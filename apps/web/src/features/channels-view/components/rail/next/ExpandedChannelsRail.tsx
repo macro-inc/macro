@@ -73,14 +73,19 @@ type ChannelRailSearch = {
 
 function ExpandedHeader(props: { search: ChannelRailSearch }) {
   const rail = useChannelsRail();
+
   return (
     <div class="flex shrink-0 flex-col">
       <ViewSidebar.Header
         searchLabel={t('channelSections.search')}
         searchOpen={props.search.isOpen()}
-        onSearchOpenChange={(open) =>
-          open ? props.search.open() : props.search.close()
-        }
+        onSearchOpenChange={(open) => {
+          if (open) {
+            props.search.open();
+          } else {
+            props.search.close();
+          }
+        }}
         search={() => (
           <SearchBar
             ref={props.search.registerInput}
@@ -90,7 +95,9 @@ function ExpandedHeader(props: { search: ChannelRailSearch }) {
             hotkey="cmd+f"
             onValueChange={props.search.setQuery}
             onEscape={() => {
-              if (!props.search.query()) props.search.close();
+              if (!props.search.query()) {
+                props.search.close();
+              }
             }}
           />
         )}
@@ -140,14 +147,17 @@ function SectionHeading(props: { group: 'favorites' | ChannelsGroup }) {
   const rail = useChannelsRail();
   const team = useCurrentTeamQuery(() => props.group === 'team_channels');
   const title = () => {
-    const teamName =
-      props.group === 'team_channels' && queryReadyGate(team)
-        ? team.data?.team.name
-        : undefined;
-    return teamName
-      ? t('channelSections.namedTeamChannels', { name: teamName })
-      : t(`channelSections.${props.group}`);
+    if (props.group === 'team_channels' && queryReadyGate(team)) {
+      const teamName = team.data?.team.name;
+
+      if (teamName) {
+        return t('channelSections.namedTeamChannels', { name: teamName });
+      }
+    }
+
+    return t(`channelSections.${props.group}`);
   };
+
   const open = () => rail.isGroupOpen(props.group);
   const key = () => rowKeyForSection(props.group);
   const channelGroup = () =>
@@ -156,6 +166,7 @@ function SectionHeading(props: { group: 'favorites' | ChannelsGroup }) {
     const group = channelGroup();
     return group ? rail.channelActivity.unreadCount(group) : 0;
   };
+
   return (
     <ChannelSectionContextMenu section={props.group}>
       <ChannelSectionHeading
@@ -185,6 +196,7 @@ function SectionStatus(props: { group: ChannelsGroup }) {
           row.group === props.group &&
           !row.labelId
       );
+
   return (
     <div>
       <Switch>
@@ -220,6 +232,7 @@ function BrowseRow(props: {
   favoriteReorder: ReturnType<typeof useFavoriteReorder>;
 }) {
   const rail = useChannelsRail();
+
   return (
     <div
       classList={{
@@ -290,7 +303,9 @@ function BrowseSection(props: {
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
   const size = createElementSize(scrollRoot);
+
   onCleanup(props.register(props.sectionKey, handle));
+
   const heading = () => props.section.heading;
   const open = () => {
     const row = heading();
@@ -298,46 +313,70 @@ function BrowseSection(props: {
       ? rail.isLabelOpen(row.label.id)
       : rail.isGroupOpen(row.group);
   };
+
   const label = () => {
     const row = heading();
     return row.kind === 'label'
       ? row.label.name
       : t(`channelSections.${row.group}`);
   };
+
   const emptyMessage = () => {
-    if (rail.sectionPreferences(props.sectionKey).unreadOnly)
+    if (rail.sectionPreferences(props.sectionKey).unreadOnly) {
       return t('channelSections.noUnreadConversations');
+    }
+
     const row = heading();
-    if (row.kind === 'section') return t('channelSections.emptyFavorites');
+
+    if (row.kind === 'section') {
+      return t('channelSections.emptyFavorites');
+    }
+
     return row.label.rule
       ? t('channelSections.emptySmartSection')
       : t('channelSections.emptySection');
   };
+
   const focusIndex = () =>
     props.section.rows.findIndex((row) => row.id === rail.list.focus.key());
   const loadVisibleSections = () => {
     const current = virtualizer();
-    if (!open() || !current) return;
+
+    if (!open() || !current) {
+      return;
+    }
+
     const first = current.findItemIndex(
       Math.max(0, current.scrollOffset - 100)
     );
     const last = current.findItemIndex(
       current.scrollOffset + current.viewportSize + 150
     );
+
     for (const row of props.section.rows.slice(first, last + 1)) {
-      if (row.kind !== 'status') continue;
+      if (row.kind !== 'status') {
+        continue;
+      }
+
       const source = rail.sources[row.group];
-      if (source.hasMore() && !source.isFetching() && !source.error())
+
+      if (source.hasMore() && !source.isFetching() && !source.error()) {
         fireAndForget(source.loadMore(), 'channels-view');
+      }
     }
   };
+
   createEffect(
     on([() => props.section.rows, open, virtualizer, () => size.height], () => {
-      if (!open()) return;
+      if (!open()) {
+        return;
+      }
+
       const frame = requestAnimationFrame(loadVisibleSections);
       onCleanup(() => cancelAnimationFrame(frame));
     })
   );
+
   const content = (
     <ResizableRailSection
       section={props.sectionKey}
@@ -354,8 +393,12 @@ function BrowseSection(props: {
       }}
       scrollRef={(element) => {
         setScrollRoot(element);
+
         const row = heading();
-        if (row.kind === 'section') rail.registerScrollRef(row.group, element);
+
+        if (row.kind === 'section') {
+          rail.registerScrollRef(row.group, element);
+        }
       }}
       header={
         <BrowseRow row={heading()} favoriteReorder={props.favoriteReorder} />
@@ -388,6 +431,7 @@ function BrowseSection(props: {
       </Show>
     </ResizableRailSection>
   );
+
   return (
     <Show
       when={
@@ -421,41 +465,65 @@ function ExpandedBrowse() {
           row.kind === 'favorite' ? [row.favorite] : []
         ) ?? []
   );
+
   createScrollTopFade(scrollRoot);
+
   const register = (key: ChannelSectionKey, handle: SectionHandle) => {
     handles.set(key, handle);
+
     return () => {
-      if (handles.get(key) === handle) handles.delete(key);
+      if (handles.get(key) === handle) {
+        handles.delete(key);
+      }
     };
   };
+
   onCleanup(
     rail.registerBrowseScrollHandle({
       scrollToIndex: (index, options) => {
         const row = rail.list.items.at(index);
-        if (!row) return;
+
+        if (!row) {
+          return;
+        }
+
         for (const [key, section] of sections()) {
           const localIndex = section.rows.findIndex(
             (item) => item.id === row.id
           );
-          if (section.heading.id !== row.id && localIndex < 0) continue;
+
+          if (section.heading.id !== row.id && localIndex < 0) {
+            continue;
+          }
+
           const handle = handles.get(key);
-          if (!handle) return;
-          if (localIndex >= 0)
+
+          if (!handle) {
+            return;
+          }
+
+          if (localIndex >= 0) {
             handle.virtualizer?.scrollToIndex(localIndex, options);
+          }
+
           const container = scrollRoot();
           if (container && handle.root) {
             const bounds = handle.root.getBoundingClientRect();
             const viewport = container.getBoundingClientRect();
-            if (bounds.top < viewport.top)
+
+            if (bounds.top < viewport.top) {
               container.scrollTop += bounds.top - viewport.top;
-            else if (bounds.bottom > viewport.bottom)
+            } else if (bounds.bottom > viewport.bottom) {
               container.scrollTop += bounds.bottom - viewport.bottom;
+            }
           }
+
           return;
         }
       },
     })
   );
+
   return (
     <div class="flex min-h-0 flex-1 flex-col">
       <div
@@ -488,7 +556,9 @@ function ExpandedBrowse() {
 function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const pagination = useChannelRailVirtualizer(() => 'search');
+
   createScrollTopFade(scrollRoot);
+
   return (
     <div
       ref={setScrollRoot}
@@ -529,6 +599,7 @@ function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
 export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
   const rail = useChannelsRail();
   const listTarget = tourTarget(CHANNELS_TOUR.list);
+
   return (
     <>
       <ExpandedHeader search={props.search} />

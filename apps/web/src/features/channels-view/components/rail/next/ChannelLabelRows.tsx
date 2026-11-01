@@ -76,6 +76,7 @@ export function ChannelLabelDropZone(props: {
 export function ChannelLabelRow(props: { label: ChannelLabel }) {
   const rail = useChannelsRail();
   const state = useChannelRailLabelState(() => props.label);
+
   return (
     <ChannelSectionContextMenu
       section={rowKeyForLabel(props.label.id)}
@@ -116,6 +117,7 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
 
 function ChannelLabelActions(props: { label: ChannelLabel }) {
   const rail = useChannelsRail();
+
   return (
     <>
       <MenuSeparator />
@@ -158,6 +160,7 @@ function SectionMenuItems(props: { channel: ChannelEntity }) {
     rail
       .labels()
       .filter((label) => !label.rule && canLabelChannel(props.channel, label));
+
   return (
     <Show
       when={
@@ -211,15 +214,18 @@ function SectionMenuItems(props: { channel: ChannelEntity }) {
                       selectorType="checkbox"
                       checked={label.channelIds.includes(props.channel.id)}
                       text={label.name}
-                      onChange={(checked) =>
-                        checked
-                          ? rail.setChannelLabel(props.channel.id, label.id)
-                          : rail.setChannelLabel(
-                              props.channel.id,
-                              undefined,
-                              label.id
-                            )
-                      }
+                      onChange={(checked) => {
+                        if (checked) {
+                          rail.setChannelLabel(props.channel.id, label.id);
+                          return;
+                        }
+
+                        rail.setChannelLabel(
+                          props.channel.id,
+                          undefined,
+                          label.id
+                        );
+                      }}
                     />
                   )}
                 </For>
@@ -248,6 +254,7 @@ function SectionMenuItems(props: { channel: ChannelEntity }) {
 
 export function ChannelLabelMenuItems(props: { channel: ChannelEntity }) {
   const rail = useChannelsRail();
+
   return (
     <Show
       when={rail.sectionsEnabled()}

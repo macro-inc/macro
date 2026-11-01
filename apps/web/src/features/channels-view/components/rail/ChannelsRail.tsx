@@ -70,6 +70,7 @@ import {
 } from '../../queries';
 import type {
   ChannelSectionKey,
+  ChannelSectionPreferences,
   ChannelsQueryScope,
   ChannelsRailSection,
   ChannelsTab,
@@ -634,18 +635,23 @@ export function ChannelsRail(props: ChannelsRailProps) {
       }
 
       const element = document.getElementById(domIdForRow(listDomId, row.id));
-      const scrollRoot = props.searchOpen
-        ? listRoot()
-        : row.kind === 'favorite'
-          ? sectionScrollRoots().favorites
-          : row.kind === 'conversation' && row.group
-            ? sectionScrollRoots()[row.group]
-            : tab() === 'recents'
-              ? listRoot()
-              : tab() === 'threads'
-                ? sectionScrollRoots().threads
-                : undefined;
-      if (!element || !scrollRoot) return;
+      let scrollRoot: HTMLDivElement | undefined;
+
+      if (props.searchOpen) {
+        scrollRoot = listRoot();
+      } else if (row.kind === 'favorite') {
+        scrollRoot = sectionScrollRoots().favorites;
+      } else if (row.kind === 'conversation' && row.group) {
+        scrollRoot = sectionScrollRoots()[row.group];
+      } else if (tab() === 'recents') {
+        scrollRoot = listRoot();
+      } else if (tab() === 'threads') {
+        scrollRoot = sectionScrollRoots().threads;
+      }
+
+      if (!element || !scrollRoot) {
+        return;
+      }
 
       const elementBounds = element.getBoundingClientRect();
       const scrollBounds = scrollRoot.getBoundingClientRect();
@@ -733,16 +739,23 @@ export function ChannelsRail(props: ChannelsRailProps) {
     if (!restoreListScroll()) return;
 
     const searchOpen = props.searchOpen;
-    const sourcesReady = searchOpen
-      ? !props.sources.search.isLoading()
-      : tab() === 'recents'
-        ? !props.sources.recents.isLoading()
-        : tab() === 'threads'
-          ? !props.sources.threads.isLoading()
-          : BROWSE_QUERY_SCOPES.every(
-              (scope) => !props.sources[scope].isLoading()
-            );
-    if (!sourcesReady) return;
+    let sourcesReady: boolean;
+
+    if (searchOpen) {
+      sourcesReady = !props.sources.search.isLoading();
+    } else if (tab() === 'recents') {
+      sourcesReady = !props.sources.recents.isLoading();
+    } else if (tab() === 'threads') {
+      sourcesReady = !props.sources.threads.isLoading();
+    } else {
+      sourcesReady = BROWSE_QUERY_SCOPES.every(
+        (scope) => !props.sources[scope].isLoading()
+      );
+    }
+
+    if (!sourcesReady) {
+      return;
+    }
 
     const frame = requestAnimationFrame(() => {
       if (props.searchOpen !== searchOpen) return;
@@ -811,22 +824,34 @@ export function ChannelsRail(props: ChannelsRailProps) {
           if (props.searchOpen) return true;
 
           const row = current?.item;
-          if (direction !== 1 || !row) return true;
-          const scope = sectionsEnabled()
-            ? getChannelRailPaginationScope(
-                row,
-                visibleRows(),
-                state.expandedGroups
-              )
-            : row.kind === 'conversation' &&
-                row.localIndex >=
-                  (row.scope === 'team_channels'
-                    ? channelSectionRows().length
-                    : props.sources[row.scope].items().length) -
-                    1
-              ? row.scope
-              : undefined;
-          if (!scope) return true;
+
+          if (direction !== 1 || !row) {
+            return true;
+          }
+
+          let scope: ChannelsSourceScope | undefined;
+
+          if (sectionsEnabled()) {
+            scope = getChannelRailPaginationScope(
+              row,
+              visibleRows(),
+              state.expandedGroups
+            );
+          } else if (row.kind === 'conversation') {
+            const sourceLength =
+              row.scope === 'team_channels'
+                ? channelSectionRows().length
+                : props.sources[row.scope].items().length;
+
+            if (row.localIndex >= sourceLength - 1) {
+              scope = row.scope;
+            }
+          }
+
+          if (!scope) {
+            return true;
+          }
+
           const source = props.sources[scope];
 
           if (!source.isLoadingMore()) {
@@ -1013,78 +1038,132 @@ export function ChannelsRail(props: ChannelsRailProps) {
   // The highlight follows the whole target (a label with all its rows), not
   // the row under the cursor, so rows read this instead of their own state.
   const activeDropTarget = (): ChannelLabelDropTarget | undefined => {
-    if (!channelTagsEnabled()) return undefined;
+    if (!channelTagsEnabled()) {
+      return undefined;
+    }
+
     const drag = dndState?.active.draggable?.data as
       | ChannelLabelDragData
       | undefined;
-    if (drag?.dragType !== 'channel-label' || drag.dndScope !== listDomId)
+
+    if (drag?.dragType !== 'channel-label' || drag.dndScope !== listDomId) {
       return undefined;
-    if (!canLabelChannelId(drag.channelId)) return undefined;
+    }
+
+    if (!canLabelChannelId(drag.channelId)) {
+      return undefined;
+    }
+
     const drop = dndState?.active.droppable?.data as
       | ChannelLabelDropData
       | undefined;
+
     if (
       drop?.dragType !== 'channel-label-target' ||
       drop.dndScope !== listDomId
-    )
+    ) {
       return undefined;
-    if (drop.target.kind === 'smart-tag') return undefined;
+    }
+
+    if (drop.target.kind === 'smart-tag') {
+      return undefined;
+    }
+
     if (
       drop.target.kind === 'channel' &&
       !canDropOnChannel(drag.channelId, drop.target.channelId)
-    )
+    ) {
       return undefined;
+    }
+
     if (drop.target.kind === 'label') {
       const labelId = drop.target.labelId;
       const label = labels().find((label) => label.id === labelId);
-      if (!label || !canLabelChannel(labelChannelById(drag.channelId), label))
+
+      if (!label || !canLabelChannel(labelChannelById(drag.channelId), label)) {
         return undefined;
+      }
     }
-    if (drop.target.kind === 'label' && drop.target.labelId === drag.labelId)
+
+    if (drop.target.kind === 'label' && drop.target.labelId === drag.labelId) {
       return undefined;
-    if (drop.target.kind === 'unlabelled' && !drag.labelId) return undefined;
+    }
+
+    if (drop.target.kind === 'unlabelled' && !drag.labelId) {
+      return undefined;
+    }
+
     return drop.target;
   };
+
   dndActions?.onDragEnd(({ draggable, droppable }) => {
-    if (!channelTagsEnabled()) return;
-    const drag = draggable?.data as ChannelLabelDragData | undefined;
-    if (drag?.dragType !== 'channel-label' || drag.dndScope !== listDomId)
+    if (!channelTagsEnabled()) {
       return;
-    if (!canLabelChannelId(drag.channelId)) return;
+    }
+
+    const drag = draggable?.data as ChannelLabelDragData | undefined;
+
+    if (drag?.dragType !== 'channel-label' || drag.dndScope !== listDomId) {
+      return;
+    }
+
+    if (!canLabelChannelId(drag.channelId)) {
+      return;
+    }
+
     // With labels unavailable every target reports itself disabled, so the
     // drag ends on nothing; say why rather than silently doing nothing.
     if (!labelsAvailable()) {
       toast.failure(labelsUnavailableReason());
       return;
     }
-    if (!droppable) return;
+
+    if (!droppable) {
+      return;
+    }
+
     const drop = droppable.data as ChannelLabelDropData | undefined;
+
     if (
       drop?.dragType !== 'channel-label-target' ||
       drop.dndScope !== listDomId
-    )
+    ) {
       return;
+    }
 
     const target = drop.target;
-    if (target.kind === 'smart-tag') return;
+
+    if (target.kind === 'smart-tag') {
+      return;
+    }
+
     if (target.kind === 'label') {
       if (drag.labelId !== target.labelId) {
         setChannelLabel(drag.channelId, target.labelId);
       }
+
       return;
     }
+
     if (target.kind === 'unlabelled') {
-      if (drag.labelId)
+      if (drag.labelId) {
         setChannelLabel(drag.channelId, undefined, drag.labelId);
+      }
+
       return;
     }
-    if (!canDropOnChannel(drag.channelId, target.channelId)) return;
+
+    if (!canDropOnChannel(drag.channelId, target.channelId)) {
+      return;
+    }
+
     // Dragging a labelled channel onto the plain list takes it out of its
     // label; dropping one plain channel on another starts a label with both.
     if (drag.labelId) {
       setChannelLabel(drag.channelId, undefined, drag.labelId);
       return;
     }
+
     fireAndForget(
       createLabel([drag.channelId, target.channelId]),
       'channels-view'
@@ -1128,7 +1207,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
     labelsUnavailableReason,
     retryLabels: async () => {
       await labelsQuery.refetch();
-      if (sectionsEnabled()) await personalLabelsQuery.refetch();
+
+      if (sectionsEnabled()) {
+        await personalLabelsQuery.refetch();
+      }
     },
     retryReferencedChannels: nextReferencedChannels.retry,
     isLabelOpen,
@@ -1146,17 +1228,23 @@ export function ChannelsRail(props: ChannelsRailProps) {
     markLabelRead,
     sortBy: (group) => state.sortBy[group],
     setSortBy,
-    sectionPreferences: (section) => ({
-      sort:
+    sectionPreferences: (section) => {
+      let sort: ChannelSectionPreferences['sort'];
+
+      if (
         section === 'team_channels' ||
         section === 'channels' ||
         section === 'direct_messages'
-          ? state.sortBy[section]
-          : section === 'favorites'
-            ? 'manual'
-            : 'name',
-      ...state.sectionPreferences[section],
-    }),
+      ) {
+        sort = state.sortBy[section];
+      } else if (section === 'favorites') {
+        sort = 'manual';
+      } else {
+        sort = 'name';
+      }
+
+      return { sort, ...state.sectionPreferences[section] };
+    },
     setSectionPreferences: (section, preferences) => {
       if (
         preferences.sort &&
@@ -1182,7 +1270,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
     registerBrowseScrollHandle: (handle) => {
       setBrowseScrollHandle(handle);
       return () => {
-        if (browseScrollHandle() === handle) setBrowseScrollHandle(undefined);
+        if (browseScrollHandle() === handle) {
+          setBrowseScrollHandle(undefined);
+        }
       };
     },
     registerVirtualizer,
@@ -1203,6 +1293,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     },
     retry: retrySearch,
   };
+
   return (
     <ChannelsRailProvider value={rail}>
       <aside

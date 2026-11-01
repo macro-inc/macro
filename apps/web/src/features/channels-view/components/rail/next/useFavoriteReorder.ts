@@ -25,13 +25,23 @@ export function reorderVisibleFavorites(
   const target = visible.findIndex(
     (item) => rowKeyForFavorite(item) === targetKey
   );
-  if (source < 0 || target < 0 || source === target) return;
+
+  if (source < 0 || target < 0 || source === target) {
+    return;
+  }
+
   const keys = new Set(visible.map(rowKeyForFavorite));
   const allKeys = new Set(all.map(rowKeyForFavorite));
-  if (visible.some((item) => !allKeys.has(rowKeyForFavorite(item)))) return;
+
+  if (visible.some((item) => !allKeys.has(rowKeyForFavorite(item)))) {
+    return;
+  }
+
   const reordered = [...visible];
   reordered.splice(target, 0, ...reordered.splice(source, 1));
+
   let index = 0;
+
   return all.map((item) =>
     keys.has(rowKeyForFavorite(item)) ? reordered[index++] : item
   );
@@ -47,22 +57,27 @@ export function useFavoriteReorder(visible: Accessor<readonly Favorite[]>) {
   const scope = `${rail.railId}:favorites`;
   const account = createMemo(() => ({ id: userId() }));
   let dragAccount: ReturnType<typeof account> | undefined;
+
   const enabled = () =>
     !!userId() &&
     !saving() &&
     rail.sectionPreferences('favorites').sort === 'manual' &&
     favorites() !== undefined &&
     visible().length > 1;
+
   const dropEdge = (targetKey: string): 'top' | 'bottom' | undefined => {
     const source = state?.active.draggable;
     const target = state?.active.droppable;
+
     if (
       !enabled() ||
       source?.data.dndScope !== scope ||
       target?.data.dndScope !== scope ||
       target.data.favoriteKey !== targetKey
-    )
+    ) {
       return;
+    }
+
     const items = visible();
     const sourceIndex = items.findIndex(
       (item) => rowKeyForFavorite(item) === source.data.favoriteKey
@@ -70,17 +85,24 @@ export function useFavoriteReorder(visible: Accessor<readonly Favorite[]>) {
     const targetIndex = items.findIndex(
       (item) => rowKeyForFavorite(item) === targetKey
     );
-    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex)
+
+    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex) {
       return;
+    }
+
     return sourceIndex < targetIndex ? 'bottom' : 'top';
   };
 
   actions?.onDragStart(({ draggable }) => {
-    if (draggable.data.dndScope === scope) dragAccount = account();
+    if (draggable.data.dndScope === scope) {
+      dragAccount = account();
+    }
   });
+
   const save = async (items: Favorite[], entityId: string) => {
     const requestAccount = account();
     setSaving(true);
+
     try {
       await Telemetry.span('channels.favorites.reorder', async (span) => {
         span.setAttr('entity.id', entityId);
@@ -94,19 +116,33 @@ export function useFavoriteReorder(visible: Accessor<readonly Favorite[]>) {
         });
       });
     } catch {
-      if (requestAccount === account())
+      if (requestAccount === account()) {
         toast.failure(t('channelSections.reorderFavoritesFailed'));
+      }
     } finally {
       setSaving(false);
     }
   };
+
   actions?.onDragEnd(({ draggable, droppable }) => {
-    if (!enabled() || dragAccount !== account() || !droppable) return;
-    if (draggable.data.dndScope !== scope || droppable.data.dndScope !== scope)
+    if (!enabled() || dragAccount !== account() || !droppable) {
       return;
+    }
+
+    if (
+      draggable.data.dndScope !== scope ||
+      droppable.data.dndScope !== scope
+    ) {
+      return;
+    }
+
     const sourceKey = draggable.data.favoriteKey;
     const targetKey = droppable.data.favoriteKey;
-    if (typeof sourceKey !== 'string' || typeof targetKey !== 'string') return;
+
+    if (typeof sourceKey !== 'string' || typeof targetKey !== 'string') {
+      return;
+    }
+
     const items = reorderVisibleFavorites(
       favorites()?.favorites ?? [],
       visible(),
@@ -116,8 +152,13 @@ export function useFavoriteReorder(visible: Accessor<readonly Favorite[]>) {
     const source = visible().find(
       (item) => rowKeyForFavorite(item) === sourceKey
     );
-    if (!items || !source) return;
+
+    if (!items || !source) {
+      return;
+    }
+
     fireAndForget(save(items, source.entityId), 'channels-view');
   });
+
   return { scope, enabled, dropEdge };
 }

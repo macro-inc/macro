@@ -37,6 +37,7 @@ function DraggableFavoriteRow(props: FavoriteRowProps) {
       <FavoriteIcon favorite={props.favorite} class="size-4" />
     ),
   };
+
   const draggable = createDraggable(`${props.reorder.scope}:drag:${key}`, data);
   const droppable = createDroppable(`${props.reorder.scope}:drop:${key}`, {
     ...data,
@@ -44,23 +45,31 @@ function DraggableFavoriteRow(props: FavoriteRowProps) {
   });
   const [, actions] = useDragDropContext() ?? [];
   let didDrag = false;
+
   actions?.onDragStart(({ draggable: source }) => {
     if (
       source.data.dndScope === props.reorder.scope &&
       source.data.favoriteKey === key
-    )
+    ) {
       didDrag = true;
+    }
   });
+
   let root: HTMLDivElement | undefined;
   const preventOpenAfterDrag = (event: MouseEvent) => {
-    if (!didDrag || event.detail === 0) return;
+    if (!didDrag || event.detail === 0) {
+      return;
+    }
+
     event.preventDefault();
     event.stopPropagation();
   };
+
   onMount(() => root?.addEventListener('click', preventOpenAfterDrag, true));
   onCleanup(() =>
     root?.removeEventListener('click', preventOpenAfterDrag, true)
   );
+
   const dropEdge = () => props.reorder.dropEdge(key);
 
   return (

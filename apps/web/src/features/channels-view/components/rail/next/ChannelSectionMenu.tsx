@@ -12,7 +12,10 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Dropdown, SingleSelectCheck, ToggleSwitch } from '@ui';
 import { For, type JSX } from 'solid-js';
-import type { ChannelSectionKey } from '../../../types';
+import type {
+  ChannelSectionKey,
+  ChannelSectionPreferences,
+} from '../../../types';
 import { useChannelsRail } from '../ChannelsRailContext';
 
 export function ChannelSectionDropdown(props: {
@@ -21,6 +24,7 @@ export function ChannelSectionDropdown(props: {
   children?: JSX.Element;
 }) {
   const label = () => t('channelSections.optionsFor', { name: props.label });
+
   return (
     <Dropdown placement="bottom-end">
       <Dropdown.Trigger
@@ -38,8 +42,9 @@ export function ChannelSectionDropdown(props: {
           contentComponent={DropdownMenu.Content}
           class="min-w-44"
           onCloseAutoFocus={(event) => {
-            if (document.querySelector('[role="dialog"]'))
+            if (document.querySelector('[role="dialog"]')) {
               event.preventDefault();
+            }
           }}
         >
           <ChannelSectionMenuItems section={props.section} />
@@ -65,8 +70,9 @@ export function ChannelSectionContextMenu(props: {
         <ContextMenuContent
           class="min-w-44"
           onCloseAutoFocus={(event) => {
-            if (document.querySelector('[role="dialog"]'))
+            if (document.querySelector('[role="dialog"]')) {
               event.preventDefault();
+            }
           }}
         >
           <ChannelSectionMenuItems section={props.section} />
@@ -81,17 +87,29 @@ export function ChannelSectionContextMenu(props: {
 function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
   const rail = useChannelsRail();
   const preferences = () => rail.sectionPreferences(props.section);
-  const options = () => [
-    ...(props.section === 'favorites'
-      ? [{ value: 'manual' as const, label: t('channelSections.customOrder') }]
-      : []),
-    ...(props.section === 'favorites' || props.section.startsWith('label:')
-      ? [{ value: 'name' as const, label: t('channelSections.alphabetical') }]
-      : []),
-    { value: 'viewed_at' as const, label: t('channelSections.lastViewed') },
-    { value: 'updated_at' as const, label: t('channelSections.lastUpdated') },
-    { value: 'created_at' as const, label: t('channelSections.dateCreated') },
-  ];
+  const options = () => {
+    const items: {
+      value: NonNullable<ChannelSectionPreferences['sort']>;
+      label: string;
+    }[] = [];
+
+    if (props.section === 'favorites') {
+      items.push({ value: 'manual', label: t('channelSections.customOrder') });
+    }
+
+    if (props.section === 'favorites' || props.section.startsWith('label:')) {
+      items.push({ value: 'name', label: t('channelSections.alphabetical') });
+    }
+
+    items.push(
+      { value: 'viewed_at', label: t('channelSections.lastViewed') },
+      { value: 'updated_at', label: t('channelSections.lastUpdated') },
+      { value: 'created_at', label: t('channelSections.dateCreated') }
+    );
+
+    return items;
+  };
+
   return (
     <MenuGroup>
       <ContextMenu.Sub>
@@ -104,10 +122,12 @@ function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
                 const option = options().find(
                   (option) => option.value === value
                 );
-                if (option)
+
+                if (option) {
                   rail.setSectionPreferences(props.section, {
                     sort: option.value,
                   });
+                }
               }}
             >
               <For each={options()}>

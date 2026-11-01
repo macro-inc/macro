@@ -31,6 +31,7 @@ export function ResizableRailSection(props: {
   const [content, setContent] = createSignal<HTMLDivElement>();
   const contentSize = createElementSize(content);
   const [preview, setPreview] = createSignal<number>();
+
   const maximum = () =>
     Math.min(
       CHANNEL_SECTION_MAX_HEIGHT,
@@ -41,20 +42,28 @@ export function ResizableRailSection(props: {
   const resizable = () =>
     props.itemCount > CHANNEL_SECTION_MIN_ITEMS &&
     maximum() > CHANNEL_SECTION_MIN_HEIGHT;
-  const defaultHeight = () =>
-    props.section === 'favorites' || props.section === 'direct_messages'
-      ? Math.min(maximum(), 4 * CHANNEL_SECTION_ROW_HEIGHT)
-      : maximum();
+  const defaultHeight = () => {
+    if (props.section === 'favorites' || props.section === 'direct_messages') {
+      return Math.min(maximum(), 4 * CHANNEL_SECTION_ROW_HEIGHT);
+    }
+
+    return maximum();
+  };
+
   const clamp = (height: number) =>
     Math.min(maximum(), clampChannelSectionHeight(height));
   const height = () => {
-    if (!resizable()) return maximum();
+    if (!resizable()) {
+      return maximum();
+    }
+
     return clamp(
       preview() ??
         rail.sectionPreferences(props.section).height ??
         defaultHeight()
     );
   };
+
   let drag:
     | {
         pointer: number;
@@ -64,10 +73,15 @@ export function ResizableRailSection(props: {
         account: ReturnType<typeof account>;
       }
     | undefined;
+
   const finish = (event: PointerEvent, cancelled = false) => {
-    if (!drag || event.pointerId !== drag.pointer) return;
+    if (!drag || event.pointerId !== drag.pointer) {
+      return;
+    }
+
     const current = drag;
     drag = undefined;
+
     if (
       !cancelled &&
       props.open &&
@@ -80,6 +94,7 @@ export function ResizableRailSection(props: {
         ),
       });
     }
+
     setPreview(undefined);
   };
 
@@ -105,6 +120,7 @@ export function ResizableRailSection(props: {
               drag = undefined;
               setPreview(undefined);
             });
+
             return (
               <button
                 type="button"
@@ -120,7 +136,10 @@ export function ResizableRailSection(props: {
                 class="group flex h-3 w-full touch-none cursor-row-resize items-center justify-center outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-edge-focus"
                 onPointerDown={(event) => {
                   const element = viewport();
-                  if (event.button !== 0 || !element || drag) return;
+                  if (event.button !== 0 || !element || drag) {
+                    return;
+                  }
+
                   event.preventDefault();
                   event.stopPropagation();
                   drag = {
@@ -135,11 +154,15 @@ export function ResizableRailSection(props: {
                   event.currentTarget.setPointerCapture(event.pointerId);
                 }}
                 onPointerMove={(event) => {
-                  if (!drag || event.pointerId !== drag.pointer) return;
+                  if (!drag || event.pointerId !== drag.pointer) {
+                    return;
+                  }
+
                   if (drag.account !== account()) {
                     finish(event, true);
                     return;
                   }
+
                   setPreview(
                     clamp(drag.height + (event.clientY - drag.y) / drag.zoom)
                   );
@@ -155,17 +178,19 @@ export function ResizableRailSection(props: {
                   })
                 }
                 onKeyDown={(event) => {
-                  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown')
+                  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
                     return;
+                  }
+
                   event.preventDefault();
                   event.stopPropagation();
                   event.stopImmediatePropagation();
+
+                  const direction = event.key === 'ArrowDown' ? 1 : -1;
+                  const step = event.shiftKey ? 100 : 20;
+
                   rail.setSectionPreferences(props.section, {
-                    height: clamp(
-                      height() +
-                        (event.key === 'ArrowDown' ? 1 : -1) *
-                          (event.shiftKey ? 100 : 20)
-                    ),
+                    height: clamp(height() + direction * step),
                   });
                 }}
               >
