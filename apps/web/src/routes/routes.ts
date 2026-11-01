@@ -686,7 +686,7 @@ export const crmItemRoute = defineRoute({
   state: crmItemStateSchema,
   claim: (params) => ({
     namespace: 'block',
-    id: `${crmItemBlockType(params)}:${params.itemId}`,
+    id: `${driveDocumentBlockType(crmItemBlockType(params))}:${params.itemId}`,
   }),
   toReference: (params) =>
     uuidRouteReference(params.itemId, crmItemBlockType(params)),

@@ -20,6 +20,7 @@ import {
   crmRecordRoute,
   legacyContentRoute,
   notFoundRoute,
+  taskDetailRoute,
 } from '@app/routes/routes';
 import { createAppSplitRouterMiddleware } from '@components/app/split-layout/split-router/app-middleware';
 import { createMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
@@ -174,6 +175,17 @@ describe('record and pipeline URLs', () => {
 
 describe('CRM item URLs', () => {
   const itemId = '01a1212c-74e5-79bd-8767-0d4943d55b18';
+
+  it('claims a CRM task as the same document shown by the Tasks view', () => {
+    expect(
+      crmItemRoute.claim?.({
+        itemType: 'document',
+        itemId,
+        itemFileType: 'md',
+        itemSubType: 'task',
+      })
+    ).toEqual(taskDetailRoute.claim?.({ taskId: itemId }));
+  });
   it.each([
     [`document/${itemId}/md/task`, 'task'],
     [`document/${itemId}/md`, 'md'],
