@@ -1,8 +1,9 @@
 /** Prebundle dependencies and generate entity docs before building the runner. */
 
-import { join } from 'node:path';
+import { join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { renderSdkDocs } from '@macro-inc/sdk-docs/render';
+import ts from 'typescript';
 import { descriptions } from './catalog';
 import { packageEntityDocs, readMarkdownPages } from './typedoc';
 
@@ -65,8 +66,45 @@ await artifact(
   `${JSON.stringify(docs, null, 2)}\n`
 );
 
-// The registry comes from generated SDK classes, not hand-maintained endpoint paths.
-const operations: Record<string, string> = {};
+// The registry comes from generated SDK classes, not hand-maintained endpoint
+// paths. `write` decides what a routine's dry run refuses and what its write
+// scope covers: every operation that isn't GET or a known read is a write.
+type Operation = {
+  label: string;
+  method: string;
+  path: string;
+  write: boolean;
+};
+const operations: Record<string, Operation> = {};
+const postReads = new Set([
+  'agent-harness.previewAgentSessions',
+  'auth.getGithubPullRequestMergeability',
+  'auth.getTeamByInviteLink',
+  'auth.getUserNames',
+  'auth.getUserNamesWithEmail',
+  'cognition.decisions',
+  'cognition.getBatchPreview',
+  'cognition.getChatHistoryBatchMessagesHandler',
+  'cognition.getUsageHandler',
+  'email.getMessagesBatch',
+  'notification.bulkGetTypedNotificationsByEventItemIds',
+  'properties.getBulkEntityProperties',
+  'search.simpleUnifiedSearch',
+  'search.unifiedSearch',
+  'storage.getBatchCallRecordPreview',
+  'storage.getBatchChannelPreview',
+  'storage.getBatchPreviewHandler',
+  'storage.getBatchProjectPreview',
+  'storage.getGithubPullRequestTasks',
+  'storage.mentionPreviews',
+  'storage.postItemsSoup',
+  'storage.postItemsSoupAst',
+  'storage.postItemsSoupAstGrouped',
+  'storage.previewSmartTag',
+  'storage.queryCrmPipelineRows',
+  'storage.taskSimilaritySearchHandler',
+  'unfurl.getUnfurlBulk',
+]);
 const labels: Record<string, string> = {
   'cognition.decisions': 'Classify content',
   'cognition.structuredCompletion': 'Generate structured content',
@@ -96,16 +134,58 @@ for (const [service, directory] of Object.entries({
   );
   for (const name of Object.getOwnPropertyNames(Sdk.prototype)) {
     if (name === 'constructor') continue;
-    operations[`${service}.${name}`] =
-      labels[`${service}.${name}`] ??
-      name
-        .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
-        .replace(/Handler$/, '')
-        .replace(/^./, (letter: string) => letter.toUpperCase())
-        .trim();
+    const key = `${service}.${name}`;
+    const body = String(Sdk.prototype[name]);
+    const method = body.match(/\.(get|post|put|patch|delete|head)\s*\(/)?.[1];
+    const path = body.match(/url:\s*["'`]([^"'`]+)["'`]/)?.[1];
+    if (!method || !path) throw new Error(`${key} has no method or url`);
+    operations[key] = {
+      label:
+        labels[key] ??
+        name
+          .replace(/([a-z0-9])([A-Z])/g, '$1 $2')
+          .replace(/Handler$/, '')
+          .replace(/^./, (letter: string) => letter.toUpperCase())
+          .trim(),
+      method: method.toUpperCase(),
+      path,
+      write: !(method === 'get' || method === 'head' || postReads.has(key)),
+    };
   }
 }
+for (const key of postReads)
+  if (!operations[key]) throw new Error(`unknown read operation ${key}`);
 await artifact(
-  'crates/agent_code_mode/src/domain/operations.json',
+  'crates/code_execution/src/domain/operations.json',
   `${JSON.stringify(operations, null, 2)}\n`
+);
+
+// Declarations that stored routine code is type-checked against, and the
+// fingerprint a routine records: the SDK version plus a hash of these types,
+// so any change to the API's shape is a new fingerprint.
+const sdkRoot = join(root, 'packages/sdk');
+const config = ts.getParsedCommandLineOfConfigFile(
+  join(sdkRoot, 'tsconfig.build.json'),
+  { removeComments: true },
+  { ...ts.sys, onUnRecoverableConfigFileDiagnostic: () => {} }
+);
+if (!config) throw new Error('SDK tsconfig.build.json is unreadable');
+const declarations: Record<string, string> = {};
+const emitted = ts
+  .createProgram(config.fileNames, config.options)
+  .emit(undefined, (file, text) => {
+    declarations[relative(config.options.outDir ?? '', file)] = text;
+  });
+if (emitted.emitSkipped) throw new Error('SDK declarations failed to emit');
+const files = Object.fromEntries(
+  Object.entries(declarations).sort(([a], [b]) => a.localeCompare(b))
+);
+const { version } = await Bun.file(join(sdkRoot, 'package.json')).json();
+const hash = new Bun.CryptoHasher('sha256')
+  .update(JSON.stringify(files))
+  .digest('hex')
+  .slice(0, 12);
+await artifact(
+  'crates/code_execution/src/outbound/deno/sdk-types.json',
+  `${JSON.stringify({ fingerprint: `${version}+${hash}`, files })}\n`
 );

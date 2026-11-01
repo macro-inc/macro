@@ -1,0 +1,3986 @@
+{
+  "agent-harness.discoverAgentCapabilitiesHandler": {
+    "label": "Discover Agent Capabilities",
+    "method": "POST",
+    "path": "/agent-capabilities/discover",
+    "write": true
+  },
+  "agent-harness.getAgentCodingPreferences": {
+    "label": "Get Agent Coding Preferences",
+    "method": "GET",
+    "path": "/agent-coding-preferences",
+    "write": false
+  },
+  "agent-harness.putAgentCodingPreferences": {
+    "label": "Put Agent Coding Preferences",
+    "method": "PUT",
+    "path": "/agent-coding-preferences",
+    "write": true
+  },
+  "agent-harness.listAgentConversations": {
+    "label": "List Agent Conversations",
+    "method": "GET",
+    "path": "/agent-conversations/{channel_id}",
+    "write": false
+  },
+  "agent-harness.startFreshAgentConversation": {
+    "label": "Start Fresh Agent Conversation",
+    "method": "POST",
+    "path": "/agent-conversations/{channel_id}/{bot_id}/start-fresh",
+    "write": true
+  },
+  "agent-harness.retryAgentConversationTurn": {
+    "label": "Retry Agent Conversation Turn",
+    "method": "POST",
+    "path": "/agent-conversations/{channel_id}/{bot_id}/turns/{source}/retry",
+    "write": true
+  },
+  "agent-harness.chooseAgentMode": {
+    "label": "Choose Agent Mode",
+    "method": "POST",
+    "path": "/agent-mode-choice",
+    "write": true
+  },
+  "agent-harness.loadAgentModelsHandler": {
+    "label": "Load Agent Models",
+    "method": "POST",
+    "path": "/agent-models/load",
+    "write": true
+  },
+  "agent-harness.listAgentRepositories": {
+    "label": "List Agent Repositories",
+    "method": "GET",
+    "path": "/agent-repositories",
+    "write": false
+  },
+  "agent-harness.listAgentRepositoryBranches": {
+    "label": "List Agent Repository Branches",
+    "method": "GET",
+    "path": "/agent-repositories/branches",
+    "write": false
+  },
+  "agent-harness.getAgentSandboxSize": {
+    "label": "Get Agent Sandbox Size",
+    "method": "GET",
+    "path": "/agent-sandbox-size",
+    "write": false
+  },
+  "agent-harness.putAgentSandboxSize": {
+    "label": "Put Agent Sandbox Size",
+    "method": "PUT",
+    "path": "/agent-sandbox-size",
+    "write": true
+  },
+  "agent-harness.createAgentSession": {
+    "label": "Create Agent Session",
+    "method": "POST",
+    "path": "/agent-sessions",
+    "write": true
+  },
+  "agent-harness.agentSessionsForPullRequest": {
+    "label": "Agent Sessions For Pull Request",
+    "method": "POST",
+    "path": "/agent-sessions/by-pull-request",
+    "write": true
+  },
+  "agent-harness.agentSessionsForPullRequests": {
+    "label": "Agent Sessions For Pull Requests",
+    "method": "POST",
+    "path": "/agent-sessions/by-pull-requests",
+    "write": true
+  },
+  "agent-harness.previewAgentSessions": {
+    "label": "Preview Agent Sessions",
+    "method": "POST",
+    "path": "/agent-sessions/preview",
+    "write": false
+  },
+  "agent-harness.warmAgentSessionHandler": {
+    "label": "Warm Agent Session",
+    "method": "POST",
+    "path": "/agent-sessions/warm",
+    "write": true
+  },
+  "agent-harness.deleteAgentSession": {
+    "label": "Delete Agent Session",
+    "method": "DELETE",
+    "path": "/agent-sessions/{session_id}",
+    "write": true
+  },
+  "agent-harness.getAgentSession": {
+    "label": "Get Agent Session",
+    "method": "GET",
+    "path": "/agent-sessions/{session_id}",
+    "write": false
+  },
+  "agent-harness.reportAgentSessionAppConnected": {
+    "label": "Report Agent Session App Connected",
+    "method": "POST",
+    "path": "/agent-sessions/{session_id}/app-connections",
+    "write": true
+  },
+  "agent-harness.setAgentSessionArchived": {
+    "label": "Set Agent Session Archived",
+    "method": "PUT",
+    "path": "/agent-sessions/{session_id}/archived",
+    "write": true
+  },
+  "agent-harness.getAgentSessionChanges": {
+    "label": "Get Agent Session Changes",
+    "method": "GET",
+    "path": "/agent-sessions/{session_id}/changes",
+    "write": false
+  },
+  "agent-harness.getAgentSessionChangesPatch": {
+    "label": "Get Agent Session Changes Patch",
+    "method": "GET",
+    "path": "/agent-sessions/{session_id}/changes/patch",
+    "write": false
+  },
+  "agent-harness.refreshAgentSessionChanges": {
+    "label": "Refresh Agent Session Changes",
+    "method": "POST",
+    "path": "/agent-sessions/{session_id}/changes/refresh",
+    "write": true
+  },
+  "agent-harness.getCodeExecution": {
+    "label": "Get Code Execution",
+    "method": "GET",
+    "path": "/agent-sessions/{session_id}/code-executions/{execution_id}",
+    "write": false
+  },
+  "agent-harness.listExecutionReviews": {
+    "label": "List Execution Reviews",
+    "method": "GET",
+    "path": "/agent-sessions/{session_id}/code-executions/{execution_id}/reviews",
+    "write": false
+  },
+  "agent-harness.controlAgentSession": {
+    "label": "Control Agent Session",
+    "method": "POST",
+    "path": "/agent-sessions/{session_id}/control",
+    "write": true
+  },
+  "agent-harness.getAgentSessionLog": {
+    "label": "Get Agent Session Log",
+    "method": "GET",
+    "path": "/agent-sessions/{session_id}/log",
+    "write": false
+  },
+  "agent-harness.getAgentSessionFoldedLog": {
+    "label": "Get Agent Session Folded Log",
+    "method": "GET",
+    "path": "/agent-sessions/{session_id}/log/folded",
+    "write": false
+  },
+  "agent-harness.renameAgentSession": {
+    "label": "Rename Agent Session",
+    "method": "PUT",
+    "path": "/agent-sessions/{session_id}/name",
+    "write": true
+  },
+  "agent-harness.getAgentSessionPermissions": {
+    "label": "Get Agent Session Permissions",
+    "method": "GET",
+    "path": "/agent-sessions/{session_id}/permissions",
+    "write": false
+  },
+  "agent-harness.updateAgentSessionPermissions": {
+    "label": "Update Agent Session Permissions",
+    "method": "PATCH",
+    "path": "/agent-sessions/{session_id}/permissions",
+    "write": true
+  },
+  "agent-harness.unlinkAgentSessionPullRequest": {
+    "label": "Unlink Agent Session Pull Request",
+    "method": "DELETE",
+    "path": "/agent-sessions/{session_id}/pull-requests",
+    "write": true
+  },
+  "agent-harness.listAgentSessionPullRequests": {
+    "label": "List Agent Session Pull Requests",
+    "method": "GET",
+    "path": "/agent-sessions/{session_id}/pull-requests",
+    "write": false
+  },
+  "agent-harness.linkAgentSessionPullRequest": {
+    "label": "Link Agent Session Pull Request",
+    "method": "PUT",
+    "path": "/agent-sessions/{session_id}/pull-requests",
+    "write": true
+  },
+  "agent-harness.getAgentSessionQueue": {
+    "label": "Get Agent Session Queue",
+    "method": "GET",
+    "path": "/agent-sessions/{session_id}/queue",
+    "write": false
+  },
+  "agent-harness.removeQueuedAction": {
+    "label": "Remove Queued Action",
+    "method": "DELETE",
+    "path": "/agent-sessions/{session_id}/queue/{action_id}",
+    "write": true
+  },
+  "agent-harness.editQueuedAction": {
+    "label": "Edit Queued Action",
+    "method": "PUT",
+    "path": "/agent-sessions/{session_id}/queue/{action_id}",
+    "write": true
+  },
+  "agent-harness.steerQueuedAction": {
+    "label": "Steer Queued Action",
+    "method": "POST",
+    "path": "/agent-sessions/{session_id}/queue/{action_id}/steer",
+    "write": true
+  },
+  "agent-harness.createSessionReview": {
+    "label": "Create Session Review",
+    "method": "POST",
+    "path": "/agent-sessions/{session_id}/reviews",
+    "write": true
+  },
+  "agent-harness.getSessionReview": {
+    "label": "Get Session Review",
+    "method": "GET",
+    "path": "/agent-sessions/{session_id}/reviews/{review_id}",
+    "write": false
+  },
+  "agent-harness.decideSessionReview": {
+    "label": "Decide Session Review",
+    "method": "POST",
+    "path": "/agent-sessions/{session_id}/reviews/{review_id}",
+    "write": true
+  },
+  "agent-harness.putAgentSessionSandboxSize": {
+    "label": "Put Agent Session Sandbox Size",
+    "method": "PUT",
+    "path": "/agent-sessions/{session_id}/sandbox-size",
+    "write": true
+  },
+  "agent-harness.answerAgentSessionToolApproval": {
+    "label": "Answer Agent Session Tool Approval",
+    "method": "POST",
+    "path": "/agent-sessions/{session_id}/tool-approvals/{approval_id}",
+    "write": true
+  },
+  "agent-harness.classify": {
+    "label": "Classify",
+    "method": "POST",
+    "path": "/universal_input/classify",
+    "write": true
+  },
+  "agent-harness.extract": {
+    "label": "Extract",
+    "method": "POST",
+    "path": "/universal_input/extract",
+    "write": true
+  },
+  "auth.deleteAgentApiKey": {
+    "label": "Delete Agent Api Key",
+    "method": "DELETE",
+    "path": "/agents/{agent_id}/api-key",
+    "write": true
+  },
+  "auth.getAgentApiKey": {
+    "label": "Get Agent Api Key",
+    "method": "GET",
+    "path": "/agents/{agent_id}/api-key",
+    "write": false
+  },
+  "auth.putAgentApiKey": {
+    "label": "Put Agent Api Key",
+    "method": "PUT",
+    "path": "/agents/{agent_id}/api-key",
+    "write": true
+  },
+  "auth.updateAiBillingAutoReload": {
+    "label": "Update Ai Billing Auto Reload",
+    "method": "PATCH",
+    "path": "/ai-billing/auto-reload",
+    "write": true
+  },
+  "auth.createAiCreditCheckout": {
+    "label": "Create Ai Credit Checkout",
+    "method": "POST",
+    "path": "/ai-billing/credits/checkout",
+    "write": true
+  },
+  "auth.updateAiBillingOverage": {
+    "label": "Update Ai Billing Overage",
+    "method": "PATCH",
+    "path": "/ai-billing/overage",
+    "write": true
+  },
+  "auth.getAiBillingPlans": {
+    "label": "Get Ai Billing Plans",
+    "method": "GET",
+    "path": "/ai-billing/plans",
+    "write": false
+  },
+  "auth.getAiBillingSummary": {
+    "label": "Get Ai Billing Summary",
+    "method": "GET",
+    "path": "/ai-billing/summary",
+    "write": false
+  },
+  "auth.disconnectCodex": {
+    "label": "Disconnect Codex",
+    "method": "DELETE",
+    "path": "/codex",
+    "write": true
+  },
+  "auth.getCodexConnection": {
+    "label": "Get Codex Connection",
+    "method": "GET",
+    "path": "/codex",
+    "write": false
+  },
+  "auth.configureCodex": {
+    "label": "Configure Codex",
+    "method": "PUT",
+    "path": "/codex/config",
+    "write": true
+  },
+  "auth.listCodexEnvironments": {
+    "label": "List Codex Environments",
+    "method": "GET",
+    "path": "/codex/environments",
+    "write": false
+  },
+  "auth.startCodexLogin": {
+    "label": "Start Codex Login",
+    "method": "POST",
+    "path": "/codex/login",
+    "write": true
+  },
+  "auth.cancelCodexLogin": {
+    "label": "Cancel Codex Login",
+    "method": "DELETE",
+    "path": "/codex/login/{attempt_id}",
+    "write": true
+  },
+  "auth.pollCodexLogin": {
+    "label": "Poll Codex Login",
+    "method": "GET",
+    "path": "/codex/login/{attempt_id}",
+    "write": false
+  },
+  "auth.deleteCursorApiKey": {
+    "label": "Delete Cursor Api Key",
+    "method": "DELETE",
+    "path": "/cursor-api-key",
+    "write": true
+  },
+  "auth.getCursorApiKey": {
+    "label": "Get Cursor Api Key",
+    "method": "GET",
+    "path": "/cursor-api-key",
+    "write": false
+  },
+  "auth.putCursorApiKey": {
+    "label": "Put Cursor Api Key",
+    "method": "PUT",
+    "path": "/cursor-api-key",
+    "write": true
+  },
+  "auth.putCursorDefaultModel": {
+    "label": "Put Cursor Default Model",
+    "method": "PUT",
+    "path": "/cursor-api-key/default-model",
+    "write": true
+  },
+  "auth.listCursorModels": {
+    "label": "List Cursor Models",
+    "method": "GET",
+    "path": "/cursor-api-key/models",
+    "write": false
+  },
+  "auth.verifyFusionauthUserEmail": {
+    "label": "Verify Fusionauth User Email",
+    "method": "GET",
+    "path": "/email/fusionauth/verify/{verification_id}",
+    "write": false
+  },
+  "auth.resendFusionauthVerifyUserEmail": {
+    "label": "Resend Fusionauth Verify User Email",
+    "method": "POST",
+    "path": "/email/fusionauth_resend",
+    "write": true
+  },
+  "auth.generateEmailLink": {
+    "label": "Generate Email Link",
+    "method": "POST",
+    "path": "/email/generate/link",
+    "write": true
+  },
+  "auth.verifyEmailLink": {
+    "label": "Verify Email Link",
+    "method": "GET",
+    "path": "/email/verify/{verification_id}",
+    "write": false
+  },
+  "auth.setGithubPullRequestDraft": {
+    "label": "Set Github Pull Request Draft",
+    "method": "POST",
+    "path": "/github_pull_requests/draft",
+    "write": true
+  },
+  "auth.enrichGithubPullRequests": {
+    "label": "Enrich Github Pull Requests",
+    "method": "POST",
+    "path": "/github_pull_requests/enrich",
+    "write": true
+  },
+  "auth.mergeGithubPullRequest": {
+    "label": "Merge Github Pull Request",
+    "method": "POST",
+    "path": "/github_pull_requests/merge",
+    "write": true
+  },
+  "auth.getGithubPullRequestMergeability": {
+    "label": "Get Github Pull Request Mergeability",
+    "method": "POST",
+    "path": "/github_pull_requests/mergeability",
+    "write": false
+  },
+  "auth.setGithubPullRequestState": {
+    "label": "Set Github Pull Request State",
+    "method": "POST",
+    "path": "/github_pull_requests/state",
+    "write": true
+  },
+  "auth.listGtmInviteLinks": {
+    "label": "List Gtm Invite Links",
+    "method": "GET",
+    "path": "/gtm-invite/links",
+    "write": false
+  },
+  "auth.createGtmInviteLink": {
+    "label": "Create Gtm Invite Link",
+    "method": "POST",
+    "path": "/gtm-invite/links",
+    "write": true
+  },
+  "auth.revokeGtmInviteLink": {
+    "label": "Revoke Gtm Invite Link",
+    "method": "DELETE",
+    "path": "/gtm-invite/links/{id}",
+    "write": true
+  },
+  "auth.getGtmInviteOffer": {
+    "label": "Get Gtm Invite Offer",
+    "method": "GET",
+    "path": "/gtm-invite/offer",
+    "write": false
+  },
+  "auth.resolveGtmInviteLink": {
+    "label": "Resolve Gtm Invite Link",
+    "method": "GET",
+    "path": "/gtm-invite/public/{token}",
+    "write": false
+  },
+  "auth.redeemGtmInviteLink": {
+    "label": "Redeem Gtm Invite Link",
+    "method": "POST",
+    "path": "/gtm-invite/redeem",
+    "write": true
+  },
+  "auth.healthHandler": {
+    "label": "Health",
+    "method": "GET",
+    "path": "/health",
+    "write": false
+  },
+  "auth.macroApiToken": {
+    "label": "Macro Api Token",
+    "method": "GET",
+    "path": "/jwt/macro_api_token",
+    "write": false
+  },
+  "auth.refresh": {
+    "label": "Refresh",
+    "method": "POST",
+    "path": "/jwt/refresh",
+    "write": true
+  },
+  "auth.createInProgressLink": {
+    "label": "Create In Progress Link",
+    "method": "POST",
+    "path": "/link",
+    "write": true
+  },
+  "auth.emailConnectionProviders": {
+    "label": "Email Connection Providers",
+    "method": "GET",
+    "path": "/link/email/providers",
+    "write": false
+  },
+  "auth.deleteGithubLink": {
+    "label": "Delete Github Link",
+    "method": "DELETE",
+    "path": "/link/github",
+    "write": true
+  },
+  "auth.initGithubLink": {
+    "label": "Init Github Link",
+    "method": "POST",
+    "path": "/link/github",
+    "write": true
+  },
+  "auth.checkGithubLinkStatus": {
+    "label": "Check Github Link Status",
+    "method": "GET",
+    "path": "/link/github/status",
+    "write": false
+  },
+  "auth.initGmailLink": {
+    "label": "Init Gmail Link",
+    "method": "POST",
+    "path": "/link/gmail",
+    "write": true
+  },
+  "auth.checkGmailLinkStatus": {
+    "label": "Check Gmail Link Status",
+    "method": "GET",
+    "path": "/link/gmail/status",
+    "write": false
+  },
+  "auth.initOutlookLink": {
+    "label": "Init Outlook Link",
+    "method": "POST",
+    "path": "/link/outlook",
+    "write": true
+  },
+  "auth.appleLogin": {
+    "label": "Apple Login",
+    "method": "POST",
+    "path": "/login/apple",
+    "write": true
+  },
+  "auth.passwordLogin": {
+    "label": "Password Login",
+    "method": "POST",
+    "path": "/login/password",
+    "write": true
+  },
+  "auth.passwordlessLogin": {
+    "label": "Passwordless Login",
+    "method": "POST",
+    "path": "/login/passwordless",
+    "write": true
+  },
+  "auth.ssoLogin": {
+    "label": "Sso Login",
+    "method": "GET",
+    "path": "/login/sso",
+    "write": false
+  },
+  "auth.logout": {
+    "label": "Logout",
+    "method": "POST",
+    "path": "/logout",
+    "write": true
+  },
+  "auth.createMergeRequest": {
+    "label": "Create Merge Request",
+    "method": "POST",
+    "path": "/merge",
+    "write": true
+  },
+  "auth.verifyMergeRequest": {
+    "label": "Verify Merge Request",
+    "method": "GET",
+    "path": "/merge/verify/{code}",
+    "write": false
+  },
+  "auth.sendMobileWelcomeEmail": {
+    "label": "Send Mobile Welcome Email",
+    "method": "POST",
+    "path": "/mobile-welcome-email",
+    "write": true
+  },
+  "auth.passwordlessCallback": {
+    "label": "Passwordless Callback",
+    "method": "GET",
+    "path": "/oauth/passwordless/{code}",
+    "write": false
+  },
+  "auth.oauthRedirect": {
+    "label": "Oauth Redirect",
+    "method": "GET",
+    "path": "/oauth/redirect",
+    "write": false
+  },
+  "auth.oauth2Callback": {
+    "label": "Oauth2 Callback",
+    "method": "GET",
+    "path": "/oauth2/{provider}/callback",
+    "write": false
+  },
+  "auth.getPermissions": {
+    "label": "Get Permissions",
+    "method": "GET",
+    "path": "/permissions",
+    "write": false
+  },
+  "auth.getUserPermissions": {
+    "label": "Get User Permissions",
+    "method": "GET",
+    "path": "/permissions/me",
+    "write": false
+  },
+  "auth.getReferralCode": {
+    "label": "Get Referral Code",
+    "method": "GET",
+    "path": "/referral/code",
+    "write": false
+  },
+  "auth.sendReferralCode": {
+    "label": "Send Referral Code",
+    "method": "POST",
+    "path": "/referral/send",
+    "write": true
+  },
+  "auth.sessionCreation": {
+    "label": "Session Creation",
+    "method": "POST",
+    "path": "/session",
+    "write": true
+  },
+  "auth.sessionLogin": {
+    "label": "Session Login",
+    "method": "GET",
+    "path": "/session/login/{session_code}",
+    "write": false
+  },
+  "auth.deleteTeam": {
+    "label": "Delete Team",
+    "method": "DELETE",
+    "path": "/team",
+    "write": true
+  },
+  "auth.getTeam": {
+    "label": "Get Team",
+    "method": "GET",
+    "path": "/team",
+    "write": false
+  },
+  "auth.patchTeam": {
+    "label": "Patch Team",
+    "method": "PATCH",
+    "path": "/team",
+    "write": true
+  },
+  "auth.createTeam": {
+    "label": "Create Team",
+    "method": "POST",
+    "path": "/team",
+    "write": true
+  },
+  "auth.toggleTeamAutoJoinDomain": {
+    "label": "Toggle Team Auto Join Domain",
+    "method": "POST",
+    "path": "/team/auto-join-domain/toggle",
+    "write": true
+  },
+  "auth.patchTeamCrmSettings": {
+    "label": "Patch Team Crm Settings",
+    "method": "PATCH",
+    "path": "/team/crm",
+    "write": true
+  },
+  "auth.inviteToTeam": {
+    "label": "Invite To Team",
+    "method": "POST",
+    "path": "/team/invite",
+    "write": true
+  },
+  "auth.deleteTeamInviteLink": {
+    "label": "Delete Team Invite Link",
+    "method": "DELETE",
+    "path": "/team/invite-link",
+    "write": true
+  },
+  "auth.getTeamInviteLink": {
+    "label": "Get Team Invite Link",
+    "method": "GET",
+    "path": "/team/invite-link",
+    "write": false
+  },
+  "auth.createTeamInviteLink": {
+    "label": "Create Team Invite Link",
+    "method": "POST",
+    "path": "/team/invite-link",
+    "write": true
+  },
+  "auth.joinTeamByInviteLink": {
+    "label": "Join Team By Invite Link",
+    "method": "POST",
+    "path": "/team/invite-link/join",
+    "write": true
+  },
+  "auth.getTeamByInviteLink": {
+    "label": "Get Team By Invite Link",
+    "method": "POST",
+    "path": "/team/invite-link/team",
+    "write": false
+  },
+  "auth.deleteTeamInviteHandler": {
+    "label": "Delete Team Invite",
+    "method": "DELETE",
+    "path": "/team/invite/{team_invite_id}",
+    "write": true
+  },
+  "auth.getTeamInvites": {
+    "label": "Get Team Invites",
+    "method": "GET",
+    "path": "/team/invites",
+    "write": false
+  },
+  "auth.rejectInvitation": {
+    "label": "Reject Invitation",
+    "method": "DELETE",
+    "path": "/team/join/{team_invite_id}",
+    "write": true
+  },
+  "auth.joinTeam": {
+    "label": "Join Team",
+    "method": "GET",
+    "path": "/team/join/{team_invite_id}",
+    "write": false
+  },
+  "auth.patchTeamMemberPlan": {
+    "label": "Patch Team Member Plan",
+    "method": "PATCH",
+    "path": "/team/members/{member_user_id}/plan",
+    "write": true
+  },
+  "auth.toggleTeamNonAdminInvites": {
+    "label": "Toggle Team Non Admin Invites",
+    "method": "POST",
+    "path": "/team/non-admin-invites/toggle",
+    "write": true
+  },
+  "auth.removeUserFromTeam": {
+    "label": "Remove User From Team",
+    "method": "DELETE",
+    "path": "/team/remove/{remove_user_id}",
+    "write": true
+  },
+  "auth.getUserTeams": {
+    "label": "Get User Teams",
+    "method": "GET",
+    "path": "/team/user",
+    "write": false
+  },
+  "auth.getUserInvites": {
+    "label": "Get User Invites",
+    "method": "GET",
+    "path": "/team/user/invites",
+    "write": false
+  },
+  "auth.getUserNames": {
+    "label": "Get User Names",
+    "method": "POST",
+    "path": "/user/get_names",
+    "write": false
+  },
+  "auth.getUserNamesWithEmail": {
+    "label": "Get User Names With Email",
+    "method": "POST",
+    "path": "/user/get_names_with_email",
+    "write": false
+  },
+  "auth.patchUserGroup": {
+    "label": "Patch User Group",
+    "method": "PATCH",
+    "path": "/user/group",
+    "write": true
+  },
+  "auth.getUserLanguage": {
+    "label": "Get User Language",
+    "method": "GET",
+    "path": "/user/language",
+    "write": false
+  },
+  "auth.putUserLanguage": {
+    "label": "Put User Language",
+    "method": "PUT",
+    "path": "/user/language",
+    "write": true
+  },
+  "auth.getLegacyUserPermissions": {
+    "label": "Get Legacy User Permissions",
+    "method": "GET",
+    "path": "/user/legacy_user_permissions",
+    "write": false
+  },
+  "auth.getUserLinkExists": {
+    "label": "Get User Link Exists",
+    "method": "GET",
+    "path": "/user/link_exists",
+    "write": false
+  },
+  "auth.deleteUser": {
+    "label": "Delete User",
+    "method": "DELETE",
+    "path": "/user/me",
+    "write": true
+  },
+  "auth.getUserInfo": {
+    "label": "Get User Info",
+    "method": "GET",
+    "path": "/user/me",
+    "write": false
+  },
+  "auth.getUserName": {
+    "label": "Get User Name",
+    "method": "GET",
+    "path": "/user/name",
+    "write": false
+  },
+  "auth.putUserName": {
+    "label": "Put User Name",
+    "method": "PUT",
+    "path": "/user/name",
+    "write": true
+  },
+  "auth.patchUserOnboarding": {
+    "label": "Patch User Onboarding",
+    "method": "PATCH",
+    "path": "/user/onboarding",
+    "write": true
+  },
+  "auth.getUserOrganization": {
+    "label": "Get User Organization",
+    "method": "GET",
+    "path": "/user/organization",
+    "write": false
+  },
+  "auth.putProfilePicture": {
+    "label": "Put Profile Picture",
+    "method": "PUT",
+    "path": "/user/profile_picture",
+    "write": true
+  },
+  "auth.postProfilePictures": {
+    "label": "Post Profile Pictures",
+    "method": "POST",
+    "path": "/user/profile_pictures",
+    "write": true
+  },
+  "auth.getUserQuota": {
+    "label": "Get User Quota",
+    "method": "GET",
+    "path": "/user/quota",
+    "write": false
+  },
+  "auth.createCheckoutSessionV2": {
+    "label": "Create Checkout Session V2",
+    "method": "POST",
+    "path": "/user/stripe/checkoutv2",
+    "write": true
+  },
+  "auth.getSubscriptionStatus": {
+    "label": "Get Subscription Status",
+    "method": "GET",
+    "path": "/user/stripe/plan",
+    "write": false
+  },
+  "auth.changePlan": {
+    "label": "Change Plan",
+    "method": "POST",
+    "path": "/user/stripe/plan",
+    "write": true
+  },
+  "auth.createPortalSession": {
+    "label": "Create Portal Session",
+    "method": "POST",
+    "path": "/user/stripe/portal",
+    "write": true
+  },
+  "auth.getTrialEligibility": {
+    "label": "Get Trial Eligibility",
+    "method": "GET",
+    "path": "/user/stripe/trial_eligibility",
+    "write": false
+  },
+  "auth.patchUserTutorial": {
+    "label": "Patch User Tutorial",
+    "method": "PATCH",
+    "path": "/user/tutorial",
+    "write": true
+  },
+  "calendar.getAvailabilityCalendars": {
+    "label": "Get Availability Calendars",
+    "method": "GET",
+    "path": "/availability-calendars",
+    "write": false
+  },
+  "calendar.setAvailabilityCalendar": {
+    "label": "Set Availability Calendar",
+    "method": "PUT",
+    "path": "/availability-calendars/{calendar_id}",
+    "write": true
+  },
+  "calendar.listCalendars": {
+    "label": "List Calendars",
+    "method": "GET",
+    "path": "/calendars",
+    "write": false
+  },
+  "calendar.createCalendarEvent": {
+    "label": "Create Calendar Event",
+    "method": "POST",
+    "path": "/events",
+    "write": true
+  },
+  "calendar.deleteCalendarEvent": {
+    "label": "Delete Calendar Event",
+    "method": "DELETE",
+    "path": "/events/{event_id}",
+    "write": true
+  },
+  "calendar.updateCalendarEvent": {
+    "label": "Update Calendar Event",
+    "method": "PATCH",
+    "path": "/events/{event_id}",
+    "write": true
+  },
+  "calendar.copyCalendarEvent": {
+    "label": "Copy Calendar Event",
+    "method": "POST",
+    "path": "/events/{event_id}/copy",
+    "write": true
+  },
+  "calendar.inviteCalendarEventGuests": {
+    "label": "Invite Calendar Event Guests",
+    "method": "POST",
+    "path": "/events/{event_id}/guests",
+    "write": true
+  },
+  "calendar.eventNotes": {
+    "label": "Event Notes",
+    "method": "GET",
+    "path": "/events/{event_id}/notes",
+    "write": false
+  },
+  "calendar.unlinkEventNote": {
+    "label": "Unlink Event Note",
+    "method": "DELETE",
+    "path": "/events/{event_id}/notes/{document_id}",
+    "write": true
+  },
+  "calendar.linkEventNote": {
+    "label": "Link Event Note",
+    "method": "PUT",
+    "path": "/events/{event_id}/notes/{document_id}",
+    "write": true
+  },
+  "calendar.calendarEventProviderUrl": {
+    "label": "Calendar Event Provider Url",
+    "method": "GET",
+    "path": "/events/{event_id}/provider-url",
+    "write": false
+  },
+  "calendar.prepareCalendarReplacement": {
+    "label": "Prepare Calendar Replacement",
+    "method": "POST",
+    "path": "/events/{event_id}/replacement",
+    "write": true
+  },
+  "calendar.rsvpCalendarEvent": {
+    "label": "Rsvp Calendar Event",
+    "method": "PUT",
+    "path": "/events/{event_id}/rsvp",
+    "write": true
+  },
+  "calendar.healthHandler": {
+    "label": "Health",
+    "method": "GET",
+    "path": "/health",
+    "write": false
+  },
+  "calendar.respondToJoinRequest": {
+    "label": "Respond To Join Request",
+    "method": "PUT",
+    "path": "/join-requests/{request_id}",
+    "write": true
+  },
+  "calendar.noteDocuments": {
+    "label": "Note Documents",
+    "method": "GET",
+    "path": "/meeting-notes/documents",
+    "write": false
+  },
+  "calendar.documentNoteLinks": {
+    "label": "Document Note Links",
+    "method": "GET",
+    "path": "/meeting-notes/documents/{document_id}/links",
+    "write": false
+  },
+  "calendar.discardCalendarReplacement": {
+    "label": "Discard Calendar Replacement",
+    "method": "DELETE",
+    "path": "/replacements/{operation_id}",
+    "write": true
+  },
+  "calendar.calendarReplacementStatus": {
+    "label": "Calendar Replacement Status",
+    "method": "GET",
+    "path": "/replacements/{operation_id}",
+    "write": false
+  },
+  "calendar.confirmCalendarReplacement": {
+    "label": "Confirm Calendar Replacement",
+    "method": "POST",
+    "path": "/replacements/{operation_id}/confirm",
+    "write": true
+  },
+  "calendar.getTeamSharing": {
+    "label": "Get Team Sharing",
+    "method": "GET",
+    "path": "/team-sharing",
+    "write": false
+  },
+  "calendar.setTeamSharing": {
+    "label": "Set Team Sharing",
+    "method": "PUT",
+    "path": "/team-sharing",
+    "write": true
+  },
+  "cognition.setPricingHandler": {
+    "label": "Set Pricing",
+    "method": "POST",
+    "path": "/ai-cost/pricing",
+    "write": true
+  },
+  "cognition.getUsageHandler": {
+    "label": "Get Usage",
+    "method": "POST",
+    "path": "/ai-cost/usage",
+    "write": false
+  },
+  "cognition.upsertAiProjection": {
+    "label": "Upsert Ai Projection",
+    "method": "POST",
+    "path": "/ai-projections",
+    "write": true
+  },
+  "cognition.getChatsForAttachmentHandler": {
+    "label": "Get Chats For Attachment",
+    "method": "GET",
+    "path": "/attachments/{attachment_id}/chats",
+    "write": false
+  },
+  "cognition.deleteChat": {
+    "label": "Delete Chat",
+    "method": "DELETE",
+    "path": "/chat/{chat_id}",
+    "write": true
+  },
+  "cognition.patchChat": {
+    "label": "Patch Chat",
+    "method": "PATCH",
+    "path": "/chat/{chat_id}",
+    "write": true
+  },
+  "cognition.permanentlyDeleteChat": {
+    "label": "Permanently Delete Chat",
+    "method": "DELETE",
+    "path": "/chat/{chat_id}/permanent",
+    "write": true
+  },
+  "cognition.createChat": {
+    "label": "Create Chat",
+    "method": "POST",
+    "path": "/chats",
+    "write": true
+  },
+  "cognition.getChatHistoryHandler": {
+    "label": "Get Chat History",
+    "method": "GET",
+    "path": "/chats/history/{chat_id}",
+    "write": false
+  },
+  "cognition.getChatHistoryBatchMessagesHandler": {
+    "label": "Get Chat History Batch Messages",
+    "method": "POST",
+    "path": "/chats/history_batch_messages",
+    "write": false
+  },
+  "cognition.getChat": {
+    "label": "Get Chat",
+    "method": "GET",
+    "path": "/chats/{chat_id}",
+    "write": false
+  },
+  "cognition.copyChat": {
+    "label": "Copy Chat",
+    "method": "POST",
+    "path": "/chats/{chat_id}/copy",
+    "write": true
+  },
+  "cognition.getChatPermissions": {
+    "label": "Get Chat Permissions",
+    "method": "GET",
+    "path": "/chats/{chat_id}/permissions",
+    "write": false
+  },
+  "cognition.revertDeleteChat": {
+    "label": "Revert Delete Chat",
+    "method": "PUT",
+    "path": "/chats/{chat_id}/revert_delete",
+    "write": true
+  },
+  "cognition.callTool": {
+    "label": "Call Tool",
+    "method": "POST",
+    "path": "/chats/{chat_id}/tool/call",
+    "write": true
+  },
+  "cognition.rejectToolCall": {
+    "label": "Reject Tool Call",
+    "method": "POST",
+    "path": "/chats/{chat_id}/tool/reject",
+    "write": true
+  },
+  "cognition.updateToolResponse": {
+    "label": "Update Tool Response",
+    "method": "POST",
+    "path": "/chats/{chat_id}/tool/response/update",
+    "write": true
+  },
+  "cognition.updateToolCall": {
+    "label": "Update Tool Call",
+    "method": "POST",
+    "path": "/chats/{chat_id}/tool/update",
+    "write": true
+  },
+  "cognition.getCitationHandler": {
+    "label": "Get Citation",
+    "method": "GET",
+    "path": "/citations/{id}",
+    "write": false
+  },
+  "cognition.generateDatabaseQuery": {
+    "label": "Generate Database Query",
+    "method": "POST",
+    "path": "/database-query",
+    "write": true
+  },
+  "cognition.decisions": {
+    "label": "Classify content",
+    "method": "POST",
+    "path": "/decisions",
+    "write": false
+  },
+  "cognition.healthHandler": {
+    "label": "Health",
+    "method": "GET",
+    "path": "/health",
+    "write": false
+  },
+  "cognition.generateImage": {
+    "label": "Generate Image",
+    "method": "POST",
+    "path": "/images/generate",
+    "write": true
+  },
+  "cognition.notionReportHandler": {
+    "label": "Notion Report",
+    "method": "GET",
+    "path": "/import/notion",
+    "write": false
+  },
+  "cognition.cancelNotionHandler": {
+    "label": "Cancel Notion",
+    "method": "POST",
+    "path": "/import/notion/cancel",
+    "write": true
+  },
+  "cognition.runImportHandler": {
+    "label": "Run Import",
+    "method": "POST",
+    "path": "/import/run",
+    "write": true
+  },
+  "cognition.discoverHandler": {
+    "label": "Discover",
+    "method": "POST",
+    "path": "/import/runs/{source}/discover",
+    "write": true
+  },
+  "cognition.getStateHandler": {
+    "label": "Get State",
+    "method": "GET",
+    "path": "/import/state",
+    "write": false
+  },
+  "cognition.workspaceReportHandler": {
+    "label": "Workspace Report",
+    "method": "GET",
+    "path": "/import/workspaces/{source}",
+    "write": false
+  },
+  "cognition.cancelWorkspaceHandler": {
+    "label": "Cancel Workspace",
+    "method": "POST",
+    "path": "/import/workspaces/{source}/cancel",
+    "write": true
+  },
+  "cognition.deleteMcpServer": {
+    "label": "Delete Mcp Server",
+    "method": "DELETE",
+    "path": "/mcp/servers",
+    "write": true
+  },
+  "cognition.listMcpServers": {
+    "label": "List Mcp Servers",
+    "method": "GET",
+    "path": "/mcp/servers",
+    "write": false
+  },
+  "cognition.addMcpServer": {
+    "label": "Add Mcp Server",
+    "method": "POST",
+    "path": "/mcp/servers",
+    "write": true
+  },
+  "cognition.updateMcpServer": {
+    "label": "Update Mcp Server",
+    "method": "PUT",
+    "path": "/mcp/servers",
+    "write": true
+  },
+  "cognition.mcpAuthCallback": {
+    "label": "Mcp Auth Callback",
+    "method": "GET",
+    "path": "/mcp/servers/auth/callback",
+    "write": false
+  },
+  "cognition.mcpOauthClientMetadata": {
+    "label": "Mcp Oauth Client Metadata",
+    "method": "GET",
+    "path": "/mcp/servers/auth/client-metadata",
+    "write": false
+  },
+  "cognition.startMcpAuth": {
+    "label": "Start Mcp Auth",
+    "method": "POST",
+    "path": "/mcp/servers/auth/start",
+    "write": true
+  },
+  "cognition.getMemoryHandler": {
+    "label": "Get Memory",
+    "method": "GET",
+    "path": "/memory",
+    "write": false
+  },
+  "cognition.getStateHandler2": {
+    "label": "Get State Handler2",
+    "method": "GET",
+    "path": "/onboarding",
+    "write": false
+  },
+  "cognition.completeHandler": {
+    "label": "Complete",
+    "method": "POST",
+    "path": "/onboarding/complete",
+    "write": true
+  },
+  "cognition.dismissedPromptsHandler": {
+    "label": "Dismissed Prompts",
+    "method": "GET",
+    "path": "/onboarding/prompts",
+    "write": false
+  },
+  "cognition.dismissPromptHandler": {
+    "label": "Dismiss Prompt",
+    "method": "POST",
+    "path": "/onboarding/prompts/{prompt_id}/dismiss",
+    "write": true
+  },
+  "cognition.browsePipedreamMcpCatalog": {
+    "label": "Browse Pipedream Mcp Catalog",
+    "method": "GET",
+    "path": "/pipedream/mcp/catalog",
+    "write": false
+  },
+  "cognition.completePipedreamMcpConnection": {
+    "label": "Complete Pipedream Mcp Connection",
+    "method": "POST",
+    "path": "/pipedream/mcp/complete",
+    "write": true
+  },
+  "cognition.deletePipedreamMcpConnection": {
+    "label": "Delete Pipedream Mcp Connection",
+    "method": "DELETE",
+    "path": "/pipedream/mcp/connections",
+    "write": true
+  },
+  "cognition.listPipedreamMcpConnections": {
+    "label": "List Pipedream Mcp Connections",
+    "method": "GET",
+    "path": "/pipedream/mcp/connections",
+    "write": false
+  },
+  "cognition.updatePipedreamMcpConnection": {
+    "label": "Update Pipedream Mcp Connection",
+    "method": "PUT",
+    "path": "/pipedream/mcp/connections",
+    "write": true
+  },
+  "cognition.listPipedreamMcpOverlays": {
+    "label": "List Pipedream Mcp Overlays",
+    "method": "GET",
+    "path": "/pipedream/mcp/overlays",
+    "write": false
+  },
+  "cognition.recoverPipedreamMcpConnection": {
+    "label": "Recover Pipedream Mcp Connection",
+    "method": "POST",
+    "path": "/pipedream/mcp/recover",
+    "write": true
+  },
+  "cognition.createPipedreamMcpToken": {
+    "label": "Create Pipedream Mcp Token",
+    "method": "POST",
+    "path": "/pipedream/mcp/token",
+    "write": true
+  },
+  "cognition.getBatchPreview": {
+    "label": "Get Batch Preview",
+    "method": "POST",
+    "path": "/preview",
+    "write": false
+  },
+  "cognition.sendChatMessage": {
+    "label": "Send Chat Message",
+    "method": "POST",
+    "path": "/stream/chat/message",
+    "write": true
+  },
+  "cognition.stopChatStream": {
+    "label": "Stop Chat Stream",
+    "method": "POST",
+    "path": "/stream/chat/message/stop",
+    "write": true
+  },
+  "cognition.structuredCompletion": {
+    "label": "Generate structured content",
+    "method": "POST",
+    "path": "/structured-completion",
+    "write": true
+  },
+  "contacts.getContacts": {
+    "label": "Get Contacts",
+    "method": "GET",
+    "path": "/contacts",
+    "write": false
+  },
+  "contacts.addContact": {
+    "label": "Add Contact",
+    "method": "POST",
+    "path": "/contacts",
+    "write": true
+  },
+  "email.getAttachment": {
+    "label": "Get Attachment",
+    "method": "GET",
+    "path": "/email/attachments/{id}",
+    "write": false
+  },
+  "email.getAttachmentDocumentId": {
+    "label": "Get Attachment Document Id",
+    "method": "GET",
+    "path": "/email/attachments/{id}/document_id",
+    "write": false
+  },
+  "email.cancelBackfillGmail": {
+    "label": "Cancel Backfill Gmail",
+    "method": "DELETE",
+    "path": "/email/backfill/gmail",
+    "write": true
+  },
+  "email.listBackfillGmail": {
+    "label": "List Backfill Gmail",
+    "method": "GET",
+    "path": "/email/backfill/gmail",
+    "write": false
+  },
+  "email.getBackfillGmailActive": {
+    "label": "Get Backfill Gmail Active",
+    "method": "GET",
+    "path": "/email/backfill/gmail/active",
+    "write": false
+  },
+  "email.getBackfillGmail": {
+    "label": "Get Backfill Gmail",
+    "method": "GET",
+    "path": "/email/backfill/gmail/{id}",
+    "write": false
+  },
+  "email.forwardCalendarEvent": {
+    "label": "Forward Calendar Event",
+    "method": "POST",
+    "path": "/email/calendar-events/{event_id}/forward",
+    "write": true
+  },
+  "email.listContacts": {
+    "label": "List Contacts",
+    "method": "GET",
+    "path": "/email/contacts",
+    "write": false
+  },
+  "email.blockSender": {
+    "label": "Block Sender",
+    "method": "POST",
+    "path": "/email/contacts/block",
+    "write": true
+  },
+  "email.listBlockedSenders": {
+    "label": "List Blocked Senders",
+    "method": "GET",
+    "path": "/email/contacts/blocked",
+    "write": false
+  },
+  "email.unblockSender": {
+    "label": "Unblock Sender",
+    "method": "POST",
+    "path": "/email/contacts/unblock",
+    "write": true
+  },
+  "email.recoverDraftTransfer": {
+    "label": "Recover Draft Transfer",
+    "method": "POST",
+    "path": "/email/draft-transfers/{id}/recover",
+    "write": true
+  },
+  "email.createDraft": {
+    "label": "Create Draft",
+    "method": "POST",
+    "path": "/email/drafts",
+    "write": true
+  },
+  "email.getScheduledMessages": {
+    "label": "Get Scheduled Messages",
+    "method": "GET",
+    "path": "/email/drafts/scheduled",
+    "write": false
+  },
+  "email.upsertScheduledMessage": {
+    "label": "Upsert Scheduled Message",
+    "method": "PUT",
+    "path": "/email/drafts/scheduled/{id}",
+    "write": true
+  },
+  "email.deleteScheduledDraft": {
+    "label": "Delete Scheduled Draft",
+    "method": "DELETE",
+    "path": "/email/drafts/scheduled/{message_id}",
+    "write": true
+  },
+  "email.deleteDraft": {
+    "label": "Delete Draft",
+    "method": "DELETE",
+    "path": "/email/drafts/{id}",
+    "write": true
+  },
+  "email.addDraftAttachment": {
+    "label": "Add Draft Attachment",
+    "method": "POST",
+    "path": "/email/drafts/{id}/attachments",
+    "write": true
+  },
+  "email.removeDraftAttachment": {
+    "label": "Remove Draft Attachment",
+    "method": "DELETE",
+    "path": "/email/drafts/{id}/attachments/{attachment_id}",
+    "write": true
+  },
+  "email.completeDraftAttachment": {
+    "label": "Complete Draft Attachment",
+    "method": "POST",
+    "path": "/email/drafts/{id}/attachments/{attachment_id}/complete",
+    "write": true
+  },
+  "email.addForwardedAttachment": {
+    "label": "Add Forwarded Attachment",
+    "method": "POST",
+    "path": "/email/drafts/{id}/forwarded-attachments",
+    "write": true
+  },
+  "email.removeForwardedAttachment": {
+    "label": "Remove Forwarded Attachment",
+    "method": "DELETE",
+    "path": "/email/drafts/{id}/forwarded-attachments/{attachment_id}",
+    "write": true
+  },
+  "email.messageOperationStatus": {
+    "label": "Message Operation Status",
+    "method": "GET",
+    "path": "/email/drafts/{id}/operation",
+    "write": false
+  },
+  "email.resolveMessageOperation": {
+    "label": "Resolve Message Operation",
+    "method": "POST",
+    "path": "/email/drafts/{id}/resolve",
+    "write": true
+  },
+  "email.transferDraft": {
+    "label": "Transfer Draft",
+    "method": "POST",
+    "path": "/email/drafts/{id}/transfer",
+    "write": true
+  },
+  "email.listEmailFilters": {
+    "label": "List Email Filters",
+    "method": "GET",
+    "path": "/email/filters",
+    "write": false
+  },
+  "email.upsertEmailFilter": {
+    "label": "Upsert Email Filter",
+    "method": "PUT",
+    "path": "/email/filters",
+    "write": true
+  },
+  "email.deleteEmailFilter": {
+    "label": "Delete Email Filter",
+    "method": "DELETE",
+    "path": "/email/filters/{id}",
+    "write": true
+  },
+  "email.initUser": {
+    "label": "Init User",
+    "method": "POST",
+    "path": "/email/init",
+    "write": true
+  },
+  "email.listLabels": {
+    "label": "List Labels",
+    "method": "GET",
+    "path": "/email/labels",
+    "write": false
+  },
+  "email.createLabel": {
+    "label": "Create Label",
+    "method": "POST",
+    "path": "/email/labels",
+    "write": true
+  },
+  "email.deleteLabel": {
+    "label": "Delete Label",
+    "method": "DELETE",
+    "path": "/email/labels/{id}",
+    "write": true
+  },
+  "email.listLinks": {
+    "label": "List Links",
+    "method": "GET",
+    "path": "/email/links",
+    "write": false
+  },
+  "email.healthCheckLinks": {
+    "label": "Health Check Links",
+    "method": "POST",
+    "path": "/email/links/health-check",
+    "write": true
+  },
+  "email.deleteLink": {
+    "label": "Delete Link",
+    "method": "DELETE",
+    "path": "/email/links/{link_id}",
+    "write": true
+  },
+  "email.disableLinkCalendar": {
+    "label": "Disable Link Calendar",
+    "method": "DELETE",
+    "path": "/email/links/{link_id}/calendar",
+    "write": true
+  },
+  "email.resyncLink": {
+    "label": "Resync Link",
+    "method": "POST",
+    "path": "/email/links/{link_id}/resync",
+    "write": true
+  },
+  "email.sendMessage": {
+    "label": "Send Message",
+    "method": "POST",
+    "path": "/email/messages",
+    "write": true
+  },
+  "email.getMessagesBatch": {
+    "label": "Get Messages Batch",
+    "method": "POST",
+    "path": "/email/messages/batch",
+    "write": false
+  },
+  "email.addRemoveLabel": {
+    "label": "Add Remove Label",
+    "method": "PATCH",
+    "path": "/email/messages/labels",
+    "write": true
+  },
+  "email.getMessage": {
+    "label": "Get Message",
+    "method": "GET",
+    "path": "/email/messages/{id}",
+    "write": false
+  },
+  "email.getMessageEml": {
+    "label": "Get Message Eml",
+    "method": "GET",
+    "path": "/email/messages/{id}/eml",
+    "write": false
+  },
+  "email.patchSettings": {
+    "label": "Patch Settings",
+    "method": "PATCH",
+    "path": "/email/settings",
+    "write": true
+  },
+  "email.mailboxSettingsOperations": {
+    "label": "Mailbox Settings Operations",
+    "method": "GET",
+    "path": "/email/settings/operations",
+    "write": false
+  },
+  "email.disableSync": {
+    "label": "Disable Sync",
+    "method": "DELETE",
+    "path": "/email/sync",
+    "write": true
+  },
+  "email.archiveThreads": {
+    "label": "Archive Threads",
+    "method": "PATCH",
+    "path": "/email/threads/archived",
+    "write": true
+  },
+  "email.previewsInboxCursor": {
+    "label": "Previews Inbox Cursor",
+    "method": "GET",
+    "path": "/email/threads/previews/cursor/{view}",
+    "write": false
+  },
+  "email.archiveThread": {
+    "label": "Archive Thread",
+    "method": "PATCH",
+    "path": "/email/threads/{id}/archived",
+    "write": true
+  },
+  "email.addRemoveThreadLabel": {
+    "label": "Add Remove Thread Label",
+    "method": "PATCH",
+    "path": "/email/threads/{id}/labels",
+    "write": true
+  },
+  "email.getThreadMessagesHandler": {
+    "label": "Get Thread Messages",
+    "method": "GET",
+    "path": "/email/threads/{id}/messages",
+    "write": false
+  },
+  "email.threadOperations": {
+    "label": "Thread Operations",
+    "method": "GET",
+    "path": "/email/threads/{id}/operations",
+    "write": false
+  },
+  "email.threadSeen": {
+    "label": "Thread Seen",
+    "method": "POST",
+    "path": "/email/threads/{id}/seen",
+    "write": true
+  },
+  "email.updateThreadState": {
+    "label": "Update Thread State",
+    "method": "PATCH",
+    "path": "/email/threads/{id}/state",
+    "write": true
+  },
+  "email.getThread": {
+    "label": "Get Thread",
+    "method": "GET",
+    "path": "/email/threads/{thread_id}",
+    "write": false
+  },
+  "email.getThreadCalendarInvitations": {
+    "label": "Get Thread Calendar Invitations",
+    "method": "GET",
+    "path": "/email/threads/{thread_id}/calendar-invitations",
+    "write": false
+  },
+  "email.copyThreadCalendarInvitation": {
+    "label": "Copy Thread Calendar Invitation",
+    "method": "POST",
+    "path": "/email/threads/{thread_id}/messages/{message_id}/calendar-invitations/{invitation_id}/copy",
+    "write": true
+  },
+  "email.updateThreadProject": {
+    "label": "Update Thread Project",
+    "method": "PATCH",
+    "path": "/email/threads/{thread_id}/project",
+    "write": true
+  },
+  "email.healthHandler": {
+    "label": "Health",
+    "method": "GET",
+    "path": "/health",
+    "write": false
+  },
+  "notification.healthHandler": {
+    "label": "Health",
+    "method": "GET",
+    "path": "/health",
+    "write": false
+  },
+  "notification.getUnsubscribes": {
+    "label": "Get Unsubscribes",
+    "method": "GET",
+    "path": "/unsubscribe",
+    "write": false
+  },
+  "notification.unsubscribeEmail": {
+    "label": "Unsubscribe Email",
+    "method": "POST",
+    "path": "/unsubscribe/email",
+    "write": true
+  },
+  "notification.removeUnsubscribeItem": {
+    "label": "Remove Unsubscribe Item",
+    "method": "DELETE",
+    "path": "/unsubscribe/item/{item_type}/{item_id}",
+    "write": true
+  },
+  "notification.unsubscribeItem": {
+    "label": "Unsubscribe Item",
+    "method": "POST",
+    "path": "/unsubscribe/item/{item_type}/{item_id}",
+    "write": true
+  },
+  "notification.removeUnsubscribeAll": {
+    "label": "Remove Unsubscribe All",
+    "method": "DELETE",
+    "path": "/unsubscribe/mute",
+    "write": true
+  },
+  "notification.unsubscribeAll": {
+    "label": "Unsubscribe All",
+    "method": "POST",
+    "path": "/unsubscribe/mute",
+    "write": true
+  },
+  "notification.listTypedNotifications": {
+    "label": "List Typed Notifications",
+    "method": "GET",
+    "path": "/v1/user_notifications",
+    "write": false
+  },
+  "notification.bulkGetTypedNotificationsByEventItemIds": {
+    "label": "Bulk Get Typed Notifications By Event Item Ids",
+    "method": "POST",
+    "path": "/v1/user_notifications/item/bulk",
+    "write": false
+  },
+  "notification.getTypedNotificationsByEventItemId": {
+    "label": "Get Typed Notifications By Event Item Id",
+    "method": "GET",
+    "path": "/v1/user_notifications/item/{event_item_id}",
+    "write": false
+  },
+  "notification.getNotificationTypePreferences": {
+    "label": "Get Notification Type Preferences",
+    "method": "GET",
+    "path": "/v1/user_notifications/preferences",
+    "write": false
+  },
+  "notification.disableNotificationType": {
+    "label": "Disable Notification Type",
+    "method": "PUT",
+    "path": "/v1/user_notifications/preferences/{notification_event_type}/disable",
+    "write": true
+  },
+  "notification.enableNotificationType": {
+    "label": "Enable Notification Type",
+    "method": "PUT",
+    "path": "/v1/user_notifications/preferences/{notification_event_type}/enable",
+    "write": true
+  },
+  "notification.getTypedNotificationById": {
+    "label": "Get Typed Notification By Id",
+    "method": "GET",
+    "path": "/v1/user_notifications/{notification_id}",
+    "write": false
+  },
+  "notification.bulkDeleteUserNotificationsV2": {
+    "label": "Bulk Delete User Notifications V2",
+    "method": "DELETE",
+    "path": "/v2/user_notifications/bulk",
+    "write": true
+  },
+  "notification.bulkMarkNotificationsDone": {
+    "label": "Bulk Mark Notifications Done",
+    "method": "PATCH",
+    "path": "/v2/user_notifications/bulk/done",
+    "write": true
+  },
+  "notification.bulkMarkNotificationsSeen": {
+    "label": "Bulk Mark Notifications Seen",
+    "method": "PATCH",
+    "path": "/v2/user_notifications/bulk/seen",
+    "write": true
+  },
+  "notification.bulkMarkNotificationsUndone": {
+    "label": "Bulk Mark Notifications Undone",
+    "method": "PATCH",
+    "path": "/v2/user_notifications/bulk/undone",
+    "write": true
+  },
+  "notification.deleteUserNotificationV2": {
+    "label": "Delete User Notification V2",
+    "method": "DELETE",
+    "path": "/v2/user_notifications/{notification_id}",
+    "write": true
+  },
+  "properties.listProperties": {
+    "label": "List Properties",
+    "method": "GET",
+    "path": "/properties/definitions",
+    "write": false
+  },
+  "properties.createPropertyDefinition": {
+    "label": "Create Property Definition",
+    "method": "POST",
+    "path": "/properties/definitions",
+    "write": true
+  },
+  "properties.deletePropertyDefinition": {
+    "label": "Delete Property Definition",
+    "method": "DELETE",
+    "path": "/properties/definitions/{definition_id}",
+    "write": true
+  },
+  "properties.getPropertyDefinition": {
+    "label": "Get Property Definition",
+    "method": "GET",
+    "path": "/properties/definitions/{definition_id}",
+    "write": false
+  },
+  "properties.getPropertyOptions": {
+    "label": "Get Property Options",
+    "method": "GET",
+    "path": "/properties/definitions/{definition_id}/options",
+    "write": false
+  },
+  "properties.addPropertyOption": {
+    "label": "Add Property Option",
+    "method": "POST",
+    "path": "/properties/definitions/{definition_id}/options",
+    "write": true
+  },
+  "properties.deletePropertyOption": {
+    "label": "Delete Property Option",
+    "method": "DELETE",
+    "path": "/properties/definitions/{definition_id}/options/{option_id}",
+    "write": true
+  },
+  "properties.updatePropertyOption": {
+    "label": "Update Property Option",
+    "method": "PATCH",
+    "path": "/properties/definitions/{definition_id}/options/{option_id}",
+    "write": true
+  },
+  "properties.getBulkEntityProperties": {
+    "label": "Get Bulk Entity Properties",
+    "method": "POST",
+    "path": "/properties/entities/bulk",
+    "write": false
+  },
+  "properties.getEntityProperties": {
+    "label": "Get Entity Properties",
+    "method": "GET",
+    "path": "/properties/entities/{entity_type}/{entity_id}",
+    "write": false
+  },
+  "properties.bulkUpdateEntityPropertyOptions": {
+    "label": "Bulk Update Entity Property Options",
+    "method": "POST",
+    "path": "/properties/entities/{entity_type}/{entity_id}/options/bulk",
+    "write": true
+  },
+  "properties.setEntityProperty": {
+    "label": "Set Entity Property",
+    "method": "PUT",
+    "path": "/properties/entities/{entity_type}/{entity_id}/{property_id}",
+    "write": true
+  },
+  "properties.removeEntityPropertyOption": {
+    "label": "Remove Entity Property Option",
+    "method": "DELETE",
+    "path": "/properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}",
+    "write": true
+  },
+  "properties.addEntityPropertyOption": {
+    "label": "Add Entity Property Option",
+    "method": "POST",
+    "path": "/properties/entities/{entity_type}/{entity_id}/{property_id}/options/{option_id}",
+    "write": true
+  },
+  "properties.deleteEntityProperty": {
+    "label": "Delete Entity Property",
+    "method": "DELETE",
+    "path": "/properties/entity_properties/{entity_property_id}",
+    "write": true
+  },
+  "properties.bulkUpdateEntitiesPropertyOptions": {
+    "label": "Bulk Update Entities Property Options",
+    "method": "POST",
+    "path": "/properties/options/bulk",
+    "write": true
+  },
+  "properties.listTags": {
+    "label": "List Tags",
+    "method": "GET",
+    "path": "/properties/tags",
+    "write": false
+  },
+  "properties.ensureTagSet": {
+    "label": "Ensure Tag Set",
+    "method": "POST",
+    "path": "/properties/tags",
+    "write": true
+  },
+  "properties.mergeTag": {
+    "label": "Merge Tag",
+    "method": "POST",
+    "path": "/properties/tags/merge",
+    "write": true
+  },
+  "properties.promoteTag": {
+    "label": "Promote Tag",
+    "method": "POST",
+    "path": "/properties/tags/promote",
+    "write": true
+  },
+  "search.unifiedSearch": {
+    "label": "Search workspace",
+    "method": "POST",
+    "path": "/search",
+    "write": false
+  },
+  "search.simpleUnifiedSearch": {
+    "label": "Search workspace",
+    "method": "POST",
+    "path": "/search/simple",
+    "write": false
+  },
+  "scheduled-action.scheduledActionHealth": {
+    "label": "Scheduled Action Health",
+    "method": "GET",
+    "path": "/health",
+    "write": false
+  },
+  "scheduled-action.listScheduledActions": {
+    "label": "List Scheduled Actions",
+    "method": "GET",
+    "path": "/scheduled-actions",
+    "write": false
+  },
+  "scheduled-action.createScheduledAction": {
+    "label": "Create Scheduled Action",
+    "method": "POST",
+    "path": "/scheduled-actions",
+    "write": true
+  },
+  "scheduled-action.deleteScheduledAction": {
+    "label": "Delete Scheduled Action",
+    "method": "DELETE",
+    "path": "/scheduled-actions/{id}",
+    "write": true
+  },
+  "scheduled-action.getScheduledAction": {
+    "label": "Get Scheduled Action",
+    "method": "GET",
+    "path": "/scheduled-actions/{id}",
+    "write": false
+  },
+  "scheduled-action.updateScheduledAction": {
+    "label": "Update Scheduled Action",
+    "method": "PUT",
+    "path": "/scheduled-actions/{id}",
+    "write": true
+  },
+  "scheduled-action.setScheduledActionEnabled": {
+    "label": "Set Scheduled Action Enabled",
+    "method": "PUT",
+    "path": "/scheduled-actions/{id}/enabled",
+    "write": true
+  },
+  "scheduled-action.executeScheduledActionNow": {
+    "label": "Execute Scheduled Action Now",
+    "method": "POST",
+    "path": "/scheduled-actions/{id}/execute",
+    "write": true
+  },
+  "scheduled-action.listScheduledActionHistory": {
+    "label": "List Scheduled Action History",
+    "method": "GET",
+    "path": "/scheduled-actions/{id}/history",
+    "write": false
+  },
+  "scheduled-action.unshareScheduledActionTemplate": {
+    "label": "Unshare Scheduled Action Template",
+    "method": "DELETE",
+    "path": "/scheduled-actions/{id}/template",
+    "write": true
+  },
+  "scheduled-action.getScheduledActionTemplate": {
+    "label": "Get Scheduled Action Template",
+    "method": "GET",
+    "path": "/scheduled-actions/{id}/template",
+    "write": false
+  },
+  "scheduled-action.shareScheduledActionTemplate": {
+    "label": "Share Scheduled Action Template",
+    "method": "PUT",
+    "path": "/scheduled-actions/{id}/template",
+    "write": true
+  },
+  "scheduled-action.activateScheduledActionTemplate": {
+    "label": "Activate Scheduled Action Template",
+    "method": "POST",
+    "path": "/scheduled-actions/{id}/template/activate",
+    "write": true
+  },
+  "unfurl.proxyRequestHandler": {
+    "label": "Proxy Request",
+    "method": "GET",
+    "path": "/proxy",
+    "write": false
+  },
+  "unfurl.getUnfurl": {
+    "label": "Get Unfurl",
+    "method": "GET",
+    "path": "/unfurl",
+    "write": false
+  },
+  "unfurl.getUnfurlBulk": {
+    "label": "Get Unfurl Bulk",
+    "method": "POST",
+    "path": "/unfurl/bulk",
+    "write": false
+  },
+  "storage.listAgents": {
+    "label": "List Agents",
+    "method": "GET",
+    "path": "/agents",
+    "write": false
+  },
+  "storage.createAgent": {
+    "label": "Create Agent",
+    "method": "POST",
+    "path": "/agents",
+    "write": true
+  },
+  "storage.updateAgent": {
+    "label": "Update Agent",
+    "method": "PUT",
+    "path": "/agents/{agent_id}",
+    "write": true
+  },
+  "storage.deleteAnchor": {
+    "label": "Delete Anchor",
+    "method": "DELETE",
+    "path": "/annotations/anchors",
+    "write": true
+  },
+  "storage.editAnchor": {
+    "label": "Edit Anchor",
+    "method": "PATCH",
+    "path": "/annotations/anchors",
+    "write": true
+  },
+  "storage.getDocumentAnchors": {
+    "label": "Get Document Anchors",
+    "method": "GET",
+    "path": "/annotations/anchors/document/{document_id}",
+    "write": false
+  },
+  "storage.createAnchor": {
+    "label": "Create Anchor",
+    "method": "POST",
+    "path": "/annotations/anchors/document/{document_id}",
+    "write": true
+  },
+  "storage.getSelfBot": {
+    "label": "Get Self Bot",
+    "method": "GET",
+    "path": "/bots/me",
+    "write": false
+  },
+  "storage.getBotOwnerProfiles": {
+    "label": "Get Bot Owner Profiles",
+    "method": "GET",
+    "path": "/bots/profiles",
+    "write": false
+  },
+  "storage.listBotChannels": {
+    "label": "List Bot Channels",
+    "method": "GET",
+    "path": "/bots/{bot_id}/channels",
+    "write": false
+  },
+  "storage.removeBotFromChannelByBot": {
+    "label": "Remove Bot From Channel By Bot",
+    "method": "DELETE",
+    "path": "/bots/{bot_id}/channels/{channel_id}",
+    "write": true
+  },
+  "storage.listOccurrences": {
+    "label": "List Occurrences",
+    "method": "GET",
+    "path": "/calendar-events",
+    "write": false
+  },
+  "storage.mentionPreviews": {
+    "label": "Mention Previews",
+    "method": "POST",
+    "path": "/calendar-events/preview",
+    "write": false
+  },
+  "storage.listTeamCalendar": {
+    "label": "List Team Calendar",
+    "method": "GET",
+    "path": "/calendar-events/team",
+    "write": false
+  },
+  "storage.listTeamOutOfOffice": {
+    "label": "List Team Out Of Office",
+    "method": "GET",
+    "path": "/calendar-events/team-out-of-office",
+    "write": false
+  },
+  "storage.eventIcs": {
+    "label": "Event Ics",
+    "method": "GET",
+    "path": "/calendar-events/{event_id}/ics",
+    "write": false
+  },
+  "storage.listJoinRequests": {
+    "label": "List Join Requests",
+    "method": "GET",
+    "path": "/calendar-events/{event_id}/join-requests",
+    "write": false
+  },
+  "storage.requestToJoin": {
+    "label": "Request To Join",
+    "method": "POST",
+    "path": "/calendar-events/{event_id}/join-requests",
+    "write": true
+  },
+  "storage.getActiveCalls": {
+    "label": "Get Active Calls",
+    "method": "GET",
+    "path": "/call/active",
+    "write": false
+  },
+  "storage.guestCallChatRead": {
+    "label": "Guest Call Chat Read",
+    "method": "GET",
+    "path": "/call/guest-chat/{call_id}",
+    "write": false
+  },
+  "storage.guestCallChatPost": {
+    "label": "Guest Call Chat Post",
+    "method": "POST",
+    "path": "/call/guest-chat/{call_id}",
+    "write": true
+  },
+  "storage.meetingLookup": {
+    "label": "Meeting Lookup",
+    "method": "GET",
+    "path": "/call/join/{token}",
+    "write": false
+  },
+  "storage.meetingGuestJoin": {
+    "label": "Meeting Guest Join",
+    "method": "POST",
+    "path": "/call/join/{token}",
+    "write": true
+  },
+  "storage.meetingLeave": {
+    "label": "Meeting Leave",
+    "method": "POST",
+    "path": "/call/join/{token}/leave",
+    "write": true
+  },
+  "storage.meetingGuestParticipants": {
+    "label": "Meeting Guest Participants",
+    "method": "GET",
+    "path": "/call/join/{token}/participants",
+    "write": false
+  },
+  "storage.meetingList": {
+    "label": "Meeting List",
+    "method": "GET",
+    "path": "/call/meetings",
+    "write": false
+  },
+  "storage.meetingCreate": {
+    "label": "Meeting Create",
+    "method": "POST",
+    "path": "/call/meetings",
+    "write": true
+  },
+  "storage.meetingListActive": {
+    "label": "Meeting List Active",
+    "method": "GET",
+    "path": "/call/meetings/active",
+    "write": false
+  },
+  "storage.meetingInvitePermissions": {
+    "label": "Meeting Invite Permissions",
+    "method": "GET",
+    "path": "/call/meetings/invite/{token}",
+    "write": false
+  },
+  "storage.meetingInvite": {
+    "label": "Meeting Invite",
+    "method": "POST",
+    "path": "/call/meetings/invite/{token}",
+    "write": true
+  },
+  "storage.meetingInviteUsers": {
+    "label": "Meeting Invite Users",
+    "method": "POST",
+    "path": "/call/meetings/invite/{token}/users",
+    "write": true
+  },
+  "storage.meetingJoin": {
+    "label": "Meeting Join",
+    "method": "POST",
+    "path": "/call/meetings/join/{token}",
+    "write": true
+  },
+  "storage.meetingParticipants": {
+    "label": "Meeting Participants",
+    "method": "GET",
+    "path": "/call/meetings/join/{token}/participants",
+    "write": false
+  },
+  "storage.meetingPrepare": {
+    "label": "Meeting Prepare",
+    "method": "POST",
+    "path": "/call/meetings/prepare",
+    "write": true
+  },
+  "storage.meetingCancelPreparation": {
+    "label": "Meeting Cancel Preparation",
+    "method": "DELETE",
+    "path": "/call/meetings/prepare/{preparation_id}",
+    "write": true
+  },
+  "storage.meetingCancel": {
+    "label": "Meeting Cancel",
+    "method": "DELETE",
+    "path": "/call/meetings/{meeting_id}",
+    "write": true
+  },
+  "storage.meetingUpdate": {
+    "label": "Meeting Update",
+    "method": "PATCH",
+    "path": "/call/meetings/{meeting_id}",
+    "write": true
+  },
+  "storage.getBatchCallRecordPreview": {
+    "label": "Get Batch Call Record Preview",
+    "method": "POST",
+    "path": "/call/record/preview",
+    "write": false
+  },
+  "storage.deleteCallRecord": {
+    "label": "Delete Call Record",
+    "method": "DELETE",
+    "path": "/call/record/{call_id}",
+    "write": true
+  },
+  "storage.getCallRecord": {
+    "label": "Get Call Record",
+    "method": "GET",
+    "path": "/call/record/{call_id}",
+    "write": false
+  },
+  "storage.editCallRecord": {
+    "label": "Edit Call Record",
+    "method": "PATCH",
+    "path": "/call/record/{call_id}",
+    "write": true
+  },
+  "storage.declineCall": {
+    "label": "Decline Call",
+    "method": "POST",
+    "path": "/call/record/{call_id}/decline",
+    "write": true
+  },
+  "storage.meetingShare": {
+    "label": "Meeting Share",
+    "method": "POST",
+    "path": "/call/record/{call_id}/link",
+    "write": true
+  },
+  "storage.toggleShareWithTeam": {
+    "label": "Toggle Share With Team",
+    "method": "POST",
+    "path": "/call/record/{call_id}/share-with-team/toggle",
+    "write": true
+  },
+  "storage.editCallTranscript": {
+    "label": "Edit Call Transcript",
+    "method": "PATCH",
+    "path": "/call/record/{call_id}/transcript",
+    "write": true
+  },
+  "storage.getRingStatus": {
+    "label": "Get Ring Status",
+    "method": "GET",
+    "path": "/call/ring-status/{call_id}",
+    "write": false
+  },
+  "storage.declineRing": {
+    "label": "Decline Ring",
+    "method": "POST",
+    "path": "/call/ring-status/{call_id}/decline",
+    "write": true
+  },
+  "storage.callWebhook": {
+    "label": "Call Webhook",
+    "method": "POST",
+    "path": "/call/webhook",
+    "write": true
+  },
+  "storage.leaveOrEndCall": {
+    "label": "Leave Or End Call",
+    "method": "DELETE",
+    "path": "/call/{channel_id}",
+    "write": true
+  },
+  "storage.getOrCreateCall": {
+    "label": "Get Or Create Call",
+    "method": "GET",
+    "path": "/call/{channel_id}",
+    "write": false
+  },
+  "storage.checkActiveCall": {
+    "label": "Check Active Call",
+    "method": "GET",
+    "path": "/call/{channel_id}/active",
+    "write": false
+  },
+  "storage.ingestTranscript": {
+    "label": "Ingest Transcript",
+    "method": "POST",
+    "path": "/call/{room_name}/transcript",
+    "write": true
+  },
+  "storage.listChannelLabels": {
+    "label": "List Channel Labels",
+    "method": "GET",
+    "path": "/channel-labels",
+    "write": false
+  },
+  "storage.createChannelLabel": {
+    "label": "Create Channel Label",
+    "method": "POST",
+    "path": "/channel-labels",
+    "write": true
+  },
+  "storage.setChannelLabel": {
+    "label": "Set Channel Label",
+    "method": "PUT",
+    "path": "/channel-labels/channels/{channel_id}",
+    "write": true
+  },
+  "storage.previewSmartTag": {
+    "label": "Preview Smart Tag",
+    "method": "POST",
+    "path": "/channel-labels/preview",
+    "write": false
+  },
+  "storage.deleteChannelLabel": {
+    "label": "Delete Channel Label",
+    "method": "DELETE",
+    "path": "/channel-labels/{label_id}",
+    "write": true
+  },
+  "storage.renameChannelLabel": {
+    "label": "Rename Channel Label",
+    "method": "PATCH",
+    "path": "/channel-labels/{label_id}",
+    "write": true
+  },
+  "storage.createChannel": {
+    "label": "Create Channel",
+    "method": "POST",
+    "path": "/channels",
+    "write": true
+  },
+  "storage.getActivity": {
+    "label": "Get Activity",
+    "method": "GET",
+    "path": "/channels/activity",
+    "write": false
+  },
+  "storage.postActivity": {
+    "label": "Post Activity",
+    "method": "POST",
+    "path": "/channels/activity",
+    "write": true
+  },
+  "storage.getAttachmentReferences": {
+    "label": "Get Attachment References",
+    "method": "GET",
+    "path": "/channels/attachments/{entity_type}/{entity_id}/references",
+    "write": false
+  },
+  "storage.getOrCreateDm": {
+    "label": "Get Or Create Dm",
+    "method": "POST",
+    "path": "/channels/get_or_create_dm",
+    "write": true
+  },
+  "storage.getOrCreatePrivate": {
+    "label": "Get Or Create Private",
+    "method": "POST",
+    "path": "/channels/get_or_create_private",
+    "write": true
+  },
+  "storage.joinChannelByCode": {
+    "label": "Join Channel By Code",
+    "method": "POST",
+    "path": "/channels/join/{join_code}",
+    "write": true
+  },
+  "storage.createEntityMention": {
+    "label": "Create Entity Mention",
+    "method": "POST",
+    "path": "/channels/mentions",
+    "write": true
+  },
+  "storage.deleteEntityMention": {
+    "label": "Delete Entity Mention",
+    "method": "DELETE",
+    "path": "/channels/mentions/{mention_id}",
+    "write": true
+  },
+  "storage.getBatchChannelPreview": {
+    "label": "Get Batch Channel Preview",
+    "method": "POST",
+    "path": "/channels/preview",
+    "write": false
+  },
+  "storage.deleteChannel": {
+    "label": "Delete Channel",
+    "method": "DELETE",
+    "path": "/channels/{channel_id}",
+    "write": true
+  },
+  "storage.getChannel": {
+    "label": "Get Channel",
+    "method": "GET",
+    "path": "/channels/{channel_id}",
+    "write": false
+  },
+  "storage.patchChannel": {
+    "label": "Patch Channel",
+    "method": "PATCH",
+    "path": "/channels/{channel_id}",
+    "write": true
+  },
+  "storage.getChannelAttachments": {
+    "label": "Get Channel Attachments",
+    "method": "GET",
+    "path": "/channels/{channel_id}/attachments",
+    "write": false
+  },
+  "storage.createChannelScopedBot": {
+    "label": "Create Channel Scoped Bot",
+    "method": "POST",
+    "path": "/channels/{channel_id}/bots/scoped",
+    "write": true
+  },
+  "storage.joinChannel": {
+    "label": "Join Channel",
+    "method": "POST",
+    "path": "/channels/{channel_id}/join",
+    "write": true
+  },
+  "storage.getChannelJoinLink": {
+    "label": "Get Channel Join Link",
+    "method": "GET",
+    "path": "/channels/{channel_id}/join-link",
+    "write": false
+  },
+  "storage.leaveChannel": {
+    "label": "Leave Channel",
+    "method": "POST",
+    "path": "/channels/{channel_id}/leave",
+    "write": true
+  },
+  "storage.removeParticipants": {
+    "label": "Remove Participants",
+    "method": "DELETE",
+    "path": "/channels/{channel_id}/participants",
+    "write": true
+  },
+  "storage.getChannelParticipants": {
+    "label": "Get Channel Participants",
+    "method": "GET",
+    "path": "/channels/{channel_id}/participants",
+    "write": false
+  },
+  "storage.addParticipants": {
+    "label": "Add Participants",
+    "method": "POST",
+    "path": "/channels/{channel_id}/participants",
+    "write": true
+  },
+  "storage.setChannelPicture": {
+    "label": "Set Channel Picture",
+    "method": "PUT",
+    "path": "/channels/{channel_id}/profile_picture",
+    "write": true
+  },
+  "storage.postChannelBotWebhook": {
+    "label": "Post Channel Bot Webhook",
+    "method": "POST",
+    "path": "/channels/{channel_id}/webhook",
+    "write": true
+  },
+  "storage.deleteCollabSurface": {
+    "label": "Delete Collab Surface",
+    "method": "DELETE",
+    "path": "/collab_surfaces/{id}",
+    "write": true
+  },
+  "storage.getCollabSurface": {
+    "label": "Get Collab Surface",
+    "method": "GET",
+    "path": "/collab_surfaces/{id}",
+    "write": false
+  },
+  "storage.ensureCollabSurface": {
+    "label": "Ensure Collab Surface",
+    "method": "PUT",
+    "path": "/collab_surfaces/{id}",
+    "write": true
+  },
+  "storage.createCollabSurfaceToken": {
+    "label": "Create Collab Surface Token",
+    "method": "POST",
+    "path": "/collab_surfaces/{id}/token",
+    "write": true
+  },
+  "storage.getChannels": {
+    "label": "Get Channels",
+    "method": "GET",
+    "path": "/comms/channels",
+    "write": false
+  },
+  "storage.createCrmCompany": {
+    "label": "Create Crm Company",
+    "method": "POST",
+    "path": "/crm/companies",
+    "write": true
+  },
+  "storage.getCompany": {
+    "label": "Get Company",
+    "method": "GET",
+    "path": "/crm/companies/{company_id}",
+    "write": false
+  },
+  "storage.listCompanyContacts": {
+    "label": "List Company Contacts",
+    "method": "GET",
+    "path": "/crm/companies/{company_id}/contacts",
+    "write": false
+  },
+  "storage.createCrmContact": {
+    "label": "Create Crm Contact",
+    "method": "POST",
+    "path": "/crm/companies/{company_id}/contacts",
+    "write": true
+  },
+  "storage.setEmailSync": {
+    "label": "Set Email Sync",
+    "method": "PUT",
+    "path": "/crm/companies/{company_id}/email-sync",
+    "write": true
+  },
+  "storage.setCompanyHidden": {
+    "label": "Set Company Hidden",
+    "method": "PUT",
+    "path": "/crm/companies/{company_id}/hidden",
+    "write": true
+  },
+  "storage.setCrmCompanyName": {
+    "label": "Set Crm Company Name",
+    "method": "PUT",
+    "path": "/crm/companies/{company_id}/name",
+    "write": true
+  },
+  "storage.searchContacts": {
+    "label": "Search Contacts",
+    "method": "GET",
+    "path": "/crm/contacts",
+    "write": false
+  },
+  "storage.getContactByEmail": {
+    "label": "Get Contact By Email",
+    "method": "GET",
+    "path": "/crm/contacts/by-email",
+    "write": false
+  },
+  "storage.getContact": {
+    "label": "Get Contact",
+    "method": "GET",
+    "path": "/crm/contacts/{contact_id}",
+    "write": false
+  },
+  "storage.setContactHidden": {
+    "label": "Set Contact Hidden",
+    "method": "PUT",
+    "path": "/crm/contacts/{contact_id}/hidden",
+    "write": true
+  },
+  "storage.setCrmContactName": {
+    "label": "Set Crm Contact Name",
+    "method": "PUT",
+    "path": "/crm/contacts/{contact_id}/name",
+    "write": true
+  },
+  "storage.listCrmPipelines": {
+    "label": "List Crm Pipelines",
+    "method": "GET",
+    "path": "/crm/pipelines",
+    "write": false
+  },
+  "storage.createCrmPipeline": {
+    "label": "Create Crm Pipeline",
+    "method": "POST",
+    "path": "/crm/pipelines",
+    "write": true
+  },
+  "storage.getCrmPipeline": {
+    "label": "Get Crm Pipeline",
+    "method": "GET",
+    "path": "/crm/pipelines/{id}",
+    "write": false
+  },
+  "storage.renameCrmPipeline": {
+    "label": "Rename Crm Pipeline",
+    "method": "PUT",
+    "path": "/crm/pipelines/{id}/name",
+    "write": true
+  },
+  "storage.applyCrmPipelineOps": {
+    "label": "Apply Crm Pipeline Ops",
+    "method": "POST",
+    "path": "/crm/pipelines/{id}/ops",
+    "write": true
+  },
+  "storage.getCrmPipelinePermissions": {
+    "label": "Get Crm Pipeline Permissions",
+    "method": "GET",
+    "path": "/crm/pipelines/{id}/permissions",
+    "write": false
+  },
+  "storage.updateCrmPipelinePermissions": {
+    "label": "Update Crm Pipeline Permissions",
+    "method": "PATCH",
+    "path": "/crm/pipelines/{id}/permissions",
+    "write": true
+  },
+  "storage.getCrmPipelineRows": {
+    "label": "Get Crm Pipeline Rows",
+    "method": "GET",
+    "path": "/crm/pipelines/{id}/rows",
+    "write": false
+  },
+  "storage.queryCrmPipelineRows": {
+    "label": "Query Crm Pipeline Rows",
+    "method": "POST",
+    "path": "/crm/pipelines/{id}/rows",
+    "write": false
+  },
+  "storage.shareCrmPipeline": {
+    "label": "Share Crm Pipeline",
+    "method": "PUT",
+    "path": "/crm/pipelines/{id}/sharing",
+    "write": true
+  },
+  "storage.getCrmPipelineTable": {
+    "label": "Get Crm Pipeline Table",
+    "method": "GET",
+    "path": "/crm/pipelines/{id}/table",
+    "write": false
+  },
+  "storage.trashCrmPipeline": {
+    "label": "Trash Crm Pipeline",
+    "method": "PUT",
+    "path": "/crm/pipelines/{id}/trash",
+    "write": true
+  },
+  "storage.getCrmTeamSettings": {
+    "label": "Get Crm Team Settings",
+    "method": "GET",
+    "path": "/crm/settings",
+    "write": false
+  },
+  "storage.putCrmTeamSettings": {
+    "label": "Put Crm Team Settings",
+    "method": "PUT",
+    "path": "/crm/settings",
+    "write": true
+  },
+  "storage.resetCrmTeamStages": {
+    "label": "Reset Crm Team Stages",
+    "method": "DELETE",
+    "path": "/crm/stages",
+    "write": true
+  },
+  "storage.putCrmTeamStages": {
+    "label": "Put Crm Team Stages",
+    "method": "PUT",
+    "path": "/crm/stages",
+    "write": true
+  },
+  "storage.listDatabases": {
+    "label": "List Databases",
+    "method": "GET",
+    "path": "/databases",
+    "write": false
+  },
+  "storage.createDatabase": {
+    "label": "Create Database",
+    "method": "POST",
+    "path": "/databases",
+    "write": true
+  },
+  "storage.saveDatabaseQuery": {
+    "label": "Save Database Query",
+    "method": "POST",
+    "path": "/databases/queries",
+    "write": true
+  },
+  "storage.getDatabaseQuery": {
+    "label": "Get Database Query",
+    "method": "GET",
+    "path": "/databases/queries/{query_id}",
+    "write": false
+  },
+  "storage.queryDatabases": {
+    "label": "Query Databases",
+    "method": "POST",
+    "path": "/databases/query",
+    "write": true
+  },
+  "storage.ensureStarterHandler": {
+    "label": "Ensure Starter",
+    "method": "POST",
+    "path": "/databases/starter",
+    "write": true
+  },
+  "storage.deliverDatabaseWebhook": {
+    "label": "Deliver Database Webhook",
+    "method": "POST",
+    "path": "/databases/webhooks/{token}",
+    "write": true
+  },
+  "storage.getDatabase": {
+    "label": "Get Database",
+    "method": "GET",
+    "path": "/databases/{id}",
+    "write": false
+  },
+  "storage.shareDatabaseAwareness": {
+    "label": "Share Database Awareness",
+    "method": "PUT",
+    "path": "/databases/{id}/awareness",
+    "write": true
+  },
+  "storage.undoDatabaseChange": {
+    "label": "Undo Database Change",
+    "method": "POST",
+    "path": "/databases/{id}/changes/{change}/undo",
+    "write": true
+  },
+  "storage.importDatabaseTable": {
+    "label": "Import Database Table",
+    "method": "POST",
+    "path": "/databases/{id}/import",
+    "write": true
+  },
+  "storage.applyDatabaseOps": {
+    "label": "Apply Database Ops",
+    "method": "POST",
+    "path": "/databases/{id}/ops",
+    "write": true
+  },
+  "storage.getDatabasePermissions": {
+    "label": "Get Database Permissions",
+    "method": "GET",
+    "path": "/databases/{id}/permissions",
+    "write": false
+  },
+  "storage.updateDatabasePermissions": {
+    "label": "Update Database Permissions",
+    "method": "PATCH",
+    "path": "/databases/{id}/permissions",
+    "write": true
+  },
+  "storage.getDatabaseTableChanges": {
+    "label": "Get Database Table Changes",
+    "method": "GET",
+    "path": "/databases/{id}/tables/{table_id}/changes",
+    "write": false
+  },
+  "storage.listDatabaseColumnCasts": {
+    "label": "List Database Column Casts",
+    "method": "GET",
+    "path": "/databases/{id}/tables/{table_id}/columns/{column_id}/casts",
+    "write": false
+  },
+  "storage.convertDatabaseColumn": {
+    "label": "Convert Database Column",
+    "method": "POST",
+    "path": "/databases/{id}/tables/{table_id}/columns/{column_id}/conversion",
+    "write": true
+  },
+  "storage.inferDatabaseColumnType": {
+    "label": "Infer Database Column Type",
+    "method": "POST",
+    "path": "/databases/{id}/tables/{table_id}/columns/{column_id}/infer-type",
+    "write": true
+  },
+  "storage.getDatabaseRowHistory": {
+    "label": "Get Database Row History",
+    "method": "GET",
+    "path": "/databases/{id}/tables/{table_id}/rows/{row_id}/history",
+    "write": false
+  },
+  "storage.getDatabaseViewPositions": {
+    "label": "Get Database View Positions",
+    "method": "GET",
+    "path": "/databases/{id}/views/{view_id}/positions",
+    "write": false
+  },
+  "storage.listDatabaseWebhooks": {
+    "label": "List Database Webhooks",
+    "method": "GET",
+    "path": "/databases/{id}/webhooks",
+    "write": false
+  },
+  "storage.createDatabaseWebhook": {
+    "label": "Create Database Webhook",
+    "method": "POST",
+    "path": "/databases/{id}/webhooks",
+    "write": true
+  },
+  "storage.deleteDatabaseWebhook": {
+    "label": "Delete Database Webhook",
+    "method": "DELETE",
+    "path": "/databases/{id}/webhooks/{webhook_id}",
+    "write": true
+  },
+  "storage.transcribeDictation": {
+    "label": "Transcribe Dictation",
+    "method": "POST",
+    "path": "/dictation/transcribe",
+    "write": true
+  },
+  "storage.getUserDocumentsHandler": {
+    "label": "List documents",
+    "method": "GET",
+    "path": "/documents",
+    "write": false
+  },
+  "storage.createDocument": {
+    "label": "Create Document",
+    "method": "POST",
+    "path": "/documents",
+    "write": true
+  },
+  "storage.createCanvasHandler": {
+    "label": "Create Canvas",
+    "method": "POST",
+    "path": "/documents/create_canvas",
+    "write": true
+  },
+  "storage.createMarkdownHandler": {
+    "label": "Create Markdown",
+    "method": "POST",
+    "path": "/documents/create_markdown",
+    "write": true
+  },
+  "storage.createSkillHandler": {
+    "label": "Create Skill",
+    "method": "POST",
+    "path": "/documents/create_skill",
+    "write": true
+  },
+  "storage.createSnippetHandler": {
+    "label": "Create Snippet",
+    "method": "POST",
+    "path": "/documents/create_snippet",
+    "write": true
+  },
+  "storage.createTaskHandler": {
+    "label": "Create Task",
+    "method": "POST",
+    "path": "/documents/create_task",
+    "write": true
+  },
+  "storage.getGithubPullRequestTasks": {
+    "label": "Get Github Pull Request Tasks",
+    "method": "POST",
+    "path": "/documents/github_prs/tasks",
+    "write": false
+  },
+  "storage.initializeUserDocuments": {
+    "label": "Initialize User Documents",
+    "method": "POST",
+    "path": "/documents/initialize_user_documents",
+    "write": true
+  },
+  "storage.getDocumentListHandler": {
+    "label": "Get Document List",
+    "method": "GET",
+    "path": "/documents/list",
+    "write": false
+  },
+  "storage.validateDocumentPermissionsToken": {
+    "label": "Validate Document Permissions Token",
+    "method": "POST",
+    "path": "/documents/permissions_token/validate",
+    "write": true
+  },
+  "storage.getDocumentPermissionsToken": {
+    "label": "Get Document Permissions Token",
+    "method": "POST",
+    "path": "/documents/permissions_token/{document_id}",
+    "write": true
+  },
+  "storage.presaveDocumentHandler": {
+    "label": "Presave Document",
+    "method": "PUT",
+    "path": "/documents/presave/{document_id}",
+    "write": true
+  },
+  "storage.getBatchPreviewHandler": {
+    "label": "Get Batch Preview",
+    "method": "POST",
+    "path": "/documents/preview",
+    "write": false
+  },
+  "storage.taskSimilaritySearchHandler": {
+    "label": "Task Similarity Search",
+    "method": "POST",
+    "path": "/documents/similarity_search",
+    "write": false
+  },
+  "storage.getDocumentByTeamSlug": {
+    "label": "Get Document By Team Slug",
+    "method": "GET",
+    "path": "/documents/slug/{slug}",
+    "write": false
+  },
+  "storage.handler": {
+    "label": "Handler",
+    "method": "GET",
+    "path": "/documents/starter_docs",
+    "write": false
+  },
+  "storage.getSystemSkillsHandler": {
+    "label": "Get System Skills",
+    "method": "GET",
+    "path": "/documents/system_skills",
+    "write": false
+  },
+  "storage.deleteDocument": {
+    "label": "Delete Document",
+    "method": "DELETE",
+    "path": "/documents/{document_id}",
+    "write": true
+  },
+  "storage.getDocument": {
+    "label": "Read document",
+    "method": "GET",
+    "path": "/documents/{document_id}",
+    "write": false
+  },
+  "storage.editDocument": {
+    "label": "Edit Document",
+    "method": "PATCH",
+    "path": "/documents/{document_id}",
+    "write": true
+  },
+  "storage.saveDocumentHandler": {
+    "label": "Save Document",
+    "method": "PUT",
+    "path": "/documents/{document_id}",
+    "write": true
+  },
+  "storage.getDocumentBranchName": {
+    "label": "Get Document Branch Name",
+    "method": "GET",
+    "path": "/documents/{document_id}/branch_name",
+    "write": false
+  },
+  "storage.copyDocument": {
+    "label": "Copy Document",
+    "method": "POST",
+    "path": "/documents/{document_id}/copy",
+    "write": true
+  },
+  "storage.exportDocument": {
+    "label": "Export Document",
+    "method": "GET",
+    "path": "/documents/{document_id}/export",
+    "write": false
+  },
+  "storage.getDocumentGithubPullRequests": {
+    "label": "Get Document Github Pull Requests",
+    "method": "GET",
+    "path": "/documents/{document_id}/github_prs",
+    "write": false
+  },
+  "storage.getLocationHandler": {
+    "label": "Get Location",
+    "method": "GET",
+    "path": "/documents/{document_id}/location",
+    "write": false
+  },
+  "storage.getDocumentLocationV3": {
+    "label": "Get Document Location V3",
+    "method": "GET",
+    "path": "/documents/{document_id}/location_v3",
+    "write": false
+  },
+  "storage.permanentlyDeleteDocument": {
+    "label": "Permanently Delete Document",
+    "method": "DELETE",
+    "path": "/documents/{document_id}/permanent",
+    "write": true
+  },
+  "storage.getDocumentProcessingResult": {
+    "label": "Get Document Processing Result",
+    "method": "GET",
+    "path": "/documents/{document_id}/processing",
+    "write": false
+  },
+  "storage.jobProcessingResultHandler": {
+    "label": "Job Processing Result",
+    "method": "GET",
+    "path": "/documents/{document_id}/processing/{job_id}",
+    "write": false
+  },
+  "storage.revertDeleteDocument": {
+    "label": "Revert Delete Document",
+    "method": "PUT",
+    "path": "/documents/{document_id}/revert_delete",
+    "write": true
+  },
+  "storage.getDocumentShortId": {
+    "label": "Get Document Short Id",
+    "method": "GET",
+    "path": "/documents/{document_id}/short_id",
+    "write": false
+  },
+  "storage.simpleSave": {
+    "label": "Simple Save",
+    "method": "PUT",
+    "path": "/documents/{document_id}/simple_save",
+    "write": true
+  },
+  "storage.getDocumentTeamShare": {
+    "label": "Get Document Team Share",
+    "method": "GET",
+    "path": "/documents/{document_id}/team_share",
+    "write": false
+  },
+  "storage.setDocumentTeamShare": {
+    "label": "Set Document Team Share",
+    "method": "PUT",
+    "path": "/documents/{document_id}/team_share",
+    "write": true
+  },
+  "storage.getDocumentTextContent": {
+    "label": "Get Document Text Content",
+    "method": "GET",
+    "path": "/documents/{document_id}/text-content",
+    "write": false
+  },
+  "storage.getDocumentViewsHandler": {
+    "label": "Get Document Views",
+    "method": "GET",
+    "path": "/documents/{document_id}/views",
+    "write": false
+  },
+  "storage.getDocumentVersion": {
+    "label": "Get Document Version",
+    "method": "GET",
+    "path": "/documents/{document_id}/{document_version_id}",
+    "write": false
+  },
+  "storage.accessRequestsState": {
+    "label": "Access Requests State",
+    "method": "GET",
+    "path": "/entities/{entity_type}/{entity_id}/access-requests",
+    "write": false
+  },
+  "storage.accessRequestsCancel": {
+    "label": "Access Requests Cancel",
+    "method": "DELETE",
+    "path": "/entities/{entity_type}/{entity_id}/access-requests/mine",
+    "write": true
+  },
+  "storage.accessRequestsSubmit": {
+    "label": "Access Requests Submit",
+    "method": "PUT",
+    "path": "/entities/{entity_type}/{entity_id}/access-requests/mine",
+    "write": true
+  },
+  "storage.accessRequestsResolve": {
+    "label": "Access Requests Resolve",
+    "method": "POST",
+    "path": "/entities/{entity_type}/{entity_id}/access-requests/{request_id}/resolve",
+    "write": true
+  },
+  "storage.accessRequestsDirect": {
+    "label": "Access Requests Direct",
+    "method": "GET",
+    "path": "/entities/{entity_type}/{entity_id}/direct-access",
+    "write": false
+  },
+  "storage.accessRequestsRemoveDirect": {
+    "label": "Access Requests Remove Direct",
+    "method": "DELETE",
+    "path": "/entities/{entity_type}/{entity_id}/direct-access/{user_id}",
+    "write": true
+  },
+  "storage.accessRequestsSetDirect": {
+    "label": "Access Requests Set Direct",
+    "method": "PUT",
+    "path": "/entities/{entity_type}/{entity_id}/direct-access/{user_id}",
+    "write": true
+  },
+  "storage.getEntityPermission": {
+    "label": "Get Entity Permission",
+    "method": "GET",
+    "path": "/entity/{entity_type}/{entity_id}/permissions",
+    "write": false
+  },
+  "storage.externalChats": {
+    "label": "External Chats",
+    "method": "GET",
+    "path": "/external-chats",
+    "write": false
+  },
+  "storage.externalChatAdd": {
+    "label": "External Chat Add",
+    "method": "POST",
+    "path": "/external-chats",
+    "write": true
+  },
+  "storage.externalChatRemove": {
+    "label": "External Chat Remove",
+    "method": "DELETE",
+    "path": "/external-chats/{chat_id}",
+    "write": true
+  },
+  "storage.externalChat": {
+    "label": "External Chat",
+    "method": "GET",
+    "path": "/external-chats/{chat_id}",
+    "write": false
+  },
+  "storage.externalChatUpload": {
+    "label": "External Chat Upload",
+    "method": "POST",
+    "path": "/external-chats/{chat_id}/attachments",
+    "write": true
+  },
+  "storage.externalChatDelivery": {
+    "label": "External Chat Delivery",
+    "method": "POST",
+    "path": "/external-chats/{chat_id}/delivery",
+    "write": true
+  },
+  "storage.externalChatMessages": {
+    "label": "External Chat Messages",
+    "method": "GET",
+    "path": "/external-chats/{chat_id}/messages",
+    "write": false
+  },
+  "storage.externalChatMessageAttachments": {
+    "label": "External Chat Message Attachments",
+    "method": "POST",
+    "path": "/external-chats/{chat_id}/messages/attachments",
+    "write": true
+  },
+  "storage.externalChatMessage": {
+    "label": "External Chat Message",
+    "method": "GET",
+    "path": "/external-chats/{chat_id}/messages/{message_id}",
+    "write": false
+  },
+  "storage.externalChatPermissions": {
+    "label": "External Chat Permissions",
+    "method": "GET",
+    "path": "/external-chats/{chat_id}/permissions",
+    "write": false
+  },
+  "storage.externalChatUpdatePermissions": {
+    "label": "External Chat Update Permissions",
+    "method": "PATCH",
+    "path": "/external-chats/{chat_id}/permissions",
+    "write": true
+  },
+  "storage.externalChatRead": {
+    "label": "External Chat Read",
+    "method": "POST",
+    "path": "/external-chats/{chat_id}/read",
+    "write": true
+  },
+  "storage.externalChatSends": {
+    "label": "External Chat Sends",
+    "method": "GET",
+    "path": "/external-chats/{chat_id}/sends",
+    "write": false
+  },
+  "storage.externalChatSend": {
+    "label": "External Chat Send",
+    "method": "POST",
+    "path": "/external-chats/{chat_id}/sends",
+    "write": true
+  },
+  "storage.listFavorites": {
+    "label": "List Favorites",
+    "method": "GET",
+    "path": "/favorites",
+    "write": false
+  },
+  "storage.addFavorite": {
+    "label": "Add Favorite",
+    "method": "POST",
+    "path": "/favorites",
+    "write": true
+  },
+  "storage.reorderFavorites": {
+    "label": "Reorder Favorites",
+    "method": "PATCH",
+    "path": "/favorites/reorder",
+    "write": true
+  },
+  "storage.removeFavoriteByEntity": {
+    "label": "Remove Favorite By Entity",
+    "method": "DELETE",
+    "path": "/favorites/{entity_type}/{entity_id}",
+    "write": true
+  },
+  "storage.getForeignEntityBySource": {
+    "label": "Get Foreign Entity By Source",
+    "method": "GET",
+    "path": "/foreign_entity/by_source/{source}/{foreign_entity_id}",
+    "write": false
+  },
+  "storage.getForeignEntity": {
+    "label": "Get Foreign Entity",
+    "method": "GET",
+    "path": "/foreign_entity/{id}",
+    "write": false
+  },
+  "storage.listForms": {
+    "label": "List Forms",
+    "method": "GET",
+    "path": "/forms",
+    "write": false
+  },
+  "storage.createForm": {
+    "label": "Create Form",
+    "method": "POST",
+    "path": "/forms",
+    "write": true
+  },
+  "storage.listAccessibleForms": {
+    "label": "List Accessible Forms",
+    "method": "GET",
+    "path": "/forms/accessible",
+    "write": false
+  },
+  "storage.getForm": {
+    "label": "Get Form",
+    "method": "GET",
+    "path": "/forms/{id}",
+    "write": false
+  },
+  "storage.updateForm": {
+    "label": "Update Form",
+    "method": "PATCH",
+    "path": "/forms/{id}",
+    "write": true
+  },
+  "storage.collaborateForm": {
+    "label": "Collaborate Form",
+    "method": "POST",
+    "path": "/forms/{id}/collaboration",
+    "write": true
+  },
+  "storage.putFormLayout": {
+    "label": "Put Form Layout",
+    "method": "PUT",
+    "path": "/forms/{id}/layout",
+    "write": true
+  },
+  "storage.getFormPermissions": {
+    "label": "Get Form Permissions",
+    "method": "GET",
+    "path": "/forms/{id}/permissions",
+    "write": false
+  },
+  "storage.updateFormPermissions": {
+    "label": "Update Form Permissions",
+    "method": "PATCH",
+    "path": "/forms/{id}/permissions",
+    "write": true
+  },
+  "storage.submitFormResponse": {
+    "label": "Submit Form Response",
+    "method": "POST",
+    "path": "/forms/{id}/responses",
+    "write": true
+  },
+  "storage.getMyFormResponse": {
+    "label": "Get My Form Response",
+    "method": "GET",
+    "path": "/forms/{id}/responses/mine",
+    "write": false
+  },
+  "storage.editMyFormResponse": {
+    "label": "Edit My Form Response",
+    "method": "PUT",
+    "path": "/forms/{id}/responses/mine",
+    "write": true
+  },
+  "storage.getFormResponseSummary": {
+    "label": "Get Form Response Summary",
+    "method": "GET",
+    "path": "/forms/{id}/responses/summary",
+    "write": false
+  },
+  "storage.getFormTally": {
+    "label": "Get Form Tally",
+    "method": "GET",
+    "path": "/forms/{id}/tally",
+    "write": false
+  },
+  "storage.installSync": {
+    "label": "Install Sync",
+    "method": "GET",
+    "path": "/github/install-sync",
+    "write": false
+  },
+  "storage.getGithubPullRequestFacets": {
+    "label": "Get Github Pull Request Facets",
+    "method": "GET",
+    "path": "/github_pull_requests/facets",
+    "write": false
+  },
+  "storage.getGithubPullRequest": {
+    "label": "Get Github Pull Request",
+    "method": "GET",
+    "path": "/github_pull_requests/{id}",
+    "write": false
+  },
+  "storage.getGithubPullRequestChanges": {
+    "label": "Get Github Pull Request Changes",
+    "method": "GET",
+    "path": "/github_pull_requests/{id}/changes",
+    "write": false
+  },
+  "storage.getGithubPullRequestChangesPatch": {
+    "label": "Get Github Pull Request Changes Patch",
+    "method": "GET",
+    "path": "/github_pull_requests/{id}/changes/patch",
+    "write": false
+  },
+  "storage.createHarnessPairing": {
+    "label": "Create Harness Pairing",
+    "method": "POST",
+    "path": "/harness-pairings",
+    "write": true
+  },
+  "storage.getHarnessPairing": {
+    "label": "Get Harness Pairing",
+    "method": "GET",
+    "path": "/harness-pairings/{code}",
+    "write": false
+  },
+  "storage.approveHarnessPairing": {
+    "label": "Approve Harness Pairing",
+    "method": "POST",
+    "path": "/harness-pairings/{code}/approve",
+    "write": true
+  },
+  "storage.claimHarnessPairing": {
+    "label": "Claim Harness Pairing",
+    "method": "POST",
+    "path": "/harness-pairings/{pairing_id}/claim",
+    "write": true
+  },
+  "storage.listHarnesses": {
+    "label": "List Harnesses",
+    "method": "GET",
+    "path": "/harnesses",
+    "write": false
+  },
+  "storage.deleteSelfHarness": {
+    "label": "Delete Self Harness",
+    "method": "DELETE",
+    "path": "/harnesses/me",
+    "write": true
+  },
+  "storage.getSelfHarness": {
+    "label": "Get Self Harness",
+    "method": "GET",
+    "path": "/harnesses/me",
+    "write": false
+  },
+  "storage.listHarnessAgents": {
+    "label": "List Harness Agents",
+    "method": "GET",
+    "path": "/harnesses/me/agents",
+    "write": false
+  },
+  "storage.listHarnessSessions": {
+    "label": "List Harness Sessions",
+    "method": "GET",
+    "path": "/harnesses/me/sessions",
+    "write": false
+  },
+  "storage.deleteHarness": {
+    "label": "Delete Harness",
+    "method": "DELETE",
+    "path": "/harnesses/{harness_id}",
+    "write": true
+  },
+  "storage.healthHandler": {
+    "label": "Health",
+    "method": "GET",
+    "path": "/health",
+    "write": false
+  },
+  "storage.getHistoryHandler": {
+    "label": "Get History",
+    "method": "GET",
+    "path": "/history",
+    "write": false
+  },
+  "storage.deleteHistoryHandler": {
+    "label": "Delete History",
+    "method": "DELETE",
+    "path": "/history/{item_type}/{item_id}",
+    "write": true
+  },
+  "storage.upsertHistoryHandler": {
+    "label": "Upsert History",
+    "method": "POST",
+    "path": "/history/{item_type}/{item_id}",
+    "write": true
+  },
+  "storage.listInitiatives": {
+    "label": "List Initiatives",
+    "method": "GET",
+    "path": "/initiatives",
+    "write": false
+  },
+  "storage.createInitiative": {
+    "label": "Create Initiative",
+    "method": "POST",
+    "path": "/initiatives",
+    "write": true
+  },
+  "storage.deleteInitiative": {
+    "label": "Delete Initiative",
+    "method": "DELETE",
+    "path": "/initiatives/{initiative_id}",
+    "write": true
+  },
+  "storage.getInitiative": {
+    "label": "Get Initiative",
+    "method": "GET",
+    "path": "/initiatives/{initiative_id}",
+    "write": false
+  },
+  "storage.updateInitiative": {
+    "label": "Update Initiative",
+    "method": "PATCH",
+    "path": "/initiatives/{initiative_id}",
+    "write": true
+  },
+  "storage.getInstructionsHandler": {
+    "label": "Get Instructions",
+    "method": "GET",
+    "path": "/instructions",
+    "write": false
+  },
+  "storage.createInstructionsHandler": {
+    "label": "Create Instructions",
+    "method": "POST",
+    "path": "/instructions",
+    "write": true
+  },
+  "storage.getItemsSoup": {
+    "label": "Get Items Soup",
+    "method": "GET",
+    "path": "/items/soup",
+    "write": false
+  },
+  "storage.postItemsSoup": {
+    "label": "Post Items Soup",
+    "method": "POST",
+    "path": "/items/soup",
+    "write": false
+  },
+  "storage.postItemsSoupAst": {
+    "label": "Browse workspace",
+    "method": "POST",
+    "path": "/items/soup/ast",
+    "write": false
+  },
+  "storage.postItemsSoupAstGrouped": {
+    "label": "Browse workspace",
+    "method": "POST",
+    "path": "/items/soup/ast/grouped",
+    "write": false
+  },
+  "storage.messageTimeline": {
+    "label": "Message Timeline",
+    "method": "GET",
+    "path": "/messages/{parent_type}/{parent_id}",
+    "write": false
+  },
+  "storage.entityMessageCreate": {
+    "label": "Entity Message Create",
+    "method": "POST",
+    "path": "/messages/{parent_type}/{parent_id}",
+    "write": true
+  },
+  "storage.entityMessageDeleteMessage": {
+    "label": "Entity Message Delete Message",
+    "method": "DELETE",
+    "path": "/messages/{parent_type}/{parent_id}/items/{id}",
+    "write": true
+  },
+  "storage.entityMessageGetMessage": {
+    "label": "Entity Message Get Message",
+    "method": "GET",
+    "path": "/messages/{parent_type}/{parent_id}/items/{id}",
+    "write": false
+  },
+  "storage.entityMessageEdit": {
+    "label": "Entity Message Edit",
+    "method": "PATCH",
+    "path": "/messages/{parent_type}/{parent_id}/items/{id}",
+    "write": true
+  },
+  "storage.entityMessageReact": {
+    "label": "Entity Message React",
+    "method": "POST",
+    "path": "/messages/{parent_type}/{parent_id}/items/{id}/reactions",
+    "write": true
+  },
+  "storage.entityMessageLegacy": {
+    "label": "Entity Message Legacy",
+    "method": "GET",
+    "path": "/messages/{parent_type}/{parent_id}/legacy/{legacy_id}",
+    "write": false
+  },
+  "storage.entityMessageDeleteThread": {
+    "label": "Entity Message Delete Thread",
+    "method": "DELETE",
+    "path": "/messages/{parent_type}/{parent_id}/threads/{id}",
+    "write": true
+  },
+  "storage.entityMessageGetThread": {
+    "label": "Entity Message Get Thread",
+    "method": "GET",
+    "path": "/messages/{parent_type}/{parent_id}/threads/{id}",
+    "write": false
+  },
+  "storage.entityMessagePatchThread": {
+    "label": "Entity Message Patch Thread",
+    "method": "PATCH",
+    "path": "/messages/{parent_type}/{parent_id}/threads/{id}",
+    "write": true
+  },
+  "storage.messageTimelineEntries": {
+    "label": "Message Timeline Entries",
+    "method": "GET",
+    "path": "/messages/{parent_type}/{parent_id}/timeline",
+    "write": false
+  },
+  "storage.entityMessageTyping": {
+    "label": "Entity Message Typing",
+    "method": "POST",
+    "path": "/messages/{parent_type}/{parent_id}/typing",
+    "write": true
+  },
+  "storage.getPinsHandler": {
+    "label": "Get Pins",
+    "method": "GET",
+    "path": "/pins",
+    "write": false
+  },
+  "storage.reorderPinsHandler": {
+    "label": "Reorder Pins",
+    "method": "PATCH",
+    "path": "/pins",
+    "write": true
+  },
+  "storage.removePinHandler": {
+    "label": "Remove Pin",
+    "method": "DELETE",
+    "path": "/pins/{pinned_item_id}",
+    "write": true
+  },
+  "storage.addPinHandler": {
+    "label": "Add Pin",
+    "method": "POST",
+    "path": "/pins/{pinned_item_id}",
+    "write": true
+  },
+  "storage.getProjectsHandler": {
+    "label": "Get Projects",
+    "method": "GET",
+    "path": "/projects",
+    "write": false
+  },
+  "storage.createProjectHandler": {
+    "label": "Create Project",
+    "method": "POST",
+    "path": "/projects",
+    "write": true
+  },
+  "storage.getPendingProjectsHandler": {
+    "label": "Get Pending Projects",
+    "method": "GET",
+    "path": "/projects/pending",
+    "write": false
+  },
+  "storage.getBatchProjectPreview": {
+    "label": "Get Batch Project Preview",
+    "method": "POST",
+    "path": "/projects/preview",
+    "write": false
+  },
+  "storage.uploadFolderHandler": {
+    "label": "Upload Folder",
+    "method": "POST",
+    "path": "/projects/upload",
+    "write": true
+  },
+  "storage.uploadExtractFolderHandler": {
+    "label": "Upload Extract Folder",
+    "method": "POST",
+    "path": "/projects/upload_extract",
+    "write": true
+  },
+  "storage.deleteProjectHandler": {
+    "label": "Delete Project",
+    "method": "DELETE",
+    "path": "/projects/{id}",
+    "write": true
+  },
+  "storage.getProjectHandler": {
+    "label": "Get Project",
+    "method": "GET",
+    "path": "/projects/{id}",
+    "write": false
+  },
+  "storage.getProjectUserAccessLevel": {
+    "label": "Get Project User Access Level",
+    "method": "GET",
+    "path": "/projects/{id}/access_level",
+    "write": false
+  },
+  "storage.getProjectContentHandler": {
+    "label": "Get Project Content",
+    "method": "GET",
+    "path": "/projects/{id}/content",
+    "write": false
+  },
+  "storage.permanentlyDeleteProject": {
+    "label": "Permanently Delete Project",
+    "method": "DELETE",
+    "path": "/projects/{id}/permanent",
+    "write": true
+  },
+  "storage.getProjectPermissionsV2": {
+    "label": "Get Project Permissions V2",
+    "method": "GET",
+    "path": "/projects/{id}/permissions",
+    "write": false
+  },
+  "storage.revertDeleteProject": {
+    "label": "Revert Delete Project",
+    "method": "PUT",
+    "path": "/projects/{id}/revert_delete",
+    "write": true
+  },
+  "storage.recentlyDeleted": {
+    "label": "Recently Deleted",
+    "method": "GET",
+    "path": "/recents/deleted",
+    "write": false
+  },
+  "storage.listEmailReminders": {
+    "label": "List Email Reminders",
+    "method": "GET",
+    "path": "/reminders/email/collection",
+    "write": false
+  },
+  "storage.getEmailFollowup": {
+    "label": "Get Email Followup",
+    "method": "GET",
+    "path": "/reminders/email/{thread_id}",
+    "write": false
+  },
+  "storage.setEmailFollowup": {
+    "label": "Set Email Followup",
+    "method": "PUT",
+    "path": "/reminders/email/{thread_id}",
+    "write": true
+  },
+  "storage.getViewsHandler": {
+    "label": "Get Views",
+    "method": "GET",
+    "path": "/saved_views",
+    "write": false
+  },
+  "storage.createViewHandler": {
+    "label": "Create View",
+    "method": "POST",
+    "path": "/saved_views",
+    "write": true
+  },
+  "storage.excludeDefaultViewHandler": {
+    "label": "Exclude Default View",
+    "method": "POST",
+    "path": "/saved_views/exclude_default",
+    "write": true
+  },
+  "storage.deleteViewHandler": {
+    "label": "Delete View",
+    "method": "DELETE",
+    "path": "/saved_views/{saved_view_id}",
+    "write": true
+  },
+  "storage.patchViewHandler": {
+    "label": "Patch View",
+    "method": "PATCH",
+    "path": "/saved_views/{saved_view_id}",
+    "write": true
+  },
+  "storage.listSlackImports": {
+    "label": "List Slack Imports",
+    "method": "GET",
+    "path": "/slack/imports",
+    "write": false
+  },
+  "storage.createSlackImport": {
+    "label": "Create Slack Import",
+    "method": "POST",
+    "path": "/slack/imports",
+    "write": true
+  },
+  "storage.getSlackImport": {
+    "label": "Get Slack Import",
+    "method": "GET",
+    "path": "/slack/imports/{job_id}",
+    "write": false
+  },
+  "storage.cancelSlackImport": {
+    "label": "Cancel Slack Import",
+    "method": "POST",
+    "path": "/slack/imports/{job_id}/cancel",
+    "write": true
+  },
+  "storage.finalizeSlackImport": {
+    "label": "Finalize Slack Import",
+    "method": "POST",
+    "path": "/slack/imports/{job_id}/finalize",
+    "write": true
+  },
+  "storage.registerSlackImportUploads": {
+    "label": "Register Slack Import Uploads",
+    "method": "POST",
+    "path": "/slack/imports/{job_id}/uploads",
+    "write": true
+  },
+  "storage.completeSlackImportUploads": {
+    "label": "Complete Slack Import Uploads",
+    "method": "POST",
+    "path": "/slack/imports/{job_id}/uploads/complete",
+    "write": true
+  },
+  "storage.bulkWakeupSyncServiceDocuments": {
+    "label": "Bulk Wakeup Sync Service Documents",
+    "method": "POST",
+    "path": "/sync_service/wakeup",
+    "write": true
+  },
+  "storage.editThreadV2": {
+    "label": "Edit Thread V2",
+    "method": "PATCH",
+    "path": "/threads/{thread_id}",
+    "write": true
+  },
+  "storage.listUserApiKeys": {
+    "label": "List User Api Keys",
+    "method": "GET",
+    "path": "/user-api-keys",
+    "write": false
+  },
+  "storage.createUserApiKey": {
+    "label": "Create User Api Key",
+    "method": "POST",
+    "path": "/user-api-keys",
+    "write": true
+  },
+  "storage.deleteUserApiKey": {
+    "label": "Delete User Api Key",
+    "method": "DELETE",
+    "path": "/user-api-keys/{id}",
+    "write": true
+  },
+  "storage.deleteUserDocumentViewLocation": {
+    "label": "Delete User Document View Location",
+    "method": "DELETE",
+    "path": "/user_document_view_location/{document_id}",
+    "write": true
+  },
+  "storage.getUserDocumentViewLocation": {
+    "label": "Get User Document View Location",
+    "method": "GET",
+    "path": "/user_document_view_location/{document_id}",
+    "write": false
+  },
+  "storage.upsertUserDocumentViewLocation": {
+    "label": "Upsert User Document View Location",
+    "method": "POST",
+    "path": "/user_document_view_location/{document_id}",
+    "write": true
+  },
+  "storage.getDocumentPermissionsV2": {
+    "label": "Get Document Permissions V2",
+    "method": "GET",
+    "path": "/v2/documents/{document_id}/permissions",
+    "write": false
+  },
+  "storage.editProjectV2": {
+    "label": "Edit Project V2",
+    "method": "PATCH",
+    "path": "/v2/projects/{id}",
+    "write": true
+  },
+  "storage.streamEvents": {
+    "label": "Stream Events",
+    "method": "GET",
+    "path": "/webhook/events/stream",
+    "write": false
+  },
+  "storage.listWebhooks": {
+    "label": "List Webhooks",
+    "method": "GET",
+    "path": "/webhook/webhooks",
+    "write": false
+  },
+  "storage.createWebhook": {
+    "label": "Create Webhook",
+    "method": "POST",
+    "path": "/webhook/webhooks",
+    "write": true
+  },
+  "storage.deleteWebhook": {
+    "label": "Delete Webhook",
+    "method": "DELETE",
+    "path": "/webhook/webhooks/{webhook_id}",
+    "write": true
+  },
+  "storage.getWebhook": {
+    "label": "Get Webhook",
+    "method": "GET",
+    "path": "/webhook/webhooks/{webhook_id}",
+    "write": false
+  },
+  "storage.patchWebhook": {
+    "label": "Patch Webhook",
+    "method": "PATCH",
+    "path": "/webhook/webhooks/{webhook_id}",
+    "write": true
+  },
+  "storage.validateWebhook": {
+    "label": "Validate Webhook",
+    "method": "POST",
+    "path": "/webhook/webhooks/{webhook_id}/validate",
+    "write": true
+  },
+  "storage.whatsappAccount": {
+    "label": "Whatsapp Account",
+    "method": "GET",
+    "path": "/whatsapp/account",
+    "write": false
+  },
+  "storage.whatsappChats": {
+    "label": "Whatsapp Chats",
+    "method": "GET",
+    "path": "/whatsapp/chats",
+    "write": false
+  },
+  "storage.whatsappConnect": {
+    "label": "Whatsapp Connect",
+    "method": "POST",
+    "path": "/whatsapp/connect",
+    "write": true
+  },
+  "storage.whatsappDisconnect": {
+    "label": "Whatsapp Disconnect",
+    "method": "POST",
+    "path": "/whatsapp/disconnect",
+    "write": true
+  },
+  "storage.whatsappCancelPairing": {
+    "label": "Whatsapp Cancel Pairing",
+    "method": "DELETE",
+    "path": "/whatsapp/pairing/{id}",
+    "write": true
+  },
+  "storage.whatsappPairing": {
+    "label": "Whatsapp Pairing",
+    "method": "GET",
+    "path": "/whatsapp/pairing/{id}",
+    "write": false
+  },
+  "storage.whatsappPasskey": {
+    "label": "Whatsapp Passkey",
+    "method": "POST",
+    "path": "/whatsapp/pairing/{id}/passkey",
+    "write": true
+  }
+}

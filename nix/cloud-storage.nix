@@ -58,7 +58,8 @@
       # `crates/pptx_engine` embeds with `include_bytes!`; `.graphql` for the
       # `static_assets/schema.graphql` that `cache-core`'s build script reads;
       # `.jsonl` for the recorded sessions `agent_fold` tests embed; `.mjs`
-      # for the Deno bootstrap and bundled public SDK/Handlebars runtime;
+      # for the Deno bootstrap and bundled public SDK/Handlebars runtime (its
+      # operation catalog and type declarations are `.json`);
       # `.proto` for the protobuf files the `whatsmeow_proto` and
       # `whatsmeow_signal` build scripts compile.
       assetFilter =
@@ -1022,8 +1023,8 @@
       checks = {
         code-execution-assets = pkgs.runCommand "cloud-storage-code-execution-assets" { } ''
           for source in ${src} ${prunedDeploySrc "service-agent-harness-service" "agent_harness_service"}; do
-            for asset in bootstrap.mjs sdk.mjs handlebars.mjs; do
-              test -s "$source/crates/code_execution/src/outbound/deno/$asset"
+            for asset in outbound/deno/bootstrap.mjs outbound/deno/sdk.mjs outbound/deno/handlebars.mjs outbound/deno/sdk-types.json domain/operations.json; do
+              test -s "$source/crates/code_execution/src/$asset"
             done
           done
           touch $out
