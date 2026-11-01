@@ -539,7 +539,10 @@ about a minute before it sends, as a draft scheduled with
 that delivery sends as `List-Unsubscribe` / `List-Unsubscribe-Post`. A reply
 step is created only after its parent is sent, so it threads like any reply.
 Inbox sync calls the crate after each committed upsert so a reply or bounce
-stops the enrollment; the sweep checks again before every step.
+stops the enrollment; the sweep checks again before every step, including
+bounces from `mailer-daemon@` or `postmaster@` that arrive in a thread of their
+own. A delay notice is not a bounce, and a bounce stops only the addresses it
+reports as failed, not those in the original message it quotes.
 
 A pending step (source set, neither sent nor failed) is not the user's mail:
 every mail list (the static views and the dynamic builder, which checks it when
@@ -547,6 +550,9 @@ choosing candidate threads so pages stay full), the thread projection and its
 importance, the GraphQL mail cache, search, and `GET /email/drafts/scheduled`
 leave it out. Threads still return it, with GraphQL `scheduledSendSource`, so
 the web thread view can skip it. A failed step shows again like any draft.
+Rescheduling or unscheduling a pending step from Mail clears its source, so it
+becomes the user's own send; the sequence then waits for them to send or
+delete it.
 Writers that make a message a pending step or stop it being one recompute the
 thread. A reply threads under a sent parent's synced Message-ID, else the
 `delivery_message_id` its delivery minted.

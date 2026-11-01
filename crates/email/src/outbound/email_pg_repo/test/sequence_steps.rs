@@ -6,7 +6,7 @@ use crate::domain::{
     models::{ContactInfo, CreateDraftInput, EmailErr, ScheduledSendSource, ScheduledSendStatus},
     ports::NoOpEnqueuer,
     scheduled::{EmailSchedulingRepo, ScheduleChange},
-    sequence_steps::{CancelExpectation, CancelOutcome, NewStep, SequenceStepStore},
+    sequence_steps::{CancelExpectation, CancelOutcome, NewStep, SequenceStepStore, StepState},
     service::EmailServiceImpl,
 };
 use crm::domain::service::NoOpCrmService;
@@ -239,6 +239,44 @@ async fn pending_step_stays_out_of_mail_lists(pool: Pool<Postgres>) -> anyhow::R
             .cancel_step(&mut conn, step, CancelExpectation::Draft)
             .await?,
         CancelOutcome::Gone
+    );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_draft"))
+)]
+async fn rescheduling_a_pending_step_makes_it_the_users(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = EmailPgRepo::new(pool.clone());
+    let step = create_step(&pool, None).await?;
+    let thread = thread_of(&pool, step).await?;
+    let later = chrono::Utc::now() + chrono::Duration::days(30);
+    repo.change_schedule(LINK, step, &actor(), ScheduleChange::Set(later), None, 0)
+        .await?;
+
+    let source = sqlx::query_scalar!(
+        "SELECT source FROM email_scheduled_messages WHERE message_id = $1",
+        step
+    )
+    .fetch_one(&pool)
+    .await?;
+    assert_eq!(source, None);
+    assert!(!lists(&pool).await?.showing(thread).is_empty());
+    let mut conn = pool.acquire().await?;
+    assert_eq!(
+        PgSequenceSteps.step_state(&mut conn, step).await?,
+        StepState::TakenOver
+    );
+    // Nor does its far-off time hold back the inbox's next step.
+    assert!(
+        PgSequenceSteps
+            .lock_send_slot(&mut conn, LINK)
+            .await?
+            .is_none(),
+        "only sequence sends take slots"
     );
     Ok(())
 }

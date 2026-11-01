@@ -100,7 +100,9 @@ async fn change_schedule(
                     (link_id, message_id, send_time, sent, processing, actor_id, created_at, updated_at)
                    VALUES ($1, $2, $3, false, false, $4, NOW(), NOW())
                    ON CONFLICT (link_id, message_id) DO UPDATE SET
-                    send_time = EXCLUDED.send_time, actor_id = EXCLUDED.actor_id, updated_at = NOW()
+                    send_time = EXCLUDED.send_time, actor_id = EXCLUDED.actor_id, updated_at = NOW(),
+                    -- Rescheduling a pending sequence step makes it the user's own send.
+                    source = NULL
                    WHERE NOT email_scheduled_messages.sent AND NOT email_scheduled_messages.processing"#,
                 link_id, message_id, send_time, actor.as_ref(),
             ).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
@@ -139,11 +141,11 @@ async fn change_schedule(
             ).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
         }
     }
-    // Cancelling a pending sequence step puts its draft back in its thread's mail state.
-    if matches!(change, ScheduleChange::Cancel)
-        && schedule
-            .as_ref()
-            .is_some_and(|row| row.source.is_some() && row.delivery_status != "failed")
+    // Cancelling or rescheduling a pending sequence step puts it back in its
+    // thread's mail state.
+    if schedule
+        .as_ref()
+        .is_some_and(|row| row.source.is_some() && row.delivery_status != "failed")
     {
         super::thread::update_thread_metadata(&mut tx, message.thread_id, link_id)
             .await
