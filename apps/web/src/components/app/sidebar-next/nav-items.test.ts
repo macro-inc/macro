@@ -23,7 +23,6 @@ const defaultGates = (overrides: Partial<NavItemGates> = {}): NavItemGates => ({
   showReviews: true,
   showActivity: true,
   showExternal: true,
-  showEmailMarketing: true,
   prefs: defaultPrefs(),
   ...overrides,
 });
@@ -176,19 +175,6 @@ describe('External', () => {
       ]) {
         expect(items.some((item) => item.id === 'external')).toBe(false);
       }
-    }
-  });
-});
-
-describe('Email Marketing', () => {
-  it('keeps Email Marketing absent everywhere when its feature flag is off', () => {
-    const gates = defaultGates({ showEmailMarketing: false });
-    for (const items of [
-      customizableNavItems(gates),
-      visibleNavItems(gates),
-      moreMenuItems(gates),
-    ]) {
-      expect(items.some((item) => item.id === 'email-marketing')).toBe(false);
     }
   });
 });

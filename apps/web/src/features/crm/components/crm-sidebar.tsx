@@ -36,6 +36,8 @@ export function CrmSidebar(props: {
   /** The highlighted record type, list, pipeline, or `settings`. */
   active: string;
   pipelines?: JSX.Element;
+  /** After pipelines, while sequences are available. */
+  sequences?: JSX.Element;
   /** Pinned to the bottom of the scrolling content, above the tools. */
   promotion?: JSX.Element;
   lists: { id: string; name: string; count: number }[];
@@ -144,6 +146,7 @@ export function CrmSidebar(props: {
           </CollapsibleSection.Content>
         </CollapsibleSection.Root>
         {props.pipelines}
+        {props.sequences}
         <Show when={props.listsEnabled}>
           <CollapsibleSection.Root
             open={listsOpen()}

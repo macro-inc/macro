@@ -92,7 +92,7 @@ describe('thread message selection', () => {
     });
     expect(selectThreadMessages(thread([standalone])).messages).toEqual([]);
   });
-  it('keeps a pending Email Marketing step out of the thread and out of the reply slot', () => {
+  it('keeps a pending sequence step out of the thread and out of the reply slot', () => {
     const parent = message('parent');
     const mine = message('mine', {
       is_draft: true,

@@ -45,7 +45,7 @@ function messageTime(message: EmailMessage) {
 }
 
 /**
- * An Email Marketing step waiting to send. It is not the user's mail: it
+ * A sequence step waiting to send. It is not the user's mail: it
  * stays out of the thread, and never takes the reply slot of the email it
  * answers. A failed step is a draft the user can fix.
  */

@@ -11,10 +11,16 @@ import {
   crmPipelineRecordRoute,
   crmPipelineRoute,
   crmRecordRoute,
+  crmSequenceRoute,
 } from '@app/routes/routes';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { CrmRoute } from './context/workspace-context';
-import { pipelineIdOfTab, pipelineTab } from './core/navigation';
+import {
+  pipelineIdOfTab,
+  pipelineTab,
+  sequenceIdOfTab,
+  sequenceTab,
+} from './core/navigation';
 import type { CrmRecordRef, CrmRecordSection } from './core/record';
 import {
   type CrmRecordParams,
@@ -23,7 +29,10 @@ import {
   crmSearchCodec,
 } from './crm-route';
 
-type CrmBranchParams = Partial<CrmRecordParams> & { pipelineId?: string };
+type CrmBranchParams = Partial<CrmRecordParams> & {
+  pipelineId?: string;
+  sequenceId?: string;
+};
 
 /** The list tab an entry shows, or undefined for a record. */
 function listTab(entry: Entry): string | undefined {
@@ -31,6 +40,10 @@ function listTab(entry: Entry): string | undefined {
   if (leaf?.id === crmPipelineRoute.id) {
     const { pipelineId } = leaf.params;
     return typeof pipelineId === 'string' ? pipelineTab(pipelineId) : undefined;
+  }
+  if (leaf?.id === crmSequenceRoute.id) {
+    const { sequenceId } = leaf.params;
+    return typeof sequenceId === 'string' ? sequenceTab(sequenceId) : undefined;
   }
   if (leaf?.id !== companiesRoute.id) return;
   return crmSearchCodec.parse(entry.location.search?.[crmSearch.namespace])
@@ -47,7 +60,11 @@ export function createCrmRoute(): CrmRoute {
   const history = usePaneHistory();
 
   const tab = () =>
-    params.pipelineId ? pipelineTab(params.pipelineId) : search.tab;
+    params.sequenceId
+      ? sequenceTab(params.sequenceId)
+      : params.pipelineId
+        ? pipelineTab(params.pipelineId)
+        : search.tab;
 
   const shown = (): CrmRecordRef | undefined =>
     params.recordType && params.recordId
@@ -99,20 +116,27 @@ export function createCrmRoute(): CrmRoute {
 
   const showList = (next: string, replace?: boolean) => {
     const pipelineId = pipelineIdOfTab(next);
+    const sequenceId = sequenceIdOfTab(next);
     const options = {
       allowDuplicate: true,
       replace,
       search: {
-        [crmSearch.namespace]: pipelineId
-          ? undefined
-          : crmSearchCodec.serialize({ tab: next }),
+        [crmSearch.namespace]:
+          pipelineId || sequenceId
+            ? undefined
+            : crmSearchCodec.serialize({ tab: next }),
         [crmRecordSearch.namespace]: undefined,
       },
     };
     fireAndForget(
       pipelineId
         ? navigate({ route: crmPipelineRoute, params: { pipelineId } }, options)
-        : navigate({ route: companiesRoute, params: {} }, options),
+        : sequenceId
+          ? navigate(
+              { route: crmSequenceRoute, params: { sequenceId } },
+              options
+            )
+          : navigate({ route: companiesRoute, params: {} }, options),
       'crm'
     );
   };

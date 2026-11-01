@@ -12,7 +12,6 @@ import {
   enableCrmLists,
   enableCrmPipelines,
   enableDatabases,
-  enableEmailMarketing,
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { useProfilePictureUrl } from '@core/signal/profilePicture';
@@ -110,9 +109,15 @@ import { crmTaskComposerContext } from './task-composer';
 const CrmRecordTasks = lazy(async () => ({
   default: (await import('./record-tasks-adapter')).CrmRecordTasks,
 }));
-const MarketingEnrollments = lazy(async () => ({
-  default: (await import('../email-marketing/contact-card'))
-    .MarketingContactCard,
+// Sequences load only where their flag mounts them.
+const SequencesNav = lazy(async () => ({
+  default: (await import('../sequences/sequences')).SequencesNav,
+}));
+const Sequences = lazy(async () => ({
+  default: (await import('../sequences/sequences')).SequencesPane,
+}));
+const ContactSequences = lazy(async () => ({
+  default: (await import('../sequences/sequences')).ContactSequences,
 }));
 
 const CrmActivityTasks = lazy(async () => ({
@@ -256,10 +261,6 @@ export function createAppCrmContext(): CrmContext {
       const flag = useFeatureFlag(enableCrmPipelines);
       return () => flag().enabled;
     },
-    emailMarketingEnabled() {
-      const flag = useFeatureFlag(enableEmailMarketing);
-      return () => flag().enabled;
-    },
     createCompanyEmails: (...args) =>
       withRowNotifications(
         useCompanyEmailsQuery(useSoupAstItemsQuery, ...args)
@@ -330,7 +331,9 @@ export function createAppCrmContext(): CrmContext {
         useRecordReferencesQuery(useSoupAstItemsQuery, scope)
       ),
     RecordTasks: CrmRecordTasks,
-    MarketingEnrollments,
+    SequencesNav,
+    Sequences,
+    ContactSequences,
     createPropertyCommands: useBulkSaveEntityPropertiesMutation,
     createSettingsCommands: () =>
       usePatchTeamCrmSettingsMutation({

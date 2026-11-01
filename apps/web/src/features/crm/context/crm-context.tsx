@@ -4,6 +4,7 @@ import {
   type Accessor,
   type Component,
   createContext,
+  type JSX,
   useContext,
 } from 'solid-js';
 import type { SetStoreFunction, Store } from 'solid-js/store';
@@ -82,7 +83,6 @@ export type CrmContext = {
   };
   listsEnabled(): Accessor<boolean>;
   pipelinesEnabled(): Accessor<boolean>;
-  emailMarketingEnabled(): Accessor<boolean>;
 
   feedback: { success(message: string): void; failure(message: string): void };
   createCompanyEmails(
@@ -137,8 +137,18 @@ export type CrmContext = {
   ): ItemListSource;
   /** The record's Tasks tab, scoped to tasks associated with it. */
   RecordTasks: Component<{ scope: CrmRecordScope }>;
-  /** Email Marketing enrollments for a contact, shown on its overview. */
-  MarketingEnrollments: Component<{ email: string }>;
+  /** The Sequences sidebar entry, with how many enrollments need attention. */
+  SequencesNav: Component<{ active: boolean; onSelect: () => void }>;
+  /** The Sequences section: the viewer's list, or one sequence. */
+  Sequences: Component<{
+    sequenceId?: string;
+    navigation?: JSX.Element;
+    onOpen: (sequenceId: string) => void;
+    onBack: () => void;
+    onOpenContact: (contactId: string) => void;
+  }>;
+  /** A contact's sequence enrollments across the team, on its Overview. */
+  ContactSequences: Component<{ contactId: string }>;
   createPropertyCommands(): PropertyCommands;
   hydrateCompany(company: CrmCompanyEntity): CrmCompanyEntity;
   createSettingsCommands(): CrmMutation<

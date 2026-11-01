@@ -52,7 +52,6 @@ import {
   DriveDetailView,
   DriveRouteView,
   EmailDetailRouteView,
-  EmailMarketingRouteView,
   FoldersRouteView,
   FormRespondRoutePage,
   HomeEntityDetailRouteView,
@@ -105,6 +104,7 @@ import {
   crmPipelineRecordRoute,
   crmPipelineRoute,
   crmRecordRoute,
+  crmSequenceRoute,
   debugRoutes,
   driveCallRoute,
   driveFolderDocumentRoute,
@@ -113,7 +113,6 @@ import {
   driveSplitRoute,
   driveTabDocumentRoute,
   driveTabRoute,
-  emailMarketingRoute,
   emailSignupCallbackRoute,
   emailSplitRoute,
   emailThreadRoute,
@@ -432,12 +431,9 @@ export function AppRouterView() {
           <Route definition={crmPipelineRoute}>
             <Route definition={crmPipelineRecordRoute} />
           </Route>
+          <Route definition={crmSequenceRoute} />
           <Route definition={crmRecordRoute} />
         </Route>
-        <Route
-          definition={emailMarketingRoute}
-          component={EmailMarketingRouteView}
-        />
         <Route definition={foldersRoute} component={FoldersRouteView} />
         <Route definition={searchRoute} component={SearchRouteView} />
         <Route definition={prDetailRoute} component={PrDetailRouteView} />

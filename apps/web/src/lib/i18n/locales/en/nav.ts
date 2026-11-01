@@ -18,7 +18,6 @@ export default {
   scheduling: 'Scheduling',
   external: 'External',
   activity: 'Activity',
-  emailMarketing: 'Email Marketing',
   recent: 'Recent',
   settings: 'Settings',
 

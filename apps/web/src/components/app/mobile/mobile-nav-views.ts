@@ -2,8 +2,7 @@
  * Views reachable from mobile navigation, in display order.
  * `search` is the "All" pill, first in the scope pill row;
  * `settings` navigates through the settings state (not `openWithSplit`), and
- * `calendar`, `reviews`, `booking-links`, `external`, and `email-marketing`
- * are feature-gated.
+ * `calendar`, `reviews`, `booking-links`, and `external` are feature-gated.
  */
 export const MOBILE_NAV_VIEW_IDS = [
   'search',
@@ -17,7 +16,6 @@ export const MOBILE_NAV_VIEW_IDS = [
   'reviews',
   'booking-links',
   'external',
-  'email-marketing',
   'calls',
   'companies',
   'settings',

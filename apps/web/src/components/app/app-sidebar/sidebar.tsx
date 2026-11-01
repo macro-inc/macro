@@ -31,7 +31,6 @@ import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_CALLS,
   enableCrm,
-  enableEmailMarketing,
   enableTasksReviews,
   enableWhatsappLinked,
 } from '@core/constant/featureFlags';
@@ -45,7 +44,6 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import BellIcon from '@icon/system/regular/bell.svg';
 import HomeIcon from '@icon/system/regular/house.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
-import PaperPlaneTiltIcon from '@icon/system/regular/paper-plane-tilt.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import ActivityIcon from '@icon/system/regular/pulse.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -257,7 +255,6 @@ export const GoToHotkeys = () => {
   const reviews = useFeatureFlag(enableTasksReviews);
   const external = useFeatureFlag(enableWhatsappLinked);
   const crm = useFeatureFlag(enableCrm);
-  const emailMarketing = useFeatureFlag(enableEmailMarketing);
   const links = createMemo((): SidebarItem[] =>
     buildSidebarLinks(
       calendarUiEnabled(),
@@ -265,8 +262,7 @@ export const GoToHotkeys = () => {
       recentViewEnabled(),
       reviews().enabled,
       external().enabled,
-      crm().enabled,
-      emailMarketing().enabled
+      crm().enabled
     )
   );
 
@@ -458,17 +454,6 @@ const REVIEWS_LINK: SidebarItem = {
   hotkeyToken: TOKENS.sidebar.goTo.reviews,
 };
 
-const EMAIL_MARKETING_LINK: SidebarItem = {
-  id: 'email-marketing',
-  get label() {
-    return t('nav.emailMarketing');
-  },
-  href: '/email-marketing',
-  icon: PaperPlaneTiltIcon,
-  hotkey: 'k',
-  hotkeyToken: TOKENS.sidebar.goTo.emailMarketing,
-};
-
 const EXTERNAL_LINK: SidebarItem = {
   id: 'external',
   get label() {
@@ -483,10 +468,9 @@ const EXTERNAL_LINK: SidebarItem = {
 
 /**
  * Assemble the ordered sidebar link list: the static links plus the
- * flag-gated Recent, Activity, Email Marketing, Calendar, Calls, Reviews, CRM,
- * and External entries in their correct positions. Callers subscribe to the
- * flags and pass them in, so a flag that resolves after mount still rebuilds
- * the list.
+ * flag-gated Recent, Activity, Calendar, Calls, Reviews, CRM, and External
+ * entries in their correct positions. Callers subscribe to the flags and pass
+ * them in, so a flag that resolves after mount still rebuilds the list.
  */
 const buildSidebarLinks = (
   showCalendar: boolean,
@@ -494,8 +478,7 @@ const buildSidebarLinks = (
   showRecent: boolean,
   showReviews: boolean,
   showExternal: boolean,
-  showCustomers: boolean,
-  showEmailMarketing: boolean
+  showCustomers: boolean
 ): SidebarItem[] => {
   let links: SidebarItem[] = SIDEBAR_LINKS.filter(
     (link) => showCalendar || link.id !== 'calendar'
@@ -513,8 +496,6 @@ const buildSidebarLinks = (
     anchorId = 'recent';
   }
   if (showActivity) insertAfter(anchorId, ACTIVITY_LINK);
-
-  if (showEmailMarketing) insertAfter('mail', EMAIL_MARKETING_LINK);
 
   if (ENABLE_CALLS) {
     const idx = links.findIndex((l) => l.id === 'channels');

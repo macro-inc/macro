@@ -370,6 +370,7 @@ it('omits pipelines and lists when those features are disabled', () => {
     'Notes',
     'Calls',
     'Databases',
+    'Sequences',
   ]);
 });
 

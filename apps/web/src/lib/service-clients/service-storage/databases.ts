@@ -31,8 +31,6 @@ import type { ListedDatabase } from './generated/schemas/listedDatabase';
 import type { OpRefusalResponse } from './generated/schemas/opRefusalResponse';
 import type { SharePermissionV2 } from './generated/schemas/sharePermissionV2';
 import type { StarterDatabase } from './generated/schemas/starterDatabase';
-import type { StorageRows } from './generated/schemas/storageRows';
-import type { StorageRowsQuery } from './generated/schemas/storageRowsQuery';
 import type { Table } from './generated/schemas/table';
 import type { TableChanges } from './generated/schemas/tableChanges';
 import type { TakenId } from './generated/schemas/takenId';
@@ -299,25 +297,6 @@ export const databasesClient = {
   }) {
     return databasesFetch<TableChanges>(
       `/databases/${id}/tables/${tableId}/changes?since=${since}`
-    );
-  },
-
-  /**
-   * One page of a table's rows and the table version it reflects, read from
-   * the primary. A write that lands mid-read fails it with CONFLICT.
-   */
-  queryRows({
-    id,
-    tableId,
-    request,
-  }: {
-    id: string;
-    tableId: string;
-    request: StorageRowsQuery;
-  }) {
-    return databasesFetch<StorageRows>(
-      `/databases/${id}/tables/${tableId}/rows`,
-      { method: 'POST', body: JSON.stringify(request) }
     );
   },
 

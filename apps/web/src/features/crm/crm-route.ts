@@ -38,6 +38,8 @@ export const crmRecordSearch = {
 
 export const crmPipelineParams = z.object({ pipelineId: z.string().min(1) });
 
+export const crmSequenceParams = z.object({ sequenceId: z.string().min(1) });
+
 /** A company or contact opened inside Customers; no section is its Overview. */
 export const crmRecordParams = z.object({
   recordType: z.enum(['company', 'contact']),

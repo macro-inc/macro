@@ -155,10 +155,10 @@ files:
   - apps/web/src/features/activity/primitives/**
   - apps/web/src/features/drive-view/primitives/**
   - apps/web/src/features/activity/views/**
-  - apps/web/src/features/email-marketing/components/**
-  - apps/web/src/features/email-marketing/queries/**
-  - apps/web/src/features/email-marketing/primitives/**
-  - apps/web/src/features/email-marketing/views/**
+  - apps/web/src/features/sequences/components/**
+  - apps/web/src/features/sequences/queries/**
+  - apps/web/src/features/sequences/primitives/**
+  - apps/web/src/features/sequences/views/**
   - apps/web/src/features/drive-view/views/**
   - apps/web/src/features/email-message/components/**
   - apps/web/src/features/email-message/queries/**

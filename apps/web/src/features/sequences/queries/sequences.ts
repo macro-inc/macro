@@ -1,0 +1,312 @@
+import {
+  type ResultError,
+  ThrownResultError,
+  throwOnErr,
+} from '@core/util/result';
+import { queryClient } from '@queries/client';
+import { emailClient, type SequenceRequestError } from '@service-email/client';
+import {
+  type EnrollmentAction,
+  type EnrollmentDetail,
+  type EnrollmentSummary,
+  type EnrollRequest,
+  type EnrollResult,
+  type Sequence,
+  type SequenceDetailResponse,
+  SequenceErrorCode,
+  type SequenceInput,
+  type SequenceStatus,
+  type SequenceSummary,
+  type UpdateSequenceRequest,
+} from '@service-email/generated/schemas';
+import { queryOptions, useMutation } from '@tanstack/solid-query';
+import type { SequenceFailure } from '../core/errors';
+import {
+  expectedState,
+  withDetailStatus,
+  withEnrollment,
+  withEnrollmentSummary,
+  withListStatus,
+  withoutSummary,
+  withSequence,
+  withSummary,
+} from './cache';
+import { sequenceKeys } from './keys';
+
+/** Steps send on the server; an open sequence follows them about once a minute. */
+const PROGRESS_INTERVAL = 60_000;
+
+function isRefusal(error: ResultError): error is SequenceRequestError {
+  return error.code in SequenceErrorCode;
+}
+
+/** A failed request as the feature reads it: the server's refusal, or no answer. */
+export function toSequenceFailure(error: unknown): SequenceFailure {
+  const refusal =
+    error instanceof ThrownResultError
+      ? error.errors.find(isRefusal)
+      : undefined;
+  if (!refusal) return { kind: 'unavailable' };
+  return {
+    kind: 'refused',
+    code: refusal.code,
+    problem: refusal.problem ?? undefined,
+    position: refusal.position ?? undefined,
+    tokens: refusal.tokens,
+  };
+}
+
+async function fetchSequences() {
+  const { sequences } = await throwOnErr(() => emailClient.listSequences());
+  return sequences;
+}
+
+export function sequencesQueryOptions() {
+  return queryOptions({
+    queryKey: sequenceKeys.list.queryKey,
+    queryFn: fetchSequences,
+    reconcile: 'id',
+    refetchOnWindowFocus: 'always',
+  });
+}
+
+export function sequenceQueryOptions(sequenceId: string) {
+  return queryOptions({
+    queryKey: sequenceKeys.detail(sequenceId).queryKey,
+    queryFn: () => throwOnErr(() => emailClient.getSequence(sequenceId)),
+    refetchInterval: PROGRESS_INTERVAL,
+    refetchOnWindowFocus: 'always',
+  });
+}
+
+export function enrollmentQueryOptions(enrollmentId: string) {
+  return queryOptions({
+    queryKey: sequenceKeys.enrollment(enrollmentId).queryKey,
+    queryFn: () => throwOnErr(() => emailClient.getEnrollment(enrollmentId)),
+    refetchInterval: PROGRESS_INTERVAL,
+  });
+}
+
+async function fetchContactEnrollments(crmContactId: string) {
+  const { enrollments } = await throwOnErr(() =>
+    emailClient.contactEnrollments(crmContactId)
+  );
+  return enrollments;
+}
+
+export function contactEnrollmentsQueryOptions(crmContactId: string) {
+  return queryOptions({
+    queryKey: sequenceKeys.contact(crmContactId).queryKey,
+    queryFn: () => fetchContactEnrollments(crmContactId),
+    refetchOnWindowFocus: 'always',
+  });
+}
+
+function setList(
+  update: (list: SequenceSummary[] | undefined) => SequenceSummary[] | undefined
+) {
+  queryClient.setQueryData<SequenceSummary[]>(
+    sequenceKeys.list.queryKey,
+    update
+  );
+}
+
+function setDetail(
+  sequenceId: string,
+  update: (
+    detail: SequenceDetailResponse | undefined
+  ) => SequenceDetailResponse | undefined
+) {
+  queryClient.setQueryData<SequenceDetailResponse>(
+    sequenceKeys.detail(sequenceId).queryKey,
+    update
+  );
+}
+
+function invalidateContactCards() {
+  return queryClient.invalidateQueries({
+    queryKey: sequenceKeys.contact._def,
+  });
+}
+
+export function useCreateSequenceMutation() {
+  return useMutation<Sequence, Error, SequenceInput>(() => ({
+    mutationFn: (input) => throwOnErr(() => emailClient.createSequence(input)),
+    onSuccess: (sequence) => {
+      queryClient.setQueryData<SequenceDetailResponse>(
+        sequenceKeys.detail(sequence.id).queryKey,
+        { sequence, enrollments: [] }
+      );
+      setList((list) => withSummary(list, sequence));
+    },
+    onSettled: () =>
+      queryClient.invalidateQueries({ queryKey: sequenceKeys.list.queryKey }),
+  }));
+}
+
+type SequenceUpdate = { sequenceId: string; request: UpdateSequenceRequest };
+type StatusRollback = { status: SequenceStatus } | undefined;
+
+/** Status changes show at once and roll back alone; edits wait for the server. */
+export function useUpdateSequenceMutation() {
+  return useMutation<Sequence, Error, SequenceUpdate, StatusRollback>(() => ({
+    mutationFn: ({ sequenceId, request }) =>
+      throwOnErr(() => emailClient.updateSequence(sequenceId, request)),
+    onMutate: async ({ sequenceId, request }) => {
+      const { status } = request;
+      if (!status) return;
+      const detailKey = sequenceKeys.detail(sequenceId).queryKey;
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: detailKey }),
+        queryClient.cancelQueries({ queryKey: sequenceKeys.list.queryKey }),
+      ]);
+      const previous =
+        queryClient.getQueryData<SequenceDetailResponse>(detailKey)?.sequence
+          .status ??
+        queryClient
+          .getQueryData<SequenceSummary[]>(sequenceKeys.list.queryKey)
+          ?.find((item) => item.id === sequenceId)?.status;
+      setDetail(sequenceId, (detail) => withDetailStatus(detail, status));
+      setList((list) => withListStatus(list, sequenceId, status));
+      return previous && { status: previous };
+    },
+    onError: (_error, { sequenceId }, rollback) => {
+      if (!rollback) return;
+      setDetail(sequenceId, (detail) =>
+        withDetailStatus(detail, rollback.status)
+      );
+      setList((list) => withListStatus(list, sequenceId, rollback.status));
+    },
+    onSuccess: (sequence) => {
+      setDetail(sequence.id, (detail) => withSequence(detail, sequence));
+      setList((list) => withSummary(list, sequence));
+    },
+    onSettled: (_data, _error, { sequenceId, request }) =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: sequenceKeys.detail(sequenceId).queryKey,
+        }),
+        queryClient.invalidateQueries({ queryKey: sequenceKeys.list.queryKey }),
+        // Contact cards show whether the sequence is paused.
+        request.status ? invalidateContactCards() : undefined,
+      ]),
+  }));
+}
+
+export function useDeleteSequenceMutation() {
+  return useMutation<void, Error, string>(() => ({
+    mutationFn: async (sequenceId) => {
+      await throwOnErr(() => emailClient.deleteSequence(sequenceId));
+    },
+    onSuccess: (_data, sequenceId) => {
+      setList((list) => withoutSummary(list, sequenceId));
+      queryClient.removeQueries({
+        queryKey: sequenceKeys.detail(sequenceId).queryKey,
+      });
+    },
+    onSettled: () =>
+      Promise.all([
+        queryClient.invalidateQueries({ queryKey: sequenceKeys.list.queryKey }),
+        invalidateContactCards(),
+      ]),
+  }));
+}
+
+type Enrollment = { sequenceId: string; request: EnrollRequest };
+
+export function useEnrollMutation() {
+  return useMutation<EnrollResult[], Error, Enrollment>(() => ({
+    mutationFn: async ({ sequenceId, request }) => {
+      const { results } = await throwOnErr(() =>
+        emailClient.enrollContacts(sequenceId, request)
+      );
+      return results;
+    },
+    onSettled: (_data, _error, { sequenceId, request }) =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey: sequenceKeys.detail(sequenceId).queryKey,
+        }),
+        queryClient.invalidateQueries({ queryKey: sequenceKeys.list.queryKey }),
+        ...request.crmContactIds.map((id) =>
+          queryClient.invalidateQueries({
+            queryKey: sequenceKeys.contact(id).queryKey,
+          })
+        ),
+      ]),
+  }));
+}
+
+type EnrollmentChange = {
+  sequenceId: string;
+  enrollment: Pick<EnrollmentSummary, 'id' | 'crmContactId'>;
+  action: EnrollmentAction;
+};
+type EnrollmentRollback = { previous: EnrollmentSummary } | undefined;
+
+function setEnrollment(sequenceId: string, enrollment: EnrollmentSummary) {
+  setDetail(sequenceId, (detail) => withEnrollment(detail, enrollment));
+  queryClient.setQueryData<EnrollmentDetail>(
+    sequenceKeys.enrollment(enrollment.id).queryKey,
+    (detail) => withEnrollmentSummary(detail, enrollment)
+  );
+}
+
+/**
+ * Pause, resume and stop show at once and roll back on failure. An opt-out
+ * is team-wide, so it waits for the server and refreshes every sequence.
+ */
+export function useEnrollmentActionMutation() {
+  return useMutation<
+    EnrollmentSummary,
+    Error,
+    EnrollmentChange,
+    EnrollmentRollback
+  >(() => ({
+    mutationFn: ({ enrollment, action }) =>
+      throwOnErr(() => emailClient.updateEnrollment(enrollment.id, { action })),
+    onMutate: async ({ sequenceId, enrollment, action }) => {
+      const expected = expectedState(action);
+      if (!expected) return;
+      const detailKey = sequenceKeys.detail(sequenceId).queryKey;
+      await Promise.all([
+        queryClient.cancelQueries({ queryKey: detailKey }),
+        queryClient.cancelQueries({
+          queryKey: sequenceKeys.enrollment(enrollment.id).queryKey,
+        }),
+      ]);
+      const previous = queryClient
+        .getQueryData<SequenceDetailResponse>(detailKey)
+        ?.enrollments.find((item) => item.id === enrollment.id);
+      if (!previous) return;
+      setEnrollment(sequenceId, { ...previous, ...expected });
+      return { previous };
+    },
+    onError: (_error, { sequenceId }, rollback) => {
+      if (rollback) setEnrollment(sequenceId, rollback.previous);
+    },
+    onSuccess: (enrollment, { sequenceId }) =>
+      setEnrollment(sequenceId, enrollment),
+    onSettled: (_data, _error, { sequenceId, enrollment, action }) =>
+      Promise.all([
+        queryClient.invalidateQueries({
+          queryKey:
+            action === 'unsubscribe'
+              ? sequenceKeys.detail._def
+              : sequenceKeys.detail(sequenceId).queryKey,
+        }),
+        queryClient.invalidateQueries({
+          queryKey: sequenceKeys.enrollment(enrollment.id).queryKey,
+        }),
+        queryClient.invalidateQueries({ queryKey: sequenceKeys.list.queryKey }),
+        action === 'unsubscribe'
+          ? invalidateContactCards()
+          : enrollment.crmContactId
+            ? queryClient.invalidateQueries({
+                queryKey: sequenceKeys.contact(enrollment.crmContactId)
+                  .queryKey,
+              })
+            : undefined,
+      ]),
+  }));
+}
