@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddDraftAttachmentData, AddDraftAttachmentErrors, AddDraftAttachmentResponses, AddForwardedAttachmentData, AddForwardedAttachmentErrors, AddForwardedAttachmentResponses, AddRemoveLabelData, AddRemoveLabelErrors, AddRemoveLabelResponses, AddRemoveThreadLabelData, AddRemoveThreadLabelErrors, AddRemoveThreadLabelResponses, ArchiveThreadData, ArchiveThreadErrors, ArchiveThreadResponses, ArchiveThreadsData, ArchiveThreadsErrors, ArchiveThreadsResponses, BlockSenderData, BlockSenderErrors, BlockSenderResponses, CancelBackfillGmailData, CancelBackfillGmailErrors, CancelBackfillGmailResponses, CompleteDraftAttachmentData, CompleteDraftAttachmentErrors, CompleteDraftAttachmentResponses, CopyThreadCalendarInvitationData, CopyThreadCalendarInvitationErrors, CopyThreadCalendarInvitationResponses, CreateDraftData, CreateDraftErrors, CreateDraftResponses, CreateLabelData, CreateLabelErrors, CreateLabelResponses, DeleteDraftData, DeleteDraftErrors, DeleteDraftResponses, DeleteEmailFilterData, DeleteEmailFilterErrors, DeleteEmailFilterResponses, DeleteLabelData, DeleteLabelErrors, DeleteLabelResponses, DeleteLinkData, DeleteLinkErrors, DeleteLinkResponses, DeleteScheduledDraftData, DeleteScheduledDraftErrors, DeleteScheduledDraftResponses, DisableLinkCalendarData, DisableLinkCalendarErrors, DisableLinkCalendarResponses, DisableSyncData, DisableSyncErrors, DisableSyncResponses, ForwardCalendarEventData, ForwardCalendarEventErrors, ForwardCalendarEventResponses, GetAttachmentData, GetAttachmentDocumentIdData, GetAttachmentDocumentIdErrors, GetAttachmentDocumentIdResponses, GetAttachmentErrors, GetAttachmentResponses, GetBackfillGmailActiveData, GetBackfillGmailActiveErrors, GetBackfillGmailActiveResponses, GetBackfillGmailData, GetBackfillGmailErrors, GetBackfillGmailResponses, GetMessageData, GetMessageEmlData, GetMessageEmlErrors, GetMessageEmlResponses, GetMessageErrors, GetMessageResponses, GetMessagesBatchData, GetMessagesBatchErrors, GetMessagesBatchResponses, GetScheduledMessagesData, GetScheduledMessagesErrors, GetScheduledMessagesResponses, GetThreadCalendarInvitationsData, GetThreadCalendarInvitationsErrors, GetThreadCalendarInvitationsResponses, GetThreadData, GetThreadErrors, GetThreadMessagesHandlerData, GetThreadMessagesHandlerErrors, GetThreadMessagesHandlerResponses, GetThreadResponses, HealthCheckLinksData, HealthCheckLinksErrors, HealthCheckLinksResponses, HealthHandlerData, HealthHandlerResponses, InitUserData, InitUserErrors, InitUserResponses, ListBackfillGmailData, ListBackfillGmailErrors, ListBackfillGmailResponses, ListBlockedSendersData, ListBlockedSendersErrors, ListBlockedSendersResponses, ListContactsData, ListContactsErrors, ListContactsResponses, ListEmailFiltersData, ListEmailFiltersErrors, ListEmailFiltersResponses, ListLabelsData, ListLabelsErrors, ListLabelsResponses, ListLinksData, ListLinksErrors, ListLinksResponses, MailboxSettingsOperationsData, MailboxSettingsOperationsResponses, MessageOperationStatusData, MessageOperationStatusErrors, MessageOperationStatusResponses, PatchSettingsData, PatchSettingsErrors, PatchSettingsResponses, PreviewsInboxCursorData, PreviewsInboxCursorErrors, PreviewsInboxCursorResponses, RecoverDraftTransferData, RecoverDraftTransferErrors, RecoverDraftTransferResponses, RemoveDraftAttachmentData, RemoveDraftAttachmentErrors, RemoveDraftAttachmentResponses, RemoveForwardedAttachmentData, RemoveForwardedAttachmentErrors, RemoveForwardedAttachmentResponses, ResolveMessageOperationData, ResolveMessageOperationErrors, ResolveMessageOperationResponses, ResyncLinkData, ResyncLinkErrors, ResyncLinkResponses, SendMessageData, SendMessageErrors, SendMessageResponses, ThreadOperationsData, ThreadOperationsErrors, ThreadOperationsResponses, ThreadSeenData, ThreadSeenErrors, ThreadSeenResponses, TransferDraftData, TransferDraftErrors, TransferDraftResponses, UnblockSenderData, UnblockSenderErrors, UnblockSenderResponses, UpdateThreadProjectData, UpdateThreadProjectErrors, UpdateThreadProjectResponses, UpdateThreadStateData, UpdateThreadStateErrors, UpdateThreadStateResponses, UpsertEmailFilterData, UpsertEmailFilterErrors, UpsertEmailFilterResponses, UpsertScheduledMessageData, UpsertScheduledMessageErrors, UpsertScheduledMessageResponses } from './types.gen';
+import type { AddDraftAttachmentData, AddDraftAttachmentErrors, AddDraftAttachmentResponses, AddForwardedAttachmentData, AddForwardedAttachmentErrors, AddForwardedAttachmentResponses, AddRemoveLabelData, AddRemoveLabelErrors, AddRemoveLabelResponses, AddRemoveThreadLabelData, AddRemoveThreadLabelErrors, AddRemoveThreadLabelResponses, ArchiveThreadData, ArchiveThreadErrors, ArchiveThreadResponses, ArchiveThreadsData, ArchiveThreadsErrors, ArchiveThreadsResponses, BlockSenderData, BlockSenderErrors, BlockSenderResponses, CancelBackfillGmailData, CancelBackfillGmailErrors, CancelBackfillGmailResponses, CompleteDraftAttachmentData, CompleteDraftAttachmentErrors, CompleteDraftAttachmentResponses, ContactEnrollmentsData, ContactEnrollmentsErrors, ContactEnrollmentsResponses, CopyThreadCalendarInvitationData, CopyThreadCalendarInvitationErrors, CopyThreadCalendarInvitationResponses, CreateDraftData, CreateDraftErrors, CreateDraftResponses, CreateLabelData, CreateLabelErrors, CreateLabelResponses, CreateSequenceData, CreateSequenceErrors, CreateSequenceResponses, DeleteDraftData, DeleteDraftErrors, DeleteDraftResponses, DeleteEmailFilterData, DeleteEmailFilterErrors, DeleteEmailFilterResponses, DeleteLabelData, DeleteLabelErrors, DeleteLabelResponses, DeleteLinkData, DeleteLinkErrors, DeleteLinkResponses, DeleteScheduledDraftData, DeleteScheduledDraftErrors, DeleteScheduledDraftResponses, DeleteSequenceData, DeleteSequenceErrors, DeleteSequenceResponses, DisableLinkCalendarData, DisableLinkCalendarErrors, DisableLinkCalendarResponses, DisableSyncData, DisableSyncErrors, DisableSyncResponses, EnrollContactsData, EnrollContactsErrors, EnrollContactsResponses, ForwardCalendarEventData, ForwardCalendarEventErrors, ForwardCalendarEventResponses, GetAttachmentData, GetAttachmentDocumentIdData, GetAttachmentDocumentIdErrors, GetAttachmentDocumentIdResponses, GetAttachmentErrors, GetAttachmentResponses, GetBackfillGmailActiveData, GetBackfillGmailActiveErrors, GetBackfillGmailActiveResponses, GetBackfillGmailData, GetBackfillGmailErrors, GetBackfillGmailResponses, GetEnrollmentData, GetEnrollmentErrors, GetEnrollmentResponses, GetMessageData, GetMessageEmlData, GetMessageEmlErrors, GetMessageEmlResponses, GetMessageErrors, GetMessageResponses, GetMessagesBatchData, GetMessagesBatchErrors, GetMessagesBatchResponses, GetScheduledMessagesData, GetScheduledMessagesErrors, GetScheduledMessagesResponses, GetSequenceData, GetSequenceErrors, GetSequenceResponses, GetThreadCalendarInvitationsData, GetThreadCalendarInvitationsErrors, GetThreadCalendarInvitationsResponses, GetThreadData, GetThreadErrors, GetThreadMessagesHandlerData, GetThreadMessagesHandlerErrors, GetThreadMessagesHandlerResponses, GetThreadResponses, HealthCheckLinksData, HealthCheckLinksErrors, HealthCheckLinksResponses, HealthHandlerData, HealthHandlerResponses, InitUserData, InitUserErrors, InitUserResponses, ListBackfillGmailData, ListBackfillGmailErrors, ListBackfillGmailResponses, ListBlockedSendersData, ListBlockedSendersErrors, ListBlockedSendersResponses, ListContactsData, ListContactsErrors, ListContactsResponses, ListEmailFiltersData, ListEmailFiltersErrors, ListEmailFiltersResponses, ListLabelsData, ListLabelsErrors, ListLabelsResponses, ListLinksData, ListLinksErrors, ListLinksResponses, ListSequencesData, ListSequencesErrors, ListSequencesResponses, MailboxSettingsOperationsData, MailboxSettingsOperationsResponses, MessageOperationStatusData, MessageOperationStatusErrors, MessageOperationStatusResponses, PatchSettingsData, PatchSettingsErrors, PatchSettingsResponses, PreviewsInboxCursorData, PreviewsInboxCursorErrors, PreviewsInboxCursorResponses, RecoverDraftTransferData, RecoverDraftTransferErrors, RecoverDraftTransferResponses, RemoveDraftAttachmentData, RemoveDraftAttachmentErrors, RemoveDraftAttachmentResponses, RemoveForwardedAttachmentData, RemoveForwardedAttachmentErrors, RemoveForwardedAttachmentResponses, ResolveMessageOperationData, ResolveMessageOperationErrors, ResolveMessageOperationResponses, ResyncLinkData, ResyncLinkErrors, ResyncLinkResponses, SendMessageData, SendMessageErrors, SendMessageResponses, ThreadOperationsData, ThreadOperationsErrors, ThreadOperationsResponses, ThreadSeenData, ThreadSeenErrors, ThreadSeenResponses, TransferDraftData, TransferDraftErrors, TransferDraftResponses, UnblockSenderData, UnblockSenderErrors, UnblockSenderResponses, UpdateEnrollmentData, UpdateEnrollmentErrors, UpdateEnrollmentResponses, UpdateSequenceData, UpdateSequenceErrors, UpdateSequenceResponses, UpdateThreadProjectData, UpdateThreadProjectErrors, UpdateThreadProjectResponses, UpdateThreadStateData, UpdateThreadStateErrors, UpdateThreadStateResponses, UpsertEmailFilterData, UpsertEmailFilterErrors, UpsertEmailFilterResponses, UpsertScheduledMessageData, UpsertScheduledMessageErrors, UpsertScheduledMessageResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -476,6 +476,97 @@ export class Sdk extends HeyApiClient {
      */
     public getMessageEml<ThrowOnError extends boolean = false>(options: Options<GetMessageEmlData, ThrowOnError>): RequestResult<GetMessageEmlResponses, GetMessageEmlErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetMessageEmlResponses, GetMessageEmlErrors, ThrowOnError>({ url: '/email/messages/{id}/eml', ...options });
+    }
+    
+    /**
+     * List the caller's sequences.
+     */
+    public listSequences<ThrowOnError extends boolean = false>(options?: Options<ListSequencesData, ThrowOnError>): RequestResult<ListSequencesResponses, ListSequencesErrors, ThrowOnError> {
+        return (options?.client ?? this.client).get<ListSequencesResponses, ListSequencesErrors, ThrowOnError>({ url: '/email/sequences', ...options });
+    }
+    
+    /**
+     * Create a draft sequence.
+     */
+    public createSequence<ThrowOnError extends boolean = false>(options: Options<CreateSequenceData, ThrowOnError>): RequestResult<CreateSequenceResponses, CreateSequenceErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<CreateSequenceResponses, CreateSequenceErrors, ThrowOnError>({
+            url: '/email/sequences',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * A CRM person's enrollments across the team, without step content.
+     */
+    public contactEnrollments<ThrowOnError extends boolean = false>(options: Options<ContactEnrollmentsData, ThrowOnError>): RequestResult<ContactEnrollmentsResponses, ContactEnrollmentsErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<ContactEnrollmentsResponses, ContactEnrollmentsErrors, ThrowOnError>({ url: '/email/sequences/contacts/{crm_contact_id}', ...options });
+    }
+    
+    /**
+     * An enrollment with its rendered steps and what happened to each.
+     */
+    public getEnrollment<ThrowOnError extends boolean = false>(options: Options<GetEnrollmentData, ThrowOnError>): RequestResult<GetEnrollmentResponses, GetEnrollmentErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetEnrollmentResponses, GetEnrollmentErrors, ThrowOnError>({ url: '/email/sequences/enrollments/{id}', ...options });
+    }
+    
+    /**
+     * Pause, resume, stop or unsubscribe an enrollment.
+     */
+    public updateEnrollment<ThrowOnError extends boolean = false>(options: Options<UpdateEnrollmentData, ThrowOnError>): RequestResult<UpdateEnrollmentResponses, UpdateEnrollmentErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<UpdateEnrollmentResponses, UpdateEnrollmentErrors, ThrowOnError>({
+            url: '/email/sequences/enrollments/{id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Delete a sequence, withdrawing its unsent steps.
+     */
+    public deleteSequence<ThrowOnError extends boolean = false>(options: Options<DeleteSequenceData, ThrowOnError>): RequestResult<DeleteSequenceResponses, DeleteSequenceErrors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteSequenceResponses, DeleteSequenceErrors, ThrowOnError>({ url: '/email/sequences/{id}', ...options });
+    }
+    
+    /**
+     * A sequence with its enrollments.
+     */
+    public getSequence<ThrowOnError extends boolean = false>(options: Options<GetSequenceData, ThrowOnError>): RequestResult<GetSequenceResponses, GetSequenceErrors, ThrowOnError> {
+        return (options.client ?? this.client).get<GetSequenceResponses, GetSequenceErrors, ThrowOnError>({ url: '/email/sequences/{id}', ...options });
+    }
+    
+    /**
+     * Edit a draft or paused sequence, or change its status.
+     */
+    public updateSequence<ThrowOnError extends boolean = false>(options: Options<UpdateSequenceData, ThrowOnError>): RequestResult<UpdateSequenceResponses, UpdateSequenceErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<UpdateSequenceResponses, UpdateSequenceErrors, ThrowOnError>({
+            url: '/email/sequences/{id}',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Enroll CRM people into an active sequence.
+     */
+    public enrollContacts<ThrowOnError extends boolean = false>(options: Options<EnrollContactsData, ThrowOnError>): RequestResult<EnrollContactsResponses, EnrollContactsErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<EnrollContactsResponses, EnrollContactsErrors, ThrowOnError>({
+            url: '/email/sequences/{id}/enrollments',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
     
     /**

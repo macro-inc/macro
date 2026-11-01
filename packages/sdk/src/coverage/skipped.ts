@@ -228,18 +228,28 @@ export const contactsBacklog =
 
 export const emailExcluded = [
   'cancelBackfillGmail',
+  // Sequences: the Customers app feature's own API.
+  'contactEnrollments',
+  'createSequence',
   'deleteLink',
+  'deleteSequence',
   'disableLinkCalendar',
   'disableSync',
+  'enrollContacts',
   'getBackfillGmail',
   'getBackfillGmailActive',
+  'getEnrollment',
   'getMessagesBatch',
+  'getSequence',
   'healthCheckLinks',
   'healthHandler',
   'initUser',
   'listBackfillGmail',
+  'listSequences',
   'patchSettings',
   'resyncLink',
+  'updateEnrollment',
+  'updateSequence',
 ] as const satisfies readonly (keyof EmailSdk)[];
 
 export const emailBacklog = [
@@ -383,8 +393,6 @@ export const storageExcluded = [
   'patchViewHandler',
   'postItemsSoup',
   'postItemsSoupAstGrouped',
-  // Rows with the table version they reflect, for app features that guard writes with versions.
-  'queryDatabaseTableRows',
   'removeBotFromChannelByBot',
   // Storage for the web app's saved questions, not a user-facing surface.
   'saveDatabaseQuery',
