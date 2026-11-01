@@ -83,7 +83,7 @@ export const TaskGroupHeader = (
       class={statusTint()}
     >
       <Layer depth={3}>
-        <div class="flex items-center justify-center size-4.5 shrink-0 rounded-xs group-hover/header:bg-ink/5 @max-[840px]/u-list:-mr-2.5">
+        <div class="flex items-center justify-center size-4.5 shrink-0 rounded-xs group-hover/header:bg-ink/5">
           <ChevronRightIcon
             class={cn('size-4', {
               'rotate-90': props.group.isExpanded(),
