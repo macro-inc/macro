@@ -27,6 +27,7 @@ export const writeScopes = [
   'workspace',
   'properties',
   'contacts',
+  'notifications',
   'ai',
 ] as const;
 export type WriteScope = (typeof writeScopes)[number];
@@ -38,6 +39,7 @@ export const WRITE_SCOPE_LABELS: Record<WriteScope, string> = {
   workspace: 'Documents, tasks and channels',
   properties: 'Properties',
   contacts: 'Contacts',
+  notifications: 'Notifications',
   ai: 'AI that can act',
 };
 

@@ -8306,7 +8306,7 @@ export interface CreateProjectResponse {
  * Code steps: a `code` step runs TypeScript against Macro's SDK, the same SDK code mode uses. Use one for work a single tool call or decision can't do: reading many items, a loop, or acting on what an earlier call returned. It takes:
  * - `title`: what it does, in a few words.
  * - `summary`: one sentence on how, for the routine's owner.
- * - `writes`: every area it changes: `email`, `calendar`, `workspace` (documents, tasks, channels, comments and folders), `properties`, `contacts`, `ai` (structured completions with tools, images). Reads need none. A write outside these is refused when it runs.
+ * - `writes`: every area it changes: `email`, `calendar`, `workspace` (documents, tasks, channels, comments and folders), `properties`, `contacts`, `notifications` (marking them seen or done), `ai` (structured completions with tools, images; `macro.ai.decide` is a read). Reads need none. A write outside these is refused when it runs.
  * - `source`: a module exporting `async function main({ macro, trigger, steps }: StepContext)`. `trigger` is the triggering item as JSON (`trigger.entity_id`, `trigger.email.subject`, …), or null when a schedule or a person started the run. `steps` holds earlier steps' outputs by `id`. What `main` returns is the step's output, named by its optional `id`.
  * - Call SDK methods as their declarations show, with `await`. Use `macro.ai.decide({ input, questions })` for yes/no judgments: `questions` maps keys to questions, and `probabilities[key]` in the answer is from 0 to 1. Don't import anything.
  * - The code is type-checked against the SDK; the checker's errors come back, and the step isn't saved until they are fixed. It runs as the owner, within 30 seconds.

@@ -120,6 +120,8 @@ pub enum WriteScope {
     Properties,
     /// Contacts and companies.
     Contacts,
+    /// Notifications: marking them seen or done, unsubscribing.
+    Notifications,
     /// AI work that can act or costs more than a decision: structured
     /// completions with tools, images.
     Ai,
@@ -127,12 +129,13 @@ pub enum WriteScope {
 
 impl WriteScope {
     /// Every scope.
-    pub const ALL: [Self; 6] = [
+    pub const ALL: [Self; 7] = [
         Self::Email,
         Self::Calendar,
         Self::Workspace,
         Self::Properties,
         Self::Contacts,
+        Self::Notifications,
         Self::Ai,
     ];
 
@@ -144,6 +147,7 @@ impl WriteScope {
             Self::Workspace => "workspace",
             Self::Properties => "properties",
             Self::Contacts => "contacts",
+            Self::Notifications => "notifications",
             Self::Ai => "ai",
         }
     }
@@ -156,6 +160,7 @@ impl WriteScope {
             Self::Workspace => "storage",
             Self::Properties => "properties",
             Self::Contacts => "contacts",
+            Self::Notifications => "notification",
             Self::Ai => "cognition",
         }
     }

@@ -161,6 +161,7 @@ fn code_steps_and_the_sdk_fingerprint_round_trip() {
 fn write_scopes_name_their_services() {
     assert_eq!(WriteScope::Workspace.service(), "storage");
     assert_eq!(WriteScope::Ai.service(), "cognition");
+    assert_eq!(WriteScope::Notifications.service(), "notification");
     for scope in WriteScope::ALL {
         assert_eq!(serde_json::to_value(scope).unwrap(), json!(scope.as_str()));
     }
