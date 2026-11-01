@@ -132,4 +132,26 @@ test.describe('on a phone', () => {
       await expect(sheet.getByText(card, { exact: true })).toBeVisible();
     });
   }
+
+  test('the no-access sheet is opaque over the page', async ({ page }) => {
+    await page.goto(fixture);
+    await chip(page, 'Hidden agent session', 'Private agent session').tap({
+      force: true,
+    });
+    const sheet = page.getByRole('dialog', { name: 'Preview' });
+    await expect(sheet).toBeVisible();
+    const alpha = await sheet.evaluate((el) => {
+      const color = getComputedStyle(el).backgroundColor;
+      const canvas = document.createElement('canvas');
+      canvas.width = 1;
+      canvas.height = 1;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return 0;
+      ctx.fillStyle = color;
+      ctx.fillRect(0, 0, 1, 1);
+      return ctx.getImageData(0, 0, 1, 1).data[3];
+    });
+    expect(alpha).toBe(255);
+    await expect(sheet.locator('[data-unauthorized-compact]')).toBeVisible();
+  });
 });

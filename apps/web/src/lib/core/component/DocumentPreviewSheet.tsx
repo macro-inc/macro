@@ -9,7 +9,8 @@ import { DocumentPreviewSkeleton } from './DocumentPreviewSkeleton';
 /**
  * The preview card as a bottom sheet. `HoverCard` renders nothing on touch
  * devices, so a mention whose tap shows its preview instead of opening it
- * presents the same card here.
+ * presents the same card here. Opaque so page text cannot show through
+ * unavailable-item empty states.
  */
 export function DocumentPreviewSheet(
   props: DocumentPreviewContentProps & {
@@ -30,7 +31,7 @@ export function DocumentPreviewSheet(
     >
       <MobileDrawer.Portal>
         <MobileDrawer.Overlay />
-        <MobileDrawer.Content aria-label="Preview">
+        <MobileDrawer.Content aria-label="Preview" opaque>
           <MobileDrawer.Handle />
           <MobileDrawer.ScrollBody class="px-3 text-ink">
             <Suspense fallback={<DocumentPreviewSkeleton />}>
