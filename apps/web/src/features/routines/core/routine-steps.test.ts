@@ -372,6 +372,7 @@ describe('step output names', () => {
         {
           type: 'if',
           condition: 'Urgent?',
+          // biome-ignore lint/suspicious/noThenProperty: the scheduler's step format names the yes branch `then`.
           then: [{ type: 'tool', tool: 'SendChannelMessage', arguments: {} }],
         },
       ] as WireStep[],
