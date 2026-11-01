@@ -149,6 +149,40 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
+ * One time a routine's code was brought to a new SDK.
+ */
+export type CodeUpgrade = {
+    createdAt: string;
+    /**
+     * The SDK the code was checked against before; none when it never was.
+     */
+    fromSdk?: string | null;
+    id: string;
+    outcome: UpgradeOutcome;
+    /**
+     * The task before.
+     */
+    previousTask: {
+        [key: string]: unknown;
+    };
+    /**
+     * Why the routine needs its owner.
+     */
+    reason?: string | null;
+    /**
+     * The saved rewrite, or the rewrite that failed its checks.
+     */
+    task?: {
+        [key: string]: unknown;
+    } | null;
+    /**
+     * The SDK it was brought to.
+     */
+    toSdk: string;
+    updatedAt: string;
+};
+
+/**
  * Why an event-triggered run was skipped before it started.
  */
 export type ConditionResult = {
@@ -514,6 +548,11 @@ export type TemplateVariable = {
 export type UpdateScheduledAction = ActionConfigurationUpdate | LegacyActionConfiguration;
 
 /**
+ * How an upgrade went.
+ */
+export type UpgradeOutcome = 'running' | 'checked' | 'rewritten' | 'needs_update';
+
+/**
  * How a variable is filled when someone activates the template.
  */
 export type VariableFill = 'activator' | 'shared' | 'choice';
@@ -664,6 +703,35 @@ export type UpdateScheduledActionResponses = {
 };
 
 export type UpdateScheduledActionResponse = UpdateScheduledActionResponses[keyof UpdateScheduledActionResponses];
+
+export type ListScheduledActionCodeUpgradesData = {
+    body?: never;
+    path: {
+        /**
+         * ID of the scheduled action
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/scheduled-actions/{id}/code-upgrades';
+};
+
+export type ListScheduledActionCodeUpgradesErrors = {
+    401: string;
+    404: string;
+    500: string;
+};
+
+export type ListScheduledActionCodeUpgradesError = ListScheduledActionCodeUpgradesErrors[keyof ListScheduledActionCodeUpgradesErrors];
+
+export type ListScheduledActionCodeUpgradesResponses = {
+    /**
+     * How the routine's code steps were brought to new SDKs, newest first
+     */
+    200: Array<CodeUpgrade>;
+};
+
+export type ListScheduledActionCodeUpgradesResponse = ListScheduledActionCodeUpgradesResponses[keyof ListScheduledActionCodeUpgradesResponses];
 
 export type SetScheduledActionEnabledData = {
     body: SetScheduledActionEnabled;

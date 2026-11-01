@@ -210,6 +210,12 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
+
+    /// How the routine's code steps were brought to new SDKs, newest first.
+    fn get_code_upgrades(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<Vec<super::code_upgrade::CodeUpgrade>>> + Send;
 }
 
 /// Templates shared from routines, keyed by their source routine's ID.

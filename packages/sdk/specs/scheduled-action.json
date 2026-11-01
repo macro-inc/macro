@@ -353,6 +353,68 @@
         }
       }
     },
+    "/scheduled-actions/{id}/code-upgrades": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "list_scheduled_action_code_upgrades",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "ID of the scheduled action",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "How the routine's code steps were brought to new SDKs, newest first",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/CodeUpgrade"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions/{id}/enabled": {
       "put": {
         "tags": ["scheduled actions"],
@@ -1132,6 +1194,55 @@
           }
         }
       },
+      "CodeUpgrade": {
+        "type": "object",
+        "description": "One time a routine's code was brought to a new SDK.",
+        "required": [
+          "id",
+          "toSdk",
+          "outcome",
+          "previousTask",
+          "createdAt",
+          "updatedAt"
+        ],
+        "properties": {
+          "createdAt": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "fromSdk": {
+            "type": ["string", "null"],
+            "description": "The SDK the code was checked against before; none when it never was."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outcome": {
+            "$ref": "#/components/schemas/UpgradeOutcome"
+          },
+          "previousTask": {
+            "type": "object",
+            "description": "The task before."
+          },
+          "reason": {
+            "type": ["string", "null"],
+            "description": "Why the routine needs its owner."
+          },
+          "task": {
+            "type": ["object", "null"],
+            "description": "The saved rewrite, or the rewrite that failed its checks."
+          },
+          "toSdk": {
+            "type": "string",
+            "description": "The SDK it was brought to."
+          },
+          "updatedAt": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
       "ConditionResult": {
         "oneOf": [
           {
@@ -1863,6 +1974,11 @@
           }
         ],
         "description": "Full replacement of client configuration, not of server-owned action state."
+      },
+      "UpgradeOutcome": {
+        "type": "string",
+        "description": "How an upgrade went.",
+        "enum": ["running", "checked", "rewritten", "needs_update"]
       },
       "VariableFill": {
         "type": "string",

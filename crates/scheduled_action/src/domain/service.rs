@@ -18,6 +18,7 @@ use model_owner::{CreationPrincipal, Owner};
 use tokio::sync::mpsc::Sender;
 
 use super::code_check::{checked_task, same_task};
+use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades};
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
 use super::models::{
@@ -26,7 +27,7 @@ use super::models::{
     UpdateScheduledAction,
 };
 use super::ports::{
-    NoRoutineCode, RoutineCode, ScheduledActionExecutor, ScheduledActionRepo,
+    CodeUpgrades, NoRoutineCode, RoutineCode, ScheduledActionExecutor, ScheduledActionRepo,
     ScheduledActionService, TaskTargetValidator,
 };
 use super::target_validation::{ModelOnlyTargets, require_explicit_selection};
@@ -42,6 +43,7 @@ pub struct ScheduledActionServiceImpl<
     Targets = ModelOnlyTargets,
     Github = NoGithubLinks,
     Code = NoRoutineCode,
+    Upgrades = NoCodeUpgrades,
 > {
     repo: Arc<Rpo>,
     executor: Arc<Exe>,
@@ -53,6 +55,8 @@ pub struct ScheduledActionServiceImpl<
     github: Github,
     /// Type-checks code steps before they are saved.
     code: Arc<Code>,
+    /// How code steps were brought to new SDKs.
+    upgrades: Arc<Upgrades>,
 }
 
 /// Composition without GitHub: no owner counts as linked, so GitHub triggers
@@ -91,17 +95,18 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
             targets: ModelOnlyTargets,
             github: NoGithubLinks,
             code: Arc::new(NoRoutineCode),
+            upgrades: Arc::new(NoCodeUpgrades),
         }
     }
 }
 
-impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code>
-    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code>
+impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
+    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades>
 {
     pub fn with_target_validation<T: TaskTargetValidator>(
         self,
         targets: T,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T, Github, Code> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T, Github, Code, Upgrades> {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
@@ -112,6 +117,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code>
             targets,
             github: self.github,
             code: self.code,
+            upgrades: self.upgrades,
         }
     }
 
@@ -119,7 +125,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code>
     pub fn with_github_links<G: GithubInstallationClaims>(
         self,
         github: G,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, G, Code> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, G, Code, Upgrades> {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
@@ -130,14 +136,17 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code>
             targets: self.targets,
             github,
             code: self.code,
+            upgrades: self.upgrades,
         }
     }
 
-    /// Lets routines have code steps, type-checked by `code` when saved.
-    pub fn with_code<C: RoutineCode>(
+    /// Lets routines have code steps, type-checked by `code` when saved,
+    /// and shows how they were brought to new SDKs from `upgrades`.
+    pub fn with_code<C: RoutineCode, U: CodeUpgrades>(
         self,
         code: Arc<C>,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, C> {
+        upgrades: Arc<U>,
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, C, U> {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
@@ -148,6 +157,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code>
             targets: self.targets,
             github: self.github,
             code,
+            upgrades,
         }
     }
 
@@ -442,11 +452,12 @@ fn same_trigger(left: &ActionTrigger, right: &ActionTrigger) -> bool {
     left == right
 }
 
-impl<Rpo, Exe, Grants, Targets, Github, Code> ScheduledActionService
-    for ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code>
+impl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades> ScheduledActionService
+    for ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code, Upgrades>
 where
     Github: GithubInstallationClaims,
     Code: RoutineCode,
+    Upgrades: CodeUpgrades,
     Rpo: ScheduledActionRepo,
     Grants: ScheduledActionGrants,
     Targets: TaskTargetValidator,
@@ -617,5 +628,16 @@ where
             bail!("cannot read execution history without id");
         };
         self.repo.get_execution_records(&id).await
+    }
+
+    async fn get_code_upgrades(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<CodeUpgrade>> {
+        let action = self.load_granted(&receipt).await?;
+        let Some(id) = action.id else {
+            bail!("cannot read code upgrades without id");
+        };
+        self.upgrades.list_upgrades(id).await
     }
 }

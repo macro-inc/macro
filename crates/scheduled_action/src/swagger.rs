@@ -47,6 +47,7 @@ use model::response::EmptyResponse;
         crate::inbound::axum_router::delete_action,
         crate::inbound::axum_router::execute_action,
         crate::inbound::axum_router::list_history,
+        crate::inbound::axum_router::list_code_upgrades,
         crate::inbound::template_router::share_template,
         crate::inbound::template_router::get_template,
         crate::inbound::template_router::unshare_template,
@@ -55,6 +56,8 @@ use model::response::EmptyResponse;
     components(
         schemas(
             AiAdmissionErrorBody,
+            crate::domain::code_upgrade::CodeUpgrade,
+            crate::domain::code_upgrade::UpgradeOutcome,
             ScheduledAction,
             ScheduledActionResponse,
             ActionConfiguration,

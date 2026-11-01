@@ -1,6 +1,7 @@
 use std::sync::Arc;
 
 use crate::domain::code_check::CodeCheckError;
+use crate::domain::code_upgrade::CodeUpgrade;
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
     ActionExecutionRecord, ActionPolicyError, AlreadyRunningError, CreateScheduledAction,
@@ -165,6 +166,10 @@ where
         .route(
             "/scheduled-actions/{id}/history",
             get(list_history::<S, Svc, Auth>),
+        )
+        .route(
+            "/scheduled-actions/{id}/code-upgrades",
+            get(list_code_upgrades::<S, Svc, Auth>),
         )
         .with_state(state)
 }
@@ -494,6 +499,38 @@ where
         .get_execution_records(entity_access_receipt)
         .await?;
     Ok(Json(records))
+}
+
+#[utoipa::path(
+    get,
+    path = "/scheduled-actions/{id}/code-upgrades",
+    tag = "scheduled actions",
+    operation_id = "list_scheduled_action_code_upgrades",
+    params(("id" = String, Path, description = "ID of the scheduled action")),
+    responses(
+        (status = 200, body = Vec<CodeUpgrade>, description = "How the routine's code steps were brought to new SDKs, newest first"),
+        (status = 401, body = String),
+        (status = 404, body = String),
+        (status = 500, body = String),
+    )
+)]
+pub async fn list_code_upgrades<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    ScheduledActionAccessExtractor {
+        entity_access_receipt,
+        ..
+    }: ScheduledActionAccessExtractor<ViewAccessLevel, Svc, Auth>,
+) -> Result<impl IntoResponse, ScheduledActionApiError>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    let upgrades = state
+        .service
+        .get_code_upgrades(entity_access_receipt)
+        .await?;
+    Ok(Json(upgrades))
 }
 
 pub enum ScheduledActionApiError {

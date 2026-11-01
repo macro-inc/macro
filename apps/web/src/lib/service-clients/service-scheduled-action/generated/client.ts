@@ -8,6 +8,7 @@
 import type {
   ActionExecutionRecord,
   AiAdmissionErrorBody,
+  CodeUpgrade,
   CreateScheduledAction,
   EmptyResponse,
   InProgressExecution,
@@ -394,6 +395,67 @@ export const deleteScheduledAction = async (
     status: res.status,
     headers: res.headers,
   } as deleteScheduledActionResponse;
+};
+
+export type listScheduledActionCodeUpgradesResponse200 = {
+  data: CodeUpgrade[];
+  status: 200;
+};
+
+export type listScheduledActionCodeUpgradesResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type listScheduledActionCodeUpgradesResponse404 = {
+  data: string;
+  status: 404;
+};
+
+export type listScheduledActionCodeUpgradesResponse500 = {
+  data: string;
+  status: 500;
+};
+
+export type listScheduledActionCodeUpgradesResponseSuccess =
+  listScheduledActionCodeUpgradesResponse200 & {
+    headers: Headers;
+  };
+export type listScheduledActionCodeUpgradesResponseError = (
+  | listScheduledActionCodeUpgradesResponse401
+  | listScheduledActionCodeUpgradesResponse404
+  | listScheduledActionCodeUpgradesResponse500
+) & {
+  headers: Headers;
+};
+
+export type listScheduledActionCodeUpgradesResponse =
+  | listScheduledActionCodeUpgradesResponseSuccess
+  | listScheduledActionCodeUpgradesResponseError;
+
+export const getListScheduledActionCodeUpgradesUrl = (id: string) => {
+  return `/scheduled-actions/${id}/code-upgrades`;
+};
+
+export const listScheduledActionCodeUpgrades = async (
+  id: string,
+  options?: RequestInit
+): Promise<listScheduledActionCodeUpgradesResponse> => {
+  const res = await fetch(getListScheduledActionCodeUpgradesUrl(id), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: listScheduledActionCodeUpgradesResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as listScheduledActionCodeUpgradesResponse;
 };
 
 export type setScheduledActionEnabledResponse200 = {

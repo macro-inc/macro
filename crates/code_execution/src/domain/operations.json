@@ -2015,6 +2015,12 @@
     "path": "/scheduled-actions/{id}",
     "write": true
   },
+  "scheduled-action.listScheduledActionCodeUpgrades": {
+    "label": "List Scheduled Action Code Upgrades",
+    "method": "GET",
+    "path": "/scheduled-actions/{id}/code-upgrades",
+    "write": false
+  },
   "scheduled-action.setScheduledActionEnabled": {
     "label": "Set Scheduled Action Enabled",
     "method": "PUT",

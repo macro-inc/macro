@@ -163,6 +163,7 @@ pub async fn build(
     // Tool and code steps run in this process, as the owner; agent steps
     // still go through the routine-session operations.
     let code = Arc::new(code);
+    let upgrades = Arc::new(PgCodeUpgrades::new(db.clone()));
     let runner = Arc::new(
         ProgramRunner::new(
             Arc::new(TargetRunner::new(Arc::clone(&sessions))),
@@ -170,7 +171,7 @@ pub async fn build(
             Arc::clone(&event_content),
             classifier.clone(),
         )
-        .with_code(Arc::clone(&code), Arc::new(PgCodeUpgrades::new(db.clone()))),
+        .with_code(Arc::clone(&code), Arc::clone(&upgrades)),
     );
     let dispatcher_executor = InProcessExecutor::new(
         Arc::clone(&repo),
@@ -283,7 +284,7 @@ pub async fn build(
             config.routine_agents_enabled,
         ))
         .with_github_links(PgGithubInstallationClaims::new(db.clone()))
-        .with_code(code),
+        .with_code(code, upgrades),
     );
     let template_flags = config
         .posthog_api_key
