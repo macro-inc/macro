@@ -8,7 +8,7 @@ use sqlx::PgPool;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-const VIEWER: &str = "macro|viewer@test.com";
+const VIEWER: &str = "macro|viewer@example.com";
 const CRM_COMPANY: &str = "crm_company";
 const ALL_SORTS: [CrmCompanyListSort; 4] = [
     CrmCompanyListSort::UpdatedAt,
@@ -613,7 +613,7 @@ async fn list_for_soup_viewed_sorts_use_only_this_users_company_views(
 ) -> anyhow::Result<()> {
     let team = Uuid::now_v7();
     let other_team = Uuid::now_v7();
-    let other_user = "macro|other@test.com";
+    let other_user = "macro|other@example.com";
     seed_team(&pool, team, VIEWER).await?;
     seed_team(&pool, other_team, other_user).await?;
     enable_crm_for_team(&pool, team).await?;
