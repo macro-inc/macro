@@ -82,6 +82,12 @@ whether the name stopped fitting (threshold 0.8) before Haiku proposes a new
 one. Only names with `agent_session.name_is_generated` are retitled; a rename
 through `set_name` clears it, so a name a person chose is never replaced.
 
+Joined sessions: `set_turn_prompter` runs before every delivered turn. When the
+acting user is not the owner (a thread mention, a channel message, a shared
+editor), the same transaction grants them `JOINED_PROMPTER_ACCESS` (edit) on the
+session, never lowering a direct grant, and records it in their history, so the
+session lists for them. System turns and bot turns with no user grant nothing.
+
 ## Checks
 
 - `cargo test -p agent_session` (`SQLX_OFFLINE` unset).

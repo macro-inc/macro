@@ -694,3 +694,80 @@ async fn by_ids_inherits_the_parent_thread_access(pool: PgPool) -> anyhow::Resul
     }
     Ok(())
 }
+
+/// Prompting a session through the document thread it runs in joins it: the
+/// session's own repo grants the prompter edit on the session, so it lists for
+/// them beside their own sessions. The owner keeps it.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_joined_document_thread_session_lists_for_its_prompter(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    use agent_session::domain::{
+        model::{AgentSessionId, PrompterKind, TurnPrompter},
+        ports::AgentSessionRepo,
+    };
+    let fixture = seed(&pool).await?;
+    let document = Uuid::now_v7();
+    let root = Uuid::now_v7();
+    sqlx::query!(
+        r#"INSERT INTO comms_messages (id, parent_entity_type, parent_entity_id, sender_id, content)
+           VALUES ($1, 'document', $2, $3, '@macro look')"#,
+        root,
+        document.to_string(),
+        OWNER,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        "UPDATE agent_session SET thread_id = $1 WHERE id = $2",
+        root,
+        fixture.private,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level)
+        VALUES ($1, 'document', $2, 'user', 'comment')
+        "#,
+        document,
+        STRANGER,
+    )
+    .execute(&pool)
+    .await?;
+    let include = || Some(Expr::val(AgentSessionLiteral::Include));
+    assert!(
+        cursor_soup(&pool, request(STRANGER, include()))
+            .await?
+            .is_empty()
+    );
+
+    let sessions = agent_session::outbound::postgres::PgAgentSessionRepo::new(
+        pool.clone(),
+        entity_registry_db_utils::OwnedEntityRegistrar::new(
+            entity_registry::OwnerGrantPolicy::new(bots::outbound::pg_bots_repo::PgBotsRepo::new(
+                pool.clone(),
+            )),
+        ),
+    );
+    sessions
+        .set_turn_prompter(
+            AgentSessionId::new_from_uuid(fixture.private),
+            &TurnPrompter {
+                kind: PrompterKind::User,
+                action_id: agent_runtime_protocol::domain::action::AgentActionId::mint(),
+                user: Some(MacroUserIdStr::try_from(STRANGER.to_string())?),
+            },
+        )
+        .await?;
+
+    assert_eq!(
+        ids(&cursor_soup(&pool, request(STRANGER, include())).await?),
+        vec![fixture.private]
+    );
+    assert_eq!(
+        ids(&cursor_soup(&pool, request(OWNER, include())).await?),
+        vec![fixture.private, fixture.shared]
+    );
+    Ok(())
+}

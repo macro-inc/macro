@@ -99,8 +99,13 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+agent_runtime_protocol = { path = "../agent_runtime_protocol" }
+agent_session = { path = "../agent_session", features = ["outbound"] }
 ai_toolset = { path = "../ai_toolset" }
+bots = { path = "../bots" }
 cool_asserts = "2"
+entity_registry = { path = "../entity_registry/entity_registry" }
+entity_registry_db_utils = { path = "../entity_registry/entity_registry_db_utils" }
 filter_ast = { path = "../filter_ast" }
 frecency = { path = "../frecency", features = ["mock", "outbound"] }
 futures = { workspace = true }
