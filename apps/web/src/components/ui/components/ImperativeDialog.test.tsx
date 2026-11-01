@@ -1,5 +1,5 @@
 import { cleanup, render, screen } from '@solidjs/testing-library';
-import { createRoot, getOwner } from 'solid-js';
+import { type Component, createRoot, getOwner, lazy, Suspense } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 import { ImperativeDialogHost, openDialog } from './ImperativeDialog';
 
@@ -41,5 +41,28 @@ describe('keyed imperative dialogs', () => {
       reason: 'owner-disposed',
     });
     expect(screen.queryByRole('dialog')).toBeNull();
+  });
+
+  it('keeps the app mounted while a lazy dialog loads', async () => {
+    const pending = Promise.withResolvers<{ default: Component }>();
+    const LazyDialog = lazy(() => pending.promise);
+    render(() => (
+      <Suspense fallback={<div>App loading</div>}>
+        <main>App content</main>
+        <ImperativeDialogHost />
+      </Suspense>
+    ));
+    const app = screen.getByRole('main');
+    openDialog(LazyDialog, {});
+    await Promise.resolve();
+
+    expect(app.isConnected).toBe(true);
+    expect(screen.queryByText('App loading')).toBeNull();
+
+    pending.resolve({ default: () => <div role="dialog">Loaded dialog</div> });
+    expect((await screen.findByRole('dialog')).textContent).toBe(
+      'Loaded dialog'
+    );
+    expect(screen.getByRole('main')).toBe(app);
   });
 });
