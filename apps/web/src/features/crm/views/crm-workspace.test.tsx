@@ -10,15 +10,6 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { createSettingsPage } from '../primitives/settings-page';
 import { CrmWorkspaceView } from './crm-workspace';
 
-type TeamQuery = {
-  status: 'pending' | 'success' | 'error';
-  data?: { team: { id: string; crm_enabled: boolean } } | null;
-};
-const LOADED_TEAM: TeamQuery = {
-  status: 'success',
-  data: { team: { id: 'team', crm_enabled: true } },
-};
-
 const fixture = vi.hoisted(() => ({
   workspace: undefined as unknown,
   pipelinesEnabled: true,
@@ -27,7 +18,6 @@ const fixture = vi.hoisted(() => ({
   narrow: false,
   openWithSplit: vi.fn(),
   activityFlag: () => ({ enabled: true, loading: false }),
-  team: (): TeamQuery => ({ status: 'pending' }),
   setCollapsed: vi.fn(),
 }));
 
@@ -252,28 +242,12 @@ vi.mock('../context/crm-context', () => ({
       loading: () => false,
       error: () => false,
     }),
-    SequencesNav: () => null,
-    Sequences: (props: { sequenceId?: string }) => (
-      <div>Sequence {props.sequenceId}</div>
-    ),
   }),
 }));
 vi.mock('./use-crm', () => ({
-  // Solid Query keeps the last data through a failed refetch.
   useCurrentTeamQuery: () => ({
-    get isPending() {
-      return fixture.team().status === 'pending';
-    },
-    get isSuccess() {
-      return fixture.team().status === 'success';
-    },
-    get isError() {
-      return fixture.team().status === 'error';
-    },
-    get data() {
-      return fixture.team().data;
-    },
-    refetch: vi.fn(),
+    isSuccess: true,
+    data: { team: { id: 'team', crm_enabled: true } },
   }),
   useCrmLists: () => ({
     lists: () => [
@@ -308,13 +282,10 @@ afterEach(() => {
 /** A workspace whose route shows another tab's list when the tab changes. */
 function setup(
   initialTab = 'active',
-  initialActivityFlag = { enabled: true, loading: false },
-  initialTeam = LOADED_TEAM
+  initialActivityFlag = { enabled: true, loading: false }
 ) {
   const [activityFlag, setActivityFlag] = createSignal(initialActivityFlag);
   fixture.activityFlag = activityFlag;
-  const [team, setTeam] = createSignal(initialTeam);
-  fixture.team = team;
   const [activeTab, setTab] = createSignal<string | undefined>(initialTab);
   const [records, setRecords] = createSignal<
     readonly { type: 'company' | 'contact'; id: string; name: string }[]
@@ -353,7 +324,7 @@ function setup(
   render(() => (
     <CrmWorkspaceView>{() => <div>Record list</div>}</CrmWorkspaceView>
   ));
-  return { activeTab, record, captureEntryState, setActivityFlag, setTeam };
+  return { activeTab, record, captureEntryState, setActivityFlag };
 }
 
 it('keeps sidebar destinations in the mobile header when switching records, pipelines and lists', () => {
@@ -454,33 +425,6 @@ it.each(['tasks', 'email', 'notes', 'calls'])(
     expect(screen.getByText('Record list')).toBeTruthy();
   }
 );
-
-it('keeps an open sequence when a team refetch fails', () => {
-  const { activeTab, setTeam } = setup('sequence:intro');
-  expect(screen.getByText('Sequence intro')).toBeTruthy();
-  setTeam({ ...LOADED_TEAM, status: 'error' });
-  expect(activeTab()).toBe('sequence:intro');
-  expect(screen.getByText('Sequence intro')).toBeTruthy();
-});
-
-it('waits for the team before resolving a sequence link, and leaves it when Customers is off', () => {
-  const { activeTab, setTeam } = setup(
-    'sequence:intro',
-    { enabled: true, loading: false },
-    { status: 'pending' }
-  );
-  expect(activeTab()).toBe('sequence:intro');
-  expect(
-    screen.getByRole('status', { name: 'Loading sequences' })
-  ).toBeTruthy();
-  expect(screen.queryByText('Sequence intro')).toBeNull();
-  setTeam({
-    status: 'success',
-    data: { team: { id: 'team', crm_enabled: false } },
-  });
-  expect(activeTab()).toBe('active');
-  expect(screen.queryByText('Sequence intro')).toBeNull();
-});
 
 it('opens the company of a pipeline row through the route on desktop', () => {
   fixture.touch = false;

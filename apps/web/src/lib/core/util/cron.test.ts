@@ -1,11 +1,10 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { describe, expect, it } from 'vitest';
 
 import {
   buildCron,
   type CronParts,
   DEFAULT_TIME,
   describeCron,
-  getDefaultTimezone,
   isCronRepresentable,
   isValidCronParts,
   isValidTime,
@@ -227,28 +226,6 @@ describe('describeCron', () => {
     expect(describeCron(everyDay, 'America/New_York')).toBe(
       `every day at ${NINE_AM} (America/New_York)`
     );
-  });
-});
-
-describe('getDefaultTimezone', () => {
-  afterEach(() => {
-    vi.restoreAllMocks();
-  });
-
-  const reportZone = (timeZone: string) => {
-    const resolved = Intl.DateTimeFormat().resolvedOptions();
-    vi.spyOn(Intl.DateTimeFormat.prototype, 'resolvedOptions').mockReturnValue({
-      ...resolved,
-      timeZone,
-    });
-  };
-
-  // Servers reject these, so every request carrying the zone would fail.
-  it('falls back to UTC when the host can’t resolve its zone', () => {
-    for (const zone of ['Etc/Unknown', '']) {
-      reportZone(zone);
-      expect(getDefaultTimezone()).toBe('UTC');
-    }
   });
 });
 

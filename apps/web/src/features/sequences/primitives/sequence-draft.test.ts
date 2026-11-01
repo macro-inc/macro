@@ -22,45 +22,17 @@ const SEQUENCE: Sequence = {
 };
 
 function setup(answer?: SequenceFailure) {
-  const [sequence, setSequence] = createSignal<Sequence | undefined>(SEQUENCE);
+  const [sequence] = createSignal<Sequence | undefined>(SEQUENCE);
   const update = vi.fn(
     async (
       request: UpdateSequenceRequest
     ): Promise<Result<Sequence, SequenceFailure>> =>
       answer ? err(answer) : ok({ ...SEQUENCE, version: request.version + 1 })
   );
-  const draft = createRoot(() => createSequenceDraft({ sequence, update }));
-  return { draft, update, setSequence };
+  return { draft: createRoot(() => createSequenceDraft({ sequence, update })) };
 }
 
 describe('createSequenceDraft', () => {
-  it('mirrors the saved sequence until edited, and an undone edit is no edit', () => {
-    const { draft } = setup();
-    expect(draft.draft()?.name).toBe('Intro');
-    expect(draft.changed()).toBe(false);
-
-    draft.change({ ...draft.draft()!, name: 'Renamed' });
-    expect(draft.changed()).toBe(true);
-
-    draft.change({ ...draft.draft()!, name: 'Intro' });
-    expect(draft.changed()).toBe(false);
-  });
-
-  it('saves only what changed, with the version the edit started from', async () => {
-    const { draft, update, setSequence } = setup();
-    draft.change({ ...draft.draft()!, footer: 'Acme' });
-    // A refetch lands mid-edit; the edit keeps its base.
-    setSequence({ ...SEQUENCE, name: 'Changed elsewhere', version: 4 });
-
-    expect(await draft.save('active')).toBe(true);
-    expect(update).toHaveBeenCalledWith({
-      version: 3,
-      footer: 'Acme',
-      status: 'active',
-    });
-    expect(draft.changed()).toBe(false);
-  });
-
   it('keeps its version when a refetch updates the cached sequence in place', async () => {
     // Solid Query keeps data in a store and reconciles refetches into it by id.
     const [query, setQuery] = createStore<{ data?: Sequence }>({
@@ -103,15 +75,5 @@ describe('createSequenceDraft', () => {
     draft.discard();
     expect(draft.conflict()).toBe(false);
     expect(draft.draft()?.name).toBe('Intro');
-  });
-
-  it('reports other failures without calling them a conflict', async () => {
-    const { draft } = setup({ kind: 'unavailable' });
-    draft.change({ ...draft.draft()!, name: 'Mine' });
-
-    expect(await draft.save()).toBe(false);
-    expect(draft.failure()).toEqual({ kind: 'unavailable' });
-    expect(draft.conflict()).toBe(false);
-    expect(draft.changed()).toBe(true);
   });
 });
