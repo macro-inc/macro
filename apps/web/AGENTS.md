@@ -499,8 +499,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   the shared desktop `Open in new split` action and its mobile/capacity guards.
 - Gate the Chat redesign with `enable-chat-sidebar-sections`; wait for its result, restore the tabbed rail and separate creation flows when off, and keep mobile unchanged.
   Keep the original rail renderer and label dialogs in `components/rail/`; build the redesigned rail and section dialogs in `components/rail/next/`, with shared controller, context, and row primitives outside `next/`.
-  With the flag on, keep desktop Chat sections in a scrolling stack with individually resizable, virtualized bodies and a collapsible DM panel pinned at the bottom; personal and team-shared section assignments remain independent.
+  With the flag on, keep desktop Chat sections in a scrolling stack with Favorites first and DMs directly below; personal and team-shared section assignments remain independent.
   Keep resize grips keyboard-accessible, preserve per-section heights in personal preferences, and route list navigation through the sectioned renderer's scroll handle rather than global virtualizer indexes.
+  Cap section heights at measured list content and available pane space; hide resize grips for two or fewer items, default Favorites and DMs to four rows, and default other sections to their maximum height.
   Mobile retains the recent feed. Use the unified New conversation picker and
   require explicit confirmation before creating a duplicate visible channel name.
   Use one name-first dialog for channels and conversations, with at most three inline suggestions; reveal channel privacy and invite controls only for channel creation, and retain typed names on blur.
@@ -514,7 +515,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Create all section types through New → New section in a wider dialog with Smart in the body and Shared in the footer; keep collapse on the header and style deletion as destructive.
   Keep per-section sorting and unread filters personal, and filter after membership assignment so hidden rows never leak into another section.
   Default Favorites to Custom order and persist drag reordering through the shared favorites mutation; preserve hidden and non-channel favorite positions, disable dragging under automatic sorts, show an insertion line at the actual destination edge, and keep the original rail unchanged.
-  Use one sliders-icon section menu with Sort and Filter submenus plus section actions; keep the Unread only label left and its switch right, and keep the submenu open when toggled.
+  Share the sliders-icon section menu's Sort, Filter, and actions with a header context menu; keep the Unread only label left and its switch right, and keep the submenu open when toggled.
+  Use checkbox items in Add to section to toggle membership within each scope without changing the other scope.
 - Route supported move, trash, restore, permanent-delete, duplicate, and share-policy
   writes through `queries/storage/entity-mutations` when GraphQL Soup is enabled;
   never retry failed GraphQL writes through REST. Preserve non-owner history removal

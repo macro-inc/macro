@@ -24,7 +24,10 @@ import {
   Switch,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
-import { CHANNEL_SECTION_MIN_HEIGHT } from '../../../constants';
+import {
+  CHANNEL_SECTION_MIN_HEIGHT,
+  CHANNEL_SECTION_ROW_HEIGHT,
+} from '../../../constants';
 import { canLabelChannel } from '../../../core/channel-label-eligibility';
 import { ChannelsLiveCallsSidebar } from '../../../live-calls-sidebar';
 import { CHANNELS_TOUR } from '../../../tour';
@@ -50,7 +53,10 @@ import {
 import { ChannelFavoriteRow } from './ChannelFavoriteRow';
 import { ChannelLabelRow } from './ChannelLabelRows';
 import { ChannelSectionHeading } from './ChannelSectionHeading';
-import { ChannelSectionDropdown } from './ChannelSectionMenu';
+import {
+  ChannelSectionContextMenu,
+  ChannelSectionDropdown,
+} from './ChannelSectionMenu';
 import { ResizableRailSection } from './ResizableRailSection';
 import { useFavoriteReorder } from './useFavoriteReorder';
 
@@ -161,18 +167,20 @@ function SectionHeading(props: { group: 'favorites' | ChannelsGroup }) {
     }
   };
   return (
-    <ChannelSectionHeading
-      id={domIdForRow(rail.railId, key())}
-      title={title()}
-      label={title()}
-      icon={icon()}
-      open={open()}
-      focused={rail.list.focus.key() === key()}
-      unreadCount={unreadCount()}
-      onToggle={() => rail.toggleGroup(props.group)}
-    >
-      <ChannelSectionDropdown section={props.group} label={title()} />
-    </ChannelSectionHeading>
+    <ChannelSectionContextMenu section={props.group}>
+      <ChannelSectionHeading
+        id={domIdForRow(rail.railId, key())}
+        title={title()}
+        label={title()}
+        icon={icon()}
+        open={open()}
+        focused={rail.list.focus.key() === key()}
+        unreadCount={unreadCount()}
+        onToggle={() => rail.toggleGroup(props.group)}
+      >
+        <ChannelSectionDropdown section={props.group} label={title()} />
+      </ChannelSectionHeading>
+    </ChannelSectionContextMenu>
   );
 }
 
@@ -347,6 +355,11 @@ function BrowseSection(props: {
       label={label()}
       open={open()}
       maxHeight={props.maxHeight}
+      itemCount={
+        props.section.rows.filter(
+          (row) => row.kind === 'conversation' || row.kind === 'favorite'
+        ).length
+      }
       rootRef={(element) => {
         handle.root = element;
       }}
@@ -374,7 +387,7 @@ function BrowseSection(props: {
           }}
           data={props.section.rows}
           scrollRef={scrollRoot()}
-          itemSize={34}
+          itemSize={CHANNEL_SECTION_ROW_HEIGHT}
           bufferSize={200}
           keepMounted={focusIndex() >= 0 ? [focusIndex()] : undefined}
           onScroll={loadVisibleSections}
@@ -390,16 +403,12 @@ function BrowseSection(props: {
 
 function ExpandedBrowse() {
   const rail = useChannelsRail();
-  const [root, setRoot] = createSignal<HTMLDivElement>();
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
-  const size = createElementSize(root);
   const scrollSize = createElementSize(scrollRoot);
   const sections = createMemo(() =>
     groupChannelRailSections(rail.list.items.all())
   );
-  const keys = createMemo(() =>
-    [...sections().keys()].filter((key) => key !== 'direct_messages')
-  );
+  const keys = createMemo(() => [...sections().keys()]);
   const handles = new Map<ChannelSectionKey, SectionHandle>();
   const favoriteReorder = useFavoriteReorder(
     () =>
@@ -431,7 +440,7 @@ function ExpandedBrowse() {
           if (localIndex >= 0)
             handle.virtualizer?.scrollToIndex(localIndex, options);
           const container = scrollRoot();
-          if (key !== 'direct_messages' && container && handle.root) {
+          if (container && handle.root) {
             const bounds = handle.root.getBoundingClientRect();
             const viewport = container.getBoundingClientRect();
             if (bounds.top < viewport.top)
@@ -445,7 +454,7 @@ function ExpandedBrowse() {
     })
   );
   return (
-    <div ref={setRoot} class="flex min-h-0 flex-1 flex-col">
+    <div class="flex min-h-0 flex-1 flex-col">
       <div
         ref={setScrollRoot}
         class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto px-(--sidebar-gutter)"
@@ -469,22 +478,6 @@ function ExpandedBrowse() {
           )}
         </For>
       </div>
-      <Show when={sections().get('direct_messages')}>
-        {(section) => (
-          <div class="shrink-0 border-t border-edge-muted px-(--sidebar-gutter)">
-            <BrowseSection
-              sectionKey="direct_messages"
-              section={section()}
-              maxHeight={Math.max(
-                CHANNEL_SECTION_MIN_HEIGHT,
-                (size.height ?? 500) - 180
-              )}
-              favoriteReorder={favoriteReorder}
-              register={register}
-            />
-          </div>
-        )}
-      </Show>
     </div>
   );
 }
@@ -510,7 +503,7 @@ function ExpandedSearchResults(props: { search: ChannelRailSearch }) {
         ref={pagination.registerVirtualizer}
         data={props.search.results()}
         scrollRef={scrollRoot()}
-        itemSize={34}
+        itemSize={CHANNEL_SECTION_ROW_HEIGHT}
         onScroll={pagination.loadMoreNearEnd}
       >
         {(channel) => <ChannelOption channel={channel} />}

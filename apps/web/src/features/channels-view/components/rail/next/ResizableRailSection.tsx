@@ -3,9 +3,10 @@ import { useUserId } from '@core/context/user';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { createMemo, createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import {
-  CHANNEL_SECTION_DEFAULT_HEIGHT,
   CHANNEL_SECTION_MAX_HEIGHT,
   CHANNEL_SECTION_MIN_HEIGHT,
+  CHANNEL_SECTION_MIN_ITEMS,
+  CHANNEL_SECTION_ROW_HEIGHT,
   clampChannelSectionHeight,
 } from '../../../constants';
 import type { ChannelSectionKey } from '../../../types';
@@ -17,6 +18,7 @@ export function ResizableRailSection(props: {
   label: string;
   open: boolean;
   maxHeight: number;
+  itemCount: number;
   header: JSX.Element;
   children: JSX.Element;
   rootRef: (element: HTMLDivElement) => void;
@@ -26,20 +28,32 @@ export function ResizableRailSection(props: {
   const userId = useUserId();
   const account = createMemo(() => ({ id: userId() }));
   const [viewport, setViewport] = createSignal<HTMLDivElement>();
-  const size = createElementSize(viewport);
+  const [content, setContent] = createSignal<HTMLDivElement>();
+  const contentSize = createElementSize(content);
   const [preview, setPreview] = createSignal<number>();
   const maximum = () =>
-    Math.max(
-      CHANNEL_SECTION_MIN_HEIGHT,
-      Math.min(CHANNEL_SECTION_MAX_HEIGHT, props.maxHeight)
+    Math.min(
+      CHANNEL_SECTION_MAX_HEIGHT,
+      props.maxHeight,
+      contentSize.height ??
+        Math.max(1, props.itemCount) * CHANNEL_SECTION_ROW_HEIGHT
     );
-  const height = () =>
-    preview() ?? rail.sectionPreferences(props.section).height;
+  const resizable = () =>
+    props.itemCount > CHANNEL_SECTION_MIN_ITEMS &&
+    maximum() > CHANNEL_SECTION_MIN_HEIGHT;
+  const defaultHeight = () =>
+    props.section === 'favorites' || props.section === 'direct_messages'
+      ? Math.min(maximum(), 4 * CHANNEL_SECTION_ROW_HEIGHT)
+      : maximum();
   const clamp = (height: number) =>
     Math.min(maximum(), clampChannelSectionHeight(height));
-  const heightStyle = () => {
-    const current = height();
-    return current === undefined ? undefined : `${clamp(current)}px`;
+  const height = () => {
+    if (!resizable()) return maximum();
+    return clamp(
+      preview() ??
+        rail.sectionPreferences(props.section).height ??
+        defaultHeight()
+    );
   };
   let drag:
     | {
@@ -54,7 +68,12 @@ export function ResizableRailSection(props: {
     if (!drag || event.pointerId !== drag.pointer) return;
     const current = drag;
     drag = undefined;
-    if (!cancelled && props.open && current.account === account()) {
+    if (
+      !cancelled &&
+      props.open &&
+      resizable() &&
+      current.account === account()
+    ) {
       rail.setSectionPreferences(props.section, {
         height: clamp(
           current.height + (event.clientY - current.y) / current.zoom
@@ -68,27 +87,25 @@ export function ResizableRailSection(props: {
     <div ref={props.rootRef} class="min-w-0 shrink-0">
       {props.header}
       <Show when={props.open}>
-        {(_open) => {
-          onCleanup(() => {
-            drag = undefined;
-            setPreview(undefined);
-          });
-          return (
-            <>
-              <div
-                ref={(element) => {
-                  setViewport(element);
-                  props.scrollRef(element);
-                }}
-                class="min-h-0 overflow-y-auto"
-                style={{
-                  height: heightStyle(),
-                  'min-height': `${CHANNEL_SECTION_MIN_HEIGHT}px`,
-                  'max-height': `${Math.min(maximum(), height() ?? CHANNEL_SECTION_DEFAULT_HEIGHT)}px`,
-                }}
-              >
-                {props.children}
-              </div>
+        <div
+          ref={(element) => {
+            setViewport(element);
+            props.scrollRef(element);
+          }}
+          class="min-h-0 overflow-y-auto"
+          style={{ height: `${height()}px` }}
+        >
+          <div ref={setContent} data-section-content>
+            {props.children}
+          </div>
+        </div>
+        <Show when={resizable()}>
+          {(_resizable) => {
+            onCleanup(() => {
+              drag = undefined;
+              setPreview(undefined);
+            });
+            return (
               <button
                 type="button"
                 role="separator"
@@ -98,9 +115,7 @@ export function ResizableRailSection(props: {
                 })}
                 aria-valuemin={CHANNEL_SECTION_MIN_HEIGHT}
                 aria-valuemax={maximum()}
-                aria-valuenow={Math.round(
-                  size.height ?? CHANNEL_SECTION_DEFAULT_HEIGHT
-                )}
+                aria-valuenow={Math.round(height())}
                 title={t('channelSections.resizeSectionHint')}
                 class="group flex h-3 w-full touch-none cursor-row-resize items-center justify-center outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-edge-focus"
                 onPointerDown={(event) => {
@@ -147,7 +162,7 @@ export function ResizableRailSection(props: {
                   event.stopImmediatePropagation();
                   rail.setSectionPreferences(props.section, {
                     height: clamp(
-                      (size.height ?? CHANNEL_SECTION_DEFAULT_HEIGHT) +
+                      height() +
                         (event.key === 'ArrowDown' ? 1 : -1) *
                           (event.shiftKey ? 100 : 20)
                     ),
@@ -156,9 +171,9 @@ export function ResizableRailSection(props: {
               >
                 <span class="h-0.5 w-8 rounded-full bg-edge-muted group-hover:bg-accent group-focus-visible:bg-accent" />
               </button>
-            </>
-          );
-        }}
+            );
+          }}
+        </Show>
       </Show>
     </div>
   );

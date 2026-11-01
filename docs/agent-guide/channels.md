@@ -921,9 +921,9 @@ between Threads, All, and Recent preserves an already-open navigation overlay.
 ### Sectioned sidebar (flag on)
 
 With the flag on, desktop Chat has one conversation sidebar, without All, Recent,
-or Threads view tabs. Favorites and the team's channels appear first, followed by custom
-sections. The team heading is **[Team name] channels**, with **Team channels**
-as the fallback while the name is unavailable.
+or Threads view tabs. Favorites appears first, followed by Direct messages, the
+team's channels, and custom sections. The team heading is **[Team name] channels**,
+with **Team channels** as the fallback while the name is unavailable.
 Other joined public and private channels remain in Channels until assigned to a
 personal section. Each custom section is a top-level heading, independent of the
 Team channels disclosure. Empty sections remain visible with a short hint; empty
@@ -941,16 +941,18 @@ badge next to the name, before the caret. Personal sections have no scope icon o
 badge. Header focus backgrounds fill the entire header row, including its
 trailing controls, with no extra right padding.
 
-The upper sidebar scrolls through all sections. Each expanded section has its
-own virtualized, scrollable channel list and a resize grip below it. Drag the
-grip to choose its height, down to two rows (68px); overflow stays inside that
-section. Focus the grip and use Up/Down to resize by 20px (100px with Shift),
-or double-click to restore its automatic height. Section heights persist as
-personal preferences alongside sorting and sidebar width. Heights adapt to
-smaller panes without discarding the saved preference. Direct messages remain
-in a separate collapsible, resizable panel pinned at the bottom. Search covers
-channels and DMs regardless of section placement and restores the selected row
-in its section when closed. Mobile retains the recent-conversation feed below.
+The sidebar scrolls through all sections. Each expanded section has its own
+virtualized, scrollable list. Lists with more than two items have a resize grip;
+drag it to choose a height between two rows (68px) and the end of the list,
+capped by the available pane space. Shorter lists fit their content and have no
+resize grip. Favorites and Direct messages default to four visible rows;
+other sections default to their maximum height. Focus the grip and use Up/Down
+to resize by 20px (100px with Shift), or double-click to restore the default.
+Section heights persist as personal preferences alongside sorting and sidebar
+width. Heights adapt to filtered content and smaller panes without discarding
+the saved preference. Search covers channels and DMs regardless of section
+placement and restores the selected row in its section when closed. Mobile
+retains the recent-conversation feed below.
 
 Section membership comes from the server's complete visible channel-ID lists.
 The sidebar shows available channel rows immediately. One shared by-ID query
@@ -996,8 +998,8 @@ retain the team's existing label permissions and accept only channels from that
 team. Neither kind accepts DMs. A personal assignment never changes a shared
 assignment. Names are unique within each scope, case-insensitively.
 
-Each heading has one sliders-icon menu. **Sort** opens its independent sorting
-options, and **Filter** contains **Unread only**. The unread label sits on the left
+Each heading has one sliders-icon menu, also available by right-clicking the header.
+**Sort** opens its independent sorting options, and **Filter** contains **Unread only**. The unread label sits on the left
 and its switch on the right; toggling it keeps the submenu open.
 Custom sections include editing, Mark all as read, and a destructive Delete
 action in the same menu. Menus use the standard dropdown groups and selection
@@ -1009,7 +1011,9 @@ Filtered-out channels retain their membership and do not reappear ungrouped.
 Shared name and rule edits apply to the team; personal edits affect only the account.
 Deleting a section does not delete its conversations or change channel access.
 Use a channel's Add to section menu to change the personal or shared assignment.
-The two scopes remain separate in that menu.
+Each section uses a checkbox: checking moves the channel into that section,
+and unchecking removes it. Only one section per scope is assigned; the personal
+and shared assignments remain independent.
 
 Choose smart grouping in the section dialog for automatic name matching.
 Smart sections match channel names literally and without regard to capitalization. They preserve ordinary section permissions and are not manual

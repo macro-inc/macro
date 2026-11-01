@@ -209,6 +209,31 @@ export function buildChannelRailRows(
     appendReferenceStatus('favorites', 'favorites');
   }
 
+  rows.push({
+    kind: 'section',
+    id: 'section:direct_messages',
+    group: 'direct_messages',
+  });
+  if (expandedGroups.direct_messages) {
+    rows.push(
+      ...items.direct_messages.map(
+        (channel, localIndex): ChannelRailRow => ({
+          kind: 'conversation',
+          id: rowKeyForChannel(channel.id),
+          group: 'direct_messages',
+          scope: 'direct_messages',
+          localIndex,
+          channel,
+        })
+      )
+    );
+    rows.push({
+      kind: 'status',
+      id: 'status:direct_messages',
+      group: 'direct_messages',
+    });
+  }
+
   const labelledIds = new Set(
     channelSectionRows.flatMap((row) =>
       row.kind === 'conversation' && row.labelId ? [row.channel.id] : []
@@ -272,34 +297,12 @@ export function buildChannelRailRows(
   }
   // Retain visual-order indexes for callers using the flat keyboard list.
   rows.forEach((row, index) => {
-    if (row.kind === 'conversation' || row.kind === 'label')
+    if (
+      (row.kind === 'conversation' && row.group !== 'direct_messages') ||
+      row.kind === 'label'
+    )
       row.localIndex = index;
   });
-
-  rows.push({
-    kind: 'section',
-    id: 'section:direct_messages',
-    group: 'direct_messages',
-  });
-  if (expandedGroups.direct_messages) {
-    rows.push(
-      ...items.direct_messages.map(
-        (channel, localIndex): ChannelRailRow => ({
-          kind: 'conversation',
-          id: rowKeyForChannel(channel.id),
-          group: 'direct_messages',
-          scope: 'direct_messages',
-          localIndex,
-          channel,
-        })
-      )
-    );
-    rows.push({
-      kind: 'status',
-      id: 'status:direct_messages',
-      group: 'direct_messages',
-    });
-  }
 
   return sectionOptions ? applySectionPreferences(rows, sectionOptions) : rows;
 }

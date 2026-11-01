@@ -25,6 +25,7 @@ import {
   useFavoriteReorder,
 } from './next/useFavoriteReorder';
 
+const measurements = vi.hoisted(() => ({ contentHeight: (): number => 400 }));
 const rail = vi.hoisted(() => ({
   channelById: (_channelId: string): ChannelEntity | undefined => undefined,
   activateRow: vi.fn(),
@@ -66,7 +67,14 @@ vi.mock('@macro-inc/observability', () => ({
   },
 }));
 vi.mock('@solid-primitives/resize-observer', () => ({
-  createElementSize: () => ({ width: 200, height: 100 }),
+  createElementSize: (element: () => HTMLElement | undefined) => ({
+    width: 200,
+    get height() {
+      return element()?.hasAttribute('data-section-content')
+        ? measurements.contentHeight()
+        : 100;
+    },
+  }),
 }));
 vi.mock('@thisbeyond/solid-dnd', () => ({
   createDraggable: () => ({
@@ -188,6 +196,7 @@ beforeEach(() => {
   drag.ends.length = 0;
   drag.favorites = [];
   const [loaded, update] = createSignal<ChannelEntity | undefined>(undefined);
+  [measurements.contentHeight] = createSignal(400);
   setChannel = update;
   rail.channelById = (channelId) =>
     loaded()?.id === channelId ? loaded() : undefined;
@@ -358,6 +367,7 @@ describe('resizable chat sections', () => {
         label="Favorites"
         open={open()}
         maxHeight={400}
+        itemCount={12}
         header={<span>Section</span>}
         rootRef={() => {}}
         scrollRef={(element) => {
@@ -425,6 +435,7 @@ describe('resizable chat sections', () => {
         label="Favorites"
         open
         maxHeight={120}
+        itemCount={4}
         header={<span>Section</span>}
         rootRef={() => {}}
         scrollRef={() => {}}
@@ -446,4 +457,76 @@ describe('resizable chat sections', () => {
       height: undefined,
     });
   });
+
+  it('caps resizing at the content height and drops the handle when filtering leaves two items', () => {
+    const [count, setCount] = createSignal(3);
+    const [contentHeight, setContentHeight] = createSignal(102);
+    measurements.contentHeight = contentHeight;
+    let scrollElement: HTMLDivElement | undefined;
+    render(() => (
+      <ResizableRailSection
+        section="team_channels"
+        label="Team channels"
+        open
+        maxHeight={400}
+        itemCount={count()}
+        header={<span>Section</span>}
+        rootRef={() => {}}
+        scrollRef={(element) => {
+          scrollElement = element;
+        }}
+      >
+        Conversations
+      </ResizableRailSection>
+    ));
+    const handle = screen.getByRole('separator');
+    expect(handle.getAttribute('aria-valuemax')).toBe('102');
+    expect(handle.getAttribute('aria-valuenow')).toBe('102');
+    expect(scrollElement?.style.height).toBe('102px');
+    fireEvent.keyDown(handle, { key: 'ArrowDown', shiftKey: true });
+    expect(rail.setSectionPreferences).toHaveBeenLastCalledWith(
+      'team_channels',
+      { height: 102 }
+    );
+
+    Object.defineProperty(handle, 'setPointerCapture', { value: vi.fn() });
+    const start = new MouseEvent('pointerdown', {
+      bubbles: true,
+      button: 0,
+      clientY: 100,
+    });
+    Object.defineProperty(start, 'pointerId', { value: 1 });
+    handle.dispatchEvent(start);
+    setCount(2);
+    setContentHeight(68);
+    expect(screen.queryByRole('separator')).toBeNull();
+    expect(scrollElement?.style.height).toBe('68px');
+    const finish = new MouseEvent('pointerup', { bubbles: true, clientY: 300 });
+    Object.defineProperty(finish, 'pointerId', { value: 1 });
+    handle.dispatchEvent(finish);
+    expect(rail.setSectionPreferences).toHaveBeenCalledTimes(1);
+  });
+
+  it.each(['favorites', 'direct_messages', 'team_channels'] as const)(
+    'uses the default height for %s within the content and viewport limits',
+    (section) => {
+      render(() => (
+        <ResizableRailSection
+          section={section}
+          label={section}
+          open
+          maxHeight={300}
+          itemCount={12}
+          header={<span>Section</span>}
+          rootRef={() => {}}
+          scrollRef={() => {}}
+        >
+          Conversations
+        </ResizableRailSection>
+      ));
+      expect(screen.getByRole('separator').getAttribute('aria-valuenow')).toBe(
+        section === 'team_channels' ? '300' : '136'
+      );
+    }
+  );
 });

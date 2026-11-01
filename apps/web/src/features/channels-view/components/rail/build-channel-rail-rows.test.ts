@@ -491,6 +491,13 @@ it('keeps overlapping section members and loading rows in their own scroll regio
     }
   );
   const grouped = groupChannelRailSections(rows);
+  expect([...grouped.keys()]).toEqual([
+    'favorites',
+    'direct_messages',
+    'team_channels',
+    'label:first',
+    'label:second',
+  ]);
   expect(grouped.get('label:first')?.rows.map((row) => row.id)).toEqual([
     'channel:acme:label:first',
     'reference-status:label:first',
@@ -507,5 +514,5 @@ it('keeps overlapping section members and loading rows in their own scroll regio
   ).toBe(true);
   expect(
     rows.filter((row) => row.kind === 'conversation').map((row) => row.id)
-  ).toEqual(['channel:acme:label:first', 'channel:deals']);
+  ).toEqual(['channel:deals', 'channel:acme:label:first']);
 });
