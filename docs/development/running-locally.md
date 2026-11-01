@@ -430,6 +430,33 @@ The seeded persona login links embed the frontend port. If you switch ports, run
 
 The Rust services are built on the host with `cargo zigbuild`. The binaries are mounted into a shared runtime image. Docker does not compile these services during a normal `run_local`.
 
+### Build memory and disk usage
+
+Host-side service compilation defaults to at most two jobs (one on a
+single-core host) and disables incremental artifacts in the development profile.
+This limits concurrent compiler work and avoids new incremental-cache files;
+dependency artifacts and the existing shared build cache are still reused.
+It does not reduce the running services' memory or delete existing caches.
+
+Set `CARGO_BUILD_JOBS` to override compilation parallelism. Unset, empty, or
+`0` uses the two-job cap. Set `CARGO_INCREMENTAL=1` to restore incremental
+compilation when frequent source changes matter more than disk usage:
+
+```bash
+CARGO_BUILD_JOBS=4 CARGO_INCREMENTAL=1 just stack update
+```
+
+The legacy `docker/Dockerfile.dev` service-bundle build also defaults to two
+jobs and disables incremental artifacts. Its build arguments
+`CARGO_BUILD_JOBS=4` and `CARGO_INCREMENTAL=1` override those defaults; explicitly
+setting its jobs argument to `0` retains automatic CPU-based parallelism.
+These arguments affect that Dockerfile only, not the host-side launcher.
+
+FusionAuth remains part of the stack. Reuse its identity provider through
+separate OAuth/OIDC application registrations for other apps; keep Macro's
+application registration and redirect URIs separate. This build change does
+not create or reconfigure SSO clients.
+
 Press `r` to rebuild the binaries. Only the services whose binaries changed restart.
 
 Three services have Docker-built images. They are not rebuilt by default:

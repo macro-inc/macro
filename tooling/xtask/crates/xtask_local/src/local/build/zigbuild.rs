@@ -42,7 +42,7 @@ pub fn run(stage: &Stage, target: Target) -> Result<()> {
         .filter(|j| !j.is_empty() && j != "0")
         .unwrap_or_else(|| {
             std::thread::available_parallelism()
-                .map(|n| n.get())
+                .map(|n| n.get().min(2))
                 .unwrap_or(1)
                 .to_string()
         });
@@ -152,6 +152,8 @@ fn base_command(ws: &Path, zig_cache: &Path, jobs: &str, target: Target) -> Comm
         .arg(jobs)
         .env("SQLX_OFFLINE", "true")
         .env("CARGO_PROFILE_DEV_DEBUG", "0")
+        // Keep local build caches small; CARGO_INCREMENTAL=1 can opt back in.
+        .env("CARGO_PROFILE_DEV_INCREMENTAL", "false")
         .env("AWS_LC_SYS_CMAKE_BUILDER", "1")
         // The nix dev shell pins OPENSSL_NO_VENDOR=1 so host builds link the
         // Nix openssl, but that openssl can't serve the cross target (pkg-config

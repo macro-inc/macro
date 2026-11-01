@@ -3,10 +3,13 @@ FROM denoland/deno:2.9.6 AS deno
 FROM rust:latest AS chef
 ENV SQLX_OFFLINE=true
 ENV CARGO_PROFILE_DEV_DEBUG=0
+ENV CARGO_PROFILE_DEV_INCREMENTAL=false
 WORKDIR /app
 
 FROM chef AS builder
-ARG CARGO_BUILD_JOBS=0
+ARG CARGO_BUILD_JOBS=2
+ARG CARGO_INCREMENTAL=0
+ENV CARGO_INCREMENTAL=${CARGO_INCREMENTAL}
 COPY . .
 
 # Build ALL standard service binaries at once (with BuildKit cache mounts for incremental builds)
