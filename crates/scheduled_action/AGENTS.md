@@ -16,9 +16,13 @@ each run.
   (Kafka or polled) turns into a dispatched run.
 - `src/domain/program_runner.rs`: runs a routine's steps (`crates/routine_program`):
   one classifier call for its decisions, tool steps through the `RoutineTools`
-  port (the harness's catalog, in process, limited to `RoutineTool`), and
-  at most one agent step through `target_runner.rs`. An old single-agent task
-  runs as one agent step.
+  port (the harness's catalog, in process, limited to `RoutineTool`),
+  code steps through the `RoutineCode` port (the harness's Deno executor,
+  limited to each step's `writes`), and at most one agent step through
+  `target_runner.rs`. An old single-agent task runs as one agent step.
+- `src/domain/code_check.rs`: saving a routine type-checks its changed code
+  steps and stamps the task's `sdk`; unchanged code already checked against
+  the current SDK isn't checked again.
 - `src/domain/event_trigger/github_selector.rs`, `payload_match.rs`: the
   `github` selector and the exact payload `match` GitHub filters take.
 - `src/inbound/axum_router.rs`, `src/inbound/kafka_consumer.rs`,

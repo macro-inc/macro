@@ -1,0 +1,271 @@
+use std::sync::Mutex;
+
+use serde_json::json;
+
+use super::*;
+use crate::domain::ports::{CodeOutcome, CodeUnavailable};
+use crate::domain::program_runner::test::{OWNER, action};
+
+const CURRENT: &str = "0.3.0+current";
+
+/// Code that uses `tasks.create` fails to check; the model rewrites it to
+/// `tasks.add`, unless `rewrite_fails`; a dry run fails if `dry_run_fails`.
+#[derive(Default)]
+struct Code {
+    rewrite_fails: bool,
+    rewrite_still_fails: bool,
+    dry_run_fails: bool,
+    dry_runs: Mutex<Vec<(Option<Value>, bool)>>,
+    rewrites: Mutex<Vec<Vec<String>>>,
+}
+
+impl RoutineCode for Code {
+    fn sdk(&self) -> Option<SdkFingerprint> {
+        Some(CURRENT.to_owned().try_into().unwrap())
+    }
+
+    async fn check(&self, source: &str) -> std::result::Result<Vec<String>, CodeUnavailable> {
+        Ok(
+            if source.contains("tasks.create") || source.contains("still broken") {
+                vec![
+                    "TS2339 [ERROR]: Property 'create' does not exist on type 'TaskNamespace'."
+                        .into(),
+                ]
+            } else {
+                Vec::new()
+            },
+        )
+    }
+
+    async fn run(&self, _: &MacroUserIdStr<'static>, run: CodeRun<'_>) -> CodeOutcome {
+        self.dry_runs
+            .lock()
+            .unwrap()
+            .push((run.trigger.cloned(), run.dry_run));
+        CodeOutcome {
+            result: if self.dry_run_fails {
+                Err("TypeError: cannot read properties of undefined".into())
+            } else {
+                Ok(Value::Null)
+            },
+            calls: Vec::new(),
+            calls_truncated: false,
+        }
+    }
+
+    async fn rewrite(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        step: &routine_program::CodeStep,
+        problems: &[String],
+    ) -> std::result::Result<String, String> {
+        self.rewrites.lock().unwrap().push(problems.to_vec());
+        if self.rewrite_fails {
+            return Err("the model is unavailable".into());
+        }
+        if self.rewrite_still_fails {
+            return Ok("still broken".into());
+        }
+        Ok(step.source.replace("tasks.create", "tasks.add"))
+    }
+}
+
+#[derive(Debug, Clone, PartialEq)]
+enum Recorded {
+    Checked(String),
+    Claimed(String),
+    Saved(Value),
+    NeedsUpdate(String, Option<Value>),
+}
+
+struct Upgrades {
+    claimable: bool,
+    recorded: Mutex<Vec<Recorded>>,
+}
+
+impl Default for Upgrades {
+    fn default() -> Self {
+        Self {
+            claimable: true,
+            recorded: Mutex::default(),
+        }
+    }
+}
+
+impl CodeUpgrades for Upgrades {
+    async fn record_checked(&self, _: &ScheduledAction, sdk: &SdkFingerprint) -> Result<()> {
+        self.recorded
+            .lock()
+            .unwrap()
+            .push(Recorded::Checked(sdk.to_string()));
+        Ok(())
+    }
+
+    async fn claim_rewrite(&self, _: &ScheduledAction, sdk: &SdkFingerprint) -> Result<bool> {
+        self.recorded
+            .lock()
+            .unwrap()
+            .push(Recorded::Claimed(sdk.to_string()));
+        Ok(self.claimable)
+    }
+
+    async fn save_rewrite(
+        &self,
+        _: &ScheduledAction,
+        _: &SdkFingerprint,
+        task: &Value,
+    ) -> Result<()> {
+        self.recorded
+            .lock()
+            .unwrap()
+            .push(Recorded::Saved(task.clone()));
+        Ok(())
+    }
+
+    async fn needs_update(
+        &self,
+        _: &ScheduledAction,
+        _: &SdkFingerprint,
+        reason: &str,
+        proposal: Option<&Value>,
+    ) -> Result<()> {
+        self.recorded
+            .lock()
+            .unwrap()
+            .push(Recorded::NeedsUpdate(reason.into(), proposal.cloned()));
+        Ok(())
+    }
+
+    async fn list_upgrades(&self, _: Uuid) -> Result<Vec<CodeUpgrade>> {
+        Ok(Vec::new())
+    }
+}
+
+fn routine(source: &str, sdk: Option<&str>) -> ScheduledAction {
+    let mut task = json!({ "steps": [
+        { "type": "code", "title": "File invoices", "source": source, "writes": ["workspace"] },
+        { "type": "agent", "model": "m", "instructions": "Summarize" },
+    ] });
+    if let Some(sdk) = sdk {
+        task["sdk"] = json!(sdk);
+    }
+    action(task)
+}
+
+async fn upgrade(
+    code: &Code,
+    upgrades: &Upgrades,
+    action: &ScheduledAction,
+) -> Result<RoutineProgram> {
+    current_code(
+        code,
+        upgrades,
+        &MacroUserIdStr::parse_from_str(OWNER).unwrap(),
+        action,
+        RoutineProgram::from_task(&action.task).unwrap(),
+        Some(&json!({ "entity_id": "thread-1" })),
+    )
+    .await
+}
+
+#[tokio::test]
+async fn code_on_the_current_sdk_is_left_alone() {
+    let (code, upgrades) = (Code::default(), Upgrades::default());
+    let program = upgrade(&code, &upgrades, &routine("tasks.create", Some(CURRENT)))
+        .await
+        .unwrap();
+    assert_eq!(program.code_steps()[0].source, "tasks.create");
+    assert!(upgrades.recorded.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn code_that_still_checks_only_records_the_new_sdk() {
+    let (code, upgrades) = (Code::default(), Upgrades::default());
+    let program = upgrade(&code, &upgrades, &routine("tasks.add", Some("0.2.0+old")))
+        .await
+        .unwrap();
+    assert_eq!(program.sdk.unwrap().as_str(), CURRENT);
+    assert_eq!(
+        *upgrades.recorded.lock().unwrap(),
+        [Recorded::Checked(CURRENT.into())]
+    );
+    assert!(code.rewrites.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn failing_code_is_rewritten_checked_dry_run_and_saved_once() {
+    let (code, upgrades) = (Code::default(), Upgrades::default());
+    let action = routine("await macro.tasks.create(x)", Some("0.2.0+old"));
+    let program = upgrade(&code, &upgrades, &action).await.unwrap();
+    assert_eq!(program.code_steps()[0].source, "await macro.tasks.add(x)");
+    // The model saw the code's problems, not the trigger.
+    assert_eq!(code.rewrites.lock().unwrap().len(), 1);
+    assert_eq!(
+        *code.dry_runs.lock().unwrap(),
+        [(Some(json!({ "entity_id": "thread-1" })), true)]
+    );
+    let recorded = upgrades.recorded.lock().unwrap().clone();
+    assert_eq!(recorded[0], Recorded::Claimed(CURRENT.into()));
+    let Recorded::Saved(task) = &recorded[1] else {
+        panic!("{recorded:?}");
+    };
+    assert_eq!(task["sdk"], CURRENT);
+    assert_eq!(task["steps"][0]["source"], "await macro.tasks.add(x)");
+    assert_eq!(task["steps"][0]["writes"], json!(["workspace"]));
+    assert_eq!(task["steps"][1]["type"], "agent");
+}
+
+#[tokio::test]
+async fn another_runs_rewrite_or_a_past_failure_fails_this_run() {
+    let code = Code::default();
+    let upgrades = Upgrades {
+        claimable: false,
+        ..Upgrades::default()
+    };
+    let error = upgrade(&code, &upgrades, &routine("tasks.create", None))
+        .await
+        .unwrap_err();
+    assert!(error.downcast_ref::<NeedsUpdate>().is_some());
+    assert!(code.rewrites.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn a_rewrite_that_fails_its_checks_pauses_the_routine_with_it() {
+    for (code, expected) in [
+        (
+            Code {
+                rewrite_fails: true,
+                ..Code::default()
+            },
+            "couldn't be updated: the model is unavailable",
+        ),
+        (
+            Code {
+                rewrite_still_fails: true,
+                ..Code::default()
+            },
+            "the update doesn't type-check",
+        ),
+        (
+            Code {
+                dry_run_fails: true,
+                ..Code::default()
+            },
+            "the update failed a dry run",
+        ),
+    ] {
+        let upgrades = Upgrades::default();
+        let error = upgrade(&code, &upgrades, &routine("tasks.create", None))
+            .await
+            .unwrap_err();
+        let NeedsUpdate(reason) = error.downcast_ref::<NeedsUpdate>().unwrap().clone();
+        assert!(reason.contains(expected), "{reason}");
+        let recorded = upgrades.recorded.lock().unwrap().clone();
+        let Recorded::NeedsUpdate(recorded_reason, proposal) = &recorded[1] else {
+            panic!("{recorded:?}");
+        };
+        assert_eq!(*recorded_reason, reason);
+        // A rewrite that exists is kept for the owner to review.
+        assert_eq!(proposal.is_some(), !code.rewrite_fails);
+    }
+}

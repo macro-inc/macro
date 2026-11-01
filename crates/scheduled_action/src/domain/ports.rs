@@ -402,6 +402,179 @@ pub enum RoutineToolOutcome {
     },
 }
 
+/// Checks and runs a routine's code steps as its owner, in the process that
+/// holds the SDK executor. Never replay a run after an ambiguous failure:
+/// its writes may have happened.
+pub trait RoutineCode: Send + Sync + 'static {
+    /// The SDK code is type-checked against now; `None` when code can't run here.
+    fn sdk(&self) -> Option<routine_program::SdkFingerprint>;
+
+    /// Type-check `source` against [`Self::sdk`] and the step contract. The
+    /// problems found, each written as the type checker reported it; empty
+    /// when the code checks.
+    fn check(
+        &self,
+        source: &str,
+    ) -> impl Future<Output = Result<Vec<String>, CodeUnavailable>> + Send;
+
+    /// Run one code step as `owner`. A dry run sends no writes.
+    fn run(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        run: CodeRun<'_>,
+    ) -> impl Future<Output = CodeOutcome> + Send;
+
+    /// Rewrite `step`'s source so the problems [`Self::check`] found go
+    /// away, keeping what it does, billed to `owner`. The model sees the
+    /// code and the problems, never the routine's data. Why it couldn't, for
+    /// the owner.
+    fn rewrite(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        step: &routine_program::CodeStep,
+        problems: &[String],
+    ) -> impl Future<Output = Result<String, String>> + Send;
+}
+
+/// Code can't be checked or run right now; the reason is for the owner.
+#[derive(Debug, Clone, PartialEq, Eq, thiserror::Error)]
+#[error("{0}")]
+pub struct CodeUnavailable(pub String);
+
+/// One code step to run.
+#[derive(Debug, Clone, Copy)]
+pub struct CodeRun<'a> {
+    /// The step.
+    pub step: &'a routine_program::CodeStep,
+    /// The triggering item, as decisions and templates see it.
+    pub trigger: Option<&'a serde_json::Value>,
+    /// Outputs of earlier steps with ids.
+    pub steps: &'a serde_json::Value,
+    /// Answer every write with an empty result instead of sending it.
+    pub dry_run: bool,
+}
+
+/// What one code step did.
+#[derive(Debug, Clone, PartialEq)]
+pub struct CodeOutcome {
+    /// What `main` returned, or why the step failed, for the owner.
+    pub result: Result<serde_json::Value, String>,
+    /// Its SDK calls, in the order they started.
+    pub calls: Vec<routine_program::CallRecord>,
+    /// More calls ran than `calls` records.
+    pub calls_truncated: bool,
+}
+
+/// Hosts without an SDK executor: code steps fail with a reason.
+pub struct NoRoutineCode;
+
+const NO_CODE: &str = "Code steps can't run here: no code executor is configured.";
+
+impl RoutineCode for NoRoutineCode {
+    fn sdk(&self) -> Option<routine_program::SdkFingerprint> {
+        None
+    }
+
+    async fn check(&self, _: &str) -> Result<Vec<String>, CodeUnavailable> {
+        Err(CodeUnavailable(NO_CODE.to_owned()))
+    }
+
+    async fn run(&self, _: &MacroUserIdStr<'static>, _: CodeRun<'_>) -> CodeOutcome {
+        CodeOutcome {
+            result: Err(NO_CODE.to_owned()),
+            calls: Vec::new(),
+            calls_truncated: false,
+        }
+    }
+
+    async fn rewrite(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &routine_program::CodeStep,
+        _: &[String],
+    ) -> Result<String, String> {
+        Err(NO_CODE.to_owned())
+    }
+}
+
+/// A host that may not have an executor: `None` behaves like [`NoRoutineCode`].
+impl<Code: RoutineCode> RoutineCode for Option<Code> {
+    fn sdk(&self) -> Option<routine_program::SdkFingerprint> {
+        self.as_ref().and_then(RoutineCode::sdk)
+    }
+
+    async fn check(&self, source: &str) -> Result<Vec<String>, CodeUnavailable> {
+        match self {
+            Some(code) => code.check(source).await,
+            None => NoRoutineCode.check(source).await,
+        }
+    }
+
+    async fn run(&self, owner: &MacroUserIdStr<'static>, run: CodeRun<'_>) -> CodeOutcome {
+        match self {
+            Some(code) => code.run(owner, run).await,
+            None => NoRoutineCode.run(owner, run).await,
+        }
+    }
+
+    async fn rewrite(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        step: &routine_program::CodeStep,
+        problems: &[String],
+    ) -> Result<String, String> {
+        match self {
+            Some(code) => code.rewrite(owner, step, problems).await,
+            None => NoRoutineCode.rewrite(owner, step, problems).await,
+        }
+    }
+}
+
+/// Records how a routine's code was brought to a new SDK. Every write is
+/// fenced by the routine's configuration revision, so an owner's edit made
+/// meanwhile wins.
+pub trait CodeUpgrades: Send + Sync + 'static {
+    /// The code checked as it was: record `sdk` on the routine's task.
+    fn record_checked(
+        &self,
+        action: &ScheduledAction,
+        sdk: &routine_program::SdkFingerprint,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Claim the one rewrite for this routine and SDK. False when another
+    /// run holds it, or it already ended; a claim left running for long by a
+    /// stopped process can be taken over.
+    fn claim_rewrite(
+        &self,
+        action: &ScheduledAction,
+        sdk: &routine_program::SdkFingerprint,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// Save a checked rewrite as the routine's task.
+    fn save_rewrite(
+        &self,
+        action: &ScheduledAction,
+        sdk: &routine_program::SdkFingerprint,
+        task: &serde_json::Value,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// Pause the routine for its owner, with why and the rewrite that
+    /// failed its checks, if there was one.
+    fn needs_update(
+        &self,
+        action: &ScheduledAction,
+        sdk: &routine_program::SdkFingerprint,
+        reason: &str,
+        proposal: Option<&serde_json::Value>,
+    ) -> impl Future<Output = Result<()>> + Send;
+
+    /// The routine's upgrades, newest first.
+    fn list_upgrades(
+        &self,
+        action_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<super::code_upgrade::CodeUpgrade>>> + Send;
+}
+
 pub trait ScheduledActionLiveUpdate: Send + Sync + 'static {
     fn publish_update(&self, update: ScheduledActionUpdate) -> impl Future<Output = ()> + Send;
 }

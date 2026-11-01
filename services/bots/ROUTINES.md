@@ -49,4 +49,6 @@ steps branch on yes/no or multiple-choice questions about the triggering item.
 A `choose` with `"multiple": true` runs every option that fits, so a choice
 whose options each apply one label lets the classifier label email by topic.
 Steps can also act on a task an earlier step created (`{{steps.task.documentId}}`),
-which works on schedules too.
+which works on schedules too. A `code` step runs TypeScript against Macro's SDK
+for work that needs more than one call; it is type-checked when saved and can
+change only the areas it lists in `writes`.

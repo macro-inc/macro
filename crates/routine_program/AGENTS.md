@@ -9,8 +9,10 @@ no I/O.
 
 ## Start here
 
-- `src/model.rs`: steps (tool, if, choose, agent), `RoutineTool` (the only tools
-  a step may call), `AgentTask`, and `RoutineProgram::from_task`.
+- `src/model.rs`: steps (code, tool, if, choose, agent), `RoutineTool` (the
+  only tools a tool step may call), `WriteScope` (the areas a code step may
+  change), `STEP_CONTEXT` (the type a code step's `main` receives), the
+  program's recorded `sdk`, `AgentTask`, and `RoutineProgram::from_task`.
 - `src/plan.rs`: `questions()` (every decision, untaken branches included, for
   one classifier call) and `resolve()` (answers → the steps to run).
 - `src/validate.rs`: save-time rules and `limits`.
@@ -22,7 +24,9 @@ no I/O.
   rendering.
 - Not here: running it → `crates/scheduled_action` (`program_runner.rs`);
   calling tools → `services/agent_harness_service` (`routine_tools.rs`);
-  answering questions → `crates/jev`.
+  running and type-checking code → `services/agent_harness_service`
+  (`routine_code.rs`, over `crates/code_execution`); answering questions →
+  `crates/jev`.
 
 ## Boundaries
 
@@ -46,7 +50,10 @@ no I/O.
 ## Gotchas
 
 - Tool outputs never change which steps run; every decision is answered before
-  the first step, so a branch can't depend on an earlier tool's result.
+  the first step, so a branch can't depend on an earlier tool's result. Code
+  can branch on anything inside itself.
+- `sdk` is bookkeeping the scheduler writes after type-checking; never trust a
+  client's value (`scheduled_action::domain::code_check`).
 - `resolve()` consumes answers for untaken branches too; keep `questions()` and
   `resolve()` walking the tree in the same order.
 - A program with `mcp_servers` needs an agent step (`AppsWithoutAgent`).

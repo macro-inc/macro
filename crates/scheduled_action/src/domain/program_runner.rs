@@ -1,5 +1,5 @@
-//! Run a routine's program: answer its decisions, call its tools, hand off to
-//! its agent.
+//! Run a routine's program: answer its decisions, run its code, call its
+//! tools, hand off to its agent.
 //!
 //! Every decision is asked about the triggering content in one classifier
 //! call before any step runs; tool outputs never change which steps run. A
@@ -14,7 +14,8 @@ use chrono_tz::Tz;
 use jev::domain::{Probability, YesNoClassifier};
 use macro_user_id::user_id::MacroUserIdStr;
 use routine_program::{
-    AgentStep, AgentTask, PlannedStep, RoutineProgram, StepRecord, StepResult, ToolStep, template,
+    AgentStep, AgentTask, CodeStep, PlannedStep, RoutineProgram, StepRecord, StepResult, ToolStep,
+    template,
 };
 use serde_json::{Map, Value, json};
 use trigger_context::{
@@ -23,6 +24,7 @@ use trigger_context::{
 };
 
 use super::{
+    code_upgrade::{NoCodeUpgrades, current_code},
     event_runs::{AuthorizedEventRun, condition::EventContentReader},
     event_trigger::{
         ActionTrigger, ConditionRequirement, EventFilters, EventReference, RoutineTrigger,
@@ -30,8 +32,8 @@ use super::{
     execution::ExecutionHandle,
     models::{Schedule, ScheduledAction},
     ports::{
-        RoutineAgents, RoutineEventReader, RoutineRun, RoutineToolOutcome, RoutineTools,
-        ScheduledAgentRunner,
+        CodeOutcome, CodeRun, CodeUpgrades, NoRoutineCode, RoutineAgents, RoutineCode,
+        RoutineEventReader, RoutineRun, RoutineToolOutcome, RoutineTools, ScheduledAgentRunner,
     },
 };
 
@@ -43,12 +45,22 @@ const SCHEDULED_GUIDANCE: &str = "You are executing a user routine that has alre
 /// Interprets every routine's program. `content` reads the triggering item,
 /// as data for decisions and templates and as the agent's account of it.
 /// `classifier` is `None` on hosts without one; programs with decisions then
-/// fail instead of guessing.
-pub struct ProgramRunner<Agents, Tools, Content, Classifier> {
+/// fail instead of guessing. Code steps fail unless a [`RoutineCode`] is
+/// added with [`ProgramRunner::with_code`].
+pub struct ProgramRunner<
+    Agents,
+    Tools,
+    Content,
+    Classifier,
+    Code = NoRoutineCode,
+    Upgrades = NoCodeUpgrades,
+> {
     agents: Arc<Agents>,
     tools: Arc<Tools>,
     content: Arc<Content>,
     classifier: Option<Arc<Classifier>>,
+    code: Arc<Code>,
+    upgrades: Arc<Upgrades>,
 }
 
 impl<Agents, Tools, Content, Classifier> ProgramRunner<Agents, Tools, Content, Classifier> {
@@ -63,17 +75,42 @@ impl<Agents, Tools, Content, Classifier> ProgramRunner<Agents, Tools, Content, C
             tools,
             content,
             classifier,
+            code: Arc::new(NoRoutineCode),
+            upgrades: Arc::new(NoCodeUpgrades),
         }
     }
 }
 
-impl<Agents, Tools, Content, Classifier> ScheduledAgentRunner
-    for ProgramRunner<Agents, Tools, Content, Classifier>
+impl<Agents, Tools, Content, Classifier, Code, Upgrades>
+    ProgramRunner<Agents, Tools, Content, Classifier, Code, Upgrades>
+{
+    /// Run code steps with `code`, bringing them to its SDK first and
+    /// recording that in `upgrades`.
+    pub fn with_code<NextCode, NextUpgrades>(
+        self,
+        code: Arc<NextCode>,
+        upgrades: Arc<NextUpgrades>,
+    ) -> ProgramRunner<Agents, Tools, Content, Classifier, NextCode, NextUpgrades> {
+        ProgramRunner {
+            agents: self.agents,
+            tools: self.tools,
+            content: self.content,
+            classifier: self.classifier,
+            code,
+            upgrades,
+        }
+    }
+}
+
+impl<Agents, Tools, Content, Classifier, Code, Upgrades> ScheduledAgentRunner
+    for ProgramRunner<Agents, Tools, Content, Classifier, Code, Upgrades>
 where
     Agents: RoutineAgents,
     Tools: RoutineTools,
     Content: EventContentReader + RoutineEventReader,
     Classifier: YesNoClassifier,
+    Code: RoutineCode,
+    Upgrades: CodeUpgrades,
 {
     /// A run that starts with an agent opens its transcript now, so the owner
     /// can follow it from the moment it starts.
@@ -102,12 +139,22 @@ where
         let owner = action.owner_user()?;
         let program = program(action)?;
         let summary = program.validate()?;
+        // Code gets the triggering item whenever there is one.
         let trigger = match firing {
-            RoutineRun::Event(run) if summary.needs_event() => {
+            RoutineRun::Event(run) if summary.needs_event() || !program.code_steps().is_empty() => {
                 Some(self.trigger(owner, run).await?)
             }
             _ => None,
         };
+        let program = current_code(
+            self.code.as_ref(),
+            self.upgrades.as_ref(),
+            owner,
+            action,
+            program,
+            trigger.as_ref(),
+        )
+        .await?;
         if summary.needs_event() && trigger.is_none() {
             bail!(
                 "This routine decides about or reads the item that triggered it, so it only runs when an activity event triggers it."
@@ -133,6 +180,21 @@ where
                     });
                     result.with_context(|| format!("{} failed", step.tool))?;
                 }
+                PlannedStep::Code { path, step } => {
+                    let outcome = self.code(owner, step, trigger.as_ref(), &mut context).await;
+                    let error = outcome.result.err();
+                    handle.steps.push(StepRecord {
+                        path,
+                        result: StepResult::Code {
+                            calls: outcome.calls,
+                            calls_truncated: outcome.calls_truncated,
+                            error: error.clone(),
+                        },
+                    });
+                    if let Some(error) = error {
+                        bail!("{} failed: {error}", step.title.trim());
+                    }
+                }
                 PlannedStep::Agent { path, step } => {
                     let result = self
                         .agent(action, &program, step, firing, handle, &context["steps"])
@@ -155,12 +217,14 @@ where
     }
 }
 
-impl<Agents, Tools, Content, Classifier> ProgramRunner<Agents, Tools, Content, Classifier>
+impl<Agents, Tools, Content, Classifier, Code, Upgrades>
+    ProgramRunner<Agents, Tools, Content, Classifier, Code, Upgrades>
 where
     Agents: RoutineAgents,
     Tools: RoutineTools,
     Content: EventContentReader + RoutineEventReader,
     Classifier: YesNoClassifier,
+    Code: RoutineCode,
 {
     /// The triggering item as decisions and templates see it: its content,
     /// plus the ids tools need to act on it.
@@ -233,6 +297,52 @@ where
                 Err(anyhow!(message))
             }
         }
+    }
+
+    /// Run one code step; its output becomes `steps.<id>` for later steps.
+    #[tracing::instrument(name = "routine.code_step", skip_all, fields(
+        calls = tracing::field::Empty,
+        writes = tracing::field::Empty,
+        failed = tracing::field::Empty,
+    ))]
+    async fn code(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        step: &CodeStep,
+        trigger: Option<&Value>,
+        context: &mut Value,
+    ) -> CodeOutcome {
+        let outcome = self
+            .code
+            .run(
+                owner,
+                CodeRun {
+                    step,
+                    trigger,
+                    steps: &context["steps"],
+                    dry_run: false,
+                },
+            )
+            .await;
+        let span = tracing::Span::current();
+        span.record("calls", outcome.calls.len());
+        span.record(
+            "writes",
+            outcome.calls.iter().filter(|call| call.write).count(),
+        );
+        span.record("failed", outcome.result.is_err());
+        match &outcome.result {
+            Ok(output) => {
+                if let (Some(id), Some(Value::Object(outputs))) =
+                    (&step.id, context.get_mut("steps"))
+                {
+                    outputs.insert(id.to_string(), output.clone());
+                }
+            }
+            // The message can quote the owner's data; it stays in history.
+            Err(_) => tracing::warn!("routine code step failed"),
+        }
+        outcome
     }
 
     /// The run's one agent: prepared already when the run started with it.

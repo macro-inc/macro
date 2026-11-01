@@ -1,7 +1,9 @@
 //! What a routine does when it runs: a small, typed program of steps.
 //!
-//! A program is data. It mixes four kinds of step:
+//! A program is data. It mixes five kinds of step:
 //!
+//! - **Code** steps run TypeScript written against Macro's SDK, type-checked
+//!   when it is saved; they may only make changes where they declare.
 //! - **Tool** steps call one tool from Macro's catalog with fixed arguments,
 //!   the same tools agents use, so they behave exactly the same way.
 //! - **If** steps ask a yes/no question about the triggering item.
@@ -23,7 +25,7 @@ mod validate;
 
 pub use model::*;
 pub use plan::{
-    AnswerMismatch, CONDITION_THRESHOLD, PlannedStep, StepPath, StepRecord, StepResult,
-    choice_question,
+    AnswerMismatch, CONDITION_THRESHOLD, CallRecord, CallStatus, PlannedStep, StepPath, StepRecord,
+    StepResult, choice_question,
 };
 pub use validate::{ProgramError, ProgramSummary, limits};

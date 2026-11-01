@@ -26,12 +26,19 @@ pub struct RoutineProgram {
     /// instructions had no length or blank limits; validation keeps it so.
     #[serde(skip)]
     pub(crate) single_agent_task: bool,
+    /// The SDK its code steps were last type-checked against, recorded by
+    /// the service that checked them. A run on another SDK checks them again
+    /// before running them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sdk: Option<SdkFingerprint>,
 }
 
 /// One step of a routine.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "snake_case")]
 pub enum Step {
+    /// Run TypeScript against Macro's SDK, as the routine owner.
+    Code(CodeStep),
     /// Call one Macro tool with fixed arguments, as the routine owner.
     Tool(ToolStep),
     /// Ask a yes/no question about the triggering item, then run one branch.
@@ -42,6 +49,154 @@ pub enum Step {
     /// Hand the run to a model or agent with instructions.
     Agent(AgentStep),
 }
+
+/// TypeScript written against Macro's SDK, usually by the AI that built the
+/// routine. It is type-checked before it is saved, and when it runs, writes
+/// outside [`CodeStep::writes`] are refused.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[serde(deny_unknown_fields)]
+pub struct CodeStep {
+    /// Names this step's output for later steps: `steps.<id>` in later code
+    /// and `{{steps.<id>.…}}` in tool step arguments.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub id: Option<StepId>,
+    /// What the step does, in a few words, e.g. "Label invoices".
+    pub title: String,
+    /// One or two sentences on how, for the routine's owner.
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub summary: String,
+    /// A module exporting `async function main({ macro, trigger, steps }:
+    /// StepContext)`. `trigger` is the triggering item (`null` when a
+    /// schedule or a person started the run), `steps` the outputs of earlier
+    /// steps with ids. What `main` returns is the step's output.
+    pub source: String,
+    /// Where the code may make changes. Reads are always allowed.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub writes: Vec<WriteScope>,
+}
+
+/// The ambient declarations a code step is type-checked with: the type of
+/// its `main`'s argument. The SDK's own declarations come from the checker.
+pub const STEP_CONTEXT: &str = r#"import type { Macro } from '@macro-inc/sdk';
+
+declare global {
+  /** What a routine code step's `main` receives. */
+  interface StepContext {
+    /** Macro's SDK, acting as the routine's owner. */
+    macro: Macro;
+    /**
+     * The item that triggered the run, such as `{ email: {...} }` with its
+     * `entity_id`; null when a schedule or a person started the run.
+     */
+    trigger: RoutineTrigger | null;
+    /** What earlier steps with ids returned, by id. */
+    steps: Record<string, any>;
+  }
+
+  /** The triggering item as JSON; its fields depend on the event. */
+  type RoutineTrigger = {
+    entity_id: string;
+    message_id?: string;
+    [field: string]: any;
+  };
+}
+"#;
+
+/// An area a code step may change.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum WriteScope {
+    /// Email: labels, archiving, drafts, sending, sender policies.
+    Email,
+    /// Calendar events.
+    Calendar,
+    /// Documents, tasks, channels, comments and folders.
+    Workspace,
+    /// Properties of tasks, documents, threads and other items.
+    Properties,
+    /// Contacts and companies.
+    Contacts,
+    /// AI work that can act or costs more than a decision: structured
+    /// completions with tools, images.
+    Ai,
+}
+
+impl WriteScope {
+    /// Every scope.
+    pub const ALL: [Self; 6] = [
+        Self::Email,
+        Self::Calendar,
+        Self::Workspace,
+        Self::Properties,
+        Self::Contacts,
+        Self::Ai,
+    ];
+
+    /// The name as written in `writes`.
+    pub const fn as_str(self) -> &'static str {
+        match self {
+            Self::Email => "email",
+            Self::Calendar => "calendar",
+            Self::Workspace => "workspace",
+            Self::Properties => "properties",
+            Self::Contacts => "contacts",
+            Self::Ai => "ai",
+        }
+    }
+
+    /// The SDK service whose writes this scope allows.
+    pub const fn service(self) -> &'static str {
+        match self {
+            Self::Email => "email",
+            Self::Calendar => "calendar",
+            Self::Workspace => "storage",
+            Self::Properties => "properties",
+            Self::Contacts => "contacts",
+            Self::Ai => "cognition",
+        }
+    }
+}
+
+/// Identifies the SDK API code was type-checked against: its version and a
+/// hash of its declarations, e.g. `0.2.2+18cc1c19c35c`.
+#[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
+#[serde(try_from = "String", into = "String")]
+pub struct SdkFingerprint(String);
+
+impl SdkFingerprint {
+    /// The fingerprint as written.
+    pub fn as_str(&self) -> &str {
+        &self.0
+    }
+}
+
+impl TryFrom<String> for SdkFingerprint {
+    type Error = BlankFingerprint;
+
+    fn try_from(value: String) -> Result<Self, Self::Error> {
+        if value.trim().is_empty() {
+            return Err(BlankFingerprint);
+        }
+        Ok(Self(value))
+    }
+}
+
+impl From<SdkFingerprint> for String {
+    fn from(fingerprint: SdkFingerprint) -> Self {
+        fingerprint.0
+    }
+}
+
+impl fmt::Display for SdkFingerprint {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+/// An SDK fingerprint that is empty or only whitespace.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
+#[error("an SDK fingerprint must not be blank")]
+pub struct BlankFingerprint;
 
 /// A deterministic call to one tool from Macro's catalog.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
@@ -328,7 +483,44 @@ impl RoutineProgram {
             })],
             mcp_servers: legacy.mcp_servers,
             single_agent_task: true,
+            sdk: None,
         })
+    }
+
+    /// Every code step, mutably, in program order, including untaken branches.
+    pub fn code_steps_mut(&mut self) -> Vec<&mut CodeStep> {
+        fn collect<'a>(steps: &'a mut [Step], code: &mut Vec<&'a mut CodeStep>) {
+            for step in steps {
+                match step {
+                    Step::Code(step) => code.push(step),
+                    Step::Tool(_) | Step::Agent(_) => {}
+                    Step::If(step) => {
+                        collect(&mut step.then, code);
+                        collect(&mut step.otherwise, code);
+                    }
+                    Step::Choose(step) => {
+                        for option in &mut step.options {
+                            collect(&mut option.steps, code);
+                        }
+                        collect(&mut step.otherwise, code);
+                    }
+                }
+            }
+        }
+        let mut code = Vec::new();
+        collect(&mut self.steps, &mut code);
+        code
+    }
+
+    /// Every code step, in program order, including untaken branches.
+    pub fn code_steps(&self) -> Vec<&CodeStep> {
+        let mut code = Vec::new();
+        visit(&self.steps, &mut |step| {
+            if let Step::Code(step) = step {
+                code.push(step);
+            }
+        });
+        code
     }
 
     /// Every agent step, in program order, including untaken branches.
@@ -356,7 +548,7 @@ impl Step {
     /// Nested step lists, in program order.
     pub fn branches(&self) -> Vec<&[Step]> {
         match self {
-            Self::Tool(_) | Self::Agent(_) => Vec::new(),
+            Self::Code(_) | Self::Tool(_) | Self::Agent(_) => Vec::new(),
             Self::If(step) => vec![&step.then, &step.otherwise],
             Self::Choose(step) => step
                 .options

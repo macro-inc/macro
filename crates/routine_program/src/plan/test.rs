@@ -44,6 +44,7 @@ fn kinds(plan: &[PlannedStep<'_>]) -> Vec<String> {
             PlannedStep::Decided(record) => format!("{}:{:?}", record.path, record.result),
             PlannedStep::Tool { path, step } => format!("{path}:{}", step.tool),
             PlannedStep::Agent { path, .. } => format!("{path}:agent"),
+            PlannedStep::Code { path, step } => format!("{path}:code:{}", step.title),
         })
         .collect()
 }
@@ -192,4 +193,33 @@ fn records_serialize_flat_with_their_kind() {
         json!({ "path": "1.then.0", "kind": "tool", "tool": "CreateDocument", "error": "boom" })
     );
     assert_eq!(serde_json::from_value::<StepRecord>(value).unwrap(), record);
+}
+
+#[test]
+fn code_steps_run_where_their_branch_is_taken() {
+    let program = program(json!({ "steps": [
+        { "type": "code", "title": "Read", "source": "export async function main() {}" },
+        { "type": "if", "condition": "Is it an invoice?", "then": [
+            { "type": "code", "title": "File it", "source": "export async function main() {}" }
+        ] }
+    ] }));
+    let titles = |answer: f32| {
+        program
+            .resolve(&answers(&[answer]))
+            .unwrap()
+            .into_iter()
+            .filter_map(|step| match step {
+                PlannedStep::Code { path, step } => Some((path.to_string(), step.title.clone())),
+                _ => None,
+            })
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(
+        titles(0.9),
+        vec![
+            ("0".into(), "Read".into()),
+            ("1.then.0".into(), "File it".into())
+        ]
+    );
+    assert_eq!(titles(0.1), vec![("0".into(), "Read".into())]);
 }

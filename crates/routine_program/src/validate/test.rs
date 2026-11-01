@@ -229,3 +229,67 @@ fn old_single_agent_tasks_keep_the_rules_they_were_saved_under() {
         Err(ProgramError::MissingTarget)
     );
 }
+
+fn code(extra: serde_json::Value) -> serde_json::Value {
+    let mut step = json!({
+        "type": "code",
+        "title": "Label invoices",
+        "source": "export async function main({ macro }: StepContext) { return 1; }",
+    });
+    step.as_object_mut()
+        .unwrap()
+        .extend(extra.as_object().unwrap().clone());
+    step
+}
+
+#[test]
+fn code_steps_need_a_title_and_bounded_source() {
+    let summary = validate(json!([code(json!({ "writes": ["email", "workspace"] }))])).unwrap();
+    // Code reads its trigger when it has one; a scheduled run gets null.
+    assert!(!summary.needs_event());
+    assert_eq!(
+        validate(json!([code(json!({ "title": "  " }))])),
+        Err(ProgramError::CodeTitle)
+    );
+    assert_eq!(
+        validate(json!([code(json!({ "source": "" }))])),
+        Err(ProgramError::CodeSource)
+    );
+    assert_eq!(
+        validate(json!([code(
+            json!({ "source": "x".repeat(limits::MAX_SOURCE_BYTES + 1) })
+        )])),
+        Err(ProgramError::CodeSource)
+    );
+    assert_eq!(
+        validate(json!([code(json!({ "writes": ["email", "email"] }))])),
+        Err(ProgramError::DuplicateWriteScope("email".into()))
+    );
+}
+
+#[test]
+fn later_steps_can_read_a_code_steps_output_by_id() {
+    validate(json!([
+        code(json!({ "id": "invoice" })),
+        tool(json!({ "content": "{{steps.invoice.total}}" })),
+    ]))
+    .unwrap();
+    assert_eq!(
+        validate(json!([
+            code(json!({ "id": "invoice" })),
+            tool(json!({ "content": "x" })),
+            code(json!({ "id": "invoice" })),
+        ])),
+        Err(ProgramError::DuplicateStepId(
+            "invoice".to_owned().try_into().unwrap()
+        ))
+    );
+}
+
+#[test]
+fn unknown_write_scopes_do_not_parse() {
+    assert!(
+        RoutineProgram::from_task(&json!({ "steps": [code(json!({ "writes": ["auth"] }))] }))
+            .is_err()
+    );
+}

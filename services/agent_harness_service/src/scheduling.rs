@@ -39,6 +39,7 @@ use scheduled_action::outbound::conn_gateway_live_updates::ConnGatewayLiveUpdate
 use scheduled_action::outbound::event_access::EventAccessAdapter;
 use scheduled_action::outbound::event_content::EventContentAdapter;
 use scheduled_action::outbound::inprocess_executor::InProcessExecutor;
+use scheduled_action::outbound::pg_code_upgrades::PgCodeUpgrades;
 use scheduled_action::outbound::pg_event_run_repo::PgEventRunRepo;
 use scheduled_action::outbound::pg_polling_dispatcher::{
     PgPollingDispatcher, PgPollingDispatcherLifecycle,
@@ -90,6 +91,7 @@ pub async fn build(
     db: sqlx::PgPool,
     harness_address: std::net::SocketAddr,
     tools: crate::routine_tools::CatalogRoutineTools,
+    code: Option<crate::routine_code::SdkRoutineCode>,
     ready: tokio::sync::watch::Receiver<bool>,
 ) -> Result<SchedulingRuntime> {
     let environment = config.environment;
@@ -158,14 +160,18 @@ pub async fn build(
         Arc::clone(&access),
         &config,
     )?);
-    // Tool steps run the harness's own catalog in this process; agent steps
+    // Tool and code steps run in this process, as the owner; agent steps
     // still go through the routine-session operations.
-    let runner = Arc::new(ProgramRunner::new(
-        Arc::new(TargetRunner::new(Arc::clone(&sessions))),
-        Arc::new(tools),
-        Arc::clone(&event_content),
-        classifier.clone(),
-    ));
+    let code = Arc::new(code);
+    let runner = Arc::new(
+        ProgramRunner::new(
+            Arc::new(TargetRunner::new(Arc::clone(&sessions))),
+            Arc::new(tools),
+            Arc::clone(&event_content),
+            classifier.clone(),
+        )
+        .with_code(Arc::clone(&code), Arc::new(PgCodeUpgrades::new(db.clone()))),
+    );
     let dispatcher_executor = InProcessExecutor::new(
         Arc::clone(&repo),
         runner,
@@ -276,7 +282,8 @@ pub async fn build(
             sessions,
             config.routine_agents_enabled,
         ))
-        .with_github_links(PgGithubInstallationClaims::new(db.clone())),
+        .with_github_links(PgGithubInstallationClaims::new(db.clone()))
+        .with_code(code),
     );
     let template_flags = config
         .posthog_api_key

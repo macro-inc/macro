@@ -1,5 +1,6 @@
 use std::sync::Arc;
 
+use crate::domain::code_check::CodeCheckError;
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
     ActionExecutionRecord, ActionPolicyError, AlreadyRunningError, CreateScheduledAction,
@@ -534,6 +535,13 @@ impl IntoResponse for ScheduledActionApiError {
                 | ActionPolicyError::DescriptionTooLong => StatusCode::BAD_REQUEST,
             };
             return (status, policy.to_string()).into_response();
+        }
+        if let Some(code) = error.downcast_ref::<CodeCheckError>() {
+            let status = match code {
+                CodeCheckError::DoesNotCheck { .. } => StatusCode::BAD_REQUEST,
+                CodeCheckError::Unavailable(_) => StatusCode::SERVICE_UNAVAILABLE,
+            };
+            return (status, code.to_string()).into_response();
         }
         if let Some(input) = error.downcast_ref::<TemplateInputError>() {
             return (StatusCode::BAD_REQUEST, input.to_string()).into_response();

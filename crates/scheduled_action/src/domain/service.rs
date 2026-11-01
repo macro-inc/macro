@@ -17,6 +17,7 @@ use macro_uuid::Uuid;
 use model_owner::{CreationPrincipal, Owner};
 use tokio::sync::mpsc::Sender;
 
+use super::code_check::{checked_task, same_task};
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
 use super::models::{
@@ -25,7 +26,8 @@ use super::models::{
     UpdateScheduledAction,
 };
 use super::ports::{
-    ScheduledActionExecutor, ScheduledActionRepo, ScheduledActionService, TaskTargetValidator,
+    NoRoutineCode, RoutineCode, ScheduledActionExecutor, ScheduledActionRepo,
+    ScheduledActionService, TaskTargetValidator,
 };
 use super::target_validation::{ModelOnlyTargets, require_explicit_selection};
 use routine_program::RoutineProgram;
@@ -39,6 +41,7 @@ pub struct ScheduledActionServiceImpl<
     Grants,
     Targets = ModelOnlyTargets,
     Github = NoGithubLinks,
+    Code = NoRoutineCode,
 > {
     repo: Arc<Rpo>,
     executor: Arc<Exe>,
@@ -48,6 +51,8 @@ pub struct ScheduledActionServiceImpl<
     conditions_enabled: bool,
     targets: Targets,
     github: Github,
+    /// Type-checks code steps before they are saved.
+    code: Arc<Code>,
 }
 
 /// Composition without GitHub: no owner counts as linked, so GitHub triggers
@@ -85,17 +90,18 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants> ScheduledActionServiceImpl<Rpo, Exe,
             conditions_enabled: false,
             targets: ModelOnlyTargets,
             github: NoGithubLinks,
+            code: Arc::new(NoRoutineCode),
         }
     }
 }
 
-impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
-    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github>
+impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code>
+    ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code>
 {
     pub fn with_target_validation<T: TaskTargetValidator>(
         self,
         targets: T,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T, Github> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, T, Github, Code> {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
@@ -105,6 +111,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
             conditions_enabled: self.conditions_enabled,
             targets,
             github: self.github,
+            code: self.code,
         }
     }
 
@@ -112,7 +119,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
     pub fn with_github_links<G: GithubInstallationClaims>(
         self,
         github: G,
-    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, G> {
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, G, Code> {
         ScheduledActionServiceImpl {
             repo: self.repo,
             executor: self.executor,
@@ -122,6 +129,25 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
             conditions_enabled: self.conditions_enabled,
             targets: self.targets,
             github,
+            code: self.code,
+        }
+    }
+
+    /// Lets routines have code steps, type-checked by `code` when saved.
+    pub fn with_code<C: RoutineCode>(
+        self,
+        code: Arc<C>,
+    ) -> ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, C> {
+        ScheduledActionServiceImpl {
+            repo: self.repo,
+            executor: self.executor,
+            grants: self.grants,
+            dispatcher_tx: self.dispatcher_tx,
+            event_management_enabled: self.event_management_enabled,
+            conditions_enabled: self.conditions_enabled,
+            targets: self.targets,
+            github: self.github,
+            code,
         }
     }
 
@@ -197,6 +223,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
     where
         Targets: TaskTargetValidator,
         Github: GithubInstallationClaims,
+        Code: RoutineCode,
     {
         let owner = principal.owner();
         let owner_user = owner.as_user().ok_or(OwnerNotUserError {
@@ -208,6 +235,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
         self.check_conditions(&input.trigger)?;
         self.targets.validate_task(&input.task, owner_user).await?;
         self.check_program(&input.trigger, &input.task)?;
+        let task = checked_task(self.code.as_ref(), &input.task, None).await?;
         if input.enabled {
             self.check_github(&input.trigger, owner_user).await?;
         }
@@ -222,7 +250,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
                 name: input.name,
                 trigger: input.trigger,
                 kind: input.kind,
-                task: input.task,
+                task,
                 enabled: input.enabled,
                 run_visibility: input.run_visibility,
                 created_at: now,
@@ -260,18 +288,23 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
     async fn replace_configuration(
         &self,
         mut action: ScheduledAction,
-        input: ActionConfiguration,
+        mut input: ActionConfiguration,
     ) -> Result<ScheduledAction>
     where
         Targets: TaskTargetValidator,
         Github: GithubInstallationClaims,
+        Code: RoutineCode,
     {
         require_explicit_selection(&action.task, &input.task)?;
+        // Clients don't echo the SDK the stored code was checked against.
+        if same_task(&action.task, &input.task) {
+            input.task = action.task.clone();
+        }
         let trigger_changed = !same_trigger(&action.trigger, &input.trigger);
         let configuration_changed = trigger_changed
             || action.name != input.name
             || action.kind != input.kind
-            || action.task != input.task
+            || !same_task(&action.task, &input.task)
             || action.run_visibility != input.run_visibility
             || action.description != input.description.trim();
         let disable_only = !input.enabled && !configuration_changed;
@@ -291,6 +324,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github>
                 .validate_task(&input.task, action.owner_user()?)
                 .await?;
             self.check_program(&input.trigger, &input.task)?;
+            input.task = checked_task(self.code.as_ref(), &input.task, Some(&action.task)).await?;
             if input.enabled {
                 self.check_github(&input.trigger, action.owner_user()?)
                     .await?;
@@ -408,10 +442,11 @@ fn same_trigger(left: &ActionTrigger, right: &ActionTrigger) -> bool {
     left == right
 }
 
-impl<Rpo, Exe, Grants, Targets, Github> ScheduledActionService
-    for ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github>
+impl<Rpo, Exe, Grants, Targets, Github, Code> ScheduledActionService
+    for ScheduledActionServiceImpl<Rpo, Exe, Grants, Targets, Github, Code>
 where
     Github: GithubInstallationClaims,
+    Code: RoutineCode,
     Rpo: ScheduledActionRepo,
     Grants: ScheduledActionGrants,
     Targets: TaskTargetValidator,

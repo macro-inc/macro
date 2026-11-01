@@ -31,13 +31,11 @@ pub fn operations() -> &'static BTreeMap<String, Operation> {
 #[derive(Deserialize)]
 struct SdkTypes {
     fingerprint: String,
+    files: BTreeMap<String, String>,
 }
 
-static FINGERPRINT: LazyLock<String> = LazyLock::new(|| {
-    serde_json::from_str::<SdkTypes>(SDK_TYPES)
-        .expect("generated SDK declarations")
-        .fingerprint
-});
+static SDK: LazyLock<SdkTypes> =
+    LazyLock::new(|| serde_json::from_str(SDK_TYPES).expect("generated SDK declarations"));
 
 /// The SDK declarations as generated: `{"fingerprint": …, "files": {path: text}}`.
 pub(crate) const SDK_TYPES: &str = include_str!("../outbound/deno/sdk-types.json");
@@ -46,5 +44,31 @@ pub(crate) const SDK_TYPES: &str = include_str!("../outbound/deno/sdk-types.json
 /// declarations. Code type-checked against one fingerprint stays valid until
 /// the fingerprint changes.
 pub fn sdk_fingerprint() -> &'static str {
-    &FINGERPRINT
+    &SDK.fingerprint
+}
+
+/// The SDK declaration files that declare any of `names` as a class,
+/// interface or type, in the order the names come, as `(path, text)` and
+/// within `budget` bytes in all: what a model fixing code against the SDK
+/// needs to read.
+pub fn sdk_declarations(names: &[&str], budget: usize) -> Vec<(&'static str, &'static str)> {
+    let mut found: Vec<(&'static str, &'static str)> = Vec::new();
+    let mut used = 0;
+    for name in names {
+        let patterns: Vec<String> = ["class ", "interface ", "type "]
+            .iter()
+            .flat_map(|kind| [" ", "<", " ="].map(|end| format!("{kind}{name}{end}")))
+            .collect();
+        let declares = |text: &str| patterns.iter().any(|pattern| text.contains(pattern));
+        for (path, text) in &SDK.files {
+            if found.iter().any(|(seen, _)| *seen == path.as_str()) || !declares(text) {
+                continue;
+            }
+            if used + text.len() <= budget {
+                used += text.len();
+                found.push((path.as_str(), text.as_str()));
+            }
+        }
+    }
+    found
 }

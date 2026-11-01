@@ -132,3 +132,36 @@ fn tool_names_match_their_serialized_form() {
         assert_eq!(serde_json::to_value(tool).unwrap(), json!(tool.name()));
     }
 }
+
+#[test]
+fn code_steps_and_the_sdk_fingerprint_round_trip() {
+    let task = json!({
+        "steps": [{
+            "type": "code",
+            "id": "invoice",
+            "title": "Label invoices",
+            "summary": "Asks whether the email is an invoice and labels it.",
+            "source": "export async function main() {}",
+            "writes": ["email"],
+        }],
+        "sdk": "0.2.2+18cc1c19c35c",
+    });
+    let program = RoutineProgram::from_task(&task).unwrap();
+    assert_eq!(program.code_steps().len(), 1);
+    assert_eq!(program.code_steps()[0].writes, vec![WriteScope::Email]);
+    assert_eq!(
+        program.sdk.as_ref().map(SdkFingerprint::as_str),
+        Some("0.2.2+18cc1c19c35c")
+    );
+    assert_eq!(serde_json::to_value(&program).unwrap(), task);
+    assert!(RoutineProgram::from_task(&json!({ "steps": [], "sdk": " " })).is_err());
+}
+
+#[test]
+fn write_scopes_name_their_services() {
+    assert_eq!(WriteScope::Workspace.service(), "storage");
+    assert_eq!(WriteScope::Ai.service(), "cognition");
+    for scope in WriteScope::ALL {
+        assert_eq!(serde_json::to_value(scope).unwrap(), json!(scope.as_str()));
+    }
+}

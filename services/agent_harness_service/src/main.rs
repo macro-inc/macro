@@ -23,6 +23,7 @@ mod model_providers;
 mod permission_policy;
 mod preview;
 mod public_mcp;
+mod routine_code;
 mod routine_sessions;
 mod routine_tools;
 mod runtime_commands;
@@ -587,27 +588,6 @@ async fn run() -> anyhow::Result<()> {
     .await
     .context("failed to compose cognition APIs")?;
     let cognition_router = cognition_runtime.router.clone();
-    let service_shutdown = tokio_util::sync::CancellationToken::new();
-    let (http_listening, http_ready) = tokio::sync::watch::channel(false);
-    let scheduling_runtime = scheduling::build(
-        scheduling::config::Config::from_env()?,
-        pool.clone(),
-        std::net::SocketAddr::from(([127, 0, 0, 1], config.port)),
-        // Routine tool steps run the same catalog as the owner, outside any session.
-        routine_tools::CatalogRoutineTools::new(tool_context.clone()),
-        http_ready,
-    )
-    .await?;
-    let scheduling_router = scheduling_runtime.router.clone();
-    let preview_router = preview::build(
-        macro_config::ConfigLoader::load::<preview::config::Config>()?,
-        config.database_url.as_ref(),
-        pool.clone(),
-        service_shutdown.clone(),
-        event_broker_tracker.clone(),
-    )
-    .await
-    .map_err(|error| anyhow::anyhow!("{error}"))?;
     let code_scratch = tempfile::tempdir()?;
     let code_runner = match &config.deno_binary {
         Some(binary) => {
@@ -629,16 +609,75 @@ async fn run() -> anyhow::Result<()> {
                     ..Default::default()
                 },
             )?;
+            // Routines get their own budget too, below the host's priority and
+            // with a CPU limit, so unattended code can't crowd out sessions.
+            let routines = code_execution::domain::ExecutionService::new(
+                Arc::clone(&runner),
+                code_execution::domain::Limits {
+                    max_running: 4,
+                    max_queued: 16,
+                    max_cpu: Some(std::time::Duration::from_secs(10)),
+                    background: true,
+                    ..Default::default()
+                },
+            )?;
+            let checker = code_execution::outbound::deno::check::DenoChecker::new(
+                binary.into(),
+                code_scratch.path().join("checks"),
+                2,
+                code_execution::domain::Limits::default().max_source_bytes,
+            )
+            .await
+            .map_err(|error| anyhow::anyhow!("invalid Deno type checker: {error}"))?;
             Some((
                 code_execution::domain::ExecutionService::new(
                     runner,
                     code_execution::domain::Limits::default(),
                 )?,
                 public,
+                routines,
+                Arc::new(checker),
             ))
         }
         None => None,
     };
+    // Routine code steps run as their owner on the routines' executor.
+    let routine_code = match &code_runner {
+        Some((_, _, routines, checker)) => Some(routine_code::SdkRoutineCode::new(
+            Arc::new(routines.clone()),
+            Arc::clone(checker) as Arc<dyn code_execution::domain::ProgramChecker>,
+            MacroApiTokenSigner::new(
+                pool.clone(),
+                config.macro_api_token_issuer.as_ref(),
+                config.macro_api_token_private_secret_key.as_ref(),
+            ),
+            code_mode::sdk_hosts()?,
+            Arc::clone(&recorder),
+        )),
+        None => None,
+    };
+    let service_shutdown = tokio_util::sync::CancellationToken::new();
+    let (http_listening, http_ready) = tokio::sync::watch::channel(false);
+    let scheduling_runtime = scheduling::build(
+        scheduling::config::Config::from_env()?,
+        pool.clone(),
+        std::net::SocketAddr::from(([127, 0, 0, 1], config.port)),
+        // Routine tool steps run the same catalog as the owner, outside any session.
+        routine_tools::CatalogRoutineTools::new(tool_context.clone()),
+        routine_code,
+        http_ready,
+    )
+    .await?;
+    let scheduling_router = scheduling_runtime.router.clone();
+    let preview_router = preview::build(
+        macro_config::ConfigLoader::load::<preview::config::Config>()?,
+        config.database_url.as_ref(),
+        pool.clone(),
+        service_shutdown.clone(),
+        event_broker_tracker.clone(),
+    )
+    .await
+    .map_err(|error| anyhow::anyhow!("{error}"))?;
     // `ai-code-mode` decides, per user, whether agent sessions hide
     // SDK-covered tools and whether the public MCP lists only code mode.
     let code_mode_selector: Option<Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>> =
@@ -660,7 +699,7 @@ async fn run() -> anyhow::Result<()> {
             _ => None,
         };
     let public_code_mode = match (&code_runner, &code_mode_selector) {
-        (Some((_, public)), Some(selector)) => Some(public_mcp::PublicCodeMode {
+        (Some((_, public, _, _)), Some(selector)) => Some(public_mcp::PublicCodeMode {
             service: Arc::new(agent_code_mode::domain::UserCodeModeService::new(
                 Arc::new(public.clone()),
                 Arc::new(code_mode::UserRunCredentials {
@@ -707,7 +746,7 @@ async fn run() -> anyhow::Result<()> {
             Arc::clone(&tool_approvals),
         ),
     );
-    let code_executor = code_runner.as_ref().map(|(runner, _)| {
+    let code_executor = code_runner.as_ref().map(|(runner, _, _, _)| {
         Arc::new(runner.clone()) as Arc<dyn code_execution::domain::ProgramExecutor>
     });
     let code_mode_enabled = code_executor.is_some();
@@ -2052,8 +2091,8 @@ async fn run() -> anyhow::Result<()> {
     typing_heartbeat.abort();
     recovery.abort();
     runtime_commands.abort();
-    if let Some((sessions, public)) = &code_runner {
-        tokio::join!(sessions.shutdown(), public.shutdown());
+    if let Some((sessions, public, routines, _)) = &code_runner {
+        tokio::join!(sessions.shutdown(), public.shutdown(), routines.shutdown());
     }
     let stop_failures = container_shutdown.shutdown_all().await;
     if stop_failures > 0 {

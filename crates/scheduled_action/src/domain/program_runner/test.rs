@@ -834,3 +834,194 @@ async fn a_manual_run_tells_the_agent_its_owner_started_it_and_hands_it_the_rout
         }))]
     );
 }
+
+/// One code step as the runner ran it.
+#[derive(Debug, Clone)]
+pub(crate) struct CodeCall {
+    pub title: String,
+    pub trigger: Option<Value>,
+    pub steps: Value,
+    pub dry_run: bool,
+}
+
+/// Runs code steps from a script; succeeds with `null` once it runs out.
+#[derive(Default)]
+pub(crate) struct Code {
+    pub runs: Mutex<Vec<CodeCall>>,
+    pub outcomes: Mutex<VecDeque<CodeOutcome>>,
+}
+
+impl Code {
+    pub fn answering(outcomes: impl IntoIterator<Item = CodeOutcome>) -> Self {
+        Self {
+            outcomes: Mutex::new(outcomes.into_iter().collect()),
+            ..Default::default()
+        }
+    }
+}
+
+impl RoutineCode for Code {
+    fn sdk(&self) -> Option<routine_program::SdkFingerprint> {
+        Some("0.2.2+fixture".to_owned().try_into().unwrap())
+    }
+
+    async fn check(
+        &self,
+        _: &str,
+    ) -> std::result::Result<Vec<String>, crate::domain::ports::CodeUnavailable> {
+        Ok(Vec::new())
+    }
+
+    async fn run(&self, _: &MacroUserIdStr<'static>, run: CodeRun<'_>) -> CodeOutcome {
+        self.runs.lock().unwrap().push(CodeCall {
+            title: run.step.title.clone(),
+            trigger: run.trigger.cloned(),
+            steps: run.steps.clone(),
+            dry_run: run.dry_run,
+        });
+        self.outcomes
+            .lock()
+            .unwrap()
+            .pop_front()
+            .unwrap_or(CodeOutcome {
+                result: Ok(Value::Null),
+                calls: Vec::new(),
+                calls_truncated: false,
+            })
+    }
+
+    async fn rewrite(
+        &self,
+        _: &MacroUserIdStr<'static>,
+        _: &routine_program::CodeStep,
+        _: &[String],
+    ) -> std::result::Result<String, String> {
+        Err("no rewrites in these tests".into())
+    }
+}
+
+fn call(
+    operation: &str,
+    write: bool,
+    status: routine_program::CallStatus,
+) -> routine_program::CallRecord {
+    routine_program::CallRecord {
+        operation: operation.into(),
+        label: operation.into(),
+        write,
+        status,
+        started_ms: 0,
+        duration_ms: Some(5),
+    }
+}
+
+fn code_step(id: &str, title: &str) -> Value {
+    json!({ "type": "code", "id": id, "title": title, "source": "export async function main() {}" })
+}
+
+#[tokio::test]
+async fn code_steps_get_the_trigger_and_hand_their_output_to_later_steps() {
+    let code = Arc::new(Code::answering([CodeOutcome {
+        result: Ok(json!({ "total": 42 })),
+        calls: vec![call(
+            "cognition.decisions",
+            false,
+            routine_program::CallStatus::Completed,
+        )],
+        calls_truncated: false,
+    }]));
+    let fixture = Fixture::new(Agents::default(), Tools::default(), None);
+    let runner = fixture
+        .runner
+        .with_code(Arc::clone(&code), Arc::new(NoCodeUpgrades));
+    let action = action(json!({ "steps": [
+        code_step("invoice", "Read the invoice"),
+        { "type": "tool", "tool": "Comment", "arguments": {
+            "entityType": "document", "entityId": "d", "content": "Total {{steps.invoice.total}}"
+        } },
+        code_step("file", "File it"),
+    ] }));
+    let run = email_run(&action);
+    let mut handle = ExecutionHandle::default();
+    runner
+        .run(&action, &mut handle, RoutineRun::Event(&run))
+        .await
+        .unwrap();
+
+    let runs = code.runs.lock().unwrap().clone();
+    assert_eq!(
+        runs.iter()
+            .map(|run| run.title.as_str())
+            .collect::<Vec<_>>(),
+        ["Read the invoice", "File it"]
+    );
+    let trigger = runs[0].trigger.as_ref().unwrap();
+    assert_eq!(trigger["email"]["subject"], "Invoice #42");
+    assert_eq!(trigger["entity_id"], json!(run.pending.event.entity_id()));
+    assert!(!runs[0].dry_run);
+    assert_eq!(runs[1].steps, json!({ "invoice": { "total": 42 } }));
+    let calls = fixture.tools.calls.lock().unwrap().clone();
+    assert_eq!(arguments(&calls[0])["content"], "Total 42");
+    assert_eq!(
+        serde_json::to_value(&handle.steps[0]).unwrap(),
+        json!({ "path": "0", "kind": "code", "calls": [{
+            "operation": "cognition.decisions", "label": "cognition.decisions",
+            "status": "completed", "started_ms": 0, "duration_ms": 5
+        }] })
+    );
+}
+
+#[tokio::test]
+async fn a_failed_code_step_stops_the_run_and_keeps_its_calls() {
+    let code = Arc::new(Code::answering([CodeOutcome {
+        result: Err("Error: no such label".into()),
+        calls: vec![call(
+            "email.createLabel",
+            true,
+            routine_program::CallStatus::Failed,
+        )],
+        calls_truncated: true,
+    }]));
+    let fixture = Fixture::new(Agents::default(), Tools::default(), None);
+    let runner = fixture
+        .runner
+        .with_code(Arc::clone(&code), Arc::new(NoCodeUpgrades));
+    let action = action(json!({ "steps": [
+        code_step("label", "Label it"),
+        code_step("after", "Never runs"),
+    ] }));
+    let mut handle = ExecutionHandle::default();
+    let error = runner
+        .run(&action, &mut handle, manual())
+        .await
+        .unwrap_err();
+    assert_eq!(error.to_string(), "Label it failed: Error: no such label");
+    assert_eq!(code.runs.lock().unwrap().len(), 1);
+    // A manual run has no triggering item.
+    assert_eq!(code.runs.lock().unwrap()[0].trigger, None);
+    assert_eq!(
+        handle.steps[0].result,
+        StepResult::Code {
+            calls: vec![call(
+                "email.createLabel",
+                true,
+                routine_program::CallStatus::Failed
+            )],
+            calls_truncated: true,
+            error: Some("Error: no such label".into()),
+        }
+    );
+}
+
+#[tokio::test]
+async fn hosts_without_a_code_executor_fail_code_steps() {
+    let fixture = Fixture::new(Agents::default(), Tools::default(), None);
+    let action = action(json!({ "steps": [code_step("label", "Label it")] }));
+    let mut handle = ExecutionHandle::default();
+    let error = fixture
+        .runner
+        .run(&action, &mut handle, manual())
+        .await
+        .unwrap_err();
+    assert!(error.to_string().contains("no code executor is configured"));
+}

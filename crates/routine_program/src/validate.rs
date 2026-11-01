@@ -4,7 +4,7 @@ use std::collections::HashSet;
 
 use jev::domain::QuestionError;
 
-use crate::model::{AgentStep, RoutineProgram, Step, StepId};
+use crate::model::{AgentStep, CodeStep, RoutineProgram, Step, StepId};
 use crate::plan::choice_question;
 use crate::template::{self, Reference, TemplateError};
 
@@ -30,6 +30,12 @@ pub mod limits {
     pub const MAX_ARGUMENT_BYTES: usize = 16 * 1024;
     /// Characters in an agent step's instructions.
     pub const MAX_INSTRUCTION_CHARS: usize = 20_000;
+    /// Characters in a code step's title.
+    pub const MAX_TITLE_CHARS: usize = 80;
+    /// Characters in a code step's summary.
+    pub const MAX_SUMMARY_CHARS: usize = 300;
+    /// Bytes of a code step's source; the executor's own limit.
+    pub const MAX_SOURCE_BYTES: usize = 64 * 1024;
 }
 
 use limits::*;
@@ -101,6 +107,18 @@ pub enum ProgramError {
     /// A placeholder that cannot be read.
     #[error(transparent)]
     Template(#[from] TemplateError),
+    /// A code step without a title, or with a long one.
+    #[error("code steps need a title of 1 to {MAX_TITLE_CHARS} characters")]
+    CodeTitle,
+    /// A long code step summary.
+    #[error("code step summaries can be at most {MAX_SUMMARY_CHARS} characters")]
+    SummaryTooLong,
+    /// A code step without code, or with too much.
+    #[error("code steps need source of at most {MAX_SOURCE_BYTES} bytes")]
+    CodeSource,
+    /// A write scope listed twice.
+    #[error("a code step lists `{0}` in writes twice")]
+    DuplicateWriteScope(String),
 }
 
 /// Facts about a valid program that its routine's triggers must support.
@@ -186,6 +204,10 @@ impl Check {
     fn step(&mut self, step: &Step) -> Result<(), ProgramError> {
         match step {
             Step::Agent(agent) => agent_step(agent, self.single_agent_task),
+            Step::Code(code) => {
+                code_step(code)?;
+                self.name(code.id.as_ref())
+            }
             Step::If(_) => Ok(()),
             Step::Choose(choose) => {
                 if !(2..=MAX_OPTIONS).contains(&choose.options.len()) {
@@ -225,16 +247,41 @@ impl Check {
                     }
                 }
                 // Registered after its own arguments: a step cannot read itself.
-                if let Some(id) = &tool.id {
-                    if !self.ids.insert(id.clone()) {
-                        return Err(ProgramError::DuplicateStepId(id.clone()));
-                    }
-                    self.visible.push(id.clone());
-                }
-                Ok(())
+                self.name(tool.id.as_ref())
             }
         }
     }
+
+    /// A step's id becomes visible to the steps after it.
+    fn name(&mut self, id: Option<&StepId>) -> Result<(), ProgramError> {
+        if let Some(id) = id {
+            if !self.ids.insert(id.clone()) {
+                return Err(ProgramError::DuplicateStepId(id.clone()));
+            }
+            self.visible.push(id.clone());
+        }
+        Ok(())
+    }
+}
+
+fn code_step(code: &CodeStep) -> Result<(), ProgramError> {
+    let title = code.title.trim();
+    if title.is_empty() || title.chars().count() > MAX_TITLE_CHARS {
+        return Err(ProgramError::CodeTitle);
+    }
+    if code.summary.trim().chars().count() > MAX_SUMMARY_CHARS {
+        return Err(ProgramError::SummaryTooLong);
+    }
+    if code.source.trim().is_empty() || code.source.len() > MAX_SOURCE_BYTES {
+        return Err(ProgramError::CodeSource);
+    }
+    let mut scopes = HashSet::new();
+    for scope in &code.writes {
+        if !scopes.insert(scope) {
+            return Err(ProgramError::DuplicateWriteScope(scope.as_str().to_owned()));
+        }
+    }
+    Ok(())
 }
 
 /// An old single-agent task keeps the rules it was saved under: its target
@@ -264,7 +311,7 @@ fn max_agents(steps: &[Step]) -> usize {
         .iter()
         .map(|step| match step {
             Step::Agent(_) => 1,
-            Step::Tool(_) => 0,
+            Step::Tool(_) | Step::Code(_) => 0,
             Step::Choose(choose) if choose.multiple => {
                 let options = choose
                     .options

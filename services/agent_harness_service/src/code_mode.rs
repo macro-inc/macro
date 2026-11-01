@@ -87,7 +87,7 @@ impl UserExecutionCredentials for UserRunCredentials {
 }
 
 /// The current trace context, for the SDK to forward on authenticated requests.
-fn trace_headers() -> BTreeMap<String, String> {
+pub(crate) fn trace_headers() -> BTreeMap<String, String> {
     let mut headers = axum::http::HeaderMap::new();
     macro_tower_layers::inject_trace_headers(&mut headers);
     headers

@@ -6,7 +6,7 @@ use jev::domain::{Probability, QuestionError, YesNoQuestion};
 use serde::{Deserialize, Serialize};
 
 use crate::model::{
-    AgentStep, ChoiceOption, ChooseStep, RoutineProgram, RoutineTool, Step, ToolStep,
+    AgentStep, ChoiceOption, ChooseStep, CodeStep, RoutineProgram, RoutineTool, Step, ToolStep,
 };
 
 #[cfg(test)]
@@ -88,6 +88,53 @@ pub enum StepResult {
         #[serde(default, skip_serializing_if = "Option::is_none")]
         error: Option<String>,
     },
+    /// Code ran.
+    Code {
+        /// Its SDK calls, in the order they started.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        calls: Vec<CallRecord>,
+        /// More calls ran than are recorded.
+        #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+        calls_truncated: bool,
+        /// Why it failed.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        error: Option<String>,
+    },
+}
+
+/// One SDK call a code step made. Records no arguments or results.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct CallRecord {
+    /// The SDK operation, e.g. `email.archiveThread`.
+    pub operation: String,
+    /// Its generic label, e.g. "Archive Thread".
+    pub label: String,
+    /// Whether it changes anything.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub write: bool,
+    /// How it ended.
+    pub status: CallStatus,
+    /// When it started, in milliseconds after the step started.
+    pub started_ms: u32,
+    /// How long it took, once it finished.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub duration_ms: Option<u32>,
+}
+
+/// How one SDK call ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum CallStatus {
+    /// The API answered.
+    Completed,
+    /// The API refused or failed it.
+    Failed,
+    /// A dry run answered it without sending it.
+    Skipped,
+    /// The step may not make this change, so it wasn't sent.
+    Refused,
+    /// The step ended before an answer arrived; it may or may not have happened.
+    Unknown,
 }
 
 /// The next thing a run does, once its decisions are answered.
@@ -108,6 +155,13 @@ pub enum PlannedStep<'a> {
         path: StepPath,
         /// The step.
         step: &'a AgentStep,
+    },
+    /// Run code.
+    Code {
+        /// Where the step sits.
+        path: StepPath,
+        /// The step.
+        step: &'a CodeStep,
     },
 }
 
@@ -159,7 +213,7 @@ impl RoutineProgram {
                     }
                 }
             }
-            Step::Tool(_) | Step::Agent(_) => {}
+            Step::Code(_) | Step::Tool(_) | Step::Agent(_) => {}
         });
         result.map(|()| questions)
     }
@@ -204,6 +258,11 @@ impl<'a> Walk<'a, '_> {
             Step::Agent(step) => {
                 if active {
                     self.plan.push(PlannedStep::Agent { path, step });
+                }
+            }
+            Step::Code(step) => {
+                if active {
+                    self.plan.push(PlannedStep::Code { path, step });
                 }
             }
             Step::If(step) => {
