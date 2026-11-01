@@ -65,7 +65,6 @@ interface MobileForwardToChannelLayoutProps
   submitAccessLevel: Accessor<AccessLevel | null>;
   setSubmitAccessLevel: (level: AccessLevel | null) => void;
   composer: ReturnType<typeof createForwardMessageComposer>;
-  hideAttachFiles: boolean;
   handleSubmit: () => void;
   canSendAsGroup: Accessor<boolean>;
   sendAsGroupMessage: Accessor<boolean>;
@@ -156,10 +155,7 @@ function MobileForwardToChannelLayout(
       </Show>
 
       <div class="flex-1 min-h-20 flex flex-col w-full mt-3 border-t border-edge-muted relative">
-        <ForwardMessageComposer
-          composer={props.composer}
-          hideAttachFiles={props.hideAttachFiles}
-        />
+        <ForwardMessageComposer composer={props.composer} />
       </div>
     </Show>
   );
@@ -345,8 +341,6 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
       entity_id: blockId() ?? '',
     };
   };
-
-  const hideAttachFiles = () => asAttachment().entity_type === 'agent_session';
 
   const trackForwardShare = (targetType: 'channel' | 'user') => {
     const attachment = asAttachment();
@@ -607,7 +601,6 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
             submitAccessLevel={submitAccessLevel}
             setSubmitAccessLevel={setSubmitAccessLevel}
             composer={composer}
-            hideAttachFiles={hideAttachFiles()}
             handleSubmit={handleSubmit}
             canSendAsGroup={canSendAsGroup}
             sendAsGroupMessage={sendAsGroupMessage}
@@ -655,10 +648,7 @@ export function ForwardToChannel(props: ForwardToChannelProps) {
 
           {/* Row 2: Optional message */}
           <div class="grow shrink min-h-0 flex flex-col w-full border-t border-edge-muted">
-            <ForwardMessageComposer
-              composer={composer}
-              hideAttachFiles={hideAttachFiles()}
-            />
+            <ForwardMessageComposer composer={composer} />
 
             {/* Row 3: Send As Group (optional) + Cancel + Send */}
             <div class="shrink-0 flex w-full items-center px-4 py-4 gap-3 flex-wrap">
