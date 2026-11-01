@@ -1150,3 +1150,45 @@ async fn a_consumed_firing_is_not_due_again_after_its_claim_goes_stale(pool: PgP
     // Without consuming it, the same past firing would run again.
     assert!(next_run(unconsumed.id.unwrap()) <= now);
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn run_history_is_the_last_run_and_the_last_success_ignoring_skipped_runs(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool);
+    let action = repo
+        .create_action(sample_action(user_owner(USER_A), "triage"))
+        .await
+        .unwrap();
+    let action_id = action.id.unwrap();
+    assert_eq!(
+        repo.run_history(&action_id).await.unwrap(),
+        RunHistory::default()
+    );
+
+    let at = |hour: u32| chrono::TimeZone::with_ymd_and_hms(&Utc, 2026, 11, 1, hour, 0, 0).unwrap();
+    for (hour, is_success, result) in [
+        (8, true, json!({})),
+        (9, false, json!({ "error": "boom" })),
+        (10, false, json!({ "condition": { "passed": false } })),
+    ] {
+        repo.create_execution_record(ActionExecutionRecord {
+            id: None,
+            action_id,
+            resource_id: None,
+            start_time: at(hour),
+            end_time: at(hour),
+            is_success,
+            result,
+            created_at: at(hour),
+        })
+        .await
+        .unwrap();
+    }
+    assert_eq!(
+        repo.run_history(&action_id).await.unwrap(),
+        RunHistory {
+            previous: Some((at(9), false)),
+            last_succeeded_at: Some(at(8)),
+        }
+    );
+}

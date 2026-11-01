@@ -654,6 +654,9 @@ async fn run() -> anyhow::Result<()> {
             code_mode::sdk_hosts()?,
             Arc::clone(&recorder),
             tool_context.cognition_tool_context.service.clone(),
+            Arc::new(routine_code::CalendarTimeZones(Arc::clone(
+                &tool_context.calendar_tool_context.occurrences,
+            ))),
         )),
         None => None,
     };

@@ -45,6 +45,9 @@ Pulumi stacks; they do not host extra agent processes.
   through `src/routine_tools.rs`; code steps through `src/routine_code.rs`,
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
   type checker, with the owner's token limited to each step's `writes`.
+  A routine's code steps are checked together, one file each; the owner's
+  time zone for `run.timezone` comes from their primary calendar
+  (`CalendarTimeZones`).
 - `src/preview.rs` + `src/preview/`: preview control routes, public HTTP and SSH listeners;
   lease/ticket and authorization logic lives in `crates/agent_preview`. The shared
   pool stores replica ownership and credential hashes; startup and ten-second

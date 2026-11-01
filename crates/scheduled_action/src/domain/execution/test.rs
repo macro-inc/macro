@@ -401,6 +401,7 @@ impl ScheduledAgentRunner for Runner {
             path: serde_json::from_value(json!("0")).unwrap(),
             result: routine_program::StepResult::Tool {
                 tool: routine_program::RoutineTool::UpdateThreadLabels,
+                output: None,
                 error: None,
             },
         });

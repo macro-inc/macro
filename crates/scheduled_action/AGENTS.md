@@ -20,15 +20,22 @@ each run.
   code steps through the `RoutineCode` port (the harness's Deno executor,
   limited to each step's `writes`), and at most one agent step through
   `target_runner.rs`. An old single-agent task runs as one agent step.
-- `src/domain/code_check.rs`: saving a routine type-checks its changed code
-  steps and stamps the task's `sdk`; unchanged code already checked against
-  the current SDK isn't checked again. `POST /scheduled-actions/code/guide`
+  `run_context` builds what code receives: the trigger's time (not the
+  clock), the schedule's zone or else the owner's, and the previous run
+  (`ScheduledActionRepo::run_history`, skipped runs excluded). Every tool and
+  code step's output is recorded on its step and the run records its `run`
+  info, for the run page.
+- `src/domain/code_check.rs`: saving a routine gives its steps ids, type-checks
+  all its code steps together and stamps the task's `sdk` (the version from
+  `routine_program::code_version`); unchanged code already checked against the
+  current version isn't checked again. `POST /scheduled-actions/code/guide`
   (the shared code-step text, `StepContext` and the SDK reference for a
-  task) and `/code/check` (the same check, without saving) serve the web
-  routine drafter.
+  task) and `/code/check` (the same check of a drafted `steps` list, without
+  saving, with problems by code step) serve the web routine drafter.
 - `src/domain/code_upgrade.rs`: before a run uses code checked against an
-  older SDK, it is checked again, and rewritten by a model only if that
-  fails (once per routine and SDK, `scheduled_action_code_upgrade`); a
+  older version (SDK or `StepContext`), it is checked again, and rewritten by
+  a model only if that fails (once per routine and version,
+  `scheduled_action_code_upgrade`); a
   failed rewrite pauses the routine. `sweep` does the same for every
   enabled routine when the harness starts after a release.
 - `src/domain/event_trigger/github_selector.rs`, `payload_match.rs`: the

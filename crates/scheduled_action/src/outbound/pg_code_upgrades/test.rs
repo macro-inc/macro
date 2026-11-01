@@ -156,11 +156,21 @@ impl crate::domain::ports::RoutineCode for Checks {
         Some(sdk("0.3.0+new"))
     }
 
-    async fn check(
+    async fn check_program(
         &self,
-        _: &str,
-    ) -> std::result::Result<Vec<String>, crate::domain::ports::CodeUnavailable> {
+        _: &routine_program::RoutineProgram,
+    ) -> std::result::Result<
+        Vec<crate::domain::ports::StepProblems>,
+        crate::domain::ports::CodeUnavailable,
+    > {
         Ok(Vec::new())
+    }
+
+    async fn owner_time_zone(
+        &self,
+        _: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> Option<String> {
+        None
     }
 
     async fn run(
@@ -187,6 +197,7 @@ impl crate::domain::ports::RoutineCode for Checks {
         &self,
         _: &macro_user_id::user_id::MacroUserIdStr<'static>,
         _: &routine_program::CodeStep,
+        _: &str,
         _: &[String],
     ) -> std::result::Result<String, String> {
         unreachable!("checked code isn't rewritten")

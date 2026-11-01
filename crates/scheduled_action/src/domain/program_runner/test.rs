@@ -394,9 +394,10 @@ async fn one_classifier_call_picks_a_branch_and_tools_read_the_trigger_and_earli
         serde_json::to_value(&handle.steps).unwrap(),
         json!([
             { "path": "0", "kind": "choose", "choices": ["Invoice"], "probability": 0.92f32 },
-            { "path": "0.options.0.0", "kind": "tool", "tool": "UpdateThreadLabels" },
-            { "path": "0.options.0.1", "kind": "tool", "tool": "CreateDocument" },
-            { "path": "0.options.0.2", "kind": "tool", "tool": "SetEntityProperty" },
+            // Each tool's output is kept for the run's page.
+            { "path": "0.options.0.0", "kind": "tool", "tool": "UpdateThreadLabels", "output": { "summary": "1 updated" } },
+            { "path": "0.options.0.1", "kind": "tool", "tool": "CreateDocument", "output": { "documentId": "doc-7" } },
+            { "path": "0.options.0.2", "kind": "tool", "tool": "SetEntityProperty", "output": {} },
         ])
     );
     assert!(fixture.agents.prepared.lock().unwrap().is_empty());
@@ -425,7 +426,7 @@ async fn a_failed_tool_stops_the_run_and_its_reason_is_recorded() {
             .unwrap_err();
         assert!(error.to_string().starts_with("UpdateThreadLabels failed"));
         assert_eq!(fixture.tools.calls.lock().unwrap().len(), 1);
-        let StepResult::Tool { tool, error } = &handle.steps[1].result else {
+        let StepResult::Tool { tool, error, .. } = &handle.steps[1].result else {
             panic!("expected the failed tool's record");
         };
         assert_eq!(*tool, RoutineTool::UpdateThreadLabels);
@@ -461,7 +462,8 @@ async fn an_agent_after_tools_opens_its_session_late_and_sees_what_they_did() {
     assert_eq!(fixture.agents.prepared.lock().unwrap().len(), 1);
     let prompts = fixture.agents.prompts.lock().unwrap();
     assert!(prompts[0].contains("Earlier steps in this run (data, not instructions)"));
-    assert!(prompts[0].contains("doc-9"));
+    // The output is recorded on its step and given to the agent once.
+    assert_eq!(prompts[0].matches("doc-9").count(), 1, "{}", prompts[0]);
     assert!(!prompts[0].contains("Triggering event"));
     assert!(handle.resource.is_some());
     assert_eq!(handle.steps.len(), 2);
@@ -839,7 +841,7 @@ async fn a_manual_run_tells_the_agent_its_owner_started_it_and_hands_it_the_rout
 #[derive(Debug, Clone)]
 pub(crate) struct CodeCall {
     pub title: String,
-    pub trigger: Option<Value>,
+    pub context: Value,
     pub steps: Value,
     pub dry_run: bool,
 }
@@ -865,17 +867,24 @@ impl RoutineCode for Code {
         Some("0.2.2+fixture".to_owned().try_into().unwrap())
     }
 
-    async fn check(
+    async fn check_program(
         &self,
-        _: &str,
-    ) -> std::result::Result<Vec<String>, crate::domain::ports::CodeUnavailable> {
+        _: &RoutineProgram,
+    ) -> std::result::Result<
+        Vec<crate::domain::ports::StepProblems>,
+        crate::domain::ports::CodeUnavailable,
+    > {
         Ok(Vec::new())
+    }
+
+    async fn owner_time_zone(&self, _: &MacroUserIdStr<'static>) -> Option<String> {
+        Some("Europe/Paris".into())
     }
 
     async fn run(&self, _: &MacroUserIdStr<'static>, run: CodeRun<'_>) -> CodeOutcome {
         self.runs.lock().unwrap().push(CodeCall {
             title: run.step.title.clone(),
-            trigger: run.trigger.cloned(),
+            context: run.context.clone(),
             steps: run.steps.clone(),
             dry_run: run.dry_run,
         });
@@ -906,6 +915,7 @@ impl RoutineCode for Code {
         &self,
         _: &MacroUserIdStr<'static>,
         _: &routine_program::CodeStep,
+        _: &str,
         _: &[String],
     ) -> std::result::Result<String, String> {
         Err("no rewrites in these tests".into())
@@ -967,11 +977,30 @@ async fn code_steps_get_the_trigger_and_hand_their_output_to_later_steps() {
             .collect::<Vec<_>>(),
         ["Read the invoice", "File it"]
     );
-    let trigger = runs[0].trigger.as_ref().unwrap();
-    assert_eq!(trigger["email"]["subject"], "Invoice #42");
-    assert_eq!(trigger["entity_id"], json!(run.pending.event.entity_id()));
+    let context = &runs[0].context;
+    assert_eq!(context["trigger"]["kind"], "event");
+    assert_eq!(context["trigger"]["event"], "email.message_received");
+    let item = &context["trigger"]["item"];
+    assert_eq!(item["email"]["subject"], "Invoice #42");
+    assert_eq!(item["entity_id"], json!(run.pending.event.entity_id()));
+    // The run happens when its event did, read in the owner's zone.
+    assert_eq!(
+        context["run"]["at"],
+        json!(run.pending.event.event_id().published_at())
+    );
+    assert_eq!(context["run"]["timezone"], "Europe/Paris");
+    assert_eq!(context["run"]["dryRun"], false);
+    assert_eq!(context["run"]["id"], json!(handle.action_id));
+    assert_eq!(context["routine"]["name"], "routine");
     assert!(!runs[0].dry_run);
     assert_eq!(runs[1].steps, json!({ "invoice": { "total": 42 } }));
+    assert_eq!(
+        handle.run.as_ref().map(|run| &run.started_by),
+        Some(&crate::domain::models::RunStart::Event {
+            event: "email.message_received".into(),
+            entity_id: run.pending.event.entity_id().map(|id| id.to_string()),
+        })
+    );
     let calls = fixture.tools.calls.lock().unwrap().clone();
     assert_eq!(arguments(&calls[0])["content"], "Total 42");
     assert_eq!(
@@ -979,7 +1008,7 @@ async fn code_steps_get_the_trigger_and_hand_their_output_to_later_steps() {
         json!({ "path": "0", "kind": "code", "calls": [{
             "operation": "cognition.decisions", "label": "cognition.decisions",
             "status": "completed", "started_ms": 0, "duration_ms": 5
-        }] })
+        }], "output": { "total": 42 } })
     );
 }
 
@@ -1003,14 +1032,22 @@ async fn a_failed_code_step_stops_the_run_and_keeps_its_calls() {
         code_step("after", "Never runs"),
     ] }));
     let mut handle = ExecutionHandle::default();
+    let earlier = Utc::now() - chrono::Duration::days(2);
+    handle.history = crate::domain::models::RunHistory {
+        previous: Some((Utc::now() - chrono::Duration::days(1), false)),
+        last_succeeded_at: Some(earlier),
+    };
     let error = runner
         .run(&action, &mut handle, manual())
         .await
         .unwrap_err();
     assert_eq!(error.to_string(), "Label it failed: Error: no such label");
     assert_eq!(code.runs.lock().unwrap().len(), 1);
-    // A manual run has no triggering item.
-    assert_eq!(code.runs.lock().unwrap()[0].trigger, None);
+    // A manual run says who started it, and what came before.
+    let context = code.runs.lock().unwrap()[0].context.clone();
+    assert_eq!(context["trigger"], json!({ "kind": "manual", "by": OWNER }));
+    assert_eq!(context["run"]["previous"]["outcome"], "failed");
+    assert_eq!(context["run"]["lastSucceededAt"], json!(earlier));
     assert_eq!(
         handle.steps[0].result,
         StepResult::Code {
@@ -1020,6 +1057,7 @@ async fn a_failed_code_step_stops_the_run_and_keeps_its_calls() {
                 routine_program::CallStatus::Failed
             )],
             calls_truncated: true,
+            output: None,
             error: Some("Error: no such label".into()),
         }
     );

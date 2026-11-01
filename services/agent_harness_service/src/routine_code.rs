@@ -16,11 +16,16 @@ use agent::{Message, PredefinedModel};
 use agent_egress::outbound::macro_mcp::MacroApiTokenSigner;
 use code_execution::domain::{
     CheckError, ExecuteRequest, Outcome, ProgramChecker, ProgramExecutor, RunEnvironment,
-    Unattended, WritePolicy, operations, sdk_declarations,
+    SourceFile, Unattended, WritePolicy, operations, sdk_declarations,
 };
 use macro_user_id::user_id::MacroUserIdStr;
-use routine_program::{CallRecord, CallStatus, CodeStep, STEP_CONTEXT, SdkFingerprint};
-use scheduled_action::domain::ports::{CodeOutcome, CodeRun, CodeUnavailable, RoutineCode};
+use routine_program::{
+    CallRecord, CallStatus, CodeStep, MAX_OUTPUT_BYTES, RoutineProgram, STEP_CONTEXT,
+    SdkFingerprint, code_version,
+};
+use scheduled_action::domain::ports::{
+    CodeOutcome, CodeRun, CodeUnavailable, RoutineCode, StepProblems,
+};
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
 use tokio_util::sync::CancellationToken;
@@ -33,8 +38,6 @@ const STEP_TIMEOUT_MS: u64 = 30_000;
 /// The credential outlives the step's deadline by a margin; it expires rather
 /// than being revoked.
 const TOKEN_LIFETIME_SECONDS: usize = 60;
-/// Largest output kept for later steps; anything larger becomes null.
-const MAX_OUTPUT_BYTES: usize = 32 * 1024;
 /// Longest failure message kept in the run's history.
 const MAX_MESSAGE_CHARS: usize = 500;
 /// Calls recorded per step; the executor reports at most this many.
@@ -62,6 +65,32 @@ impl RoutineCredentials for MacroApiTokenSigner {
     }
 }
 
+/// Looks up the time zone a routine's owner works in. `async_trait` keeps it
+/// object-safe, so the adapter holds it as `Arc<dyn OwnerTimeZones>`.
+#[async_trait::async_trait]
+pub trait OwnerTimeZones: Send + Sync + 'static {
+    /// The IANA zone of `owner`'s primary calendar, when they have one.
+    async fn time_zone(&self, owner: &MacroUserIdStr<'static>) -> Option<String>;
+}
+
+/// Owners' zones from their primary calendars.
+pub struct CalendarTimeZones<Calendars>(pub Arc<Calendars>);
+
+#[async_trait::async_trait]
+impl<Calendars> OwnerTimeZones for CalendarTimeZones<Calendars>
+where
+    Calendars: calendar_events::domain::ports::CalendarOccurrenceService,
+{
+    async fn time_zone(&self, owner: &MacroUserIdStr<'static>) -> Option<String> {
+        self.0
+            .primary_time_zone(owner.as_ref())
+            .await
+            .inspect_err(|error| tracing::warn!(?error, "owner's calendar zone unavailable"))
+            .ok()
+            .flatten()
+    }
+}
+
 /// Routine code over the harness's own executor and type checker.
 pub struct SdkRoutineCode<Credentials = MacroApiTokenSigner> {
     executor: Arc<dyn ProgramExecutor>,
@@ -71,6 +100,7 @@ pub struct SdkRoutineCode<Credentials = MacroApiTokenSigner> {
     recorder: Arc<dyn ai_usage::UsageRecorder>,
     /// Chooses the SDK entities relevant to a task, as code mode does.
     cognition: Option<Arc<dyn cognition::domain::Cognition>>,
+    time_zones: Arc<dyn OwnerTimeZones>,
 }
 
 impl<Credentials> SdkRoutineCode<Credentials> {
@@ -84,6 +114,7 @@ impl<Credentials> SdkRoutineCode<Credentials> {
         hosts: BTreeMap<String, String>,
         recorder: Arc<dyn ai_usage::UsageRecorder>,
         cognition: Option<Arc<dyn cognition::domain::Cognition>>,
+        time_zones: Arc<dyn OwnerTimeZones>,
     ) -> Self {
         Self {
             executor,
@@ -92,28 +123,72 @@ impl<Credentials> SdkRoutineCode<Credentials> {
             hosts,
             recorder,
             cognition,
+            time_zones,
         }
     }
 }
 
 impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials> {
     fn sdk(&self) -> Option<SdkFingerprint> {
-        SdkFingerprint::try_from(self.checker.sdk_fingerprint().to_owned()).ok()
+        Some(code_version(self.checker.sdk_fingerprint()))
     }
 
-    async fn check(&self, source: &str) -> Result<Vec<String>, CodeUnavailable> {
-        match self.checker.check(source, STEP_CONTEXT).await {
-            Ok(diagnostics) => Ok(diagnostics
-                .into_iter()
-                .map(|diagnostic| diagnostic.message)
-                .collect()),
-            Err(CheckError::InvalidSource) => Ok(vec![
-                "The code is empty or larger than the 64 KiB limit.".to_owned(),
-            ]),
-            Err(error) => Err(CodeUnavailable(format!(
-                "The code couldn't be type-checked: {error}"
-            ))),
+    async fn check_program(
+        &self,
+        program: &RoutineProgram,
+    ) -> Result<Vec<StepProblems>, CodeUnavailable> {
+        let files = program.check_files();
+        if files.is_empty() {
+            return Ok(Vec::new());
         }
+        let sources: Vec<SourceFile> = files
+            .iter()
+            .map(|file| SourceFile {
+                name: file.name.clone(),
+                source: file.source.clone(),
+            })
+            .collect();
+        let diagnostics = match self.checker.check_files(&sources, STEP_CONTEXT).await {
+            Ok(diagnostics) => diagnostics,
+            Err(CheckError::InvalidSource) => {
+                return Ok(vec![StepProblems {
+                    index: 0,
+                    title: files[0].title.clone(),
+                    problems: vec![
+                        "A code step is empty or larger than the 64 KiB limit.".to_owned(),
+                    ],
+                }]);
+            }
+            Err(error) => {
+                return Err(CodeUnavailable(format!(
+                    "The code couldn't be type-checked: {error}"
+                )));
+            }
+        };
+        // A problem outside every step's file (an unresolvable import) is
+        // the first step's to report.
+        let mut failing: Vec<StepProblems> = Vec::new();
+        for diagnostic in diagnostics {
+            let file = diagnostic
+                .file
+                .as_deref()
+                .and_then(|name| files.iter().find(|file| file.name == name))
+                .unwrap_or(&files[0]);
+            match failing.iter_mut().find(|step| step.index == file.index) {
+                Some(step) => step.problems.push(diagnostic.message),
+                None => failing.push(StepProblems {
+                    index: file.index,
+                    title: file.title.clone(),
+                    problems: vec![diagnostic.message],
+                }),
+            }
+        }
+        failing.sort_by_key(|step| step.index);
+        Ok(failing)
+    }
+
+    async fn owner_time_zone(&self, owner: &MacroUserIdStr<'static>) -> Option<String> {
+        self.time_zones.time_zone(owner).await
     }
 
     // Arguments, outputs and failures are the owner's content; the span
@@ -135,11 +210,13 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
                 };
             }
         };
-        let mut arguments = Map::new();
-        arguments.insert(
-            "trigger".into(),
-            run.trigger.cloned().unwrap_or(Value::Null),
-        );
+        let mut arguments = match run.context {
+            Value::Object(context) => context.clone(),
+            _ => Map::new(),
+        };
+        if let Some(Value::Object(info)) = arguments.get_mut("run") {
+            info.insert("dryRun".into(), Value::Bool(run.dry_run));
+        }
         arguments.insert("steps".into(), run.steps.clone());
         let writes = if run.dry_run {
             WritePolicy::DryRun
@@ -242,9 +319,10 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
         &self,
         owner: &MacroUserIdStr<'static>,
         step: &CodeStep,
+        steps: &str,
         problems: &[String],
     ) -> Result<String, String> {
-        self.rewrite_source(owner, step, problems)
+        self.rewrite_source(owner, step, steps, problems)
             .await
             .map_err(|_| "the model couldn't rewrite it".to_owned())
     }
@@ -257,11 +335,12 @@ impl<Credentials> SdkRoutineCode<Credentials> {
         &self,
         owner: &MacroUserIdStr<'static>,
         step: &CodeStep,
+        steps: &str,
         problems: &[String],
     ) -> anyhow::Result<String> {
         let declarations = declarations_for(problems);
         let prompt = format!(
-            "Step: {title}\n{summary}\n\nIts code:\n```ts\n{source}\n```\n\nThe type checker's errors against the current SDK:\n{problems}\n\nThe type of `main`'s argument:\n```ts\n{STEP_CONTEXT}```\n\nThe current SDK's declarations for the types in those errors:\n```ts\n{declarations}```",
+            "Step: {title}\n{summary}\n\nIts code:\n```ts\n{source}\n```\n\nThe type checker's errors against the current SDK:\n{problems}\n\nThe declarations every step is checked with:\n```ts\n{STEP_CONTEXT}```\n\nThis step's `StepContext`, with the outputs of the steps before it:\n```ts\n{steps}\n```\n\nThe current SDK's declarations for the types in those errors:\n```ts\n{declarations}```",
             title = step.title.trim(),
             summary = step.summary.trim(),
             source = step.source,
@@ -327,9 +406,11 @@ fn quoted_names(problems: &[String]) -> Vec<String> {
 /// What `main` returned, or why the step failed, for the run's history.
 fn result(outcome: Outcome) -> Result<Value, String> {
     match outcome {
-        Outcome::Succeeded { value } if value.to_string().len() > MAX_OUTPUT_BYTES => {
-            Ok(Value::Null)
-        }
+        Outcome::Succeeded { value } if value.to_string().len() > MAX_OUTPUT_BYTES => Err(format!(
+            "The step's output is {} KB as JSON; a step's output can be at most {} KB. Return only what later steps need.",
+            value.to_string().len().div_ceil(1024),
+            MAX_OUTPUT_BYTES / 1024
+        )),
         Outcome::Succeeded { value } => Ok(value),
         Outcome::Failed { error } => Err(bounded(error.message)),
         Outcome::Cancelled => Err("The step was stopped before it finished.".to_owned()),

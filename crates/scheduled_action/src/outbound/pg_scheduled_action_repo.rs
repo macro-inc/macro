@@ -18,7 +18,7 @@ use crate::domain::event_runs::{ClaimToken, ConfigurationRevision};
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
     ActionExecutionRecord, ActionKind, ActionPolicyError, AlreadyRunningError, MAX_ACTION_TIME,
-    Schedule, ScheduledAction,
+    RunHistory, Schedule, ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionRepo;
 
@@ -503,6 +503,31 @@ impl<B: BotFacts + 'static> ScheduledActionRepo for PgScheduledActionRepo<B> {
                 created_at: row.created_at,
             })
             .collect())
+    }
+
+    async fn run_history(&self, action_id: &Uuid) -> Result<RunHistory> {
+        // Runs a trigger's condition skipped didn't run, so they don't count.
+        let row = sqlx::query!(
+            r#"
+            SELECT
+                (SELECT start_time FROM action_execution_record
+                 WHERE action_id = $1 AND NOT (result ? 'condition')
+                 ORDER BY start_time DESC LIMIT 1) AS previous_at,
+                (SELECT is_success FROM action_execution_record
+                 WHERE action_id = $1 AND NOT (result ? 'condition')
+                 ORDER BY start_time DESC LIMIT 1) AS previous_succeeded,
+                (SELECT max(start_time) FROM action_execution_record
+                 WHERE action_id = $1 AND is_success AND NOT (result ? 'condition'))
+                    AS last_succeeded_at
+            "#,
+            action_id,
+        )
+        .fetch_one(&self.pool)
+        .await?;
+        Ok(RunHistory {
+            previous: row.previous_at.zip(row.previous_succeeded),
+            last_succeeded_at: row.last_succeeded_at,
+        })
     }
 
     async fn get_latest_execution_records(

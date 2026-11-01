@@ -12,11 +12,14 @@ const CURRENT: &str = "0.3.0+current";
 /// `tasks.add`, unless `rewrite_fails`; a dry run fails if `dry_run_fails`.
 #[derive(Default)]
 struct Code {
+    /// A step that reads `steps.count` fails once an earlier step returns a
+    /// string instead, as the type checker would find with the steps typed.
+    readers_break: bool,
     rewrite_fails: bool,
     rewrite_still_fails: bool,
     dry_run_fails: bool,
-    dry_runs: Mutex<Vec<(Option<Value>, bool)>>,
-    rewrites: Mutex<Vec<Vec<String>>>,
+    dry_runs: Mutex<Vec<(Value, bool)>>,
+    rewrites: Mutex<Vec<(String, Vec<String>)>>,
 }
 
 impl RoutineCode for Code {
@@ -24,24 +27,46 @@ impl RoutineCode for Code {
         Some(CURRENT.to_owned().try_into().unwrap())
     }
 
-    async fn check(&self, source: &str) -> std::result::Result<Vec<String>, CodeUnavailable> {
-        Ok(
-            if source.contains("tasks.create") || source.contains("still broken") {
-                vec![
+    async fn check_program(
+        &self,
+        program: &RoutineProgram,
+    ) -> std::result::Result<Vec<StepProblems>, CodeUnavailable> {
+        let steps = program.code_steps();
+        let returns_string = |index: usize| {
+            steps[..index]
+                .iter()
+                .any(|step| step.source.contains("return String"))
+        };
+        Ok(steps
+            .iter()
+            .enumerate()
+            .filter(|(index, step)| {
+                step.source.contains("tasks.create")
+                    || step.source.contains("still broken")
+                    || (self.readers_break
+                        && step.source.contains("steps.count")
+                        && returns_string(*index))
+            })
+            .map(|(index, step)| StepProblems {
+                index,
+                title: step.title.clone(),
+                problems: vec![
                     "TS2339 [ERROR]: Property 'create' does not exist on type 'TaskNamespace'."
                         .into(),
-                ]
-            } else {
-                Vec::new()
-            },
-        )
+                ],
+            })
+            .collect())
+    }
+
+    async fn owner_time_zone(&self, _: &MacroUserIdStr<'static>) -> Option<String> {
+        None
     }
 
     async fn run(&self, _: &MacroUserIdStr<'static>, run: CodeRun<'_>) -> CodeOutcome {
         self.dry_runs
             .lock()
             .unwrap()
-            .push((run.trigger.cloned(), run.dry_run));
+            .push((run.context.clone(), run.dry_run));
         CodeOutcome {
             result: if self.dry_run_fails {
                 Err("TypeError: cannot read properties of undefined".into())
@@ -69,14 +94,21 @@ impl RoutineCode for Code {
         &self,
         _: &MacroUserIdStr<'static>,
         step: &routine_program::CodeStep,
+        steps: &str,
         problems: &[String],
     ) -> std::result::Result<String, String> {
-        self.rewrites.lock().unwrap().push(problems.to_vec());
+        self.rewrites
+            .lock()
+            .unwrap()
+            .push((steps.to_owned(), problems.to_vec()));
         if self.rewrite_fails {
             return Err("the model is unavailable".into());
         }
         if self.rewrite_still_fails {
             return Ok("still broken".into());
+        }
+        if self.readers_break {
+            return Ok("return String(await macro.tasks.add(x))".into());
         }
         Ok(step.source.replace("tasks.create", "tasks.add"))
     }
@@ -173,6 +205,13 @@ fn routine(source: &str, sdk: Option<&str>) -> ScheduledAction {
     action(task)
 }
 
+fn context() -> Value {
+    json!({
+        "run": { "id": "run-1", "at": "2026-11-01T09:00:00Z", "timezone": "UTC", "dryRun": false },
+        "trigger": { "kind": "event", "event": "email.message_received", "item": { "entity_id": "thread-1" } },
+    })
+}
+
 async fn upgrade(
     code: &Code,
     upgrades: &Upgrades,
@@ -184,7 +223,7 @@ async fn upgrade(
         &MacroUserIdStr::parse_from_str(OWNER).unwrap(),
         action,
         RoutineProgram::from_task(&action.task).unwrap(),
-        Some(&json!({ "entity_id": "thread-1" })),
+        &context(),
     )
     .await
 }
@@ -221,10 +260,14 @@ async fn failing_code_is_rewritten_checked_dry_run_and_saved_once() {
     assert_eq!(program.code_steps()[0].source, "await macro.tasks.add(x)");
     // The model saw the code's problems, not the trigger.
     assert_eq!(code.rewrites.lock().unwrap().len(), 1);
-    assert_eq!(
-        *code.dry_runs.lock().unwrap(),
-        [(Some(json!({ "entity_id": "thread-1" })), true)]
-    );
+    let dry_runs = code.dry_runs.lock().unwrap().clone();
+    assert_eq!(dry_runs.len(), 1);
+    let (context, dry_run) = &dry_runs[0];
+    assert!(*dry_run);
+    // The dry run replays this run's trigger and time, marked as a dry run.
+    assert_eq!(context["trigger"]["item"]["entity_id"], "thread-1");
+    assert_eq!(context["run"]["at"], "2026-11-01T09:00:00Z");
+    assert_eq!(context["run"]["dryRun"], true);
     let recorded = upgrades.recorded.lock().unwrap().clone();
     assert_eq!(recorded[0], Recorded::Claimed(CURRENT.into()));
     let Recorded::Saved(task) = &recorded[1] else {
@@ -289,4 +332,29 @@ async fn a_rewrite_that_fails_its_checks_pauses_the_routine_with_it() {
         // A rewrite that exists is kept for the owner to review.
         assert_eq!(proposal.is_some(), !code.rewrite_fails);
     }
+}
+
+#[tokio::test]
+async fn a_rewrite_must_still_suit_the_steps_that_read_its_output() {
+    let code = Code {
+        readers_break: true,
+        ..Code::default()
+    };
+    let upgrades = Upgrades::default();
+    let action = action(json!({ "steps": [
+        { "type": "code", "id": "count", "title": "Count tasks", "source": "await macro.tasks.create(x); return { n: 1 }" },
+        { "type": "code", "title": "Report", "source": "return steps.count.n" },
+    ] }));
+    let error = upgrade(&code, &upgrades, &action).await.unwrap_err();
+    let NeedsUpdate(reason) = error.downcast_ref::<NeedsUpdate>().unwrap().clone();
+    assert!(reason.contains("\"Report\""), "{reason}");
+    assert!(reason.contains("doesn't type-check"), "{reason}");
+    // The model saw the first step's own view of the outputs before it.
+    let rewrites = code.rewrites.lock().unwrap().clone();
+    assert_eq!(rewrites.len(), 1);
+    assert!(
+        rewrites[0]
+            .0
+            .starts_with("type StepContext = RoutineStepContext<")
+    );
 }

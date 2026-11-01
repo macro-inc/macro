@@ -60,6 +60,7 @@ use model::response::EmptyResponse;
             AiAdmissionErrorBody,
             crate::domain::code_check::CodeGuide,
             crate::domain::code_check::CodeCheck,
+            crate::domain::code_check::CodeStepCheck,
             crate::inbound::axum_router::CodeGuideRequest,
             crate::inbound::axum_router::CheckCodeRequest,
             crate::domain::code_upgrade::CodeUpgrade,

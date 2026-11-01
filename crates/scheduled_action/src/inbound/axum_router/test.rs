@@ -1080,7 +1080,9 @@ async fn code_steps_need_a_checker_and_the_owner_reads_their_upgrades() {
 async fn code_guides_and_checks_need_a_signed_in_user_and_an_executor() {
     let app = router(true);
     let guide = json!({ "task": "keep the important notifications" });
-    let check = json!({ "source": "export async function main() {}" });
+    let check = json!({ "steps": [
+        { "type": "code", "title": "Count", "source": "export async function main() {}" }
+    ] });
     for (path, body) in [
         ("/scheduled-actions/code/guide", guide.clone()),
         ("/scheduled-actions/code/check", check.clone()),

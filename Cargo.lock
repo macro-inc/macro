@@ -542,6 +542,7 @@ dependencies = [
  "axum-extra",
  "bot_id",
  "bots",
+ "calendar_events",
  "call",
  "channel_sender",
  "channels",

@@ -18,7 +18,8 @@ use crate::domain::event_runs::{
 };
 use crate::domain::models::{
     ActionExecutionRecord, ExecutionResource, ExecutionResult, InProgressExecution,
-    MAX_ACTION_TIME, ResolvedTaskTarget, ScheduledAction, ScheduledActionUpdate,
+    MAX_ACTION_TIME, ResolvedTaskTarget, RunHistory, RunInfo, ScheduledAction,
+    ScheduledActionUpdate,
 };
 use crate::domain::ports::{
     FinishedRoutineRun, RoutineRun, RoutineRunObserver, RunEnd, RunTarget, RunTrigger,
@@ -41,6 +42,10 @@ pub struct ExecutionHandle {
     pub agent: Option<BotId>,
     /// What each step did so far, kept even when the run fails or is cut short.
     pub steps: Vec<StepRecord>,
+    /// The routine's earlier runs, as its code reads them.
+    pub history: RunHistory,
+    /// What started this run and when, once the runner knows.
+    pub run: Option<RunInfo>,
     // Cancellation during admission must not contact a runner that never started.
     preparation_started: bool,
     // Started was published, so Stopped must follow even without a transcript.
@@ -55,6 +60,8 @@ impl Default for ExecutionHandle {
             resource: None,
             agent: None,
             steps: Vec::new(),
+            history: RunHistory::default(),
+            run: None,
             preparation_started: false,
             announced: false,
         }
@@ -149,6 +156,13 @@ where
         if decides || runs_model {
             self.admission.admit(&owner, AiFeature::Automation).await?;
         }
+        // Code reads when the routine last ran; without it, it reads none.
+        handle.history = self
+            .repo
+            .run_history(&action_id)
+            .await
+            .inspect_err(|error| tracing::warn!(?error, "routine run history unavailable"))
+            .unwrap_or_default();
         handle.preparation_started = true;
         self.runner.prepare(action, handle).await?;
         // Retain the resource even if publishing Started stalls or is cancelled.
@@ -284,7 +298,8 @@ fn execution_record(
         is_success: result.is_ok(),
         result: serde_json::to_value(
             ExecutionResult::new(resource, result.as_ref().err().map(ToString::to_string))
-                .with_steps(handle.steps.clone(), action.configuration_revision),
+                .with_steps(handle.steps.clone(), action.configuration_revision)
+                .with_run(handle.run.clone()),
         )
         .expect("execution metadata is JSON serializable"),
         created_at: end_time,

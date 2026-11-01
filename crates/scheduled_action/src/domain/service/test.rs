@@ -1591,7 +1591,10 @@ async fn programs_that_read_their_trigger_need_activity_triggers_and_decisions_n
         )
         .await
         .unwrap();
-    assert_eq!(created.task, json!({ "steps": triage }));
+    // Saving names the tool step, so its output can reach later steps.
+    let mut named = triage.clone();
+    named[0]["then"][0]["id"] = json!("update_thread_labels");
+    assert_eq!(created.task, json!({ "steps": named }));
 }
 
 #[tokio::test]

@@ -1,6 +1,8 @@
 use std::sync::Arc;
 
-use crate::domain::code_check::{CodeCheck, CodeCheckError, CodeGuide, InvalidCodeTask};
+use crate::domain::code_check::{
+    CodeCheck, CodeCheckError, CodeGuide, InvalidCodeSteps, InvalidCodeTask,
+};
 use crate::domain::code_upgrade::CodeUpgrade;
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
@@ -549,12 +551,13 @@ pub struct CodeGuideRequest {
     pub task: String,
 }
 
-/// Code to type-check.
+/// A routine's steps, whose code steps are type-checked together.
 #[derive(Debug, Deserialize, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct CheckCodeRequest {
-    /// A code step's source.
-    pub source: String,
+    /// The steps, in the shape a routine's task holds them.
+    #[schema(value_type = Vec<Object>)]
+    pub steps: serde_json::Value,
 }
 
 #[utoipa::path(
@@ -597,6 +600,7 @@ where
     request_body = CheckCodeRequest,
     responses(
         (status = 200, body = CodeCheck, description = "What the type checker found, as saving a routine would check it"),
+        (status = 400, body = String),
         (status = 401, body = String),
         (status = 503, body = String, description = "Code steps aren't available here"),
         (status = 500, body = String),
@@ -613,7 +617,7 @@ where
     Auth: MacroAuthorizationService,
 {
     let Json(request) = request.map_err(ScheduledActionApiError::InvalidRequest)?;
-    let checked = state.service.check_code(&request.source).await?;
+    let checked = state.service.check_code(&request.steps).await?;
     Ok(Json(checked))
 }
 
@@ -659,6 +663,9 @@ impl IntoResponse for ScheduledActionApiError {
         }
         if let Some(task) = error.downcast_ref::<InvalidCodeTask>() {
             return (StatusCode::BAD_REQUEST, task.to_string()).into_response();
+        }
+        if let Some(steps) = error.downcast_ref::<InvalidCodeSteps>() {
+            return (StatusCode::BAD_REQUEST, steps.to_string()).into_response();
         }
         if let Some(code) = error.downcast_ref::<CodeCheckError>() {
             let status = match code {

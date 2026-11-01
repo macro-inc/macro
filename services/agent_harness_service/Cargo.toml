@@ -64,6 +64,7 @@ axum-extra = { workspace = true, features = ["typed-header"] }
 bot_id = { path = "../../crates/bot_id" }
 bots = { path = "../../crates/bots", features = ["outbound", "ports"] }
 call = { path = "../../crates/call", default-features = false, features = ["outbound", "ports"] }
+calendar_events = { path = "../../crates/calendar_events" }
 channel_sender = { path = "../../crates/channel_sender" }
 channels = { path = "../../crates/channels", features = ["attachment", "outbound", "ports"] }
 chat = { path = "../../crates/chat", features = ["ai_tools", "attachment", "outbound"] }

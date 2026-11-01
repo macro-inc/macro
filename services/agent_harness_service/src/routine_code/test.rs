@@ -116,12 +116,12 @@ fn outcomes_become_outputs_or_bounded_reasons() {
         }),
         Ok(json!({ "total": 1 }))
     );
-    assert_eq!(
-        result(Outcome::Succeeded {
-            value: json!("x".repeat(MAX_OUTPUT_BYTES))
-        }),
-        Ok(Value::Null)
-    );
+    let Err(too_large) = result(Outcome::Succeeded {
+        value: json!("x".repeat(MAX_OUTPUT_BYTES)),
+    }) else {
+        panic!("an output over the limit fails");
+    };
+    assert!(too_large.contains("at most 64 KB"), "{too_large}");
     let Err(message) = result(Outcome::Failed {
         error: ExecutionFailure::new(FailureCode::Runtime, "e".repeat(MAX_MESSAGE_CHARS + 5)),
     }) else {
@@ -158,6 +158,16 @@ fn rewrites_read_the_declarations_the_errors_name() {
             .sum::<usize>()
             <= REWRITE_DECLARATION_BYTES
     );
+}
+
+/// Owners without calendars: every owner reads UTC.
+struct NoTimeZones;
+
+#[async_trait::async_trait]
+impl OwnerTimeZones for NoTimeZones {
+    async fn time_zone(&self, _: &MacroUserIdStr<'static>) -> Option<String> {
+        None
+    }
 }
 
 mod real_deno {
@@ -209,6 +219,7 @@ mod real_deno {
             hosts,
             Arc::new(ai_usage::NoOpUsageRecorder),
             None,
+            Arc::new(NoTimeZones),
         );
         (root, code)
     }
@@ -246,9 +257,10 @@ mod real_deno {
     }
 
     const SOURCE: &str = r#"
-export async function main({ macro, trigger, steps }: StepContext) {
+export async function main({ macro, trigger, steps, run }: StepContext) {
+  const subject = trigger.kind === "event" ? trigger.item.email?.subject : undefined;
   const decision = await macro.ai.decide({
-    input: { subject: trigger?.email?.subject },
+    input: { subject, at: run.at, timezone: run.timezone },
     questions: { invoice: "Is this an invoice?" },
   });
   const invoice = (decision.probabilities.invoice ?? 0) >= 0.5;
@@ -261,7 +273,7 @@ export async function main({ macro, trigger, steps }: StepContext) {
   } catch (error) {
     deleted = String(error);
   }
-  return { invoice, earlier: steps.first ?? null, deleted };
+  return { invoice, earlier: steps.first ?? null, deleted, dryRun: run.dryRun };
 }
 "#;
 
@@ -277,25 +289,80 @@ export async function main({ macro, trigger, steps }: StepContext) {
         MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap()
     }
 
+    fn program(steps: serde_json::Value) -> RoutineProgram {
+        let mut program = RoutineProgram::from_task(&json!({ "steps": steps })).unwrap();
+        program.assign_step_ids();
+        program
+    }
+
     #[tokio::test]
     #[ignore = "requires pinned Deno runtime"]
     async fn the_step_contract_type_checks_sdk_calls() {
         let (_root, code) = code("http://127.0.0.1:9").await;
-        assert_eq!(code.check(SOURCE).await.unwrap(), Vec::<String>::new());
-        let problems = code
-            .check(
+        // `SOURCE` reads the output of an earlier step named "First".
+        let checked = |source: &str| {
+            program(json!([
+                { "type": "code", "title": "First", "source": "export async function main() { return { count: 2 }; }" },
+                { "type": "code", "title": "Label invoices", "source": source },
+            ]))
+        };
+        assert_eq!(
+            code.check_program(&checked(SOURCE)).await.unwrap(),
+            Vec::new()
+        );
+        let failing = code
+            .check_program(&checked(
                 "export async function main({ macro }: StepContext) { return macro.ai.guess({}); }",
-            )
+            ))
             .await
             .unwrap();
+        assert_eq!(failing.len(), 1);
         assert!(
-            problems[0].contains("Property 'guess' does not exist"),
-            "{problems:?}"
+            failing[0].problems[0].contains("Property 'guess' does not exist"),
+            "{failing:?}"
         );
+        assert_eq!(failing[0].index, 1);
+        assert!(failing[0].problems[0].contains("at step_1.ts:1:"));
+        // The routine's own run context is typed; the old trigger shape isn't.
+        let old = code
+            .check_program(&checked(
+                "export async function main({ trigger }: StepContext) { return trigger.entity_id; }",
+            ))
+            .await
+            .unwrap();
+        assert!(!old.is_empty());
         assert_eq!(
-            code.sdk().unwrap().as_str(),
-            code_execution::domain::sdk_fingerprint()
+            code.sdk().unwrap(),
+            routine_program::code_version(code_execution::domain::sdk_fingerprint())
         );
+    }
+
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn each_step_reads_the_typed_outputs_of_the_steps_before_it() {
+        let (_root, code) = code("http://127.0.0.1:9").await;
+        let routine = |read: &str| {
+            program(json!([
+                { "type": "code", "title": "Count", "source": "export async function main({ run }: StepContext) { return { count: 3, since: new Date(run.at) }; }" },
+                { "type": "code", "title": "Report", "source": format!("export async function main({{ steps }}: StepContext) {{ {read} }}") },
+            ]))
+        };
+        // `since` is a Date, so the next step reads it as its JSON string.
+        assert_eq!(
+            code.check_program(&routine(
+                "const n: number = steps.count.count; const s: string = steps.count.since; return n + s.length;"
+            ))
+            .await
+            .unwrap(),
+            Vec::new()
+        );
+        let failing = code
+            .check_program(&routine("return steps.count.total;"))
+            .await
+            .unwrap();
+        assert_eq!(failing.len(), 1, "{failing:?}");
+        assert_eq!((failing[0].index, failing[0].title.as_str()), (1, "Report"));
+        assert!(failing[0].problems[0].contains("Property 'total' does not exist"));
     }
 
     #[tokio::test]
@@ -328,13 +395,17 @@ export async function main({ macro, trigger, steps }: StepContext) {
             );
         });
         let (_root, code) = code(&host).await;
-        let trigger = json!({ "entity_id": "thread-1", "email": { "subject": "Invoice #42" } });
+        let context = json!({
+            "run": { "id": "run-1", "at": "2026-11-01T09:00:00Z", "timezone": "Europe/Paris", "dryRun": false, "previous": null, "lastSucceededAt": null },
+            "routine": { "id": "routine-1", "name": "Label invoices" },
+            "trigger": { "kind": "event", "event": "email.message_received", "item": { "entity_id": "thread-1", "email": { "subject": "Invoice #42" } } },
+        });
         let outcome = code
             .run(
                 &owner(),
                 CodeRun {
                     step: &step(vec![WriteScope::Email]),
-                    trigger: Some(&trigger),
+                    context: &context,
                     steps: &json!({ "first": { "count": 2 } }),
                     dry_run: false,
                 },
@@ -343,6 +414,7 @@ export async function main({ macro, trigger, steps }: StepContext) {
         let output = outcome.result.unwrap();
         assert_eq!(output["invoice"], true);
         assert_eq!(output["earlier"], json!({ "count": 2 }));
+        assert_eq!(output["dryRun"], false);
         assert!(
             output["deleted"]
                 .as_str()
@@ -382,13 +454,17 @@ export async function main({ macro, trigger, steps }: StepContext) {
             );
         });
         let (_root, code) = code(&host).await;
-        let trigger = json!({ "entity_id": "thread-1", "email": { "subject": "Invoice #42" } });
+        let context = json!({
+            "run": { "id": "run-1", "at": "2026-11-01T09:00:00Z", "timezone": "Europe/Paris", "dryRun": false, "previous": null, "lastSucceededAt": null },
+            "routine": { "id": "routine-1", "name": "Label invoices" },
+            "trigger": { "kind": "event", "event": "email.message_received", "item": { "entity_id": "thread-1", "email": { "subject": "Invoice #42" } } },
+        });
         let outcome = code
             .run(
                 &owner(),
                 CodeRun {
                     step: &step(vec![WriteScope::Email]),
-                    trigger: Some(&trigger),
+                    context: &context,
                     steps: &json!({}),
                     dry_run: true,
                 },

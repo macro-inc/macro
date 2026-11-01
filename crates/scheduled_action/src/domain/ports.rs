@@ -2,7 +2,7 @@ use super::event_runs::{AuthorizedEventRun, ClaimToken, ConfigurationRevision};
 use super::event_trigger::{EventName, EventReference};
 use super::execution::ExecutionHandle;
 use super::models::{
-    ActionExecutionRecord, CreateScheduledAction, DispatchEvent, InProgressExecution,
+    ActionExecutionRecord, CreateScheduledAction, DispatchEvent, InProgressExecution, RunHistory,
     ScheduledAction, ScheduledActionUpdate, UpdateScheduledAction,
 };
 use super::templates::{RoutineTemplate, ShareRoutineTemplate, TemplateSnapshot};
@@ -100,6 +100,12 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
         &self,
         action_id: &Uuid,
     ) -> impl Future<Output = Result<Vec<ActionExecutionRecord>>> + Send;
+
+    /// When the routine last finished a run and last succeeded, for its code.
+    fn run_history(&self, action_id: &Uuid) -> impl Future<Output = Result<RunHistory>> + Send {
+        let _ = action_id;
+        async { Ok(RunHistory::default()) }
+    }
 
     /// The latest execution record of each of `action_ids` that has run.
     fn get_latest_execution_records(
@@ -219,10 +225,11 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         task: &str,
     ) -> impl Future<Output = Result<super::code_check::CodeGuide>> + Send;
 
-    /// Type-check code the way saving a routine does, without saving it.
+    /// Type-check a routine's code steps the way saving it does, without
+    /// saving it.
     fn check_code(
         &self,
-        source: &str,
+        steps: &serde_json::Value,
     ) -> impl Future<Output = Result<super::code_check::CodeCheck>> + Send;
 
     /// How the routine's code steps were brought to new SDKs, newest first.
@@ -426,16 +433,25 @@ pub enum RoutineToolOutcome {
 /// holds the SDK executor. Never replay a run after an ambiguous failure:
 /// its writes may have happened.
 pub trait RoutineCode: Send + Sync + 'static {
-    /// The SDK code is type-checked against now; `None` when code can't run here.
+    /// The version code is type-checked against now: the SDK and the step
+    /// contract ([`routine_program::code_version`]). `None` when code can't
+    /// run here.
     fn sdk(&self) -> Option<routine_program::SdkFingerprint>;
 
-    /// Type-check `source` against [`Self::sdk`] and the step contract. The
-    /// problems found, each written as the type checker reported it; empty
-    /// when the code checks.
-    fn check(
+    /// Type-check a program's code steps together against [`Self::sdk`] and
+    /// the step contract, each step seeing the outputs of the steps before
+    /// it. The steps with problems, each written as the type checker
+    /// reported it; empty when every step checks.
+    fn check_program(
         &self,
-        source: &str,
-    ) -> impl Future<Output = Result<Vec<String>, CodeUnavailable>> + Send;
+        program: &routine_program::RoutineProgram,
+    ) -> impl Future<Output = Result<Vec<StepProblems>, CodeUnavailable>> + Send;
+
+    /// The IANA time zone of `owner`'s primary calendar, when they have one.
+    fn owner_time_zone(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Option<String>> + Send;
 
     /// Run one code step as `owner`. A dry run sends no writes.
     fn run(
@@ -456,16 +472,29 @@ pub trait RoutineCode: Send + Sync + 'static {
     /// the code.
     fn declarations(&self, problems: &[String]) -> String;
 
-    /// Rewrite `step`'s source so the problems [`Self::check`] found go
-    /// away, keeping what it does, billed to `owner`. The model sees the
-    /// code and the problems, never the routine's data. Why it couldn't, for
-    /// the owner.
+    /// Rewrite `step`'s source so the problems [`Self::check_program`]
+    /// found go away, keeping what it does, billed to `owner`. `steps` is
+    /// the TypeScript type of the outputs it reads. The model sees the code
+    /// and the problems, never the routine's data. Why it couldn't, for the
+    /// owner.
     fn rewrite(
         &self,
         owner: &MacroUserIdStr<'static>,
         step: &routine_program::CodeStep,
+        steps: &str,
         problems: &[String],
     ) -> impl Future<Output = Result<String, String>> + Send;
+}
+
+/// A code step that doesn't type-check.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct StepProblems {
+    /// Which code step, counted in program order from zero.
+    pub index: usize,
+    /// Its title.
+    pub title: String,
+    /// The problems, as the type checker reported them.
+    pub problems: Vec<String>,
 }
 
 /// Code can't be checked or run right now; the reason is for the owner.
@@ -478,8 +507,8 @@ pub struct CodeUnavailable(pub String);
 pub struct CodeRun<'a> {
     /// The step.
     pub step: &'a routine_program::CodeStep,
-    /// The triggering item, as decisions and templates see it.
-    pub trigger: Option<&'a serde_json::Value>,
+    /// `run`, `routine` and `trigger`, as `main` receives them.
+    pub context: &'a serde_json::Value,
     /// Outputs of earlier steps with ids.
     pub steps: &'a serde_json::Value,
     /// Answer every write with an empty result instead of sending it.
@@ -507,8 +536,15 @@ impl RoutineCode for NoRoutineCode {
         None
     }
 
-    async fn check(&self, _: &str) -> Result<Vec<String>, CodeUnavailable> {
+    async fn check_program(
+        &self,
+        _: &routine_program::RoutineProgram,
+    ) -> Result<Vec<StepProblems>, CodeUnavailable> {
         Err(CodeUnavailable(NO_CODE.to_owned()))
+    }
+
+    async fn owner_time_zone(&self, _: &MacroUserIdStr<'static>) -> Option<String> {
+        None
     }
 
     async fn run(&self, _: &MacroUserIdStr<'static>, _: CodeRun<'_>) -> CodeOutcome {
@@ -535,6 +571,7 @@ impl RoutineCode for NoRoutineCode {
         &self,
         _: &MacroUserIdStr<'static>,
         _: &routine_program::CodeStep,
+        _: &str,
         _: &[String],
     ) -> Result<String, String> {
         Err(NO_CODE.to_owned())
@@ -547,10 +584,20 @@ impl<Code: RoutineCode> RoutineCode for Option<Code> {
         self.as_ref().and_then(RoutineCode::sdk)
     }
 
-    async fn check(&self, source: &str) -> Result<Vec<String>, CodeUnavailable> {
+    async fn check_program(
+        &self,
+        program: &routine_program::RoutineProgram,
+    ) -> Result<Vec<StepProblems>, CodeUnavailable> {
         match self {
-            Some(code) => code.check(source).await,
-            None => NoRoutineCode.check(source).await,
+            Some(code) => code.check_program(program).await,
+            None => NoRoutineCode.check_program(program).await,
+        }
+    }
+
+    async fn owner_time_zone(&self, owner: &MacroUserIdStr<'static>) -> Option<String> {
+        match self {
+            Some(code) => code.owner_time_zone(owner).await,
+            None => None,
         }
     }
 
@@ -582,11 +629,12 @@ impl<Code: RoutineCode> RoutineCode for Option<Code> {
         &self,
         owner: &MacroUserIdStr<'static>,
         step: &routine_program::CodeStep,
+        steps: &str,
         problems: &[String],
     ) -> Result<String, String> {
         match self {
-            Some(code) => code.rewrite(owner, step, problems).await,
-            None => NoRoutineCode.rewrite(owner, step, problems).await,
+            Some(code) => code.rewrite(owner, step, steps, problems).await,
+            None => NoRoutineCode.rewrite(owner, step, steps, problems).await,
         }
     }
 }

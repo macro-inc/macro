@@ -296,6 +296,57 @@ pub enum ActionPolicyError {
     ProgramNeedsEvent,
 }
 
+/// A routine's finished runs, as code reads them: its last run and its last
+/// successful one. Runs a trigger's condition skipped don't count.
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+pub struct RunHistory {
+    /// When the last finished run started, and whether it succeeded.
+    pub previous: Option<(DateTime<Utc>, bool)>,
+    /// When the last successful run started.
+    pub last_succeeded_at: Option<DateTime<Utc>>,
+}
+
+/// What started a run, for its page.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+#[serde(tag = "kind", rename_all = "snake_case")]
+pub enum RunStart {
+    /// One of its schedules came due.
+    Schedule {
+        /// The cron expression.
+        schedule: String,
+        /// Its IANA time zone.
+        timezone: String,
+    },
+    /// An event it watches happened.
+    Event {
+        /// The event's name, e.g. `email.message_received`.
+        event: String,
+        /// The item the event is about.
+        entity_id: Option<String>,
+    },
+    /// Its owner started it by hand.
+    Manual {
+        /// Who started it.
+        by: String,
+    },
+}
+
+/// What the run page says about a run: what started it, when it counts as
+/// happening, and since when.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize, ToSchema)]
+pub struct RunInfo {
+    /// When the run counts as happening: its trigger's time.
+    pub at: DateTime<Utc>,
+    /// The IANA time zone code read `at` in, when the run had one.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub timezone: Option<String>,
+    /// What started it.
+    pub started_by: RunStart,
+    /// When the routine's previous finished run started.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub previous_at: Option<DateTime<Utc>>,
+}
+
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 pub struct ScheduledAction {
     #[schema(value_type = Option<String>, format = Uuid)]
@@ -398,6 +449,9 @@ pub struct ExecutionResult {
     #[serde(default, skip_serializing_if = "Option::is_none")]
     #[schema(value_type = Option<i64>)]
     pub configuration_revision: Option<ConfigurationRevision>,
+    /// What started the run and when, for runs of programs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub run: Option<RunInfo>,
 }
 
 impl ExecutionResult {
@@ -409,12 +463,19 @@ impl ExecutionResult {
             condition: None,
             steps: Vec::new(),
             configuration_revision: None,
+            run: None,
         }
     }
 
     pub fn with_steps(mut self, steps: Vec<StepRecord>, revision: ConfigurationRevision) -> Self {
         self.steps = steps;
         self.configuration_revision = Some(revision);
+        self
+    }
+
+    /// What started the run and when.
+    pub fn with_run(mut self, run: Option<RunInfo>) -> Self {
+        self.run = run;
         self
     }
 

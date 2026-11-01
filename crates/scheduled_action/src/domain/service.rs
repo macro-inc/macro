@@ -634,8 +634,8 @@ where
         super::code_check::guide(self.code.as_ref(), &user, task).await
     }
 
-    async fn check_code(&self, source: &str) -> Result<CodeCheck> {
-        super::code_check::check(self.code.as_ref(), source).await
+    async fn check_code(&self, steps: &serde_json::Value) -> Result<CodeCheck> {
+        super::code_check::check(self.code.as_ref(), steps).await
     }
 
     async fn get_code_upgrades(

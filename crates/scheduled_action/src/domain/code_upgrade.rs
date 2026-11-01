@@ -5,8 +5,6 @@
 //! checked, dry-run on this run's trigger, and saved; if any of that fails,
 //! the routine is paused for its owner with the reason and the rewrite.
 
-use std::collections::HashSet;
-
 use anyhow::{Result, anyhow, bail};
 use chrono::{DateTime, Utc};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -17,7 +15,7 @@ use serde_json::{Value, json};
 use utoipa::ToSchema;
 
 use super::models::ScheduledAction;
-use super::ports::{CodeRun, CodeUpgrades, RoutineCode, ScheduledActionRepo};
+use super::ports::{CodeRun, CodeUpgrades, RoutineCode, ScheduledActionRepo, StepProblems};
 
 #[cfg(test)]
 mod test;
@@ -67,8 +65,10 @@ pub enum UpgradeOutcome {
 #[error("{0}")]
 pub struct NeedsUpdate(pub String);
 
-/// `program`, with its code working against the current SDK: as it was, or
-/// rewritten and saved. Fails with [`NeedsUpdate`] when it can't be.
+/// `program`, with its code working against the current SDK and step
+/// contract: as it was, or rewritten and saved. Fails with [`NeedsUpdate`]
+/// when it can't be. `context` is what the run's code receives (`run`,
+/// `routine`, `trigger`); a rewrite is dry-run with it.
 #[tracing::instrument(name = "routine.code_upgrade", skip_all, fields(
     action_id = %action.id.map(|id| id.to_string()).unwrap_or_default(),
     outcome = tracing::field::Empty,
@@ -79,52 +79,42 @@ pub async fn current_code(
     owner: &MacroUserIdStr<'static>,
     action: &ScheduledAction,
     mut program: RoutineProgram,
-    trigger: Option<&Value>,
+    context: &Value,
 ) -> Result<RoutineProgram> {
-    let Some(sdk) = code.sdk() else {
+    let Some(version) = code.sdk() else {
         // Code steps fail on their own with the executor's reason.
         return Ok(program);
     };
-    if program.code_steps().is_empty() || program.sdk.as_ref() == Some(&sdk) {
+    if program.code_steps().is_empty() || program.sdk.as_ref() == Some(&version) {
         return Ok(program);
     }
     let span = tracing::Span::current();
-    let mut failing: Vec<(String, Vec<String>)> = Vec::new();
-    let mut seen = HashSet::new();
-    for step in program.code_steps() {
-        if !seen.insert(step.source.clone()) {
-            continue;
-        }
-        let problems = code
-            .check(&step.source)
-            .await
-            .map_err(|unavailable| anyhow!(unavailable.0))?;
-        if !problems.is_empty() {
-            failing.push((step.source.clone(), problems));
-        }
-    }
+    let failing = code
+        .check_program(&program)
+        .await
+        .map_err(|unavailable| anyhow!(unavailable.0))?;
     if failing.is_empty() {
-        upgrades.record_checked(action, &sdk).await?;
+        upgrades.record_checked(action, &version).await?;
         span.record("outcome", "checked");
-        program.sdk = Some(sdk);
+        program.sdk = Some(version);
         return Ok(program);
     }
-    if !upgrades.claim_rewrite(action, &sdk).await? {
+    if !upgrades.claim_rewrite(action, &version).await? {
         span.record("outcome", "waiting");
         bail!(NeedsUpdate(
             "This routine's code doesn't work with Macro's current SDK. It is being updated, or is waiting for review on the routine's page.".to_owned()
         ));
     }
-    match rewrite(code, owner, action, program, &failing, trigger, &sdk).await {
+    match rewrite(code, owner, action, program, &failing, context, &version).await {
         Ok((program, task)) => {
-            upgrades.save_rewrite(action, &sdk, &task).await?;
+            upgrades.save_rewrite(action, &version, &task).await?;
             span.record("outcome", "rewritten");
             Ok(program)
         }
         Err((reason, proposal)) => {
             let reason = bounded(reason);
             upgrades
-                .needs_update(action, &sdk, &reason, proposal.as_ref())
+                .needs_update(action, &version, &reason, proposal.as_ref())
                 .await?;
             span.record("outcome", "needs_update");
             bail!(NeedsUpdate(reason))
@@ -139,45 +129,66 @@ async fn rewrite(
     owner: &MacroUserIdStr<'static>,
     action: &ScheduledAction,
     mut program: RoutineProgram,
-    failing: &[(String, Vec<String>)],
-    trigger: Option<&Value>,
-    sdk: &SdkFingerprint,
+    failing: &[StepProblems],
+    context: &Value,
+    version: &SdkFingerprint,
 ) -> std::result::Result<(RoutineProgram, Value), (String, Option<Value>)> {
+    // Each step's own view of the outputs before it, for the model.
+    let outputs: Vec<String> = program
+        .check_files()
+        .into_iter()
+        .map(|file| file.source.lines().last().unwrap_or_default().to_owned())
+        .collect();
     // Which code steps, in program order, were rewritten.
     let mut rewritten = Vec::new();
-    for step in program.code_steps_mut() {
-        let Some((_, problems)) = failing.iter().find(|(source, _)| *source == step.source) else {
+    for (index, step) in program.code_steps_mut().into_iter().enumerate() {
+        let Some(failure) = failing.iter().find(|failure| failure.index == index) else {
             rewritten.push(false);
             continue;
         };
-        let source = code.rewrite(owner, step, problems).await.map_err(|reason| {
-            (
-                format!(
-                    "\"{}\" doesn't work with Macro's current SDK, and it couldn't be updated: {reason}",
-                    step.title.trim()
-                ),
-                None,
-            )
-        })?;
+        let steps = outputs.get(index).map(String::as_str).unwrap_or_default();
+        let source = code
+            .rewrite(owner, step, steps, &failure.problems)
+            .await
+            .map_err(|reason| {
+                (
+                    format!(
+                        "\"{}\" doesn't work with Macro's current SDK, and it couldn't be updated: {reason}",
+                        step.title.trim()
+                    ),
+                    None,
+                )
+            })?;
         step.source = source;
         rewritten.push(true);
     }
-    program.sdk = Some(sdk.clone());
+    program.assign_step_ids();
+    program.sdk = Some(version.clone());
     let task = task_with(&action.task, &program).map_err(|error| (error.to_string(), None))?;
     let failed = |reason: String| (reason, Some(task.clone()));
+    // Checked together: a rewrite that changes what one step returns must
+    // still suit the steps that read it.
+    let still = code
+        .check_program(&program)
+        .await
+        .map_err(|unavailable| failed(unavailable.0))?;
+    if let Some(step) = still.first() {
+        return Err(failed(format!(
+            "\"{}\" was updated for Macro's current SDK, but the update doesn't type-check:\n{}",
+            step.title,
+            step.problems
+                .first()
+                .map(String::as_str)
+                .unwrap_or_default()
+        )));
+    }
+    let mut dry = context.clone();
+    if let Some(run) = dry.get_mut("run").and_then(Value::as_object_mut) {
+        run.insert("dryRun".into(), Value::Bool(true));
+    }
     for (step, rewritten) in program.code_steps().into_iter().zip(rewritten) {
         if !rewritten {
             continue;
-        }
-        let problems = code
-            .check(&step.source)
-            .await
-            .map_err(|unavailable| failed(unavailable.0))?;
-        if let Some(problem) = problems.first() {
-            return Err(failed(format!(
-                "\"{}\" was updated for Macro's current SDK, but the update doesn't type-check:\n{problem}",
-                step.title.trim()
-            )));
         }
         // Earlier steps' outputs aren't known before the run; the dry run
         // shows the step works on this trigger and changes nothing.
@@ -186,7 +197,7 @@ async fn rewrite(
                 owner,
                 CodeRun {
                     step,
-                    trigger,
+                    context: &dry,
                     steps: &json!({}),
                     dry_run: true,
                 },
@@ -260,6 +271,23 @@ impl CodeUpgrades for NoCodeUpgrades {
     }
 }
 
+/// What a sweep's dry run of a rewrite tells the code: no trigger, now, as
+/// if its owner ran it by hand.
+fn sweep_context(action: &ScheduledAction, owner: &MacroUserIdStr<'static>) -> Value {
+    json!({
+        "run": {
+            "id": macro_uuid::generate_uuid_v7(),
+            "at": Utc::now(),
+            "timezone": "UTC",
+            "dryRun": true,
+            "previous": null,
+            "lastSucceededAt": null,
+        },
+        "routine": { "id": action.id, "name": action.name },
+        "trigger": { "kind": "manual", "by": owner.as_ref() },
+    })
+}
+
 /// Routines one sweep page reads.
 const SWEEP_PAGE: u16 = 50;
 
@@ -306,7 +334,8 @@ pub async fn sweep(
                 continue;
             };
             let owner = action.owner_user()?.clone();
-            match current_code(code, upgrades, &owner, &action, program, None).await {
+            let context = sweep_context(&action, &owner);
+            match current_code(code, upgrades, &owner, &action, program, &context).await {
                 Ok(_) => done.upgraded += 1,
                 Err(error) if error.downcast_ref::<NeedsUpdate>().is_some() => done.waiting += 1,
                 Err(error) => return Err(error),
