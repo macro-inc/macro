@@ -28,10 +28,12 @@ impl ContactsRepository for DbContactsRepository {
         &self,
         user_id: MacroUserIdStr<'_>,
     ) -> Result<Vec<MacroUserIdStr<'static>>, Report> {
+        // Each pair is stored once with user1 < user2, so the branches are
+        // disjoint and neither repeats a contact.
         let rows = sqlx::query!(
             "
             SELECT user1 AS contact FROM contacts_connections WHERE user2 = $1
-            UNION
+            UNION ALL
             SELECT user2 AS contact FROM contacts_connections WHERE user1 = $1
             ",
             user_id.as_ref()
