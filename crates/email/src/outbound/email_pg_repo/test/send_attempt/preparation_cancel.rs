@@ -105,10 +105,7 @@ async fn schedule_cancellation_fences_managed_preparation_during_backoff(
                 link(),
                 message(),
                 &actor(),
-                ScheduleChange::Set {
-                    send_time: Utc::now() + chrono::Duration::hours(1),
-                    source: None
-                },
+                ScheduleChange::Set(Utc::now() + chrono::Duration::hours(1)),
                 None,
                 0
             )

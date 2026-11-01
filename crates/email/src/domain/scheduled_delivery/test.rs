@@ -20,8 +20,6 @@ enum PrepareResult {
     Ready,
     Retry,
     Failed,
-    ParentPending,
-    ParentUnsent,
 }
 
 #[derive(Default, Clone, Copy)]
@@ -113,8 +111,6 @@ impl ScheduledMessageSender<(), ()> for Fake {
             PrepareResult::Failed => Err(PreparationError::Failed(anyhow::anyhow!(
                 "attachment missing"
             ))),
-            PrepareResult::ParentPending => Err(ReplyOrderError::ParentPending.into()),
-            PrepareResult::ParentUnsent => Err(ReplyOrderError::ParentUnsent.into()),
         }
     }
     async fn send_prepared(&self, _: &(), _: ()) -> Result<(), SubmissionError> {
@@ -185,39 +181,6 @@ async fn transient_preparation_failure_releases_without_crossing_provider_bounda
         *fake.calls.lock().unwrap(),
         [Call::Deletion, Call::Claim, Call::Prepare, Call::Release]
     );
-}
-
-#[tokio::test]
-async fn reply_waits_without_failing_while_its_parent_is_scheduled() -> anyhow::Result<()> {
-    let fake = Fake {
-        prepare_result: PrepareResult::ParentPending,
-        ..Default::default()
-    };
-    deliver_scheduled(&fake, &fake, Uuid::nil(), Uuid::nil()).await?;
-    assert_eq!(
-        *fake.calls.lock().unwrap(),
-        [Call::Deletion, Call::Claim, Call::Prepare, Call::Release]
-    );
-    Ok(())
-}
-
-#[tokio::test]
-async fn reply_fails_when_its_parent_will_not_be_sent() -> anyhow::Result<()> {
-    let fake = Fake {
-        prepare_result: PrepareResult::ParentUnsent,
-        ..Default::default()
-    };
-    deliver_scheduled(&fake, &fake, Uuid::nil(), Uuid::nil()).await?;
-    assert_eq!(
-        *fake.calls.lock().unwrap(),
-        [
-            Call::Deletion,
-            Call::Claim,
-            Call::Prepare,
-            Call::Pause(DeliveryPause::Failed)
-        ]
-    );
-    Ok(())
 }
 
 #[tokio::test]

@@ -67,23 +67,15 @@ async fn change_schedule(
                 || (row.delivery_status != "failed"
                     && ((row.processing
                         && (row.delivery_claim_id.is_none()
-                            || matches!(change, ScheduleChange::Set { .. })))
+                            || matches!(change, ScheduleChange::Set(_))))
                         || row.delivery_started_at.is_some()
                         || row.delivery_status == "unconfirmed"))
         })
     {
         return Err(EmailErr::MessageDeliveryConflict(message_id));
     }
-    // A pending sequence step is not part of its thread's mail state.
-    let pending_step_before = schedule
-        .as_ref()
-        .is_some_and(|row| row.source.is_some() && row.delivery_status != "failed");
-    let pending_step_after = match change {
-        ScheduleChange::Set { source, .. } => source.is_some() || pending_step_before,
-        ScheduleChange::Cancel => false,
-    };
     match change {
-        ScheduleChange::Set { send_time, source } => {
+        ScheduleChange::Set(send_time) => {
             super::draft::require_completed_uploads(&mut tx, message_id).await?;
             if !message.is_draft {
                 return Err(EmailErr::MessageDeliveryConflict(message_id));
@@ -103,18 +95,14 @@ async fn change_schedule(
                     html, text, message_id, link_id,
                 ).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
             }
-            // An omitted source keeps the one the schedule already has, so a
-            // time change from the composer cannot expose a sequence step.
-            let source: Option<&'static str> = source.map(Into::into);
             let updated = sqlx::query!(
                 r#"INSERT INTO email_scheduled_messages
-                    (link_id, message_id, send_time, sent, processing, actor_id, source, created_at, updated_at)
-                   VALUES ($1, $2, $3, false, false, $4, $5, NOW(), NOW())
+                    (link_id, message_id, send_time, sent, processing, actor_id, created_at, updated_at)
+                   VALUES ($1, $2, $3, false, false, $4, NOW(), NOW())
                    ON CONFLICT (link_id, message_id) DO UPDATE SET
-                    send_time = EXCLUDED.send_time, actor_id = EXCLUDED.actor_id,
-                    source = COALESCE(EXCLUDED.source, email_scheduled_messages.source), updated_at = NOW()
+                    send_time = EXCLUDED.send_time, actor_id = EXCLUDED.actor_id, updated_at = NOW()
                    WHERE NOT email_scheduled_messages.sent AND NOT email_scheduled_messages.processing"#,
-                link_id, message_id, send_time, actor.as_ref(), source,
+                link_id, message_id, send_time, actor.as_ref(),
             ).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
             if updated.rows_affected() != 1 {
                 return Err(EmailErr::MessageDeliveryConflict(message_id));
@@ -151,14 +139,18 @@ async fn change_schedule(
             ).execute(&mut *tx).await.map_err(anyhow::Error::from)?;
         }
     }
-    if outlook.is_some() && matches!(change, ScheduleChange::Set { .. }) {
-        super::draft::snapshot_outlook_draft(&mut tx, message_id, link_id, actor.as_ref())
+    // Cancelling a pending sequence step puts its draft back in its thread's mail state.
+    if matches!(change, ScheduleChange::Cancel)
+        && schedule
+            .as_ref()
+            .is_some_and(|row| row.source.is_some() && row.delivery_status != "failed")
+    {
+        super::thread::update_thread_metadata(&mut tx, message.thread_id, link_id)
             .await
             .map_err(anyhow::Error::from)?;
     }
-    // Becoming or leaving a pending step changes the thread's mail lists.
-    if pending_step_before != pending_step_after {
-        super::thread::update_thread_metadata(&mut tx, message.thread_id, link_id)
+    if outlook.is_some() && matches!(change, ScheduleChange::Set(_)) {
+        super::draft::snapshot_outlook_draft(&mut tx, message_id, link_id, actor.as_ref())
             .await
             .map_err(anyhow::Error::from)?;
     }

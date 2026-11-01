@@ -64,10 +64,6 @@ pub enum EmailErr {
     /// Explicit scheduled delivery requires a time in the future.
     #[error("Scheduled send time must be in the future")]
     InvalidScheduleTime,
-    /// Only Gmail delivery keeps sequence steps in order, so only Gmail
-    /// inboxes accept them.
-    #[error("Sequence sends are only supported for Gmail inboxes")]
-    ScheduleSourceUnsupported,
     /// Cannot reply to a draft message.
     #[error("Cannot reply to a draft")]
     CannotReplyToDraft,

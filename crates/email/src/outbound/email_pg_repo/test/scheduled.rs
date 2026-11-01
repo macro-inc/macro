@@ -16,10 +16,7 @@ fn actor() -> MacroUserIdStr<'static> {
 }
 
 fn future() -> ScheduleChange {
-    ScheduleChange::Set {
-        send_time: Utc::now() + chrono::Duration::hours(1),
-        source: None,
-    }
+    ScheduleChange::Set(Utc::now() + chrono::Duration::hours(1))
 }
 
 async fn wait_for_transaction_waiter(pool: &Pool<Postgres>, blocker: i32) -> anyhow::Result<()> {
@@ -53,18 +50,8 @@ async fn schedule_update_cancel_is_atomic_and_idempotent(
             .is_some()
     );
     let later = Utc::now() + chrono::Duration::hours(2);
-    repo.change_schedule(
-        link,
-        message,
-        &actor(),
-        ScheduleChange::Set {
-            send_time: later,
-            source: None,
-        },
-        None,
-        0,
-    )
-    .await?;
+    repo.change_schedule(link, message, &actor(), ScheduleChange::Set(later), None, 0)
+        .await?;
     let schedule = sqlx::query!(
         "SELECT send_time, sent, processing FROM email_scheduled_messages WHERE message_id = $1",
         message
@@ -190,10 +177,7 @@ async fn service_authorizes_actor_and_validates_future_time(
                 actor(),
                 link,
                 message,
-                ScheduleChange::Set {
-                    send_time: Utc::now(),
-                    source: None
-                },
+                ScheduleChange::Set(Utc::now()),
                 None,
                 0
             )
@@ -252,7 +236,6 @@ async fn scheduled_source_rejects_delete_and_migration_into_existing_reply(
         db_id: Some(message),
         provider_id: None,
         replying_to_id: Some(Uuid::parse_str("ee000001-0000-0000-0000-000000000001")?),
-        reuse_reply_draft: true,
         provider_thread_id: None,
         thread_db_id: None,
         subject: "must not overwrite the target reply".to_string(),

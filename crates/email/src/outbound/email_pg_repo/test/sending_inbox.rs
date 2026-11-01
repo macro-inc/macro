@@ -61,7 +61,6 @@ fn reply_input(replying_to_id: Uuid) -> CreateDraftInput {
         db_id: None,
         provider_id: None,
         replying_to_id: Some(replying_to_id),
-        reuse_reply_draft: true,
         provider_thread_id: None,
         thread_db_id: None,
         subject: "Re: Hello alt".to_owned(),

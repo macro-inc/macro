@@ -358,9 +358,8 @@ pub(crate) async fn get_simple_message(
 }
 
 /// Find an existing draft that replies to the given message, identified by
-/// the "Macro-In-Reply-To" header value. A draft parent (a scheduled sequence
-/// step) never has its reply continued, so each step stays its own draft, and
-/// an unsent sequence step is never taken for the user's own reply draft.
+/// the "Macro-In-Reply-To" header value. An unsent sequence step is never
+/// taken for the user's own reply draft.
 #[tracing::instrument(skip(pool), err)]
 pub(crate) async fn get_draft_replying_to(
     pool: &PgPool,
@@ -386,7 +385,6 @@ pub(crate) async fn get_draft_replying_to(
           AND NOT COALESCE((m.mailbox_state->>'provider_missing')::boolean,false)
           AND NOT EXISTS(SELECT 1 FROM email_mailbox_drafts d WHERE d.message_id=m.id AND d.delete_requested)
           AND NOT EXISTS(SELECT 1 FROM email_draft_transfers t WHERE t.source_id=m.id AND t.state<>'preparing')
-          AND NOT EXISTS(SELECT 1 FROM email_messages parent WHERE parent.id=$2::uuid AND parent.is_draft)
           AND NOT EXISTS(SELECT 1 FROM email_scheduled_messages s WHERE s.message_id=m.id AND s.source IS NOT NULL AND NOT s.sent)
           AND (m.replying_to_id=$2::uuid OR jsonb_path_exists(
               m.headers_jsonb,

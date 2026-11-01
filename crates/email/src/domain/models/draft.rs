@@ -28,11 +28,6 @@ pub struct CreateDraftInput {
     pub provider_id: Option<String>,
     /// ID of the message this draft is replying to.
     pub replying_to_id: Option<Uuid>,
-    /// Without a `db_id`, continue the inbox's existing unsent draft replying
-    /// to `replying_to_id` instead of creating another. `false` always creates
-    /// a new draft, so a sequence step never overwrites the user's own reply.
-    #[serde(default = "continue_existing_reply_draft")]
-    pub reuse_reply_draft: bool,
     /// Provider thread ID.
     pub provider_thread_id: Option<String>,
     /// Thread DB ID (set if this draft belongs to an existing thread).
@@ -73,10 +68,6 @@ pub struct CreateDraftInput {
     /// Client thread handle to bind to the final thread row; same contract
     /// as `draft_client_binding`.
     pub thread_client_binding: Option<Uuid>,
-}
-
-fn continue_existing_reply_draft() -> bool {
-    true
 }
 
 /// A draft input with all IDs resolved, ready for database insertion.

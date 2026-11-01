@@ -58,12 +58,6 @@ pub struct ApiDraftInput {
     pub provider_id: Option<String>,
     /// ID of the message this draft is replying to.
     pub replying_to_id: Option<Uuid>,
-    /// Without `db_id`, continue an existing unsent draft replying to
-    /// `replying_to_id` in this inbox. `false` always creates a new draft, as
-    /// a sequence step does, leaving the user's own reply draft untouched.
-    #[serde(default = "continue_existing_reply_draft")]
-    #[schema(default = true)]
-    pub reuse_reply_draft: bool,
     /// Provider thread ID.
     pub provider_thread_id: Option<String>,
     /// Thread DB ID.
@@ -89,10 +83,6 @@ pub struct ApiDraftInput {
     /// default policy. Ignored for drafts.
     #[serde(default)]
     pub include_signature: Option<bool>,
-}
-
-fn continue_existing_reply_draft() -> bool {
-    true
 }
 
 /// Request body for creating a draft.
@@ -160,7 +150,6 @@ impl CreateDraftRequest {
             db_id: draft.db_id,
             provider_id: draft.provider_id,
             replying_to_id: draft.replying_to_id,
-            reuse_reply_draft: draft.reuse_reply_draft,
             provider_thread_id: draft.provider_thread_id,
             thread_db_id: draft.thread_db_id,
             subject: draft.subject,

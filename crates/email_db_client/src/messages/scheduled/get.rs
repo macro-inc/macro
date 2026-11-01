@@ -93,26 +93,20 @@ pub async fn get_scheduled_message_no_auth(
     Ok(record)
 }
 
-/// Fetches unsent scheduled messages for a link with pagination.
-///
-/// Without a `source`, these are the user's own scheduled sends: pending steps
-/// that a source (a sequence) created are left out, and failed ones are listed
-/// so the user can fix them. With a `source`, only that source's unsent
-/// schedules are listed, in every delivery state.
+/// Fetches the user's unsent scheduled messages for a link with pagination.
+/// Pending sequence steps are left out; failed ones are listed.
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_scheduled_messages_by_link_id(
     pool: &PgPool,
     link_id: Uuid,
     offset: u32,
     limit: u32,
-    source: Option<&str>,
 ) -> anyhow::Result<Vec<service::message::Message>> {
     if limit == 0 {
         anyhow::bail!("limit must be positive");
     }
 
-    let db_messages =
-        get_scheduled_db_messages_by_link_id(pool, link_id, offset, limit, source).await?;
+    let db_messages = get_scheduled_db_messages_by_link_id(pool, link_id, offset, limit).await?;
     convert_db_messages_to_service_concurrent(pool, db_messages).await
 }
 
@@ -147,15 +141,13 @@ pub async fn fetch_scheduled_messages_in_bulk(
     Ok(scheduled_map)
 }
 
-/// Fetches unsent scheduled db messages for a link with pagination; see
-/// [`get_scheduled_messages_by_link_id`] for `source`.
+/// Fetches unsent scheduled db messages for a link with pagination
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_scheduled_db_messages_by_link_id(
     pool: &PgPool,
     link_id: Uuid,
     offset: u32,
     limit: u32,
-    source: Option<&str>,
 ) -> anyhow::Result<Vec<db::message::Message>> {
     let db_messages = sqlx::query_as!(
         db::message::Message,
@@ -193,15 +185,14 @@ pub async fn get_scheduled_db_messages_by_link_id(
           AND m.is_draft = true
           AND m.is_sent = false
           AND sm.sent = false
-          AND (sm.source = $4::text
-               OR ($4::text IS NULL AND (sm.source IS NULL OR sm.delivery_status = 'failed')))
+          -- A pending sequence step is not the user's scheduled send; a failed one is listed so the user can fix it.
+          AND (sm.source IS NULL OR sm.delivery_status = 'failed')
         ORDER BY m.created_at DESC
         LIMIT $2 OFFSET $3
         "#,
         link_id,
         limit as i64,
-        offset as i64,
-        source,
+        offset as i64
     )
     .fetch_all(pool)
     .await?;
