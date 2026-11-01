@@ -143,7 +143,18 @@ try {
     if (typeof main !== "function") throw new Error("Export an async main({macro, session, execution}) function.");
     value = await main({...context, macro, session, execution});
   }
-  emit(resultFrame(value ?? null, maxResultBytes));
+  if (unattended) {
+    // A step's output feeds later steps whole; one too large fails instead
+    // of being summarized.
+    const bytes = encoder.encode(stringify(value ?? null) ?? "null").length;
+    if (bytes > maxResultBytes) {
+      emit({type: "error", message: `The step's output is ${Math.ceil(bytes / 1024)} KB as JSON; a step's output can be at most ${Math.floor(maxResultBytes / 1024)} KB. Return only what later steps need.`});
+      exit(0);
+    }
+    emit({type: "result", value: value ?? null});
+  } else {
+    emit(resultFrame(value ?? null, maxResultBytes));
+  }
   exit(0);
 } catch (error) {
   emit({type: "error", message: String(error)});

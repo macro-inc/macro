@@ -46,6 +46,8 @@ A host can run a program with nobody watching (a routine step) by setting
 - the source is TypeScript (`main.ts`); Deno strips its types on load;
 - `main` receives `macro` plus the host's `arguments`, never `token`, `hosts`
   or trace context;
+- its result is kept whole; one larger than `Limits::max_result_bytes` as JSON
+  fails with a message naming its size, instead of being summarized;
 - every SDK write passes the `WritePolicy`. `DryRun` answers each write with an
   empty result and reports it as `skipped`; `Services` lets writes to the named
   services through and refuses the rest (`refused`). Writes are the catalog's
@@ -63,7 +65,9 @@ carries the owner's permissions.
 `DenoChecker` (`src/outbound/deno/check.rs`) type-checks a TypeScript program
 against the SDK's generated declarations (`src/outbound/deno/sdk-types.json`)
 without running it, plus an ambient declaration module the host supplies (the
-type of `main`'s argument). An import map sends every file URL outside the
+type of `main`'s argument). `check_files` checks several modules together (up
+to 40), so one can import another's types, and attributes each diagnostic to
+its file. An import map sends every file URL outside the
 check and the declarations to a root that doesn't exist, so a program can't
 make the checker read, or quote, another file. `sdk_fingerprint()` is the
 SDK version plus a hash of those declarations: code that checked under one
@@ -77,7 +81,7 @@ fingerprint stays valid until it changes.
 | Additional queued executions | 16 (public MCP: 8 more) |
 | Total execution lifetime, including queueing and API calls | 30 seconds |
 | JavaScript source | 64 KiB |
-| Model-facing result (larger `data` is summarized) | 64 KiB |
+| Model-facing result (larger `data` is summarized; an unattended one fails) | 64 KiB |
 | Child frame | 256 KiB |
 | Combined program stdout/stderr | 2 MiB |
 | Additional bounded SDK progress frames | 64 KiB |

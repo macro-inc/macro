@@ -9,6 +9,8 @@ use tokio::{process::Command, sync::Semaphore};
 
 /// Longest a check may take, including waiting for a slot.
 const CHECK_TIMEOUT: Duration = Duration::from_secs(30);
+/// Modules one check takes.
+const MAX_FILES: usize = 40;
 
 /// Checks with the pinned Deno against declarations written once at startup.
 pub struct DenoChecker {
@@ -68,15 +70,21 @@ impl DenoChecker {
         })
     }
 
-    async fn run(&self, source: &str, declarations: &str) -> Result<Vec<Diagnostic>, CheckError> {
+    async fn run(
+        &self,
+        files: &[SourceFile],
+        declarations: &str,
+    ) -> Result<Vec<Diagnostic>, CheckError> {
         let directory = tempfile::Builder::new()
             .prefix("check-")
             .tempdir_in(&self.root)
             .map_err(internal)?;
         let check = directory.path();
-        tokio::fs::write(check.join("main.ts"), source)
-            .await
-            .map_err(internal)?;
+        for file in files {
+            tokio::fs::write(check.join(&file.name), &file.source)
+                .await
+                .map_err(internal)?;
+        }
         tokio::fs::write(check.join("context.d.ts"), declarations)
             .await
             .map_err(internal)?;
@@ -114,9 +122,9 @@ impl DenoChecker {
                 "--no-npm",
                 "--unstable-sloppy-imports",
                 "--import-map=imports.json",
-                "main.ts",
-                "context.d.ts",
             ])
+            .args(files.iter().map(|file| file.name.as_str()))
+            .arg("context.d.ts")
             .stdin(Stdio::null())
             .kill_on_drop(true)
             .output()
@@ -144,11 +152,34 @@ impl ProgramChecker for DenoChecker {
     #[tracing::instrument(
         name = "code_execution.check",
         skip_all,
-        fields(source_bytes = source.len(), diagnostics = tracing::field::Empty),
+        fields(
+            files = files.len(),
+            source_bytes = files.iter().map(|file| file.source.len()).sum::<usize>(),
+            diagnostics = tracing::field::Empty,
+        ),
         err
     )]
-    async fn check(&self, source: &str, declarations: &str) -> Result<Vec<Diagnostic>, CheckError> {
-        if source.trim().is_empty() || source.len() > self.max_source_bytes {
+    async fn check_files(
+        &self,
+        files: &[SourceFile],
+        declarations: &str,
+    ) -> Result<Vec<Diagnostic>, CheckError> {
+        let valid_name = |name: &str| {
+            name.strip_suffix(".ts").is_some_and(|stem| {
+                !stem.is_empty()
+                    && stem
+                        .chars()
+                        .all(|c| c.is_ascii_lowercase() || c.is_ascii_digit() || c == '_')
+            })
+        };
+        if files.is_empty()
+            || files.len() > MAX_FILES
+            || files.iter().any(|file| {
+                !valid_name(&file.name)
+                    || file.source.trim().is_empty()
+                    || file.source.len() > self.max_source_bytes
+            })
+        {
             return Err(CheckError::InvalidSource);
         }
         let checked = tokio::time::timeout(CHECK_TIMEOUT, async {
@@ -157,7 +188,7 @@ impl ProgramChecker for DenoChecker {
                 .acquire()
                 .await
                 .map_err(|_| CheckError::Internal)?;
-            self.run(source, declarations).await
+            self.run(files, declarations).await
         })
         .await
         .map_err(|_| CheckError::Busy)??;
@@ -168,8 +199,8 @@ impl ProgramChecker for DenoChecker {
 
 /// `deno check` prints each problem as a block: `TS<code> [ERROR]: …`, the
 /// offending line, a marker and `at <file>:<line>:<column>`. Resolution
-/// problems are single `error: …` lines. Paths become `main.ts` and
-/// `@macro-inc/sdk/…` so diagnostics name no host directory.
+/// problems are single `error: …` lines. Paths become the checked files'
+/// names and `@macro-inc/sdk/…` so diagnostics name no host directory.
 fn diagnostics(output: &str, check_url: &str, types_url: &str) -> Vec<Diagnostic> {
     output
         .split("\n\n")
@@ -179,12 +210,26 @@ fn diagnostics(output: &str, check_url: &str, types_url: &str) -> Vec<Diagnostic
                 || (block.starts_with("error: ")
                     && !block.starts_with("error: Type checking failed"))
         })
-        .map(|block| Diagnostic {
-            message: block
+        .map(|block| {
+            let message = block
                 .replace(check_url, "")
-                .replace(types_url, "@macro-inc/sdk/"),
+                .replace(types_url, "@macro-inc/sdk/");
+            Diagnostic {
+                file: located_in(&message),
+                message,
+            }
         })
         .collect()
+}
+
+/// The checked file a diagnostic's `at <file>:<line>:<column>` names.
+fn located_in(message: &str) -> Option<String> {
+    let at = message
+        .lines()
+        .rev()
+        .find_map(|line| line.trim().strip_prefix("at "))?;
+    let file = at.split(':').next()?;
+    (file.ends_with(".ts") && !file.contains('/')).then(|| file.to_owned())
 }
 
 fn directory_url(path: &std::path::Path) -> Result<String, CheckError> {

@@ -114,3 +114,54 @@ async fn rejects_empty_and_oversized_source() {
         Err(CheckError::InvalidSource)
     ));
 }
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn modules_checked_together_see_each_others_types_and_report_by_file() {
+    let (_root, checker) = checker().await;
+    let declarations = format!("{CONTEXT}\ndeclare global {{ type StepOutput<T> = T; }}\n");
+    let first = SourceFile {
+        name: "step_0.ts".into(),
+        source: "export async function main() { return { count: 3 }; }\n".into(),
+    };
+    let second = |field: &str| SourceFile {
+        name: "step_1.ts".into(),
+        source: format!(
+            "export async function main(steps: Steps) {{ return steps.read.{field} + 1; }}\ntype Steps = {{ read: StepOutput<Awaited<ReturnType<typeof import('./step_0.ts')['main']>>> }};\n"
+        ),
+    };
+    assert_eq!(
+        checker
+            .check_files(&[first.clone(), second("count")], &declarations)
+            .await
+            .unwrap(),
+        Vec::new()
+    );
+    let diagnostics = checker
+        .check_files(&[first, second("total")], &declarations)
+        .await
+        .unwrap();
+    assert_eq!(diagnostics.len(), 1, "{diagnostics:?}");
+    assert_eq!(diagnostics[0].file.as_deref(), Some("step_1.ts"));
+    assert!(
+        diagnostics[0]
+            .message
+            .contains("Property 'total' does not exist")
+    );
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn file_names_are_plain_typescript_modules() {
+    let (_root, checker) = checker().await;
+    for name in ["../escape.ts", "main.js", "Main.ts", ".ts"] {
+        let file = SourceFile {
+            name: name.into(),
+            source: "export const x = 1;".into(),
+        };
+        assert!(matches!(
+            checker.check_files(&[file], CONTEXT).await,
+            Err(CheckError::InvalidSource)
+        ));
+    }
+}

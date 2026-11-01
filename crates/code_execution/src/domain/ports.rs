@@ -64,5 +64,22 @@ pub trait ProgramChecker: Send + Sync + 'static {
         &self,
         source: &str,
         declarations: &str,
+    ) -> Result<Vec<super::Diagnostic>, super::CheckError> {
+        self.check_files(
+            &[super::SourceFile {
+                name: "main.ts".to_owned(),
+                source: source.to_owned(),
+            }],
+            declarations,
+        )
+        .await
+    }
+
+    /// Type-check several modules together, so one can use the types
+    /// another exports (`import('./step_0.ts')`). Each problem names its file.
+    async fn check_files(
+        &self,
+        files: &[super::SourceFile],
+        declarations: &str,
     ) -> Result<Vec<super::Diagnostic>, super::CheckError>;
 }

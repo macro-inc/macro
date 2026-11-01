@@ -578,6 +578,48 @@ async fn run_unattended(
 
 #[tokio::test]
 #[ignore = "requires pinned Deno runtime"]
+async fn an_unattended_result_is_kept_whole_or_fails_over_the_limit() {
+    let (_root, service) = setup(Limits::default()).await;
+    let fits = "export function main() { return { items: Array.from({ length: 400 }, (_, id) => ({ id, name: 'x'.repeat(100) })) }; }";
+    let (_, outcome) = run_unattended(
+        &service,
+        fits,
+        unattended(
+            "fixture-run-token",
+            &[],
+            serde_json::json!({}),
+            WritePolicy::DryRun,
+        ),
+    )
+    .await;
+    let Outcome::Succeeded { value } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(value["items"].as_array().unwrap().len(), 400);
+
+    let (_, outcome) = run_unattended(
+        &service,
+        "export function main() { return 'x'.repeat(70 * 1024); }",
+        unattended(
+            "fixture-run-token",
+            &[],
+            serde_json::json!({}),
+            WritePolicy::DryRun,
+        ),
+    )
+    .await;
+    let Outcome::Failed { error } = outcome else {
+        panic!("{outcome:?}");
+    };
+    assert_eq!(
+        error.message,
+        "The step's output is 71 KB as JSON; a step's output can be at most 64 KB. Return only what later steps need."
+    );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
 async fn unattended_typescript_gets_its_arguments_and_no_credential_or_raw_network() {
     let (_root, service) = setup(Limits::default()).await;
     let source = r#"

@@ -275,11 +275,22 @@ pub struct ExecutionEvent {
 }
 
 /// One type-checker problem, as the checker reported it. Locations are
-/// `main.ts:<line>:<column>`.
+/// `<file>:<line>:<column>`.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 pub struct Diagnostic {
+    /// The file it is in, when it is in one of the checked files.
+    pub file: Option<String>,
     /// The problem with its code, the offending line and its location.
     pub message: String,
+}
+
+/// A TypeScript module checked together with others.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct SourceFile {
+    /// Its file name: lowercase letters, digits and `_`, ending in `.ts`.
+    pub name: String,
+    /// Its source.
+    pub source: String,
 }
 
 /// The checker couldn't decide whether a program checks.

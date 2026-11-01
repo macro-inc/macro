@@ -33,6 +33,8 @@ mutation routes demand the copy's `inbox` from such requests.
 
 The bootstrap replaces a result's `data` larger than `Limits::max_result_bytes`
 with an outline and preview, keeping `reviews`; the frame limit stays the backstop.
+An unattended result is never summarized: later routine steps read it whole, so
+one over the limit fails the run with a message saying so.
 
 ## Checks
 
