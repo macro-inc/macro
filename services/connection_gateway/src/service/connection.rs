@@ -73,6 +73,15 @@ pub trait ConnectionRepo: Send + Sync {
     ) -> anyhow::Result<()>;
 }
 
+/// What became of a message offered to a connection's outbound queue.
+#[derive(Debug, PartialEq, Eq)]
+pub enum SendOutcome {
+    /// The message is queued for the connection's forwarder to write.
+    Queued,
+    /// The connection would not take the message, so it was dropped.
+    Dropped,
+}
+
 #[derive(Clone)]
 pub struct ConnectionManager {
     pub connections: Arc<DashMap<String, Connection>>,
@@ -234,7 +243,9 @@ impl ConnectionManager {
     /// A full queue is not a slow consumer, it is a consumer already a whole
     /// queue behind, so it is treated the same as a closed one: the
     /// connection goes, which also aborts the forwarder that stopped
-    /// draining, and the client reconnects.
+    /// draining, and the client reconnects. That is the designed way to shed
+    /// a client that stopped reading, not a failed send, so it is reported as
+    /// [SendOutcome::Dropped] rather than an error.
     #[tracing::instrument(
         name = "connection_gateway.queue_send",
         err,
@@ -243,9 +254,10 @@ impl ConnectionManager {
             connection.id = id,
             connection.queue.observed_depth = tracing::field::Empty,
             connection.queue.max_capacity = tracing::field::Empty,
+            connection.dropped = tracing::field::Empty,
         )
     )]
-    pub async fn send_message(&self, id: &str, message: Message) -> Result<()> {
+    pub async fn send_message(&self, id: &str, message: Message) -> Result<SendOutcome> {
         let sender = match self.connections.get(id) {
             Some(connection) => connection.sender.clone(),
             None => anyhow::bail!("connection not found"),
@@ -259,17 +271,19 @@ impl ConnectionManager {
         span.record("connection.queue.max_capacity", max_capacity as u64);
 
         if let Err(err) = sender.try_send(OutgoingMessage::Message(message)) {
+            span.record("connection.dropped", true);
             tracing::warn!(
+                error = %err,
                 connection.id = id,
                 connection.queue.observed_depth = depth,
                 connection.queue.max_capacity = max_capacity,
                 "websocket outbound queue would not take a message; dropping the connection"
             );
             self.remove_connection(id).await?;
-            anyhow::bail!("failed to send message: {}", err);
+            return Ok(SendOutcome::Dropped);
         }
 
-        Ok(())
+        Ok(SendOutcome::Queued)
     }
 
     /// Send a raw binary frame to a connection held by this instance.
