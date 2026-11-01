@@ -15,6 +15,7 @@ import { NarrowLayout } from '@entity/composed/list-entity/narrow-layout';
 import type { LayoutProps } from '@entity/composed/list-entity/shared';
 import { soupPropertyToProperty } from '@entity/extractors-property';
 import { EntityReferenceProperties } from '@entity/extractors-property/entity-reference-properties';
+import { getTaskDueDate, isTaskClosed } from '@entity/utils/task-properties';
 import { ListPropertyValue } from '@property/component/ListPropertyValue';
 import { Modals } from '@property/component/modal';
 import {
@@ -27,7 +28,11 @@ import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity'
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
 import { cn } from '@ui/utils/classname';
-import { createMemo, For, Show, Suspense } from 'solid-js';
+import { type Accessor, createMemo, For, Show, Suspense } from 'solid-js';
+import {
+  type DateBucketBoundaries,
+  taskDueDateUrgency,
+} from '../../core/task-due-date';
 import {
   TASK_DUE_DATE_COLUMN,
   TASK_GRID_COLUMNS,
@@ -65,7 +70,7 @@ type TaskGridLayoutProps = Omit<LayoutProps, 'entity'> & {
   entity: TaskEntityWithProperties;
   onFilterByTag?: (optionId: string) => void;
   compact?: boolean;
-  dueDateUrgency?: 'danger' | 'warning';
+  calendar: Accessor<DateBucketBoundaries>;
   referencePropertyIds?: readonly string[];
 };
 
@@ -107,12 +112,18 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
       saveOne(property, { valueType: 'DATE', value: date }),
   };
 
-  const dueDateClass = () =>
-    cn({
-      'text-failure': props.dueDateUrgency === 'danger',
-      'text-warning': props.dueDateUrgency === 'warning',
-      'text-ink-muted': !props.dueDateUrgency,
+  const dueDateClass = () => {
+    const urgency = taskDueDateUrgency(
+      getTaskDueDate(props.entity),
+      isTaskClosed(props.entity),
+      props.calendar()
+    );
+    return cn({
+      'text-failure': urgency === 'danger',
+      'text-warning': urgency === 'warning',
+      'text-ink-muted': !urgency,
     });
+  };
 
   return (
     <PropertiesProvider
@@ -128,21 +139,18 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
       <Show
         when={!props.compact}
         fallback={
-          <NarrowLayout
-            {...props}
-            propertyLeading={
-              <div class="w-8 min-w-0">
-                <ListPropertyValue
-                  entityId={props.entity.id}
-                  property={
-                    propertyMap().get(TASK_DUE_DATE_COLUMN.defId) ??
-                    buildStubProperty(TASK_DUE_DATE_COLUMN)
-                  }
-                  class={dueDateClass()}
-                />
-              </div>
-            }
-          />
+          <NarrowLayout {...props}>
+            <div class="w-8 min-w-0">
+              <ListPropertyValue
+                entityId={props.entity.id}
+                property={
+                  propertyMap().get(TASK_DUE_DATE_COLUMN.defId) ??
+                  buildStubProperty(TASK_DUE_DATE_COLUMN)
+                }
+                class={dueDateClass()}
+              />
+            </div>
+          </NarrowLayout>
         }
       >
         <Entity.Layout

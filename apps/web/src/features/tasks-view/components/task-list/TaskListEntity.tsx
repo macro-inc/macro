@@ -25,7 +25,6 @@ import {
 } from '@entity/composed/list-entity/shared';
 import type { EntityRowConfig } from '@entity/extractors-notification';
 import { EntityReferenceProperties } from '@entity/extractors-property/entity-reference-properties';
-import { getTaskDueDate, isTaskClosed } from '@entity/utils/task-properties';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,
   enqueueDocumentWakeup,
@@ -47,10 +46,7 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
-import {
-  type DateBucketBoundaries,
-  taskDueDateUrgency,
-} from '../../core/task-due-date';
+import type { DateBucketBoundaries } from '../../core/task-due-date';
 import { TaskGridLayout } from './TaskGridLayout';
 
 type TaskListEntityProps = Omit<BaseListEntityProps, 'entity'> & {
@@ -125,12 +121,9 @@ export function TaskListEntity(props: TaskListEntityProps) {
 
   const showContentHits = () => showHitSnippet();
 
-  const dueDate = () => getTaskDueDate(props.entity);
-  const urgency = () =>
-    taskDueDateUrgency(dueDate(), isTaskClosed(props.entity), props.calendar());
   const layoutProps = () => ({
     entity: props.entity,
-    dueDateUrgency: urgency(),
+    calendar: props.calendar,
     checked: props.checked,
     hideCheckbox: props.hideCheckbox,
     onChecked: props.onChecked,
