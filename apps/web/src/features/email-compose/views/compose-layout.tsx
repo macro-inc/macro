@@ -14,7 +14,10 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { FromInboxSelector } from '../components/from-inbox-selector';
 import { useCompose } from '../context/compose-context';
-import { registerCcBccHotkeys } from '../primitives/cc-bcc-hotkeys';
+import {
+  registerCcBccHotkeys,
+  revealRecipientField,
+} from '../primitives/cc-bcc-hotkeys';
 import { registerDraftActionHotkeys } from '../primitives/draft-action-hotkeys';
 import { ComposeBody } from './compose-body';
 import { ComposeRecipients } from './compose-recipients';
@@ -126,17 +129,20 @@ export function ComposeLayout(props: {
     shouldReturnFocusOnClose: false,
   });
 
+  const ccField = {
+    reveal: () => setShowCc(true),
+    input: () => refs().ccRecipientsSelector,
+  };
+  const bccField = {
+    reveal: () => setShowBcc(true),
+    input: () => refs().bccRecipientsSelector,
+  };
+
   registerCcBccHotkeys({
     scopeId: composeHotkeyScope,
     disabled: ctx.disabled,
-    cc: {
-      reveal: () => setShowCc(true),
-      input: () => refs().ccRecipientsSelector,
-    },
-    bcc: {
-      reveal: () => setShowBcc(true),
-      input: () => refs().bccRecipientsSelector,
-    },
+    cc: ccField,
+    bcc: bccField,
   });
 
   registerHotkey({
@@ -268,7 +274,7 @@ export function ComposeLayout(props: {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setShowCc(true)}
+                    onClick={() => revealRecipientField(ccField)}
                     disabled={ctx.disabled()}
                   >
                     Cc
@@ -278,7 +284,7 @@ export function ComposeLayout(props: {
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={() => setShowBcc(true)}
+                    onClick={() => revealRecipientField(bccField)}
                     disabled={ctx.disabled()}
                   >
                     Bcc
