@@ -190,7 +190,7 @@ pub async fn run() -> anyhow::Result<()> {
             entity_access_service.as_ref().clone(),
             crm_service,
         ),
-        &macro_service_urls::EmailServiceUrl::new()?.to_string(),
+        macro_service_urls::EmailServiceUrl::new()?.as_str(),
     ));
     let email_thread_state = EmailThreadRouterState {
         service: email_service.service(),

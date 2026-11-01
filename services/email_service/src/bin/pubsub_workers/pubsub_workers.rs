@@ -421,7 +421,7 @@ async fn main() -> anyhow::Result<()> {
     let sequences = Arc::new(email_service::pubsub::context::sequences(
         db.clone(),
         crm_service.clone(),
-        &macro_service_urls::EmailServiceUrl::new_for_environment(env)?.to_string(),
+        macro_service_urls::EmailServiceUrl::new_for_environment(env)?.as_str(),
     ));
     worker_tracker.spawn(email_sequences::inbound::sweep_worker::run(
         sequences.clone(),
