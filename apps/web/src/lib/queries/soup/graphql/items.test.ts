@@ -431,6 +431,35 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       ]);
       expect(query.hasNextPage()).toBe(false);
       expect(fake.executions).toHaveLength(4);
+      const deletion = createGraphqlSoupDeletion([
+        'GraphqlSoupDocument:cached',
+      ]);
+      const pending = deferred<void>();
+      const mutation = queryClient.getMutationCache().build(queryClient, {
+        mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
+        onMutate: () => ({ graphqlDeletion: deletion }),
+        mutationFn: () => pending.promise,
+        onSettled: () => deletion.release(),
+      });
+      const completion = mutation.execute(undefined);
+      try {
+        await vi.waitFor(() =>
+          expect(
+            query
+              .data()
+              ?.map((row) => `${row.__typename}:${row.id}`)
+              .sort()
+          ).toEqual([
+            'GraphqlSoupChannel:cached',
+            'GraphqlSoupChannel:first',
+            'GraphqlSoupChannel:second',
+          ])
+        );
+      } finally {
+        pending.resolve();
+        await completion;
+      }
+      expect(query.data()).toHaveLength(4);
     } finally {
       dispose();
     }
@@ -1887,7 +1916,9 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       'requires visible local rows before suppressing loading/errors unless server data exists: %s',
       async (hasServerData) => {
         const f = fixture();
-        const deletion = createGraphqlSoupDeletion(['cached-document']);
+        const deletion = createGraphqlSoupDeletion([
+          'GraphqlSoupDocument:cached-document',
+        ]);
         const pending = deferred<void>();
         const mutation = queryClient.getMutationCache().build(queryClient, {
           mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
@@ -1939,7 +1970,9 @@ describe('createGraphqlSoupAstItemsQuery', () => {
 
     it('keeps a partial projection usable when only some cached rows are pending deletion', async () => {
       const f = fixture([item('deleted'), item('visible')]);
-      const deletion = createGraphqlSoupDeletion(['deleted']);
+      const deletion = createGraphqlSoupDeletion([
+        'GraphqlSoupDocument:deleted',
+      ]);
       const pending = deferred<void>();
       const mutation = queryClient.getMutationCache().build(queryClient, {
         mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
@@ -2270,7 +2303,10 @@ describe('createGraphqlSoupAstItemsQuery', () => {
       const mutation = queryClient.getMutationCache().build(queryClient, {
         mutationKey: GRAPHQL_SOUP_DELETE_MUTATION_KEY,
         onMutate: () => ({
-          graphqlDeletion: createGraphqlSoupDeletion(['a', 'b']),
+          graphqlDeletion: createGraphqlSoupDeletion([
+            'GraphqlSoupDocument:a',
+            'GraphqlSoupDocument:b',
+          ]),
         }),
         onSettled: (_data, _error, _vars, context) =>
           context?.graphqlDeletion.release(),

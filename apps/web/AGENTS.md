@@ -518,7 +518,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   writes through `queries/storage/entity-mutations` when GraphQL Soup is enabled;
   never retry failed GraphQL writes through REST. Preserve non-owner history removal
   and version-specific markdown forks on their existing paths. Confirmed restores
-  clear earlier deletion markers without clearing a newer delete's intent.
+  clear earlier deletion markers without clearing a newer delete's intent; key markers and restore confirmations by normalized entity type plus ID, never by bare ID.
 - Preserve loaded block content on initial access confirmation when its loader
   supplies no permissions; reload only on a later confirmed permission change.
   Apply shared access in place only after a successful permissionless load.

@@ -894,6 +894,11 @@ so equal IDs in different entity types remain independent. Channel lookups use
 refreshes. Soup exposes generic revalidation descriptors rather than registering
 channel notification readers. Consumers receive rows and unresolved IDs without
 coordinating query lifetimes.
+Deletion markers use the same `typename:id` identity through pending mutations,
+retention, display filtering, and restore confirmation. Deleting or restoring a
+document must not hide or restore an unrelated channel with the same ID. The
+GraphQL-enabled deletion flow also scopes REST Soup and search side-cache
+removals to the entity type, including grouped caches and partial-failure rollback.
 
 Mail list pages carry same-query server membership in the existing `baseline`
 field. The Mail adapter reconciles only baseline rows outside the indexed window,

@@ -23,7 +23,7 @@ import {
   type SoupLiveQueryOptions,
 } from './create-soup-live-query';
 import { createGraphqlSoupDoneProjection } from './done-projection';
-import { usePendingGraphqlSoupDeleteIds } from './optimistic-deletions';
+import { usePendingGraphqlSoupDeleteKeys } from './optimistic-deletions';
 import { usePendingGraphqlSoupDone } from './optimistic-done';
 import { soupItemKey } from './reconciliation';
 
@@ -84,7 +84,7 @@ export function createGraphqlSoupAstItemsQuery(
   const source = createSoupLiveQuery(input, options);
   const sortMethod = createMemo(() => args().params.sort_method);
   const showForeign = createMemo(() => options().showSupportedForeignEntities);
-  const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
+  const pendingDeleteKeys = usePendingGraphqlSoupDeleteKeys();
   const pendingDone = usePendingGraphqlSoupDone();
   const projectDone = createGraphqlSoupDoneProjection();
   const excludesDone = createMemo(() => soupQueryExcludesDone([args().body]));
@@ -194,7 +194,7 @@ export function createGraphqlSoupAstItemsQuery(
         data(),
         pendingDone(),
         excludesDone(),
-        pendingDeleteIds()
+        pendingDeleteKeys()
       )
     ),
   };

@@ -58,7 +58,7 @@ import {
 } from './entity-input';
 import { isCachedMailView } from './mail-view';
 import {
-  usePendingGraphqlSoupDeleteIds,
+  usePendingGraphqlSoupDeleteKeys,
   withoutPendingSoupEntities,
 } from './optimistic-deletions';
 import { readSoupPage } from './read-soup-page';
@@ -102,7 +102,7 @@ export function createSoupLiveQuery(
   options: Accessor<SoupLiveQueryOptions> = () => ({})
 ) {
   const owner = getOwner();
-  const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
+  const pendingDeleteKeys = usePendingGraphqlSoupDeleteKeys();
   const offline = createBrowserOfflineSignal();
   const [fetchingMailPage, setFetchingMailPage] = createSignal(false);
   // The position of the last local Mail row loaded (a page's `endCursor`).
@@ -943,7 +943,9 @@ export function createSoupLiveQuery(
     if (
       local.withoutEmail &&
       !query.data &&
-      local.records.every((record) => pendingDeleteIds().has(record.id))
+      local.records.every((record) =>
+        pendingDeleteKeys().has(soupItemKey(record))
+      )
     )
       return undefined;
     const keys = serverRecordKeys();
@@ -1079,7 +1081,10 @@ export function createSoupLiveQuery(
     localOptimistic: () => displayLocalProjection()?.mail?.optimistic ?? false,
     data: createMemo(() => {
       const records = displayData();
-      return records && withoutPendingSoupEntities(records, pendingDeleteIds());
+      return (
+        records &&
+        withoutPendingSoupEntities(records, pendingDeleteKeys(), soupItemKey)
+      );
     }),
     fetchedRecords: () => query.data?.records() ?? [],
     cachedMail,

@@ -1,5 +1,9 @@
+import type { EntityData } from '@entity/types/entity';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import type { UnifiedSearchResponseItem } from '@service-search/generated/models';
+import type { SoupApiItem } from '@service-storage/generated/schemas/soupApiItem';
 import type {
+  EntityRefInput,
   GraphqlEntityFilterAst,
   SoupInput,
 } from '@service-storage/graphql/generated/graphql';
@@ -30,6 +34,41 @@ export function soupEntityRefKey(entity: SoupEntityRef): string | undefined {
     .with('DATABASE_ROW', () => 'GraphqlSoupDatabaseRow')
     .exhaustive(() => undefined);
   return typename ? `${typename}:${entity.entityId}` : undefined;
+}
+
+/** Normalized identity for display entities and unified mutation targets. */
+export function soupEntityKey(entity: {
+  type:
+    | EntityData['type']
+    | EntityRefInput['type']
+    | SoupApiItem['tag']
+    | UnifiedSearchResponseItem['type'];
+  id: string | number;
+}): string | undefined {
+  const typename = match(entity.type)
+    .with('document', 'DOCUMENT', () => 'GraphqlSoupDocument')
+    .with('chat', 'CHAT', () => 'GraphqlSoupChat')
+    .with('project', 'PROJECT', () => 'GraphqlSoupProject')
+    .with('channel', 'CHANNEL', () => 'GraphqlSoupChannel')
+    .with(
+      'email',
+      'emailThread',
+      'EMAIL_THREAD',
+      () => 'GraphqlSoupEmailThread'
+    )
+    .with('call', 'CALL', () => 'GraphqlSoupCall')
+    .with('agent_session', 'agentSession', () => 'GraphqlSoupAgentSession')
+    .with(
+      'crm_company',
+      'crmCompany',
+      'company',
+      'CRM_COMPANY',
+      () => 'GraphqlSoupCrmCompany'
+    )
+    .with('calendar_event', 'calendarEvent', () => 'GraphqlSoupCalendarEvent')
+    .with('initiative', 'INITIATIVE', () => 'GraphqlSoupInitiative')
+    .otherwise(() => undefined);
+  return typename ? `${typename}:${entity.id}` : undefined;
 }
 
 // Balanced trees stay below the GraphQL filter ingress depth limit even for
