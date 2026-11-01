@@ -1,6 +1,6 @@
 # Type Alias: DeleteUserNotificationV2Data
 
-> **DeleteUserNotificationV2Data** = \{ `body?`: `never`; `path`: \{ `notification_id`: `string`; \}; `query?`: `never`; `url`: `"/v2/user_notifications/{notification_id}"`; \}
+> **DeleteUserNotificationV2Data** = \{ `body?`: `never`; `path`: \{ `notification_id`: `string`; \}; `query?`: `never`; `url`: `"/v1/user_notifications/{notification_id}"`; \}
 
 ## Properties
 
@@ -10,4 +10,4 @@
 | <a id="property-path"></a> `path` | \{ `notification_id`: `string`; \} | - |
 | `path.notification_id` | `string` | ID of the notification |
 | <a id="property-query"></a> `query?` | `never` | - |
-| <a id="property-url"></a> `url` | `"/v2/user_notifications/{notification_id}"` | - |
+| <a id="property-url"></a> `url` | `"/v1/user_notifications/{notification_id}"` | - |

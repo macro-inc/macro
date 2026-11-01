@@ -1,6 +1,6 @@
 # Type Alias: BulkMarkNotificationsUndoneData
 
-> **BulkMarkNotificationsUndoneData** = \{ `body`: [`NotificationBulkRequest`](NotificationBulkRequest.md); `path?`: `never`; `query?`: `never`; `url`: `"/v2/user_notifications/bulk/undone"`; \}
+> **BulkMarkNotificationsUndoneData** = \{ `body`: [`NotificationBulkRequest`](NotificationBulkRequest.md); `path?`: `never`; `query?`: `never`; `url`: `"/v1/user_notifications/bulk/undone"`; \}
 
 ## Properties
 
@@ -9,4 +9,4 @@
 | <a id="property-body"></a> `body` | [`NotificationBulkRequest`](NotificationBulkRequest.md) |
 | <a id="property-path"></a> `path?` | `never` |
 | <a id="property-query"></a> `query?` | `never` |
-| <a id="property-url"></a> `url` | `"/v2/user_notifications/bulk/undone"` |
+| <a id="property-url"></a> `url` | `"/v1/user_notifications/bulk/undone"` |

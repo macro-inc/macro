@@ -118,6 +118,62 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * Soft-delete multiple user notifications.
+     */
+    public bulkDeleteUserNotificationsV2<ThrowOnError extends boolean = false>(options: Options<BulkDeleteUserNotificationsV2Data, ThrowOnError>): RequestResult<BulkDeleteUserNotificationsV2Responses, BulkDeleteUserNotificationsV2Errors, ThrowOnError> {
+        return (options.client ?? this.client).delete<BulkDeleteUserNotificationsV2Responses, BulkDeleteUserNotificationsV2Errors, ThrowOnError>({
+            url: '/v1/user_notifications/bulk',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Mark notifications as done.
+     */
+    public bulkMarkNotificationsDone<ThrowOnError extends boolean = false>(options: Options<BulkMarkNotificationsDoneData, ThrowOnError>): RequestResult<BulkMarkNotificationsDoneResponses, BulkMarkNotificationsDoneErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<BulkMarkNotificationsDoneResponses, BulkMarkNotificationsDoneErrors, ThrowOnError>({
+            url: '/v1/user_notifications/bulk/done',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Mark notifications as seen.
+     */
+    public bulkMarkNotificationsSeen<ThrowOnError extends boolean = false>(options: Options<BulkMarkNotificationsSeenData, ThrowOnError>): RequestResult<BulkMarkNotificationsSeenResponses, BulkMarkNotificationsSeenErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<BulkMarkNotificationsSeenResponses, BulkMarkNotificationsSeenErrors, ThrowOnError>({
+            url: '/v1/user_notifications/bulk/seen',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Mark notifications as not done.
+     */
+    public bulkMarkNotificationsUndone<ThrowOnError extends boolean = false>(options: Options<BulkMarkNotificationsUndoneData, ThrowOnError>): RequestResult<BulkMarkNotificationsUndoneResponses, BulkMarkNotificationsUndoneErrors, ThrowOnError> {
+        return (options.client ?? this.client).patch<BulkMarkNotificationsUndoneResponses, BulkMarkNotificationsUndoneErrors, ThrowOnError>({
+            url: '/v1/user_notifications/bulk/undone',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
      * Wrapper handler that calls the inner generic bulk-get handler with `serde_json::Value`,
      * then converts each row to [`UserNotificationRow<NotifEvent>`].
      *
@@ -163,72 +219,16 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
+     * Soft-delete a single user notification.
+     */
+    public deleteUserNotificationV2<ThrowOnError extends boolean = false>(options: Options<DeleteUserNotificationV2Data, ThrowOnError>): RequestResult<DeleteUserNotificationV2Responses, DeleteUserNotificationV2Errors, ThrowOnError> {
+        return (options.client ?? this.client).delete<DeleteUserNotificationV2Responses, DeleteUserNotificationV2Errors, ThrowOnError>({ url: '/v1/user_notifications/{notification_id}', ...options });
+    }
+    
+    /**
      * Typed wrapper for getting a single notification by ID.
      */
     public getTypedNotificationById<ThrowOnError extends boolean = false>(options: Options<GetTypedNotificationByIdData, ThrowOnError>): RequestResult<GetTypedNotificationByIdResponses, GetTypedNotificationByIdErrors, ThrowOnError> {
         return (options.client ?? this.client).get<GetTypedNotificationByIdResponses, GetTypedNotificationByIdErrors, ThrowOnError>({ url: '/v1/user_notifications/{notification_id}', ...options });
-    }
-    
-    /**
-     * Soft-delete multiple user notifications.
-     */
-    public bulkDeleteUserNotificationsV2<ThrowOnError extends boolean = false>(options: Options<BulkDeleteUserNotificationsV2Data, ThrowOnError>): RequestResult<BulkDeleteUserNotificationsV2Responses, BulkDeleteUserNotificationsV2Errors, ThrowOnError> {
-        return (options.client ?? this.client).delete<BulkDeleteUserNotificationsV2Responses, BulkDeleteUserNotificationsV2Errors, ThrowOnError>({
-            url: '/v2/user_notifications/bulk',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
-     * Mark notifications as done.
-     */
-    public bulkMarkNotificationsDone<ThrowOnError extends boolean = false>(options: Options<BulkMarkNotificationsDoneData, ThrowOnError>): RequestResult<BulkMarkNotificationsDoneResponses, BulkMarkNotificationsDoneErrors, ThrowOnError> {
-        return (options.client ?? this.client).patch<BulkMarkNotificationsDoneResponses, BulkMarkNotificationsDoneErrors, ThrowOnError>({
-            url: '/v2/user_notifications/bulk/done',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
-     * Mark notifications as seen.
-     */
-    public bulkMarkNotificationsSeen<ThrowOnError extends boolean = false>(options: Options<BulkMarkNotificationsSeenData, ThrowOnError>): RequestResult<BulkMarkNotificationsSeenResponses, BulkMarkNotificationsSeenErrors, ThrowOnError> {
-        return (options.client ?? this.client).patch<BulkMarkNotificationsSeenResponses, BulkMarkNotificationsSeenErrors, ThrowOnError>({
-            url: '/v2/user_notifications/bulk/seen',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
-     * Mark notifications as not done.
-     */
-    public bulkMarkNotificationsUndone<ThrowOnError extends boolean = false>(options: Options<BulkMarkNotificationsUndoneData, ThrowOnError>): RequestResult<BulkMarkNotificationsUndoneResponses, BulkMarkNotificationsUndoneErrors, ThrowOnError> {
-        return (options.client ?? this.client).patch<BulkMarkNotificationsUndoneResponses, BulkMarkNotificationsUndoneErrors, ThrowOnError>({
-            url: '/v2/user_notifications/bulk/undone',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
-     * Soft-delete a single user notification.
-     */
-    public deleteUserNotificationV2<ThrowOnError extends boolean = false>(options: Options<DeleteUserNotificationV2Data, ThrowOnError>): RequestResult<DeleteUserNotificationV2Responses, DeleteUserNotificationV2Errors, ThrowOnError> {
-        return (options.client ?? this.client).delete<DeleteUserNotificationV2Responses, DeleteUserNotificationV2Errors, ThrowOnError>({ url: '/v2/user_notifications/{notification_id}', ...options });
     }
 }
