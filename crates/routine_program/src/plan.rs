@@ -78,6 +78,9 @@ pub enum StepResult {
     Tool {
         /// The tool.
         tool: RoutineTool,
+        /// What it returned.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        output: Option<serde_json::Value>,
         /// Why it failed.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         error: Option<String>,
@@ -96,6 +99,9 @@ pub enum StepResult {
         /// More calls ran than are recorded.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         calls_truncated: bool,
+        /// What `main` returned.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        output: Option<serde_json::Value>,
         /// Why it failed.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         error: Option<String>,

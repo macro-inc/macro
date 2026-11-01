@@ -18,11 +18,13 @@
 //! Apps the routine requires ([`RoutineProgram::mcp_servers`]) go to its agent.
 #![deny(missing_docs)]
 
+mod contract;
 mod model;
 mod plan;
 pub mod template;
 mod validate;
 
+pub use contract::{CODE_STEPS, CheckFile, MAX_OUTPUT_BYTES, STEP_CONTEXT, code_version};
 pub use model::*;
 pub use plan::{
     AnswerMismatch, CONDITION_THRESHOLD, CallRecord, CallStatus, PlannedStep, StepPath, StepRecord,

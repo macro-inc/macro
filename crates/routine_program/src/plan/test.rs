@@ -185,6 +185,7 @@ fn records_serialize_flat_with_their_kind() {
         result: StepResult::Tool {
             tool: crate::RoutineTool::CreateDocument,
             error: Some("boom".into()),
+            output: None,
         },
     };
     let value = serde_json::to_value(&record).unwrap();
@@ -193,6 +194,21 @@ fn records_serialize_flat_with_their_kind() {
         json!({ "path": "1.then.0", "kind": "tool", "tool": "CreateDocument", "error": "boom" })
     );
     assert_eq!(serde_json::from_value::<StepRecord>(value).unwrap(), record);
+
+    // A step's output is recorded beside it, and records from before outputs
+    // still read.
+    let code = StepRecord {
+        path: StepPath::root(0),
+        result: StepResult::Code {
+            calls: Vec::new(),
+            calls_truncated: false,
+            output: Some(json!({ "count": 2 })),
+            error: None,
+        },
+    };
+    let value = serde_json::to_value(&code).unwrap();
+    assert_eq!(value["output"], json!({ "count": 2 }));
+    assert_eq!(serde_json::from_value::<StepRecord>(value).unwrap(), code);
 }
 
 #[test]

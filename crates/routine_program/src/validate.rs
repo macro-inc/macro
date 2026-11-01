@@ -101,7 +101,7 @@ pub enum ProgramError {
     DuplicateStepId(StepId),
     /// A placeholder naming no step that runs before it on every path.
     #[error(
-        "`{{{{steps.{0}…}}}}` must name a tool step that always runs before it: earlier in the same list, or before the decision it sits in"
+        "`{{{{steps.{0}…}}}}` must name a tool or code step that always runs before it: earlier in the same list, or before the decision it sits in"
     )]
     UnknownStep(StepId),
     /// A placeholder that cannot be read.
@@ -180,7 +180,7 @@ struct Check {
 }
 
 impl Check {
-    /// `{{steps.<id>…}}` names a tool step that runs before it on every path
+    /// `{{steps.<id>…}}` names a tool or code step that runs before it on every path
     /// to it: earlier in the same list, or earlier in a list that encloses it.
     /// A branch's steps are visible only inside that branch, so neither a
     /// sibling branch (`then`/`else`, another option) nor anything after the

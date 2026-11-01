@@ -1,7 +1,13 @@
 Code steps: a `code` step runs TypeScript against Macro's SDK, the same SDK code mode uses. Use one for work a single tool call or decision can't do: reading many items, a loop, or acting on what an earlier call returned. It takes:
-- `title`: what it does, in a few words.
+- `title`: what it does, in a few words. Saving names the step's output after it: "Find open invoices" becomes `find_open_invoices`. An `id` you give is kept.
 - `summary`: one sentence on how, for the routine's owner.
 - `writes`: every area it changes: `email`, `calendar`, `workspace` (documents, tasks, channels, comments and folders), `properties`, `contacts`, `notifications` (marking them seen or done), `ai` (structured completions with tools, images; `macro.ai.decide` is a read). Reads need none. A write outside these is refused when it runs.
-- `source`: a module exporting `async function main({ macro, trigger, steps }: StepContext)`. `trigger` is the triggering item as JSON (`trigger.entity_id`, `trigger.email.subject`, …), or null when a schedule or a person started the run. `steps` holds earlier steps' outputs by `id`. What `main` returns is the step's output, named by its optional `id`.
+- `source`: a module exporting `async function main({ macro, run, routine, trigger, steps }: StepContext)`. Take only what you use.
+  - `run.at` is when the run counts as happening (ISO 8601) and `run.timezone` the zone to read it in. Use them for "today", "this week" or a cutoff; never `new Date()` or `Date.now()`, so a dry run that replays an earlier trigger gives the same answer.
+  - `run.lastSucceededAt` (null on the first run) and `run.previous` (`{ at, outcome }`) say when the routine last ran. Work on what is new since then instead of everything each time.
+  - `trigger` says what started the run: `{ kind: 'schedule', schedule, timezone }`, `{ kind: 'event', event, item }` with the item as JSON (`item.entity_id`, `item.email?.subject`, …), or `{ kind: 'manual', by }`. Check `trigger.kind` before reading `item`.
+  - `run.dryRun` is true when writes change nothing; `routine` is `{ id, name }`.
+  - `steps.<id>` is the output of a code or tool step that always runs before this one, typed from that step's code. Changing what a step returns can break the steps that read it; every code step is checked with the others.
+- What `main` returns is the step's output: JSON (dates become strings) of at most 64 KB. Return only what later steps need, such as ids and counts, not whole items; a larger output fails the step. Tool step arguments can read it as `{{steps.<id>.<path>}}`.
 - Call SDK methods as their declarations show, with `await`. Use `macro.ai.decide({ input, questions })` for yes/no judgments: `questions` maps keys to questions, and `probabilities[key]` in the answer is from 0 to 1. Don't import anything.
 - The code is type-checked against the SDK; the checker's errors come back, and the step isn't saved until they are fixed. It runs as the owner, within 30 seconds.

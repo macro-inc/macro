@@ -57,7 +57,8 @@ pub enum Step {
 #[serde(deny_unknown_fields)]
 pub struct CodeStep {
     /// Names this step's output for later steps: `steps.<id>` in later code
-    /// and `{{steps.<id>.…}}` in tool step arguments.
+    /// and `{{steps.<id>.…}}` in tool step arguments. Saving gives a step
+    /// without one an id from its title, e.g. `label_invoices`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<StepId>,
     /// What the step does, in a few words, e.g. "Label invoices".
@@ -65,46 +66,16 @@ pub struct CodeStep {
     /// One or two sentences on how, for the routine's owner.
     #[serde(default, skip_serializing_if = "String::is_empty")]
     pub summary: String,
-    /// A module exporting `async function main({ macro, trigger, steps }:
-    /// StepContext)`. `trigger` is the triggering item (`null` when a
-    /// schedule or a person started the run), `steps` the outputs of earlier
-    /// steps with ids. What `main` returns is the step's output.
+    /// A module exporting `async function main({ macro, run, routine,
+    /// trigger, steps }: StepContext)`: `run` is this run (its time, zone and
+    /// the previous run), `trigger` what started it (a schedule, an event and
+    /// its item, or a person), `steps` the typed outputs of the steps before
+    /// it. What `main` returns, as JSON of at most 64 KB, is the step's output.
     pub source: String,
     /// Where the code may make changes. Reads are always allowed.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub writes: Vec<WriteScope>,
 }
-
-/// How to write a code step, for whoever writes one: the agent tool that
-/// creates routines and the routine drafter read the same text.
-pub const CODE_STEPS: &str = include_str!("code_steps.md");
-
-/// The ambient declarations a code step is type-checked with: the type of
-/// its `main`'s argument. The SDK's own declarations come from the checker.
-pub const STEP_CONTEXT: &str = r#"import type { Macro } from '@macro-inc/sdk';
-
-declare global {
-  /** What a routine code step's `main` receives. */
-  interface StepContext {
-    /** Macro's SDK, acting as the routine's owner. */
-    macro: Macro;
-    /**
-     * The item that triggered the run, such as `{ email: {...} }` with its
-     * `entity_id`; null when a schedule or a person started the run.
-     */
-    trigger: RoutineTrigger | null;
-    /** What earlier steps with ids returned, by id. */
-    steps: Record<string, any>;
-  }
-
-  /** The triggering item as JSON; its fields depend on the event. */
-  type RoutineTrigger = {
-    entity_id: string;
-    message_id?: string;
-    [field: string]: any;
-  };
-}
-"#;
 
 /// An area a code step may change.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
@@ -170,7 +141,7 @@ impl WriteScope {
 /// hash of its declarations, e.g. `0.2.2+18cc1c19c35c`.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]
-pub struct SdkFingerprint(String);
+pub struct SdkFingerprint(pub(crate) String);
 
 impl SdkFingerprint {
     /// The fingerprint as written.
@@ -212,7 +183,8 @@ pub struct BlankFingerprint;
 #[serde(deny_unknown_fields)]
 pub struct ToolStep {
     /// Names this step's output for later steps, e.g. `task` makes a created
-    /// task's id available as `{{steps.task.documentId}}`.
+    /// task's id available as `{{steps.task.documentId}}`. Saving gives a step
+    /// without one an id from its tool, e.g. `create_document`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<StepId>,
     /// The tool to call.
@@ -220,7 +192,7 @@ pub struct ToolStep {
     /// The tool's arguments, exactly as the tool documents them. String values
     /// may embed `{{trigger.<path>}}` (the triggering item, e.g.
     /// `{{trigger.entity_id}}` or `{{trigger.email.subject}}`) and
-    /// `{{steps.<id>.<path>}}` (an earlier tool step's output). A string that
+    /// `{{steps.<id>.<path>}}` (an earlier tool or code step's output). A string that
     /// is exactly one placeholder takes the referenced JSON value as is.
     pub arguments: Map<String, Value>,
 }
@@ -290,7 +262,7 @@ impl fmt::Display for RoutineTool {
     }
 }
 
-/// Names a tool step's output: a lowercase letter, then up to 31 lowercase
+/// Names a step's output: a lowercase letter, then up to 31 lowercase
 /// letters, digits or underscores.
 #[derive(Debug, Clone, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
 #[serde(try_from = "String", into = "String")]

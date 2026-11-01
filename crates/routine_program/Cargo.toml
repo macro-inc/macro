@@ -9,6 +9,7 @@ bots = { path = "../bots", default-features = false }
 jev = { path = "../jev" }
 serde = { workspace = true }
 serde_json = { workspace = true }
+sha2 = { workspace = true }
 thiserror = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true }
