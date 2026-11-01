@@ -105,7 +105,10 @@ delivery progress is silent, as on Gmail: a composer or sent message shows a
 notice only for a conflict, uncertain or rejected delivery, revoked access,
 unsavable content, or an inbox move. Use its recovery actions and check the
 provider copy before choosing an explicit resend; a resend in flight shows as
-the send button's pending state. Switching the sender
+the send button's pending state. A new-email draft locked by a conflict or an
+unconfirmed draft or attachment write still discards from its trash and
+Cmd+Shift+D; delivery in progress, unknown or rejected delivery, and revoked
+access keep discard locked. Switching the sender
 inbox copies the draft and attachments into the destination; wait for completion
 before sending. If the copy is interrupted, use retry or keep the original.
 A draft the provider could not save can still switch From, which moves it to an
@@ -618,9 +621,10 @@ and type; every character must stay in Subject.
 In new emails, replies, reply-alls, and forwards, `Cmd+Shift+C` (`Ctrl+Shift+C`)
 reveals and focuses Cc and `Cmd+Shift+B` does the same for Bcc, expanding a
 collapsed reply header; inside a composer they never fall through to the
-thread's Copy link. `bunx playwright test --config
-src/features/email-compose/browser-test/playwright.app.config.ts` (from
-`apps/web`) checks both shortcuts in all four composers.
+thread's Copy link. Clicking the Cc or Bcc button also focuses the revealed
+field, so typing goes there instead of to app shortcuts. `bunx playwright test
+--config src/features/email-compose/browser-test/playwright.app.config.ts` (from
+`apps/web`) checks both shortcuts and both buttons in all four composers.
 While an editable field is focused, Escape is handled by that field before the
 close-reply shortcut.
 An edited reply remains a draft when navigating away and returning. Standalone
@@ -678,6 +682,10 @@ missing message or subject error does once filled in. Suggestions leave out
 automated addresses (`notifications@`, `mailer-daemon@`, `postmaster@`,
 `bounce@` and no-reply or do-not-reply addresses); typing one in full still adds
 it. Reply on a bounce goes to its sender, as for any other message.
+With a typed address chip in To or Cc, type text that is not an address
+(`notanemail`) and press Enter, or `bad@@x..com` and Tab: the chip stays, and
+the text stays in the field to be corrected. A typed address already chosen is
+not listed again in the suggestions.
 When checking draft autosave, edit the body of a draft with uploaded or forwarded
 attachments, wait for the save, and reopen it; the attachments should remain visible.
 In a long thread, scroll away from the bottom while a draft save is pending.

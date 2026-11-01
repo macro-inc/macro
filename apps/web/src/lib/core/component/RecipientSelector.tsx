@@ -422,9 +422,6 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 ): JSX.Element {
   const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
   const [inputValue, setInputValue] = createSignal('');
-  const [customUsers, setCustomUsers] = createSignal<WithCustomUserInput<K>[]>(
-    []
-  );
   const [disabled, setDisabled] = createSignal(false);
 
   const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
@@ -507,7 +504,6 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   function handleChange(value: CombinedRecipientItem[]) {
     let newestSelection = value.at(-1);
     if (!newestSelection) {
-      setCustomUsers([]);
       props.setSelectedOptions([]);
       return;
     }
@@ -535,14 +531,6 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       newestSelection.kind === 'custom' ||
       newestSelection.kind === 'agent'
     ) {
-      setCustomUsers(
-        value.filter((o) => {
-          if (o.kind === 'custom') {
-            return o.data.invalid === false;
-          }
-          return false;
-        }) as WithCustomUserInput<K>[]
-      );
       props.setSelectedOptions(value as CombinedRecipientItem<K>[]);
       return;
     }
@@ -690,10 +678,12 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       typed.push(recipientEntityMapper('custom')(customUserInput));
     }
 
-    return [
-      ...rankRecipientMatches([...searched, ...typed], searchTerm),
-      ...customUsers(),
-    ] as CombinedRecipientItem<K>[];
+    // Typed recipients already chosen stay out of the suggestions, where Enter
+    // on text matching nothing would toggle one off and clear the text.
+    return rankRecipientMatches(
+      [...searched, ...typed],
+      searchTerm
+    ) as CombinedRecipientItem<K>[];
   });
 
   const visibleOptionKeys = createMemo(

@@ -635,6 +635,61 @@ async fn deletion_retains_a_fenced_remote_cleanup_intent(db: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_discard_while_the_worker_writes_a_save_runs_after_that_write(db: PgPool) {
+    let (sync, repo, input, link) = setup(&db, false).await;
+    let second = ResolvedDraftInput {
+        db_id: Uuid::now_v7(),
+        ..input.clone()
+    };
+    repo.insert_message(
+        &second,
+        &UpsertedContacts {
+            from_contact_id: None,
+            recipients: Vec::new(),
+        },
+        link,
+        None,
+        true,
+    )
+    .await
+    .unwrap()
+    .unwrap();
+    let claim = || sync.claim_draft(Uuid::now_v7(), DraftClaimMode::All);
+    let (lost, rejected) = (
+        claim().await.unwrap().unwrap(),
+        claim().await.unwrap().unwrap(),
+    );
+    for (lease, provider_id) in [(&lost, "a"), (&rejected, "b")] {
+        assert!(
+            repo.delete_draft_message(
+                lease.message_id,
+                input.thread_db_id,
+                &[link],
+                Some(ACTOR),
+                0
+            )
+            .await
+            .unwrap()
+            .is_some()
+        );
+        // The write still records its progress under its lease.
+        let mut progress = checkpoint(lease, DraftStage::Updating);
+        progress.draft.as_mut().unwrap().id = ProviderId::new(provider_id).unwrap();
+        sync.checkpoint_draft(lease, &progress).await.unwrap();
+    }
+    // One write's response is lost; Outlook reports the other edited there.
+    sync.release_draft(&lost, 0).await.unwrap();
+    sync.fail_draft(&rejected, DraftFailure::Conflict)
+        .await
+        .unwrap();
+    for _ in 0..2 {
+        let discard = claim().await.unwrap().unwrap();
+        assert!(discard.delete_requested);
+        assert!(discard.checkpoint.is_none());
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn sync_before_creation_response_binds_the_existing_macro_message(db: PgPool) {
     let (sync, _, input, link) = setup(&db, false).await;
     let lease = sync

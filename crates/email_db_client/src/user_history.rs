@@ -48,10 +48,12 @@ where
 /// 1. Priority: Non-drafts with a valid `sent_at` take precedence over drafts (or messages without `sent_at`).
 /// 2. Sort: Chronological order of `sent_at` (or `updated_at` fallback).
 ///
-/// Pending sequence steps (scheduled with a source, neither sent nor failed)
-/// are left out, so a thread holding only steps has no summary.
-///
 /// Note: This will exclude any threads where the latest message is marked as TRASH
+///
+/// Discarded drafts (`provider_missing` tombstones) are skipped, as the thread
+/// view skips them, so a thread left with only one is excluded. Pending
+/// sequence steps (scheduled with a source, neither sent nor failed) are left
+/// out too, so a thread holding only steps has no summary.
 #[tracing::instrument(skip(pool), err)]
 pub async fn get_thread_summary_info(
     pool: &PgPool,
@@ -85,6 +87,7 @@ pub async fn get_thread_summary_info(
                       AND m_latest.link_id = t.link_id
                       AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m_latest.id
                         AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
+                      AND NOT (m_latest.is_draft AND COALESCE((m_latest.mailbox_state->>'provider_missing')::boolean, false))
                     ORDER BY m_latest.internal_date_ts DESC NULLS LAST
                     LIMIT 1
                 ) AS "is_draft!",
@@ -128,6 +131,7 @@ pub async fn get_thread_summary_info(
                   AND m2.link_id = t.link_id
                   AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m2.id
                     AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
+                  AND NOT (m2.is_draft AND COALESCE((m2.mailbox_state->>'provider_missing')::boolean, false))
                 ORDER BY
                     (CASE WHEN m2.is_draft = false AND m2.sent_at IS NOT NULL THEN 0 ELSE 1 END) ASC,
                     COALESCE(m2.sent_at, m2.updated_at) DESC NULLS LAST
@@ -144,6 +148,7 @@ pub async fn get_thread_summary_info(
                   AND m3.link_id = t.link_id
                   AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages s WHERE s.message_id = m3.id
                     AND s.source IS NOT NULL AND NOT s.sent AND s.delivery_status <> 'failed')
+                  AND NOT (m3.is_draft AND COALESCE((m3.mailbox_state->>'provider_missing')::boolean, false))
                 ORDER BY
                     -- 1. Priority: Non-drafts with valid sent_at come first (0), everything else is fallback (1)
                     (CASE WHEN m3.is_draft = false AND m3.sent_at IS NOT NULL THEN 0 ELSE 1 END) ASC,

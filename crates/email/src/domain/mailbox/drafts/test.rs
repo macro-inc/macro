@@ -434,6 +434,48 @@ async fn lost_attachment_response_recovers_by_content_id_without_a_second_post()
 }
 
 #[tokio::test]
+async fn resync_keeps_an_uploaded_attachment_whose_provider_size_counts_its_properties() {
+    let h = harness(Some(DraftStage::Attachments));
+    {
+        let mut state = h.0.lock().unwrap();
+        state
+            .lease
+            .checkpoint
+            .as_mut()
+            .unwrap()
+            .prepared
+            .files
+            .push(DraftFile {
+                source: AttachmentSource::Uploaded {
+                    key: "immutable-key".into(),
+                },
+                name: "notes.txt".into(),
+                content_type: "text/plain".into(),
+                content_id: "stable-cid".into(),
+                inline: false,
+                size: 3,
+                sha256: format!("{:x}", Sha256::digest(b"abc")),
+            });
+        // Graph reports PidTagAttachSize: the content plus the attachment's properties.
+        state.attachments.push(DraftAttachment {
+            id: ProviderId::new("uploaded-earlier").unwrap(),
+            name: "notes.txt".into(),
+            size: 3 + 212,
+            content_id: Some("stable-cid".into()),
+            inline: false,
+        });
+    }
+    let service = service(&h);
+    for _ in 0..3 {
+        service.execute_once().await.unwrap();
+    }
+    let state = h.0.lock().unwrap();
+    assert!(state.failure.is_none(), "{:?}", state.failure);
+    assert_eq!(state.additions, 0);
+    assert_eq!(state.submissions, 1);
+}
+
+#[tokio::test]
 async fn forwarded_removal_matches_a_bracketed_provider_content_id() {
     use crate::domain::models::draft_attachment_manifest::AttachmentRemoval;
     let h = harness(Some(DraftStage::Attachments));
