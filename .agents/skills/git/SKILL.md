@@ -60,7 +60,7 @@ test fixtures. Describe the code change and nothing else.
   (`Slack integration`), never as the source of a request or report.
 - Never cite support channels, tickets, chat channels or threads, calls,
   meetings, emails, or links into support tools or Macro workspace items
-  (task links are fine). Don't say who asked or where it was reported.
+  (task and agent-session links are fine). Don't say who asked or where it was reported.
 - Never mention places tied to a person or customer (cities, offices, regions).
 - When the reason matters, say it in general terms: "Users with long read
   histories saw channels load slowly", not "<customer> reported in
