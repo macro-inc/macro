@@ -57,9 +57,12 @@ pub enum EnrollmentStatus {
 }
 
 impl EnrollmentStatus {
+    /// The statuses in which an enrollment may still send.
+    pub const LIVE: [Self; 3] = [Self::Active, Self::Paused, Self::NeedsAttention];
+
     /// Whether the enrollment may still send.
     pub fn is_live(self) -> bool {
-        matches!(self, Self::Active | Self::Paused | Self::NeedsAttention)
+        Self::LIVE.contains(&self)
     }
 }
 
@@ -319,8 +322,6 @@ pub struct Owner {
 pub struct EnrollmentRow {
     /// Enrollment id.
     pub id: Uuid,
-    /// Its sequence.
-    pub sequence_id: Uuid,
     /// The sequence's owner.
     pub owner_id: String,
     /// The team it belongs to.

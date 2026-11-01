@@ -299,11 +299,13 @@ pub trait SequenceRepo: Send + Sync + 'static {
         after: Option<(DateTime<Utc>, Uuid)>,
         limit: i64,
     ) -> impl Future<Output = Result<Vec<(DateTime<Utc>, Uuid)>, Self::Err>> + Send;
-    /// Active enrollments due for a step, after `after` in `(due_at, id)` order.
+    /// Active enrollments due for a step, after `after` in `(due_at, id)`
+    /// order, leaving out those sending from `skip_inboxes`.
     fn due_page(
         &self,
         after: Option<(DateTime<Utc>, Uuid)>,
         limit: i64,
+        skip_inboxes: &[Uuid],
     ) -> impl Future<Output = Result<Vec<DueEnrollment>, Self::Err>> + Send;
     /// Give active enrollments with neither a due time nor an unsent step a
     /// due time, so none waits forever. Returns how many.

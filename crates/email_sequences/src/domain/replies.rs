@@ -6,6 +6,8 @@ mod test;
 use chrono::{DateTime, Utc};
 use uuid::Uuid;
 
+use super::models::EnrollmentReason;
+
 /// What an incoming message means for a sequence.
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
 pub enum Response {
@@ -142,12 +144,9 @@ fn header_values<'a>(
 
 /// Message-IDs named by `In-Reply-To` and `References`.
 pub fn references(headers: &[(String, String)]) -> Vec<String> {
-    let mut ids: Vec<String> = headers
-        .iter()
-        .filter(|(key, _)| {
-            key.eq_ignore_ascii_case("in-reply-to") || key.eq_ignore_ascii_case("references")
-        })
-        .flat_map(|(_, value)| {
+    let mut ids: Vec<String> = header_values(headers, "in-reply-to")
+        .chain(header_values(headers, "references"))
+        .flat_map(|value| {
             value
                 .replace(['<', '>'], " ")
                 .split_whitespace()
@@ -162,10 +161,8 @@ pub fn references(headers: &[(String, String)]) -> Vec<String> {
 
 /// Addresses a bounce names in `X-Failed-Recipients`.
 pub fn failed_recipients(headers: &[(String, String)]) -> Vec<String> {
-    headers
-        .iter()
-        .filter(|(key, _)| key.eq_ignore_ascii_case("x-failed-recipients"))
-        .flat_map(|(_, value)| {
+    header_values(headers, "x-failed-recipients")
+        .flat_map(|value| {
             value
                 .split(',')
                 .map(|address| address.trim().to_lowercase())
@@ -175,12 +172,14 @@ pub fn failed_recipients(headers: &[(String, String)]) -> Vec<String> {
         .collect()
 }
 
-/// Whether `incoming` answers `enrolled`'s emails, and how. `None` when it
-/// doesn't answer them or is an automatic reply.
-pub fn stop_reason(enrolled: &Enrolled<'_>, incoming: &Incoming) -> Option<Response> {
-    if incoming.response == Response::AutoReply {
-        return None;
-    }
+/// Why `incoming` stops `enrolled`: it replies to or bounces its emails.
+/// `None` when it doesn't answer them or is an automatic reply.
+pub fn stop_reason(enrolled: &Enrolled<'_>, incoming: &Incoming) -> Option<EnrollmentReason> {
+    let reason = match incoming.response {
+        Response::Reply => EnrollmentReason::Replied,
+        Response::Bounce => EnrollmentReason::Bounced,
+        Response::AutoReply => return None,
+    };
     if let (Some(after), Some(received)) = (enrolled.replies_after, incoming.received_at)
         && received <= after
     {
@@ -211,7 +210,7 @@ pub fn stop_reason(enrolled: &Enrolled<'_>, incoming: &Incoming) -> Option<Respo
                 .bounce_text
                 .as_deref()
                 .is_some_and(|text| reports_failure_for(text, enrolled.email)));
-    (names_a_step || from_contact || bounced_contact).then_some(incoming.response)
+    (names_a_step || from_contact || bounced_contact).then_some(reason)
 }
 
 /// Whether a bounce's text names `address` as a failed recipient: outside the

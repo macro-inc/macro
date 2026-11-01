@@ -76,7 +76,7 @@ pub struct InvalidSequence {
 }
 
 impl InvalidSequence {
-    fn new(problem: Problem, position: Option<usize>) -> Self {
+    pub(super) fn new(problem: Problem, position: Option<usize>) -> Self {
         Self {
             problem,
             position,
@@ -158,18 +158,21 @@ fn check_tokens(text: &str, position: Option<usize>) -> Result<(), InvalidSequen
     }
 }
 
+/// A personalization token, `{{ name }}`; the name is the first group.
+static TOKEN: lazy_regex::Lazy<lazy_regex::Regex> = lazy_regex::lazy_regex!(r"\{\{\s*(\w+)\s*\}\}");
+
 fn token_count(text: &str) -> usize {
-    regex!(r"\{\{\s*\w+\s*\}\}").find_iter(text).count()
+    TOKEN.find_iter(text).count()
 }
 
 /// Tokens a contact can't fill in, including a stray `{{` or `}}`.
 fn unknown_tokens(text: &str) -> Vec<String> {
-    let mut unknown: Vec<String> = regex!(r"\{\{\s*(\w+)\s*\}\}")
+    let mut unknown: Vec<String> = TOKEN
         .captures_iter(text)
         .filter(|token| !matches!(&token[1], "firstName" | "name" | "email"))
         .map(|token| token[0].to_owned())
         .collect();
-    let rest = regex!(r"\{\{\s*\w+\s*\}\}").replace_all(text, " ");
+    let rest = TOKEN.replace_all(text, " ");
     for stray in regex!(r"\{\{|\}\}").find_iter(&rest) {
         let line_start = rest[..stray.start()].rfind('\n').map_or(0, |at| at + 1);
         let line_end = rest[stray.end()..]
@@ -269,7 +272,7 @@ fn personalize(text: &str, recipient: &Recipient) -> String {
         "" => FALLBACK_NAME,
         full => full,
     };
-    regex!(r"\{\{\s*(\w+)\s*\}\}")
+    TOKEN
         .replace_all(text, |token: &lazy_regex::Captures| match &token[1] {
             "firstName" => first.to_owned(),
             "name" => full.to_owned(),

@@ -4,7 +4,7 @@
 use super::*;
 use crate::domain::{
     models::{CrmPerson, EnrollSkip, EnrollmentAction, SequenceError},
-    ports::{NewSequence, OwnerAccess},
+    ports::{NewSequence, OwnerAccess, SequencesApi as _},
     render::{InvalidSequence, Problem},
     service::{EnrollRequest, MAX_ENROLL, SequencePatch, Sequences},
 };

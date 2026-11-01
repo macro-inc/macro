@@ -68,6 +68,9 @@ CREATE TABLE email_sequence_enrollments (
 
 CREATE INDEX email_sequence_enrollments_due_idx ON email_sequence_enrollments (due_at, id)
     WHERE status = 'active' AND due_at IS NOT NULL;
+-- Active enrollments waiting on a step in flight; the sweep checks none is stranded.
+CREATE INDEX email_sequence_enrollments_waiting_idx ON email_sequence_enrollments (id)
+    WHERE status = 'active' AND due_at IS NULL;
 -- Live enrollments of an inbox (inbox sync asks on every message), and the
 -- rows a deleted inbox sets to NULL.
 CREATE INDEX email_sequence_enrollments_link_idx ON email_sequence_enrollments (link_id, status);

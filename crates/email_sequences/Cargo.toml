@@ -11,8 +11,6 @@ default = []
 inbound = [
   "dep:axum",
   "dep:macro_authorization",
-  "dep:model-error-response",
-  "dep:serde_json",
   "dep:tokio",
   "dep:tokio-util",
   "dep:utoipa",
@@ -41,11 +39,9 @@ lazy-regex = { workspace = true }
 macro_authorization = { path = "../macro_authorization", optional = true, default-features = false, features = ["axum"] }
 macro_user_id = { path = "../macro_user_id" }
 macro_uuid = { path = "../macro_uuid", optional = true }
-model-error-response = { path = "../model-error-response", optional = true }
 rand = { workspace = true }
 rootcause = { workspace = true }
 serde = { workspace = true }
-serde_json = { workspace = true, optional = true }
 sqlx = { workspace = true, optional = true, features = ["json"] }
 strum = { workspace = true }
 thiserror = { workspace = true }

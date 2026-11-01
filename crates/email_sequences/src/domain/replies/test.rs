@@ -172,7 +172,7 @@ fn each_rule_matches_on_its_own() {
                 references: vec!["step@send.macro.com".to_owned()],
                 ..from_colleague.clone()
             },
-            Some(Response::Reply),
+            Some(EnrollmentReason::Replied),
         ),
         (
             "1: References resolve to the step message",
@@ -180,7 +180,7 @@ fn each_rule_matches_on_its_own() {
                 referenced_message_ids: vec![step_message],
                 ..from_colleague.clone()
             },
-            Some(Response::Reply),
+            Some(EnrollmentReason::Replied),
         ),
         (
             "2: replying_to_id is the step message",
@@ -188,7 +188,7 @@ fn each_rule_matches_on_its_own() {
                 replying_to_id: Some(step_message),
                 ..from_colleague.clone()
             },
-            Some(Response::Reply),
+            Some(EnrollmentReason::Replied),
         ),
         (
             "3: from the enrolled address, new thread, no In-Reply-To",
@@ -196,7 +196,7 @@ fn each_rule_matches_on_its_own() {
                 from: Some("ada@example.com".to_owned()),
                 ..from_colleague.clone()
             },
-            Some(Response::Reply),
+            Some(EnrollmentReason::Replied),
         ),
         (
             "4: a bounce naming the enrolled address",
@@ -206,7 +206,7 @@ fn each_rule_matches_on_its_own() {
                 response: Response::Bounce,
                 ..from_colleague.clone()
             },
-            Some(Response::Bounce),
+            Some(EnrollmentReason::Bounced),
         ),
         (
             "4b: a remote bounce that names the address only in its text",
@@ -216,7 +216,7 @@ fn each_rule_matches_on_its_own() {
                 response: Response::Bounce,
                 ..from_colleague.clone()
             },
-            Some(Response::Bounce),
+            Some(EnrollmentReason::Bounced),
         ),
         (
             "a bounce naming a longer address",
@@ -248,7 +248,7 @@ fn each_rule_matches_on_its_own() {
                 response: Response::Bounce,
                 ..from_colleague.clone()
             },
-            Some(Response::Bounce),
+            Some(EnrollmentReason::Bounced),
         ),
         (
             "a bounce for someone else that quotes the contact in its headers",
@@ -302,7 +302,7 @@ fn each_rule_matches_on_its_own() {
                 references: vec!["STEP@send.macro.com".to_owned()],
                 ..from_colleague.clone()
             },
-            Some(Response::Reply),
+            Some(EnrollmentReason::Replied),
         ),
         ("unrelated mail", from_colleague.clone(), None),
         (
@@ -338,7 +338,10 @@ fn each_rule_matches_on_its_own() {
         referenced_message_ids: vec![step_message],
         ..from_colleague.clone()
     };
-    assert_eq!(stop_reason(&unsent, &resolved), Some(Response::Reply));
+    assert_eq!(
+        stop_reason(&unsent, &resolved),
+        Some(EnrollmentReason::Replied)
+    );
     let from_contact = Incoming {
         from: Some("ada@example.com".to_owned()),
         ..from_colleague

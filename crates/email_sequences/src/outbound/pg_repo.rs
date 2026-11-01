@@ -10,8 +10,8 @@ use uuid::Uuid;
 use crate::domain::{
     models::{
         ContactEnrollment, EnrollmentCounts, EnrollmentDetail, EnrollmentReason, EnrollmentRow,
-        EnrollmentStep, EnrollmentSummary, HistoryRow, Owner, SendClock, Sequence, SequenceStatus,
-        SequenceSummary, Step, StepStatus, UnsubscribeToken,
+        EnrollmentStatus, EnrollmentStep, EnrollmentSummary, HistoryRow, Owner, SendClock,
+        Sequence, SequenceStatus, SequenceSummary, Step, StepStatus, UnsubscribeToken,
     },
     ports::{
         DueEnrollment, NewEnrollment, NewSequence, RecipientState, ReplyCandidates, SentStep,
@@ -56,7 +56,21 @@ fn reason_str(reason: Option<EnrollmentReason>) -> Option<&'static str> {
 }
 
 /// Live statuses, as stored.
-const LIVE: [&str; 3] = ["active", "paused", "needs_attention"];
+fn live() -> Vec<String> {
+    EnrollmentStatus::LIVE
+        .map(|status| <&'static str>::from(status).to_owned())
+        .to_vec()
+}
+
+fn recipient_state(
+    token: &str,
+    unsubscribed_at: Option<DateTime<Utc>>,
+) -> Result<RecipientState, PgSequenceError> {
+    Ok(RecipientState {
+        token: UnsubscribeToken::parse(token).ok_or(PgSequenceError::Decode("token"))?,
+        unsubscribed: unsubscribed_at.is_some(),
+    })
+}
 
 struct SequenceRecord {
     id: Uuid,
@@ -89,7 +103,6 @@ impl TryFrom<SequenceRecord> for Sequence {
 
 struct EnrollmentRecord {
     id: Uuid,
-    sequence_id: Uuid,
     owner_id: String,
     team_id: Uuid,
     sequence_status: String,
@@ -113,7 +126,6 @@ impl TryFrom<EnrollmentRecord> for EnrollmentRow {
     fn try_from(record: EnrollmentRecord) -> Result<Self, Self::Error> {
         Ok(EnrollmentRow {
             id: record.id,
-            sequence_id: record.sequence_id,
             owner_id: record.owner_id,
             team_id: record.team_id,
             sequence_status: parse(&record.sequence_status, "sequence status")?,
@@ -418,7 +430,7 @@ impl SequenceRepo for PgSequenceRepo {
     ) -> Result<Vec<EnrollmentRow>, PgSequenceError> {
         let records = sqlx::query_as!(
             EnrollmentRecord,
-            r#"SELECT e.id, e.sequence_id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,
+            r#"SELECT e.id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,
                       s.link_id AS sequence_link_id, e.link_id, e.email, e.contact_name,
                       '[]'::jsonb AS "steps!: Json<Vec<Step>>", e.status, e.reason, e.next_step, e.due_at,
                       e.attempts, e.timezone, e.send_time, e.replies_after
@@ -427,7 +439,7 @@ impl SequenceRepo for PgSequenceRepo {
                ORDER BY e.id
                FOR UPDATE OF e"#,
             sequence_id,
-            &LIVE.map(str::to_owned) as &[String],
+            &live(),
         )
         .fetch_all(&mut **tx)
         .await?;
@@ -495,7 +507,7 @@ impl SequenceRepo for PgSequenceRepo {
         let record = if skip_locked {
             sqlx::query_as!(
                 EnrollmentRecord,
-                r#"SELECT e.id, e.sequence_id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,
+                r#"SELECT e.id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,
                           s.link_id AS sequence_link_id, e.link_id, e.email, e.contact_name,
                           e.steps AS "steps: Json<Vec<Step>>", e.status, e.reason, e.next_step, e.due_at,
                           e.attempts, e.timezone, e.send_time, e.replies_after
@@ -509,7 +521,7 @@ impl SequenceRepo for PgSequenceRepo {
         } else {
             sqlx::query_as!(
                 EnrollmentRecord,
-                r#"SELECT e.id, e.sequence_id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,
+                r#"SELECT e.id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,
                           s.link_id AS sequence_link_id, e.link_id, e.email, e.contact_name,
                           e.steps AS "steps: Json<Vec<Step>>", e.status, e.reason, e.next_step, e.due_at,
                           e.attempts, e.timezone, e.send_time, e.replies_after
@@ -658,16 +670,7 @@ impl SequenceRepo for PgSequenceRepo {
         .fetch_all(&mut **tx)
         .await?;
         rows.into_iter()
-            .map(|row| {
-                Ok((
-                    row.email,
-                    RecipientState {
-                        token: UnsubscribeToken::parse(&row.token)
-                            .ok_or(PgSequenceError::Decode("token"))?,
-                        unsubscribed: row.unsubscribed_at.is_some(),
-                    },
-                ))
-            })
+            .map(|row| Ok((row.email, recipient_state(&row.token, row.unsubscribed_at)?)))
             .collect()
     }
 
@@ -712,13 +715,7 @@ impl SequenceRepo for PgSequenceRepo {
         )
         .fetch_optional(&mut **tx)
         .await?
-        .map(|row| {
-            Ok(RecipientState {
-                token: UnsubscribeToken::parse(&row.token)
-                    .ok_or(PgSequenceError::Decode("token"))?,
-                unsubscribed: row.unsubscribed_at.is_some(),
-            })
-        })
+        .map(|row| recipient_state(&row.token, row.unsubscribed_at))
         .transpose()
     }
 
@@ -766,7 +763,7 @@ impl SequenceRepo for PgSequenceRepo {
                ORDER BY id"#,
             team_id,
             email,
-            &LIVE.map(str::to_owned) as &[String],
+            &live(),
         )
         .fetch_all(&self.pool)
         .await?)
@@ -840,6 +837,7 @@ impl SequenceRepo for PgSequenceRepo {
         &self,
         after: Option<(DateTime<Utc>, Uuid)>,
         limit: i64,
+        skip_inboxes: &[Uuid],
     ) -> Result<Vec<DueEnrollment>, PgSequenceError> {
         let rows = sqlx::query!(
             r#"SELECT e.id, e.due_at AS "due_at!", e.link_id, e.email, e.contact_name
@@ -849,11 +847,13 @@ impl SequenceRepo for PgSequenceRepo {
                  AND ($1::timestamptz IS NULL OR (e.due_at, e.id) > ($1, $2))
                  AND NOT EXISTS (SELECT 1 FROM email_sequence_steps h
                                  WHERE h.enrollment_id = e.id AND h.status = 'scheduled')
+                 AND (e.link_id IS NULL OR e.link_id <> ALL($4))
                ORDER BY e.due_at, e.id
                LIMIT $3"#,
             after.map(|(at, _)| at),
             after.map(|(_, id)| id),
             limit,
+            skip_inboxes,
         )
         .fetch_all(&self.pool)
         .await?;
@@ -915,7 +915,7 @@ impl SequenceRepo for PgSequenceRepo {
             r#"SELECT EXISTS (SELECT 1 FROM email_sequence_enrollments
                               WHERE link_id = $1 AND status = ANY($2)) AS "live!""#,
             link_id,
-            &LIVE.map(str::to_owned) as &[String],
+            &live(),
         )
         .fetch_one(&self.pool)
         .await?)
@@ -942,7 +942,7 @@ impl SequenceRepo for PgSequenceRepo {
                                         OR lower(h.provider_message_id) = ANY($5))))
                ORDER BY e.id"#,
             candidates.link_id,
-            &LIVE.map(str::to_owned) as &[String],
+            &live(),
             candidates.from,
             candidates.failed_recipients,
             &references,

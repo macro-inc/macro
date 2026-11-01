@@ -3,7 +3,7 @@
 
 use chrono::{DateTime, Duration, Utc};
 use email::domain::{
-    models::{ContactInfo, ScheduledSendStatus, UserProvider},
+    models::{ContactInfo, ScheduledSendStatus},
     sequence_steps::{
         CancelExpectation, CancelOutcome, InboundMessage, NewStep, ReplySearch, SequenceStepStore,
         StepState,
@@ -61,16 +61,6 @@ pub struct SweepReport {
     pub failed: u32,
 }
 
-/// The sending inbox, when a step may go out from it now.
-fn usable_inbox(
-    inbox: Option<email::domain::sequence_steps::SendingInbox>,
-    owner_id: &str,
-) -> Option<email::domain::sequence_steps::SendingInbox> {
-    inbox.filter(|inbox| {
-        inbox.healthy && inbox.provider == UserProvider::Gmail && inbox.macro_id == owner_id
-    })
-}
-
 fn identities(history: &[HistoryRow]) -> Vec<SentIdentity> {
     history
         .iter()
@@ -102,13 +92,6 @@ fn incoming(message: &InboundMessage, resolved: Vec<Uuid>) -> Incoming {
             .then(|| message.body_text.as_deref().map(str::to_lowercase))
             .flatten(),
         response,
-    }
-}
-
-fn stop_reason(response: Response) -> EnrollmentReason {
-    match response {
-        Response::Bounce => EnrollmentReason::Bounced,
-        Response::Reply | Response::AutoReply => EnrollmentReason::Replied,
     }
 }
 
@@ -268,15 +251,11 @@ where
             }
             StepState::Gone => {
                 self.mark_unknown(&mut tx, &mut row, &step).await?;
-                let inbox = match row.link_id {
-                    Some(link_id) => self
-                        .steps
-                        .sending_inbox(R::conn(&mut tx), link_id)
-                        .await
-                        .map_err(internal)?,
-                    None => None,
-                };
-                let reason = if usable_inbox(inbox, &row.owner_id).is_some() {
+                let reason = if self
+                    .usable_inbox(&mut tx, row.link_id, &row.owner_id)
+                    .await?
+                    .is_some()
+                {
                     EnrollmentReason::StepUnknown
                 } else {
                     EnrollmentReason::InboxUnavailable
@@ -297,15 +276,10 @@ where
     ) -> Result<(), SequenceError> {
         match row.status {
             EnrollmentStatus::Active => {
-                let inbox = match row.link_id {
-                    Some(link_id) => self
-                        .steps
-                        .sending_inbox(R::conn(tx), link_id)
-                        .await
-                        .map_err(internal)?,
-                    None => None,
-                };
-                let healthy = usable_inbox(inbox, &row.owner_id).is_some();
+                let healthy = self
+                    .usable_inbox(tx, row.link_id, &row.owner_id)
+                    .await?
+                    .is_some();
                 let retry = usize::try_from(row.attempts)
                     .ok()
                     .and_then(|attempt| RETRY_DELAYS.get(attempt));
@@ -364,15 +338,10 @@ where
             self.stop(tx, row, reason).await?;
             return Ok(false);
         }
-        let inbox = match row.link_id {
-            Some(link_id) => self
-                .steps
-                .sending_inbox(R::conn(tx), link_id)
-                .await
-                .map_err(internal)?,
-            None => None,
-        };
-        if usable_inbox(inbox, &row.owner_id).is_none()
+        if self
+            .usable_inbox(tx, row.link_id, &row.owner_id)
+            .await?
+            .is_none()
             && self
                 .withdraw(tx, row, step, CancelExpectation::Scheduled)
                 .await?
@@ -425,9 +394,9 @@ where
             replies_after: Some(since),
             steps: &steps,
         };
-        Ok(messages.iter().find_map(|message| {
-            replies::stop_reason(&enrolled, &incoming(message, Vec::new())).map(stop_reason)
-        }))
+        Ok(messages
+            .iter()
+            .find_map(|message| replies::stop_reason(&enrolled, &incoming(message, Vec::new()))))
     }
 
     async fn create_due(&self, now: DateTime<Utc>, report: &mut SweepReport) {
@@ -449,7 +418,8 @@ where
         let mut full_inboxes = std::collections::HashSet::new();
         let mut after = None;
         loop {
-            let page = match self.repo.due_page(after, DUE_PAGE).await {
+            let skip: Vec<Uuid> = full_inboxes.iter().copied().collect();
+            let page = match self.repo.due_page(after, DUE_PAGE, &skip).await {
                 Ok(page) => page,
                 Err(error) => {
                     tracing::error!(error = ?error, "failed to list due enrollments");
@@ -564,15 +534,10 @@ where
                 .map(|()| Creation::Skipped)
                 .map_err(internal);
         }
-        let inbox = match row.link_id {
-            Some(link_id) => self
-                .steps
-                .sending_inbox(R::conn(&mut tx), link_id)
-                .await
-                .map_err(internal)?,
-            None => None,
-        };
-        let (Some(inbox), Some(contacts)) = (usable_inbox(inbox, &row.owner_id), contacts) else {
+        let inbox = self
+            .usable_inbox(&mut tx, row.link_id, &row.owner_id)
+            .await?;
+        let (Some(inbox), Some(contacts)) = (inbox, contacts) else {
             self.needs_attention(&mut tx, &mut row, EnrollmentReason::InboxUnavailable)
                 .await?;
             return self
@@ -788,6 +753,10 @@ where
             else {
                 return Ok(());
             };
+            // An automatic reply answers nothing.
+            if replies::classify(&message.headers, message.from.as_deref()) == Response::AutoReply {
+                return Ok(());
+            }
             let references = replies::references(&message.headers);
             let mut resolved = self
                 .steps
@@ -798,9 +767,6 @@ where
             (message, resolved)
         };
         let incoming = incoming(&message, resolved);
-        if incoming.response == Response::AutoReply {
-            return Ok(());
-        }
         let candidates = self
             .repo
             .reply_candidates(ReplyCandidates {
@@ -855,10 +821,10 @@ where
             replies_after: reply_cutoff(&row, &history),
             steps: &steps,
         };
-        let Some(response) = replies::stop_reason(&enrolled, incoming) else {
+        let Some(reason) = replies::stop_reason(&enrolled, incoming) else {
             return Ok(false);
         };
-        self.stop(&mut tx, &mut row, stop_reason(response)).await?;
+        self.stop(&mut tx, &mut row, reason).await?;
         self.repo.commit(tx).await.map_err(internal)?;
         Ok(true)
     }
