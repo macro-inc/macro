@@ -221,7 +221,9 @@ pub trait SequenceStepStore: Send + Sync + 'static {
     ) -> impl Future<Output = Result<Vec<Uuid>, Self::Err>> + Send;
 
     /// Incoming messages after `since` that may answer the steps: from the
-    /// enrolled address, replying to a step, or in a step's current thread.
+    /// enrolled address, replying to a step, in a step's current thread, or
+    /// from the mail system (`mailer-daemon@`, `postmaster@`), whose bounces
+    /// often start a thread of their own. Only those carry `body_text`.
     fn replies_since(
         &self,
         conn: &mut Self::Conn,

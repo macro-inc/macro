@@ -27,6 +27,33 @@ fn classifier_table() {
             Response::Bounce,
         ),
         (
+            "Gmail delay notice: still retrying",
+            vec![
+                (
+                    "Content-Type",
+                    "multipart/report; report-type=delivery-status",
+                ),
+                ("Subject", "Delivery Status Notification (Delay)"),
+            ],
+            Some("mailer-daemon@googlemail.com"),
+            Response::AutoReply,
+        ),
+        (
+            "Postfix delay notice",
+            vec![("Subject", "Delayed Mail (still being retried)")],
+            Some("MAILER-DAEMON@mx.example.org"),
+            Response::AutoReply,
+        ),
+        (
+            "a failed recipient wins over a delay subject",
+            vec![
+                ("X-Failed-Recipients", "ada@example.com"),
+                ("Subject", "Delivery Status Notification (Delay)"),
+            ],
+            Some("mailer-daemon@googlemail.com"),
+            Response::Bounce,
+        ),
+        (
             "delivery report from anyone",
             vec![(
                 "content-type",
@@ -196,6 +223,74 @@ fn each_rule_matches_on_its_own() {
             Incoming {
                 from: Some("mailer-daemon@remote.example".to_owned()),
                 bounce_text: Some("<grada@example.com.au> failed".to_owned()),
+                response: Response::Bounce,
+                ..from_colleague.clone()
+            },
+            None,
+        ),
+        (
+            "a bounce naming the address in a longer domain",
+            Incoming {
+                from: Some("mailer-daemon@remote.example".to_owned()),
+                bounce_text: Some("delivery to ada@example.com.au failed".to_owned()),
+                response: Response::Bounce,
+                ..from_colleague.clone()
+            },
+            None,
+        ),
+        (
+            "a bounce naming the address at the end of a sentence",
+            Incoming {
+                from: Some("postmaster@remote.example".to_owned()),
+                bounce_text: Some(
+                    "your message couldn't be delivered to ada@example.com.".to_owned(),
+                ),
+                response: Response::Bounce,
+                ..from_colleague.clone()
+            },
+            Some(Response::Bounce),
+        ),
+        (
+            "a bounce for someone else that quotes the contact in its headers",
+            Incoming {
+                from: Some("postmaster@contoso.com".to_owned()),
+                bounce_text: Some(
+                    "your message to bob@contoso.com couldn't be delivered.\n\
+                     original message headers:\n\
+                     to: bob@contoso.com\n\
+                     cc: ada <ada@example.com>"
+                        .to_owned(),
+                ),
+                response: Response::Bounce,
+                ..from_colleague.clone()
+            },
+            None,
+        ),
+        (
+            "a bounce whose quoted address headers fold onto the contact",
+            Incoming {
+                from: Some("mailer-daemon@remote.example".to_owned()),
+                bounce_text: Some(
+                    "<bob@contoso.com>: 550 no such user\n\
+                     to: bob <bob@contoso.com>,\n \
+                     ada <ada@example.com>"
+                        .to_owned(),
+                ),
+                response: Response::Bounce,
+                ..from_colleague.clone()
+            },
+            None,
+        ),
+        (
+            "a qmail bounce that copies the original below its failure",
+            Incoming {
+                from: Some("mailer-daemon@remote.example".to_owned()),
+                bounce_text: Some(
+                    "<bob@contoso.com>:\nsorry, no mailbox here by that name.\n\
+                     --- below this line is a copy of the message.\n\
+                     hi bob, looping in ada@example.com"
+                        .to_owned(),
+                ),
                 response: Response::Bounce,
                 ..from_colleague.clone()
             },

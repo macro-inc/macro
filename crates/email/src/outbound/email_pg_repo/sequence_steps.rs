@@ -478,15 +478,31 @@ impl SequenceStepStore for PgSequenceSteps {
     ) -> Result<Vec<InboundMessage>, EmailErr> {
         // Bounded: the first answer stops the enrollment.
         const MAX_CANDIDATES: i64 = 200;
+        // One indexed branch per way a message can answer the steps: from the
+        // contact or the mail system (a bounce in a thread of its own), a
+        // reply to a step, or anything in a step's thread. Only bounces carry
+        // their text, which can name the failed address.
         let rows = sqlx::query!(
-            r#"SELECT m.id, m.internal_date_ts, m.replying_to_id, m.headers_jsonb,
-                      lower(c.email_address) AS "from_email?"
-               FROM email_messages m LEFT JOIN email_contacts c ON c.id = m.from_contact_id
-               WHERE m.link_id = $1 AND NOT m.is_sent AND NOT m.is_draft AND m.internal_date_ts > $4
-                 AND (m.from_contact_id IN (SELECT id FROM email_contacts
-                                            WHERE link_id = $1 AND lower(email_address) = $2)
-                      OR m.replying_to_id = ANY($3)
-                      OR m.thread_id IN (SELECT thread_id FROM email_messages WHERE id = ANY($3) AND link_id = $1))
+            r#"WITH candidates AS (
+                   SELECT m.id FROM email_contacts c JOIN email_messages m ON m.from_contact_id = c.id
+                   WHERE c.link_id = $1 AND m.internal_date_ts > $4
+                     AND (lower(c.email_address) = $2
+                          OR split_part(lower(c.email_address), '@', 1) IN ('mailer-daemon', 'postmaster'))
+                   UNION
+                   SELECT id FROM email_messages
+                   WHERE link_id = $1 AND replying_to_id = ANY($3) AND internal_date_ts > $4
+                   UNION
+                   SELECT t.id FROM email_messages s
+                   JOIN email_messages t ON t.link_id = s.link_id AND t.thread_id = s.thread_id
+                   WHERE s.id = ANY($3) AND s.link_id = $1 AND t.internal_date_ts > $4
+               )
+               SELECT m.id, m.internal_date_ts, m.replying_to_id, m.headers_jsonb,
+                      lower(c.email_address) AS "from_email?",
+                      CASE WHEN split_part(lower(c.email_address), '@', 1) IN ('mailer-daemon', 'postmaster')
+                           THEN m.body_text END AS "body_text?"
+               FROM candidates JOIN email_messages m ON m.id = candidates.id
+               LEFT JOIN email_contacts c ON c.id = m.from_contact_id
+               WHERE NOT m.is_sent AND NOT m.is_draft
                ORDER BY m.internal_date_ts
                LIMIT $5"#,
             search.link_id,
@@ -506,7 +522,7 @@ impl SequenceStepStore for PgSequenceSteps {
                 from: row.from_email,
                 replying_to_id: row.replying_to_id,
                 headers: header_pairs(row.headers_jsonb),
-                body_text: None,
+                body_text: row.body_text,
             })
             .collect())
     }

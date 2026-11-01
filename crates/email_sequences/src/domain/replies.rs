@@ -62,6 +62,32 @@ pub struct SentIdentity {
     pub provider_message_id: Option<String>,
 }
 
+/// Subjects of delay notices: Gmail, Postfix, Exchange, Sendmail.
+const DELAY_SUBJECTS: [&str; 4] = [
+    "(delay)",
+    "delayed mail",
+    "delivery delayed",
+    "warning: could not send message",
+];
+
+/// Where a bounce's quoted copy of the original message starts; addresses
+/// after it are the original's recipients, not the failed ones.
+const QUOTED_ORIGINAL: [&str; 4] = [
+    "original message headers",
+    "original message follows",
+    "copy of the message",
+    "----- original message",
+];
+
+/// Address headers a bounce quotes from the original message.
+const QUOTED_ADDRESS_HEADERS: [&str; 6] = ["to:", "cc:", "bcc:", "from:", "reply-to:", "sender:"];
+
+/// A sender that is the mail system itself, which sends bounces.
+pub fn is_mail_system(address: &str) -> bool {
+    let address = address.to_ascii_lowercase();
+    address.starts_with("mailer-daemon@") || address.starts_with("postmaster@")
+}
+
 /// Read a message's headers (`[{name, value}]`, names in any case).
 pub fn classify(headers: &[(String, String)], from: Option<&str>) -> Response {
     let header = |name| header_values(headers, name);
@@ -73,12 +99,20 @@ pub fn classify(headers: &[(String, String)], from: Option<&str>) -> Response {
             .collect();
         value.starts_with("multipart/report") && value.contains("report-type=delivery-status")
     });
-    let daemon = from.is_some_and(|from| {
-        let from = from.to_ascii_lowercase();
-        from.starts_with("mailer-daemon@") || from.starts_with("postmaster@")
-    });
-    if delivery_report || header("x-failed-recipients").any(|v| !v.is_empty()) || daemon {
+    if header("x-failed-recipients").any(|v| !v.is_empty()) {
         return Response::Bounce;
+    }
+    if delivery_report || from.is_some_and(is_mail_system) {
+        // A delay notice: the provider is still retrying, so nothing failed.
+        let delayed = header("subject").any(|subject| {
+            let subject = subject.to_ascii_lowercase();
+            DELAY_SUBJECTS.iter().any(|marker| subject.contains(marker))
+        });
+        return if delayed {
+            Response::AutoReply
+        } else {
+            Response::Bounce
+        };
     }
     // `Auto-Submitted: auto-replied (vacation)`; anything but an `auto-` value
     // (including `no`) is a person.
@@ -176,8 +210,34 @@ pub fn stop_reason(enrolled: &Enrolled<'_>, incoming: &Incoming) -> Option<Respo
             || incoming
                 .bounce_text
                 .as_deref()
-                .is_some_and(|text| mentions_address(text, enrolled.email)));
+                .is_some_and(|text| reports_failure_for(text, enrolled.email)));
     (names_a_step || from_contact || bounced_contact).then_some(incoming.response)
+}
+
+/// Whether a bounce's text names `address` as a failed recipient: outside the
+/// copy of the original message it quotes and that message's address headers.
+fn reports_failure_for(text: &str, address: &str) -> bool {
+    let mut quoted_header = false;
+    for line in text.lines() {
+        let trimmed = line.trim_start();
+        if QUOTED_ORIGINAL
+            .iter()
+            .any(|marker| trimmed.contains(marker))
+        {
+            return false;
+        }
+        // A folded header line continues the one before it.
+        let continues = line.starts_with([' ', '\t']) && !trimmed.is_empty();
+        if !continues {
+            quoted_header = QUOTED_ADDRESS_HEADERS
+                .iter()
+                .any(|header| trimmed.starts_with(header));
+        }
+        if !quoted_header && mentions_address(line, address) {
+            return true;
+        }
+    }
+    false
 }
 
 /// Whether `text` names `address` as a whole address, not inside a longer one.
@@ -185,8 +245,12 @@ fn mentions_address(text: &str, address: &str) -> bool {
     let part_of_address = |c: char| c.is_alphanumeric() || "._%+-@".contains(c);
     text.match_indices(address).any(|(at, found)| {
         let before = text[..at].chars().next_back();
-        let after = text[at + found.len()..].chars().next();
+        let mut after = text[at + found.len()..].chars();
+        let next = after.next();
+        // `ada@example.com.au` is another address; `ada@example.com.` ends a sentence.
+        let longer_domain = next == Some('.') && after.next().is_some_and(char::is_alphanumeric);
         !before.is_some_and(part_of_address)
-            && !after.is_some_and(|c| c.is_alphanumeric() || c == '-' || c == '_')
+            && !next.is_some_and(|c| c.is_alphanumeric() || c == '-' || c == '_')
+            && !longer_domain
     })
 }
