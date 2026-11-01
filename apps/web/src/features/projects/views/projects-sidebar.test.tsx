@@ -88,6 +88,49 @@ it('highlights the active project and preserves the navigation gesture', () => {
   );
 });
 
+it('renders appearance changes from the shared rows without a timestamp change', () => {
+  const [rows, setRows] = createSignal<ReturnType<ProjectsSource['rows']>>([
+    {
+      project: {
+        id: 'launch',
+        name: 'Launch',
+        updatedAt: '2026-01-01',
+        appearance: { icon: { kind: 'emoji', value: '🚀' }, color: null },
+      },
+      properties: [],
+    },
+  ]);
+  setup({ rows });
+  expect(
+    screen.getByRole('button', { name: 'Launch' }).querySelector('.emoji')
+      ?.textContent
+  ).toBe('🚀');
+  setRows((previous) =>
+    previous?.map((row) => ({
+      ...row,
+      project: {
+        ...row.project,
+        appearance: { icon: { kind: 'emoji', value: '🧭' }, color: 'blue' },
+      },
+    }))
+  );
+  expect(
+    screen.getByRole('button', { name: 'Launch' }).querySelector('.emoji')
+      ?.textContent
+  ).toBe('🧭');
+  setRows((previous) =>
+    previous?.map((row) => ({
+      ...row,
+      project: { ...row.project, appearance: null },
+    }))
+  );
+  expect(
+    screen.getByRole('button', { name: 'Launch' }).querySelector('.emoji')
+  ).toBeNull();
+  expect(
+    screen.getByRole('button', { name: 'Launch' }).querySelector('svg')
+  ).not.toBeNull();
+});
 it('collapses the list and disables reads, then restores it when expanded', async () => {
   const { enabled } = setup();
   const trigger = screen.getByRole('button', { name: 'My projects' });

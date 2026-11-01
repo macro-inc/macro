@@ -37,4 +37,4 @@ snippets, task projects (initiatives), forms, and databases.
 - Keep mutations account-scoped, update every reader optimistically on Apply, and roll back rejected writes without overwriting newer edits.
 - Serialize server writes per entity, and reconcile confirmed appearance after in-flight initial reads without canceling those reads.
 - Render public metadata without mounting authenticated preview queries.
-- Preserve appearance in identity projections and renderers; reserve type-only icons for navigation and status.
+- Preserve appearance in identity projections and renderers, including project list, sidebar, and picker rows; reserve type-only icons for navigation and status.

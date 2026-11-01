@@ -44,6 +44,7 @@ vi.mock('./project-collection-persistence', () => ({}));
 vi.mock('./project-share', () => ({}));
 vi.mock('./views/project-assignment', () => ({}));
 vi.mock('./views/projects-collection', () => ({}));
+vi.mock('./views/projects-sidebar', () => ({ ProjectsSidebar: () => null }));
 vi.mock('../entity-appearance/entity-appearance', () => ({
   useChangeEntityIcon: () => vi.fn(),
 }));

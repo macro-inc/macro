@@ -1,8 +1,8 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isResponseFreeNetworkError } from '@core/util/request-error';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import StackIcon from '@icon/system/regular/stack.svg';
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import { ProjectsSidebarSkeleton } from '../components/project-skeletons';
 import { useProjectsContext } from '../context/projects-context';
@@ -84,7 +84,12 @@ export function ProjectsSidebar(props: ProjectsSidebarProps) {
                   onClick={(event) => props.onOpen(project.id, event)}
                 >
                   <ViewSidebar.Icon>
-                    <StackIcon />
+                    <EntityIcon
+                      targetType="initiative"
+                      appearance={project.appearance}
+                      theme="monochrome"
+                      class="size-(--sidebar-icon-size)"
+                    />
                   </ViewSidebar.Icon>
                   <span class="truncate">{project.name}</span>
                 </ViewSidebar.Item>
