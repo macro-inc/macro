@@ -13,7 +13,7 @@ snippets, task projects (initiatives), forms, and databases.
 - `primitives/create-appearance-draft.ts`: isolated drafts and guarded Apply.
 - `queries/appearance.ts`: domain writes and cache reconciliation.
 - `save-entity-appearance.ts`: lazy production clients for the mutation adapter.
-- `queries/document-appearance.ts`: authenticated preview projection for open Markdown headers.
+- `queries/document-appearance.ts`: authenticated lightweight identity projection for open Markdown headers.
 
 ## Scope
 
@@ -28,11 +28,13 @@ snippets, task projects (initiatives), forms, and databases.
 
 ## Checks
 
-- Run the focused `create-appearance-draft` tests and the appearance browser fixture.
+- Run the focused `create-appearance-draft`, appearance query, and imperative dialog tests; run the browser fixture only when browser testing is permitted.
 
 ## Gotchas
 
 - Do not change content recency or send notifications when appearance changes.
 - Keep unsaved previews inside the picker.
-- Keep mutations account-scoped and update every reader after a confirmed save.
+- Keep mutations account-scoped, update every reader optimistically on Apply, and roll back rejected writes without overwriting newer edits.
+- Serialize server writes per entity, and reconcile confirmed appearance after in-flight initial reads without canceling those reads.
 - Render public metadata without mounting authenticated preview queries.
+- Preserve appearance in identity projections and renderers; reserve type-only icons for navigation and status.

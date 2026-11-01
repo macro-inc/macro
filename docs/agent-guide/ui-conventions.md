@@ -60,8 +60,10 @@ Desktop uses a compact popover; phones use the shared dialog sheet. Search
 Macro icons or emoji. Colors use a fixed theme-aware palette; emoji keep their
 native colors. **Default icon** and **Default color** reset independently;
 **Reset all** resets both. Draft choices preview only inside the picker.
-**Apply** saves both fields together, then closes. A failed save leaves choices
-available to retry; Cancel or dismiss discards only the unsaved draft.
+**Apply** updates visible icons immediately while saving both fields together,
+then closes on success. A failed save restores the previous icons and keeps the
+draft available to retry; Cancel or dismiss discards only the unsaved draft.
+Opening the editor must not blank or remount the surrounding app.
 
 Readers, including public viewers, see saved appearance wherever an entity icon
 already appears. Appearance edits do not reorder content, update content recency,

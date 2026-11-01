@@ -1,21 +1,21 @@
-import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
+import { useItemIdentity } from '@queries/preview';
 import { type Accessor, createMemo } from 'solid-js';
 import type { DocumentEntity } from '../../entity/types/entity';
 
 /** An open document header observes the existing preview projection, not a per-icon fetch. */
 export function useDocumentAppearance(
-  entity: Accessor<DocumentEntity | undefined>,
+  entity: Accessor<Pick<DocumentEntity, 'id' | 'appearance'> | undefined>,
   authenticated: Accessor<boolean>
 ) {
   const enabled = createMemo(() => Boolean(entity() && authenticated()));
   const preview = createMemo(() =>
     enabled()
-      ? useItemPreview(() => ({ type: 'document', id: entity()?.id ?? '' }))[0]
+      ? useItemIdentity(() => ({ type: 'document', id: entity()?.id ?? '' }))
       : undefined
   );
   return () => {
     const current = preview()?.();
-    return current && isAccessiblePreviewItem(current)
+    return current?.appearance !== undefined
       ? current.appearance
       : entity()?.appearance;
   };

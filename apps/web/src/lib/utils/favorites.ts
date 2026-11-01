@@ -86,10 +86,13 @@ function favoritePreviewEntity(favorite: Favorite): ItemEntity | undefined {
     case 'chat':
     case 'project':
     case 'call':
+    case 'initiative':
     case 'crm_company':
     case 'database':
     case 'form':
       return { id: favorite.entityId, type: favorite.entityType };
+    case 'scheduled_action':
+      return { id: favorite.entityId, type: 'routine' };
     default:
       return undefined;
   }
@@ -133,6 +136,24 @@ export function useFavoriteDmRecipientId(
   });
 }
 
+/** Shared saved appearance from the same preview cache used by favorite names. */
+export function useFavoriteAppearance(favorite: Favorite) {
+  const entity = favoritePreviewEntity(favorite);
+  if (
+    !entity ||
+    (entity.type !== 'document' &&
+      entity.type !== 'initiative' &&
+      entity.type !== 'routine' &&
+      entity.type !== 'database' &&
+      entity.type !== 'form')
+  )
+    return () => undefined;
+  const [preview] = useItemPreview(() => entity);
+  return () => {
+    const item = preview();
+    return isAccessiblePreviewItem(item) ? item.appearance : undefined;
+  };
+}
 /**
  * Reactive display name for a favorite: subscribes to the entity's preview
  * (fetching it if needed) and resolves like `favoriteDisplayName`.

@@ -1,4 +1,4 @@
-# Confirmed REST writes update entity fields without replacing any query membership.
+# Appearance field patches update identity without replacing query membership.
 subscription EntityAppearanceCacheWrite {
   soupUpdates {
     __typename

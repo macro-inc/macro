@@ -1,5 +1,6 @@
 import {
   favoriteIconType,
+  useFavoriteAppearance,
   useFavoriteDmRecipientId,
 } from '@app/util/favorites';
 import { EntityIcon } from '@core/component/EntityIcon';
@@ -21,6 +22,7 @@ export function FavoriteIcon(props: {
   class?: string;
 }) {
   const dmRecipientId = useFavoriteDmRecipientId(props.favorite);
+  const appearance = useFavoriteAppearance(props.favorite);
   return (
     <Show
       when={dmRecipientId()}
@@ -28,6 +30,7 @@ export function FavoriteIcon(props: {
         <EntityIcon
           size="xs"
           targetType={favoriteIconType(props.favorite)}
+          appearance={appearance()}
           class={props.class}
         />
       }

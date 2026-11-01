@@ -1,4 +1,7 @@
-import type { EntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import {
+  type EntityAppearance,
+  sameAppearance,
+} from '@app/features/entity-appearance/core/appearance';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import {
   enableGraphqlSoup,
@@ -281,12 +284,18 @@ const RAW_NAME_STALE_TIME = 5 * 60 * 1000;
 export function useItemRawName(
   item: Accessor<{ id: string; type?: ItemType }>
 ): Accessor<string | undefined> {
-  const query = useItemPreviewQuery(item, RAW_NAME_STALE_TIME, false);
+  const identity = useItemIdentity(item);
+  return () => identity()?.rawName;
+}
 
+/** Reads lightweight identity fields without fetching document properties. */
+export function useItemIdentity(
+  item: Accessor<ItemEntity>
+): Accessor<AccessiblePreviewItem | undefined> {
+  const query = useItemPreviewQuery(item, RAW_NAME_STALE_TIME, false);
   return () => {
     const data = query.data();
-    if (!data || !isAccessiblePreviewItem(data)) return undefined;
-    return data.rawName;
+    return data && isAccessiblePreviewItem(data) ? data : undefined;
   };
 }
 
@@ -348,14 +357,17 @@ export function setPreviewFileType(itemId: string, fileType: string) {
   if (prev) return setPreviewData(itemId, (prev) => ({ ...prev, fileType }));
 }
 
-/** Patch a confirmed appearance without creating inaccessible or missing previews. */
+/** Patch a loaded REST preview without creating an inaccessible preview. */
 export function setPreviewAppearance(
   itemId: string,
-  appearance: EntityAppearance
-) {
+  appearance: EntityAppearance | null | undefined,
+  expected?: EntityAppearance
+): { appearance: EntityAppearance | null | undefined } | undefined {
   const previous = getPreviewData(itemId);
   if (!previous || !isAccessiblePreviewItem(previous)) return;
+  if (expected && !sameAppearance(previous.appearance, expected)) return;
   setPreviewData(itemId, (item) => ({ ...item, appearance }));
+  return { appearance: previous.appearance };
 }
 
 /** Optimistically updates a preview name in the selected transport cache. */

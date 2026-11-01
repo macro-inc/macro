@@ -1,3 +1,4 @@
+import { supportsEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { TaskStatusIcon } from '@core/component/TaskStatusIcon';
 import { UserIcon } from '@core/component/UserIcon';
@@ -121,6 +122,11 @@ export function MentionsMenuItem(props: {
         return (
           <EntityIcon
             targetType={getBlockNameFromEntity(props.item)}
+            appearance={
+              supportsEntityAppearance(props.item.data)
+                ? props.item.data.appearance
+                : undefined
+            }
             size="xs"
           />
         );

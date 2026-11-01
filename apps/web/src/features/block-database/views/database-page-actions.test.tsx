@@ -24,6 +24,9 @@ import {
 vi.mock('@app/components/entity-detail/DocumentTitleHoverCard', () => ({
   DocumentTitleHoverCard: () => null,
 }));
+vi.mock('@app/features/entity-appearance/entity-appearance', () => ({
+  useChangeEntityIcon: () => vi.fn(),
+}));
 vi.mock('@core/block', () => ({
   isInBlock: () => true,
   useBlockAliasedName: () => 'database',

@@ -719,7 +719,15 @@ function DatabaseMention(props: DocumentMentionDecoratorProps) {
             documentId={props.documentId}
             blockName="database"
             name={name() || 'Database'}
-            icon={<EntityIcon targetType="database" size="fill" />}
+            icon={
+              <EntityIcon
+                targetType="database"
+                appearance={
+                  detail.isSuccess ? detail.data.database.appearance : undefined
+                }
+                size="fill"
+              />
+            }
             collapsed={props.collapsed}
             onOpen={(event) =>
               openDocument(
@@ -779,7 +787,15 @@ function FormMention(props: DocumentMentionDecoratorProps) {
           documentId={props.documentId}
           blockName="form"
           name={name() || 'Form'}
-          icon={<EntityIcon targetType="form" size="fill" />}
+          icon={
+            <EntityIcon
+              targetType="form"
+              appearance={
+                detail.isSuccess ? detail.data.form.appearance : undefined
+              }
+              size="fill"
+            />
+          }
           collapsed={props.collapsed}
           onOpen={(event) =>
             openDocument(

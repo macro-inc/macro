@@ -6,6 +6,8 @@ import {
 import type { EntityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
+import type { EntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { useDocumentAppearance } from '@app/features/entity-appearance/queries/document-appearance';
 import { createSearchParams, useParams } from '@app/lib/split-router';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
 import { useMarkdownName } from '@block-md/component/MarkdownNameProvider';
@@ -30,6 +32,7 @@ import { getPermissions, Permissions } from '@core/component/SharePermissions';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
+import { useUserId } from '@core/context/user';
 import {
   type Accessor,
   createMemo,
@@ -53,8 +56,20 @@ function HomeEntityBreadcrumb(props: {
   target: EntityDetailTarget;
   value: Accessor<string>;
   fileMenu?: JSX.Element;
+  appearance?: EntityAppearance | null;
 }) {
   useSplitDisplayName(props.name);
+  const userId = useUserId();
+  const appearance = useDocumentAppearance(
+    () => {
+      const blockType = entityDetailBlockType(props.target);
+      return props.target.type === 'document' &&
+        (blockType === 'md' || blockType === 'snippet')
+        ? { id: props.target.id, appearance: props.appearance }
+        : undefined;
+    },
+    () => Boolean(userId())
+  );
 
   return (
     <ViewBreadcrumbs.Item
@@ -78,6 +93,7 @@ function HomeEntityBreadcrumb(props: {
                 <EntityIcon
                   targetType={entityDetailBlockType(props.target) ?? 'unknown'}
                   size="xs"
+                  appearance={appearance()}
                   class="shrink-0"
                 />
               }
@@ -100,6 +116,7 @@ function HomeEntityBreadcrumb(props: {
 function HomeMarkdownBreadcrumb(props: {
   target: EntityDetailTarget;
   value: Accessor<string>;
+  appearance?: EntityAppearance | null;
 }) {
   const { displayName } = useMarkdownName();
   const { documentId, kind, permissions } = useMarkdownDocument();
@@ -121,6 +138,7 @@ function HomeMarkdownBreadcrumb(props: {
       name={name}
       target={props.target}
       value={props.value}
+      appearance={props.appearance}
       fileMenu={
         <SplitFileMenu
           id={documentId()}
@@ -160,6 +178,7 @@ function HomeDocumentBreadcrumb(props: {
       name={name}
       target={props.target}
       value={props.value}
+      appearance={props.context.documentMetadata.appearance}
       fileMenu={
         <SplitFileMenu
           id={props.context.documentMetadata.documentId}
@@ -316,6 +335,7 @@ function HomeEntityDetailBody(props: {
                   <HomeMarkdownBreadcrumb
                     target={props.target}
                     value={props.value}
+                    appearance={document()?.documentMetadata.appearance}
                   />
                 </Show>
                 <Show when={channel()}>

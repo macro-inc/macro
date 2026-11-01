@@ -20,6 +20,8 @@ nullable JSON field, eligibility, authorization, writes, and lifecycle.
 Edits require existing edit access; routines remain owner-only. Metadata-only
 writes do not change content timestamps or execution configuration revisions.
 Appearance travels with entity reads, rather than fetching per rendered icon.
+Headers and breadcrumbs use the lightweight preview identity selection, without
+loading document properties.
 Existing duplication/template flows copy appearance; blank creation uses defaults.
 Published routine templates retain snapshot semantics.
 
@@ -30,12 +32,15 @@ wire types from the Rust schemas, not hand-written frontend DTOs.
 
 Header icons and existing entity menus open the same lazy editor. Desktop uses
 an anchored compact popover; mobile uses the existing sheet primitives. Row icons
-retain navigation behavior.
+retain navigation behavior. Popup loading stays inside the dialog's Suspense
+boundary without suspending the surrounding app.
 
 The editor offers Icons/Emoji tabs, search, a grid, palette swatches, independent
 icon/color defaults, and Reset all. Preview stays inside the picker. Cancel
-discards the draft; Apply persists both choices together. Failed saves retain
-the draft. Async completion stays scoped to the opening account.
+before Apply discards the draft. Apply updates visible readers optimistically
+while saving both choices together. A failed save restores the previous appearance
+and retains the draft for retry. Async completion stays scoped to the opening
+account and never overwrites a newer edit.
 
 ## History
 

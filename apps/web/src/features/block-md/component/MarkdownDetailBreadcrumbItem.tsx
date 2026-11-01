@@ -1,5 +1,7 @@
 import { DocumentTitleHoverCard } from '@app/components/entity-detail/DocumentTitleHoverCard';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
+import type { EntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { useDocumentAppearance } from '@app/features/entity-appearance/queries/document-appearance';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
@@ -10,6 +12,7 @@ import type { BlockAlias, BlockName } from '@core/block';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { Permissions } from '@core/component/SharePermissions';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
+import { useUserId } from '@core/context/user';
 import { buildEntityData } from '@entity';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import type { MarkdownDocumentKind } from '../types';
@@ -31,6 +34,7 @@ export function MarkdownDetailBreadcrumbItem(props: {
   fallbackName?: string;
   ownerId: string;
   projectId?: string;
+  appearance?: EntityAppearance | null;
   onClose: () => void;
   onDuplicate: (id: string, name: string) => void;
 }) {
@@ -39,6 +43,14 @@ export function MarkdownDetailBreadcrumbItem(props: {
   const { permissions, state } = useMarkdownDocument();
   const { fileOperations, menuTools } = useMarkdownDocumentTools();
   const blockName = () => markdownDocumentBlockName(props.kind);
+  const userId = useUserId();
+  const appearance = useDocumentAppearance(
+    () =>
+      props.kind === 'document' || props.kind === 'snippet'
+        ? { id: props.documentId, appearance: props.appearance }
+        : undefined,
+    () => Boolean(userId())
+  );
   const documentName = () =>
     displayName() || props.fallbackName || blockNameToDefaultFile(blockName());
   useSplitDisplayName(documentName);
@@ -86,7 +98,12 @@ export function MarkdownDetailBreadcrumbItem(props: {
                 focusDocument();
               }}
             >
-              <EntityIcon targetType={blockName()} size="xs" class="shrink-0" />
+              <EntityIcon
+                targetType={blockName()}
+                appearance={appearance()}
+                size="xs"
+                class="shrink-0"
+              />
               <span class="truncate">{documentName()}</span>
             </ViewBreadcrumbs.Button>
           </DocumentTitleHoverCard>

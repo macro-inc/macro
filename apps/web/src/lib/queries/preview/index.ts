@@ -6,6 +6,7 @@ export {
   setPreviewAppearance,
   setPreviewFileType,
   setPreviewName,
+  useItemIdentity,
   useItemPreview,
   useItemRawName,
 } from './preview';
