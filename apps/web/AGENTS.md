@@ -682,6 +682,20 @@ on focus/reconnect; route existing subscriptions to billing management. Keep
 known management access through refetch failures, but hide unconfirmed trials.
 Reset rejected checkout offers before refetching eligibility.
 
+## Native commands
+
+Over-the-air bundles reach native apps older than the commands they call.
+`native-commands.json` lists every Tauri command the web code invokes directly,
+through a wrapper such as the cache host's `request`, or by `addPluginListener`.
+`src/lib/tauri/native-commands.test.ts` reads the calls with the TypeScript
+parser and fails when one is missing from that list, is not registered by the
+app (`generate_handler!` or an in-repo plugin's `build.rs`), or names its
+command with a value it cannot read: use a string literal, a constant, or a
+parameter typed as a union of literals. Commands that published plugins' own
+JavaScript packages call are not covered. Before adding a command to the list,
+raise `min-native-build.json` to the first build with it, or handle
+`Command … not found` in the caller (see the src-tauri README).
+
 ## Desktop release builds: generated WASM
 
 Keep `nix/tauri-desktop.nix` in sync with generated WASM dependencies: desktop

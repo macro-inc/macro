@@ -5,6 +5,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { requireNativeUpdate } from '@core/mobile/nativeUpdateRequired';
 import { hasLoginCookie } from '@core/util/cookies';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -759,19 +760,16 @@ export function getGraphqlSoupClient(): Client {
       }
       reportCacheError(error, 'initialization');
       fallbackAfterInitializationFailure(error);
-      toast.failure(
-        error instanceof NativeCacheUpgradeRequiredError
-          ? 'Macro update required'
-          : 'Local cache unavailable',
-        {
+      if (error instanceof NativeCacheUpgradeRequiredError) {
+        requireNativeUpdate(error.message);
+      } else {
+        toast.failure('Local cache unavailable', {
           subtext:
-            error instanceof NativeCacheUpgradeRequiredError
-              ? error.message
-              : cacheRecovery.state() === 'unavailable'
-                ? 'Drafts remain on this device. Reconnect or retry draft synchronization.'
-                : 'Queued changes are preserved. Update or reload Macro to recover local storage.',
-        }
-      );
+            cacheRecovery.state() === 'unavailable'
+              ? 'Drafts remain on this device. Reconnect or retry draft synchronization.'
+              : 'Queued changes are preserved. Update or reload Macro to recover local storage.',
+        });
+      }
       console.warn(
         'graphql cache async init failed; using uncached client',
         error
