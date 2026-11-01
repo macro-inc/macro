@@ -178,8 +178,8 @@ Customers too: `/app/company/<uuid>` and `/app/contact/<uuid>` links (which
 **Copy link** still copies), `@` mentions, search and Command-K results,
 favorites, and CRM discussion notifications. A contact opens under People, so its
 breadcrumb returns to People. A split already showing that record is brought
-forward instead. Touch devices keep the standalone pages, and a
-Customers record URL opened on touch redirects to its standalone page.
+forward instead. Touch devices keep the standalone record pages; a Customers
+record URL redirects there unless it opens a linked item inside Customers.
 Each record opened from the details appends a breadcrumb and a history entry: a
 contact from a company's Team tab gives `Companies > <company> > <contact>`, and
 a person's Company link gives `People > <contact> > <company>`. Opening a record
@@ -284,10 +284,18 @@ Files also includes attachments of emails with its address. Tasks created from a
 contact also reference its company. The side panel keeps Sharing (admins only)
 and adds References.
 
-In a company or contact's Tasks tab, clicking a task (or pressing Enter on its
-focused row) opens the task detail view at `/app/tasks/<task-id>`, including on
-mobile. Shift-click opens it in a separate split. Verify that the task's status
-and properties appear, rather than the regular Drive markdown editor.
+In workspace activity and a company or contact's embedded sections, clicking a
+Task, Email, Note, Call, or Database opens its authorized detail inside Customers.
+The CRM sidebar stays in place and the breadcrumb shows the source view, record
+trail and section (when present), and selected item. The item URL is nested under
+`/app/companies` or `/app/companies/pipeline/<uuid>`; record items also retain
+`/<record-type>/<record-id>/<section>` before `/item/<item-type>/<item-id>`.
+Back and Forward restore the item and source; selecting the source breadcrumb or
+closing the item returns to the source list or record with its entry state.
+Reload keeps the selected item's URL. Shift-click uses the existing separate
+split behavior; modified row clicks keep the existing split behavior. On touch,
+the existing header and breadcrumb conventions apply without a new navigation UI.
+Verify that tasks display their status and properties, not the Drive editor.
 
 Verify the real CRM routes separately with accessible and inaccessible databases,
 multiple matching rows per database, empty matches, and a second page of results.

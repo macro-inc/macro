@@ -26,11 +26,13 @@ import {
   CrmListSkeleton,
 } from './components/list-state';
 import { useCrmContext } from './context/crm-context';
+import { useCrmWorkspace } from './context/workspace-context';
 
 /** Production Tasks layouts for the workspace-wide CRM activity scope. */
 export function CrmActivityTasks(props: { title?: JSX.Element }) {
   const crm = useCrmContext();
   const layout = useSplitLayout();
+  const workspace = useCrmWorkspace();
   return (
     <TagSetsQueryProvider>
       <TasksViewProvider
@@ -38,6 +40,19 @@ export function CrmActivityTasks(props: { title?: JSX.Element }) {
         restoreEntryState
         scopeKey="crm:activity:tasks"
         onOpenTask={(task, options) => {
+          if (
+            workspace.host.record.openItem(
+              {
+                type: 'document',
+                id: task.id,
+                name: task.fallbackName ?? 'Task',
+                fileType: 'md',
+                subType: { type: 'task' },
+              },
+              options?.event
+            )
+          )
+            return true;
           layout.openWithSplit(
             { type: 'task', id: task.id },
             { preferNewSplit: options?.event?.shiftKey }

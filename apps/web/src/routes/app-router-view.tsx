@@ -101,8 +101,12 @@ import {
   channelsSplitRoute,
   codersRoute,
   companiesRoute,
+  crmItemRoute,
+  crmPipelineItemRoute,
+  crmPipelineRecordItemRoute,
   crmPipelineRecordRoute,
   crmPipelineRoute,
+  crmRecordItemRoute,
   crmRecordRoute,
   debugRoutes,
   driveCallRoute,
@@ -428,9 +432,15 @@ export function AppRouterView() {
         <Route definition={callDetailRoute} component={CallDetailRouteView} />
         <Route definition={companiesRoute} component={CompaniesRouteView}>
           <Route definition={crmPipelineRoute}>
-            <Route definition={crmPipelineRecordRoute} />
+            <Route definition={crmPipelineItemRoute} />
+            <Route definition={crmPipelineRecordRoute}>
+              <Route definition={crmPipelineRecordItemRoute} />
+            </Route>
           </Route>
-          <Route definition={crmRecordRoute} />
+          <Route definition={crmItemRoute} />
+          <Route definition={crmRecordRoute}>
+            <Route definition={crmRecordItemRoute} />
+          </Route>
         </Route>
         <Route definition={foldersRoute} component={FoldersRouteView} />
         <Route definition={searchRoute} component={SearchRouteView} />

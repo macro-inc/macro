@@ -6,14 +6,26 @@ import { CrmActivityTasks } from './activity-tasks-adapter';
 import type { CrmRecordScope } from './core/record';
 import { CrmRecordTasks } from './record-tasks-adapter';
 
-const { openWithSplit, popoverSplit, adaptive, openTaskComposer } = vi.hoisted(
-  () => ({
-    openWithSplit: vi.fn(),
-    popoverSplit: vi.fn(),
-    adaptive: vi.fn(() => false),
-    openTaskComposer: vi.fn(),
-  })
-);
+const {
+  openWithSplit,
+  popoverSplit,
+  adaptive,
+  openTaskComposer,
+  openItem,
+  workspacePresent,
+} = vi.hoisted(() => ({
+  openWithSplit: vi.fn(),
+  popoverSplit: vi.fn(),
+  adaptive: vi.fn(() => false),
+  openTaskComposer: vi.fn(),
+  openItem: vi.fn(() => false),
+  workspacePresent: vi.fn(() => true),
+}));
+vi.mock('./context/workspace-context', () => ({
+  useCrmWorkspace: () => ({ host: { record: { openItem } } }),
+  useOptionalCrmWorkspace: () =>
+    workspacePresent() ? { host: { record: { openItem } } } : undefined,
+}));
 vi.mock('./context/crm-context', () => ({
   useCrmContext: () => ({ openTaskComposer }),
 }));
@@ -87,6 +99,7 @@ vi.mock('./components/record-section', () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
+  workspacePresent.mockReturnValue(true);
 });
 
 const scopes: CrmRecordScope[] = [
@@ -150,4 +163,23 @@ it('forwards board and Gantt creation defaults through the CRM composer', () => 
     dueDate: new Date('2026-10-01T12:00:00Z'),
     composerContext: { key: 'crm-board', initialPropertyValues: {} },
   });
+});
+
+it('opens an unmodified task in the CRM record instead of a separate split', () => {
+  openItem.mockReturnValueOnce(true);
+  render(() => <CrmRecordTasks scope={scopes[0]} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Open task' }));
+  expect(openItem).toHaveBeenCalledOnce();
+  expect(openWithSplit).not.toHaveBeenCalled();
+});
+
+it('keeps standalone record previews independent of a CRM workspace', () => {
+  workspacePresent.mockReturnValue(false);
+  render(() => <CrmRecordTasks scope={scopes[0]} />);
+  fireEvent.click(screen.getByRole('button', { name: 'Open task' }));
+  expect(openItem).not.toHaveBeenCalled();
+  expect(openWithSplit).toHaveBeenCalledExactlyOnceWith(
+    { type: 'task', id: 'task-1' },
+    { preferNewSplit: false }
+  );
 });
