@@ -21,6 +21,14 @@ fn personalization_table() {
     let cases = [
         ("Hi {{firstName}}", Some("Ada Lovelace"), "Hi Ada"),
         ("Hi {{ firstName }}", Some("Lovelace, Ada B"), "Hi Ada"),
+        ("Hi {{firstName}}", Some("Ada Lovelace, PhD"), "Hi Ada"),
+        (
+            "Hi {{firstName}}",
+            Some("Martin Luther King, Jr."),
+            "Hi Martin",
+        ),
+        ("Hi {{firstName}}", Some("Jane Doe, Acme Corp"), "Hi Jane"),
+        ("Hi {{firstName}}", Some("Bob Jones (Acme, Inc.)"), "Hi Bob"),
         (
             "Hi {{firstName}}",
             Some("The Analytical Co,"),

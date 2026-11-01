@@ -243,8 +243,10 @@ fn first_name(name: &str) -> &str {
         return name.trim_end_matches(',');
     }
     let trimmed = name.trim();
-    // "Last, First [Middle]", as Outlook writes names.
-    if let Some((_, rest)) = trimmed.split_once(',')
+    // "Last, First [Middle]", as Outlook writes names. A comma after more
+    // than one word starts a suffix instead: "Ada Lovelace, PhD".
+    if let Some((last, rest)) = trimmed.split_once(',')
+        && !last.trim().contains(char::is_whitespace)
         && let Some(first) = rest.split_whitespace().next()
     {
         return first.trim_end_matches(',');
