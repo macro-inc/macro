@@ -84,7 +84,7 @@ async fn test_get_contacts(pool: PgPool) -> sqlx::Result<()> {
 async fn test_get_contacts_reads_both_columns_once(pool: PgPool) -> sqlx::Result<()> {
     let repo = DbContactsRepository::new(pool);
     let mut contacts: Vec<String> = repo
-        .get_contacts(mid("macro|m@test.com"))
+        .get_contacts(mid("macro|m@example.com"))
         .await
         .unwrap()
         .iter()
@@ -94,10 +94,10 @@ async fn test_get_contacts_reads_both_columns_once(pool: PgPool) -> sqlx::Result
     assert_eq!(
         contacts,
         [
-            "macro|a@test.com",
-            "macro|b@test.com",
-            "macro|x@test.com",
-            "macro|z@test.com",
+            "macro|a@example.com",
+            "macro|b@example.com",
+            "macro|x@example.com",
+            "macro|z@example.com",
         ]
     );
     Ok(())
