@@ -55,6 +55,14 @@ Keep property names on one line. Collection headers use available space up to
 their actions, truncating only the remaining overflow; value rows retain the
 shared label column.
 
+Empty panel values use the shared `Property.Empty` icons with “No status,”
+“No priority,” “Unassigned,” “No due date,” or “No project” for system fields,
+and “Not set” for other fields. Host `getEmptyLabel` overrides apply to single,
+multi-value, and inline fields. Empty select values remain clickable to open
+their picker; empty text, number, and link values retain inline editing through
+an `emptyValue` slot. Boolean toggles and separate collection headers retain
+their existing empty-state behavior.
+
 `side-panel/properties/EntityCollectionProperty.tsx` renders non-user, multi-entity
 properties. Empty collections show only the property header, with no placeholder
 or reserved content area. Their labeled ghost Add button aligns with the shared

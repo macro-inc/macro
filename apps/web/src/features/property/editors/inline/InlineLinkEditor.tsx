@@ -4,7 +4,7 @@ import { openExternalUrl } from '@core/util/url';
 import LinkIcon from '@icon/system/regular/link.svg';
 import DeleteIcon from '@icon/system/regular/x.svg';
 import { proxyResource } from '@service-unfurl/client';
-import { type Component, createSignal, For, Show } from 'solid-js';
+import { type Component, createSignal, For, type JSX, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import { useProperty } from '../../core/context';
 import { PropertyEmpty } from '../../extractors/PropertyEmpty';
@@ -21,7 +21,7 @@ const ADD_BUTTON_CLASS =
 // Inline URL collection editor for LINK properties. Supports multi-select
 // (chip list with add button) and single (one slot). Unfurl preview pulls
 // favicon + title; remove on hover.
-export function InlineLinkEditor() {
+export function InlineLinkEditor(props: { emptyValue?: JSX.Element }) {
   const ctx = useProperty();
 
   const [isAdding, setIsAdding] = createSignal(false);
@@ -146,7 +146,7 @@ export function InlineLinkEditor() {
         fallback={
           <Show when={!hasValue(property())}>
             <div class="text-ink-muted px-2 py-0.5 bg-transparent inline-block shrink-0 rounded-sm">
-              <PropertyEmpty label="Empty" />
+              {props.emptyValue ?? <PropertyEmpty label="Empty" />}
             </div>
           </Show>
         }
@@ -161,7 +161,12 @@ export function InlineLinkEditor() {
                 onClick={startAdding}
                 disabled={isSaving()}
               >
-                +
+                <Show
+                  when={links().length === 0 && props.emptyValue}
+                  fallback="+"
+                >
+                  {props.emptyValue}
+                </Show>
               </button>
             </Show>
           }

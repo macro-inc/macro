@@ -129,6 +129,9 @@ split, and an already open project is focused instead of opened again), and the
 caret changes the project. Hovering the name turns its icon into an arrow. People
 who can't edit the task get the name alone, so they can still open the project.
 An empty or unavailable project keeps the plain pill, and composers never split it.
+Empty values in the Properties panel show No status, No priority, Unassigned,
+No due date, or No project with the shared empty-value icons; custom fields show
+Not set. Click the empty value to open its existing picker or inline editor.
 Enter activates a pill or any other document control reached by keyboard. After a
 mouse click, Enter still moves to the editor.
 Wide desktop task rows and group headers share their leading icon alignment.
