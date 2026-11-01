@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT e.id, e.sequence_id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,\n                          s.link_id AS sequence_link_id, e.link_id, e.email, e.contact_name,\n                          e.steps AS \"steps: Json<Vec<Step>>\", e.status, e.reason, e.next_step, e.due_at,\n                          e.attempts, e.timezone, e.send_time, e.replies_after\n                   FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id\n                   WHERE e.id = $1\n                   FOR UPDATE OF e",
+  "query": "SELECT e.id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,\n                      s.link_id AS sequence_link_id, e.link_id, e.email, e.contact_name,\n                      '[]'::jsonb AS \"steps!: Json<Vec<Step>>\", e.status, e.reason, e.next_step, e.due_at,\n                      e.attempts, e.timezone, e.send_time, e.replies_after\n               FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id\n               WHERE e.sequence_id = $1 AND e.status = ANY($2)\n               ORDER BY e.id\n               FOR UPDATE OF e",
   "describe": {
     "columns": [
       {
@@ -10,93 +10,89 @@
       },
       {
         "ordinal": 1,
-        "name": "sequence_id",
-        "type_info": "Uuid"
-      },
-      {
-        "ordinal": 2,
         "name": "owner_id",
         "type_info": "Text"
       },
       {
-        "ordinal": 3,
+        "ordinal": 2,
         "name": "team_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 4,
+        "ordinal": 3,
         "name": "sequence_status",
         "type_info": "Text"
       },
       {
-        "ordinal": 5,
+        "ordinal": 4,
         "name": "sequence_link_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 6,
+        "ordinal": 5,
         "name": "link_id",
         "type_info": "Uuid"
       },
       {
-        "ordinal": 7,
+        "ordinal": 6,
         "name": "email",
         "type_info": "Text"
       },
       {
-        "ordinal": 8,
+        "ordinal": 7,
         "name": "contact_name",
         "type_info": "Text"
       },
       {
-        "ordinal": 9,
-        "name": "steps: Json<Vec<Step>>",
+        "ordinal": 8,
+        "name": "steps!: Json<Vec<Step>>",
         "type_info": "Jsonb"
       },
       {
-        "ordinal": 10,
+        "ordinal": 9,
         "name": "status",
         "type_info": "Text"
       },
       {
-        "ordinal": 11,
+        "ordinal": 10,
         "name": "reason",
         "type_info": "Text"
       },
       {
-        "ordinal": 12,
+        "ordinal": 11,
         "name": "next_step",
         "type_info": "Int2"
       },
       {
-        "ordinal": 13,
+        "ordinal": 12,
         "name": "due_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 14,
+        "ordinal": 13,
         "name": "attempts",
         "type_info": "Int2"
       },
       {
-        "ordinal": 15,
+        "ordinal": 14,
         "name": "timezone",
         "type_info": "Text"
       },
       {
-        "ordinal": 16,
+        "ordinal": 15,
         "name": "send_time",
         "type_info": "Time"
       },
       {
-        "ordinal": 17,
+        "ordinal": 16,
         "name": "replies_after",
         "type_info": "Timestamptz"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid"
+        "Uuid",
+        "TextArray"
       ]
     },
     "nullable": [
@@ -104,12 +100,11 @@
       false,
       false,
       false,
-      false,
       true,
       true,
       false,
       true,
-      false,
+      null,
       false,
       true,
       false,
@@ -120,5 +115,5 @@
       true
     ]
   },
-  "hash": "3f78fcd2b5d2c54046875c3411e0c8ee23f521165d19ed313af6f76469fd7852"
+  "hash": "ab5502006a177a1db18ce3411b38d6f0fdea8c744062dc0bfbba91155ed22e62"
 }
