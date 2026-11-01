@@ -44,7 +44,8 @@ pub struct DraftAttachment {
     pub id: ProviderId,
     /// Filename.
     pub name: String,
-    /// Decoded byte length.
+    /// Provider-reported size. Graph reports `PidTagAttachSize`, which also
+    /// counts the attachment's other properties, so it exceeds the byte length.
     pub size: u64,
     /// Content-ID retained for reconciliation and inline rendering.
     pub content_id: Option<String>,
