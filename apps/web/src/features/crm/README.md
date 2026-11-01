@@ -87,8 +87,10 @@ joins the CRM list only after a row has a Companies or Contacts link.
 CRM collection and record lists use full-height empty states, horizontally
 centered and raised toward the toolbar, with
 creation guidance, distinct search-empty actions, retryable error states, and
-shared list skeletons. Keep search and available header actions visible in every
-state. A failed continuation retains rows and retries that page.
+shared list skeletons with compact single-line rows, small icons, varied title
+widths, and supporting metadata columns that hide in narrow panes. Keep search
+and available header actions visible in every state. A failed continuation retains
+rows and retries that page.
 Workspace activity uses the shared single-row desktop header with New and an
 expandable Search control; record-detail tabs retain their section toolbar.
 Company and contact headers keep desktop section tabs; touch uses a labeled
