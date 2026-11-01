@@ -1598,6 +1598,42 @@ async fn programs_that_read_their_trigger_need_activity_triggers_and_decisions_n
 }
 
 #[tokio::test]
+async fn placeholders_can_use_the_ids_saving_gives_and_resaving_them_changes_nothing() {
+    let svc = service(true);
+    let daily = json!({ "type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC" });
+    let steps = json!([
+        { "type": "tool", "tool": "CreateDocument", "arguments": {
+            "documentName": "Follow up", "fileContent": "", "fileExtension": "md", "isTask": true
+        } },
+        { "type": "tool", "tool": "Comment", "arguments": {
+            "entityType": "document",
+            "entityId": "{{steps.create_document.documentId}}",
+            "content": "Created by a routine",
+        } },
+    ]);
+    let config = program_configuration(daily, steps.clone());
+    let created = svc
+        .create_action(
+            &user_principal(),
+            CreateScheduledAction::Canonical(config.clone()),
+        )
+        .await
+        .unwrap();
+    assert_eq!(created.task["steps"][0]["id"], "create_document");
+    assert_eq!(created.task["steps"][1]["id"], "comment");
+    // A client that doesn't echo the ids sends the same routine.
+    let id = created.id.unwrap();
+    let updated = svc
+        .update_action(edit_receipt(id), update(config))
+        .await
+        .unwrap();
+    assert_eq!(
+        updated.configuration_revision,
+        created.configuration_revision
+    );
+}
+
+#[tokio::test]
 async fn structurally_invalid_programs_are_rejected_with_the_broken_rule() {
     let svc = service(true);
     let error = svc

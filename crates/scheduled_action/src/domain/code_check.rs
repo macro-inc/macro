@@ -48,6 +48,26 @@ fn describe(steps: &[StepProblems]) -> String {
         .join("\n\n")
 }
 
+/// `task` with every code and tool step named, as saving stores it
+/// ([`RoutineProgram::assign_step_ids`]), so placeholder validation, change
+/// detection and the checker all see the same ids. Malformed programs come
+/// back as they are, for target validation to report, and a single agent
+/// task has no steps to name.
+pub fn named_steps(task: &Value) -> Value {
+    let mut named = task.clone();
+    let (Ok(mut program), Value::Object(fields)) = (RoutineProgram::from_task(task), &mut named)
+    else {
+        return named;
+    };
+    if fields.contains_key("steps") {
+        program.assign_step_ids();
+        if let Ok(steps) = serde_json::to_value(&program.steps) {
+            fields.insert("steps".into(), steps);
+        }
+    }
+    named
+}
+
 /// `task` with an id on every code and tool step, and its `sdk` set to the
 /// version every code step now checks against. A routine's code steps are
 /// checked together, each against the outputs of the steps before it, unless
@@ -58,19 +78,13 @@ pub async fn checked_task(
     task: &Value,
     previous: Option<&Value>,
 ) -> Result<Value, CodeCheckError> {
-    let mut checked = task.clone();
-    // Malformed programs are reported by target validation, and a single
-    // agent task has no steps to name.
-    let (Ok(mut program), Value::Object(fields)) = (RoutineProgram::from_task(task), &mut checked)
+    let mut checked = named_steps(task);
+    let (Ok(program), Value::Object(fields)) = (RoutineProgram::from_task(&checked), &mut checked)
     else {
         return Ok(checked);
     };
     if !fields.contains_key("steps") {
         return Ok(checked);
-    }
-    program.assign_step_ids();
-    if let Ok(steps) = serde_json::to_value(&program.steps) {
-        fields.insert("steps".into(), steps);
     }
     if program.code_steps().is_empty() {
         fields.remove("sdk");

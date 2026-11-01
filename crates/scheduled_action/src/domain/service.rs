@@ -17,7 +17,7 @@ use macro_uuid::Uuid;
 use model_owner::{CreationPrincipal, Owner};
 use tokio::sync::mpsc::Sender;
 
-use super::code_check::{CodeCheck, CodeGuide, checked_task, same_task};
+use super::code_check::{CodeCheck, CodeGuide, checked_task, named_steps, same_task};
 use super::code_upgrade::{CodeUpgrade, NoCodeUpgrades};
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
@@ -239,7 +239,8 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         let owner_user = owner.as_user().ok_or(OwnerNotUserError {
             owner_type: owner.owner_type(),
         })?;
-        let input = ActionConfiguration::from(input);
+        let mut input = ActionConfiguration::from(input);
+        input.task = named_steps(&input.task);
         let description = description(&input.description)?;
         self.check_event_management(&input.trigger)?;
         self.check_conditions(&input.trigger)?;
@@ -306,6 +307,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         Code: RoutineCode,
     {
         require_explicit_selection(&action.task, &input.task)?;
+        input.task = named_steps(&input.task);
         // Clients don't echo the SDK the stored code was checked against.
         if same_task(&action.task, &input.task) {
             input.task = action.task.clone();
