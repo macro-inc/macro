@@ -679,6 +679,10 @@ missing message or subject error does once filled in. Suggestions leave out
 automated addresses (`notifications@`, `mailer-daemon@`, `postmaster@`,
 `bounce@` and no-reply or do-not-reply addresses); typing one in full still adds
 it. Reply on a bounce goes to its sender, as for any other message.
+With a typed address chip in To or Cc, type text that is not an address
+(`notanemail`) and press Enter, or `bad@@x..com` and Tab: the chip stays, and
+the text stays in the field to be corrected. A typed address already chosen is
+not listed again in the suggestions.
 When checking draft autosave, edit the body of a draft with uploaded or forwarded
 attachments, wait for the save, and reopen it; the attachments should remain visible.
 In a long thread, scroll away from the bottom while a draft save is pending.

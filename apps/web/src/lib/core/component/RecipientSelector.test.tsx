@@ -98,6 +98,15 @@ describe('RecipientSelector typed addresses', () => {
     expect(input.value).toBe('');
   });
 
+  it('keeps the recipients and the text when Enter is pressed on an invalid address', async () => {
+    const user = userEvent.setup();
+    const { input, emails } = renderSelector();
+    fireEvent.input(input, { target: { value: 'qa@example.com,' } });
+    await user.type(input, 'notanemail{Enter}');
+    expect(emails()).toEqual(['qa@example.com']);
+    expect(input.value).toBe('notanemail');
+  });
+
   it('leaves text until a separator ends a complete address', () => {
     const { input, emails } = renderSelector();
     fireEvent.input(input, {
