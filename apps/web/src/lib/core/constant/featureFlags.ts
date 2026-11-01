@@ -814,6 +814,15 @@ export const enableActivityFeed = defineFlag({
   default: onInDev,
 });
 
+// Agents home: pending updates from coding agents shown as a stack under the
+// new-chat composer, and the Open PRs section in the Agents sidebar.
+// Override with VITE_ENABLE_AGENT_UPDATES.
+export const enableAgentUpdates = defineFlag({
+  key: 'enable-agent-updates',
+  env: 'ENABLE_AGENT_UPDATES',
+  default: onInDev,
+});
+
 // AI agents: the folded agent-session view in channels, and which bot the
 // single `@macro` mention targets — the agent session when on, the classic
 // in-channel reply when off.

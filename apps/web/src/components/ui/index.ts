@@ -140,6 +140,10 @@ export { Layer } from './components/Layer';
 export { LogoProgress } from './components/LogoProgress';
 export type { NavRowProps } from './components/NavRow';
 export { NavRow } from './components/NavRow';
+export {
+  NotificationStack,
+  type NotificationStackProps,
+} from './components/NotificationStack';
 export type {
   NumberUnitInputDecrementProps,
   NumberUnitInputIncrementProps,

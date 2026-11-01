@@ -13,12 +13,14 @@ import {
   speedForModel,
 } from '@core/component/AI/constant/speed';
 import { fastModeEnabled } from '@core/component/AI/signal/speed';
+import { chatAttachmentMentionToMarkdown } from '@core/component/AI/util/chatAttachmentMention';
 import { ComposerGreeting } from '@core/component/ComposerGreeting';
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { uploadFile } from '@core/util/upload';
+import type { AgentSessionEntity } from '@entity';
 import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import CodeIcon from '@icon/system/regular/code.svg';
 import AutoIcon from '@icon/system/regular/sparkle.svg';
@@ -29,6 +31,7 @@ import type { PromptAttachment } from '@service-agent-harness/generated/schemas'
 import { Tabs } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createMemo, createSignal, Show } from 'solid-js';
+import { AgentUpdatesStack } from '../../agent-updates/views/AgentUpdatesStack';
 import { EffortSelector } from '../../block-agent/component/EffortSelector';
 import {
   type EffortChoice,
@@ -97,6 +100,9 @@ export function NewChatPage(props: {
   onStart: (start: StartConversation) => void;
   /** Opens the roster page on the given kind's tab. */
   onOpenRoster: (kind: AgentKind) => void;
+  updateSessions?: readonly AgentSessionEntity[];
+  onOpenUpdateSession?: (sessionId: string) => void;
+  showUpdates?: boolean;
 }) {
   const userId = useUserId();
   const billing = useAiBillingSummaryQuery();
@@ -380,6 +386,17 @@ export function NewChatPage(props: {
   };
 
   let focusInput: (() => void) | undefined;
+  const chatAboutUpdate = (sessionId: string, sessionName: string) => {
+    const mention = chatAttachmentMentionToMarkdown({
+      documentId: sessionId,
+      documentName: sessionName,
+      blockName: 'agent',
+    });
+    setDraft(
+      `${draft().trim()}${draft().trim() ? '\n\n' : ''}${mention}\nAbout this update: `
+    );
+    focusInput?.();
+  };
   const restoreInputFocus = (event: Event) => {
     event.preventDefault();
     focusInput?.();
@@ -557,6 +574,20 @@ export function NewChatPage(props: {
               {composer()}
             </div>
           </FloatRegionOrInline>
+          <Show
+            when={
+              props.showUpdates &&
+              props.updateSessions &&
+              props.onOpenUpdateSession
+            }
+          >
+            <AgentUpdatesStack
+              home
+              sessions={props.updateSessions ?? []}
+              onOpenSession={(id) => props.onOpenUpdateSession?.(id)}
+              onChatAbout={chatAboutUpdate}
+            />
+          </Show>
         </div>
       </section>
     </Show>
