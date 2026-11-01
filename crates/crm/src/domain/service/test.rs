@@ -845,9 +845,9 @@ async fn malformed_emails_have_no_depopulate_target() {
         "",
         "jane",
         "jane@",
-        "@acme.com",
-        "jane@@acme.com",
-        "a@b@c.com",
+        "@acme.test",
+        "jane@@acme.test",
+        "a@b@c.test",
     ] {
         let has_target = service()
             .has_depopulate_target(&team_id, email)

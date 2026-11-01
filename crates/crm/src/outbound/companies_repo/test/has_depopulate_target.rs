@@ -9,27 +9,27 @@ use uuid::Uuid;
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn true_only_for_a_contact_on_a_tracked_domain(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
-    let owner_id = "macro|owner@test.com";
+    let owner_id = "macro|owner@owner.test";
     seed_team(&pool, team_id, owner_id).await?;
     let other_team_id = Uuid::now_v7();
-    seed_team(&pool, other_team_id, "macro|other@test.com").await?;
+    seed_team(&pool, other_team_id, "macro|other@other.test").await?;
     let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
-    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
-    insert_contact_with_source(&pool, company_id, "Jane@Acme.com", link_id).await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.test"]).await?;
+    insert_contact_with_source(&pool, company_id, "Jane@Acme.test", link_id).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     assert!(
-        repo.has_depopulate_target(&team_id, "acme.com", "jane@acme.com")
+        repo.has_depopulate_target(&team_id, "acme.test", "jane@acme.test")
             .await?
     );
     assert!(
-        repo.has_depopulate_target(&team_id, "ACME.com", "JANE@acme.COM")
+        repo.has_depopulate_target(&team_id, "ACME.test", "JANE@acme.TEST")
             .await?
     );
     // Never in CRM: the common case for a fresh cleanup candidate.
     assert!(
         !repo
-            .has_depopulate_target(&team_id, "acme.com", "stranger@acme.com")
+            .has_depopulate_target(&team_id, "acme.test", "stranger@acme.test")
             .await?
     );
     assert!(
@@ -39,7 +39,7 @@ async fn true_only_for_a_contact_on_a_tracked_domain(pool: PgPool) -> anyhow::Re
     );
     assert!(
         !repo
-            .has_depopulate_target(&other_team_id, "acme.com", "jane@acme.com")
+            .has_depopulate_target(&other_team_id, "acme.test", "jane@acme.test")
             .await?
     );
     Ok(())
@@ -50,30 +50,30 @@ async fn true_only_for_a_contact_on_a_tracked_domain(pool: PgPool) -> anyhow::Re
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn agrees_with_depopulate_contact(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
-    let owner_id = "macro|owner@test.com";
+    let owner_id = "macro|owner@owner.test";
     seed_team(&pool, team_id, owner_id).await?;
     let link_id = insert_email_link(&pool, owner_id, "user@macro.com").await?;
-    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
-    insert_contact(&pool, company_id, "orphan@acme.com").await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.test"]).await?;
+    insert_contact(&pool, company_id, "orphan@acme.test").await?;
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     assert!(
-        repo.has_depopulate_target(&team_id, "acme.com", "orphan@acme.com")
+        repo.has_depopulate_target(&team_id, "acme.test", "orphan@acme.test")
             .await?
     );
     let outcome = repo
-        .depopulate_contact(&team_id, &link_id, "acme.com", "orphan@acme.com")
+        .depopulate_contact(&team_id, &link_id, "acme.test", "orphan@acme.test")
         .await?;
     assert!(outcome.contact_deleted);
     assert!(outcome.company_deleted);
 
     assert!(
         !repo
-            .has_depopulate_target(&team_id, "acme.com", "orphan@acme.com")
+            .has_depopulate_target(&team_id, "acme.test", "orphan@acme.test")
             .await?
     );
     let outcome = repo
-        .depopulate_contact(&team_id, &link_id, "acme.com", "orphan@acme.com")
+        .depopulate_contact(&team_id, &link_id, "acme.test", "orphan@acme.test")
         .await?;
     assert!(!outcome.removed_anything());
     Ok(())
@@ -85,8 +85,8 @@ async fn agrees_with_depopulate_contact(pool: PgPool) -> anyhow::Result<()> {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn waits_for_an_in_flight_populate(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
-    seed_team(&pool, team_id, "macro|owner@test.com").await?;
-    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    seed_team(&pool, team_id, "macro|owner@owner.test").await?;
+    let company_id = insert_company(&pool, team_id, true, &["acme.test"]).await?;
 
     let mut populate = pool.begin().await?;
     let populate_pid = sqlx::query_scalar!(r#"SELECT pg_backend_pid() AS "pid!""#)
@@ -94,13 +94,13 @@ async fn waits_for_an_in_flight_populate(pool: PgPool) -> anyhow::Result<()> {
         .await?;
     sqlx::query!(
         r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))"#,
-        format!("{team_id}:acme.com"),
+        format!("{team_id}:acme.test"),
     )
     .execute(&mut *populate)
     .await?;
     sqlx::query!(
         r#"INSERT INTO crm_contacts (company_id, email, first_interaction, last_interaction)
-           VALUES ($1, 'jane@acme.com', now(), now())"#,
+           VALUES ($1, 'jane@acme.test', now(), now())"#,
         company_id,
     )
     .execute(&mut *populate)
@@ -108,7 +108,7 @@ async fn waits_for_an_in_flight_populate(pool: PgPool) -> anyhow::Result<()> {
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let check = tokio::spawn(async move {
-        repo.has_depopulate_target(&team_id, "acme.com", "jane@acme.com")
+        repo.has_depopulate_target(&team_id, "acme.test", "jane@acme.test")
             .await
     });
 
