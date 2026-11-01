@@ -56,8 +56,12 @@ afterEach(() => queryClient.clear());
 
 it('shows a confirmed restore immediately while retaining unrelated and newer deletes', async () => {
   mocks.refresh.mockReturnValue(new Promise<void>(() => {}));
-  const earlier = createGraphqlSoupDeletion(['restored', 'sibling']);
-  earlier.settle(['restored', 'sibling']);
+  const earlier = createGraphqlSoupDeletion([
+    'GraphqlSoupDocument:restored',
+    'GraphqlSoupDocument:sibling',
+    'GraphqlSoupChat:restored',
+  ]);
+  earlier.settle(earlier.keys());
   let finish!: () => void;
   const network = new Promise<void>((resolve) => {
     finish = resolve;
@@ -85,13 +89,16 @@ it('shows a confirmed restore immediately while retaining unrelated and newer de
     },
   });
   const restore = restoreEntity({ type: 'DOCUMENT', id: 'restored' });
-  const newer = createGraphqlSoupDeletion(['restored']);
-  newer.settle(['restored']);
+  const newer = createGraphqlSoupDeletion(['GraphqlSoupDocument:restored']);
+  newer.settle(['GraphqlSoupDocument:restored']);
   try {
     finish();
     await restore;
-    expect(earlier.ids()).toEqual(['sibling']);
-    expect(newer.ids()).toEqual(['restored']);
+    expect(earlier.keys()).toEqual([
+      'GraphqlSoupDocument:sibling',
+      'GraphqlSoupChat:restored',
+    ]);
+    expect(newer.keys()).toEqual(['GraphqlSoupDocument:restored']);
   } finally {
     earlier.release();
     newer.release();
@@ -100,8 +107,8 @@ it('shows a confirmed restore immediately while retaining unrelated and newer de
 
 it('keeps prior deletion markers when the server refuses restoration', async () => {
   mocks.refresh.mockReturnValue(new Promise<void>(() => {}));
-  const deletion = createGraphqlSoupDeletion(['deleted']);
-  deletion.settle(['deleted']);
+  const deletion = createGraphqlSoupDeletion(['GraphqlSoupDocument:deleted']);
+  deletion.settle(['GraphqlSoupDocument:deleted']);
   mocks.mutation.mockReturnValue({
     toPromise: async () => ({
       data: {
@@ -121,7 +128,7 @@ it('keeps prior deletion markers when the server refuses restoration', async () 
     await expect(
       restoreEntity({ type: 'DOCUMENT', id: 'deleted' })
     ).rejects.toBeDefined();
-    expect(deletion.ids()).toEqual(['deleted']);
+    expect(deletion.keys()).toEqual(['GraphqlSoupDocument:deleted']);
   } finally {
     deletion.release();
   }

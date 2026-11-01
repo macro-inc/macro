@@ -32,7 +32,7 @@ export const channelsTour = defineViewTour({
       entryLabel: 'Show the channel list to continue',
       title: 'Channels and DMs, together',
       description:
-        'Organize work in shared channels, and use DMs for smaller conversations. All and Recent help you return to the right discussion.',
+        'Browse your channels and direct messages, keep favorites close, and search for a conversation from the sidebar.',
     },
     {
       target: CHANNELS_TOUR.create,
@@ -40,7 +40,7 @@ export const channelsTour = defineViewTour({
       entryLabel: 'Show the channel list to continue',
       title: 'Bring your team into the room',
       description:
-        'Use the + beside Channels to create a shared space, or the + beside DMs to start a direct message. Choose the people who need the context.',
+        'Use New to create a channel or start a direct message. Conversations you join appear in the sidebar.',
     },
     {
       target: CHANNEL_TOUR.messages,

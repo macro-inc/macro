@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { ChannelLabel } from './channelLabel';
+import type { ChannelLabelScopeSelection } from './channelLabelScopeSelection';
 import type { ChannelLabelsListTeamId } from './channelLabelsListTeamId';
 
 /**
@@ -13,6 +14,8 @@ import type { ChannelLabelsListTeamId } from './channelLabelsListTeamId';
 export interface ChannelLabelsList {
   /** Every label of the scope, whether or not the caller sees channels in it. */
   labels: ChannelLabel[];
+  /** Resolved label namespace. */
+  scope: ChannelLabelScopeSelection;
   /** Team scope, or `None` for private labels. */
   teamId?: ChannelLabelsListTeamId;
 }

@@ -6,12 +6,22 @@ import {
 } from './channel-label-eligibility';
 
 describe('channel label eligibility', () => {
-  it('requires a known team channel', () => {
+  it('allows named conversations in personal sections but excludes DMs', () => {
     expect(canLabelChannel({ channelType: 'team' })).toBe(true);
-    expect(canLabelChannel({ channelType: 'public' })).toBe(false);
-    expect(canLabelChannel({ channelType: 'private' })).toBe(false);
+    expect(canLabelChannel({ channelType: 'public' })).toBe(true);
+    expect(canLabelChannel({ channelType: 'private' })).toBe(true);
     expect(canLabelChannel({ channelType: 'direct_message' })).toBe(false);
     expect(canLabelChannel(undefined)).toBe(false);
+  });
+
+  it('keeps shared sections restricted to team channels', () => {
+    const shared = { teamId: 'team' };
+    expect(canLabelChannel({ channelType: 'team' }, shared)).toBe(true);
+    expect(canLabelChannel({ channelType: 'private' }, shared)).toBe(false);
+    expect(canLabelChannel({ channelType: 'public' }, shared)).toBe(false);
+    expect(canLabelChannel({ channelType: 'direct_message' }, shared)).toBe(
+      false
+    );
   });
 
   it('retains unloaded server memberships for unread activity while removing known non-team channels', () => {
@@ -22,7 +32,8 @@ describe('channel label eligibility', () => {
         ['team', { channelType: 'team' }],
         ['private', { channelType: 'private' }],
         ['dm', { channelType: 'direct_message' }],
-      ])
+      ]),
+      { teamId: 'team' }
     );
 
     expect(members).toEqual(['unloaded', 'team']);

@@ -392,10 +392,17 @@ export function insertSoupEntity(item: SoupApiItem): SoupTransaction {
   return { rollback: () => restoreSnapshot(previous) };
 }
 
-export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
+export function removeSoupEntities(
+  entityIds: Set<string>,
+  matches?: (item: SoupApiItem, id: string) => boolean
+): SoupTransaction {
   cancelSoupQueries();
 
   const previous = snapshotSoup();
+  const shouldRemove = (item: SoupApiItem) => {
+    const id = getSoupItemId(item);
+    return entityIds.has(id) && (!matches || matches(item, id));
+  };
 
   queryClient.setQueriesData<SoupItemsInfiniteData>(
     {
@@ -406,9 +413,7 @@ export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
       return {
         ...prev,
         pages: prev.pages.map((page) => {
-          const items = page.items.filter(
-            (item) => !entityIds.has(getSoupItemId(item))
-          );
+          const items = page.items.filter((item) => !shouldRemove(item));
           if (items.length === page.items.length) return page;
           return { ...page, items };
         }),
@@ -430,9 +435,7 @@ export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
         const pages = prev.pages.map((page) => {
           if (page.kind !== 'flat') return page;
 
-          const items = page.items.filter(
-            (item) => !entityIds.has(getSoupItemId(item))
-          );
+          const items = page.items.filter((item) => !shouldRemove(item));
 
           if (items.length === page.items.length) return page;
 
@@ -445,7 +448,7 @@ export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
 
       // Grouped AST queries only use the first parent page. Group membership is
       // fully represented there by `groups[].itemIds`, so update that page once.
-      const nextPage = removeGroupedPage(firstPage, entityIds);
+      const nextPage = removeGroupedPage(firstPage, entityIds, matches);
 
       return nextPage === firstPage
         ? prev
@@ -453,7 +456,7 @@ export function removeSoupEntities(entityIds: Set<string>): SoupTransaction {
     }
   );
 
-  removeGroupQueries(entityIds);
+  removeGroupQueries(entityIds, undefined, matches);
 
   return { rollback: () => restoreSnapshot(previous) };
 }
@@ -684,7 +687,10 @@ function removeSoupEntitiesWhere(
   return { rollback: () => restoreSnapshot(previous) };
 }
 
-export function removeSearchEntities(entityIds: Set<string>): SoupTransaction {
+export function removeSearchEntities(
+  entityIds: Set<string>,
+  matches?: (item: UnifiedSearchResponseItem, id: string) => boolean
+): SoupTransaction {
   queryClient.cancelQueries({ queryKey: soupKeys.search._def });
 
   const previous = queryClient.getQueriesData<SoupSearchInfiniteData>({
@@ -698,9 +704,13 @@ export function removeSearchEntities(entityIds: Set<string>): SoupTransaction {
       return {
         ...prev,
         pages: prev.pages.map((page) => {
-          const results = page.results.filter(
-            (result) => !entityIds.has(getSearchResultId(result))
-          );
+          const results = page.results.filter((result) => {
+            const id = getSearchResultId(result);
+            return (
+              !entityIds.has(id) ||
+              (matches !== undefined && !matches(result, id))
+            );
+          });
           return results.length === page.results.length
             ? page
             : { ...page, results };

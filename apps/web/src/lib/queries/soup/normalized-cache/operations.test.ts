@@ -433,6 +433,24 @@ describe('removeSoupEntities', () => {
     expect(getSoupItemId(cached.pages[1].items[0])).toBe('d-2');
   });
 
+  it('keeps another entity type with the same ID when removal is scoped', () => {
+    seedSoupQuery(
+      mockSoupCache([[mockDocumentItem('shared'), mockChannelItem('shared')]])
+    );
+    const transaction = removeSoupEntities(
+      new Set(['shared']),
+      (item) => item.tag === 'document'
+    );
+    expect(getSoupQuery()!.pages[0].items.map((item) => item.tag)).toEqual([
+      'channel',
+    ]);
+    transaction.rollback();
+    expect(getSoupQuery()!.pages[0].items.map((item) => item.tag)).toEqual([
+      'document',
+      'channel',
+    ]);
+  });
+
   it('rollback restores removed items', () => {
     seedSoupQuery(
       mockSoupCache([[mockDocumentItem('d-1'), mockChatItem('c-1')]])
@@ -582,6 +600,28 @@ describe('removeSearchEntities', () => {
     expect(cached.pages[0].results).toHaveLength(1);
     expect(cached.pages[0].results[0].type).toBe('chat');
     expect(cached.pages[1].results).toHaveLength(0);
+  });
+
+  it('keeps search results of other types with the same ID', () => {
+    seedSearchQuery(
+      mockSearchCache([
+        [
+          mockSearchResult('document', 'shared'),
+          mockSearchResult('chat', 'shared'),
+        ],
+      ])
+    );
+    const transaction = removeSearchEntities(
+      new Set(['shared']),
+      (item) => item.type === 'document'
+    );
+    expect(getSearchQuery()!.pages[0].results.map((item) => item.type)).toEqual(
+      ['chat']
+    );
+    transaction.rollback();
+    expect(getSearchQuery()!.pages[0].results.map((item) => item.type)).toEqual(
+      ['document', 'chat']
+    );
   });
 
   it('rollback restores removed search results', () => {
@@ -935,6 +975,23 @@ describe('removeSoupEntities — grouped cache', () => {
     const done = page.groups.find((g) => g.key === 'done')!;
     expect(done.itemIds).toEqual(['b-1']);
     expect(done.totalCount).toBe(3);
+  });
+
+  it('keeps grouped membership when the matching ID has another type', () => {
+    const key = seedGroupedAstQuery(
+      mockGroupedParentCache(
+        [mockTaskItem('shared', 'in_progress')],
+        [buildGroup('in_progress', ['shared'], 1, 0)]
+      )
+    );
+    removeSoupEntities(new Set(['shared']), (item) => item.tag === 'chat');
+    const cached =
+      testQueryClient.getQueryData<
+        InfiniteData<SoupAstItemsGroupedPage, unknown>
+      >(key)!;
+    expect(cached.pages[0].groups[0].itemIds).toEqual(['shared']);
+    expect(cached.pages[0].groups[0].totalCount).toBe(1);
+    expect(cached.pages[0].items.shared).toBeDefined();
   });
 
   it('rollback restores grouped cache', () => {

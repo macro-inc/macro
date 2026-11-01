@@ -5,6 +5,7 @@ import {
   buildChannelRailRows,
   buildChannelSectionRows,
 } from './build-channel-rail-rows';
+import { buildChannelRailRows as buildSectionedRailRows } from './next/build-channel-rail-rows';
 
 function channel(
   id: string,
@@ -123,7 +124,7 @@ describe('buildChannelSectionRows', () => {
   });
 
   it.each([true, false])(
-    'keeps non-team channels in the plain list when labels are open=%s, ignoring cached memberships',
+    'excludes non-team channels from team sections when labels are open=%s',
     (isOpen) => {
       const publicChannel = channel('public', 'Public', 'public');
       const privateChannel = channel('private', 'Private', 'private');
@@ -151,10 +152,7 @@ describe('buildChannelSectionRows', () => {
 
       expect(
         rows.filter((row) => row.kind === 'conversation' && !row.labelId)
-      ).toEqual([
-        { kind: 'conversation', channel: publicChannel },
-        { kind: 'conversation', channel: privateChannel },
-      ]);
+      ).toEqual([]);
       expect(
         rows.filter((row) => row.kind === 'conversation' && row.labelId)
       ).toEqual(
@@ -419,4 +417,37 @@ it('renders a channel in every matching smart tag with unique navigation IDs, ex
   expect(collapsed.filter((row) => row.kind === 'conversation')).toEqual([
     { kind: 'conversation', channel: deals },
   ]);
+});
+
+it('keeps saved favorite order unless an automatic sort is selected', () => {
+  const items: Parameters<typeof buildSectionedRailRows>[2] = {
+    favorites: [zeta, deals].map((item, sortOrder) => ({
+      entityId: item.id,
+      entityType: 'channel',
+      sortOrder,
+      createdAt: '2026-01-01',
+    })),
+    team_channels: [],
+    channels: [],
+    direct_messages: [],
+    recents: [],
+    threads: [],
+  };
+  const expanded = {
+    favorites: true,
+    team_channels: false,
+    channels: false,
+    direct_messages: false,
+  };
+  const rows = (sort?: 'manual' | 'name') =>
+    buildSectionedRailRows('browse', expanded, items, [], {
+      preferences: { favorites: { sort } },
+      channelById: (id) => byId.get(id),
+      unreadChannelIds: new Set(),
+    }).flatMap((row) =>
+      row.kind === 'favorite' ? [row.favorite.entityId] : []
+    );
+  expect(rows()).toEqual(['zeta', 'deals']);
+  expect(rows('manual')).toEqual(['zeta', 'deals']);
+  expect(rows('name')).toEqual(['deals', 'zeta']);
 });

@@ -188,6 +188,7 @@
 - [ChannelJoinCodeResponse](type-aliases/ChannelJoinCodeResponse.md)
 - [ChannelLabel](type-aliases/ChannelLabel.md)
 - [ChannelLabelRule](type-aliases/ChannelLabelRule.md)
+- [ChannelLabelScopeSelection](type-aliases/ChannelLabelScopeSelection.md)
 - [ChannelLabelsList](type-aliases/ChannelLabelsList.md)
 - [ChannelMessage](type-aliases/ChannelMessage.md)
 - [ChannelParticipant](type-aliases/ChannelParticipant.md)

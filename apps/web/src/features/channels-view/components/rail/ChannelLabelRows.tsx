@@ -25,7 +25,7 @@ import type { ChannelLabel } from '@service-storage/generated/schemas/channelLab
 import { createDroppable } from '@thisbeyond/solid-dnd';
 import { cn, Dropdown } from '@ui';
 import { type Component, For, type JSX, Show } from 'solid-js';
-import { canLabelChannel } from '../../core/channel-label-eligibility';
+import { canLabelChannel as canLabelConversation } from '../../core/channel-label-eligibility';
 import { isPrimaryMouseDown } from './ChannelRailItems';
 import {
   type ChannelLabelDropData,
@@ -35,6 +35,9 @@ import {
 import { useChannelRailLabelState } from './hooks/useChannelRailState';
 
 type MenuIcon = Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+
+const canLabelChannel = (channel: ChannelEntity) =>
+  channel.channelType === 'team' && canLabelConversation(channel);
 
 /** A dropdown row in the house style: muted icon, muted label. */
 function MenuRow(props: {

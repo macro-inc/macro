@@ -12,6 +12,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelsSources } from '../../queries';
 import type { ChannelRailRow } from './ChannelsRailContext';
 
+vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
 const mocks = vi.hoisted(() => ({
   fetchChannel: vi.fn<(id: string) => Promise<ChannelEntity>>(),
   favoriteId: undefined as string | undefined,
@@ -165,8 +166,10 @@ vi.mock('../../channels-view-context', () => ({
       tab: 'browse',
       expandedGroups: { channels: true, direct_messages: true },
       collapsedLabels: [],
+      sectionPreferences: {},
     },
     tab: () => mocks.tab,
+    sectionsEnabled: () => true,
     threadsEnabled: () => false,
     selectedChannel: () => mocks.selected,
     setSelectedChannel: mocks.select,
@@ -182,13 +185,28 @@ vi.mock('../../queries', () => ({
   // What the real helper answers for the disabled lookup above.
   resolveReferencedChannels: (previous: ChannelEntity[]) => previous,
 }));
-vi.mock('./ChannelLabelNameDialog', () => ({ promptLabelName: vi.fn() }));
+vi.mock('@queries/channel/by-ids', () => ({
+  useChannelsByIdsQuery: () => ({ isEnabled: false }),
+  useCachedChannelsByIds: () => ({
+    channels: () => [],
+    pendingIds: () => new Set<string>(),
+    failedIds: () => new Set<string>(),
+    error: () => undefined,
+    isLoading: () => false,
+    retry: async () => {},
+  }),
+}));
+vi.mock('./next/SectionDialog', () => ({ promptSection: vi.fn() }));
+vi.mock('./ChannelLabelNameDialog', () => ({
+  promptLabelName: vi.fn(),
+}));
 vi.mock('./SmartTagDialog', () => ({ promptSmartTag: vi.fn() }));
+vi.mock('./ExpandedChannelsRail', () => ({ ExpandedChannelsRail: () => null }));
 vi.mock('./hooks/useChannelCalls', () => ({ useChannelCalls: () => ({}) }));
 vi.mock('./hooks/useChannelRailActivity', () => ({
-  useChannelRailActivity: () => ({}),
+  useChannelRailActivity: () => ({ unreadChannelIds: () => new Set<string>() }),
 }));
-vi.mock('./ExpandedChannelsRail', async () => {
+vi.mock('./next/ExpandedChannelsRail', async () => {
   const { useChannelsRail } = await import('./ChannelsRailContext');
   return {
     ExpandedChannelsRail: () => {

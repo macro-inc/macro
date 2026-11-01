@@ -98,7 +98,16 @@ export function useChannelRailScopeState(
   return createMemo(() => {
     const currentScope = scope();
     const source = rail.sources[currentScope];
-    const items = source.items();
+    const items =
+      currentScope === 'direct_messages'
+        ? rail.list.items
+            .all()
+            .flatMap((row) =>
+              row.kind === 'conversation' && row.scope === currentScope
+                ? [row.channel]
+                : []
+            )
+        : source.items();
     // The Team channels section renders label headings between its channels,
     // so its virtualizer indexes come from those rows, not the source.
     const rows =

@@ -351,16 +351,28 @@ export function insertGroupQueries(
   }
 }
 
+function matchingRemovalIds(
+  entityIds: Set<string>,
+  items: Record<string, SoupApiItem>,
+  matches: ((item: SoupApiItem, id: string) => boolean) | undefined
+): Set<string> {
+  if (!matches) return entityIds;
+  return new Set(
+    [...entityIds].filter((id) => items[id] && matches(items[id], id))
+  );
+}
 /** Removes items from a grouped parent page's item pool and group memberships. */
 export function removeGroupedPage(
   page: SoupAstItemsGroupedPage,
-  entityIds: Set<string>
+  entityIds: Set<string>,
+  matches?: (item: SoupApiItem, id: string) => boolean
 ) {
+  const removedIds = matchingRemovalIds(entityIds, page.items, matches);
   const groups: GroupMeta[] = [];
   let changed = false;
 
   for (const group of page.groups) {
-    const itemIds = group.itemIds.filter((id) => !entityIds.has(id));
+    const itemIds = group.itemIds.filter((id) => !removedIds.has(id));
     const removed = group.itemIds.length - itemIds.length;
 
     if (removed === 0) {
@@ -378,7 +390,7 @@ export function removeGroupedPage(
 
   const items: Record<string, SoupApiItem> = {};
   for (const [id, item] of Object.entries(page.items)) {
-    if (entityIds.has(id)) {
+    if (removedIds.has(id)) {
       changed = true;
       continue;
     }
@@ -392,7 +404,8 @@ export function removeGroupedPage(
 /** Removes items from all expanded group queries while preserving unaffected pages. */
 export function removeGroupQueries(
   entityIds: Set<string>,
-  keyFilter?: (key: QueryKey) => boolean
+  keyFilter?: (key: QueryKey) => boolean,
+  matches?: (item: SoupApiItem, id: string) => boolean
 ) {
   const queries = queryClient.getQueryCache().findAll({
     queryKey: soupKeys.groupedGroup._def,
@@ -408,11 +421,12 @@ export function removeGroupQueries(
     const pages = [];
 
     for (const page of prev.pages) {
-      const itemIds = page.group.itemIds.filter((id) => !entityIds.has(id));
+      const removedIds = matchingRemovalIds(entityIds, page.items, matches);
+      const itemIds = page.group.itemIds.filter((id) => !removedIds.has(id));
       const removed = page.group.itemIds.length - itemIds.length;
       let items = page.items;
 
-      for (const id of entityIds) {
+      for (const id of removedIds) {
         if (id in items) {
           const { [id]: _, ...rest } = items;
           items = { ...rest };

@@ -3088,6 +3088,15 @@ export const ingestTranscriptBody = zod
 /**
  * @summary List the caller's shared or private labels.
  */
+export const listChannelLabelsQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
 export const listChannelLabelsResponse = zod
   .object({
     labels: zod
@@ -3151,6 +3160,11 @@ export const listChannelLabelsResponse = zod
       .describe(
         'Every label of the scope, whether or not the caller sees channels in it.'
       ),
+    scope: zod
+      .enum(['personal', 'team'])
+      .describe(
+        'Requested label namespace. Omission retains the deployed automatic selection.'
+      ),
     teamId: zod
       .uuid()
       .nullish()
@@ -3161,6 +3175,15 @@ export const listChannelLabelsResponse = zod
 /**
  * @summary Create a label for the caller's authorized scope.
  */
+export const createChannelLabelQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
 export const createChannelLabelBody = zod
   .object({
     channelIds: zod
@@ -3248,6 +3271,15 @@ export const setChannelLabelParams = zod.object({
   channel_id: zod.uuid().describe('The channel id.'),
 });
 
+export const setChannelLabelQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
 export const setChannelLabelBody = zod
   .object({
     labelId: zod
@@ -3262,6 +3294,15 @@ export const setChannelLabelBody = zod
 /**
  * @summary Preview visible channels matched by a smart tag, without creating it.
  */
+export const previewSmartTagQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
 export const previewSmartTagBody = zod
   .object({
     attribute: zod.enum(['name']),
@@ -3303,11 +3344,29 @@ export const deleteChannelLabelParams = zod.object({
   label_id: zod.uuid().describe('The label id.'),
 });
 
+export const deleteChannelLabelQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
 /**
  * @summary Rename a label of the caller's authorized scope.
  */
 export const renameChannelLabelParams = zod.object({
   label_id: zod.uuid().describe('The label id.'),
+});
+
+export const renameChannelLabelQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
 });
 
 export const renameChannelLabelBody = zod

@@ -503,11 +503,29 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   [dragging rows into a folder](../../docs/agent-guide/navigation.md#dragging-rows-into-a-folder).
 - Keep channel rail and title menus on `CHANNEL_ACTION_VIEW_CONTEXT`, including
   the shared desktop `Open in new split` action and its mobile/capacity guards.
+- Gate the Chat redesign with `enable-chat-sidebar-sections`; wait for its result, restore the tabbed rail and separate creation flows when off, and keep mobile unchanged.
+  Keep the original rail renderer and label dialogs in `components/rail/`; build the redesigned rail and section dialogs in `components/rail/next/`, with shared controller, context, and row primitives outside `next/`.
+  With the flag on, keep desktop Chat on one scrolling section list with a collapsible DM panel at
+  the bottom; personal and team-shared section assignments remain independent.
+  Mobile retains the recent feed. Use the unified New conversation picker and
+  require explicit confirmation before creating a duplicate visible channel name.
+  Use one name-first dialog for channels and conversations, with at most three inline suggestions; reveal channel privacy and invite controls only for channel creation, and retain typed names on blur.
+  Resume unfinished channel setup after failures without recreating the channel; keep drafts locked after creation and guard each later write against account/team changes.
+  Use `--sidebar-gutter` for the outer section, DM, and search containers; shared headings and rows provide their own item padding.
+  Indent all section content by 8px, including Favorites, custom sections, DMs, and empty states; keep unsectioned search results unindented.
+  Reuse shared collapsible section headers and their hidden-caret behavior, with a leading folder icon (star for Favorites, chat bubble for DMs) and a neutral Shared badge next to the name before the caret; apply focus backgrounds across the full header row and omit trailing header padding.
+  Name the team-channel section after the current team, falling back to Team channels while its name is unavailable.
+  Keep available channel rows visible during section hydration and refetches; pass server-returned member IDs to `queries/channel/by-ids`, whose single Soup owner selects cached rows and fetches missing records. Keep entity-ID hydration generic in Soup, with channel identities, batching, and unread refreshes in the channel query layer; append per-section skeletons only while unresolved members load.
+  Show lock icons for private conversations and visible per-section options; keep empty sections usable as drop targets without an all-sections management menu.
+  Create all section types through New → New section in a wider dialog with Smart in the body and Shared in the footer; keep collapse on the header and style deletion as destructive.
+  Keep per-section sorting and unread filters personal, and filter after membership assignment so hidden rows never leak into another section.
+  Default Favorites to Custom order and persist drag reordering through the shared favorites mutation; preserve hidden and non-channel favorite positions, disable dragging under automatic sorts, and keep the original rail unchanged.
+  Use one sliders-icon section menu with Sort and Filter submenus plus section actions; keep the Unread only label left and its switch right, and keep the submenu open when toggled.
 - Route supported move, trash, restore, permanent-delete, duplicate, and share-policy
   writes through `queries/storage/entity-mutations` when GraphQL Soup is enabled;
   never retry failed GraphQL writes through REST. Preserve non-owner history removal
   and version-specific markdown forks on their existing paths. Confirmed restores
-  clear earlier deletion markers without clearing a newer delete's intent.
+  clear earlier deletion markers without clearing a newer delete's intent; key markers and restore confirmations by normalized entity type plus ID, never by bare ID.
 - Preserve loaded block content on initial access confirmation when its loader
   supplies no permissions; reload only on a later confirmed permission change.
   Apply shared access in place only after a successful permissionless load.

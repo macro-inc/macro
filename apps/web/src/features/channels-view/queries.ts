@@ -13,6 +13,17 @@ import {
   isChannelThreadEntity,
 } from '@entity';
 import {
+  registerChannelListNotificationRefresh,
+  useChannelsByIdsQuery,
+} from '@queries/channel/by-ids';
+
+export {
+  channelsByIdsQueryArgs,
+  useChannelsByIdsQuery,
+} from '@queries/channel/by-ids';
+
+import { queryReadyGate } from '@queries/gate';
+import {
   type SoupAstItemsQueryArgs,
   type SoupAstParams,
   useSoupAstItemsQuery,
@@ -123,55 +134,6 @@ export function filterChannelsForScope(
 }
 
 /**
- * Fetch specific channels by id, for labelled channels the paginated Channels
- * source has not reached yet. Page through the requested IDs independently
- * of the main list so broad smart tags include all their matched channels.
- */
-export function channelsByIdsQueryArgs(
-  channelIds: readonly string[]
-): SoupAstItemsQueryArgs {
-  return {
-    params: {
-      ...CHANNELS_QUERY_PARAMS,
-      limit: Math.min(500, Math.max(1, channelIds.length)),
-      sort_method: 'created_at',
-    },
-    body: compileToAst(
-      queryStateFrom(
-        defineQueryFilters({
-          include: { channelId: [...channelIds] },
-        })
-      )
-    ),
-  };
-}
-
-export function useChannelsByIdsQuery(channelIds: Accessor<readonly string[]>) {
-  const query = useSoupAstItemsQuery(
-    () => channelsByIdsQueryArgs(channelIds()),
-    // Rail rows need only bounded unread evidence, like the channel lists.
-    () => ({
-      enabled: channelIds().length > 0,
-      staleTime: 30_000,
-      graphqlProjection: 'channel-list',
-    })
-  );
-  // Drive the external paginated query until all requested matches are loaded.
-  createEffect(() => {
-    if (
-      !query.isEnabled ||
-      query.isLoading ||
-      query.isFetching ||
-      query.error ||
-      !query.hasNextPage
-    )
-      return;
-    fireAndForget(query.fetchNextPage(), 'channels-view');
-  });
-  return query;
-}
-
-/**
  * The channels a by-id lookup has resolved.
  *
  * A settled lookup answers for every id it asked about — its data covers the
@@ -183,15 +145,15 @@ export function resolveReferencedChannels(
   previous: ChannelEntity[],
   lookup: {
     isEnabled: boolean;
-    isLoading: boolean;
+    isPending: boolean;
     error: unknown;
-    entities: readonly EntityData[] | undefined;
+    data: { entities: readonly EntityData[] } | undefined;
   }
 ): ChannelEntity[] {
-  if (!lookup.isEnabled || lookup.isLoading || lookup.error || !lookup.entities)
+  if (!lookup.isEnabled || lookup.error || !queryReadyGate(lookup))
     return previous;
 
-  return lookup.entities.filter(isChannelEntity);
+  return lookup.data.entities.filter(isChannelEntity);
 }
 
 export function deduplicateChannels(
@@ -330,6 +292,7 @@ function useChannelsDataSource(
       graphqlProjection: 'channel-list',
     })
   );
+  registerChannelListNotificationRefresh(query);
   const items = createMemo<ChannelEntity[]>((previous) => {
     if (!query.isEnabled || query.isPending) return previous;
 

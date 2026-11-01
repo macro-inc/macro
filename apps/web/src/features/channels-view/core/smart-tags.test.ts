@@ -72,11 +72,20 @@ describe('smart tag matching', () => {
     'excludes %s channels from smart matching and cached manual or smart memberships',
     (channelType) => {
       const nonTeam = channel('non-team', 'Support', channelType);
-      expect(channelMatchesSmartTag(nonTeam, rule)).toBe(false);
+      expect(channelMatchesSmartTag(nonTeam, rule, { teamId: 'team' })).toBe(
+        false
+      );
       const result = resolveChannelLabelMemberships(
         [
-          { ...label('manual', ['unloaded', 'non-team', 'team']), rule: null },
-          label('smart', ['unloaded', 'non-team', 'team']),
+          {
+            ...label('manual', ['unloaded', 'non-team', 'team']),
+            teamId: 'team',
+            rule: null,
+          },
+          {
+            ...label('smart', ['unloaded', 'non-team', 'team']),
+            teamId: 'team',
+          },
         ],
         [nonTeam, channel('team', 'Support')]
       );
@@ -89,7 +98,14 @@ describe('smart tag matching', () => {
 
   it('preserves the manual count of assignments outside the loaded viewer-relative IDs', () => {
     const result = resolveChannelLabelMemberships(
-      [{ ...label('manual', ['public', 'team']), rule: null, channelCount: 8 }],
+      [
+        {
+          ...label('manual', ['public', 'team']),
+          teamId: 'team',
+          rule: null,
+          channelCount: 8,
+        },
+      ],
       [channel('public', 'Public', 'public'), channel('team', 'Support')]
     );
     expect(result[0].channelIds).toEqual(['team']);
@@ -113,5 +129,14 @@ describe('smart tag matching', () => {
     );
     expect(result[0].channelIds).toEqual(['unloaded', 'member']);
     expect(result[0].channelCount).toBe(2);
+  });
+
+  it('matches private channels in personal sections without adding them to shared sections', () => {
+    const result = resolveChannelLabelMemberships(
+      [label('personal', []), { ...label('shared', []), teamId: 'team' }],
+      [channel('private', 'Support', 'private')]
+    );
+    expect(result[0].channelIds).toEqual(['private']);
+    expect(result[1].channelIds).toEqual([]);
   });
 });

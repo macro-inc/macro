@@ -97,8 +97,8 @@ impl PgChannelLabelsRepo {
                     FROM comms_channels c
                     JOIN comms_channel_participants p
                         ON p.channel_id = c.id AND p.user_id = $3 AND p.left_at IS NULL
-                    WHERE c.channel_type = 'team'
-                    AND (l.team_id IS NULL OR c.team_id = l.team_id)
+                    WHERE ((l.team_id IS NULL AND c.channel_type IN ('team', 'public', 'private'))
+                        OR (l.team_id IS NOT NULL AND c.channel_type = 'team' AND c.team_id = l.team_id))
                     AND ((
                         l.name_contains IS NULL AND EXISTS (
                             SELECT 1 FROM channel_label_channel lc
@@ -125,8 +125,8 @@ impl PgChannelLabelsRepo {
                 CASE WHEN l.name_contains IS NULL THEN
                     (SELECT COUNT(*) FROM channel_label_channel lc
                      JOIN comms_channels c ON c.id = lc.channel_id
-                     WHERE lc.label_id = l.id AND c.channel_type = 'team'
-                         AND (l.team_id IS NULL OR c.team_id = l.team_id))
+                     WHERE lc.label_id = l.id AND ((l.team_id IS NULL AND c.channel_type IN ('team', 'public', 'private'))
+                             OR (l.team_id IS NOT NULL AND c.channel_type = 'team' AND c.team_id = l.team_id)))
                     ELSE cardinality(l.visible_ids)::bigint END as "channel_count!"
             FROM labels l
             ORDER BY l.sort_order, l.created_at, l.id
@@ -144,7 +144,7 @@ impl PgChannelLabelsRepo {
 impl ChannelLabelsRepo for PgChannelLabelsRepo {
     type Err = ChannelLabelsRepoErr;
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
     async fn list_labels(
         &self,
         scope: &ChannelLabelsScope,
@@ -153,7 +153,7 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
         self.load_labels(scope, None, viewer).await
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
     async fn get_label(
         &self,
         scope: &ChannelLabelsScope,
@@ -163,7 +163,7 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
         Ok(self.load_labels(scope, Some(label_id), viewer).await?.pop())
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
     async fn create_label(
         &self,
         scope: &ChannelLabelsScope,
@@ -219,7 +219,7 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
         }
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
     async fn rename_label(
         &self,
         scope: &ChannelLabelsScope,
@@ -257,7 +257,7 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
         }
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
     async fn delete_label(
         &self,
         scope: &ChannelLabelsScope,
@@ -275,7 +275,7 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
         Ok(done.rows_affected() > 0)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
     async fn set_channel_label(
         &self,
         scope: &ChannelLabelsScope,
@@ -329,7 +329,7 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
         Ok(SetChannelLabelOutcome::Updated)
     }
 
-    #[tracing::instrument(err, skip(self))]
+    #[tracing::instrument(skip_all, err)]
     async fn preview_smart_tag(
         &self,
         scope: &ChannelLabelsScope,
@@ -344,8 +344,8 @@ impl ChannelLabelsRepo for PgChannelLabelsRepo {
                FROM comms_channels c
                JOIN comms_channel_participants p ON p.channel_id = c.id
                WHERE p.user_id = $1 AND p.left_at IS NULL
-                   AND c.channel_type = 'team'
-                   AND ($4::uuid IS NULL OR c.team_id = $4)
+                   AND (($4::uuid IS NULL AND c.channel_type IN ('team', 'public', 'private'))
+                       OR (c.channel_type = 'team' AND c.team_id = $4))
                    AND strpos(lower(c.name), lower($2)) > 0
                ORDER BY lower(c.name), c.id
                LIMIT $3"#,
@@ -378,10 +378,9 @@ async fn validate_channels(
     actor: &MacroUserIdStr<'_>,
     assignment_scope: Option<&ChannelLabelsScope>,
 ) -> Result<SetChannelLabelOutcome, ChannelLabelsRepoErr> {
-    // The valid_team_channel constraint makes team_id present exactly when the
-    // channel type is 'team', so it supplies the domain's eligibility fact.
+    // Lock the channel type and team along with active participation.
     let channels = sqlx::query!(
-        r#"SELECT c.id, c.team_id
+        r#"SELECT c.id, c.team_id, c.channel_type::text as "channel_type!"
            FROM comms_channels c
            JOIN comms_channel_participants p ON p.channel_id = c.id
            WHERE c.id = ANY($1) AND p.user_id = $2 AND p.left_at IS NULL
@@ -394,9 +393,11 @@ async fn validate_channels(
     if channels.len() != channel_ids.len() {
         return Ok(SetChannelLabelOutcome::ChannelNotFound);
     }
-    if assignment_scope
-        .is_some_and(|scope| channels.iter().any(|c| !scope.can_label_channel(c.team_id)))
-    {
+    if assignment_scope.is_some_and(|scope| {
+        channels
+            .iter()
+            .any(|c| !scope.can_label_channel(&c.channel_type, c.team_id))
+    }) {
         return Ok(SetChannelLabelOutcome::ChannelNotLabelable);
     }
     Ok(SetChannelLabelOutcome::Updated)
