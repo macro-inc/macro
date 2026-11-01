@@ -40,8 +40,9 @@ The plus button beside `My projects` opens the project composer, even while the
 section is collapsed or loading. Its rows use the shared project query/cache and
 load inside a local Suspense boundary, leaving sidebar controls available.
 Project list rows, sidebar entries, and project pickers display the saved icon
-and color. Changing appearance updates these surfaces without changing project
-recency; resetting appearance restores the default stack icon.
+and color. With the normalized cache active, Apply updates these surfaces before
+the save completes, without changing project recency or refetching their pages;
+resetting appearance restores the default stack icon.
 Once a current-query project page is cached, an offline/background refresh failure
 must not show **Could not load projects** beside those rows (or a cached empty
 result). Retrying a refresh must not reintroduce that warning merely because the

@@ -38,3 +38,4 @@ snippets, task projects (initiatives), forms, and databases.
 - Serialize server writes per entity, and reconcile confirmed appearance after in-flight initial reads without canceling those reads.
 - Render public metadata without mounting authenticated preview queries.
 - Preserve appearance in identity projections and renderers, including project list, sidebar, and picker rows; reserve type-only icons for navigation and status.
+- Keep initiative list queries limited to server-backed initiative fields; unrelated cache-only Mail fields prevent cache hits and optimistic icon updates.

@@ -13,6 +13,32 @@ fragment InitiativeIdentityFields on GraphqlSoupInitiative {
   }
 }
 
+# Lists select only server-backed initiative fields. General Soup's local Mail
+# and projection fields can make an otherwise loaded initiative page incomplete.
+fragment InitiativeListFields on GraphqlSoupInitiative {
+  ...InitiativeIdentityFields
+  metadata {
+    createdAt
+    updatedAt
+  }
+  properties {
+    ...SoupPropertyFields
+  }
+}
+
+query Initiatives($input: SoupInput!) {
+  user {
+    id
+    soup(input: $input) {
+      items {
+        __typename
+        ...InitiativeListFields
+      }
+      nextCursor
+    }
+  }
+}
+
 # Quick Access reads cached projects by key after a cache search hit. Select
 # only fields every initiative write includes (create and update replies carry
 # no viewedAt), so a new or renamed project stays complete.
