@@ -18,6 +18,7 @@ use axum::http::{
 };
 use config::Config;
 use constants::ORIGINS;
+use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{
     domain::services::{EventIngestorImpl, PullAggregatorImpl},
     inbound::polling_aggregator::FrecencyAggregatorWorkerHandle,
@@ -117,6 +118,9 @@ async fn main() -> Result<()> {
     let fanout_gateway_id: Arc<str> = Arc::from(uuid::Uuid::new_v4().to_string());
     let context = context::ApiContext {
         connection_manager,
+        entity_access: Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+            pgpool.clone(),
+        ))),
         fanout_gateway_id: Arc::clone(&fanout_gateway_id),
         redis_client: Arc::clone(&redis_client),
         redis_connection,

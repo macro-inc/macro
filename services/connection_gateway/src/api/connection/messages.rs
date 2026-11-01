@@ -1,43 +1,68 @@
 use crate::{
+    constants::GRANT_REVALIDATION_INTERVAL,
     model::{
         connection::ConnectionContext,
         message::OutgoingMessage,
-        tracking::{EntityConnectionExt, TrackingData},
+        tracking::{EntityConnectionExt, TrackAction, TrackingData},
         websocket::ToWebsocketMessage,
     },
-    service::{fanout, stream_event::handle_stream_events, tracker},
+    service::{
+        entity_grants::{Admission, EntityGrants},
+        fanout,
+        stream_event::handle_stream_events,
+        tracker,
+    },
 };
 use anyhow::{Context, Result};
 use axum::extract::ws::{Message, WebSocket};
 use cowlike::CowLike;
 use futures::{StreamExt, stream::SplitStream};
 use macro_user_id::user_id::MacroUserIdStr;
-use tokio::sync::mpsc::Sender;
+use model_entity::Entity;
+use tokio::{
+    sync::mpsc::Sender,
+    time::{Instant, MissedTickBehavior},
+};
 
 pub async fn handle_websocket_stream(
     connection_context: ConnectionContext<'_>,
     mut stream: SplitStream<WebSocket>,
     sender: Sender<OutgoingMessage>,
+    mut grants: EntityGrants,
 ) -> Result<()> {
-    while let Some(msg) = stream.next().await {
-        match msg {
-            Ok(msg) => {
-                if let Err(e) = handle_message(connection_context, msg, &sender).await {
-                    tracing::warn!(error=?e, "error handling message");
+    let mut revalidation = tokio::time::interval_at(
+        Instant::now() + GRANT_REVALIDATION_INTERVAL,
+        GRANT_REVALIDATION_INTERVAL,
+    );
+    revalidation.set_missed_tick_behavior(MissedTickBehavior::Delay);
+
+    loop {
+        tokio::select! {
+            msg = stream.next() => match msg {
+                Some(Ok(msg)) => {
+                    if let Err(e) =
+                        handle_message(connection_context, msg, &sender, &mut grants).await
+                    {
+                        tracing::warn!(error=?e, "error handling message");
+                    }
                 }
+                // A read error means the client went away without a close frame
+                // (connection reset, broken pipe, no closing handshake).
+                Some(Err(err)) => {
+                    tracing::info!(
+                        error = ?err,
+                        connection_id = %connection_context.connection_id,
+                        user_id       = %connection_context.user_context.user_id,
+                        "web-socket closed with error",
+                    );
+                    break;
+                }
+                None => break,
+            },
+            _ = revalidation.tick() => {
+                revoke_lost_grants(connection_context, &sender, &mut grants).await;
             }
-            // A read error means the client went away without a close frame
-            // (connection reset, broken pipe, no closing handshake).
-            Err(err) => {
-                tracing::info!(
-                    error = ?err,
-                    connection_id = %connection_context.connection_id,
-                    user_id       = %connection_context.user_context.user_id,
-                    "web-socket closed with error",
-                );
-                break;
-            }
-        };
+        }
     }
 
     Ok(())
@@ -49,6 +74,7 @@ pub async fn handle_message(
     connection_context: ConnectionContext<'_>,
     message: Message,
     sender: &Sender<OutgoingMessage>,
+    grants: &mut EntityGrants,
 ) -> Result<()> {
     // Every client frame is republished to the fanout channel, unparsed,
     // before any in-gateway handling. Backend services consume what they care
@@ -98,30 +124,95 @@ pub async fn handle_message(
     let parsed_message = serde_json::from_str::<ToWebsocketMessage>(&text_message)
         .context("unable to parse message")?;
 
+    let access = connection_context.api_context.entity_access.as_ref();
     match parsed_message {
         ToWebsocketMessage::TrackEntityMessage(message) => {
-            let entity_id = message.extra.entity_id.to_string();
-
-            tracker::track_entity(
-                sender,
-                connection_context,
-                TrackingData {
-                    entity: message
-                        .extra
-                        .entity_type
-                        .with_entity_str(&entity_id)
-                        .with_connection_str(connection_context.connection_id)
-                        .with_user_str(&connection_context.user_context.user_id),
-                    action: message.action,
-                },
-            )
-            .await
-            .ok();
+            let entity = message.extra;
+            match grants.admit(access, &entity, message.action).await {
+                Ok(Admission::Admitted) => {
+                    track(connection_context, sender, &entity, message.action).await;
+                }
+                Ok(Admission::Refused) => {
+                    log_refused(connection_context, &entity, message.action.into());
+                }
+                Ok(Admission::Revoked) => {
+                    log_refused(connection_context, &entity, message.action.into());
+                    track(connection_context, sender, &entity, TrackAction::Close).await;
+                }
+                Err(error) => log_check_failed(connection_context, &entity, &error),
+            }
         }
         ToWebsocketMessage::StreamEvents(message) => {
-            handle_stream_events(connection_context, sender.clone(), message)
+            match grants.permits(access, &message.entity).await {
+                Ok(true) => {
+                    let entity = message.entity.clone();
+                    let listener =
+                        handle_stream_events(connection_context, sender.clone(), message);
+                    grants.hold_stream_listener(&entity, listener);
+                }
+                Ok(false) => log_refused(connection_context, &message.entity, "stream_events"),
+                Err(error) => log_check_failed(connection_context, &message.entity, &error),
+            }
         }
     };
 
     Ok(())
+}
+
+async fn track(
+    connection_context: ConnectionContext<'_>,
+    sender: &Sender<OutgoingMessage>,
+    entity: &Entity<'_>,
+    action: TrackAction,
+) {
+    tracker::track_entity(
+        sender,
+        connection_context,
+        TrackingData {
+            entity: entity
+                .copied()
+                .with_connection_str(connection_context.connection_id)
+                .with_user_str(&connection_context.user_context.user_id),
+            action,
+        },
+    )
+    .await
+    .ok();
+}
+
+/// Tears down subscriptions to entities the user can no longer view.
+async fn revoke_lost_grants(
+    connection_context: ConnectionContext<'_>,
+    sender: &Sender<OutgoingMessage>,
+    grants: &mut EntityGrants,
+) {
+    let access = connection_context.api_context.entity_access.as_ref();
+    for entity in grants.revalidate(access).await {
+        log_refused(connection_context, &entity, "revalidation");
+        track(connection_context, sender, &entity, TrackAction::Close).await;
+    }
+}
+
+fn log_refused(connection_context: ConnectionContext<'_>, entity: &Entity<'_>, frame: &str) {
+    tracing::warn!(
+        connection_id = %connection_context.connection_id,
+        entity_type = %entity.entity_type,
+        entity_id = %entity.entity_id,
+        frame,
+        "refused an entity subscription the user cannot view"
+    );
+}
+
+fn log_check_failed(
+    connection_context: ConnectionContext<'_>,
+    entity: &Entity<'_>,
+    error: &entity_access::domain::models::AccessError,
+) {
+    tracing::error!(
+        error = ?error,
+        connection_id = %connection_context.connection_id,
+        entity_type = %entity.entity_type,
+        entity_id = %entity.entity_id,
+        "could not check entity access; dropped the subscription frame"
+    );
 }

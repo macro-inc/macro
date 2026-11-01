@@ -4901,6 +4901,7 @@ dependencies = [
  "dashmap",
  "doppler-config",
  "ensure_exists",
+ "entity_access",
  "frecency",
  "futures",
  "http-body-util",
