@@ -59,6 +59,7 @@ function ChipWithUserTooltip(props: {
       open={open()}
       onOpenChange={setOpen}
       triggerAs="div"
+      triggerClass="max-w-full"
       trigger={props.chip}
       content={props.renderTooltip(() => setOpen(false))}
       // Chips mount under the cursor when a recipient is picked via keyboard;
@@ -92,7 +93,7 @@ function RecipientChip(props: {
           <span
             class={
               props.showAddress
-                ? 'shrink-0 text-sm whitespace-nowrap text-ink-muted'
+                ? 'min-w-0 truncate text-sm text-ink-muted'
                 : 'sr-only'
             }
           >
@@ -101,7 +102,7 @@ function RecipientChip(props: {
         )}
       </Show>
       <XIcon
-        class="size-5 hover:bg-hover hover:text-failure p-1 rounded-full"
+        class="size-5 shrink-0 hover:bg-hover hover:text-failure p-1 rounded-full"
         onClick={props.onRemove}
       />
     </div>
