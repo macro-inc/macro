@@ -356,6 +356,8 @@ Shift+Enter adds a line to the draft; Enter sends. The composer spaces its
 paragraphs the way the sent message does, so a multi-line draft reads as what
 it will send. Check a multi-line message against the draft that wrote it: the
 spacing must not change on send.
+Typing `6.` then Enter (or `6. `) starts an ordered list at 6; the marker is
+not rewritten to `1.`
 Both the expanded and collapsed composers start with a `+` button (`Add`). It
 opens a menu on desktop and a bottom drawer on mobile: `Mention` (opens the `@` typeahead), `Attach files` (the file
 picker; the iOS media picker on iOS), `GIF` (the same picker as `/gif`), then under `Create` the same actions as
