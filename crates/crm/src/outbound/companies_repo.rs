@@ -782,7 +782,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         Ok(outcome)
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self, email), err)]
     async fn has_depopulate_target(
         &self,
         team_id: &uuid::Uuid,
