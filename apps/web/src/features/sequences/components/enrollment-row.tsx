@@ -70,7 +70,7 @@ export function EnrollmentRow(props: {
             <CaretDownIcon
               class={cn(
                 'size-4 transition-transform',
-                !props.expanded && 'rotate-180'
+                props.expanded && 'rotate-180'
               )}
               aria-hidden="true"
             />

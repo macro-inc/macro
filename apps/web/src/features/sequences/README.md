@@ -5,7 +5,8 @@ People. The server owns all sequence state; this feature only calls the
 `/email/sequences` API through `@service-email/client`. Customers mounts it
 behind `enable-sequences`: `sequences.tsx` is the entry point CRM loads lazily
 (sidebar item, main pane, contact card), and `add-to-sequence.ts` is the small
-launcher the People actions and the app shell's dialog host share.
+launcher the People actions and the app shell's dialog host share. People
+search reuses CRM's contact query through `crm/record-adapter.ts`.
 
 ```text
 core/        status and action rules, editor draft diffing, limits

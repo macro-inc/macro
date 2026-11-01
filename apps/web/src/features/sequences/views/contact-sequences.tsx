@@ -11,7 +11,7 @@ export function ContactSequencesView(props: {
   return (
     <ContactSequences
       enrollments={source.enrollments()}
-      failed={source.failed()}
+      failure={source.failure()}
       ownerName={context.userName}
       onRetry={() => fireAndForget(source.refresh(), 'sequences.contact')}
       onOpenSequence={props.onOpenSequence}

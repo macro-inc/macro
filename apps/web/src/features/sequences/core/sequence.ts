@@ -121,6 +121,7 @@ export function shownStatus(
 /**
  * The owner actions an enrollment offers, in display order. Pause and resume
  * wait for a sending sequence, which is what resumes a paused one's people.
+ * Anyone not already opted out can be unsubscribed, even after a reply.
  */
 export function enrollmentActions(
   enrollment: EnrollmentState,
@@ -136,7 +137,8 @@ export function enrollmentActions(
   if (sending && resumable) actions.push('resume');
   if (sending && (status === 'active' || status === 'needs_attention'))
     actions.push('pause');
-  if (isLive(status)) actions.push('stop', 'unsubscribe');
+  if (isLive(status)) actions.push('stop');
+  if (reason !== 'unsubscribed') actions.push('unsubscribe');
   return actions;
 }
 

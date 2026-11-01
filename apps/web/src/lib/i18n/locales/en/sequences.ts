@@ -73,16 +73,9 @@ export default {
   moveEmailUp: 'Move email {{position}} up',
   remove: 'Remove',
   removeEmail: 'Remove email {{position}}',
-  wait: 'Wait',
   delayDays: 'Days before email {{position}}',
-  daysAfterStart: {
-    one: 'day after the start',
-    other: 'days after the start',
-  },
-  daysAfterPrevious: {
-    one: 'day after the previous email',
-    other: 'days after the previous email',
-  },
+  delayAfterStart: 'Days after the start',
+  delayAfterPrevious: 'Days after the previous email',
   replyInThread: 'Send as a reply in the same thread',
   subject: 'Subject',
   subjectOf: 'Subject of email {{position}}',
@@ -192,9 +185,6 @@ export default {
   skipUnsubscribed: 'Unsubscribed',
   skipAlreadyEnrolled: 'Already in this sequence',
   skipUnknown: 'Skipped',
-
-  // Contact card
-  contactLoadFailed: 'Couldn’t load sequences.',
 
   // Errors
   errorUnavailable: 'Couldn’t reach Macro. Try again.',

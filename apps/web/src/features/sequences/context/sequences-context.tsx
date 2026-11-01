@@ -25,8 +25,8 @@ type Outcome<T> = Promise<Result<T, SequenceFailure>>;
 export type SequenceListSource = {
   sequences: Accessor<readonly SequenceSummary[]>;
   pending: Accessor<boolean>;
-  /** Loading failed and nothing is cached. */
-  failed: Accessor<boolean>;
+  /** Why it could not load, when nothing is cached. */
+  failure: Accessor<SequenceFailure | undefined>;
   refresh(): Promise<unknown>;
   create(input: SequenceInput): Outcome<Sequence>;
   creating: Accessor<boolean>;
@@ -88,7 +88,7 @@ export type SendersSource = {
 export type ContactEnrollmentsSource = {
   enrollments: Accessor<readonly ContactEnrollment[]>;
   pending: Accessor<boolean>;
-  failed: Accessor<boolean>;
+  failure: Accessor<SequenceFailure | undefined>;
   refresh(): Promise<unknown>;
 };
 

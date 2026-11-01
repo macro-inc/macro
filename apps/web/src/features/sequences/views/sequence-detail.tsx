@@ -21,6 +21,7 @@ import {
   type SequenceSource,
   useSequences,
 } from '../context/sequences-context';
+import { isRetryable } from '../core/errors';
 import { isEditable } from '../core/sequence';
 import { createSequenceDraft } from '../primitives/sequence-draft';
 import { EnrollView } from './enroll';
@@ -225,7 +226,7 @@ function SequenceDetailContent(props: {
           {t('sequences.connectGmail')}
         </p>
       </Show>
-      <div class="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-8 lg:px-8">
+      <div class="min-h-0 flex-1 overflow-y-auto px-4 pt-2 pb-8 lg:px-8 touch:pb-[calc(var(--mobile-content-inset-bottom,0px)+2rem)]">
         <Show
           when={tab() === 'steps'}
           fallback={
@@ -311,10 +312,14 @@ export function SequenceDetailView(props: {
                 : t('sequences.loadFailed')
             }
             description={failureMessage(failure())}
-            primaryAction={{
-              label: t('sequences.retry'),
-              onClick: () => fireAndForget(source.refresh(), SURFACE),
-            }}
+            primaryAction={
+              isRetryable(failure())
+                ? {
+                    label: t('sequences.retry'),
+                    onClick: () => fireAndForget(source.refresh(), SURFACE),
+                  }
+                : undefined
+            }
           >
             <Button
               type="button"

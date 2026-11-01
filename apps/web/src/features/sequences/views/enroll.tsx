@@ -1,12 +1,14 @@
 import { t } from '@app/lib/i18n';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { Button } from '@ui';
 import { addMinutes, format, isValid, roundToNearestMinutes } from 'date-fns';
-import { createSignal, Show } from 'solid-js';
+import { createSignal, Match, Show, Switch } from 'solid-js';
 import { EnrollDialog, type EnrollOutcome } from '../components/enroll-dialog';
 import { failureMessage } from '../components/failure-message';
 import { OptionSelect } from '../components/option-select';
 import { type Person, useSequences } from '../context/sequences-context';
+import { isRetryable } from '../core/errors';
 import { SEQUENCE_LIMITS } from '../core/sequence';
 
 const SURFACE = 'sequences.enroll';
@@ -31,23 +33,43 @@ function SequencePicker(props: {
   const active = () =>
     list.sequences().filter((sequence) => sequence.status === 'active');
   return (
-    <Show
-      when={list.pending() || active().length}
-      fallback={
+    <Switch>
+      <Match when={list.failure()}>
+        {(failure) => (
+          <div
+            class="flex items-center gap-2 text-xs text-failure"
+            role="alert"
+          >
+            {failureMessage(failure())}
+            <Show when={isRetryable(failure())}>
+              <Button
+                type="button"
+                variant="link"
+                size="xs"
+                onClick={() => fireAndForget(list.refresh(), SURFACE)}
+              >
+                {t('sequences.retry')}
+              </Button>
+            </Show>
+          </div>
+        )}
+      </Match>
+      <Match when={!list.pending() && !active().length}>
         <p class="text-xs text-ink-muted">{t('sequences.noActiveSequences')}</p>
-      }
-    >
-      <OptionSelect
-        label={t('sequences.sequence')}
-        placeholder={t('sequences.chooseSequence')}
-        value={props.value}
-        options={active().map((sequence) => ({
-          value: sequence.id,
-          label: sequence.name || t('sequences.untitled'),
-        }))}
-        onChange={props.onChange}
-      />
-    </Show>
+      </Match>
+      <Match when={true}>
+        <OptionSelect
+          label={t('sequences.sequence')}
+          placeholder={t('sequences.chooseSequence')}
+          value={props.value}
+          options={active().map((sequence) => ({
+            value: sequence.id,
+            label: sequence.name || t('sequences.untitled'),
+          }))}
+          onChange={props.onChange}
+        />
+      </Match>
+    </Switch>
   );
 }
 

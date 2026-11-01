@@ -5,7 +5,7 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope.svg';
 import FlowArrowIcon from '@icon/system/regular/tree-structure.svg';
 import type { Step } from '@service-email/generated/schemas';
-import { Button, Checkbox, ComposerSurface, Input } from '@ui';
+import { Button, Checkbox, ComposerSurface, Input, TextField } from '@ui';
 import { Index, Show } from 'solid-js';
 import type { Sender } from '../context/sequences-context';
 import {
@@ -150,7 +150,9 @@ export function SequenceEditor(props: {
                   </div>
                   <div class="space-y-4 px-6 pt-4 pb-6">
                     <label class="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
-                      {t('sequences.wait')}
+                      {index === 0
+                        ? t('sequences.delayAfterStart')
+                        : t('sequences.delayAfterPrevious')}
                       <Input
                         aria-label={t('sequences.delayDays', {
                           position: position(),
@@ -170,13 +172,6 @@ export function SequenceEditor(props: {
                           })
                         }
                       />
-                      {index === 0
-                        ? t('sequences.daysAfterStart', {
-                            count: step().delayDays,
-                          })
-                        : t('sequences.daysAfterPrevious', {
-                            count: step().delayDays,
-                          })}
                     </label>
                     <Show when={index > 0}>
                       <Checkbox
@@ -193,54 +188,61 @@ export function SequenceEditor(props: {
                         </Checkbox.Label>
                       </Checkbox>
                     </Show>
-                    <label class="block space-y-2 text-xs font-medium">
-                      {t('sequences.subject')}
-                      <Show
-                        when={!reply()}
-                        fallback={
+                    <Show
+                      when={!reply()}
+                      fallback={
+                        <div class="space-y-2 text-xs font-medium">
+                          <p>{t('sequences.subject')}</p>
                           <p class="ph-no-capture text-sm font-normal text-ink-muted">
                             {stepSubject(props.draft.steps, index)}
                           </p>
+                        </div>
+                      }
+                    >
+                      <TextField
+                        class="gap-2"
+                        value={step().subject}
+                        disabled={props.disabled}
+                        onChange={(value) =>
+                          changeStep(index, {
+                            subject: value.replace(/[\r\n]+/g, ' '),
+                          })
                         }
                       >
-                        <input
+                        <TextField.Label class="text-xs">
+                          {t('sequences.subject')}
+                        </TextField.Label>
+                        <TextField.Input
+                          class="ph-no-capture"
                           aria-label={t('sequences.subjectOf', {
                             position: position(),
                           })}
-                          class="ph-no-capture w-full rounded-md border-0 bg-transparent text-sm font-normal text-composer-ink outline-none placeholder:text-ink-placeholder focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent/40 disabled:opacity-60"
                           placeholder={t('sequences.subjectPlaceholder')}
                           maxLength={SEQUENCE_LIMITS.subject}
-                          value={step().subject}
-                          disabled={props.disabled}
-                          onInput={(event) =>
-                            changeStep(index, {
-                              subject: event.currentTarget.value.replace(
-                                /[\r\n]+/g,
-                                ' '
-                              ),
-                            })
-                          }
                         />
-                      </Show>
-                    </label>
-                    <label class="block space-y-2 text-xs font-medium">
-                      {t('sequences.message')}
-                      <textarea
+                      </TextField>
+                    </Show>
+                    <TextField
+                      class="gap-2"
+                      value={step().body}
+                      disabled={props.disabled}
+                      onChange={(value) => changeStep(index, { body: value })}
+                    >
+                      <TextField.Label class="text-xs">
+                        {t('sequences.message')}
+                      </TextField.Label>
+                      <TextField.TextArea
+                        class="ph-no-capture min-h-36"
+                        autoResize
                         aria-label={t('sequences.messageOf', {
                           position: position(),
                         })}
-                        class="ph-no-capture min-h-36 w-full resize-y rounded-md border-0 bg-transparent text-sm leading-6 font-normal text-composer-ink outline-none placeholder:text-ink-placeholder focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-accent/40 disabled:opacity-60"
                         placeholder={t('sequences.messagePlaceholder', {
                           token: PERSONALIZATION_TOKENS[0],
                         })}
                         maxLength={SEQUENCE_LIMITS.body}
-                        value={step().body}
-                        disabled={props.disabled}
-                        onInput={(event) =>
-                          changeStep(index, { body: event.currentTarget.value })
-                        }
                       />
-                    </label>
+                    </TextField>
                     <p class="text-xs text-ink-muted">
                       {t('sequences.personalizeHint', {
                         tokens: PERSONALIZATION_TOKENS.join(', '),

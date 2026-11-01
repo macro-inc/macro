@@ -14,3 +14,12 @@ export type SequenceFailure =
       tokens?: string[];
     }
   | { kind: 'unavailable' };
+
+/**
+ * Whether trying again can help. The server's typed refusals (no team, CRM
+ * off, not found, …) are answers, not outages; only an internal error or no
+ * answer at all is worth a retry.
+ */
+export function isRetryable(failure: SequenceFailure) {
+  return failure.kind === 'unavailable' || failure.code === 'internal';
+}

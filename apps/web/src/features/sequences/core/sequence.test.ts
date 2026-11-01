@@ -30,15 +30,20 @@ describe('enrollment actions', () => {
     for (const reason of ['replied', 'bounced'] as const)
       expect(
         enrollmentActions(enrollment('stopped', reason), 'active')
-      ).toEqual(['resume']);
+      ).toEqual(['resume', 'unsubscribe']);
   });
 
-  it('never resumes a deliberate stop, an opt-out or a finished enrollment', () => {
-    for (const reason of ['manual', 'unsubscribed', 'access_lost'] as const)
+  it('never resumes a deliberate stop or a finished enrollment, but can still opt it out', () => {
+    for (const reason of ['manual', 'access_lost'] as const)
       expect(
         enrollmentActions(enrollment('stopped', reason), 'active')
-      ).toEqual([]);
-    expect(enrollmentActions(enrollment('completed'), 'active')).toEqual([]);
+      ).toEqual(['unsubscribe']);
+    expect(enrollmentActions(enrollment('completed'), 'active')).toEqual([
+      'unsubscribe',
+    ]);
+    expect(
+      enrollmentActions(enrollment('stopped', 'unsubscribed'), 'active')
+    ).toEqual([]);
   });
 
   it('leaves only stop and unsubscribe while the sequence is paused', () => {
@@ -49,7 +54,7 @@ describe('enrollment actions', () => {
       ]);
     expect(
       enrollmentActions(enrollment('stopped', 'replied'), 'paused')
-    ).toEqual([]);
+    ).toEqual(['unsubscribe']);
   });
 
   it('reads Retry only when the step never went out', () => {

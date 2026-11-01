@@ -7,11 +7,9 @@ import type {
   Enroller,
   EnrollmentCommands,
   EnrollmentSource,
-  PeopleSource,
   SequenceListSource,
   SequenceSource,
 } from '../context/sequences-context';
-import { peopleQueryOptions } from './people';
 import {
   contactEnrollmentsQueryOptions,
   enrollmentQueryOptions,
@@ -36,7 +34,10 @@ export function createSequenceList(): SequenceListSource {
     // Gated reads keep cached rows through a failed refetch (FE-48).
     sequences: () => (queryReadyGate(query) ? query.data : []),
     pending: () => query.isPending,
-    failed: () => query.isError && !queryReadyGate(query),
+    failure: () =>
+      query.isError && !queryReadyGate(query)
+        ? toSequenceFailure(query.error)
+        : undefined,
     refresh: () => query.refetch(),
     create: (input) => outcome(create.mutateAsync(input)),
     creating: () => create.isPending,
@@ -89,15 +90,6 @@ export function createEnrollmentCommands(
   };
 }
 
-export function createPeople(search: Accessor<string>): PeopleSource {
-  const query = useQuery(() => peopleQueryOptions(search()));
-  return {
-    people: () => (queryReadyGate(query) ? query.data : []),
-    pending: () => query.isPending,
-    failed: () => query.isError && !queryReadyGate(query),
-  };
-}
-
 export function createEnroller(): Enroller {
   const mutation = useEnrollMutation();
   return {
@@ -114,7 +106,10 @@ export function createContactEnrollments(
   return {
     enrollments: () => (queryReadyGate(query) ? query.data : []),
     pending: () => query.isPending,
-    failed: () => query.isError && !queryReadyGate(query),
+    failure: () =>
+      query.isError && !queryReadyGate(query)
+        ? toSequenceFailure(query.error)
+        : undefined,
     refresh: () => query.refetch(),
   };
 }

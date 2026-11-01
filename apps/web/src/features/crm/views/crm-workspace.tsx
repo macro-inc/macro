@@ -330,10 +330,9 @@ export function CrmWorkspaceView(props: {
   const teamId = () =>
     teamQuery.isSuccess ? teamQuery.data?.team.id : undefined;
   const pipelinesEnabled = useCrmContext().pipelinesEnabled();
-  const canCreatePipeline = () =>
-    pipelinesEnabled() &&
-    teamQuery.isSuccess &&
-    teamQuery.data?.team.crm_enabled === true;
+  const crmEnabled = () =>
+    teamQuery.isSuccess && teamQuery.data?.team.crm_enabled === true;
+  const canCreatePipeline = () => pipelinesEnabled() && crmEnabled();
   const pipelines = useCrmContext().createPipelines(() =>
     pipelinesEnabled() ? teamId() : undefined
   );
@@ -370,10 +369,12 @@ export function CrmWorkspaceView(props: {
     isCrmActivityTab(active()) &&
     (activityFlag().loading ||
       (active() === 'databases' && databasesFlag().loading));
-  const sequencesShown = () =>
-    sequencesFlag().enabled && isSequencesTab(active());
-  const sequencesPending = () =>
-    sequencesFlag().loading && isSequencesTab(active());
+  // Sequences need the flag and a team with CRM on.
+  const sequencesEnabled = () => sequencesFlag().enabled && crmEnabled();
+  const sequencesLoading = () =>
+    sequencesFlag().loading || (sequencesFlag().enabled && teamQuery.isPending);
+  const sequencesShown = () => sequencesEnabled() && isSequencesTab(active());
+  const sequencesPending = () => sequencesLoading() && isSequencesTab(active());
   const [exporting, setExporting] = createSignal(false);
   const activeList = () =>
     lists.lists().find((list) => `list:${list.id}` === active());
@@ -429,7 +430,7 @@ export function CrmWorkspaceView(props: {
     if (!listsEnabled() && id.startsWith('list:')) id = 'active';
     if (!activityFlag().enabled && isCrmActivityTab(id)) id = 'active';
     if (id === 'databases' && !databasesFlag().enabled) id = 'active';
-    if (!sequencesFlag().enabled && isSequencesTab(id)) id = 'active';
+    if (!sequencesEnabled() && isSequencesTab(id)) id = 'active';
     if (
       id !== 'people' &&
       !id.startsWith('list:') &&
@@ -510,11 +511,10 @@ export function CrmWorkspaceView(props: {
       }
     )
   );
-  // Sequence links wait for PostHog too; off falls back to Companies.
+  // Sequence links wait for PostHog and the team; unavailable falls back to Companies.
   createEffect(
     on(
-      () =>
-        [sequencesFlag().loading, sequencesFlag().enabled, active()] as const,
+      () => [sequencesLoading(), sequencesEnabled(), active()] as const,
       ([loading, enabled, tab]) => {
         if (!loading && !enabled && isSequencesTab(tab)) navigate('active');
       }
@@ -567,7 +567,7 @@ export function CrmWorkspaceView(props: {
         </Show>
       }
       sequences={
-        <Show when={sequencesFlag().enabled}>
+        <Show when={sequencesEnabled()}>
           <Suspense>
             <SequencesNav
               active={!settings.isOpen() && sequencesShown()}
@@ -648,6 +648,7 @@ export function CrmWorkspaceView(props: {
                 active={activeRecord()}
                 pipelines={pipelinesEnabled() ? pipelines.pipelines() : []}
                 lists={listsEnabled() ? lists.lists() : []}
+                crmEnabled={crmEnabled()}
                 onNavigate={(id) => {
                   const pipeline = pipelineIdOfTab(id);
                   if (pipeline) selectPipeline(pipeline);

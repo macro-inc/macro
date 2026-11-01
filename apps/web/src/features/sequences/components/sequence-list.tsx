@@ -4,12 +4,14 @@ import FlowArrowIcon from '@icon/system/regular/tree-structure.svg';
 import type { SequenceSummary } from '@service-email/generated/schemas';
 import { Badge, EmptyStatePanel } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
+import { isRetryable, type SequenceFailure } from '../core/errors';
+import { failureMessage } from './failure-message';
 import { SequenceStatusBadge } from './status-badge';
 
 export function SequenceList(props: {
   sequences: readonly SequenceSummary[];
   pending: boolean;
-  failed: boolean;
+  failure?: SequenceFailure;
   filtered: boolean;
   onRetry: () => void;
   onCreate: () => void;
@@ -28,15 +30,19 @@ export function SequenceList(props: {
           </For>
         </ListSkeleton.Root>
       </Match>
-      <Match when={props.failed}>
-        <EmptyStatePanel
-          centered
-          title={t('sequences.loadFailed')}
-          primaryAction={{
-            label: t('sequences.retry'),
-            onClick: props.onRetry,
-          }}
-        />
+      <Match when={props.failure}>
+        {(failure) => (
+          <EmptyStatePanel
+            centered
+            title={t('sequences.loadFailed')}
+            description={failureMessage(failure())}
+            primaryAction={
+              isRetryable(failure())
+                ? { label: t('sequences.retry'), onClick: props.onRetry }
+                : undefined
+            }
+          />
+        )}
       </Match>
       <Match when={!props.sequences.length}>
         <EmptyStatePanel

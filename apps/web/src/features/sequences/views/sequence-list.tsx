@@ -71,11 +71,11 @@ export function SequenceListView(props: {
           </>
         }
       />
-      <div class="min-h-0 flex-1 overflow-y-auto">
+      <div class="min-h-0 flex-1 overflow-y-auto touch:pb-[var(--mobile-content-inset-bottom,0px)]">
         <SequenceList
           sequences={shown()}
           pending={source.pending()}
-          failed={source.failed()}
+          failure={source.failure()}
           filtered={!!search().trim()}
           onRetry={() => fireAndForget(source.refresh(), SURFACE)}
           onCreate={openCreate}

@@ -18,6 +18,8 @@ export function CrmMobileTabs(props: {
   active: string;
   pipelines: readonly { id: string; name: string }[];
   lists: readonly { id: string; name: string }[];
+  /** The team has CRM on, which Sequences need. */
+  crmEnabled: boolean;
   leading?: JSX.Element;
   onNavigate(id: string): void;
 }) {
@@ -40,7 +42,7 @@ export function CrmMobileTabs(props: {
       value: pipelineTab(pipeline.id),
       label: pipeline.name,
     })),
-    ...(sequencesFlag().enabled
+    ...(sequencesFlag().enabled && props.crmEnabled
       ? [{ value: SEQUENCES_TAB, label: t('sequences.title') }]
       : []),
     ...props.lists.map((list) => ({

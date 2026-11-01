@@ -1,24 +1,30 @@
 import { crmSequenceContent } from '@app/features/crm/crm-hosted-content';
+import { useCrmPeopleSearch } from '@app/features/crm/record-adapter';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { useUserId } from '@core/context/user';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { useEmailLinksQuery } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
-import { type ComponentProps, type ParentProps, Show } from 'solid-js';
+import {
+  type Accessor,
+  type ComponentProps,
+  type ParentProps,
+  Show,
+} from 'solid-js';
 import { addToSequenceDialog } from './add-to-sequence';
 import {
+  type PeopleSource,
   type SendersSource,
   type SequencesContext,
   SequencesProvider,
 } from './context/sequences-context';
-import { ownGmailSenders } from './core/sequence';
+import { ownGmailSenders, SEQUENCE_LIMITS } from './core/sequence';
 import {
   createContactEnrollments,
   createEnroller,
   createEnrollment,
   createEnrollmentCommands,
-  createPeople,
   createSequence,
   createSequenceList,
 } from './queries/sources';
@@ -38,6 +44,21 @@ function createSenders(): SendersSource {
         : [];
     },
     pending: () => links.isPending,
+  };
+}
+
+/** CRM's own People search, the one its pickers and mentions use. */
+function createPeople(search: Accessor<string>): PeopleSource {
+  const results = useCrmPeopleSearch(search, SEQUENCE_LIMITS.contacts);
+  return {
+    people: () =>
+      results.people().map((person) => ({
+        id: person.id,
+        name: person.name,
+        email: person.email,
+      })),
+    pending: results.pending,
+    failed: results.failed,
   };
 }
 

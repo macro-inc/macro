@@ -1,6 +1,7 @@
 import {
   type ResultError,
   ThrownResultError,
+  thrownResultErrorHasCode,
   throwOnErr,
 } from '@core/util/result';
 import { queryClient } from '@queries/client';
@@ -20,7 +21,7 @@ import {
   type UpdateSequenceRequest,
 } from '@service-email/generated/schemas';
 import { queryOptions, useMutation } from '@tanstack/solid-query';
-import type { SequenceFailure } from '../core/errors';
+import { isRetryable, type SequenceFailure } from '../core/errors';
 import {
   expectedState,
   withDetailStatus,
@@ -56,6 +57,15 @@ export function toSequenceFailure(error: unknown): SequenceFailure {
   };
 }
 
+/** Reads retry once, and never on a refusal or a lost session. */
+function retrySequenceRead(failureCount: number, error: Error) {
+  return (
+    failureCount < 1 &&
+    !thrownResultErrorHasCode(error, 'UNAUTHORIZED') &&
+    isRetryable(toSequenceFailure(error))
+  );
+}
+
 async function fetchSequences() {
   const { sequences } = await throwOnErr(() => emailClient.listSequences());
   return sequences;
@@ -66,6 +76,7 @@ export function sequencesQueryOptions() {
     queryKey: sequenceKeys.list.queryKey,
     queryFn: fetchSequences,
     reconcile: 'id',
+    retry: retrySequenceRead,
     refetchOnWindowFocus: 'always',
   });
 }
@@ -74,6 +85,9 @@ export function sequenceQueryOptions(sequenceId: string) {
   return queryOptions({
     queryKey: sequenceKeys.detail(sequenceId).queryKey,
     queryFn: () => throwOnErr(() => emailClient.getSequence(sequenceId)),
+    // It polls under open rows and the editor; keep row identity across refetches.
+    reconcile: 'id',
+    retry: retrySequenceRead,
     refetchInterval: PROGRESS_INTERVAL,
     refetchOnWindowFocus: 'always',
   });
@@ -83,6 +97,7 @@ export function enrollmentQueryOptions(enrollmentId: string) {
   return queryOptions({
     queryKey: sequenceKeys.enrollment(enrollmentId).queryKey,
     queryFn: () => throwOnErr(() => emailClient.getEnrollment(enrollmentId)),
+    retry: retrySequenceRead,
     refetchInterval: PROGRESS_INTERVAL,
   });
 }
@@ -98,6 +113,9 @@ export function contactEnrollmentsQueryOptions(crmContactId: string) {
   return queryOptions({
     queryKey: sequenceKeys.contact(crmContactId).queryKey,
     queryFn: () => fetchContactEnrollments(crmContactId),
+    // A contact is in a sequence once, so rows keep their identity by it.
+    reconcile: 'sequenceId',
+    retry: retrySequenceRead,
     refetchOnWindowFocus: 'always',
   });
 }

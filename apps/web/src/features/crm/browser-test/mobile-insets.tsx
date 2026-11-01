@@ -41,6 +41,7 @@ function Fixture() {
               active={tab()}
               pipelines={[{ id: 'sales', name: 'Sales' }]}
               lists={[]}
+              crmEnabled={false}
               onNavigate={setTab}
             />
           </ViewShell.Header>

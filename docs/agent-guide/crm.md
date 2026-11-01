@@ -465,8 +465,9 @@ Sequences are multi-step emails the server sends from your own connected Gmail
 inbox (not a delegated inbox or Outlook) to CRM People. They need a team with
 Customers on and PostHog `enable-sequences` (on in dev; local override
 `VITE_ENABLE_SEQUENCES`). Off, the sidebar item, mobile tab, contact card and
-**Add to sequence** disappear, no sequence code loads, and sequence links return
-to Companies after flags load.
+**Add to sequence** disappear, the sequence views never load, no sequence
+requests run, and sequence links return to Companies after flags load. Without
+CRM on for the team, the section and its links behave the same way.
 
 - **Where:** the **Sequences** item after Pipelines in the Customers sidebar (its
   number counts enrollments that need attention) or the mobile view strip; the
