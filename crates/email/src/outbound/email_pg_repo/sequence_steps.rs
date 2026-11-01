@@ -479,15 +479,18 @@ impl SequenceStepStore for PgSequenceSteps {
         // Bounded: the first answer stops the enrollment.
         const MAX_CANDIDATES: i64 = 200;
         // One indexed branch per way a message can answer the steps: from the
-        // contact or the mail system (a bounce in a thread of its own), a
+        // contact, from the mail system (a bounce in a thread of its own), a
         // reply to a step, or anything in a step's thread. Only bounces carry
         // their text, which can name the failed address.
         let rows = sqlx::query!(
             r#"WITH candidates AS (
                    SELECT m.id FROM email_contacts c JOIN email_messages m ON m.from_contact_id = c.id
+                   WHERE c.link_id = $1 AND lower(c.email_address) = $2 AND m.internal_date_ts > $4
+                   UNION
+                   -- `email_contacts_mail_system_idx`
+                   SELECT m.id FROM email_contacts c JOIN email_messages m ON m.from_contact_id = c.id
                    WHERE c.link_id = $1 AND m.internal_date_ts > $4
-                     AND (lower(c.email_address) = $2
-                          OR split_part(lower(c.email_address), '@', 1) IN ('mailer-daemon', 'postmaster'))
+                     AND split_part(lower(c.email_address::text), '@', 1) IN ('mailer-daemon', 'postmaster')
                    UNION
                    SELECT id FROM email_messages
                    WHERE link_id = $1 AND replying_to_id = ANY($3) AND internal_date_ts > $4
