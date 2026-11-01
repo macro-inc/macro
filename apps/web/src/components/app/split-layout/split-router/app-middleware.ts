@@ -86,8 +86,12 @@ function redirectLegacyRoutes(
 
   // Touch shows records on their own pages, as the Customers lists open them.
   if (rootId === 'view-companies' && isTouch) {
-    const { recordType, recordId } = routeParams(route);
-    if (typeof recordType === 'string' && typeof recordId === 'string') {
+    const { recordType, recordId, itemId } = routeParams(route);
+    if (
+      typeof recordType === 'string' &&
+      typeof recordId === 'string' &&
+      typeof itemId !== 'string'
+    ) {
       return redirect(`/${recordType}/${encodeURIComponent(recordId)}`);
     }
   }

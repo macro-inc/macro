@@ -11,11 +11,16 @@ import { paneRoute } from '@app/routes/app-route';
 import {
   appRoute,
   companiesRoute,
+  crmItemRoute,
+  crmPipelineItemRoute,
+  crmPipelineRecordItemRoute,
   crmPipelineRecordRoute,
   crmPipelineRoute,
+  crmRecordItemRoute,
   crmRecordRoute,
   legacyContentRoute,
   notFoundRoute,
+  taskDetailRoute,
 } from '@app/routes/routes';
 import { createAppSplitRouterMiddleware } from '@components/app/split-layout/split-router/app-middleware';
 import { createMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
@@ -50,8 +55,18 @@ const routes = createRoutesManifest({
         {
           ...companiesRoute,
           children: [
-            { ...crmPipelineRoute, children: [crmPipelineRecordRoute] },
-            crmRecordRoute,
+            {
+              ...crmPipelineRoute,
+              children: [
+                crmPipelineItemRoute,
+                {
+                  ...crmPipelineRecordRoute,
+                  children: [crmPipelineRecordItemRoute],
+                },
+              ],
+            },
+            crmItemRoute,
+            { ...crmRecordRoute, children: [crmRecordItemRoute] },
           ],
         },
         legacyContentRoute,
@@ -155,6 +170,52 @@ describe('record and pipeline URLs', () => {
     expect(resolveMention(appUrl(`/companies/pipeline/${pipelineId}`))).toEqual(
       { id: pipelineId, block: 'pipeline', params: {} }
     );
+  });
+});
+
+describe('CRM item URLs', () => {
+  const itemId = '01a1212c-74e5-79bd-8767-0d4943d55b18';
+
+  it('claims a CRM task as the same document shown by the Tasks view', () => {
+    expect(
+      crmItemRoute.claim?.({
+        itemType: 'document',
+        itemId,
+        itemFileType: 'md',
+        itemSubType: 'task',
+      })
+    ).toEqual(taskDetailRoute.claim?.({ taskId: itemId }));
+  });
+  it.each([
+    [`document/${itemId}/md/task`, 'task'],
+    [`document/${itemId}/md`, 'md'],
+    [`email/${itemId}`, 'email'],
+    [`call/${itemId}`, 'call'],
+    [`database/${itemId}`, 'database'],
+  ])(
+    'references the selected %s item rather than its parent record',
+    (item, block) => {
+      expect(
+        resolveMention(
+          appUrl(`/companies/company/${companyId}/tasks/item/${item}`)
+        )
+      ).toEqual({ id: itemId, block, params: {} });
+    }
+  );
+
+  it.each([
+    ['companies', crmItemRoute.id],
+    [`companies/company/${companyId}/tasks`, crmRecordItemRoute.id],
+    [`companies/pipeline/${pipelineId}`, crmPipelineItemRoute.id],
+    [
+      `companies/pipeline/${pipelineId}/contact/${contactId}/emails`,
+      crmPipelineRecordItemRoute.id,
+    ],
+  ])('retains the source branch of %s', (source, id) => {
+    expect(leafOf(`${source}/item/email/${itemId}`)).toEqual({
+      id,
+      params: { itemType: 'email', itemId },
+    });
   });
 });
 
@@ -367,6 +428,30 @@ describe('legacy CRM URLs', () => {
       run(recordEntry('contact', contactId, pipelineId), { touch: true })
     ).toEqual({ type: 'redirect', to: `/contact/${contactId}` });
     expect(run(recordEntry('company', companyId))).toBeUndefined();
+  });
+
+  it('keeps a record item link inside Customers on touch instead of dropping the item', () => {
+    const entry: Entry = {
+      id: 'entry',
+      location: {
+        route: paneRoute(
+          { id: companiesRoute.id, params: {} },
+          {
+            id: crmRecordRoute.id,
+            params: {
+              recordType: 'company',
+              recordId: companyId,
+              section: 'emails',
+            },
+          },
+          {
+            id: crmRecordItemRoute.id,
+            params: { itemType: 'email', itemId: 'thread-1' },
+          }
+        ),
+      },
+    };
+    expect(run(entry, { touch: true })).toBeUndefined();
   });
 
   it('carries a linked Discussion message into the record on entry', () => {
