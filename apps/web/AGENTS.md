@@ -279,6 +279,10 @@ about its groups (labels, order, membership) is computed on the server and
 mirrored by the cache's local grouping projection; never add a side cache in
 feature code to cover a remount.
 
+Resolve server date-group keys through the shared `DATE_GROUP_BUCKETS` metadata
+in `lib/queries/soup/grouped/api.ts` for labels and display order; cached Mail
+uses the same metadata.
+
 Keep persistent list hotkeys free of mounted-view closures, and clear
 virtualizer accessors when their view unmounts.
 Keep editor newline handling local; result-opening handlers must yield
