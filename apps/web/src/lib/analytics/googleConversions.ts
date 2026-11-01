@@ -28,6 +28,12 @@ export const GOOGLE_CONVERSION_LABELS = {
   mobile_web_lead: 'lCHSCIntvaccEO2FpY4p',
   /** Onboarding completed (post-Stripe for paid tiers, direct for free). */
   signup: 'Gk2rCI7svaccEO2FpY4p',
+  /**
+   * Trial or paid subscription confirmed after Stripe checkout. Reports to the
+   * Ads action named "Purchase (1)"; for now it counts trial starts, so it is
+   * the action Smart Bidding optimizes toward for paying-intent users.
+   */
+  subscription_start: '88S8CIiRt50cEO2FpY4p',
 } as const;
 
 export type GoogleConversionAction = keyof typeof GOOGLE_CONVERSION_LABELS;

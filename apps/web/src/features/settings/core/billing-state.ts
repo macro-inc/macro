@@ -49,7 +49,12 @@ export function getFreePlanCheckoutRequest(
   plan: PaidPlanTier,
   trialEligible: boolean
 ) {
-  return { plan, onboardingTrial: plan === 'premium' && trialEligible };
+  // `type` comes back on the success URL so the return can value the conversion by plan.
+  return {
+    plan,
+    type: plan,
+    onboardingTrial: plan === 'premium' && trialEligible,
+  };
 }
 
 export function describeSeatPlans(plans: readonly PaidPlanTier[]): string {

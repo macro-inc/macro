@@ -20,7 +20,10 @@ export type PlanState =
  * the flow finishes only once the server reports an active or trialing license.
  */
 export function createPlanConfirmation(
-  context: Pick<OnboardingContext, 'viewer' | 'refreshViewer' | 'track'>,
+  context: Pick<
+    OnboardingContext,
+    'viewer' | 'refreshViewer' | 'track' | 'trackSubscriptionStarted'
+  >,
   options: {
     checkoutReturn: CheckoutReturn | undefined;
     onConfirmed: (tier: PaidPlanTier) => Promise<void>;
@@ -51,6 +54,9 @@ export function createPlanConfirmation(
         const viewer = await context.refreshViewer();
         if (disposed) return;
         if (viewer.t === 'signed-in' && viewer.viewer.licensed) {
+          // Members who were already paid didn't just check out.
+          if (returned)
+            context.trackSubscriptionStarted(viewer.viewer.id, tier);
           await options.onConfirmed(tier);
           return;
         }
