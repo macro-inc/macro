@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            DELETE FROM processing_ai_projections\n            WHERE created_at < NOW() - make_interval(secs => $1)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "2139f35ae8c3363bad3251ee3274fa19fa64c46d0fcaa98f5ae6ae83d186c556"
+}

@@ -11,6 +11,12 @@ regenerated on demand or when cold.
 - `src/lib.rs` doc comment: the full lifecycle — upsert-and-read on
   `POST /ai-projections`, async vs. `await: true` materialization,
   `prompt_hash` versioning, push via connection gateway.
+- Reads recover abandoned loading instances as cold when their
+  processing claim is missing or expired; active claims and retained results
+  stay intact; queued refreshing instances need no processing claim. The
+  persistence adapter shares one processing lease for recovery and claim
+  replacement. Recovery locks the instance before checking its claim in a
+  fresh statement snapshot.
 - `src/domain/ai_projection_service.rs`: the upsert/read/invalidate logic.
 - `src/domain/projection_generator.rs`: the generation port.
 - `src/outbound/agent_generator.rs`: the agent-backed generator (behind the

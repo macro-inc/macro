@@ -464,3 +464,186 @@ async fn user_has_permission_reflects_roles(pool: Pool<Postgres>) -> anyhow::Res
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("ai_projections"))
+)]
+async fn reading_abandoned_loading_recovers_generation(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let repo = AiProjectionRepositoryImpl::new(pool);
+    let target = "macro|recovery@example.com";
+    upsert_definition(&repo, "inbox/recovery", "Summarize unread items", "hash_v1").await?;
+    repo.get_or_create_target_projection("inbox/recovery", target, "hash_v1")
+        .await?;
+    assert!(repo.try_start_processing("inbox/recovery", target).await?);
+    repo.set_projection_loading("inbox/recovery", target, "hash_v1")
+        .await?;
+    let active = repo
+        .get_or_create_target_projection("inbox/recovery", target, "hash_v1")
+        .await?;
+    assert_eq!(active.status, ProjectionStatus::Loading);
+    repo.finish_processing("inbox/recovery", target).await?;
+
+    let recovered = repo
+        .get_or_create_target_projection("inbox/recovery", target, "hash_v1")
+        .await?;
+    assert_eq!(recovered.status, ProjectionStatus::Cold);
+    assert!(recovered.result.is_none());
+    assert!(repo.try_start_processing("inbox/recovery", target).await?);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("ai_projections"))
+)]
+async fn reading_refresh_keeps_queued_work_and_recovers_abandoned_generation(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = AiProjectionRepositoryImpl::new(pool);
+    let target = "macro|recovery@example.com";
+    upsert_definition(&repo, "inbox/recovery", "Summarize unread items", "hash_v1").await?;
+    repo.get_or_create_target_projection("inbox/recovery", target, "hash_v1")
+        .await?;
+    let generated_at = chrono::Utc::now();
+    repo.set_projection_result(
+        "inbox/recovery",
+        target,
+        "hash_v1",
+        "retained result",
+        generated_at,
+        generated_at + Expiry::Day.to_duration(),
+    )
+    .await?;
+    repo.set_projection_refreshing("inbox/recovery", target)
+        .await?;
+    let queued = repo
+        .get_or_create_target_projection("inbox/recovery", target, "hash_v1")
+        .await?;
+    assert_eq!(queued.status, ProjectionStatus::Refreshing);
+    assert_eq!(queued.result.as_deref(), Some("retained result"));
+    assert!(repo.try_start_processing("inbox/recovery", target).await?);
+    repo.set_projection_loading("inbox/recovery", target, "hash_v1")
+        .await?;
+
+    let active = repo
+        .get_or_create_target_projection("inbox/recovery", target, "hash_v1")
+        .await?;
+    assert_eq!(active.status, ProjectionStatus::Loading);
+    assert_eq!(active.result.as_deref(), Some("retained result"));
+    assert!(!repo.try_start_processing("inbox/recovery", target).await?);
+
+    repo.finish_processing("inbox/recovery", target).await?;
+    let recovered = repo
+        .get_or_create_target_projection("inbox/recovery", target, "hash_v1")
+        .await?;
+    assert_eq!(recovered.status, ProjectionStatus::Cold);
+    assert_eq!(recovered.result.as_deref(), Some("retained result"));
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("ai_projections"))
+)]
+async fn reading_loading_reclaims_an_expired_processing_lease(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = AiProjectionRepositoryImpl::new(pool.clone());
+    let target = "macro|recovery@example.com";
+    upsert_definition(&repo, "inbox/recovery", "Summarize unread items", "hash_v1").await?;
+    repo.get_or_create_target_projection("inbox/recovery", target, "hash_v1")
+        .await?;
+    assert!(repo.try_start_processing("inbox/recovery", target).await?);
+    repo.set_projection_loading("inbox/recovery", target, "hash_v1")
+        .await?;
+    sqlx::query!(
+        "UPDATE processing_ai_projections SET created_at = NOW() - INTERVAL '16 minutes' WHERE ai_projection_id = $1 AND target_id = $2",
+        "inbox/recovery",
+        target,
+    )
+    .execute(&pool)
+    .await?;
+
+    let recovered = repo
+        .get_or_create_target_projection("inbox/recovery", target, "hash_v1")
+        .await?;
+    assert_eq!(recovered.status, ProjectionStatus::Cold);
+    assert!(repo.try_start_processing("inbox/recovery", target).await?);
+    assert!(!repo.try_start_processing("inbox/recovery", target).await?);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../fixtures",
+        scripts("ai_projections", "projection_read_barrier")
+    )
+)]
+async fn reading_during_worker_start_preserves_the_new_processing_claim(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    let repo = AiProjectionRepositoryImpl::new(pool.clone());
+    let target = "macro|recovery@example.com";
+    upsert_definition(&repo, "inbox/recovery", "Summarize unread items", "hash_v1").await?;
+    repo.get_or_create_target_projection("inbox/recovery", target, "hash_v1")
+        .await?;
+
+    // One connection ensures the repository read uses the session holding the
+    // barrier. Its BEFORE INSERT trigger releases that barrier after PostgreSQL
+    // takes the statement snapshot, before ON CONFLICT waits for the row lock.
+    let reader_pool = sqlx::postgres::PgPoolOptions::new()
+        .max_connections(1)
+        .connect_with(
+            (*pool.connect_options())
+                .clone()
+                .application_name("projection-concurrent-reader"),
+        )
+        .await?;
+    sqlx::query!(
+        "SELECT pg_advisory_lock($1) IS NULL AS barrier",
+        710471789_i64
+    )
+    .fetch_one(&reader_pool)
+    .await?;
+    let mut worker = pool.begin().await?;
+    sqlx::query!(
+        "SELECT ai_projection_id FROM user_ai_projection WHERE ai_projection_id = $1 AND target_id = $2 FOR UPDATE",
+        "inbox/recovery",
+        target,
+    )
+    .fetch_one(&mut *worker)
+    .await?;
+    let reader = tokio::spawn(async move {
+        AiProjectionRepositoryImpl::new(reader_pool)
+            .get_or_create_target_projection("inbox/recovery", target, "hash_v1")
+            .await
+    });
+    sqlx::query!(
+        "SELECT pg_advisory_xact_lock($1) IS NULL AS barrier",
+        710471789_i64
+    )
+    .fetch_one(&mut *worker)
+    .await?;
+    sqlx::query!(
+        "INSERT INTO processing_ai_projections (ai_projection_id, target_id) VALUES ($1, $2)",
+        "inbox/recovery",
+        target,
+    )
+    .execute(&mut *worker)
+    .await?;
+    sqlx::query!(
+        "UPDATE user_ai_projection SET status = 'loading' WHERE ai_projection_id = $1 AND target_id = $2",
+        "inbox/recovery",
+        target,
+    )
+    .execute(&mut *worker)
+    .await?;
+    worker.commit().await?;
+
+    let active = reader.await??;
+    assert_eq!(active.status, ProjectionStatus::Loading);
+    assert!(!repo.try_start_processing("inbox/recovery", target).await?);
+    Ok(())
+}
