@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT e.id, e.crm_contact_id, e.email, e.contact_name, e.status, e.reason, e.next_step,\n                  jsonb_array_length(e.steps) AS \"step_count!\", e.created_at,\n                  (SELECT max(h.sent_at) FROM email_sequence_steps h WHERE h.enrollment_id = e.id) AS last_sent_at,\n                  COALESCE((SELECT h.scheduled_at FROM email_sequence_steps h\n                            WHERE h.enrollment_id = e.id AND h.status = 'scheduled'), e.due_at) AS next_send_at\n           FROM email_sequence_enrollments e\n           JOIN email_sequences s ON s.id = e.sequence_id\n           WHERE ($1::uuid IS NULL OR e.sequence_id = $1)\n             AND ($2::uuid IS NULL OR e.id = $2)\n             AND ($3::text IS NULL OR (s.user_id = $3 AND s.team_id = $4))\n           ORDER BY e.created_at DESC, e.id",
+  "query": "SELECT e.id, e.crm_contact_id, e.email, e.contact_name, e.status, e.reason, e.next_step,\n                  jsonb_array_length(e.steps) AS \"step_count!\", e.created_at,\n                  (SELECT max(h.sent_at) FROM email_sequence_steps h WHERE h.enrollment_id = e.id) AS last_sent_at,\n                  COALESCE((SELECT h.scheduled_at FROM email_sequence_steps h\n                            WHERE h.enrollment_id = e.id AND h.status = 'scheduled'),\n                           CASE WHEN e.status = 'active' THEN e.due_at END) AS next_send_at\n           FROM email_sequence_enrollments e\n           JOIN email_sequences s ON s.id = e.sequence_id\n           WHERE ($1::uuid IS NULL OR e.sequence_id = $1)\n             AND ($2::uuid IS NULL OR e.id = $2)\n             AND ($3::text IS NULL OR (s.user_id = $3 AND s.team_id = $4))\n           ORDER BY e.created_at DESC, e.id",
   "describe": {
     "columns": [
       {
@@ -81,5 +81,5 @@
       null
     ]
   },
-  "hash": "7073b77d6bd27d50848d21bd7431b1dc402c1fa73837cadde5f8c2953bf5ae3d"
+  "hash": "a034d7d596f3779cc86b0abca97c55c441f02cdccdb7a3a75eabfbcbfa780f05"
 }

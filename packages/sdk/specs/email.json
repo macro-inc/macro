@@ -8182,6 +8182,7 @@
           "invalid_timezone",
           "action_unavailable",
           "step_in_delivery",
+          "step_taken_over",
           "no_team",
           "crm_disabled",
           "internal"

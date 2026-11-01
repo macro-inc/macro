@@ -23,6 +23,7 @@ export const SequenceErrorCode = {
   invalid_timezone: 'invalid_timezone',
   action_unavailable: 'action_unavailable',
   step_in_delivery: 'step_in_delivery',
+  step_taken_over: 'step_taken_over',
   no_team: 'no_team',
   crm_disabled: 'crm_disabled',
   internal: 'internal',
