@@ -172,7 +172,7 @@ pub async fn run() -> anyhow::Result<()> {
             EmailPgRepo::new(db.clone()),
             FrecencyQueryServiceImpl::new(FrecencyPgStorage::new(db.clone())),
             (*sqs_client).clone(),
-            crm_service,
+            crm_service.clone(),
             entity_access_management::domain::service::EntityAccessManagementServiceImpl::new(
                 entity_access_management::outbound::PgRepository::new(db.clone()),
             ),
@@ -183,6 +183,15 @@ pub async fn run() -> anyhow::Result<()> {
     let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         db.clone(),
     )));
+    let sequences = Arc::new(email_sequences::domain::service::Sequences::new(
+        email_sequences::outbound::PgSequenceRepo::new(db.clone()),
+        email::outbound::PgSequenceSteps,
+        email_sequences::outbound::CrmOwnerAccess::new(
+            entity_access_service.as_ref().clone(),
+            crm_service,
+        ),
+        &macro_service_urls::EmailServiceUrl::new()?.to_string(),
+    ));
     let email_thread_state = EmailThreadRouterState {
         service: email_service.service(),
         access_service: entity_access_service.clone(),
@@ -416,6 +425,7 @@ pub async fn run() -> anyhow::Result<()> {
         macro_event_broker: Arc::new(macro_event_broker),
         calendar_service,
         calendar_mutation_service,
+        sequences,
     })
     .await;
 

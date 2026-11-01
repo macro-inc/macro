@@ -112,6 +112,18 @@ pub(crate) type MessageSourceSvc = email::domain::message_source::MessageSourceS
     EmailEntityAccessService,
 >;
 
+pub(crate) type SequencesSvc = email_sequences::domain::service::Sequences<
+    email_sequences::outbound::PgSequenceRepo,
+    email::outbound::PgSequenceSteps,
+    email_sequences::outbound::CrmOwnerAccess<
+        EmailEntityAccessService,
+        crm::domain::service::CrmServiceImpl<
+            crm::outbound::companies_repo::CompaniesRepositoryImpl,
+            crm::outbound::no_op_resolver::NoOpCompanyMetadataResolver,
+        >,
+    >,
+>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub mailbox_notifications: Arc<
@@ -178,4 +190,5 @@ pub(crate) struct ApiContext {
     pub macro_event_broker: Arc<EmailEventBroker>,
     pub calendar_service: Arc<CalendarGrantService>,
     pub calendar_mutation_service: Arc<CalendarMutationSvc>,
+    pub sequences: Arc<SequencesSvc>,
 }

@@ -121,6 +121,15 @@ use utoipa::OpenApi;
         email::sync::disable::disable_handler,
         email::settings::patch::patch_settings_handler,
         email::settings::operations::handler,
+        email_sequences::inbound::axum_router::list_sequences,
+        email_sequences::inbound::axum_router::create_sequence,
+        email_sequences::inbound::axum_router::get_sequence,
+        email_sequences::inbound::axum_router::update_sequence,
+        email_sequences::inbound::axum_router::delete_sequence,
+        email_sequences::inbound::axum_router::enroll_contacts,
+        email_sequences::inbound::axum_router::get_enrollment,
+        email_sequences::inbound::axum_router::update_enrollment,
+        email_sequences::inbound::axum_router::contact_enrollments,
     ),
     components(
         schemas(
@@ -204,7 +213,15 @@ use utoipa::OpenApi;
             service::thread::Thread,
             service::message::Message,
             PatchSettingsRequest,
-            PatchSettingsResponse
+            PatchSettingsResponse,
+            // Sequences
+            email_sequences::inbound::axum_router::ListSequencesResponse,
+            email_sequences::inbound::axum_router::SequenceDetailResponse,
+            email_sequences::inbound::axum_router::EnrollResponse,
+            email_sequences::inbound::axum_router::EnrollmentActionRequest,
+            email_sequences::inbound::axum_router::ContactEnrollmentsResponse,
+            email_sequences::inbound::axum_router::SequenceErrorResponse,
+            email_sequences::inbound::axum_router::SequenceErrorCode,
         ),
     ),
     tags(

@@ -276,6 +276,12 @@ pub async fn upsert_message(
             })
         })?;
 
+    // The insert is committed: stop any sequence this message answers. Never
+    // fails sync; the sweep checks again before each step.
+    if !is_draft && !is_sent {
+        let _ = ctx.sequences.message_synced(link.id, message_db_id).await;
+    }
+
     // Also runs for a message already saved by a whole-thread fetch, which carries no
     // calendar parts. Saves skip existing components; an attachment-only invitation is
     // downloaded again on a re-sync.

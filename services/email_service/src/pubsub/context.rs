@@ -57,6 +57,37 @@ impl CompanyMetadataResolver for CrmMetadataResolver {
 /// surfaced separately on [`PubSubContext`].
 pub type CrmServiceType = CrmServiceImpl<CompaniesRepositoryImpl, CrmMetadataResolver>;
 
+/// Sequences as the workers run them: the sweep and the reply hook.
+pub type SequencesType = email_sequences::domain::service::Sequences<
+    email_sequences::outbound::PgSequenceRepo,
+    email::outbound::PgSequenceSteps,
+    email_sequences::outbound::CrmOwnerAccess<
+        entity_access::domain::service::EntityAccessServiceImpl<
+            entity_access::outbound::PgAccessRepository,
+        >,
+        CrmServiceType,
+    >,
+>;
+
+/// Compose sequences over the worker's pool and CRM service.
+pub fn sequences(
+    db: PgPool,
+    crm_service: CrmServiceType,
+    email_service_url: &str,
+) -> SequencesType {
+    email_sequences::domain::service::Sequences::new(
+        email_sequences::outbound::PgSequenceRepo::new(db.clone()),
+        email::outbound::PgSequenceSteps,
+        email_sequences::outbound::CrmOwnerAccess::new(
+            entity_access::domain::service::EntityAccessServiceImpl::new(
+                entity_access::outbound::PgAccessRepository::new(db),
+            ),
+            crm_service,
+        ),
+        email_service_url,
+    )
+}
+
 #[derive(Clone)]
 pub struct PubSubContext {
     pub gmail_history: email::domain::mailbox::gmail_history::GmailHistoryService<
@@ -75,6 +106,7 @@ pub struct PubSubContext {
     pub dss_client: DocumentStorageServiceClient,
     pub system_properties_service: Arc<SystemPropertiesServiceImpl<PgSystemPropertiesRepository>>,
     pub crm_service: CrmServiceType,
+    pub sequences: Arc<SequencesType>,
     pub macro_event_broker: PubSubEventBroker,
     pub notifications_enabled: bool,
     pub retry_worker: bool,

@@ -305,6 +305,11 @@ impl World {
                 ),
             ),
             crm_service: crm_service.clone(),
+            sequences: Arc::new(crate::pubsub::context::sequences(
+                db.clone(),
+                crm_service.clone(),
+                "http://localhost",
+            )),
             macro_event_broker: broker.clone(),
             notifications_enabled: false,
             retry_worker,
