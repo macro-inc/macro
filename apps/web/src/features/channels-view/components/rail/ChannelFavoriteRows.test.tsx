@@ -317,7 +317,11 @@ describe('favorite reordering', () => {
     render(() => (
       <DraggableFavoriteRow
         favorite={favorite}
-        reorder={{ scope: 'rail:favorites', enabled: () => true }}
+        reorder={{
+          scope: 'rail:favorites',
+          enabled: () => true,
+          dropEdge: () => undefined,
+        }}
       />
     ));
     drag.starts.forEach((start) =>

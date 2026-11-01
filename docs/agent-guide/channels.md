@@ -966,8 +966,9 @@ hydration must not mark notifications read. Context menus retain Mark Read,
 Open in new split, Unfavorite, notification controls, and Copy Link.
 
 Favorites defaults to **Custom order**. Drag a favorite onto another favorite to
-move it to that position; the order saves through the shared favorites API and
-survives reloads. Hidden favorites and favorites of other entity types keep
+move it to that position; an accent insertion line shows the exact destination
+above or below the target row. The order saves through the shared favorites API
+and survives reloads. Hidden favorites and favorites of other entity types keep
 their positions. **Sort → Custom order** restores dragging after choosing an
 automatic sort. Dropping a favorite does not open its conversation or move it
 into a custom section. Failed saves roll back and show an error toast.

@@ -6,13 +6,14 @@ import {
   createDroppable,
   useDragDropContext,
 } from '@thisbeyond/solid-dnd';
-import { type Accessor, onCleanup, onMount, Show } from 'solid-js';
+import { onCleanup, onMount, Show } from 'solid-js';
 import { ChannelFavoriteRow as FavoriteRow } from '../ChannelFavoriteRows';
 import { rowKeyForFavorite } from '../ChannelsRailContext';
+import type { useFavoriteReorder } from './useFavoriteReorder';
 
 type FavoriteRowProps = {
   favorite: Favorite;
-  reorder: { scope: string; enabled: Accessor<boolean> };
+  reorder: ReturnType<typeof useFavoriteReorder>;
 };
 
 export function ChannelFavoriteRow(props: FavoriteRowProps) {
@@ -41,7 +42,7 @@ function DraggableFavoriteRow(props: FavoriteRowProps) {
     ...data,
     isDropTargetDisabled: () => !props.reorder.enabled(),
   });
-  const [state, actions] = useDragDropContext() ?? [];
+  const [, actions] = useDragDropContext() ?? [];
   let didDrag = false;
   actions?.onDragStart(({ draggable: source }) => {
     if (
@@ -60,10 +61,7 @@ function DraggableFavoriteRow(props: FavoriteRowProps) {
   onCleanup(() =>
     root?.removeEventListener('click', preventOpenAfterDrag, true)
   );
-  const isTarget = () =>
-    props.reorder.enabled() &&
-    droppable.isActiveDroppable &&
-    state?.active.draggable?.data.favoriteKey !== key;
+  const dropEdge = () => props.reorder.dropEdge(key);
 
   return (
     <div
@@ -76,12 +74,26 @@ function DraggableFavoriteRow(props: FavoriteRowProps) {
       onPointerDown={() => {
         didDrag = false;
       }}
+      class="relative"
       classList={{
         'opacity-50': draggable.isActiveDraggable,
-        'rounded-lg ring-1 ring-inset ring-accent': isTarget(),
       }}
     >
       <FavoriteRow favorite={props.favorite} />
+      <Show when={dropEdge()}>
+        {(edge) => (
+          <div
+            aria-hidden="true"
+            class="pointer-events-none absolute inset-x-0 z-10 h-0.5 rounded-full bg-accent"
+            classList={{
+              'top-0': edge() === 'top',
+              'bottom-0': edge() === 'bottom',
+            }}
+          >
+            <span class="absolute -top-0.5 left-0 size-1.5 rounded-full bg-accent" />
+          </div>
+        )}
+      </Show>
     </div>
   );
 }

@@ -43,7 +43,7 @@ export function useFavoriteReorder(visible: Accessor<readonly Favorite[]>) {
   const favorites = useFavoritesData();
   const mutation = useReorderFavoritesMutation();
   const [saving, setSaving] = createSignal(false);
-  const [, actions] = useDragDropContext() ?? [];
+  const [state, actions] = useDragDropContext() ?? [];
   const scope = `${rail.railId}:favorites`;
   const account = createMemo(() => ({ id: userId() }));
   let dragAccount: ReturnType<typeof account> | undefined;
@@ -53,6 +53,27 @@ export function useFavoriteReorder(visible: Accessor<readonly Favorite[]>) {
     rail.sectionPreferences('favorites').sort === 'manual' &&
     favorites() !== undefined &&
     visible().length > 1;
+  const dropEdge = (targetKey: string): 'top' | 'bottom' | undefined => {
+    const source = state?.active.draggable;
+    const target = state?.active.droppable;
+    if (
+      !enabled() ||
+      source?.data.dndScope !== scope ||
+      target?.data.dndScope !== scope ||
+      target.data.favoriteKey !== targetKey
+    )
+      return;
+    const items = visible();
+    const sourceIndex = items.findIndex(
+      (item) => rowKeyForFavorite(item) === source.data.favoriteKey
+    );
+    const targetIndex = items.findIndex(
+      (item) => rowKeyForFavorite(item) === targetKey
+    );
+    if (sourceIndex < 0 || targetIndex < 0 || sourceIndex === targetIndex)
+      return;
+    return sourceIndex < targetIndex ? 'bottom' : 'top';
+  };
 
   actions?.onDragStart(({ draggable }) => {
     if (draggable.data.dndScope === scope) dragAccount = account();
@@ -98,5 +119,5 @@ export function useFavoriteReorder(visible: Accessor<readonly Favorite[]>) {
     if (!items || !source) return;
     fireAndForget(save(items, source.entityId), 'channels-view');
   });
-  return { scope, enabled };
+  return { scope, enabled, dropEdge };
 }
