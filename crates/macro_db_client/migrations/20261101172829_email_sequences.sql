@@ -6,6 +6,10 @@
 -- history and the team's unsubscribe list; a deleted inbox or CRM contact
 -- leaves its enrollments with a NULL reference. Unsent steps left without
 -- history are withdrawn by the sweep.
+--
+-- The foreign keys lock the referenced tables briefly; don't queue writes to
+-- them behind a long transaction.
+SET LOCAL lock_timeout = '5s';
 
 CREATE TABLE email_sequences (
     id uuid PRIMARY KEY,
@@ -64,8 +68,9 @@ CREATE TABLE email_sequence_enrollments (
 
 CREATE INDEX email_sequence_enrollments_due_idx ON email_sequence_enrollments (due_at, id)
     WHERE status = 'active' AND due_at IS NOT NULL;
-CREATE INDEX email_sequence_enrollments_live_idx ON email_sequence_enrollments (link_id, email)
-    WHERE status IN ('active', 'paused', 'needs_attention');
+-- Live enrollments of an inbox (inbox sync asks on every message), and the
+-- rows a deleted inbox sets to NULL.
+CREATE INDEX email_sequence_enrollments_link_idx ON email_sequence_enrollments (link_id, status);
 CREATE INDEX email_sequence_enrollments_team_email_idx ON email_sequence_enrollments (team_id, email);
 -- CRM deletes contacts in bulk; each delete sets references here to NULL.
 CREATE INDEX email_sequence_enrollments_crm_contact_idx ON email_sequence_enrollments (crm_contact_id)
@@ -88,7 +93,3 @@ CREATE TABLE email_sequence_steps (
 -- At most one unsent step per enrollment.
 CREATE UNIQUE INDEX email_sequence_steps_one_unsent_idx ON email_sequence_steps (enrollment_id)
     WHERE status = 'scheduled';
-CREATE INDEX email_sequence_steps_delivery_idx ON email_sequence_steps (delivery_message_id)
-    WHERE delivery_message_id IS NOT NULL;
-CREATE INDEX email_sequence_steps_provider_idx ON email_sequence_steps (provider_message_id)
-    WHERE provider_message_id IS NOT NULL;
