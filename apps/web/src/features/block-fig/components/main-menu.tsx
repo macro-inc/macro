@@ -1,6 +1,6 @@
 /** File, edit, view, and layer commands grouped like Figma's main menu. */
 import { IS_MAC } from '@core/constant/isMac';
-import List from '@phosphor/list.svg';
+import List from '@icon/system/regular/list.svg';
 import { paletteActions } from '../core/palette';
 import { EDIT_ACTIONS, type ViewerAction } from '../core/shortcuts';
 import { EditorMenu, type EditorMenuItem } from './editor-menu';

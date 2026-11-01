@@ -2,7 +2,7 @@ import { analytics } from '@app/lib/analytics';
 import { ENABLE_PROJECT_SHARING } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { compareDateDesc } from '@core/util/date';
-
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   refetchHistory,
   useUpsertToHistoryMutation,
@@ -15,6 +15,7 @@ import type { Project } from '@service-storage/generated/schemas/project';
 import { keepPreviousData, useMutation, useQuery } from '@tanstack/solid-query';
 import { v4 as uuidv4 } from 'uuid';
 import { queryClient } from '../client';
+import { refreshActiveGraphqlFoldersQueries } from './graphql-folders';
 import { storageKeys } from './keys';
 
 const PROJECTS_STALE_TIME = 5 * 60 * 1000;
@@ -85,9 +86,12 @@ export function useProjectsQuery() {
 }
 
 export function invalidateProjects() {
-  return queryClient.invalidateQueries({
-    queryKey: storageKeys.projects.list.queryKey,
-  });
+  return Promise.all([
+    queryClient.invalidateQueries({
+      queryKey: storageKeys.projects.list.queryKey,
+    }),
+    refreshActiveGraphqlFoldersQueries(),
+  ]);
 }
 
 /**
@@ -126,10 +130,13 @@ export async function createProject(params: {
     });
     // Drive's folder contents are a Soup list, not the projects list: insert
     // the new folder there too so it appears in its parent without a reload.
-    void refetchSoupEntity(projectId, 'project', {
-      ownTouch: true,
-      refreshGraphql: true,
-    });
+    fireAndForget(
+      refetchSoupEntity(projectId, 'project', {
+        ownTouch: true,
+        refreshGraphql: true,
+      }),
+      'project-creation'
+    );
     await Promise.all([invalidateProjects(), refetchHistory()]);
     return projectId;
   }
@@ -244,7 +251,7 @@ function _useCreateProjectMutation(
           queryClient.invalidateQueries({
             queryKey: storageKeys.projects.list.queryKey,
           });
-          refetchHistory();
+          fireAndForget(refetchHistory(), 'project-creation');
         },
       },
       callbacks

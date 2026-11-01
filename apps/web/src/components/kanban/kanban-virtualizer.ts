@@ -68,15 +68,13 @@ export function createKanbanVirtualizer(options: KanbanVirtualizerOptions) {
   const pinnedIndex = () => {
     const source = state.active.draggable?.data;
 
-    if (source?.kind !== 'card') {
-      return -1;
-    }
-
     if (options.direction === 'horizontal') {
-      return options.keys().indexOf(source.laneId);
+      return source?.kind === 'card' || source?.kind === 'lane'
+        ? options.keys().indexOf(source.laneId)
+        : -1;
     }
 
-    if (source.laneId !== options.laneId()) {
+    if (source?.kind !== 'card' || source.laneId !== options.laneId()) {
       return -1;
     }
 

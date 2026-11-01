@@ -2,7 +2,7 @@ import { ThrownResultError } from '@core/util/result';
 import type { FormsError } from '@service-storage/forms';
 import { createRoot, createSignal } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { createFormDetailSource } from './form-sources';
+import { createFormDetailSource, createTallySource } from './form-sources';
 
 const sync = vi.hoisted(() => ({
   formFollowed: [] as (() => string | undefined)[],
@@ -13,6 +13,7 @@ const sync = vi.hoisted(() => ({
   formReads: 0,
   databaseName: (): string => 'Offsite',
   queryError: (): unknown => undefined,
+  tallyBuckets: [] as unknown[],
 }));
 vi.mock('@queries/storage/forms', () => ({
   useFormDetailQuery: () => ({
@@ -49,6 +50,15 @@ vi.mock('@queries/storage/forms', () => ({
     refetch: async () => {
       sync.formReads += 1;
       return { isError: false };
+    },
+  }),
+  useTallyQuery: () => ({
+    isSuccess: true,
+    isError: false,
+    data: {
+      questions: [
+        { question: 'question-1', responses: 2, buckets: sync.tallyBuckets },
+      ],
     },
   }),
 }));
@@ -207,5 +217,25 @@ describe('createFormDetailSource', () => {
       dispose();
     });
     expect(sync.databasesRead).toEqual(['database-1', undefined]);
+  });
+});
+
+describe('createTallySource', () => {
+  it('skips a bucket kind from a newer service', () => {
+    sync.tallyBuckets = [
+      { value: { kind: 'option', option: 'option-1' }, count: 1 },
+      { value: JSON.parse('{"kind":"rating","stars":5}'), count: 1 },
+    ];
+    const source = createTallySource(
+      () => 'form-1',
+      () => true
+    );
+    expect(source.value()).toEqual([
+      {
+        questionId: 'question-1',
+        responses: 2,
+        buckets: [{ kind: 'option', optionId: 'option-1', count: 1 }],
+      },
+    ]);
   });
 });

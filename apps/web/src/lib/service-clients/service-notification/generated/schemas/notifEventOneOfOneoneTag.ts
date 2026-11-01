@@ -10,5 +10,5 @@ export type NotifEventOneOfOneoneTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfOneoneTag = {
-  initiative_discussion: 'initiative_discussion',
+  entity_access_requested: 'entity_access_requested',
 } as const;

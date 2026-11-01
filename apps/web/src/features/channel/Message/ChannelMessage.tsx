@@ -2,7 +2,7 @@ import { useMessageActionDrawer } from '@channel/Mobile/message-action-drawer-co
 import { touchHandler } from '@core/directive/touchHandler';
 import type { MessageActions, MessageData } from '@core/messages/types';
 import { messageSendMotion } from '@core/util/message-send-motion';
-import TrashIcon from '@phosphor/trash.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import type { MessageParent } from '@service-storage/messages';
 import { type JSX, Match, Show, Switch } from 'solid-js';
 import type { MessageEditor } from '../Channel/create-message-editor';
@@ -13,7 +13,14 @@ import { Message } from './Message';
 import { MaybeSwipeToReplyRow } from './SwipeToReplyRow';
 
 type ChannelMessageProps = {
-  parent: MessageParent;
+  renderContent?: (content: JSX.Element) => JSX.Element;
+  /**
+   * The stored conversation the message belongs to; inline editing needs
+   * it. Rows of messages stored elsewhere leave it out.
+   */
+  parent?: MessageParent;
+  /** Header time; defaults to the time alone in a channel. */
+  timestampFormat?: 'time' | 'dateAndTime';
   inputMode?: 'inline' | 'unified';
   message: MessageData;
   actions?: MessageActions;
@@ -25,6 +32,11 @@ type ChannelMessageProps = {
    * navigation, points at this message.
    */
   targeted?: boolean;
+  /**
+   * Leave out who triggered a bot's message. In a private conversation with
+   * an agent that is always the viewer, so it says nothing.
+   */
+  hideTriggeredBy?: boolean;
   onClick?: JSX.EventHandlerUnion<HTMLDivElement, MouseEvent>;
 };
 
@@ -36,26 +48,29 @@ function isEditingMessage(
 }
 
 function MessageContentSlot(props: {
-  parent: MessageParent;
+  renderContent?: (content: JSX.Element) => JSX.Element;
+  parent?: MessageParent;
   inputMode?: 'inline' | 'unified';
   messageEditor?: MessageEditor;
   class?: string;
 }) {
   const message = useMessage();
   const isEditing = () => isEditingMessage(props.messageEditor, message().id);
+  const inlineEditing = () => {
+    const parent = props.parent;
+    const messageEditor = props.messageEditor;
+    if (!isEditing() || props.inputMode === 'unified') return;
+    return parent && messageEditor ? { parent, messageEditor } : undefined;
+  };
 
-  return (
+  const content = (
     <Switch>
-      <Match
-        when={
-          isEditing() && props.inputMode !== 'unified' && props.messageEditor
-        }
-      >
-        {(messageEditor) => (
+      <Match when={inlineEditing()}>
+        {(editing) => (
           <MessageEditorContent
-            parent={props.parent}
+            parent={editing().parent}
             message={message()}
-            messageEditor={messageEditor()}
+            messageEditor={editing().messageEditor}
             class={props.class}
           />
         )}
@@ -65,6 +80,7 @@ function MessageContentSlot(props: {
       </Match>
     </Switch>
   );
+  return props.renderContent ? props.renderContent(content) : content;
 }
 
 function MessageFooter(props: { messageEditor?: MessageEditor }) {
@@ -110,9 +126,12 @@ function DeletedMessageLayout() {
 }
 
 function RegularMessageLayout(props: {
-  parent: MessageParent;
+  renderContent?: (content: JSX.Element) => JSX.Element;
+  parent?: MessageParent;
+  timestampFormat?: 'time' | 'dateAndTime';
   inputMode?: 'inline' | 'unified';
   messageEditor?: MessageEditor;
+  hideTriggeredBy?: boolean;
 }) {
   return (
     <Message.Layout class="pt-(--regular-message-padding-t)">
@@ -125,15 +144,21 @@ function RegularMessageLayout(props: {
           <Message.AgentBadge />
           <Message.Timestamp
             class="shrink-0"
-            format={props.parent.type === 'channel' ? 'time' : 'dateAndTime'}
+            format={
+              props.timestampFormat ??
+              (props.parent?.type === 'channel' ? 'time' : 'dateAndTime')
+            }
           />
           <Message.EditedIndicator class="shrink-0" />
           <Message.AgentSessionLink class="ml-auto" />
         </div>
-        <Message.FromPill />
+        <Show when={!props.hideTriggeredBy}>
+          <Message.FromPill />
+        </Show>
       </Message.Slot>
       <Message.Slot placement="content" class="ph-no-capture">
         <MessageContentSlot
+          renderContent={props.renderContent}
           parent={props.parent}
           inputMode={props.inputMode}
           messageEditor={props.messageEditor}
@@ -151,7 +176,8 @@ function RegularMessageLayout(props: {
 }
 
 function GroupedMessageLayout(props: {
-  parent: MessageParent;
+  renderContent?: (content: JSX.Element) => JSX.Element;
+  parent?: MessageParent;
   inputMode?: 'inline' | 'unified';
   messageEditor?: MessageEditor;
 }) {
@@ -163,6 +189,7 @@ function GroupedMessageLayout(props: {
       <Message.Slot placement="content">
         <div class="ph-no-capture flex gap-3 min-w-0 items-start">
           <MessageContentSlot
+            renderContent={props.renderContent}
             parent={props.parent}
             inputMode={props.inputMode}
             messageEditor={props.messageEditor}
@@ -219,6 +246,7 @@ export function ChannelMessage(props: ChannelMessageProps) {
           </Match>
           <Match when={isGrouped()}>
             <GroupedMessageLayout
+              renderContent={props.renderContent}
               parent={props.parent}
               inputMode={props.inputMode}
               messageEditor={props.messageEditor}
@@ -226,9 +254,12 @@ export function ChannelMessage(props: ChannelMessageProps) {
           </Match>
           <Match when={true}>
             <RegularMessageLayout
+              renderContent={props.renderContent}
               parent={props.parent}
+              timestampFormat={props.timestampFormat}
               inputMode={props.inputMode}
               messageEditor={props.messageEditor}
+              hideTriggeredBy={props.hideTriggeredBy}
             />
           </Match>
         </Switch>

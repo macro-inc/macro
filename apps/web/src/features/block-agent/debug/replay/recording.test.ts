@@ -80,6 +80,11 @@ describe('isPromptEntry', () => {
       content: { type: 'acp', method: 'session/prompt' },
     } as const;
     expect(isPromptEntry(prompt)).toBe(true);
+    const [notification] = parseRecording(
+      LINE({ ...prompt, direction: 'notification' })
+    );
+    expect(notification?.direction).toBe('notification');
+    expect(isPromptEntry(notification!)).toBe(true);
     expect(isPromptEntry({ ...prompt, direction: 'to_server' })).toBe(false);
     expect(
       isPromptEntry({

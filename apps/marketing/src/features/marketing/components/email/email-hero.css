@@ -20,7 +20,7 @@
   text-transform: uppercase;
 }
 
-.email-page-hero-label > svg {
+.product-home-link > svg {
   width: 20px;
   height: 20px;
   flex-shrink: 0;
@@ -44,6 +44,7 @@
 }
 
 .feature-page .email-page-hero > .email-page-hero-description {
+  width: 100%;
   max-width: 540px;
   color: var(--color-ink-muted);
   font-size: 17px;
@@ -80,4 +81,18 @@
   .email-page-hero-break {
     display: none;
   }
+}
+
+.product-home-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: inherit;
+  text-decoration: none;
+  border-radius: 3px;
+}
+.product-home-link:hover { color: var(--color-ink); }
+.product-home-link:focus-visible {
+  outline: 2px solid currentColor;
+  outline-offset: 5px;
 }

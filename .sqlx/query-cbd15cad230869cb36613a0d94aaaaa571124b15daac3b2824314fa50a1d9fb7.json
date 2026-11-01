@@ -1,0 +1,59 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT thread_id, draft_generation, is_draft, is_sent, replying_to_id, body_html_sanitized, body_text FROM email_messages WHERE id = $1 AND link_id = $2 FOR UPDATE",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "draft_generation",
+        "type_info": "Int4"
+      },
+      {
+        "ordinal": 2,
+        "name": "is_draft",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "is_sent",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "replying_to_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "body_html_sanitized",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 6,
+        "name": "body_text",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "cbd15cad230869cb36613a0d94aaaaa571124b15daac3b2824314fa50a1d9fb7"
+}

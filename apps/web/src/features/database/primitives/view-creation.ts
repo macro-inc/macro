@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { createSignal } from 'solid-js';
 import type { ViewCreation } from '../core/view-creation';
@@ -39,11 +40,12 @@ export function createViewCreation() {
     discard,
     start: (creation: ViewCreation) => {
       setDrafts((items) => [...items, { ...creation, pending: true }]);
-      void save(creation);
+      fireAndForget(save(creation), 'database');
     },
     retry: (id: string) => {
       const creation = drafts().find((item) => item.view.id === id);
-      if (creation && !creation.pending) void save(creation);
+      if (creation && !creation.pending)
+        fireAndForget(save(creation), 'database');
     },
   };
 }

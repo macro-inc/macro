@@ -1,6 +1,7 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { ThrownResultError } from '@core/util/result';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import XIcon from '@phosphor/x.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, Dialog, EntityComposer, Panel } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 import {
@@ -15,7 +16,7 @@ import {
 // The part before the @: non-empty, no whitespace or a second @.
 const LOCAL_PART_PATTERN = /^[^\s@]+$/;
 
-function createErrorMessage(cause: unknown): string {
+export function contactCreationError(cause: unknown): string {
   if (cause instanceof ThrownResultError) {
     if (cause.errors.some((e) => e.code === 'CONFLICT')) {
       return 'A contact with this email already exists.';
@@ -146,7 +147,7 @@ export function CreateContactModal(props: {
       props.onCreated(id);
     } catch (cause) {
       console.error('Failed to create contact', cause);
-      setError(createErrorMessage(cause));
+      setError(contactCreationError(cause));
     }
   }
 
@@ -163,7 +164,7 @@ export function CreateContactModal(props: {
             aria-label="New contact"
             onSubmit={(event) => {
               event.preventDefault();
-              void submit();
+              fireAndForget(submit(), 'crm');
             }}
             onKeyDown={(event) => {
               if (
@@ -173,7 +174,7 @@ export function CreateContactModal(props: {
               ) {
                 event.preventDefault();
                 event.stopPropagation();
-                void submit();
+                fireAndForget(submit(), 'crm');
               }
             }}
           >
@@ -198,14 +199,15 @@ export function CreateContactModal(props: {
                   />
                 </EntityComposer.Title>
                 <Button
+                  variant="ghost"
                   tabIndex={-1}
                   aria-label="Close"
                   tooltip="Close"
-                  size="icon-composer"
+                  size="icon-md"
                   disabled={createContactMutation.isPending}
                   onClick={close}
                 >
-                  <XIcon />
+                  <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
               </EntityComposer.Header>
               <EntityComposer.Main class="gap-4">

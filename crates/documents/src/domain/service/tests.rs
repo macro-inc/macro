@@ -117,6 +117,9 @@ fn bot_receipt(document_id: &str) -> EntityAccessReceipt<ViewAccessLevel> {
 struct TestUploadUrlPort;
 
 impl PresignedUploadUrlPort for TestUploadUrlPort {
+    async fn delete_object(&self, _key: &str) -> anyhow::Result<()> {
+        Ok(())
+    }
     async fn put_document_storage_presigned_url(
         &self,
         _key: &str,
@@ -155,7 +158,13 @@ impl TaskPropertiesPort for TestTaskPropertiesPort {
         Ok(())
     }
 
-    async fn update_task_status(&self, _entity_id: &str, _status: &str) -> anyhow::Result<()> {
+    async fn update_task_status(
+        &self,
+        _access: &EntityAccessReceipt<EditAccessLevel>,
+        _credited_user: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
+        _source: Option<&models_properties::service::property_change_source::PropertyChangeSource>,
+        _status: &str,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -2184,9 +2193,18 @@ async fn copy_document_best_effort_bumps_inherited_project_and_publishes_event()
 #[derive(Clone, Default)]
 struct RecordingUploadUrlPort {
     copies: Arc<Mutex<Vec<(String, String)>>>,
+    deletions: Arc<Mutex<Vec<String>>>,
+    fail_delete: bool,
 }
 
 impl PresignedUploadUrlPort for RecordingUploadUrlPort {
+    async fn delete_object(&self, key: &str) -> anyhow::Result<()> {
+        self.deletions.lock().unwrap().push(key.to_string());
+        if self.fail_delete {
+            anyhow::bail!("storage cleanup unavailable");
+        }
+        Ok(())
+    }
     async fn put_document_storage_presigned_url(
         &self,
         _key: &str,
@@ -2315,6 +2333,14 @@ impl crate::domain::ports::markdown::MarkdownInitializationPort for RejectUnexpe
     ) -> Result<Vec<u8>, DocumentError> {
         panic!("failed repository creation must not initialize markdown");
     }
+
+    async fn initialize_existing_notion(
+        &self,
+        _: &str,
+        _: &crate::domain::notion_markdown::NotionMarkdown,
+    ) -> Result<crate::domain::ports::markdown::MarkdownSnapshot, DocumentError> {
+        panic!("failed repository creation must not initialize markdown");
+    }
 }
 
 impl crate::domain::ports::create::DocumentBytesUploadPort for RejectUnexpectedFinalization {
@@ -2411,6 +2437,7 @@ fn new_document(file_type: FileType) -> NewDocument {
         team_id: None,
         share_with_team: false,
         created_at: None,
+        updated_at: None,
         sub_type: None,
         skip_history: false,
         initial_link_share: InitialLinkShare::EntityDefault,
@@ -2756,7 +2783,13 @@ impl TaskPropertiesPort for RecordingTaskPropertiesPort {
         Ok(())
     }
 
-    async fn update_task_status(&self, _entity_id: &str, _status: &str) -> anyhow::Result<()> {
+    async fn update_task_status(
+        &self,
+        _access: &EntityAccessReceipt<EditAccessLevel>,
+        _credited_user: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
+        _source: Option<&models_properties::service::property_change_source::PropertyChangeSource>,
+        _status: &str,
+    ) -> anyhow::Result<()> {
         Ok(())
     }
 
@@ -3001,6 +3034,183 @@ fn spreadsheet_test_service(
         TestForeignEntityService::default(),
         TestEventBroker::default(),
     )
+}
+
+#[tokio::test]
+async fn canvas_copy_preserves_live_content_and_legacy_canvases_still_copy() {
+    for (shared, native) in [(false, false), (true, false), (true, true)] {
+        let mut repo = make_mock_repo();
+        repo.expect_get_persisted_document_content()
+            .returning(move |_| {
+                Box::pin(std::future::ready(Ok(Some(DocumentContent::ready(
+                    if native {
+                        DocumentContentLocation::SyncService
+                    } else {
+                        DocumentContentLocation::ObjectStorage
+                    },
+                )))))
+            });
+        let mut original = make_test_metadata();
+        original.project_id = None;
+        original.file_type = Some("canvas".to_string());
+        repo.expect_get_document_metadata()
+            .returning(move |_| Box::pin(std::future::ready(Ok(original.clone()))));
+        let mut copied = make_test_metadata();
+        copied.document_id = "doc-2".to_string();
+        copied.project_id = None;
+        copied.file_type = Some("canvas".to_string());
+        repo.expect_copy_document()
+            .returning(move |_, _| Box::pin(std::future::ready(Ok(copied.clone()))));
+        repo.expect_get_owner_team()
+            .returning(|_| Box::pin(std::future::ready(Ok(None))));
+        repo.expect_get_latest_document_version_id()
+            .times(usize::from(!native))
+            .returning(|_| Box::pin(std::future::ready(Ok((1, true)))));
+        repo.expect_set_document_content()
+            .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+        repo.expect_get_team_task_metadata()
+            .returning(|_| Box::pin(std::future::ready(Ok(None))));
+        let mut sync = crate::domain::ports::sync::MockDocumentSyncPort::new();
+        sync.expect_exists()
+            .withf(|id| id == "doc-1")
+            .times(usize::from(!native))
+            .returning(move |_| Box::pin(std::future::ready(Ok(shared))));
+        sync.expect_copy_document()
+            .withf(|from, to, _| from == "doc-1" && to == "doc-2")
+            .times(usize::from(shared))
+            .returning(|_, _, _| Box::pin(std::future::ready(Ok(()))));
+        let service = spreadsheet_test_service(repo, sync);
+        let mut context = task_document_context("doc-1");
+        context.file_type = Some("canvas".to_string());
+        context.sub_type = None;
+        service
+            .copy_document(
+                authenticated_receipt("doc-1"),
+                context,
+                &CreationPrincipal::User(test_user()),
+                "copied canvas".to_string(),
+                None,
+                None,
+            )
+            .await
+            .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn canvas_copy_failure_compensates_only_its_destinations_and_still_removes_rows() {
+    for phase in ["lookup", "copy", "ready", "legacy-ready", "metadata"] {
+        let mut repo = make_mock_repo();
+        repo.expect_get_persisted_document_content().returning(|_| {
+            Box::pin(std::future::ready(Ok(Some(DocumentContent::ready(
+                DocumentContentLocation::ObjectStorage,
+            )))))
+        });
+        let mut original = make_test_metadata();
+        original.project_id = None;
+        original.file_type = Some("canvas".to_string());
+        repo.expect_get_document_metadata()
+            .returning(move |_| Box::pin(std::future::ready(Ok(original.clone()))));
+        let mut copied = make_test_metadata();
+        copied.document_id = "doc-2".to_string();
+        copied.project_id = None;
+        copied.file_type = Some("canvas".to_string());
+        repo.expect_copy_document()
+            .returning(move |_, _| Box::pin(std::future::ready(Ok(copied.clone()))));
+        repo.expect_get_owner_team()
+            .returning(|_| Box::pin(std::future::ready(Ok(None))));
+        repo.expect_get_latest_document_version_id()
+            .returning(|_| Box::pin(std::future::ready(Ok((1, true)))));
+        repo.expect_delete_document_by_id()
+            .withf(|id| id == "doc-2")
+            .times(1)
+            .returning(|_| Box::pin(std::future::ready(Ok(()))));
+        if phase.ends_with("ready") || phase == "metadata" {
+            repo.expect_set_document_content()
+                .times(1)
+                .returning(move |_, _| {
+                    Box::pin(std::future::ready(if phase == "metadata" {
+                        Ok(())
+                    } else {
+                        Err(anyhow!("content update unavailable"))
+                    }))
+                });
+        }
+        if phase == "metadata" {
+            repo.expect_get_team_task_metadata()
+                .times(1)
+                .returning(|_| Box::pin(std::future::ready(Err(anyhow!("metadata unavailable")))));
+        }
+        let mut sync = crate::domain::ports::sync::MockDocumentSyncPort::new();
+        sync.expect_exists()
+            .withf(|id| id == "doc-1")
+            .times(1)
+            .returning(move |_| {
+                Box::pin(std::future::ready(if phase == "lookup" {
+                    Err(anyhow!("lookup unavailable"))
+                } else {
+                    Ok(phase != "legacy-ready")
+                }))
+            });
+        let room_attempted = phase == "copy" || phase == "ready" || phase == "metadata";
+        sync.expect_copy_document()
+            .withf(|from, to, _| from == "doc-1" && to == "doc-2")
+            .times(usize::from(room_attempted))
+            .returning(move |_, _, _| {
+                Box::pin(std::future::ready(if phase == "copy" {
+                    Err(anyhow!("room copy unavailable"))
+                } else {
+                    Ok(())
+                }))
+            });
+        sync.expect_delete_document()
+            .withf(|id| id == "doc-2")
+            .times(usize::from(room_attempted))
+            .returning(move |_| {
+                Box::pin(std::future::ready(if phase == "copy" {
+                    Err(anyhow!("room cleanup unavailable"))
+                } else {
+                    Ok(())
+                }))
+            });
+        // Cleanup failures must not prevent the remaining compensation steps.
+        let uploads = RecordingUploadUrlPort {
+            fail_delete: phase == "copy",
+            ..Default::default()
+        };
+        let deleted = uploads.deletions.clone();
+        let service = DocumentServiceImpl::new(
+            repo,
+            test_cloudfront_config(),
+            sync,
+            uploads,
+            TestTaskPropertiesPort,
+            TestConnectionService::default(),
+            TestEntityAccessManagementService::default(),
+            TestForeignEntityService::default(),
+            TestEventBroker::default(),
+        );
+        let mut context = task_document_context("doc-1");
+        context.file_type = Some("canvas".to_string());
+        context.sub_type = None;
+        assert!(
+            service
+                .copy_document(
+                    authenticated_receipt("doc-1"),
+                    context,
+                    &CreationPrincipal::User(test_user()),
+                    "copied canvas".to_string(),
+                    None,
+                    None,
+                )
+                .await
+                .is_err()
+        );
+        assert_eq!(
+            *deleted.lock().unwrap(),
+            vec!["macro|user@user.com/doc-2/1"]
+        );
+    }
 }
 
 fn spreadsheet_document() -> NewDocument {
@@ -3494,4 +3704,112 @@ async fn task_identity_treats_a_deleted_task_as_missing() {
         .await;
 
     assert!(matches!(result, Err(DocumentError::NotFound(_))));
+}
+
+#[tokio::test]
+async fn native_canvas_location_uses_sync_without_an_object_url() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_persisted_document_content().returning(|_| {
+        Box::pin(std::future::ready(Ok(Some(DocumentContent::ready(
+            DocumentContentLocation::SyncService,
+        )))))
+    });
+    let sync = crate::domain::ports::sync::MockDocumentSyncPort::new();
+    let service = spreadsheet_test_service(repo, sync);
+    let mut context = task_document_context("doc-1");
+    context.file_type = Some("canvas".to_string());
+    context.sub_type = None;
+    let result = service
+        .get_document_location(
+            &context,
+            authenticated_receipt("doc-1"),
+            LocationQueryParams {
+                document_version_id: None,
+                get_converted_docx_url: None,
+            },
+        )
+        .await
+        .unwrap();
+    assert!(matches!(
+        result,
+        LocationResponseV3::SyncServiceContent { .. }
+    ));
+}
+
+#[tokio::test]
+async fn a_document_with_its_own_dates_dates_its_folder_by_them() {
+    let created_at = chrono::DateTime::parse_from_rfc3339("2021-03-01T00:00:00Z")
+        .unwrap()
+        .to_utc();
+    let updated_at = chrono::DateTime::parse_from_rfc3339("2024-02-01T00:00:00Z")
+        .unwrap()
+        .to_utc();
+    let mut repo = make_mock_repo();
+    repo.expect_get_owner_team()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_create_document().returning(|_, _| {
+        let mut metadata = make_test_metadata();
+        metadata.document_id = "00000000-0000-0000-0000-000000000001".to_string();
+        Box::pin(std::future::ready(Ok(metadata)))
+    });
+    repo.expect_set_document_content()
+        .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_get_team_task_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_update_project_modified().times(0);
+    repo.expect_extend_project_dates()
+        .withf(move |project_id, created, updated| {
+            project_id == "00000000-0000-0000-0000-000000000009"
+                && *created == created_at
+                && *updated == updated_at
+        })
+        .times(1)
+        .returning(|_, _, _| Box::pin(std::future::ready(Ok(()))));
+    let (service, _event_broker) = make_test_service_with_event_broker(repo);
+
+    let mut document = new_document(FileType::Txt);
+    document.project_id = Some(uuid::Uuid::from_u128(9));
+    document.created_at = Some(created_at);
+    document.updated_at = Some(updated_at);
+    crate::domain::ports::DocumentService::create_document(
+        &service,
+        &CreationPrincipal::User(test_user()),
+        document,
+        None,
+    )
+    .await
+    .unwrap();
+}
+
+#[tokio::test]
+async fn a_document_without_dates_marks_its_folder_updated_now() {
+    let mut repo = make_mock_repo();
+    repo.expect_get_owner_team()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_create_document().returning(|_, _| {
+        let mut metadata = make_test_metadata();
+        metadata.document_id = "00000000-0000-0000-0000-000000000001".to_string();
+        Box::pin(std::future::ready(Ok(metadata)))
+    });
+    repo.expect_set_document_content()
+        .returning(|_, _| Box::pin(std::future::ready(Ok(()))));
+    repo.expect_get_team_task_metadata()
+        .returning(|_| Box::pin(std::future::ready(Ok(None))));
+    repo.expect_extend_project_dates().times(0);
+    repo.expect_update_project_modified()
+        .withf(|project_id| project_id == "00000000-0000-0000-0000-000000000009")
+        .times(1)
+        .returning(|_| Box::pin(std::future::ready(Ok(()))));
+    let (service, _event_broker) = make_test_service_with_event_broker(repo);
+
+    let mut document = new_document(FileType::Txt);
+    document.project_id = Some(uuid::Uuid::from_u128(9));
+    crate::domain::ports::DocumentService::create_document(
+        &service,
+        &CreationPrincipal::User(test_user()),
+        document,
+        None,
+    )
+    .await
+    .unwrap();
 }

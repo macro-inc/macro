@@ -3,6 +3,7 @@ import { expect, type Page, test } from '@playwright/test';
 import { buildSchema, graphql } from 'graphql';
 import type {
   RenameEntitiesMutationVariables,
+  SoupEntityInput,
   SoupInput,
   UpdateEntityPropertyOptionsMutationVariables,
 } from '../../src/lib/service-clients/service-storage/graphql/generated/graphql';
@@ -52,6 +53,8 @@ async function mount(page: Page, mode: CacheMode, initial?: string[]) {
   let delayNextQuery = false;
   const unexpected: string[] = [];
   page.on('pageerror', (error) => unexpected.push(error.message));
+  // GraphQL Soup builds its cache only for a signed-in tab.
+  await page.addInitScript(() => localStorage.setItem('macro:login', 'true'));
   await page.routeWebSocket('**', (socket) => socket.close());
   await page.route('**/*', async (route) => {
     const url = new URL(route.request().url());
@@ -119,6 +122,8 @@ async function mount(page: Page, mode: CacheMode, initial?: string[]) {
           ),
           nextCursor: null,
         }),
+        soupEntity: ({ input }: { input: SoupEntityInput }) =>
+          items.find(({ id }) => id === input.entityId) ?? null,
         groupSoup: {
           bins: [
             { key: '', totalCount: items.length, items, nextCursor: null },

@@ -1,7 +1,14 @@
 import { Telemetry } from '@macro-inc/observability';
 import type { DatabaseOpsError } from '@service-storage/databases';
 import { err, ok, type Result } from 'neverthrow';
-import { batch, createMemo, createSignal, onCleanup } from 'solid-js';
+import {
+  batch,
+  createEffect,
+  createMemo,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
 import type {
   DatabaseRowsSource,
   DatabaseWriteResult,
@@ -93,6 +100,7 @@ export function createTableController(
   const [refreshWarning, setRefreshWarning] = createSignal(false);
   const [schemaPending, setSchemaPending] = createSignal(0);
   let sequence = 0;
+  let refreshGeneration = 0;
   // A new column's type settles against the newest version this writer has
   // seen, read or written; row ops themselves carry no version.
   let lastWrittenVersion: number | undefined;
@@ -264,10 +272,24 @@ export function createTableController(
   }
 
   async function refresh(reason: 'after-write' | 'refresh' = 'refresh') {
+    const generation = ++refreshGeneration;
     const refreshed = await source.refresh(reason);
+    if (generation !== refreshGeneration) return;
     setRefreshWarning(refreshed.isErr());
     if (refreshed.isOk()) pruneCommitted();
   }
+
+  // Schema/cache revalidation can finish outside this controller's refresh.
+  // A successful newer read clears an old warning; an older failure cannot restore it.
+  createEffect(
+    on(source.refreshing, (refreshing, previous) => {
+      if (previous && !refreshing && !source.error() && source.snapshot()) {
+        refreshGeneration++;
+        setRefreshWarning(false);
+        pruneCommitted();
+      }
+    })
+  );
 
   /** Schema changes share the row-write queue because both advance the table version. */
   async function addGroup(

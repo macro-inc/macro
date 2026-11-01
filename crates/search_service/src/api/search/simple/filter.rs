@@ -2,6 +2,7 @@
 //! This is used in simple_unified.rs
 
 use comms_db_client::model::SimpleMention;
+use models_search::calendar_event::CalendarEventSearchScope;
 use opensearch_client::search::unified::{
     UnifiedCalendarEventSearchArgs, UnifiedCallRecordSearchArgs, UnifiedChannelMessageSearchArgs,
     UnifiedChatSearchArgs, UnifiedDocumentSearchArgs, UnifiedEmailSearchArgs,
@@ -200,7 +201,14 @@ impl FilterVariantToSearchArgs for item_filters::CallFilters {
     }
 }
 
-impl FilterVariantToSearchArgs for item_filters::CalendarEventFilters {
+/// Calendar event filters with the set of events the request searches, which
+/// lives on the request rather than in the soup-shaped filters.
+pub(super) struct ScopedCalendarEventFilters {
+    pub filters: item_filters::CalendarEventFilters,
+    pub scope: CalendarEventSearchScope,
+}
+
+impl FilterVariantToSearchArgs for ScopedCalendarEventFilters {
     type Output = UnifiedCalendarEventSearchArgs;
 
     async fn filter_to_search_args(
@@ -214,15 +222,15 @@ impl FilterVariantToSearchArgs for item_filters::CalendarEventFilters {
             return Ok(UnifiedCalendarEventSearchArgs::default());
         }
 
-        let response = filter_calendar_events(ctx, user_id, self).await?;
+        let response = filter_calendar_events(ctx, user_id, &self.filters, self.scope).await?;
 
         Ok(UnifiedCalendarEventSearchArgs {
             calendar_event_ids: response.calendar_event_ids,
             link_ids: response.link_ids,
             ids_only: response.ids_only,
-            statuses: self.statuses.clone(),
-            organizer_emails: self.organizers.clone(),
-            attendee_emails: self.attendees.clone(),
+            statuses: self.filters.statuses.clone(),
+            organizer_emails: self.filters.organizers.clone(),
+            attendee_emails: self.filters.attendees.clone(),
             ..Default::default()
         })
     }

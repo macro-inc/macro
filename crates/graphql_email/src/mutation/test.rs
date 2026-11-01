@@ -6,6 +6,7 @@ use email::domain::models::{AttachmentDraft, AttachmentForwarded, MessageAttachm
 use super::*;
 
 mod archive;
+mod senders;
 
 struct QueryRoot;
 
@@ -18,6 +19,11 @@ impl QueryRoot {
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 enum CapturedMutation {
+    State {
+        user_id: String,
+        thread_id: Uuid,
+        action: email::domain::models::mailbox_action::MailboxAction,
+    },
     Seen {
         user_id: String,
         thread_id: Uuid,
@@ -29,6 +35,11 @@ enum CapturedMutation {
     Archive {
         user_id: String,
         thread_id: Uuid,
+        archived: bool,
+    },
+    ArchiveMany {
+        user_id: String,
+        thread_ids: Vec<Uuid>,
         archived: bool,
     },
     Label {
@@ -55,6 +66,7 @@ enum CapturedMutation {
 #[derive(Default)]
 struct CapturingEmailMutationService {
     calls: Mutex<Vec<CapturedMutation>>,
+    send_inputs: Mutex<Vec<(Option<String>, Option<bool>)>>,
     draft_fails_as_already_sent: std::sync::atomic::AtomicBool,
     delete_reports_missing: std::sync::atomic::AtomicBool,
     attachment_load_fails: bool,
@@ -70,6 +82,42 @@ struct CapturingEmailMutationService {
 const TEST_THREAD_ID: Uuid = Uuid::from_u128(0x7ead);
 
 impl EmailMutationService for CapturingEmailMutationService {
+    async fn resolve_email_message_operation(
+        &self,
+        _user_id: MacroUserIdStr<'static>,
+        request: email::domain::models::mailbox_operation::MessageResolutionRequest,
+    ) -> Result<Uuid, EmailErr> {
+        Err(EmailErr::MessageDeliveryConflict(request.message_id))
+    }
+    async fn set_email_thread_state(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_id: Uuid,
+        action: email::domain::models::mailbox_action::MailboxAction,
+    ) -> Result<(), EmailErr> {
+        self.calls.lock().unwrap().push(CapturedMutation::State {
+            user_id: user_id.to_string(),
+            thread_id,
+            action,
+        });
+        Ok(())
+    }
+    async fn send_email_message(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        link_id: Option<Uuid>,
+        input: CreateDraftInput,
+    ) -> Result<CreatedDraft, EmailErr> {
+        self.send_inputs.lock().unwrap().push((
+            input
+                .sender_email
+                .as_ref()
+                .map(|email| email.0.as_ref().to_owned()),
+            input.include_signature,
+        ));
+        Ok(self.save_email_draft(user_id, link_id, input).await?.draft)
+    }
+
     async fn set_email_thread_archived(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -85,6 +133,29 @@ impl EmailMutationService for CapturingEmailMutationService {
             return Err(EmailErr::ThreadNotFound);
         }
         Ok(())
+    }
+
+    async fn set_email_threads_archived(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+        archived: bool,
+    ) -> Result<SetThreadsArchivedResult, EmailErr> {
+        self.calls
+            .lock()
+            .unwrap()
+            .push(CapturedMutation::ArchiveMany {
+                user_id: user_id.to_string(),
+                thread_ids: thread_ids.clone(),
+                archived,
+            });
+        let (failed_thread_ids, updated_thread_ids) = thread_ids
+            .into_iter()
+            .partition(|thread_id| self.reject_archive && *thread_id == TEST_THREAD_ID);
+        Ok(SetThreadsArchivedResult {
+            updated_thread_ids,
+            failed_thread_ids,
+        })
     }
 
     async fn mark_email_thread_seen(
@@ -162,7 +233,19 @@ impl EmailMutationService for CapturingEmailMutationService {
             ));
         }
         Ok(SavedUserDraft {
+            operation_status: None,
+            sender: ContactInfo {
+                email: input
+                    .sender_email
+                    .map(|email| email.0.as_ref().to_owned())
+                    .unwrap_or_else(|| {
+                        String::from(test_sending_link(link_id.unwrap_or_default()).email_address)
+                    }),
+                name: None,
+                photo_url: None,
+            },
             draft: email::domain::models::CreatedDraft {
+                draft_generation: input.draft_generation,
                 db_id: input.db_id.unwrap_or_default(),
                 provider_id: input.provider_id,
                 replying_to_id: input.replying_to_id,
@@ -202,6 +285,8 @@ impl EmailMutationService for CapturingEmailMutationService {
         &self,
         user_id: MacroUserIdStr<'static>,
         draft_id: Uuid,
+
+        _expected_generation: i32,
     ) -> Result<DeletedUserDraft, EmailErr> {
         if self
             .draft_fails_as_already_sent
@@ -539,6 +624,7 @@ async fn save_email_draft_returns_each_kind_of_persisted_attachment() {
     let services = [
         CapturingEmailMutationService {
             attachments: vec![MessageAttachment {
+                reference_url: Some("https://outlook.office.com/mail/message".into()),
                 db_id: attachment_id,
                 provider_id: Some("provider-attachment".to_string()),
                 filename: Some("provider.txt".to_string()),
@@ -551,6 +637,9 @@ async fn save_email_draft_returns_each_kind_of_persisted_attachment() {
         },
         CapturingEmailMutationService {
             attachments_draft: vec![AttachmentDraft {
+                upload_pending: false,
+                content_id: None,
+                is_inline: false,
                 id: attachment_id,
                 draft_id,
                 file_name: "upload.txt".to_string(),
@@ -811,4 +900,37 @@ async fn delete_email_draft_rejects_a_malformed_draft_id() {
     assert_eq!(response.errors.len(), 1);
     assert!(response.errors[0].message.contains("draftId"));
     assert!(service.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn semantic_mailbox_action_needs_no_provider_label_id() {
+    let service = Arc::new(CapturingEmailMutationService::default());
+    let response = schema(service.clone()).execute(format!(r#"mutation {{ setEmailThreadState(input: {{ threadId: "{TEST_THREAD_ID}",field: TRASHED,value: true }}) {{ id }} }}"#)).await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(
+        *service.calls.lock().unwrap(),
+        vec![CapturedMutation::State {
+            user_id: "macro|viewer@example.com".into(),
+            thread_id: TEST_THREAD_ID,
+            action: email::domain::models::mailbox_action::MailboxAction::Trashed(true)
+        }]
+    );
+    let anonymous = Schema::build(
+        QueryRoot,
+        GraphqlEmailMutation::<CapturingEmailMutationService, TestEmailThreadOutput>::new(),
+        EmptySubscription,
+    )
+    .data(service.clone())
+    .finish();
+    let response = anonymous.execute(format!(r#"mutation {{ setEmailThreadState(input: {{ threadId: "{TEST_THREAD_ID}",field: STARRED,value: true }}) {{ id }} }}"#)).await;
+    assert!(!response.errors.is_empty());
+    assert_eq!(service.calls.lock().unwrap().len(), 1);
+}
+
+#[test]
+fn stale_draft_generation_is_recoverable_not_already_sent() {
+    let error = super::draft_mutation_error(&EmailErr::DraftGenerationConflict(Uuid::nil()));
+    let extensions = format!("{:?}", error.extensions);
+    assert!(extensions.contains("DRAFT_VERSION_CONFLICT"));
+    assert!(!extensions.contains("DRAFT_ALREADY_SENT"));
 }

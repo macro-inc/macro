@@ -10,7 +10,9 @@ pub(crate) async fn register_watch(
     access_token: &str,
 ) -> Result<WatchResponse, GmailApiHttpError> {
     let request = WatchRequest {
-        topic_name: client.subscription_topic.clone(),
+        topic_name: client.subscription_topic.clone().ok_or_else(|| {
+            GmailApiHttpError::InvalidResponse("Gmail watch topic is not configured".to_owned())
+        })?,
     };
     let response = client
         .inner

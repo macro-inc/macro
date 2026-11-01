@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "DELETE FROM microsoft_oauth_grant_versions WHERE grant_id IN (\n            SELECT g.grant_id FROM microsoft_oauth_grant_versions g\n            WHERE g.created_at <= $1\n                AND NOT EXISTS(SELECT 1 FROM email_links l WHERE l.grant_id=g.grant_id)\n                AND NOT EXISTS(SELECT 1 FROM email_mailbox_custodians c WHERE c.grant_id=g.grant_id)\n                AND NOT EXISTS(SELECT 1 FROM microsoft_link_attempts a WHERE a.grant_id=g.grant_id)\n            ORDER BY g.created_at LIMIT $2 FOR UPDATE OF g SKIP LOCKED)\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Timestamptz",
+        "Int8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "eb78a10fd87bfe38f15093490a8063933e5969b1cc649388239223ae89b08fd1"
+}

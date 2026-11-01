@@ -23,9 +23,11 @@ import {
   RedirectSplit,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { useViewRestoration } from '@components/app/split-layout/view-restoration';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableProjects } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { onMount, Show } from 'solid-js';
 import { TasksDetailView } from './components/TasksDetailView';
 import { projectDetailSearch } from './project-detail-search';
@@ -42,6 +44,7 @@ function TasksLegacyRouteView() {
 }
 
 export const TasksRouteView = withAuth(() => {
+  useViewRestoration();
   const params = useParams<{ taskId?: string; projectId?: string }>();
   return (
     <AppView
@@ -86,14 +89,17 @@ export function ProjectTaskRouteView() {
             event?.altKey
           )
             return false;
-          navigate({
-            route: projectTaskRoute,
-            params: {
-              projectId: params.projectId,
-              section: params.section,
-              taskId: task.id,
-            },
-          });
+          fireAndForget(
+            navigate({
+              route: projectTaskRoute,
+              params: {
+                projectId: params.projectId,
+                section: params.section,
+                taskId: task.id,
+              },
+            }),
+            'tasks-view'
+          );
           return true;
         }}
       >

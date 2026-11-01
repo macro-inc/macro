@@ -1,10 +1,11 @@
 use std::sync::Arc;
 
+use crate::domain::models::grouping::{GroupByField, GroupLabels};
 use crate::domain::models::{
-    AdvancedSortParams, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst, NotifiedEntity,
-    NotifiedSoupRequest, SimpleSortRequest, SoupErr, SoupProjectionHydration, SoupPropertiesField,
-    SoupRequest, TouchedEntity, TouchedSoupRequest, WorkFeedCandidate, WorkFeedCandidateRequest,
-    WorkFeedSoupPage, WorkFeedSoupRequest, grouping::ItemGroupingInfo,
+    AdvancedSortParams, CrmPropertyEdge, EnrichedSoupItem, GroupedSortRequest, IntoSoupReqAst,
+    NotifiedEntity, NotifiedSoupRequest, SimpleSortRequest, SoupErr, SoupProjectionHydration,
+    SoupPropertiesField, SoupRequest, TouchedEntity, TouchedSoupRequest, WorkFeedCandidate,
+    WorkFeedCandidateRequest, WorkFeedSoupPage, WorkFeedSoupRequest, grouping::ItemGroupingInfo,
 };
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -96,6 +97,15 @@ pub trait SoupRepo: Send + Sync + 'static {
         &self,
         req: TouchedSoupRequest<'a>,
     ) -> impl Future<Output = Result<Vec<TouchedEntity>, Self::Err>> + Send;
+
+    /// Every entity whose Companies property names one of `company_ids` or
+    /// whose Contacts property names one of `contact_ids`. Not authorized:
+    /// each entity reaches the caller only through its own source query.
+    fn crm_property_edges<'a>(
+        &self,
+        company_ids: &'a [uuid::Uuid],
+        contact_ids: &'a [uuid::Uuid],
+    ) -> impl Future<Output = Result<Vec<CrmPropertyEdge>, Self::Err>> + Send;
 
     /// Fetch one page of notified-at candidates: entities the user holds a
     /// live notification for, newest notification first, already gated on
@@ -312,6 +322,17 @@ pub trait SoupService: Send + Sync + 'static {
         >,
     > + Send;
 
+    /// Display text for group keys that `group_by` leaves unlabeled, such as
+    /// the names behind entity-id keys, limited to what the user can read.
+    /// Keys the grouping labels on its own, or the user cannot read, are left
+    /// out.
+    fn group_labels<'a>(
+        &'a self,
+        user_id: MacroUserIdStr<'a>,
+        group_by: &'a GroupByField,
+        keys: &'a [String],
+    ) -> impl Future<Output = Result<GroupLabels, SoupErr>> + Send;
+
     /// Fetch the tag definitions visible to a user — their own plus their
     /// teams' — with options attached.
     fn caller_tag_sets<'a>(
@@ -432,6 +453,15 @@ where
         (**self).get_user_soup_grouped(req).await
     }
 
+    async fn group_labels<'a>(
+        &'a self,
+        user_id: MacroUserIdStr<'a>,
+        group_by: &'a GroupByField,
+        keys: &'a [String],
+    ) -> Result<GroupLabels, SoupErr> {
+        (**self).group_labels(user_id, group_by, keys).await
+    }
+
     async fn caller_tag_sets<'a>(
         &self,
         user_id: MacroUserIdStr<'a>,
@@ -512,6 +542,15 @@ impl SoupService for NoOpSoupService {
         _req: GroupedSortRequest<'_>,
     ) -> Result<impl Iterator<Item = ItemGroupingInfo<SoupPropertiesField>> + Send, SoupErr> {
         Err::<std::vec::IntoIter<ItemGroupingInfo<SoupPropertiesField>>, _>(no_op_soup_err())
+    }
+
+    async fn group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _group_by: &'a GroupByField,
+        _keys: &'a [String],
+    ) -> Result<GroupLabels, SoupErr> {
+        Ok(GroupLabels::default())
     }
 
     async fn caller_tag_sets<'a>(

@@ -10,6 +10,7 @@ import { Compartment, EditorState, type Extension } from '@codemirror/state';
 import { EditorView, keymap, type Panel } from '@codemirror/view';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { debounce, throttle } from '@solid-primitives/scheduled';
 import { basicSetup } from 'codemirror';
 import {
@@ -83,7 +84,7 @@ export function CodeMirror(props: CodeMirrorProps) {
       saving = false;
       if (saveQueued) {
         saveQueued = false;
-        void saveNow();
+        fireAndForget(saveNow(), 'code-editor');
       }
     }
   };
@@ -266,7 +267,7 @@ export function CodeMirror(props: CodeMirrorProps) {
   onCleanup(() => {
     debouncedSave.clear();
     throttledSave.clear();
-    void saveNow();
+    fireAndForget(saveNow(), 'code-editor');
     view?.destroy();
   });
 

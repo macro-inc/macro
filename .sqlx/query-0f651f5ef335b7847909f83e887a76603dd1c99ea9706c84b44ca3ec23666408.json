@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO team_invite_link (team_id, token)\n        VALUES ($1, $2)\n        ON CONFLICT (team_id) DO UPDATE\n        SET token = EXCLUDED.token,\n            created_at = now()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "0f651f5ef335b7847909f83e887a76603dd1c99ea9706c84b44ca3ec23666408"
+}

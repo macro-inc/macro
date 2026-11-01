@@ -1,5 +1,6 @@
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useUserInfoQuery } from '@queries/auth/user-info';
 import { useSearchParams } from '@solidjs/router';
 import { createEffect, createSignal, on, onCleanup } from 'solid-js';
@@ -57,7 +58,7 @@ export function useCheckoutCompletionListener() {
           handledSuccess = true;
           toast.success('Your plan has been activated!');
           analytics.track('subscription_success', { type: searchParams.type });
-          void refreshLicense();
+          fireAndForget(refreshLicense(), 'paywall');
         }
         if (cancel === 'true' && !handledCancel) {
           handledCancel = true;

@@ -9,6 +9,7 @@
 
 import type { AiEngine } from '@core/ai-engine/client';
 import type { EdgeRect, EditResult, Op } from '@core/ai-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal, onCleanup } from 'solid-js';
 import type { AiSharing } from '../context/ai-editor-context';
 import type { SaveState } from '../core/save-state';
@@ -131,11 +132,15 @@ export function createEditSteps(options: EditStepsOptions) {
     // Shared live, so nothing is lost while someone else stores the file.
     if (!stores()) return;
     setSaveState('unsaved');
-    saveTimer = setTimeout(() => void saveNow(), SAVE_DELAY_MS);
+    saveTimer = setTimeout(
+      () => fireAndForget(saveNow(), 'ai-editor'),
+      SAVE_DELAY_MS
+    );
   };
 
   const onHidden = () => {
-    if (document.visibilityState === 'hidden') void saveNow();
+    if (document.visibilityState === 'hidden')
+      fireAndForget(saveNow(), 'ai-editor');
   };
   document.addEventListener('visibilitychange', onHidden);
   // Whoever stores the file now (the one who did may have left) stores
@@ -219,7 +224,7 @@ export function createEditSteps(options: EditStepsOptions) {
     if (pushTimer) return;
     pushTimer = setTimeout(() => {
       pushTimer = undefined;
-      void enqueue(pushLater);
+      fireAndForget(enqueue(pushLater), 'ai-editor');
     }, GESTURE_PUSH_MS);
   };
   onCleanup(() => clearTimeout(pushTimer));
@@ -236,7 +241,7 @@ export function createEditSteps(options: EditStepsOptions) {
   const unsubscribeIncoming = sharing?.onIncoming(() => {
     if (pullQueued) return;
     pullQueued = true;
-    void enqueue(pullLater);
+    fireAndForget(enqueue(pullLater), 'ai-editor');
   });
   onCleanup(() => unsubscribeIncoming?.());
 

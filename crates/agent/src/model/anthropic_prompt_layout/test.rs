@@ -201,9 +201,11 @@ fn a_malformed_layout_fails() {
     assert!(matches!(shaped(body), Err(PromptLayoutError::Malformed(_))));
 }
 
+type RecordedRequests = Arc<Mutex<Vec<(Option<String>, Bytes)>>>;
+
 /// Records what reaches the transport under the layout adapter.
 #[derive(Clone, Debug, Default)]
-struct Recording(Arc<Mutex<Vec<(Option<String>, Bytes)>>>);
+struct Recording(RecordedRequests);
 
 impl HttpClientExt for Recording {
     fn send<T, U>(

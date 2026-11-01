@@ -3,6 +3,15 @@
 // Adopted from monitors created by hand in the Datadog UI. Do not edit a
 // monitor here and in the UI at the same time — this file wins on deploy.
 import { adopted } from '../adopted';
+import { notify } from '../notify';
+
+// DSS logs every expired-JWT rejection at ERROR. These are routine client token
+// refreshes and make up about 60% of its prod error lines, so the DSS error
+// monitors drop them. Log search wildcards are case-sensitive, so each spelling
+// (`JwtExpired`, `jwt is expired`, `jwt expired`) is listed; `?` stands in for
+// the space.
+const DSS_EXPIRED_JWT_EXCLUSION =
+  '-@error:(*JwtExpired* OR *jwt?is?expired* OR *jwt?expired*)';
 
 // https://us5.datadoghq.com/monitors/440085
 adopted('macroai-error-logs', {
@@ -10,8 +19,9 @@ adopted('macroai-error-logs', {
   type: 'log alert',
   query:
     'logs("service:(macroai-query-service-prod OR macroai-store-service-prod OR macroai-proxy-service-prod) status:error").index("*").rollup("count").last("5m") > 2500',
-  message: `@teo@macro.com 
-@slack-monitoring`,
+  message: `macroai services logged {{value}} errors in 5 minutes.
+
+${notify({ pages: false })}`,
   tags: ['macro-ai'],
   monitorThresholds: {
     critical: '2500',
@@ -21,7 +31,6 @@ adopted('macroai-error-logs', {
   notifyAudit: false,
   includeTags: false,
   newHostDelay: 300,
-  renotifyInterval: 0,
   enableLogsSample: true,
   groupbySimpleMonitor: false,
 });
@@ -32,7 +41,9 @@ adopted('macroapi-error-logs', {
   type: 'log alert',
   query:
     'logs("service:macro-gql-service-prod status:error").index("*").rollup("count").last("5m") > 50',
-  message: '@slack-monitoring',
+  message: `macro-gql-service logged {{value}} errors in 5 minutes.
+
+${notify({ pages: false })}`,
   monitorThresholds: {
     critical: '50',
   },
@@ -48,9 +59,10 @@ adopted('macroapi-error-logs', {
 adopted('dss-errors-dev', {
   name: '[DEV] Increased number of errors for DSS',
   type: 'log alert',
-  query:
-    'logs("service:cloud-storage-service-dev ERROR*").index("*").rollup("count").last("5m") > 200',
-  message: '@slack-monitoring',
+  query: `logs("service:cloud-storage-service env:dev status:error ${DSS_EXPIRED_JWT_EXCLUSION}").index("*").rollup("count").last("5m") > 200`,
+  message: `Dev cloud-storage-service logged {{value}} errors in 5 minutes.
+
+${notify({ pages: false, environment: 'dev' })}`,
   monitorThresholds: {
     critical: '200',
     warning: '100',
@@ -64,15 +76,18 @@ adopted('dss-errors-dev', {
 });
 
 // https://us5.datadoghq.com/monitors/1062128
+// The steady baseline is 300-450 error lines per 5 minutes since the
+// expired-JWT exclusion, so 800 is roughly double a normal window. No warning
+// threshold: one would notify all day.
 adopted('dss-errors-prod', {
   name: '[PROD] Increased number of errors for DSS',
   type: 'log alert',
-  query:
-    'logs("service:cloud-storage-service-prod ERROR*").index("*").rollup("count").last("5m") > 150',
-  message: '@slack-monitoring',
+  query: `logs("service:cloud-storage-service env:prod status:error ${DSS_EXPIRED_JWT_EXCLUSION}").index("*").rollup("count").last("5m") > 800`,
+  message: `Prod cloud-storage-service logged {{value}} errors in 5 minutes, not counting expired-JWT rejections.
+
+${notify({ pages: false })}`,
   monitorThresholds: {
-    critical: '150',
-    warning: '50',
+    critical: '800',
   },
   onMissingData: 'default',
   notifyAudit: true,
@@ -87,17 +102,12 @@ adopted('error-logs-overall', {
   name: '[PROD] Increase in Error Logs',
   type: 'log alert',
   query: 'formula("query - query1").last("5m") > 25000',
+  // Crosses its thresholds many times a day, so it notifies without paging.
+  // The per-service anomaly monitors in regressions.ts cover regressions.
   message: `Increase in overall count of error logs across production services.
 Please view datadog to checkout what specific items may be causing the issues.
 
-{{#is_alert}}
-@slack-holy-shit-alarms 
-{{/is_alert}}
-{{#is_alert_recovery}}
-@slack-holy-shit-alarms 
-{{/is_alert_recovery}}
-
-@slack-monitoring`,
+${notify({ pages: false })}`,
   priority: '1',
   tags: ['prod'],
   monitorThresholds: {
@@ -149,7 +159,9 @@ adopted('graphql-redis-connect', {
   type: 'log alert',
   query:
     'logs("service:macro-gql-service-prod status:error \\"Failed to reconnect to Redis cache at URL*\\"").index("*").rollup("count").last("5m") >= 1',
-  message: '@slack-monitoring',
+  message: `macro-gql-service could not reconnect to its Redis cache.
+
+${notify({ pages: false })}`,
   priority: '3',
   tags: ['prod'],
   monitorThresholds: {
@@ -169,12 +181,13 @@ adopted('high-channel-invites', {
   type: 'log alert',
   query:
     'logs("service:notification-service-prod @notification_event_type:channel_invite").index("*").rollup("count", "@sender_id").last("1h") > 100',
-  message: `@slack-monitoring 
-High number of channel invites
+  message: `High number of channel invites
 
 Investigate whether 1 user is causing this with this log query
 
-\`service:notification-service-prod @notification_event_type:channel_invite\``,
+\`service:notification-service-prod @notification_event_type:channel_invite\`
+
+${notify({ pages: false })}`,
   monitorThresholds: {
     critical: '100',
     warning: '50',
@@ -195,9 +208,7 @@ adopted('channel-invite-spam-dev', {
     'logs("service:notification-service-dev message:\\"processing message\\" @notification_event_type:channel_invite").index("*").rollup("count").by("@sender_id").last("1h") > 10',
   message: `A user is generating a high number of channel invites. This could mean they are spamming users with invite emails.
 
-@slack-monitoring
-
-@hutch@macro.com`,
+${notify({ pages: false, environment: 'dev' })}`,
   monitorThresholds: {
     critical: '10',
     warning: '5',
@@ -218,9 +229,7 @@ adopted('channel-invite-spam-prod', {
     'logs("service:notification-service-prod message:\\"processing message\\" @notification_event_type:channel_invite").index("*").rollup("count").by("@sender_id").last("1h") > 10',
   message: `A user is generating a high number of channel invites. This could mean they are spamming users with invite emails.
 
-@slack-monitoring
-
-@hutch@macro.com`,
+${notify({ pages: false })}`,
   monitorThresholds: {
     critical: '10',
     warning: '5',

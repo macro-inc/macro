@@ -10,6 +10,7 @@
 
 import type { FigEngine } from '@core/fig-engine/client';
 import type { FontUse } from '@core/fig-engine/types';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { createSignal } from 'solid-js';
 import type {
   FigFontSource,
@@ -256,7 +257,7 @@ export function createFontRegistry(options: FontRegistryOptions) {
     const granted = await source?.grantedLocalFonts?.();
     if (granted) setLocalFonts(granted);
   };
-  void start();
+  fireAndForget(start(), 'fig-fonts');
 
   return {
     documentFonts,

@@ -34,6 +34,27 @@ where
     CS: crm::domain::service::CrmService,
     anyhow::Error: From<T::Err>,
 {
+    /// An entity share grants access to that entity only. Following a retained
+    /// thread's alias requires independent access to its entire inbox.
+    pub(crate) async fn resolve_thread_read_id_impl(
+        &self,
+        macro_id: macro_user_id::user_id::MacroUserIdStr<'_>,
+        thread_id: Uuid,
+    ) -> Result<Uuid, EmailErr> {
+        let inboxes = self
+            .email_repo
+            .inboxes_for_macro_id(macro_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+        let link_ids: Vec<_> = inboxes.iter().map(|link| link.id).collect();
+        Ok(self
+            .email_repo
+            .redirected_thread_id(thread_id, &link_ids)
+            .await
+            .map_err(anyhow::Error::from)?
+            .unwrap_or(thread_id))
+    }
+
     /// Fetch thread row, paginated messages, and their core sub-resources
     /// (senders, recipients, labels). Returns `None` if the thread doesn't exist.
     async fn fetch_thread_core(
@@ -42,8 +63,15 @@ where
         offset: i64,
         limit: i64,
     ) -> Result<Option<ThreadFetchResult>, EmailErr> {
-        let thread_id = Uuid::parse_str(&receipt.entity().entity_id)
+        let requested_id = Uuid::parse_str(&receipt.entity().entity_id)
             .map_err(|e| EmailErr::RepoErr(anyhow::anyhow!("invalid thread id: {}", e)))?;
+        let thread_id = match receipt.get_authenticated_user() {
+            Ok(actor) => {
+                self.resolve_thread_read_id_impl(actor.clone(), requested_id)
+                    .await?
+            }
+            Err(_) => requested_id,
+        };
 
         let thread_row = self
             .email_repo
@@ -61,12 +89,13 @@ where
             .await
             .map_err(anyhow::Error::from)?;
 
-        let is_owner = matches!(
-            receipt.entity_permission(),
-            EntityPermission::AccessLevel {
-                access_level: AccessLevel::Owner
-            }
-        );
+        let is_owner = thread_id != requested_id
+            || matches!(
+                receipt.entity_permission(),
+                EntityPermission::AccessLevel {
+                    access_level: AccessLevel::Owner
+                }
+            );
 
         let mut message_ids: Vec<Uuid> = message_rows.iter().map(|m| m.db_id).collect();
 
@@ -133,7 +162,7 @@ where
         }))
     }
 
-    async fn hydrate_full_messages(
+    pub(super) async fn hydrate_full_messages(
         &self,
         message_rows: Vec<MessageRow>,
         mut senders: HashMap<Uuid, ContactInfo>,
@@ -153,7 +182,7 @@ where
             .collect();
         let draft_message_ids: Vec<Uuid> = message_rows
             .iter()
-            .filter(|message| message.provider_id.is_none())
+            .filter(|message| !message.is_sent)
             .map(|message| message.db_id)
             .collect();
 
@@ -163,10 +192,11 @@ where
             mut draft_attachments,
             mut forwarded_attachments,
             mut calendar_invitations,
+            mut operations,
         ) = tokio::try_join!(
             async {
                 self.email_repo
-                    .scheduled_send_times_by_message_ids(&message_ids)
+                    .scheduled_sends_by_message_ids(&message_ids)
                     .await
                     .map_err(anyhow::Error::from)
             },
@@ -194,11 +224,18 @@ where
                     .await
                     .map_err(anyhow::Error::from)
             },
+            async {
+                self.email_repo
+                    .message_operation_facts(&message_ids)
+                    .await
+                    .map_err(anyhow::Error::from)
+            },
         )?;
 
         Ok(message_rows
             .into_iter()
             .map(|row| {
+                let operation_status = operations.remove(&row.db_id).map(Into::into);
                 let sender = senders.remove(&row.db_id);
                 let recipient_list = recipients.remove(&row.db_id).unwrap_or_default();
                 let scheduled_send_time = scheduled.remove(&row.db_id);
@@ -218,7 +255,7 @@ where
                     row.body_text.as_deref(),
                 );
 
-                message_from_row(
+                let mut message = message_from_row(
                     row,
                     sender,
                     to,
@@ -231,7 +268,9 @@ where
                     scheduled_send_time,
                     body_replyless,
                     message_calendar_invitations,
-                )
+                );
+                message.operation_status = operation_status;
+                message
             })
             .collect())
     }
@@ -462,7 +501,7 @@ where
     }
 }
 
-fn email_thread_ids_from_receipts(
+pub(super) fn email_thread_ids_from_receipts(
     receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
 ) -> Result<Vec<Uuid>, EmailErr> {
     receipts
@@ -495,6 +534,7 @@ fn parsed_message_from_row(
     );
 
     ParsedMessage {
+        draft_generation: row.draft_generation,
         db_id: row.db_id,
         link_id: row.link_id,
         thread_db_id: row.thread_db_id,

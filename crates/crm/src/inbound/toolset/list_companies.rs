@@ -47,7 +47,8 @@ pub struct CompanyListItem {
     pub hidden: bool,
     /// Most recent known email interaction with this company.
     pub last_interaction: DateTime<Utc>,
-    /// The company's pipeline stage, if set.
+    /// The company's own Stage property, if set; separate from any
+    /// pipeline entry's stage.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub stage: Option<ToolCompanyStage>,
     /// Macro user id of the company's owner, if set.
@@ -72,7 +73,7 @@ pub struct ListCompaniesResponse {
 #[derive(Debug, Clone, Default, Deserialize, JsonSchema)]
 #[schemars(
     title = "ListCompanies",
-    description = "List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and its pipeline Stage / Owner / Revenue properties when set. Use the filters to narrow results: `search` for name/domain text, `stage` for pipeline stage, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to move stages or update owner/revenue/custom properties."
+    description = "List the CRM companies tracked by the authenticated user's team, sorted by most recent interaction. Each row includes the company id, name, domains, last interaction time, and the company's own Stage / Owner / Revenue properties when set (not a pipeline deal's). Use the filters to narrow results: `search` for name/domain text, `stage` for the company's own Stage property, `owner_user_id` for companies owned by a user. Use GetCompany for one company's full details (contacts + all properties), and SetEntityProperty with entity_type=company to change the company's own Stage / Owner / Revenue or custom properties. Deals in a pipeline have their own stage and fields, separate from these: use FindPipelineEntries and UpdatePipelineEntries for them."
 )]
 pub struct ListCompanies {
     /// Case-insensitive substring matched against company names and domains.
@@ -82,9 +83,9 @@ pub struct ListCompanies {
     #[serde(default)]
     pub search: Option<String>,
 
-    /// Filter to companies in this pipeline stage (label or option id).
+    /// Filter to companies whose own Stage property is this (label or option id).
     #[schemars(
-        description = "Filter to companies in this pipeline stage. Accepts a stage label matched case-insensitively (e.g. \"lead\", \"Customer\" — teams may have custom stage names) or a stage option UUID."
+        description = "Filter to companies whose own Stage property (not a pipeline deal's stage) is this. Accepts a stage label matched case-insensitively (e.g. \"lead\", \"Customer\" — teams may have custom stage names) or a stage option UUID."
     )]
     #[serde(default)]
     pub stage: Option<String>,

@@ -1,0 +1,17 @@
+id: plist-media-entitlements
+language: html
+# .plist files parse as HTML through sgconfig.yml `languageGlobs`.
+severity: error
+message: The macOS entitlements need com.apple.security.device.camera and com.apple.security.device.audio-input set to true.
+note: |-
+  A hardened-runtime macOS app can't capture camera or microphone without these
+  entitlements. This is the `entitlements` file in
+  apps/web/tauri/desktop-cef/tauri.conf.json; update `files` here if that moves.
+files:
+  - apps/web/tauri/desktop-cef/entitlements.plist
+rule:
+  kind: document
+  not:
+    all:
+      - regex: <key>com\.apple\.security\.device\.camera</key>\s*<true\s*/>
+      - regex: <key>com\.apple\.security\.device\.audio-input</key>\s*<true\s*/>

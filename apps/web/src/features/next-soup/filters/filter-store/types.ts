@@ -95,6 +95,8 @@ export type ScalarFieldFilters = {
   chatDone?: boolean;
   folderSeen?: boolean;
   folderDone?: boolean;
+  initiativeSeen?: boolean;
+  initiativeDone?: boolean;
   foreignEntitySeen?: boolean;
   foreignEntityDone?: boolean;
   foreignEntityIncludesMe?: boolean;

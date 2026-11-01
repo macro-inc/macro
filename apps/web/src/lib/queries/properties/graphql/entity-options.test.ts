@@ -2,7 +2,6 @@ import type { Property, PropertyDefinitionDomain } from '@property/types';
 import { EntityPropertiesDocument } from '@service-storage/graphql/generated/graphql';
 import { validate as validateUuid } from 'uuid';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { buildGraphqlEntitySoupInput } from '../../soup/graphql/entity-input';
 
 const executeOptimisticMutationMock = vi.hoisted(() => vi.fn());
 const optimisticMutationDispositionOfMock = vi.hoisted(() => vi.fn());
@@ -24,7 +23,10 @@ vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlCacheHost: () => cacheHostState.current,
 }));
 
-vi.mock('./entity', () => ({
+vi.mock('./entity', async (importOriginal) => ({
+  buildEntityPropertiesInput: (
+    await importOriginal<typeof import('./entity')>()
+  ).buildEntityPropertiesInput,
   toGraphqlPropertyTargetEntityType: (entityType: string) =>
     entityType === 'TASK' ? 'DOCUMENT' : entityType,
 }));
@@ -144,7 +146,7 @@ describe('updateGraphqlEntityPropertyOptions', () => {
     expect(options.revalidations).toEqual([
       {
         document: EntityPropertiesDocument,
-        variables: { input: buildGraphqlEntitySoupInput('DOCUMENT', 'doc-1') },
+        variables: { input: { entityType: 'DOCUMENT', entityId: 'doc-1' } },
         onlyOnLinkFailure: true,
       },
     ]);
@@ -225,7 +227,7 @@ describe('updateGraphqlEntityPropertyOptions', () => {
     expect(options.revalidations).toEqual([
       {
         document: EntityPropertiesDocument,
-        variables: { input: buildGraphqlEntitySoupInput('DOCUMENT', 'doc-1') },
+        variables: { input: { entityType: 'DOCUMENT', entityId: 'doc-1' } },
         onlyOnLinkFailure: true,
       },
     ]);
@@ -275,7 +277,7 @@ describe('updateGraphqlEntityPropertyOptions', () => {
     expect(options.revalidations).toEqual([
       {
         document: EntityPropertiesDocument,
-        variables: { input: buildGraphqlEntitySoupInput('DOCUMENT', 'doc-1') },
+        variables: { input: { entityType: 'DOCUMENT', entityId: 'doc-1' } },
         onlyOnLinkFailure: true,
       },
     ]);
@@ -283,13 +285,13 @@ describe('updateGraphqlEntityPropertyOptions', () => {
   });
 
   it.each([
-    ['TASK', 'GraphqlSoupDocument'],
-    ['THREAD', 'GraphqlSoupEmailThread'],
-    ['INITIATIVE', 'GraphqlSoupInitiative'],
-    ['CALL_RECORD', 'GraphqlSoupCall'],
+    ['TASK', 'GraphqlSoupDocument', 'DOCUMENT'],
+    ['THREAD', 'GraphqlSoupEmailThread', 'EMAIL_THREAD'],
+    ['INITIATIVE', 'GraphqlSoupInitiative', 'INITIATIVE'],
+    ['CALL_RECORD', 'GraphqlSoupCall', 'CALL'],
   ] as const)(
     'durably links and revalidates only the %s target after a queued first-tag commit',
-    async (entityType, typename) => {
+    async (entityType, typename, soupEntityType) => {
       optimisticMutationDispositionOfMock.mockReturnValue({
         kind: 'queued',
         transactionId: 'txn-1',
@@ -324,7 +326,7 @@ describe('updateGraphqlEntityPropertyOptions', () => {
         {
           document: EntityPropertiesDocument,
           variables: {
-            input: buildGraphqlEntitySoupInput(entityType, 'target-1'),
+            input: { entityType: soupEntityType, entityId: 'target-1' },
           },
           onlyOnLinkFailure: true,
         },

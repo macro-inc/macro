@@ -5,16 +5,19 @@
 //! reattach within one process lifetime, and a cold attach after a restart
 //! rebuilds it from the frame log (see [`crate::domain::replay`]).
 
+use std::collections::HashMap;
+
 use agent::ReasoningEffort;
 use agent::types::{AssistantMessagePart, ChatMessage, ChatMessageContent, Role};
-use agent_client_protocol::schema::v1::{ContentBlock, PromptRequest, SessionId};
-use agent_runtime_protocol::domain::action::{COMPACT_COMMAND, PromptAttachment};
+use agent_client_protocol::schema::v1::{ContentBlock, PromptRequest, RequestId, SessionId};
+use agent_runtime_protocol::domain::action::PromptAttachment;
 use agent_session::domain::model::AgentSessionId;
 use attachment::image::ImageData;
 use attachment::{AttachmentContent, AttachmentPart, Attachments};
 use dashmap::DashMap;
 use model_entity::EntityType;
 use non_empty::NonEmpty;
+use tokio_util::sync::CancellationToken;
 
 #[cfg(test)]
 mod test;
@@ -69,17 +72,12 @@ impl UserPrompt {
         Self::from_blocks(&request.prompt)
     }
 
-    /// Whether this is the compaction control rather than a message.
-    ///
-    /// The command word and nothing else. A `/compact` that also carries
-    /// files is a real prompt about those files, and compacting would throw
-    /// them away unseen - so serving a turn and replaying one must agree on
-    /// this, or a cold attach would drop a conversation the live session
-    /// kept. The harness applies the same rule where it reads a control off
-    /// the wire (`AgentAction::control_from_runtime`).
-    #[must_use]
-    pub fn is_compact_command(&self) -> bool {
-        self.text.trim() == COMPACT_COMMAND && self.attachments.is_empty()
+    /// The attached files that reach the model as images: HTTPS images,
+    /// which the provider fetches. Any other file is named in text.
+    pub fn images(&self) -> impl Iterator<Item = &PromptAttachment> {
+        self.attachments
+            .iter()
+            .filter(|attachment| is_image(attachment) && attachment.uri.starts_with("https://"))
     }
 
     /// The model-facing form of the attached files, `None` without any.
@@ -198,9 +196,63 @@ use super::engine::AgentIdentity;
 #[derive(Debug, Clone)]
 pub enum HistoryEntry {
     /// A prompt from a user.
-    User(UserPrompt),
+    User {
+        /// What they said.
+        prompt: UserPrompt,
+        /// The JSON-RPC id of the `session/prompt` request it came in. The
+        /// log keeps the request whole, so the live agent and a replay of
+        /// its log know the turn by the same id even where their entries
+        /// differ, and a summary names the last turn it covers by it.
+        request_id: RequestId,
+    },
     /// One assistant turn: text, tool calls, and tool results, flattened.
     Assistant(Vec<AssistantMessagePart>),
+    /// What a summary says of the conversation before it, which it stands
+    /// in for. The model reads it as history it has already acted on.
+    Summary(String),
+}
+
+/// What the model reads ahead of a summary, so it takes the summary as what
+/// already happened rather than as work to do, and knows where the exact
+/// words went.
+pub const SUMMARY_PREAMBLE: &str = "The earlier conversation was summarized to keep it within \
+your context. The summary below is history: the actions it records already happened, so do \
+not repeat them. ContentSearch over this agent session finds the exact words of anything it \
+covers.";
+
+/// A summary being written in the background. A session has at most one.
+#[derive(Debug)]
+pub struct PendingSummary {
+    /// Stops it. A summary whose history was reset under it is cancelled,
+    /// so it never lands on a conversation it was not written from.
+    pub cancel: CancellationToken,
+    /// Closes once the summary has landed or been abandoned.
+    pub settled: tokio::sync::watch::Receiver<()>,
+}
+
+impl PendingSummary {
+    /// Whether it is still being written. One whose task is gone - its
+    /// agent was replaced mid-summary - is not.
+    #[must_use]
+    pub fn is_running(&self) -> bool {
+        self.settled.has_changed().is_ok()
+    }
+}
+
+/// Where a session's summaries stand: the one being written, and what an
+/// attempt that failed leaves the next.
+#[derive(Debug, Default)]
+pub struct Summarizing {
+    /// The summary being written in the background, if any.
+    pub pending: Option<PendingSummary>,
+    /// How many tokens the conversation took when the last summary to
+    /// settle failed; `None` once one lands. Another is not tried until the
+    /// conversation has grown well past it, so a summary that keeps failing
+    /// is not paid for on every message.
+    pub failed_at: Option<u64>,
+    /// What each image a summary read shows, by the image's URI, kept until
+    /// a summary lands so that trying again does not read them again.
+    pub descriptions: HashMap<String, String>,
 }
 
 /// The in-memory state of one agent session.
@@ -221,8 +273,12 @@ pub struct SessionState {
     /// and a conversation whose system prompt changed halfway is one the
     /// agent never agreed to.
     pub instructions: Option<String>,
-    /// The conversation so far, oldest first.
+    /// The conversation the model reads, oldest first: a summary of what
+    /// came before, if there was one, then everything since.
     pub history: Vec<HistoryEntry>,
+    /// The summary being written in the background, if any, and what the
+    /// last attempt left for the next.
+    pub summarizing: Summarizing,
 }
 
 impl SessionState {
@@ -237,8 +293,44 @@ impl SessionState {
             identity: None,
             instructions: None,
             history: Vec::new(),
+            summarizing: Summarizing::default(),
         }
     }
+
+    /// Start the conversation over: what the model reads and what it no
+    /// longer does, and any summary of it still being written or tried.
+    pub fn clear_history(&mut self) {
+        self.history.clear();
+        if let Some(summary) = std::mem::take(&mut self.summarizing).pending {
+            summary.cancel.cancel();
+        }
+    }
+}
+
+/// Put a summary in place of the first `replaces` entries of `history`. The
+/// log keeps what they said, and an earlier summary among them is covered
+/// by the new one.
+pub fn splice_summary(history: &mut Vec<HistoryEntry>, text: String, replaces: usize) {
+    let replaces = replaces.min(history.len());
+    history.drain(..replaces);
+    history.insert(0, HistoryEntry::Summary(text));
+}
+
+/// Where the turn of the prompt that request `id` carried ends in
+/// `history`: right after its last entry, where the next prompt starts.
+/// `None` when `history` holds no such prompt.
+#[must_use]
+pub fn end_of_turn(history: &[HistoryEntry], id: &RequestId) -> Option<usize> {
+    let start = history.iter().position(
+        |entry| matches!(entry, HistoryEntry::User { request_id, .. } if request_id == id),
+    )?;
+    let after = start + 1;
+    Some(
+        history[after..]
+            .iter()
+            .position(|entry| matches!(entry, HistoryEntry::User { .. }))
+            .map_or(history.len(), |next| after + next),
+    )
 }
 
 /// Session state by Macro session id, shared between the manager (which
@@ -253,16 +345,26 @@ pub type SessionStore = DashMap<AgentSessionId, SessionState>;
 pub fn messages_for_turn(history: &[HistoryEntry], prompt: &UserPrompt) -> Vec<ChatMessage> {
     history
         .iter()
-        .map(|entry| match entry {
-            HistoryEntry::User(prompt) => prompt.to_chat_message(),
-            HistoryEntry::Assistant(parts) => ChatMessage {
-                content: ChatMessageContent::AssistantMessageParts(parts.clone()),
-                role: Role::Assistant,
-                attachments: None,
-            },
+        .flat_map(|entry| match entry {
+            HistoryEntry::User { prompt, .. } => vec![prompt.to_chat_message()],
+            HistoryEntry::Assistant(parts) => vec![assistant_message(parts.clone())],
+            HistoryEntry::Summary(summary) => vec![
+                UserPrompt::text(SUMMARY_PREAMBLE).to_chat_message(),
+                assistant_message(vec![AssistantMessagePart::Text {
+                    text: summary.clone(),
+                }]),
+            ],
         })
         .chain(std::iter::once(prompt.to_chat_message()))
         .collect()
+}
+
+fn assistant_message(parts: Vec<AssistantMessagePart>) -> ChatMessage {
+    ChatMessage {
+        content: ChatMessageContent::AssistantMessageParts(parts),
+        role: Role::Assistant,
+        attachments: None,
+    }
 }
 
 /// Whether resolved attachments contain images, including nested attachments.

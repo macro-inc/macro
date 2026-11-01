@@ -5,7 +5,7 @@ import {
 } from '@core/component/EntityLoadGate';
 import { EmailDebouncedReadMarker } from '@notifications';
 import type { ComponentProps, ParentProps } from 'solid-js';
-import { Suspense } from 'solid-js';
+import { Show, Suspense } from 'solid-js';
 
 export type EmailThreadLoadGateProps<Data> = ParentProps<{
   result: EntityLoadResult<Data>;
@@ -13,6 +13,8 @@ export type EmailThreadLoadGateProps<Data> = ParentProps<{
     typeof EmailDebouncedReadMarker
   >['notificationSource'];
   threadId: string;
+  /** An account-owned working copy whose thread has never been confirmed. */
+  isLocalDraft?: boolean;
   linkId?: string;
   debounceTime?: number;
   onRetry: () => void;
@@ -22,12 +24,16 @@ export type EmailThreadLoadGateProps<Data> = ParentProps<{
 export function EmailThreadLoadGate<Data>(
   props: EmailThreadLoadGateProps<Data>
 ) {
+  const error = () => {
+    const error = props.result.error();
+    return error === 'NOT_FOUND' && props.isLocalDraft ? undefined : error;
+  };
   return (
     <Suspense fallback={<ContentLoading />}>
       <EntityLoadGate
         result={{
           data: props.result.data,
-          error: props.result.error,
+          error,
           // Hosts supply identity-checked data from createEmailThreadSource.
           // Keep that composer's data during server-ID adoption; navigation to
           // another thread clears it and restores the loading state.
@@ -35,17 +41,21 @@ export function EmailThreadLoadGate<Data>(
           // no data or error yet, the email is still waiting to load.
           isPending: () =>
             props.result.data() === undefined &&
-            (props.result.isPending() || props.result.error() === undefined),
+            (props.result.isPending() || error() === undefined),
         }}
         loadErrorTitle="Unable to load this email"
         onRetry={props.onRetry}
       >
-        <EmailDebouncedReadMarker
-          notificationSource={props.notificationSource}
-          threadId={props.threadId}
-          linkId={props.linkId}
-          debounceTime={props.debounceTime}
-        />
+        <Show when={!props.isLocalDraft && props.threadId} keyed>
+          {(threadId) => (
+            <EmailDebouncedReadMarker
+              notificationSource={props.notificationSource}
+              threadId={threadId}
+              linkId={props.linkId}
+              debounceTime={props.debounceTime}
+            />
+          )}
+        </Show>
         {props.children}
       </EntityLoadGate>
     </Suspense>

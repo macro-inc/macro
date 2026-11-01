@@ -1,0 +1,44 @@
+whatsmeow_signal includes code from libsignal
+(https://github.com/signalapp/libsignal), Copyright 2020-2025 Signal
+Messenger, LLC, licensed under the GNU Affero General Public License v3.0
+only (SPDX-License-Identifier: AGPL-3.0-only).
+
+libsignal-core is used unmodified as a dependency (tag v0.105.2). The
+following files are copied from libsignal tag v0.74.1 (rust/protocol) and
+modified by Macro so they speak WhatsApp's dialect of the Signal protocol:
+
+  proto/wire.proto            <- rust/protocol/src/proto/wire.proto
+  proto/storage.proto         <- rust/protocol/src/proto/storage.proto
+  src/protocol/consts.rs      <- rust/protocol/src/consts.rs
+  src/protocol/crypto.rs      <- rust/protocol/src/crypto.rs, rust/crypto/src/aes_cbc.rs
+  src/protocol/error.rs       <- rust/protocol/src/error.rs
+  src/protocol/group_cipher.rs<- rust/protocol/src/group_cipher.rs
+  src/protocol/messages.rs    <- rust/protocol/src/protocol.rs
+  src/protocol/proto.rs       <- rust/protocol/src/proto.rs
+  src/protocol/ratchet.rs     <- rust/protocol/src/ratchet.rs, ratchet/keys.rs, ratchet/params.rs
+  src/protocol/sender_keys.rs <- rust/protocol/src/sender_keys.rs
+  src/protocol/session.rs     <- rust/protocol/src/session.rs
+  src/protocol/session_cipher.rs <- rust/protocol/src/session_cipher.rs
+  src/protocol/session_state.rs  <- rust/protocol/src/state/session.rs
+
+Modifications, in summary (each file's header lists its own):
+
+- Session version 3 only: X3DH without Kyber pre-keys, no post-quantum
+  ratchet (SPQR), no PQXDH key derivation label.
+- Messages are written with the version byte 0x33, as WhatsApp and
+  go.mau.fi/libsignal write it; libsignal writes 0x34 for version 3, which
+  fails the MAC whatsmeow recomputes over its own re-serialization.
+- Sender key messages and distribution messages use WhatsApp's protobuf
+  layout (a 32-bit key ID in field 1) instead of a distribution UUID and
+  chain ID; sender keys are named by group and sender.
+- A pre-key ID of 0 in a pre-key message means "no one-time pre-key".
+- Unacknowledged sessions never expire (go.mau.fi/libsignal has no limit).
+- Message keys are stored in full (cipher key, MAC key, IV), never as seeds;
+  the pre-key timestamp and sender key version fields are not stored.
+- Creating a sender key distribution message replaces an empty record.
+- AES-256-CBC comes from the RustCrypto `cbc` crate instead of libsignal's
+  `signal-crypto`.
+- Stores are the whatsmeow port's `SignalProtocolStore`; addresses are kept
+  out of errors and logs; logging uses `tracing`.
+- Sealed sender, fingerprints, incremental MAC, Kyber/KEM, plaintext content
+  and decryption-error messages are not included.

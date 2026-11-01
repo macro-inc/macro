@@ -1,6 +1,6 @@
 use std::collections::HashMap;
 use std::sync::Mutex;
-use std::sync::atomic::{AtomicUsize, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
 
 use axum::http::{Request as HttpRequest, header};
 use email::domain::models::{
@@ -8,7 +8,8 @@ use email::domain::models::{
     EmailSyncStatus, EmailThreadMailCacheFacts, EmailThreadMailPreviews, EmailThreadMailProjection,
     EmailThreadMetadata, EnrichedEmailThreadPreview, GetEmailsRequest, LabelListVisibility,
     LabelType, Link, LinkLabel, Message, MessageAttachment, MessageListVisibility, ParsedMessage,
-    ParsedThread, SenderPolicy, Thread, UpdateThreadLabelsResult, UpsertEmailFilterInput,
+    ParsedThread, ResolvedSendingInbox, SenderPolicy, SendingInboxRequest,
+    SetThreadsArchivedResult, Thread, UpdateThreadLabelsResult, UpsertEmailFilterInput,
     UserEmailLink, UserEmailLinkSettings, UserProvider,
 };
 use entity_access::domain::models::{
@@ -53,6 +54,8 @@ mod form_activity;
 mod initiative;
 mod scheduled_actions;
 mod soup_patches;
+mod stale_client;
+mod team_activity;
 mod work_feed;
 
 const VALID_USER_ID: &str = "macro|user@example.com";
@@ -115,6 +118,8 @@ fn soup_agent_session(id: Uuid) -> SoupItem<()> {
         updated_at: Default::default(),
         viewed_at: None,
         extra: (),
+        source: models_soup::agent_session::AgentSessionSource::User,
+        visibility: models_soup::agent_session::AgentSessionVisibility::Listed,
     })
 }
 
@@ -321,6 +326,15 @@ impl SoupService for CountingSoupService {
         .into_iter())
     }
 
+    async fn group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _group_by: &'a soup::domain::models::grouping::GroupByField,
+        _keys: &'a [String],
+    ) -> Result<soup::domain::models::grouping::GroupLabels, soup::domain::models::SoupErr> {
+        Ok(Default::default())
+    }
+
     async fn caller_tag_sets<'a>(
         &self,
         _user_id: MacroUserIdStr<'a>,
@@ -336,6 +350,8 @@ impl SoupService for CountingSoupService {
 /// the lazy extraction actually runs.
 #[derive(Clone, Default)]
 struct CountingEmailService {
+    thread_read_fails: Arc<Mutex<bool>>,
+    thread_read_redirect: Arc<Mutex<Option<(Uuid, Uuid)>>>,
     thread_is_read: Arc<Mutex<bool>>,
     thread_archived: Arc<Mutex<bool>>,
     archive_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid, bool)>>>,
@@ -346,6 +362,29 @@ struct CountingEmailService {
     seen_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid)>>>,
     unread_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid)>>>,
     label_mutation_calls: Arc<Mutex<Vec<(MacroUserIdStr<'static>, Uuid, Uuid, bool)>>>,
+    thread_preview_receipts: Arc<Mutex<Vec<Vec<Uuid>>>>,
+}
+
+impl email::domain::ports::EmailThreadPreviewService for CountingEmailService {
+    async fn get_email_thread_previews_by_receipts(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<Vec<EnrichedEmailThreadPreview>, EmailErr> {
+        assert_eq!(user_id.as_ref(), VALID_USER_ID);
+        let mut thread_ids = receipts
+            .iter()
+            .map(|receipt| Uuid::parse_str(&receipt.entity().entity_id).unwrap())
+            .collect::<Vec<_>>();
+        thread_ids.sort_unstable();
+        self.thread_preview_receipts
+            .lock()
+            .unwrap()
+            .push(thread_ids);
+        // Only the email crate constructs previews; this fake observes which
+        // receipts reached the read.
+        Ok(Vec::new())
+    }
 }
 
 impl graphql_soup::EmailMutationThreadReader for CountingEmailService {
@@ -369,7 +408,51 @@ fn test_email_err() -> EmailErr {
     EmailErr::RepoErr(anyhow::anyhow!("counting email service"))
 }
 
+impl email::domain::send_attempt::EmailSendService for CountingEmailService {
+    async fn pending_email_sends(
+        &self,
+        _: MacroUserIdStr<'static>,
+        _: Option<email::domain::send_attempt::SendAttemptCursor>,
+    ) -> Result<email::domain::send_attempt::SendAttemptPage, EmailErr> {
+        Err(test_email_err())
+    }
+
+    async fn send_email(
+        &self,
+        _: MacroUserIdStr<'static>,
+        _: Uuid,
+        _: email::domain::send_attempt::SendAttemptId,
+        _: email::domain::send_attempt::SendSnapshot,
+    ) -> Result<email::domain::send_attempt::SendAttempt, EmailErr> {
+        Err(test_email_err())
+    }
+    async fn cancel_email_send(
+        &self,
+        _: MacroUserIdStr<'static>,
+        _: Uuid,
+        _: email::domain::send_attempt::SendAttemptId,
+    ) -> Result<email::domain::send_attempt::SendAttempt, EmailErr> {
+        Err(test_email_err())
+    }
+    async fn email_send_status(
+        &self,
+        _: MacroUserIdStr<'static>,
+        _: Uuid,
+        _: email::domain::send_attempt::SendAttemptId,
+    ) -> Result<Option<email::domain::send_attempt::SendAttempt>, EmailErr> {
+        Err(test_email_err())
+    }
+}
+
 impl EmailUserService for CountingEmailService {
+    async fn get_user_email_senders(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _link: Uuid,
+    ) -> Result<Vec<email::domain::senders::SendAsAddress>, EmailErr> {
+        Ok(vec![])
+    }
+
     async fn get_user_email_labels(
         &self,
         macro_id: MacroUserIdStr<'static>,
@@ -425,6 +508,41 @@ impl EmailUserService for CountingEmailService {
 }
 
 impl EmailService for CountingEmailService {
+    async fn resolve_thread_read_id(
+        &self,
+        macro_id: MacroUserIdStr<'_>,
+        thread_id: Uuid,
+    ) -> Result<Uuid, EmailErr> {
+        assert_eq!(macro_id.as_ref(), VALID_USER_ID);
+        if *self.thread_read_fails.lock().unwrap() {
+            return Err(anyhow::anyhow!("private repository diagnostic").into());
+        }
+        Ok(self
+            .thread_read_redirect
+            .lock()
+            .unwrap()
+            .filter(|(source, _)| *source == thread_id)
+            .map(|(_, canonical)| canonical)
+            .unwrap_or(thread_id))
+    }
+
+    async fn resolve_message_operation(
+        &self,
+        _actor: macro_user_id::user_id::MacroUserIdStr<'static>,
+        _request: email::domain::models::mailbox_operation::MessageResolutionRequest,
+    ) -> Result<Uuid, EmailErr> {
+        Err(EmailErr::RepoErr(anyhow::anyhow!("unused test capability")))
+    }
+
+    async fn send_message_for_user(
+        &self,
+        _user: MacroUserIdStr<'static>,
+        _link: Option<Uuid>,
+        _input: email::domain::models::CreateDraftInput,
+    ) -> Result<email::domain::models::CreatedDraft, EmailErr> {
+        Err(test_email_err())
+    }
+
     async fn set_thread_archived(
         &self,
         user_id: MacroUserIdStr<'static>,
@@ -437,6 +555,24 @@ impl EmailService for CountingEmailService {
             .unwrap()
             .push((user_id, thread_id, archived));
         Ok(())
+    }
+
+    async fn set_threads_archived(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+        archived: bool,
+    ) -> Result<SetThreadsArchivedResult, EmailErr> {
+        *self.thread_archived.lock().unwrap() = archived;
+        self.archive_mutation_calls.lock().unwrap().extend(
+            thread_ids
+                .iter()
+                .map(|thread_id| (user_id.clone(), *thread_id, archived)),
+        );
+        Ok(SetThreadsArchivedResult {
+            updated_thread_ids: thread_ids,
+            failed_thread_ids: vec![],
+        })
     }
 
     async fn get_email_thread_previews(
@@ -455,10 +591,11 @@ impl EmailService for CountingEmailService {
         Err(test_email_err())
     }
 
-    async fn get_link_by_macro_id(
+    async fn resolve_sending_inbox(
         &self,
         _macro_id: MacroUserIdStr<'_>,
-    ) -> Result<Option<Link>, EmailErr> {
+        _request: SendingInboxRequest<'_>,
+    ) -> Result<ResolvedSendingInbox, EmailErr> {
         Err(test_email_err())
     }
 
@@ -518,6 +655,7 @@ impl EmailService for CountingEmailService {
         &self,
         _macro_id: MacroUserIdStr<'_>,
         _draft_id: Uuid,
+        _expected_generation: i32,
     ) -> Result<email::domain::models::DeletedUserDraft, EmailErr> {
         Err(test_email_err())
     }
@@ -606,6 +744,7 @@ impl EmailService for CountingEmailService {
 
     async fn set_sender_policy(
         &self,
+        _actor: &macro_user_id::user_id::MacroUserIdStr<'_>,
         _link: &Link,
         _sender_email: &str,
         _policy: SenderPolicy,
@@ -619,6 +758,40 @@ impl EmailService for CountingEmailService {
 
     async fn list_email_filters(&self, _link: &Link) -> Result<Vec<EmailFilter>, EmailErr> {
         Err(test_email_err())
+    }
+}
+
+#[tokio::test]
+async fn email_thread_redirect_reauthorizes_the_canonical_soup_entity() {
+    let source = Uuid::from_u128(420);
+    let canonical = Uuid::from_u128(421);
+    for visible in [None, Some(source), Some(canonical)] {
+        let harness = harness();
+        *harness.email_service.thread_read_redirect.lock().unwrap() = Some((source, canonical));
+        // Visibility of the retained source alone must never satisfy the
+        // redirected lookup's canonical entity authorization.
+        harness
+            .thread_reader
+            .set_raw_threads(visible.into_iter().map(soup_email_thread).collect());
+        let response = harness
+            .execute(&format!(
+                r#"{{ user {{ emailThread(input: {{threadId: "{source}"}}) {{ id }} }} }}"#
+            ))
+            .await;
+        if visible == Some(source) {
+            // Even a malformed loader response containing the shared source
+            // cannot stand in for the requested canonical entity.
+            assert_eq!(response.errors.len(), 1);
+            assert!(response.errors[0].message.contains("unrequested entity"));
+        } else {
+            assert!(response.errors.is_empty(), "{:?}", response.errors);
+        }
+        let data = response.data.into_json().unwrap();
+        if visible == Some(canonical) {
+            assert_eq!(data["user"]["emailThread"]["id"], canonical.to_string());
+        } else {
+            assert!(data["user"]["emailThread"].is_null());
+        }
     }
 }
 
@@ -647,8 +820,12 @@ impl graphql_email::SoupEmailThreadMetadataEdgeReader for RecordingEmailContentR
                     graphql_email::EmailThreadMetadataLoad::Found(EmailThreadMetadata {
                         thread_id,
                         link_id: Uuid::from_u128(900 + thread_id.as_u128()),
+                        has_received_mail: true,
                         latest_inbound_message_ts: (thread_id.as_u128() % 2 == 1)
                             .then(Default::default),
+                        latest_outbound_message_ts: (thread_id.as_u128() % 2 == 1)
+                            .then(Default::default),
+                        latest_non_spam_message_ts: Some(Default::default()),
                         reminder_returned_at: (thread_id.as_u128() % 2 == 0).then(Default::default),
                     }),
                 )
@@ -796,6 +973,36 @@ impl graphql_activity::ActivityFeedReader for RecordingActivityReader {
         })
     }
 
+    async fn teammate_feed(
+        &self,
+        viewer_id: &str,
+        cursor: Option<(chrono::DateTime<chrono::Utc>, Uuid)>,
+        limit: std::num::NonZeroU32,
+    ) -> Result<activity::ActivityFeedPage, graphql_activity::ActivityReadFailed> {
+        // Emulate the repo with everyone but the viewer as a teammate, in
+        // the same keyset order and raw-row `next` as `subject_feed`.
+        let limit = limit.get() as usize;
+        let records = self.records.lock().expect("activity records lock").clone();
+        let mut page: Vec<activity::ActivityRecord> = records
+            .into_iter()
+            .filter(|record| record.subject_id != viewer_id)
+            .filter(|record| {
+                cursor.is_none_or(|(occurred_at, id)| {
+                    (record.occurred_at, record.id) < (occurred_at, id)
+                })
+            })
+            .collect();
+        let has_more = page.len() > limit;
+        page.truncate(limit);
+        let next = has_more
+            .then(|| page.last().map(|record| (record.occurred_at, record.id)))
+            .flatten();
+        Ok(activity::ActivityFeedPage {
+            records: page,
+            next,
+        })
+    }
+
     async fn subject_overview(
         &self,
         subject_id: &str,
@@ -823,6 +1030,7 @@ impl graphql_activity::ActivityFeedReader for RecordingActivityReader {
 
 fn parsed_message(thread_id: Uuid) -> ParsedMessage {
     ParsedMessage {
+        draft_generation: 0,
         db_id: Uuid::from_u128(100),
         link_id: Uuid::from_u128(200),
         thread_db_id: thread_id,
@@ -854,6 +1062,8 @@ fn full_message(thread_id: Uuid) -> Message {
     let message_id = Uuid::from_u128(100);
     let draft_attachment_id = Uuid::from_u128(102);
     Message {
+        draft_generation: 0,
+        operation_status: None,
         calendar_invitations: Default::default(),
         db_id: message_id,
         provider_id: Some("provider-message".to_owned()),
@@ -874,6 +1084,7 @@ fn full_message(thread_id: Uuid) -> Message {
         is_draft: true,
         has_attachments: true,
         scheduled_send_time: Some(Default::default()),
+        scheduled_send_status: Some(email::domain::models::ScheduledSendStatus::Failed),
         from: None,
         to: Vec::new(),
         cc: Vec::new(),
@@ -884,6 +1095,7 @@ fn full_message(thread_id: Uuid) -> Message {
         body_macro: None,
         body_replyless: Some("Direct thread body".to_owned()),
         attachments: vec![MessageAttachment {
+            reference_url: Some("https://outlook.office.com/mail/message".into()),
             db_id: Uuid::from_u128(103),
             provider_id: Some("provider-attachment".to_owned()),
             filename: Some("provider.txt".to_owned()),
@@ -893,6 +1105,9 @@ fn full_message(thread_id: Uuid) -> Message {
             content_id: Some("inline-content".to_owned()),
         }],
         attachments_draft: vec![AttachmentDraft {
+            upload_pending: false,
+            content_id: None,
+            is_inline: false,
             id: draft_attachment_id,
             draft_id: message_id,
             file_name: "draft.txt".to_owned(),
@@ -916,10 +1131,13 @@ fn full_message(thread_id: Uuid) -> Message {
     }
 }
 
-/// Entity access service whose team lookups are counted and return a team.
+/// Entity access service whose team lookups are counted and return a team,
+/// and which grants View on the configured email threads only.
 #[derive(Clone, Default)]
 struct CountingEntityAccessService {
     team_calls: Arc<AtomicUsize>,
+    viewable_email_threads: Arc<Mutex<std::collections::HashSet<Uuid>>>,
+    email_thread_checks: Arc<Mutex<Vec<Uuid>>>,
 }
 
 impl EntityAccessService for CountingEntityAccessService {
@@ -938,6 +1156,15 @@ impl EntityAccessService for CountingEntityAccessService {
             | (EntityType::Form, form_activity::RESPONDED_FORM_ID) => Some(AccessLevel::View),
             (EntityType::Form, form_activity::EDITABLE_FORM_ID) => Some(AccessLevel::Edit),
             (EntityType::Database | EntityType::Form, _) => None,
+            (EntityType::EmailThread, _) => {
+                let thread_id = Uuid::parse_str(entity_id).unwrap();
+                self.email_thread_checks.lock().unwrap().push(thread_id);
+                self.viewable_email_threads
+                    .lock()
+                    .unwrap()
+                    .contains(&thread_id)
+                    .then_some(AccessLevel::View)
+            }
             _ => return Err(AccessError::internal("test access failure")),
         };
         if let Some(access_level) = grant {
@@ -950,7 +1177,10 @@ impl EntityAccessService for CountingEntityAccessService {
                 EntityPermission::AccessLevel { access_level },
             );
         }
-        if matches!(entity_type, EntityType::Database | EntityType::Form) {
+        if matches!(
+            entity_type,
+            EntityType::Database | EntityType::Form | EntityType::EmailThread
+        ) {
             return Err(AccessError::Unauthorized);
         }
         Err(AccessError::internal("test access failure"))
@@ -1063,6 +1293,15 @@ impl MacroAuthorizationService for FakeAuthorizationService {
         }
     }
 
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
+
     async fn authorize_internal(
         &self,
         provided_key: &str,
@@ -1112,6 +1351,52 @@ impl FromRef<TestState> for Arc<CountingEntityAccessService> {
     }
 }
 
+/// Soup email thread reader standing in for the replica-backed email reader.
+#[derive(Clone, Default)]
+struct RecordingThreadReader {
+    reads: Arc<AtomicUsize>,
+    return_unrequested_threads: Arc<AtomicBool>,
+    threads: Arc<Mutex<Vec<SoupItem<()>>>>,
+}
+
+impl RecordingThreadReader {
+    fn set_raw_threads(&self, threads: Vec<SoupItem<()>>) {
+        self.set_threads(threads);
+        self.return_unrequested_threads
+            .store(true, Ordering::SeqCst);
+    }
+
+    fn set_threads(&self, threads: Vec<SoupItem<()>>) {
+        *self.threads.lock().unwrap() = threads;
+    }
+}
+
+impl graphql_soup::SoupEmailThreadReader for RecordingThreadReader {
+    async fn read_threads(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+        thread_ids: Vec<Uuid>,
+    ) -> Result<Vec<SoupEnrichedEmailThreadPreview<()>>, graphql_soup::SoupItemLoaderError> {
+        assert_eq!(user_id.as_ref(), VALID_USER_ID);
+        self.reads.fetch_add(1, Ordering::SeqCst);
+        Ok(self
+            .threads
+            .lock()
+            .unwrap()
+            .iter()
+            .filter_map(|item| match item {
+                SoupItem::EmailThread(thread)
+                    if self.return_unrequested_threads.load(Ordering::SeqCst)
+                        || thread_ids.contains(&thread.thread.id) =>
+                {
+                    Some(thread.clone())
+                }
+                _ => None,
+            })
+            .collect())
+    }
+}
+
 struct TestHarness {
     schema: SoupSchema<
         CountingSoupService,
@@ -1140,9 +1425,11 @@ struct TestHarness {
     primary_soup_service: CountingSoupService,
     email_service: CountingEmailService,
     email_content_reader: RecordingEmailContentReader,
+    thread_reader: RecordingThreadReader,
     activity_reader: RecordingActivityReader,
     authorization_calls: Arc<AtomicUsize>,
     inbox_calls: Arc<AtomicUsize>,
+    thread_reads: Arc<AtomicUsize>,
     user_label_calls: Arc<AtomicUsize>,
     user_link_calls: Arc<AtomicUsize>,
     user_catalog_identities: Arc<Mutex<Vec<MacroUserIdStr<'static>>>>,
@@ -1160,9 +1447,11 @@ fn harness() -> TestHarness {
     let authorization = FakeAuthorizationService::default();
     let soup = CountingSoupService::default();
     let email_content_reader = RecordingEmailContentReader::default();
+    let thread_reader = RecordingThreadReader::default();
     let activity_reader = RecordingActivityReader::default();
     let authorization_calls = Arc::clone(&authorization.authorization_calls);
     let inbox_calls = Arc::clone(&email.inbox_calls);
+    let thread_reads = Arc::clone(&thread_reader.reads);
     let user_label_calls = Arc::clone(&email.user_label_calls);
     let user_link_calls = Arc::clone(&email.user_link_calls);
     let user_catalog_identities = Arc::clone(&email.user_catalog_identities);
@@ -1183,9 +1472,11 @@ fn harness() -> TestHarness {
         primary_soup_service: CountingSoupService::default(),
         email_service: email,
         email_content_reader,
+        thread_reader,
         activity_reader,
         authorization_calls,
         inbox_calls,
+        thread_reads,
         user_label_calls,
         user_link_calls,
         user_catalog_identities,
@@ -1248,14 +1539,24 @@ impl TestHarness {
             .data(graphql_soup::EmailMutationThreadLoader::new(
                 self.email_service.clone(),
             ))
-            .data(graphql_soup::soup_item_loader(
-                self.soup_service.clone(),
-                Arc::new(self.email_service.clone()),
+            .data(graphql_soup::SoupItemDataLoader::new(
+                graphql_soup::SoupItemLoader::new(
+                    self.soup_service.clone(),
+                    self.thread_reader.clone(),
+                ),
             ))
             .data(graphql_soup::AgentSessionEntityLoader(
                 graphql_soup::soup_item_loader(
                     self.primary_soup_service.clone(),
                     Arc::new(self.email_service.clone()),
+                    self.state.entity_access.as_ref().clone(),
+                ),
+            ))
+            .data(graphql_soup::PrimarySoupItemLoader(
+                graphql_soup::soup_item_loader(
+                    self.primary_soup_service.clone(),
+                    Arc::new(self.email_service.clone()),
+                    self.state.entity_access.as_ref().clone(),
                 ),
             ))
             .data(graphql_properties::entity_properties_loader(
@@ -1268,13 +1569,16 @@ impl TestHarness {
             ))
             .data(graphql_email::email_thread_metadata_loader(
                 user_id.clone(),
+                None,
                 self.email_content_reader.clone(),
             ))
             .data(graphql_email::email_thread_mail_projection_loader(
                 user_id,
+                None,
                 self.email_content_reader.clone(),
             ))
             .data(NoOpEntityFavoriteEdgeReader)
+            .data(graphql_soup::FoldersQuery::noop())
             .data(self.activity_reader.clone())
             .data(graphql_activity::entity_activity_loader(
                 self.activity_reader.clone(),
@@ -1297,7 +1601,11 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
     let document_id = Uuid::from_u128(42);
     let deleted_document_id = Uuid::from_u128(43);
     soup_service.set_raw_response(vec![soup_document(document_id)]);
-    let loader = graphql_soup::soup_item_loader(soup_service.clone(), Arc::new(NoOpEmailService));
+    let loader = graphql_soup::PrimarySoupItemLoader(graphql_soup::soup_item_loader(
+        soup_service.clone(),
+        Arc::new(NoOpEmailService),
+        NoOpEntityAccessService,
+    ));
     let schema: SoupSchema<
         CountingSoupService,
         TestRealtimeSubscriptionService,
@@ -1397,6 +1705,49 @@ async fn agent_session_is_read_from_the_primary_not_the_list_replica() {
 }
 
 #[tokio::test]
+async fn soup_entity_is_read_from_the_primary_not_the_list_replica() {
+    let harness = harness();
+    let document_id = Uuid::from_u128(8);
+    // Just created: the replica behind Soup lists has not replayed the task yet.
+    harness.soup_service.set_raw_response(Vec::new());
+    harness
+        .primary_soup_service
+        .set_raw_response(vec![soup_document(document_id)]);
+
+    let response = harness
+        .execute(&format!(
+            r#"{{ user {{ soupEntity(input: {{entityType: DOCUMENT, entityId: "{document_id}"}}) {{ __typename id }} }} }}"#
+        ))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(
+        data["user"]["soupEntity"]["__typename"],
+        "GraphqlSoupDocument"
+    );
+    assert_eq!(data["user"]["soupEntity"]["id"], document_id.to_string());
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+}
+
+#[tokio::test]
+async fn soup_entity_is_null_when_the_viewer_cannot_see_it() {
+    let harness = harness();
+    harness.primary_soup_service.set_raw_response(Vec::new());
+
+    let response = harness
+        .execute(&format!(
+            r#"{{ user {{ soupEntity(input: {{entityType: DOCUMENT, entityId: "{}"}}) {{ id }} }} }}"#,
+            Uuid::from_u128(9)
+        ))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert!(data["user"]["soupEntity"].is_null());
+}
+
+#[tokio::test]
 async fn agent_session_log_appended_streams_runs_for_an_accessible_session() {
     use agent_runtime_protocol::domain::schema::v0::{SystemEvent, ToServerMessage};
     use agent_session::domain::model::{
@@ -1438,6 +1789,7 @@ async fn agent_session_log_appended_streams_runs_for_an_accessible_session() {
     let loader = graphql_soup::AgentSessionEntityLoader(graphql_soup::soup_item_loader(
         soup_service.clone(),
         Arc::new(NoOpEmailService),
+        NoOpEntityAccessService,
     ));
     let schema = build_schema_with_service::<
         CountingSoupService,
@@ -1494,6 +1846,7 @@ async fn agent_session_log_appended_streams_runs_for_an_accessible_session() {
                 content: Message::ToServer(ToServerMessage::Event {
                     event: SystemEvent::AcpReady,
                 }),
+                logged_at: None,
             },
         }])
         .await
@@ -1678,6 +2031,19 @@ async fn favorites_are_nested_under_the_authenticated_user() {
 }
 
 #[tokio::test]
+async fn folders_are_nested_under_the_authenticated_user() {
+    let harness = harness();
+
+    let response = harness
+        .execute("{ user { folders { id name parentId ownerId } } }")
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    assert_eq!(response.data.to_string(), "{user: {folders: []}}");
+    assert_eq!(harness.authorization_calls.load(Ordering::SeqCst), 1);
+}
+
+#[tokio::test]
 async fn email_catalog_fields_use_the_authenticated_user_and_remain_direct_user_fields() {
     let harness = harness();
 
@@ -1801,6 +2167,28 @@ async fn flat_soup_emits_server_fact_supplements_for_documents_and_mail() {
             .unwrap()
     );
     assert!(mail_supplement.mail_facts().is_some());
+    assert_eq!(
+        mail_supplement.target_profile().token().as_str(),
+        "soup-mail-v2"
+    );
+    let current = harness.schema.execute(
+        harness.request("{ user { soup(input: {initial: {}}) { items { __typename cacheProjection } } } }", authenticated_parts())
+            .data(crate::MailCacheProfile::from_advertised(Some("soup-mail-v5")))
+    ).await;
+    assert!(current.errors.is_empty(), "{:?}", current.errors);
+    let current = current.data.into_json().unwrap();
+    let current = current["user"]["soup"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["__typename"] == "GraphqlSoupEmailThread")
+        .unwrap();
+    let current = soup_filter_projection::decode_cache_projection_supplement(
+        current["cacheProjection"].as_str().unwrap(),
+    )
+    .unwrap();
+    assert_eq!(current.target_profile().token().as_str(), "soup-mail-v5");
+    assert_eq!(current.mail_facts(), mail_supplement.mail_facts());
     for (typename, id) in [
         ("GraphqlSoupProject", project_id),
         ("GraphqlSoupChat", chat_id),
@@ -2006,8 +2394,8 @@ async fn email_thread_returns_the_canonical_soup_type_and_forwards_message_pagin
     let harness = harness();
     let thread_id = Uuid::from_u128(42);
     harness
-        .soup_service
-        .set_raw_response(vec![soup_email_thread(thread_id)]);
+        .thread_reader
+        .set_threads(vec![soup_email_thread(thread_id)]);
 
     let response = harness
         .execute(&format!(
@@ -2026,8 +2414,9 @@ async fn email_thread_returns_the_canonical_soup_type_and_forwards_message_pagin
     assert_eq!(thread["isRead"], false);
     assert_eq!(thread["messages"][0]["threadId"], thread_id.to_string());
     assert_eq!(thread["messages"][0]["bodyParsed"], "Direct thread body");
-    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1);
-    assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.thread_reads.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
     assert_eq!(
         *harness
             .email_content_reader
@@ -2077,7 +2466,7 @@ async fn email_thread_metadata_is_lazy_and_batches_across_threads() {
 
     let with_metadata = harness
         .execute(
-            r#"{ user { soup(input: {initial: {}}) { items { ... on GraphqlSoupEmailThread { id linkId latestInboundMessageTs reminderReturnedAt } } } } }"#,
+            r#"{ user { soup(input: {initial: {}}) { items { ... on GraphqlSoupEmailThread { id linkId latestInboundMessageTs latestOutboundMessageTs latestNonSpamMessageTs reminderReturnedAt } } } } }"#,
         )
         .await;
     assert!(
@@ -2102,6 +2491,16 @@ async fn email_thread_metadata_is_lazy_and_batches_across_threads() {
     assert!(items[1]["latestInboundMessageTs"].is_null());
     assert!(items[0]["reminderReturnedAt"].is_null());
     assert_eq!(items[1]["reminderReturnedAt"], "1970-01-01T00:00:00+00:00");
+    assert!(items[0]["latestOutboundMessageTs"].as_str().is_some());
+    assert!(items[1]["latestOutboundMessageTs"].is_null());
+    assert_eq!(
+        items[0]["latestNonSpamMessageTs"],
+        "1970-01-01T00:00:00+00:00"
+    );
+    assert_eq!(
+        items[1]["latestNonSpamMessageTs"],
+        "1970-01-01T00:00:00+00:00"
+    );
 }
 
 #[tokio::test]
@@ -2359,16 +2758,36 @@ async fn activity_overview_uses_the_authenticated_subject_and_requested_zone() {
 }
 
 #[tokio::test]
+async fn email_message_delivery_status_alone_requests_the_full_edge_payload() {
+    let harness = harness();
+    let thread_id = Uuid::from_u128(43);
+    harness
+        .thread_reader
+        .set_threads(vec![soup_email_thread(thread_id)]);
+    let response = harness
+        .execute(&format!(
+            r#"{{ user {{ emailThread(input: {{threadId: "{thread_id}"}}) {{ messages(offset: 0, limit: 1) {{ scheduledSendStatus }} }} }} }}"#
+        ))
+        .await;
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    let data = response.data.into_json().unwrap();
+    assert_eq!(
+        data["user"]["emailThread"]["messages"][0]["scheduledSendStatus"],
+        "FAILED"
+    );
+}
+
+#[tokio::test]
 async fn email_message_full_fields_request_the_full_edge_payload() {
     let harness = harness();
     let thread_id = Uuid::from_u128(43);
     harness
-        .soup_service
-        .set_raw_response(vec![soup_email_thread(thread_id)]);
+        .thread_reader
+        .set_threads(vec![soup_email_thread(thread_id)]);
 
     let response = harness
         .execute(&format!(
-            r#"{{ user {{ emailThread(input: {{threadId: "{thread_id}"}}) {{ messages(offset: 2, limit: 4) {{ providerId replyingToId scheduledSendTime bodyParsed attachments {{ id providerId sfsId }} attachmentsDraft {{ id draftId fileName }} attachmentsForwarded {{ attachmentId draftId providerAttachmentId }} }} }} }} }}"#
+            r#"{{ user {{ emailThread(input: {{threadId: "{thread_id}"}}) {{ messages(offset: 2, limit: 4) {{ providerId replyingToId scheduledSendTime scheduledSendStatus bodyParsed attachments {{ id providerId sfsId referenceUrl }} attachmentsDraft {{ id draftId fileName }} attachmentsForwarded {{ attachmentId draftId providerAttachmentId }} }} }} }} }}"#
         ))
         .await;
 
@@ -2378,10 +2797,15 @@ async fn email_message_full_fields_request_the_full_edge_payload() {
     assert_eq!(message["providerId"], "provider-message");
     assert_eq!(message["replyingToId"], Uuid::from_u128(101).to_string());
     assert!(message["scheduledSendTime"].as_str().is_some());
+    assert_eq!(message["scheduledSendStatus"], "FAILED");
     assert_eq!(message["bodyParsed"], "Direct thread body");
     assert_eq!(
         message["attachments"][0]["sfsId"],
         Uuid::from_u128(104).to_string()
+    );
+    assert_eq!(
+        message["attachments"][0]["referenceUrl"],
+        "https://outlook.office.com/mail/message"
     );
     assert_eq!(message["attachmentsDraft"][0]["fileName"], "draft.txt");
     assert_eq!(
@@ -2405,8 +2829,8 @@ async fn latest_email_message_full_fields_request_the_full_edge_payload() {
     let harness = harness();
     let thread_id = Uuid::from_u128(44);
     harness
-        .soup_service
-        .set_raw_response(vec![soup_email_thread(thread_id)]);
+        .thread_reader
+        .set_threads(vec![soup_email_thread(thread_id)]);
 
     let response = harness
         .execute(&format!(
@@ -2514,10 +2938,9 @@ async fn email_mutations_return_primary_state_even_when_the_soup_replica_is_stal
 }
 
 #[tokio::test]
-async fn email_thread_returns_null_when_soup_cannot_load_the_thread() {
+async fn email_thread_returns_null_when_the_viewer_cannot_read_the_thread() {
     let harness = harness();
     let thread_id = Uuid::from_u128(43);
-    harness.soup_service.set_raw_response(Vec::new());
 
     let response = harness
         .execute(&format!(
@@ -2528,8 +2951,9 @@ async fn email_thread_returns_null_when_soup_cannot_load_the_thread() {
     assert!(response.errors.is_empty(), "{:?}", response.errors);
     let data = response.data.into_json().unwrap();
     assert!(data["user"]["emailThread"].is_null());
-    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 1);
-    assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.thread_reads.load(Ordering::SeqCst), 1);
+    assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
     assert!(
         harness
             .email_content_reader
@@ -2538,6 +2962,61 @@ async fn email_thread_returns_null_when_soup_cannot_load_the_thread() {
             .expect("email content calls lock")
             .is_empty()
     );
+}
+
+/// The lookup mints a view receipt through entity access, the rule the REST
+/// thread route applies, so a thread shared through a team's CRM or a project
+/// reaches the email read while an inaccessible one never does.
+#[tokio::test]
+async fn email_thread_lookups_settle_access_before_reading_the_email_service() {
+    let harness = harness();
+    let viewable_id = Uuid::from_u128(45);
+    let hidden_id = Uuid::from_u128(46);
+    harness
+        .state
+        .entity_access
+        .viewable_email_threads
+        .lock()
+        .unwrap()
+        .insert(viewable_id);
+    let loader = graphql_soup::soup_item_loader(
+        harness.soup_service.clone(),
+        Arc::new(harness.email_service.clone()),
+        harness.state.entity_access.as_ref().clone(),
+    );
+
+    for thread_id in [viewable_id, hidden_id] {
+        let request = harness
+            .request(
+                &format!(
+                    r#"{{ user {{ emailThread(input: {{threadId: "{thread_id}"}}) {{ id }} }} }}"#
+                ),
+                authenticated_parts(),
+            )
+            .data(loader.clone());
+        let response = harness.schema.execute(request).await;
+        assert!(response.errors.is_empty(), "{:?}", response.errors);
+        assert!(response.data.into_json().unwrap()["user"]["emailThread"].is_null());
+    }
+
+    assert_eq!(
+        *harness
+            .state
+            .entity_access
+            .email_thread_checks
+            .lock()
+            .unwrap(),
+        vec![viewable_id, hidden_id]
+    );
+    assert_eq!(
+        *harness
+            .email_service
+            .thread_preview_receipts
+            .lock()
+            .unwrap(),
+        vec![vec![viewable_id]]
+    );
+    assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
@@ -2555,6 +3034,7 @@ async fn email_thread_rejects_an_invalid_thread_id_before_loading_soup() {
             .starts_with("invalid threadId UUID")
     );
     assert_eq!(harness.raw_soup_calls.load(Ordering::SeqCst), 0);
+    assert_eq!(harness.thread_reads.load(Ordering::SeqCst), 0);
     assert_eq!(harness.inbox_calls.load(Ordering::SeqCst), 0);
 }
 

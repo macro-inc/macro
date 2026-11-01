@@ -19,6 +19,9 @@ tauri-build = { version = "2.3.1", features = [] }
 
 [dev-dependencies]
 tauri = { workspace = true, features = ["test"] }
+specta = { version = "=2.0.0-rc.25", features = ["derive", "uuid"] }
+specta-serde = "=0.0.12"
+specta-typescript = "=0.0.12"
 
 [features]
 # Automatic OTA bundle updates: check on launch/resume, apply cached bundles at
@@ -26,6 +29,8 @@ tauri = { workspace = true, features = ["test"] }
 # ios-build-no-update) so the embedded bundle / dev server is always served.
 auto_apply_update = []
 default = ["auto_apply_update"]
+# Set only by the macOS Chromium build in ../desktop-cef; adds no dependencies.
+cef = []
 
 [dependencies]
 http = "1"
@@ -43,22 +48,22 @@ serde_qs = "0.15.0"
 tauri = { workspace = true, features = ["devtools", "protocol-asset"] }
 tauri-plugin-deep-link = "=2.4.5"
 tokio-util = { version = "0.7", features = ["io"] }
-# seanaye/feat/ws-replay-buffer; keep both plugin revs identical, and keep the
-# TauriMessage/ReplayEnvelope types in
+# sean/cookie-store-path includes ws-replay-buffer. Keep both plugin revs identical
+# and the TauriMessage/ReplayEnvelope types in
 # packages/collaboration/src/websocket/platform/tauri-websocket.ts in sync when bumping
-tauri-plugin-http = { git = "https://github.com/macro-inc/plugins-workspace", rev = "06474e4c446600627cf37a11f0c22c27bcf764ca", features = [
+tauri-plugin-http = { git = "https://github.com/macro-inc/plugins-workspace", rev = "bc6ec3b8e80eed80ef4969f4463a357d46adb3b1", features = [
   "unsafe-headers",
 ] }
 tauri-plugin-log = { version = "2", features = ["tracing"] }
 tauri-plugin-opener = "2"
-tauri-plugin-websocket = { git = "https://github.com/macro-inc/plugins-workspace", rev = "06474e4c446600627cf37a11f0c22c27bcf764ca" }
+tauri-plugin-websocket = { git = "https://github.com/macro-inc/plugins-workspace", rev = "bc6ec3b8e80eed80ef4969f4463a357d46adb3b1" }
 thiserror = "2.0.14"
 tokio = { version = "1.47.1", features = ["full"] }
 tracing = { workspace = true }
 tracing-subscriber = { version = "0.3.20", features = ["env-filter"] }
 url = { workspace = true }
 urlencoding = "2.1.3"
-uuid = { version = "1.18.1", features = ["v4"] }
+uuid = { version = "1.18.1", features = ["v4", "serde"] }
 # system notifications for when the app is open
 tauri-plugin-notification = "2"
 # push notifications for mobile (when app is closed)
@@ -66,7 +71,7 @@ graphql_cache_plugin = { path = "../graphql_cache_plugin" }
 macro_bundle_updater_plugin = { path = "../macro_bundle_updater_plugin" }
 navigation_plugin = { path = "../navigation_plugin" }
 tauri-plugin-device-info = "1.0.1"
-tauri-plugin-notifications = { git = "https://github.com/macro-inc/tauri-plugins", rev = "6ddd6600e20436388f169e936b610fe93944b7b0" }
+tauri-plugin-notifications = { path = "../ios_push_plugin" }
 tauri-plugin-os = "2"
 
 
@@ -74,6 +79,26 @@ tauri-plugin-os = "2"
 clap = { version = "4", features = ["derive"] }
 tauri-plugin-single-instance = { version = "2", features = ["deep-link"] }
 tauri-plugin-updater = "=2.10.1"
+# 2.5 requires tauri 2.12; the pinned fork is 2.11.
+tauri-plugin-window-state = "=2.4.1"
+
+# WhatsApp passkey pairing: caBLE (phone over Bluetooth) on macOS/Linux,
+# native WebAuthn on Windows. See src/whatsapp_passkey.rs.
+[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
+base64 = "0.22"
+sha2 = "0.10"
+webauthn-rs-proto = { workspace = true }
+
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+webauthn-authenticator-rs = { workspace = true, features = ["cable"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+webauthn-authenticator-rs = { workspace = true, features = ["win10"] }
+
+[target.'cfg(target_os = "linux")'.dependencies]
+futures-util = "0.3"
+gtk = "0.18"
+zbus = "5"
 
 [target.'cfg(target_os = "macos")'.dependencies]
 block2 = "0.6"
@@ -82,13 +107,34 @@ objc2 = "0.6"
 objc2-foundation = { version = "0.3", default-features = false, features = [
   "std",
   "NSBundle",
+  "NSData",
   "NSError",
   "NSString",
+] }
+objc2-intents = { version = "0.3", default-features = false, features = [
+  "std",
+  "block2",
+  "INImage",
+  "INIntent",
+  "INIntentResponse",
+  "INInteraction",
+  "INOutgoingMessageType",
+  "INPerson",
+  "INPersonHandle",
+  "INSendMessageAttachment",
+  "INSendMessageIntent",
+  "INSpeakableString",
 ] }
 objc2-user-notifications = { version = "0.3", default-features = false, features = [
   "std",
   "block2",
+  "UNNotification",
+  "UNNotificationResponse",
+  "UNNotificationContent",
+  "UNNotificationRequest",
   "UNNotificationSettings",
+  "UNNotificationSound",
+  "UNNotificationTrigger",
   "UNUserNotificationCenter",
 ] }
 
@@ -101,6 +147,7 @@ rustls-platform-verifier = "0.6"
 tauri-plugin-android-auth = { path = "../android_auth_plugin" }
 tauri-plugin-android-mobile = { path = "../android_mobile_plugin" }
 tauri-plugin-android-push = { path = "../android_push_plugin" }
+tauri-plugin-call-kit = { path = "../callkit_plugin" }
 tauri-plugin-network-status = { path = "../network_status_plugin" }
 
 [target.'cfg(target_os = "ios")'.dependencies]
@@ -109,10 +156,16 @@ tauri-plugin-virtual-keyboard = { git = "https://github.com/voxelbee/tauri-plugi
 tracing-oslog = { version = "0.3" }
 tauri-plugin-call-kit = { path = "../callkit_plugin" }
 tauri-plugin-edit-menu = { path = "../edit_menu_plugin" }
+tauri-plugin-file-export = { path = "../file_export_plugin" }
 tauri-plugin-input-accessory = { path = "../input_accessory_plugin" }
 tauri-plugin-network-status = { path = "../network_status_plugin" }
 tauri-plugin-pasteboard = { path = "../pasteboard_plugin" }
 tauri-plugin-photo-library = { path = "../photo_library_plugin" }
 # Used to call NSFileManager from Rust to get the App Group container path.
 # This version is already in the dependency tree via wry/tao.
-objc2 = "0.5"
+objc2-legacy = { package = "objc2", version = "0.5" }
+# Modern generated Foundation/UIKit bindings for memory-warning observation.
+objc2 = "0.6"
+block2 = "0.6"
+objc2-ui-kit = { version = "0.3", default-features = false, features = ["std", "UIApplication"] }
+objc2-foundation = { version = "0.3", default-features = false, features = ["std", "NSNotification", "NSOperation", "NSString", "block2"] }

@@ -1,7 +1,12 @@
 //! AI tools for reading channel messages and mutating channel membership.
 
 mod create_channel;
+mod create_channel_media_upload;
+mod delete_channel_message;
+mod edit_channel_message;
 mod manage_channel_participants;
+mod open_direct_message;
+mod react_to_channel_message;
 mod read_channel_message_context;
 mod read_channel_messages;
 mod read_channel_thread;
@@ -16,7 +21,10 @@ mod test;
 use crate::{
     domain::{models::Sender, ports::ChannelMutationErr, ports::ChannelService},
     inbound::toolset::{
-        create_channel::CreateChannel, manage_channel_participants::ManageChannelParticipants,
+        create_channel::CreateChannel, delete_channel_message::DeleteChannelMessage,
+        edit_channel_message::EditChannelMessage,
+        manage_channel_participants::ManageChannelParticipants,
+        open_direct_message::OpenDirectMessage, react_to_channel_message::ReactToChannelMessage,
         rename_channel::RenameChannel, send_channel_message::SendChannelMessage,
         share_with_channel::ShareWithChannel,
     },
@@ -33,16 +41,23 @@ use entity_access::domain::{
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::{
     api::MessageServiceApi,
+    models::MessageAttribution,
+    ports::MessageError,
     service::{MessageView, MessageWrite},
 };
-use std::sync::Arc;
+use std::{collections::HashSet, sync::Arc};
+use types::SenderNames;
 use uuid::Uuid;
 
+pub use create_channel_media_upload::{
+    ChannelMediaUploadToolContext, CreateChannelMediaUpload, CreateChannelMediaUploadResponse,
+};
 pub use read_channel_message_context::{
     ReadChannelMessageContext, ReadChannelMessageContextResponse,
 };
 pub use read_channel_messages::{ReadChannelMessages, ReadChannelMessagesResponse};
 pub use read_channel_thread::{ReadChannelThread, ReadChannelThreadResponse};
+pub use types::{ChannelAttachmentKind, ChannelMessageAttachmentInput};
 
 /// Service context for channel AI tools.
 pub struct ChannelToolContext<Svc, AccessSvc>
@@ -59,6 +74,8 @@ where
     /// The bot these tools act as, on behalf of the requesting user. Defaults
     /// to Macro AI; hosts running a specific agent set it with [`Self::with_actor`].
     pub actor: BotId,
+    /// The client the requesting user works through, labelled on posts.
+    pub via: Option<String>,
 }
 
 impl<Svc, AccessSvc> Clone for ChannelToolContext<Svc, AccessSvc>
@@ -72,6 +89,7 @@ where
             service: self.service.clone(),
             entity_access_service: self.entity_access_service.clone(),
             actor: self.actor,
+            via: self.via.clone(),
         }
     }
 }
@@ -92,6 +110,7 @@ where
             service: Arc::new(service),
             entity_access_service: Arc::new(entity_access_service),
             actor: bot_id::MACRO_AI_BOT_ID,
+            via: None,
         }
     }
 
@@ -118,6 +137,68 @@ where
         self
     }
 
+    /// Label the posts these tools make with the client the requesting user
+    /// works through, such as an MCP client.
+    pub fn with_via(mut self, client: String) -> Self {
+        self.via = Some(client);
+        self
+    }
+
+    /// How a post made by these tools is attributed.
+    pub fn attribution(&self) -> MessageAttribution {
+        match &self.via {
+            Some(client) => MessageAttribution::ActingUserVia {
+                client: client.clone(),
+            },
+            None => MessageAttribution::ActingUser,
+        }
+    }
+
+    /// Mint the requesting user's own channel write capability, for actions
+    /// the app attributes to the user rather than to the tool actor bot.
+    pub async fn require_user_message_write(
+        &self,
+        request_context: &RequestContext,
+        channel_id: Uuid,
+    ) -> Result<EntityAccessReceipt<MessageWrite>, ToolCallError> {
+        self.entity_access_service
+            .generate_entity_access_receipt::<MessageWrite>(
+                &request_context.user_id,
+                None,
+                &channel_id.to_string(),
+                EntityType::Channel,
+            )
+            .await
+            .map_err(channel_access_error)
+    }
+
+    /// Mint the write capability for changing an existing message as its
+    /// author: messages the tool actor bot posted are changed as the bot, and
+    /// every other message as the user, so the message service applies the
+    /// same authorship and moderation rules as in the app.
+    pub async fn require_message_author_write(
+        &self,
+        request_context: &RequestContext,
+        channel_id: Uuid,
+        message_id: Uuid,
+    ) -> Result<EntityAccessReceipt<MessageWrite>, ToolCallError> {
+        let view = self
+            .require_channel_member(request_context, channel_id)
+            .await?;
+        let message = self
+            .messages
+            .get(view, message_id)
+            .await
+            .map_err(message_mutation_error("read the message"))?;
+        if message.sender_id == Sender::new_from_bot(self.actor) {
+            self.require_channel_message_write(request_context, channel_id)
+                .await
+        } else {
+            self.require_user_message_write(request_context, channel_id)
+                .await
+        }
+    }
+
     /// Require that the request user is an active member of the channel before
     /// reading it, minting the read capability the message reads take.
     pub async fn require_channel_member(
@@ -134,6 +215,23 @@ where
             )
             .await
             .map_err(channel_access_error)
+    }
+
+    /// Profile names for the people among `user_senders`, so the read tools
+    /// name them as the app does. A failed lookup leaves the names out rather
+    /// than failing the read.
+    pub(crate) async fn sender_names(
+        &self,
+        user_senders: HashSet<MacroUserIdStr<'static>>,
+    ) -> SenderNames {
+        if user_senders.is_empty() {
+            return SenderNames::new();
+        }
+        self.service
+            .get_user_display_names(user_senders.into_iter().collect())
+            .await
+            .inspect_err(|error| tracing::warn!(error = ?error, "failed to resolve sender names"))
+            .unwrap_or_default()
     }
 
     /// Mint a member receipt before renaming a channel.
@@ -252,6 +350,24 @@ fn channel_mutation_error(action: &'static str, err: ChannelMutationErr) -> Tool
     }
 }
 
+/// Map a message mutation failure onto an actionable tool error.
+fn message_mutation_error(action: &'static str) -> impl FnOnce(MessageError) -> ToolCallError {
+    move |err| {
+        let description = match &err {
+            MessageError::NotFound => "message not found in this channel".to_string(),
+            MessageError::Forbidden => format!(
+                "not allowed to {action}: only the message's author or a channel admin or owner can change it"
+            ),
+            MessageError::Invalid(message) => (*message).to_string(),
+            MessageError::Conflict | MessageError::Repository(_) => format!("failed to {action}"),
+        };
+        ToolCallError {
+            description,
+            internal_error: anyhow::Error::new(err),
+        }
+    }
+}
+
 const MAX_CHANNEL_NAME_CHARS: usize = 255;
 
 fn channel_name(name: &str) -> Result<String, ToolCallError> {
@@ -334,4 +450,8 @@ where
         .add_tool::<CreateChannel, ChannelToolContext<Svc, AccessSvc>>()
         .add_tool::<RenameChannel, ChannelToolContext<Svc, AccessSvc>>()
         .add_tool::<ManageChannelParticipants, ChannelToolContext<Svc, AccessSvc>>()
+        .add_tool::<EditChannelMessage, ChannelToolContext<Svc, AccessSvc>>()
+        .add_tool::<DeleteChannelMessage, ChannelToolContext<Svc, AccessSvc>>()
+        .add_tool::<ReactToChannelMessage, ChannelToolContext<Svc, AccessSvc>>()
+        .add_tool::<OpenDirectMessage, ChannelToolContext<Svc, AccessSvc>>()
 }

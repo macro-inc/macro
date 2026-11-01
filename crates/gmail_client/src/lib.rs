@@ -16,8 +16,13 @@ mod test;
 
 use regex::Regex;
 use std::sync::LazyLock;
+use std::time::Duration;
 
 const MAX_ERROR_BODY_LEN: usize = 1024;
+// A stalled request fails instead of holding its worker, and its mailbox's
+// request-gate permit, indefinitely. Callers size permit leases above this.
+const REQUEST_TIMEOUT: Duration = Duration::from_secs(60);
+const CONNECT_TIMEOUT: Duration = Duration::from_secs(10);
 
 static EMAIL_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}").unwrap());
@@ -44,7 +49,7 @@ use crate::contacts::get_self_connection;
 use crate::messages::{get_message, get_message_label_ids, list_messages};
 use crate::threads::get_thread;
 pub use error::GmailApiHttpError;
-use models_email::gmail::contacts::PersonResource;
+use models_email::gmail::contacts::{ConnectionsResponse, OtherContactsResponse, PersonResource};
 pub use models_email::gmail::filters::Filter;
 use models_email::gmail::inbox_sync::{
     GoogleJwtClaims, GooglePublicKeys, JwtVerificationError, KeyMap,
@@ -58,6 +63,9 @@ use models_email::gmail::{
 pub struct GmailClient {
     /// The inner client used to make requests
     inner: reqwest::Client,
+    /// Sending crosses a durable submission boundary and must never be retried
+    /// or redirected automatically by the transport.
+    send_client: reqwest::Client,
     /// The base url for Gmail API
     base_url: String,
     /// The url for fetching google certs
@@ -67,10 +75,21 @@ pub struct GmailClient {
     /// The expected audience for the jwt passed by Google
     audience: String,
     /// The GCP topic name we listen on for inbox updates
-    subscription_topic: String,
+    subscription_topic: Option<String>,
 }
 
 impl GmailClient {
+    /// Client for API calls that do not register push subscriptions.
+    pub fn without_watch() -> Self {
+        Self::new_with_urls(
+            None,
+            "https://www.googleapis.com/gmail/v1".to_string(),
+            "https://people.googleapis.com/v1".to_string(),
+            "https://www.googleapis.com/oauth2/v3/certs".to_string(),
+            "macro-gmail-webhook".to_string(),
+        )
+    }
+
     pub fn new(subscription_topic: String) -> Self {
         Self::new_with_urls(
             subscription_topic,
@@ -87,19 +106,30 @@ impl GmailClient {
     /// endpoints. HTTP transport details and endpoint values remain private to
     /// this crate.
     pub fn new_with_urls(
-        subscription_topic: String,
+        subscription_topic: impl Into<Option<String>>,
         gmail_url: String,
         people_url: String,
         jwks_url: String,
         audience: String,
     ) -> Self {
         Self {
-            inner: reqwest::Client::new(),
+            inner: reqwest::Client::builder()
+                .timeout(REQUEST_TIMEOUT)
+                .connect_timeout(CONNECT_TIMEOUT)
+                .build()
+                .expect("Gmail HTTP client should initialize"),
+            send_client: reqwest::Client::builder()
+                .timeout(REQUEST_TIMEOUT)
+                .connect_timeout(CONNECT_TIMEOUT)
+                .retry(reqwest::retry::never())
+                .redirect(reqwest::redirect::Policy::none())
+                .build()
+                .expect("Gmail send HTTP client should initialize"),
             base_url: gmail_url.trim_end_matches('/').to_string(),
             certs_url: jwks_url,
             contacts_url: people_url.trim_end_matches('/').to_string(),
             audience,
-            subscription_topic,
+            subscription_topic: subscription_topic.into(),
         }
     }
 
@@ -151,15 +181,17 @@ impl GmailClient {
         get_thread(self, access_token, thread_id).await
     }
 
-    /// Gets the changes to a user's inbox that have occurred since start_history_id.
-    /// Returns raw HistoryListResponse - callers should map to InboxChanges using convert module.
-    #[tracing::instrument(skip(self, access_token), err)]
-    pub async fn get_history(
+    /// Gets one page of the changes to a user's inbox since `start_history_id`.
+    /// Pass the previous page's `next_page_token` to continue. Returns the raw
+    /// HistoryListResponse; callers map it to inbox changes.
+    #[tracing::instrument(skip(self, access_token, page_token), err)]
+    pub async fn get_history_page(
         &self,
         access_token: &str,
         start_history_id: &str,
+        page_token: Option<&str>,
     ) -> Result<HistoryListResponse, GmailApiHttpError> {
-        history::get_history(self, access_token, start_history_id).await
+        history::get_history_page(self, access_token, start_history_id, page_token).await
     }
 
     /// Fetches the user's raw Gmail profile.
@@ -227,6 +259,30 @@ impl GmailClient {
         .await
     }
 
+    /// Adds and removes labels on many messages in one request (at most
+    /// [`models_email::gmail::gmail_ops::MAX_BATCH_MODIFY_MESSAGES`] ids).
+    #[tracing::instrument(
+        skip(self, access_token, provider_message_ids),
+        fields(message_count = provider_message_ids.len()),
+        err
+    )]
+    pub async fn batch_modify_message_labels(
+        &self,
+        access_token: &str,
+        provider_message_ids: &[String],
+        label_ids_to_add: &[String],
+        label_ids_to_remove: &[String],
+    ) -> Result<(), GmailApiHttpError> {
+        labels::batch_modify_message_labels(
+            self,
+            access_token,
+            provider_message_ids,
+            label_ids_to_add,
+            label_ids_to_remove,
+        )
+        .await
+    }
+
     /// Fetches a specific message from Gmail by its provider ID.
     /// Returns raw Gmail MessageResource - callers should map to service layer structs.
     #[tracing::instrument(skip(self, access_token), err)]
@@ -236,6 +292,17 @@ impl GmailClient {
         message_provider_id: &str,
     ) -> Result<Option<MessageResource>, GmailApiHttpError> {
         get_message(self, access_token, message_provider_id).await
+    }
+
+    /// Fetches a message's original RFC 822 bytes, or `None` when Gmail no
+    /// longer has it.
+    #[tracing::instrument(skip(self, access_token), err)]
+    pub async fn get_raw_message(
+        &self,
+        access_token: &str,
+        message_provider_id: &str,
+    ) -> Result<Option<Vec<u8>>, GmailApiHttpError> {
+        messages::get_raw_message(self, access_token, message_provider_id).await
     }
 
     #[tracing::instrument(skip(self, access_token), err)]
@@ -256,6 +323,16 @@ impl GmailClient {
         thread_id: Option<&str>,
     ) -> Result<models_email::gmail::SentMessageResource, GmailApiHttpError> {
         messages::send_message(self, access_token, mime, thread_id).await
+    }
+
+    /// Looks for a unique sent message by its RFC 5322 Message-ID, including trash.
+    #[tracing::instrument(skip(self, access_token, message_id), err)]
+    pub async fn find_sent_message(
+        &self,
+        access_token: &str,
+        message_id: &str,
+    ) -> Result<Option<models_email::gmail::SentMessageResource>, GmailApiHttpError> {
+        messages::find_sent_message(self, access_token, message_id).await
     }
 
     /// Fetches an attachment from Gmail by its provider ID
@@ -308,31 +385,31 @@ impl GmailClient {
         get_self_connection(self, access_token).await
     }
 
-    /// Fetches all of the user's main contacts, handling pagination.
-    /// Returns raw Gmail PersonResource objects and a sync token for future incremental updates.
-    /// Callers should map PersonResource to service layer Contact.
+    /// Fetches one page of the user's main contacts. Pass the previous page's
+    /// `next_page_token` to continue; the last page carries the sync token for
+    /// future incremental updates. Callers map the people to service contacts.
     /// Failures log at WARN: expired sync tokens and missing contacts scopes are routine.
-    #[tracing::instrument(skip(self, access_token, sync_token), err(level = "warn"))]
-    pub async fn get_contacts(
+    #[tracing::instrument(skip(self, access_token, sync_token, page_token), err(level = "warn"))]
+    pub async fn get_contacts_page(
         &self,
         access_token: &str,
         sync_token: Option<&str>,
-    ) -> Result<(Vec<PersonResource>, String), GmailApiHttpError> {
-        contacts::list_connections(self, access_token, sync_token).await
+        page_token: Option<&str>,
+    ) -> Result<ConnectionsResponse, GmailApiHttpError> {
+        contacts::get_connections_page(self, access_token, sync_token, page_token).await
     }
 
-    /// Fetches all of the user's "Other Contacts", handling pagination.
-    /// These are typically contacts auto-created from interactions.
-    /// Returns raw Gmail PersonResource objects and a sync token.
-    /// Callers should map PersonResource to service layer Contact.
+    /// Fetches one page of the user's "Other Contacts", typically created from
+    /// interactions. Paging and sync tokens work as in [`Self::get_contacts_page`].
     /// Failures log at WARN: expired sync tokens and missing contacts scopes are routine.
-    #[tracing::instrument(skip(self, access_token, sync_token), err(level = "warn"))]
-    pub async fn get_other_contacts(
+    #[tracing::instrument(skip(self, access_token, sync_token, page_token), err(level = "warn"))]
+    pub async fn get_other_contacts_page(
         &self,
         access_token: &str,
         sync_token: Option<&str>,
-    ) -> Result<(Vec<PersonResource>, String), GmailApiHttpError> {
-        contacts::list_other_contacts(self, access_token, sync_token).await
+        page_token: Option<&str>,
+    ) -> Result<OtherContactsResponse, GmailApiHttpError> {
+        contacts::get_other_contacts_page(self, access_token, sync_token, page_token).await
     }
 
     /// Creates a new Gmail filter.

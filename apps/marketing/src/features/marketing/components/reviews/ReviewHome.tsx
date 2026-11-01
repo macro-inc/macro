@@ -97,7 +97,7 @@ const row = {
   email: {
     id: 'email-dana',
     kind: 'email',
-    label: 'Next steps for our team',
+    label: 'Homepage feedback',
     time: '9:41 AM',
     unread: true,
     open: { view: 'email', id: 'dana' },
@@ -120,7 +120,7 @@ const row = {
   comment: {
     id: 'comment-plan',
     kind: 'comment',
-    label: 'Valentina commented on Q3 launch plan',
+    label: 'Valentina commented on Website launch plan',
     time: '8:52 AM',
     open: { view: 'documents', id: 'plan' },
   },
@@ -269,6 +269,19 @@ export function createHomeInbox(options: {
     toast,
     dismissToast: () => setToast(undefined),
     rowsOf,
+    reset: () =>
+      batch(() => {
+        setRead([]);
+        setDone([]);
+        setPending(options.pending ?? []);
+        setToast(undefined);
+        home();
+        const initial = all.find((item) => item.id === options.initial);
+        if (initial) {
+          open(initial);
+          setPane('list');
+        }
+      }),
     reveal: (id: string) => {
       if (pending().includes(id))
         setPending((ids) => ids.filter((x) => x !== id));
@@ -313,7 +326,7 @@ function RowIcon(props: { row: HomeRow }) {
   );
 }
 
-/** "Julia in #launch", "Valentina commented on Q3 launch plan". */
+/** "Julia in #launch", "Valentina commented on Website launch plan". */
 function ActorTitle(props: { label: string; joiner: string }) {
   const parts = () => props.label.split(props.joiner);
   return (

@@ -1,7 +1,9 @@
 //! Toolset inbound adapter for Documents.
 
-mod comment_on_document;
+mod canvas;
+mod comment_on_text;
 mod create_document;
+mod create_skill;
 mod design;
 mod edit_document;
 mod illustrator;
@@ -10,7 +12,6 @@ mod presentation;
 mod read_content;
 mod read_metadata;
 mod rename_document;
-mod resolve_document_comment;
 mod spreadsheet;
 mod upload_file;
 mod word_document;
@@ -31,9 +32,12 @@ use crate::{
     domain::ports::editing::{EditingWorkerService, EditorName},
     domain::ports::mentions::NoOpDocumentMentionTracker,
     domain::presentation::{NoPresentationFiles, PresentationFiles, PresentationService},
+    domain::word_document::WordDocumentFiles,
     inbound::toolset::{
-        comment_on_document::CommentOnDocument,
+        canvas::{ApplyCanvasEdits, EditCanvas, ReadCanvas, RenderCanvas},
+        comment_on_text::CommentOnText,
         create_document::CreateDocument,
+        create_skill::CreateSkill,
         design::ReadDesign,
         edit_document::EditDocument,
         illustrator::ReadIllustratorDocument,
@@ -42,7 +46,6 @@ use crate::{
         read_content::ReadContent,
         read_metadata::ReadMetadata,
         rename_document::RenameDocument,
-        resolve_document_comment::ResolveDocumentComment,
         spreadsheet::{CalculateSpreadsheet, EditSpreadsheet, ReadSpreadsheet},
         upload_file::UploadFile,
         word_document::{EditWordDocument, ReadWordDocument},
@@ -107,7 +110,11 @@ pub struct DocumentToolContext<
     pub spreadsheet: Arc<crate::domain::spreadsheet::SpreadsheetService<DSvc, EDSvc>>,
 
     /// Reading and editing uploaded Word documents through their live copy.
-    pub word_documents: Arc<crate::domain::word_document::WordDocumentService<DSvc, EDSvc>>,
+    /// Hosts without a file store keep the default, which cannot seed a
+    /// document nobody has opened yet; wire one with
+    /// [`Self::with_word_document_files`].
+    pub word_documents:
+        Arc<crate::domain::word_document::WordDocumentService<DSvc, EDSvc, SyncServiceClient>>,
 
     /// Reading and editing PowerPoint presentations. Hosts without a file
     /// store keep the default, whose calls fail with a clear message; wire
@@ -223,6 +230,8 @@ impl<
         let word_documents = Arc::new(crate::domain::word_document::WordDocumentService::new(
             service.clone(),
             editing.clone(),
+            sync_service_client.clone(),
+            Arc::new(crate::domain::word_document::NoWordDocumentFiles),
             document_permission_jwt_secret.clone(),
         ));
 
@@ -270,6 +279,19 @@ impl<
     /// Store presentations the presentation tools read and edit through `files`.
     pub fn with_presentation_files(mut self, files: Arc<dyn PresentationFiles>) -> Self {
         self.presentations = Arc::new(PresentationService::new(files));
+        self
+    }
+
+    /// Read uploaded Word files through `files`, so the Word tools can seed a
+    /// document nobody has opened yet.
+    pub fn with_word_document_files(mut self, files: Arc<dyn WordDocumentFiles>) -> Self {
+        self.word_documents = Arc::new(crate::domain::word_document::WordDocumentService::new(
+            self.service.clone(),
+            self.editing.clone(),
+            self.sync_service_client.clone(),
+            files,
+            self.document_permission_jwt_secret.clone(),
+        ));
         self
     }
 
@@ -361,11 +383,15 @@ where
         .add_tool::<ReadMetadata, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ReadContent, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<CreateDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<CreateSkill, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<UploadFile, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<RenameDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<EditDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
-        .add_tool::<CommentOnDocument, DocumentToolContext<DSvc, ESvc, EDSvc>>()
-        .add_tool::<ResolveDocumentComment, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ReadCanvas, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<RenderCanvas, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<ApplyCanvasEdits, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<EditCanvas, DocumentToolContext<DSvc, ESvc, EDSvc>>()
+        .add_tool::<CommentOnText, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<ReadSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<CalculateSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()
         .add_tool::<EditSpreadsheet, DocumentToolContext<DSvc, ESvc, EDSvc>>()

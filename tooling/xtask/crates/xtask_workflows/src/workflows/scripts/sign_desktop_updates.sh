@@ -8,7 +8,8 @@ curl --fail --silent --show-error --retry 3 \
   --header "Authorization: Bearer $DOPPLER_TOKEN" \
   'https://api.doppler.com/v3/configs/config/secrets/download?project=macos-release&config=prd&format=json&secrets=TAURI_SIGNING_PRIVATE_KEY,TAURI_SIGNING_PRIVATE_KEY_PASSWORD' \
   > "$credentials_dir/secrets.json"
-jq -er '.TAURI_SIGNING_PRIVATE_KEY | strings | select(length > 0)' \
+# The Tauri signer rejects the newline that jq normally appends to raw output.
+jq -jer '.TAURI_SIGNING_PRIVATE_KEY | strings | select(length > 0)' \
   "$credentials_dir/secrets.json" > "$credentials_dir/updater.key"
 export TAURI_SIGNING_PRIVATE_KEY_PATH="$credentials_dir/updater.key"
 TAURI_SIGNING_PRIVATE_KEY_PASSWORD=$(jq -r '.TAURI_SIGNING_PRIVATE_KEY_PASSWORD // ""' "$credentials_dir/secrets.json")

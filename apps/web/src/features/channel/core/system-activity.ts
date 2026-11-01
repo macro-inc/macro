@@ -7,7 +7,8 @@ export type SystemActivity = {
   action:
     | { kind: 'renamed'; name?: string }
     | { kind: 'picture_changed' }
-    | { kind: 'participant_added'; participant: string }
+    /** Several when consecutive additions by one actor share a row. */
+    | { kind: 'participant_added'; participants: string[] }
     | { kind: 'participant_removed'; participant: string }
     | { kind: 'call_ended'; durationMs: number }
     | { kind: 'unknown' };
@@ -23,6 +24,16 @@ export function callDuration(durationMs: number): string {
   return `${hours} ${hours === 1 ? 'hour' : 'hours'}${remainder ? ` ${remainder} ${remainder === 1 ? 'minute' : 'minutes'}` : ''}`;
 }
 
+/** Whether the actor added themselves: joined rather than added someone. */
+export function isSelfJoin(event: SystemActivity): boolean {
+  return (
+    event.action.kind === 'participant_added' &&
+    event.action.participants.length === 1 &&
+    event.action.participants[0] === event.actorId
+  );
+}
+
+/** `participantName` names every participant, comma separated. */
 export function systemActivityDescription(
   event: SystemActivity,
   participantName: string
@@ -36,8 +47,8 @@ export function systemActivityDescription(
     .with({ kind: 'picture_changed' }, () => ({
       verb: 'updated the channel profile picture',
     }))
-    .with({ kind: 'participant_added' }, ({ participant }) =>
-      participant === event.actorId
+    .with({ kind: 'participant_added' }, () =>
+      isSelfJoin(event)
         ? { verb: 'joined the channel' }
         : { verb: 'added', subject: participantName }
     )

@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH candidate AS (\n                SELECT o.id FROM email_projection_outbox o JOIN email_links l ON l.id = o.link_id\n                WHERE l.is_sync_active AND o.available_at <= now() AND (o.lease_until IS NULL OR o.lease_until < now())\n                ORDER BY o.available_at,o.id LIMIT 1 FOR UPDATE OF o SKIP LOCKED\n            )\n            UPDATE email_projection_outbox o SET lease_id = $1,lease_until = now() + interval '3 minutes',attempts = attempts + 1\n            FROM candidate c,email_links l WHERE o.id = c.id AND l.id = o.link_id\n            RETURNING o.id,o.link_id,o.generation,o.payload,l.sync_generation,l.grant_generation\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 3,
+        "name": "payload",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "4f501e81e5d26c98eed8aaec428c90f364eb75ecedc23dae6e55f5283714e78f"
+}

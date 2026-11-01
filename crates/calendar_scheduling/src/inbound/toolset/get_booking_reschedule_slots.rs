@@ -13,7 +13,7 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schemars(
     title = "GetBookingRescheduleSlots",
-    description = "Find available replacement times for a booking discovered through ListBookings. The date is in the booking schedule time zone. Only the personal owner or team administrators may reschedule it. Returns absolute start/end times for ChangeBooking reschedule; availability is checked again when moving the meeting."
+    description = "Find available replacement times for a booking discovered through ListBookings. The date is in the booking schedule time zone. Only the personal owner, a host of the meeting or team administrators may reschedule it. Returns absolute start/end times for ChangeBooking reschedule; availability is checked again when moving the meeting."
 )]
 pub struct GetBookingRescheduleSlots {
     /// Existing booking ID from ListBookings.

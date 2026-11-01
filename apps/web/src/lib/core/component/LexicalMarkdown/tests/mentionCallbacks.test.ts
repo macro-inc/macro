@@ -397,7 +397,11 @@ describe('mentionsPlugin callbacks', () => {
         itemId: 'session-1',
       })
     );
-    expect(untrackMention).toHaveBeenCalledWith('doc-1', 'uuid-session');
+    expect(untrackMention).toHaveBeenCalledWith(
+      'doc-1',
+      'uuid-session',
+      'agent_session'
+    );
 
     cleanup();
   });

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
 import type { Accessor } from 'solid-js';
 import { createMemo, onMount } from 'solid-js';
@@ -42,8 +43,10 @@ function toRoutine(schedule: ScheduledAction): RoutineSnapshot {
       schedule.kind,
       schedule.trigger,
       schedule.task,
+      schedule.run_visibility,
     ]),
     draft: draftFromSchedule(schedule),
+    templateId: schedule.template_id ?? undefined,
   };
 }
 
@@ -54,6 +57,7 @@ type DetailCallbacks = {
 
 export function createRoutineDetailSource(
   id: Accessor<string>,
+  userId: Accessor<string | undefined>,
   callbacks: DetailCallbacks
 ): RoutineDetailSource {
   const list = useSchedulesQuery(() => true);
@@ -76,15 +80,21 @@ export function createRoutineDetailSource(
   const activate = useSetScheduleEnabledMutation({
     onError: (error) => callbacks.onError('Failed to update routine', error),
   });
-  const duplicate = useCreateScheduleMutation({
-    onSuccess: (created) => {
-      if (created.id) callbacks.onDuplicated(created.id);
+  const duplicate = useCreateScheduleMutation(
+    {
+      onSuccess: (created) => {
+        if (created.id) callbacks.onDuplicated(created.id);
+      },
+      onError: (error) =>
+        callbacks.onError('Failed to duplicate routine', error),
     },
-    onError: (error) => callbacks.onError('Failed to duplicate routine', error),
-  });
-  const history = useScheduleHistoryQuery(id, () => Boolean(raw()));
+    'duplicate'
+  );
+  const history = useScheduleHistoryQuery(id, () =>
+    Boolean(raw() && raw()?.owner === userId())
+  );
   onMount(() => {
-    void invalidateSchedules();
+    fireAndForget(invalidateSchedules(), 'routines');
   });
   return {
     routine,

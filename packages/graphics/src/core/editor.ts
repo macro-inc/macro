@@ -1,3 +1,4 @@
+import { enclosing } from './affine';
 import type { GraphicsBackend } from './backend';
 import {
   fitImageCamera,
@@ -36,6 +37,7 @@ import {
   freezeDocument,
   groupNodes,
   hitTest,
+  nodeBoundsPoints,
   reparent,
   ungroupNode,
   worldBounds,
@@ -49,12 +51,15 @@ export type EditingSession = SelectionState &
     canUndo: boolean;
     canRedo: boolean;
     snapUnit?: number;
+    objectSnapping: boolean;
   }>;
 
 export type GraphicsEditorOptions = Readonly<{
   measureText?: TextMeasurer;
   /** Any positive finite scene-unit interval; omitted disables snapping. */
   snapUnit?: number;
+  /** Align nearby edges and centers during selection transforms. Off by default. */
+  objectSnapping?: boolean;
 }>;
 export type GraphicsEditor = ReturnType<typeof createGraphicsEditor>;
 
@@ -81,6 +86,7 @@ function createEditor(
 ) {
   validateSnapUnit(options.snapUnit);
   let snapUnit = options.snapUnit;
+  let objectSnapping = options.objectSnapping ?? false;
   let document: GraphicsDocument = Array.isArray(seed)
     ? createScene(seed)
     : freezeDocument(seed as GraphicsDocument);
@@ -96,6 +102,7 @@ function createEditor(
     Object.freeze({
       ...selection.getState(),
       snapUnit,
+      objectSnapping,
       canUndo: backend ? backend.getHistory().canUndo : undoStack.length > 0,
       canRedo: backend ? backend.getHistory().canRedo : redoStack.length > 0,
     });
@@ -106,6 +113,8 @@ function createEditor(
   const selection = createSelection({
     measureText: options.measureText,
     getSnapUnit: () => snapUnit,
+    getObjectSnapping: () => objectSnapping,
+    getScale: () => camera.scale,
     getDocument: () => document,
     commitDocument,
     cancelDrawing: cancelShape,
@@ -227,6 +236,34 @@ function createEditor(
     for (const listener of listeners) listener(camera);
   }
 
+  function fitBounds(
+    bounds: Bounds,
+    viewport: { width: number; height: number }
+  ) {
+    if (
+      (bounds.width <= 0 && bounds.height <= 0) ||
+      ![viewport.width, viewport.height].every(
+        (size) => Number.isFinite(size) && size > 0
+      )
+    )
+      return;
+    // Screen-space margins; leave usable room even in a small embedded view.
+    const padding = Math.min(100, viewport.width / 4, viewport.height / 4);
+    const scale = Math.max(
+      MIN_SCALE,
+      Math.min(
+        MAX_SCALE,
+        (viewport.width - padding * 2) / bounds.width,
+        (viewport.height - padding * 2) / bounds.height
+      )
+    );
+    publish({
+      scale,
+      x: (viewport.width - bounds.width * scale) / 2 - bounds.x * scale,
+      y: (viewport.height - bounds.height * scale) / 2 - bounds.y * scale,
+    });
+  }
+
   function beginShape(kind: DrawingKind, point: DrawingSample) {
     if (disposed || !Number.isFinite(point.x) || !Number.isFinite(point.y))
       return false;
@@ -302,6 +339,11 @@ function createEditor(
     },
     getSession,
     getSnapUnit: () => snapUnit,
+    setObjectSnapping(enabled: boolean) {
+      if (disposed || objectSnapping === enabled) return;
+      objectSnapping = enabled;
+      cancelTransform();
+    },
     setSnapUnit(unit: number | undefined) {
       validateSnapUnit(unit);
       if (disposed || unit === snapUnit) return;
@@ -394,29 +436,13 @@ function createEditor(
     },
     fitScene(viewport: { width: number; height: number }) {
       const bounds = worldBounds(document, document.rootId);
-      if (
-        bounds.width <= 0 ||
-        bounds.height <= 0 ||
-        ![viewport.width, viewport.height].every(
-          (size) => Number.isFinite(size) && size > 0
-        )
-      )
-        return;
-      // Screen-space margins; leave usable room even in a small embedded view.
-      const padding = Math.min(100, viewport.width / 4, viewport.height / 4);
-      const scale = Math.max(
-        MIN_SCALE,
-        Math.min(
-          MAX_SCALE,
-          (viewport.width - padding * 2) / bounds.width,
-          (viewport.height - padding * 2) / bounds.height
-        )
-      );
-      publish({
-        scale,
-        x: (viewport.width - bounds.width * scale) / 2 - bounds.x * scale,
-        y: (viewport.height - bounds.height * scale) / 2 - bounds.y * scale,
-      });
+      fitBounds(bounds, viewport);
+    },
+    fitSelection(viewport: { width: number; height: number }) {
+      const points = selection
+        .getState()
+        .selectedIds.flatMap((id) => nodeBoundsPoints(document, id));
+      if (points.length) fitBounds(enclosing(points), viewport);
     },
     fitImage(viewport: { width: number; height: number }) {
       if (document.surface) publish(fitImageCamera(document.surface, viewport));

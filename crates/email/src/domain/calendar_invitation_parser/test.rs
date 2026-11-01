@@ -76,6 +76,24 @@ fn cancellation_preserves_original_occurrence_and_partial_metadata() {
 }
 
 #[test]
+fn a_published_series_keeps_its_recurrence_lines_and_a_single_event_has_none() {
+    let series = parse(
+        "DTSTART;TZID=America/New_York:20261026T090000\r\nRRULE:FREQ=WEEKLY;BYDAY=MO\r\nEXDATE;TZID=America/New_York:20261102T090000",
+        "PUBLISH",
+    );
+    assert_eq!(series[0].method, InvitationMethod::Publish);
+    assert_eq!(
+        series[0].recurrence,
+        Some(vec![
+            "RRULE:FREQ=WEEKLY;BYDAY=MO".to_string(),
+            "EXDATE;TZID=America/New_York:20261102T090000".to_string(),
+        ])
+    );
+    let single = parse("DTSTART:20261026T130000Z", "PUBLISH");
+    assert_eq!(single[0].recurrence, Some(Vec::new()));
+}
+
+#[test]
 fn duplicates_collapse_but_overrides_remain() {
     let bytes = b"BEGIN:VCALENDAR\nMETHOD:REQUEST\nBEGIN:VEVENT\nUID:series\nDTSTART:20260924T170000Z\nEND:VEVENT\nBEGIN:VEVENT\nUID:series\nRECURRENCE-ID:20261001T170000Z\nDTSTART:20261001T180000Z\nEND:VEVENT\nEND:VCALENDAR\n";
     let parsed = parse_invitation_parts(&[bytes, bytes]);

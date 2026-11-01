@@ -1,6 +1,6 @@
 //! The work feed candidate query: one keyset-paginated page merging the
-//! viewer's attention (live notifications, at least one not done) with their
-//! own work (latest activity that counts as work), newest first.
+//! viewer's attention (the newest pending, i.e. unseen or seen, notification)
+//! with their own work (latest activity that counts as work), newest first.
 //!
 //! An item's place in the feed is `sort_at = max(attention_at, touched_at)`.
 //! The query runs two streams, each ordered by its own timestamp: the
@@ -15,6 +15,13 @@
 //! and its per-type gates. One condition is specific to the work feed: an
 //! email thread's attention lasts only while the thread is in the inbox
 //! (mail's own notion of done).
+//!
+//! Done notifications never place an item, so the query reads only the
+//! viewer's pending ones, once, and both streams look attention up there.
+//! It also reads them only back to a floor: a full page of own work holds
+//! `limit` items placed at or after its oldest touch, so nothing placed
+//! earlier can reach the page. Reading every notification instead made a
+//! viewer with a long history pay for all of it on each page.
 //!
 //! Like the notified-at feed, channel, channel-thread, email and
 //! foreign-entity filter trees fold in their own domains, so the service
@@ -74,50 +81,6 @@ fn email_inbox_gate() -> String {
     )
 }
 
-/// The viewer's live notifications keyed to the candidate at `alias`, with
-/// `predicate` applied. Own-work candidates are never thread rows, so a
-/// channel candidate keeps only its channel-level notifications.
-fn keyed_notifications(alias: &str, predicate: &str) -> String {
-    format!(
-        r#"EXISTS (
-            SELECT 1
-            FROM notification n
-            JOIN user_notification un ON un.notification_id = n.id
-            WHERE un.user_id = $1
-            AND un.deleted_at IS NULL
-            AND n.event_item_type = {alias}.entity_type
-            AND n.event_item_id = {alias}.entity_id
-            AND ({alias}.entity_type <> 'channel'
-                OR n.secondary_event_item_type IS DISTINCT FROM 'channel_message')
-            AND {predicate}
-        )"#
-    )
-}
-
-/// The attention timestamp of an own-work row, computed exactly as the
-/// attention stream would: the newest live notification, when one is not
-/// done and (for email) the thread is in the inbox.
-fn own_attention_at() -> String {
-    r#"(
-        SELECT max(un.created_at) AT TIME ZONE 'UTC'
-        FROM notification n
-        JOIN user_notification un ON un.notification_id = n.id
-        WHERE un.user_id = $1
-        AND un.deleted_at IS NULL
-        AND n.event_item_type = o.entity_type
-        AND n.event_item_id = o.entity_id
-        AND (o.entity_type <> 'channel'
-            OR n.secondary_event_item_type IS DISTINCT FROM 'channel_message')
-        AND (o.entity_type <> 'email_thread' OR EXISTS (
-            SELECT 1 FROM email_threads inbox
-            WHERE inbox.id::text = o.entity_id
-            AND inbox.inbox_visible
-        ))
-        HAVING bool_or(un.state <> 'done')
-    )"#
-    .to_string()
-}
-
 /// Whether the `activity_events` row aliased `alias` is the viewer's own work:
 /// any action but a view, except that an email thread is only worked on by
 /// sending from it. Archiving, starring, labeling and moving a thread record
@@ -139,10 +102,6 @@ fn build_query(req: &WorkFeedCandidateRequest<'_>) -> String {
         own_work_ae = own_work("ae"),
         own_work_newer = own_work("newer"),
         email_inbox_gate = email_inbox_gate(),
-        attention_pending = keyed_notifications("nc", "un.state <> 'done'"),
-        attention_since_touch =
-            keyed_notifications("nc", "un.created_at AT TIME ZONE 'UTC' >= nc.touched_at"),
-        own_attention_at = own_attention_at(),
         document_gate = document_gate(ID_SQL, filter),
         chat_gate = chat_gate(ID_SQL, filter),
         project_gate = project_gate(ID_SQL, filter),
@@ -152,7 +111,7 @@ fn build_query(req: &WorkFeedCandidateRequest<'_>) -> String {
         email_gate = email_gate(ID_SQL, filter),
         calendar_event_gate = calendar_event_gate(filter),
         foreign_entity_gate = foreign_entity_gate(filter),
-        agent_session_gate = agent_session_gate(),
+        agent_session_gate = agent_session_gate(filter),
     )
 }
 

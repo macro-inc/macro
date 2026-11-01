@@ -67,6 +67,7 @@ export const unsubscribeItemParams = zod.object({
     'database',
     'database_row',
     'form',
+    'external_chat',
   ]),
   item_id: zod.string(),
 });
@@ -112,6 +113,7 @@ export const removeUnsubscribeItemParams = zod.object({
     'database',
     'database_row',
     'form',
+    'external_chat',
   ]),
   item_id: zod.string(),
 });
@@ -222,6 +224,7 @@ export const listTypedNotificationsResponse = zod
                 'database',
                 'database_row',
                 'form',
+                'external_chat',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -628,6 +631,70 @@ export const listTypedNotificationsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          accessLevel: zod
+                            .enum(['view', 'comment', 'edit'])
+                            .describe(
+                              'Permission level used by an access request, excluding ownership.'
+                            ),
+                          entityName: zod
+                            .string()
+                            .describe("Shared item's name."),
+                          fileType: zod
+                            .string()
+                            .nullish()
+                            .describe('Document file type for routing.'),
+                          requestId: zod
+                            .uuid()
+                            .describe('Stable request identity.'),
+                          revision: zod
+                            .number()
+                            .describe(
+                              'Revision that generated this notification.'
+                            ),
+                        })
+                        .describe(
+                          'A person requested access to a shared entity.'
+                        ),
+                      tag: zod.enum(['entity_access_requested']),
+                    })
+                    .describe(
+                      'Someone requested more access to a shared entity.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          accessLevel: zod
+                            .enum(['view', 'comment', 'edit'])
+                            .describe(
+                              'Permission level used by an access request, excluding ownership.'
+                            ),
+                          entityName: zod
+                            .string()
+                            .describe("Shared item's name."),
+                          fileType: zod
+                            .string()
+                            .nullish()
+                            .describe('Document file type for routing.'),
+                          requestId: zod
+                            .uuid()
+                            .describe('Stable request identity.'),
+                          revision: zod
+                            .number()
+                            .describe(
+                              'Revision that generated this notification.'
+                            ),
+                        })
+                        .describe(
+                          'A person granted you access to a shared entity.'
+                        ),
+                      tag: zod.enum(['entity_access_granted']),
+                    })
+                    .describe('An owner granted requested access.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           messageId: zod
                             .uuid()
                             .describe('Canonical shared message UUID.'),
@@ -718,6 +785,12 @@ export const listTypedNotificationsResponse = zod
                           invitedBy: zod
                             .string()
                             .describe('The user who sent the invitation'),
+                          isDirectMessage: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether this is a direct message rather than a channel invitation.\nOlder notification payloads retain channel-invitation wording.'
+                            ),
                           messageContent: zod
                             .string()
                             .nullish()
@@ -893,6 +966,16 @@ export const listTypedNotificationsResponse = zod
                           invitedBy: zod
                             .string()
                             .describe('The user who sent the invitation'),
+                          inviteePlan: zod
+                            .enum(['free', 'premium'])
+                            .optional()
+                            .describe('What a team invitee gets by joining.'),
+                          reminder: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether this email reminds the invitee of an invite they have not answered.'
+                            ),
                           role: zod
                             .string()
                             .nullish()
@@ -993,6 +1076,28 @@ export const listTypedNotificationsResponse = zod
                     .describe(
                       'A reminder the user set for themselves came due.'
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          chatName: zod.string().describe("The chat's name."),
+                          messageId: zod
+                            .uuid()
+                            .describe(
+                              'Stable message id; retries use it as their notification id.'
+                            ),
+                          provider: zod
+                            .enum(['whatsapp'])
+                            .describe(
+                              'The messaging service an external chat lives in.'
+                            ),
+                        })
+                        .describe(
+                          'A live message in an independently shared external chat.'
+                        ),
+                      tag: zod.enum(['external_chat_message']),
+                    })
+                    .describe('A live message in a shared external chat.'),
                   zod
                     .object({
                       content: zod
@@ -1992,6 +2097,32 @@ export const listTypedNotificationsResponse = zod
                     .describe(
                       "Someone reacted to one of the user's channel messages."
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          eventId: zod
+                            .uuid()
+                            .describe(
+                              'The shared calendar event entity the request is for.'
+                            ),
+                          requestId: zod
+                            .uuid()
+                            .describe(
+                              "Stable request identity, answered from the event's details."
+                            ),
+                          title: zod
+                            .string()
+                            .describe('Event title when the request was made.'),
+                        })
+                        .describe(
+                          'A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.'
+                        ),
+                      tag: zod.enum(['calendar_event_join_request']),
+                    })
+                    .describe(
+                      'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -2118,6 +2249,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'database',
                 'database_row',
                 'form',
+                'external_chat',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -2524,6 +2656,70 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .object({
                       content: zod
                         .object({
+                          accessLevel: zod
+                            .enum(['view', 'comment', 'edit'])
+                            .describe(
+                              'Permission level used by an access request, excluding ownership.'
+                            ),
+                          entityName: zod
+                            .string()
+                            .describe("Shared item's name."),
+                          fileType: zod
+                            .string()
+                            .nullish()
+                            .describe('Document file type for routing.'),
+                          requestId: zod
+                            .uuid()
+                            .describe('Stable request identity.'),
+                          revision: zod
+                            .number()
+                            .describe(
+                              'Revision that generated this notification.'
+                            ),
+                        })
+                        .describe(
+                          'A person requested access to a shared entity.'
+                        ),
+                      tag: zod.enum(['entity_access_requested']),
+                    })
+                    .describe(
+                      'Someone requested more access to a shared entity.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          accessLevel: zod
+                            .enum(['view', 'comment', 'edit'])
+                            .describe(
+                              'Permission level used by an access request, excluding ownership.'
+                            ),
+                          entityName: zod
+                            .string()
+                            .describe("Shared item's name."),
+                          fileType: zod
+                            .string()
+                            .nullish()
+                            .describe('Document file type for routing.'),
+                          requestId: zod
+                            .uuid()
+                            .describe('Stable request identity.'),
+                          revision: zod
+                            .number()
+                            .describe(
+                              'Revision that generated this notification.'
+                            ),
+                        })
+                        .describe(
+                          'A person granted you access to a shared entity.'
+                        ),
+                      tag: zod.enum(['entity_access_granted']),
+                    })
+                    .describe('An owner granted requested access.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           messageId: zod
                             .uuid()
                             .describe('Canonical shared message UUID.'),
@@ -2614,6 +2810,12 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           invitedBy: zod
                             .string()
                             .describe('The user who sent the invitation'),
+                          isDirectMessage: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether this is a direct message rather than a channel invitation.\nOlder notification payloads retain channel-invitation wording.'
+                            ),
                           messageContent: zod
                             .string()
                             .nullish()
@@ -2789,6 +2991,16 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                           invitedBy: zod
                             .string()
                             .describe('The user who sent the invitation'),
+                          inviteePlan: zod
+                            .enum(['free', 'premium'])
+                            .optional()
+                            .describe('What a team invitee gets by joining.'),
+                          reminder: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether this email reminds the invitee of an invite they have not answered.'
+                            ),
                           role: zod
                             .string()
                             .nullish()
@@ -2889,6 +3101,28 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .describe(
                       'A reminder the user set for themselves came due.'
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          chatName: zod.string().describe("The chat's name."),
+                          messageId: zod
+                            .uuid()
+                            .describe(
+                              'Stable message id; retries use it as their notification id.'
+                            ),
+                          provider: zod
+                            .enum(['whatsapp'])
+                            .describe(
+                              'The messaging service an external chat lives in.'
+                            ),
+                        })
+                        .describe(
+                          'A live message in an independently shared external chat.'
+                        ),
+                      tag: zod.enum(['external_chat_message']),
+                    })
+                    .describe('A live message in a shared external chat.'),
                   zod
                     .object({
                       content: zod
@@ -3888,6 +4122,32 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .describe(
                       "Someone reacted to one of the user's channel messages."
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          eventId: zod
+                            .uuid()
+                            .describe(
+                              'The shared calendar event entity the request is for.'
+                            ),
+                          requestId: zod
+                            .uuid()
+                            .describe(
+                              "Stable request identity, answered from the event's details."
+                            ),
+                          title: zod
+                            .string()
+                            .describe('Event title when the request was made.'),
+                        })
+                        .describe(
+                          'A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.'
+                        ),
+                      tag: zod.enum(['calendar_event_join_request']),
+                    })
+                    .describe(
+                      'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -4008,6 +4268,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'database',
                 'database_row',
                 'form',
+                'external_chat',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -4414,6 +4675,70 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .object({
                       content: zod
                         .object({
+                          accessLevel: zod
+                            .enum(['view', 'comment', 'edit'])
+                            .describe(
+                              'Permission level used by an access request, excluding ownership.'
+                            ),
+                          entityName: zod
+                            .string()
+                            .describe("Shared item's name."),
+                          fileType: zod
+                            .string()
+                            .nullish()
+                            .describe('Document file type for routing.'),
+                          requestId: zod
+                            .uuid()
+                            .describe('Stable request identity.'),
+                          revision: zod
+                            .number()
+                            .describe(
+                              'Revision that generated this notification.'
+                            ),
+                        })
+                        .describe(
+                          'A person requested access to a shared entity.'
+                        ),
+                      tag: zod.enum(['entity_access_requested']),
+                    })
+                    .describe(
+                      'Someone requested more access to a shared entity.'
+                    ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          accessLevel: zod
+                            .enum(['view', 'comment', 'edit'])
+                            .describe(
+                              'Permission level used by an access request, excluding ownership.'
+                            ),
+                          entityName: zod
+                            .string()
+                            .describe("Shared item's name."),
+                          fileType: zod
+                            .string()
+                            .nullish()
+                            .describe('Document file type for routing.'),
+                          requestId: zod
+                            .uuid()
+                            .describe('Stable request identity.'),
+                          revision: zod
+                            .number()
+                            .describe(
+                              'Revision that generated this notification.'
+                            ),
+                        })
+                        .describe(
+                          'A person granted you access to a shared entity.'
+                        ),
+                      tag: zod.enum(['entity_access_granted']),
+                    })
+                    .describe('An owner granted requested access.'),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
                           messageId: zod
                             .uuid()
                             .describe('Canonical shared message UUID.'),
@@ -4504,6 +4829,12 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           invitedBy: zod
                             .string()
                             .describe('The user who sent the invitation'),
+                          isDirectMessage: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether this is a direct message rather than a channel invitation.\nOlder notification payloads retain channel-invitation wording.'
+                            ),
                           messageContent: zod
                             .string()
                             .nullish()
@@ -4679,6 +5010,16 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                           invitedBy: zod
                             .string()
                             .describe('The user who sent the invitation'),
+                          inviteePlan: zod
+                            .enum(['free', 'premium'])
+                            .optional()
+                            .describe('What a team invitee gets by joining.'),
+                          reminder: zod
+                            .boolean()
+                            .optional()
+                            .describe(
+                              'Whether this email reminds the invitee of an invite they have not answered.'
+                            ),
                           role: zod
                             .string()
                             .nullish()
@@ -4779,6 +5120,28 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .describe(
                       'A reminder the user set for themselves came due.'
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          chatName: zod.string().describe("The chat's name."),
+                          messageId: zod
+                            .uuid()
+                            .describe(
+                              'Stable message id; retries use it as their notification id.'
+                            ),
+                          provider: zod
+                            .enum(['whatsapp'])
+                            .describe(
+                              'The messaging service an external chat lives in.'
+                            ),
+                        })
+                        .describe(
+                          'A live message in an independently shared external chat.'
+                        ),
+                      tag: zod.enum(['external_chat_message']),
+                    })
+                    .describe('A live message in a shared external chat.'),
                   zod
                     .object({
                       content: zod
@@ -5778,6 +6141,32 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .describe(
                       "Someone reacted to one of the user's channel messages."
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          eventId: zod
+                            .uuid()
+                            .describe(
+                              'The shared calendar event entity the request is for.'
+                            ),
+                          requestId: zod
+                            .uuid()
+                            .describe(
+                              "Stable request identity, answered from the event's details."
+                            ),
+                          title: zod
+                            .string()
+                            .describe('Event title when the request was made.'),
+                        })
+                        .describe(
+                          'A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.'
+                        ),
+                      tag: zod.enum(['calendar_event_join_request']),
+                    })
+                    .describe(
+                      'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
+                    ),
                 ])
                 .describe(
                   'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'
@@ -5903,6 +6292,7 @@ export const getTypedNotificationByIdResponse = zod
         'database',
         'database_row',
         'form',
+        'external_chat',
       ])
       .describe('The type of an entity in Macro'),
   })
@@ -6277,6 +6667,52 @@ export const getTypedNotificationByIdResponse = zod
             .object({
               content: zod
                 .object({
+                  accessLevel: zod
+                    .enum(['view', 'comment', 'edit'])
+                    .describe(
+                      'Permission level used by an access request, excluding ownership.'
+                    ),
+                  entityName: zod.string().describe("Shared item's name."),
+                  fileType: zod
+                    .string()
+                    .nullish()
+                    .describe('Document file type for routing.'),
+                  requestId: zod.uuid().describe('Stable request identity.'),
+                  revision: zod
+                    .number()
+                    .describe('Revision that generated this notification.'),
+                })
+                .describe('A person requested access to a shared entity.'),
+              tag: zod.enum(['entity_access_requested']),
+            })
+            .describe('Someone requested more access to a shared entity.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  accessLevel: zod
+                    .enum(['view', 'comment', 'edit'])
+                    .describe(
+                      'Permission level used by an access request, excluding ownership.'
+                    ),
+                  entityName: zod.string().describe("Shared item's name."),
+                  fileType: zod
+                    .string()
+                    .nullish()
+                    .describe('Document file type for routing.'),
+                  requestId: zod.uuid().describe('Stable request identity.'),
+                  revision: zod
+                    .number()
+                    .describe('Revision that generated this notification.'),
+                })
+                .describe('A person granted you access to a shared entity.'),
+              tag: zod.enum(['entity_access_granted']),
+            })
+            .describe('An owner granted requested access.'),
+          zod
+            .object({
+              content: zod
+                .object({
                   messageId: zod
                     .uuid()
                     .describe('Canonical shared message UUID.'),
@@ -6361,6 +6797,12 @@ export const getTypedNotificationByIdResponse = zod
                   invitedBy: zod
                     .string()
                     .describe('The user who sent the invitation'),
+                  isDirectMessage: zod
+                    .boolean()
+                    .optional()
+                    .describe(
+                      'Whether this is a direct message rather than a channel invitation.\nOlder notification payloads retain channel-invitation wording.'
+                    ),
                   messageContent: zod
                     .string()
                     .nullish()
@@ -6526,6 +6968,16 @@ export const getTypedNotificationByIdResponse = zod
                   invitedBy: zod
                     .string()
                     .describe('The user who sent the invitation'),
+                  inviteePlan: zod
+                    .enum(['free', 'premium'])
+                    .optional()
+                    .describe('What a team invitee gets by joining.'),
+                  reminder: zod
+                    .boolean()
+                    .optional()
+                    .describe(
+                      'Whether this email reminds the invitee of an invite they have not answered.'
+                    ),
                   role: zod
                     .string()
                     .nullish()
@@ -6614,6 +7066,28 @@ export const getTypedNotificationByIdResponse = zod
               tag: zod.enum(['reminder']),
             })
             .describe('A reminder the user set for themselves came due.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  chatName: zod.string().describe("The chat's name."),
+                  messageId: zod
+                    .uuid()
+                    .describe(
+                      'Stable message id; retries use it as their notification id.'
+                    ),
+                  provider: zod
+                    .enum(['whatsapp'])
+                    .describe(
+                      'The messaging service an external chat lives in.'
+                    ),
+                })
+                .describe(
+                  'A live message in an independently shared external chat.'
+                ),
+              tag: zod.enum(['external_chat_message']),
+            })
+            .describe('A live message in a shared external chat.'),
           zod
             .object({
               content: zod
@@ -7536,6 +8010,32 @@ export const getTypedNotificationByIdResponse = zod
               tag: zod.enum(['channel_message_reaction']),
             })
             .describe("Someone reacted to one of the user's channel messages."),
+          zod
+            .object({
+              content: zod
+                .object({
+                  eventId: zod
+                    .uuid()
+                    .describe(
+                      'The shared calendar event entity the request is for.'
+                    ),
+                  requestId: zod
+                    .uuid()
+                    .describe(
+                      "Stable request identity, answered from the event's details."
+                    ),
+                  title: zod
+                    .string()
+                    .describe('Event title when the request was made.'),
+                })
+                .describe(
+                  'A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.'
+                ),
+              tag: zod.enum(['calendar_event_join_request']),
+            })
+            .describe(
+              'A channel member asked to be added as a guest of an event the\nuser shared with the channel.'
+            ),
         ])
         .describe(
           'Mirrors [`model_notifications::NotificationEvent`] but uses `tag` \/ `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait.'

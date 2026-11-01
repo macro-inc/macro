@@ -58,6 +58,10 @@ pub trait UserDeletionGateway: Send + Sync {
 
 /// Cleanup is retryable: failures preserve the profile/account and never fall
 /// through to a cascading delete. Callers must await this and report failure.
+///
+/// Each completed step is logged so a failed or retried deletion can be traced
+/// to the exact step it reached.
+#[tracing::instrument(skip(gateway, users), fields(profile_count = users.len()), err)]
 pub async fn delete_user_data(
     gateway: &impl UserDeletionGateway,
     account: &Uuid,
@@ -65,12 +69,21 @@ pub async fn delete_user_data(
 ) -> Result<(), Report> {
     for user in users {
         gateway.delete_scheduled_actions(user).await?;
+        tracing::info!(%user, "deleted scheduled actions");
         gateway.delete_agent_sessions(user).await?;
+        tracing::info!(%user, "deleted agent sessions");
         gateway.leave_teams(user).await?;
+        tracing::info!(%user, "left and cleaned up teams");
         gateway.delete_items(user).await?;
+        tracing::info!(%user, "deleted documents, chats, and projects");
         gateway.delete_onboarding(user).await?;
+        tracing::info!(%user, "deleted onboarding state");
         gateway.delete_profile(user, account).await?;
+        tracing::info!(%user, "deleted user profile");
     }
     gateway.delete_billing_customer(account).await?;
-    gateway.delete_account(account).await
+    tracing::info!("deleted billing customer");
+    gateway.delete_account(account).await?;
+    tracing::info!("deleted account");
+    Ok(())
 }

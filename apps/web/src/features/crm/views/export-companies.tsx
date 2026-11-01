@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type CrmCompanyEntity, getCompanyOwnerId } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { Button, Dialog, Panel } from '@ui';
@@ -290,14 +291,16 @@ export function CrmExport(props: {
                 Cancel
               </Button>
               <Button
-                variant="strong"
+                variant="secondary"
                 disabled={
                   pending() ||
                   !selectedColumns().length ||
                   metadataLoading() ||
                   metadataError()
                 }
-                onClick={() => void (rows() ? download() : prepare())}
+                onClick={() =>
+                  fireAndForget(rows() ? download() : prepare(), 'crm')
+                }
               >
                 {pending()
                   ? 'Preparing…'

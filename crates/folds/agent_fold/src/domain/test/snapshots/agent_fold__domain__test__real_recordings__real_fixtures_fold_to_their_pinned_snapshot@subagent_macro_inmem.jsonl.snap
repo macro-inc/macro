@@ -1,7 +1,7 @@
 ---
-source: crates/agent_fold/src/domain/test/real_recordings.rs
+source: crates/folds/agent_fold/src/domain/test/real_recordings.rs
 expression: messages
-input_file: crates/agent_fold/fixtures/real/subagent_macro_inmem.jsonl
+input_file: crates/folds/agent_fold/fixtures/real/subagent_macro_inmem.jsonl
 ---
 [
     FoldedMessage {
@@ -23,6 +23,7 @@ input_file: crates/agent_fold/fixtures/real/subagent_macro_inmem.jsonl
         },
         stop: None,
         pending: false,
+        posted_at: None,
     },
     FoldedMessage {
         id: TurnId(
@@ -80,5 +81,6 @@ input_file: crates/agent_fold/fixtures/real/subagent_macro_inmem.jsonl
             EndTurn,
         ),
         pending: false,
+        posted_at: None,
     },
 ]

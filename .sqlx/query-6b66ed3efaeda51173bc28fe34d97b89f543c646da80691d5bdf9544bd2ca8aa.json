@@ -1,0 +1,40 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT g.id AS \"id!\", seen.community_jid AS \"community_jid?\",\n                seen.community_announcements AS \"community_announcements?\", parent.name AS \"community_name?\"\n            FROM external_chat g\n            LEFT JOIN LATERAL (SELECT r.metadata->>'communityJid' AS community_jid,COALESCE((r.metadata->>'communityAnnouncements')::boolean,false) AS community_announcements\n              FROM whatsapp_roster r JOIN whatsapp_chat_membership m ON m.account_id=r.account_id\n              WHERE m.chat_id=g.id AND m.consent_ended_at IS NULL AND r.group_jid=g.remote_id\n              ORDER BY r.observed_at DESC LIMIT 1) seen ON true\n            LEFT JOIN LATERAL (SELECT r.metadata->>'name' AS name\n              FROM whatsapp_roster r JOIN whatsapp_chat_membership m ON m.account_id=r.account_id\n              WHERE m.chat_id=g.id AND m.consent_ended_at IS NULL AND r.group_jid=seen.community_jid\n              ORDER BY r.observed_at DESC LIMIT 1) parent ON true\n            WHERE g.id = ANY($1)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "community_jid?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "community_announcements?",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "community_name?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "6b66ed3efaeda51173bc28fe34d97b89f543c646da80691d5bdf9544bd2ca8aa"
+}

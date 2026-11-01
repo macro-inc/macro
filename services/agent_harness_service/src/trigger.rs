@@ -213,6 +213,19 @@ async fn run(
             ),
         ),
     )
+    .with_conversations(std::sync::Arc::new(
+        agent_trigger::domain::conversations::ConversationRouter::new(
+            PgChannelsRepo::new(pool.clone()),
+            bots::domain::service::BotServiceImpl::new(
+                PgBotsRepo::new(pool.clone()),
+                macro_event_broker::NoopMacroEventBroker,
+            ),
+            PgAgentSessionRepo::new(
+                pool.clone(),
+                OwnedEntityRegistrar::new(OwnerGrantPolicy::new(PgBotsRepo::new(pool.clone()))),
+            ),
+        ),
+    ))
     .with_admission(admission);
     let channel_types = ChannelRepoTypeLookup::new(PgChannelsRepo::new(pool.clone()));
     let publisher = MacroEventBrokerService::new(

@@ -163,8 +163,12 @@ pub struct CreateMessage {
     pub parent: MessageParent,
     /// Verified actor.
     pub actor: ChannelSender<'static>,
+    /// Server-verified guest display name; absent for account authors.
+    pub guest_name: Option<String>,
     /// User who triggered a bot message, if applicable.
     pub triggered_by: Option<String>,
+    /// Label of the client the user triggered it through, if any.
+    pub triggered_via: Option<String>,
     /// Parsed message input.
     pub input: PostMessage,
 }
@@ -289,7 +293,67 @@ pub enum MessageChange {
         thread_id: Option<Uuid>,
         /// Whether the user is currently typing.
         active: bool,
+        /// Present when an agent session is typing through the bot that
+        /// speaks for it. Names the session, so a viewer who can read it can
+        /// show the turn live in place of the bare indicator.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        agent: Option<AgentTyping>,
     },
+}
+
+/// An agent session typing through its bot.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+pub struct AgentTyping {
+    /// The session whose turn the bot is speaking for.
+    pub session_id: Uuid,
+    /// What the agent is doing. Deliberately coarse: a typing event reaches
+    /// everyone in the conversation, and which tool runs on what is for
+    /// viewers who can read the session itself.
+    pub phase: AgentTypingPhase,
+}
+
+/// What a typing agent is doing.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[serde(rename_all = "snake_case")]
+pub enum AgentTypingPhase {
+    /// Working out what to do, or between steps.
+    Thinking,
+    /// Writing a reply.
+    Writing,
+    /// Using a tool.
+    Working,
+    /// Waiting on someone to answer a question or approve an action.
+    Waiting,
+}
+
+impl MessageEvent {
+    /// A posted message or finalized bot reply to evaluate for agent triggers,
+    /// explicit or implicit. Streaming and ordinary edits must never wake an
+    /// agent.
+    pub fn agent_trigger(&self) -> Option<super::events::MessagePostedMetadata> {
+        let (message, mentions) = match &self.change {
+            MessageChange::Posted {
+                message, mentions, ..
+            } => (message, mentions),
+            MessageChange::Edited {
+                message,
+                mentions,
+                notification_policy: PatchMessageNotificationPolicy::NotifyAsPostedMessage,
+                ..
+            } if message.sender_id.as_bot().is_some()
+                && self.actor == message.sender_id.as_ref() =>
+            {
+                (message, mentions)
+            }
+            _ => return None,
+        };
+        Some(super::events::MessagePostedMetadata::from_message(
+            message,
+            mentions.clone(),
+        ))
+    }
 }
 
 /// Persisted reaction state and whether this operation changed membership.

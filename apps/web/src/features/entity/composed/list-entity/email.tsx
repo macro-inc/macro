@@ -117,6 +117,28 @@ export function EmailNarrowBody(props: {
   );
 }
 
+/** The narrow email row's one-line preview. */
+export function EmailNarrowSnippet(props: {
+  entity: EmailEntity;
+  chars: number;
+  showHitSnippet: boolean;
+  setContainerRef: (el: HTMLElement) => void;
+}) {
+  return (
+    <Entity.Slot
+      placement="body"
+      ref={props.setContainerRef}
+      class="ph-no-capture min-w-0 truncate pr-3 pb-2.5 text-ink/50"
+    >
+      <EmailSnippet
+        entity={props.entity}
+        showHitSnippet={props.showHitSnippet}
+        chars={props.chars}
+      />
+    </Entity.Slot>
+  );
+}
+
 export function EmailWideContent(props: {
   entity: EmailEntity;
   chars: number;

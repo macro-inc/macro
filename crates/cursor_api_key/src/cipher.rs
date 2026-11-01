@@ -3,7 +3,7 @@
 //! `kms:Encrypt` directly, not the envelope pattern
 //! `microsoft_oauth_grants` uses. The envelope exists so that large plaintext
 //! can be encrypted locally under a cheap data key that KMS only has to wrap;
-//! a `crsr_` key is around 60 bytes, far inside KMS's 4 KB direct limit, so
+//! a Cursor key is around 60 bytes, far inside KMS's 4 KB direct limit, so
 //! there is nothing to amortize. Both designs make one KMS call per operation,
 //! so the envelope's cost here is pure: a data key column, a nonce column, an
 //! AES-GCM implementation to review, and a nonce-reuse rule for a future reader
@@ -41,8 +41,9 @@ pub const ENCRYPTION_VERSION: i16 = 1;
 /// feature cannot be decrypted as a Cursor key even under the same KMS key.
 const ENCRYPTION_PURPOSE: &str = "cursor-api-key";
 
-/// The prefix every Cursor API key carries.
-const CURSOR_KEY_PREFIX: &str = "crsr_";
+/// The prefixes a Cursor API key carries. Cursor now mints `grok_` keys, and
+/// the `crsr_` keys minted before that still authenticate.
+const CURSOR_KEY_PREFIXES: [&str; 2] = ["crsr_", "grok_"];
 
 /// A Cursor API key in plaintext.
 ///
@@ -68,10 +69,12 @@ impl CursorApiKey {
         let trimmed = supplied
             .trim()
             .trim_matches(|character| character == '"' || character == '\'');
-        if !trimmed.starts_with(CURSOR_KEY_PREFIX) {
-            return Err(MalformedCursorApiKey);
-        }
-        if trimmed.len() <= CURSOR_KEY_PREFIX.len() {
+        let has_secret_after_prefix = CURSOR_KEY_PREFIXES.iter().any(|prefix| {
+            trimmed
+                .strip_prefix(prefix)
+                .is_some_and(|secret| !secret.is_empty())
+        });
+        if !has_secret_after_prefix {
             return Err(MalformedCursorApiKey);
         }
         Ok(Self(Zeroizing::new(trimmed.to_owned())))

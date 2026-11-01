@@ -7,6 +7,9 @@ use crate::domain::pipelines::{
 use databases::domain::provisioning::DatabaseStorageProvisioner;
 use entity_access_db_utils::{AccessLevel, EntityAccessSourceType, EntityType};
 use models_databases::{ColumnId, DatabaseId, RowId, TableId};
+use models_permissions::share_permission::channel_share_permission::{
+    ChannelSharePermission, UpdateChannelSharePermission,
+};
 use sqlx::{PgPool, Postgres, Transaction};
 use uuid::Uuid;
 
@@ -248,5 +251,35 @@ where
         }
         transaction.commit().await?;
         Ok(())
+    }
+
+    async fn channel_grants(&self, id: Uuid) -> Result<Vec<ChannelSharePermission>, Self::Error> {
+        Ok(entity_access_db_utils::get_direct_channel_grants(
+            &self.pool,
+            &id,
+            EntityType::CrmPipeline,
+        )
+        .await?)
+    }
+
+    #[tracing::instrument(skip_all, err)]
+    async fn update_channel_grants(
+        &self,
+        id: Uuid,
+        grants: &[UpdateChannelSharePermission],
+    ) -> Result<bool, Self::Error> {
+        // The live lock serializes sharing with trash and deletion.
+        let Some(mut transaction) = self.lock_live(id).await? else {
+            return Ok(false);
+        };
+        entity_access_db_utils::update_entity_access_channel_share_permissions(
+            &mut transaction,
+            &id,
+            EntityType::CrmPipeline,
+            grants,
+        )
+        .await?;
+        transaction.commit().await?;
+        Ok(true)
     }
 }

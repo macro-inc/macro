@@ -1,6 +1,10 @@
 //! Filtered notification edges, limited independently for every requested entity.
-//! Separate indexed primary/secondary candidate paths keep the legacy JSON
-//! message lookup from forcing a metadata scan for ordinary channel requests.
+//! Each recipient row carries its notification's entity and type, so the
+//! primary-entity path reads only the viewer's rows from
+//! `idx_user_notification_viewer_entity` instead of the entity's notifications
+//! for every user. The secondary and message-id paths match few notifications
+//! each and keep their `notification` indexes; the message-id path's `COALESCE`
+//! must match `idx_notification_message_id`.
 
 use std::{collections::HashMap, str::FromStr};
 
@@ -38,6 +42,28 @@ pub(super) async fn get_filtered_entity_notifications(
     let limit = query.limit.map(i64::from);
     let rows = sqlx::query!(
         r#"
+        WITH requested AS (
+            SELECT entity_id, entity_type
+            FROM unnest($2::text[], $3::text[]) AS entities(entity_id, entity_type)
+        ),
+        -- Scope uses all active notifications, not just the requested states: a
+        -- seen reply still assigns an unseen root send to its thread row.
+        -- Build scope evidence once per batch, never rescan history per send.
+        channel_scopes AS MATERIALIZED (
+            SELECT DISTINCT n.event_item_id AS channel_id,
+                   CASE WHEN n.notification_event_type = 'channel_mention'
+                       THEN COALESCE(n.metadata->>'messageId', n.metadata->>'message_id')
+                   END AS mentioned_message_id,
+                   COALESCE(n.metadata->>'threadId', n.metadata->>'thread_id') AS thread_id
+            FROM requested
+            JOIN user_notification un
+              ON un.user_id = $1 AND un.deleted_at IS NULL
+             AND un.event_item_type = 'channel' AND un.event_item_id = requested.entity_id
+             AND un.state = ANY($9::notification_state[])
+             AND un.notification_event_type IN ('channel_mention', 'channel_message_reply')
+            JOIN notification n ON n.id = un.notification_id
+            WHERE $8::bool AND requested.entity_type = 'channel'
+        )
         SELECT requested.entity_id AS "requested_id!",
                requested.entity_type AS "requested_type!",
                matched.notification_id AS "notification_id!",
@@ -50,7 +76,7 @@ pub(super) async fn get_filtered_entity_notifications(
                matched.viewed_at,
                matched.notification_metadata,
                matched.sender_id
-        FROM unnest($2::text[], $3::text[]) requested(entity_id, entity_type)
+        FROM requested
         CROSS JOIN LATERAL (
             SELECT un.notification_id, n.event_item_id, n.event_item_type,
                    n.notification_event_type, un.sent, un.state,
@@ -58,32 +84,83 @@ pub(super) async fn get_filtered_entity_notifications(
                    un.seen_at::timestamptz AS viewed_at,
                    n.metadata AS notification_metadata, n.sender_id
             FROM (
-                SELECT n.id FROM notification n
-                WHERE n.event_item_id = requested.entity_id AND n.event_item_type = requested.entity_type
-                UNION
-                SELECT n.id FROM notification n
-                WHERE n.secondary_event_item_id = requested.entity_id AND n.secondary_event_item_type = requested.entity_type
-                UNION
-                SELECT n.id FROM notification n
-                WHERE requested.entity_type = 'channel_message'
-                  AND COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = requested.entity_id
-            ) candidates
-            JOIN notification n ON n.id = candidates.id
-            JOIN user_notification un ON un.notification_id = n.id
-            WHERE un.user_id = $1
-              AND un.deleted_at IS NULL
-              AND un.state = ANY($4::notification_state[])
-              AND (cardinality($5::text[]) = 0 OR n.notification_event_type = ANY($5))
+                SELECT viewer_match.*
+                FROM (
+                    SELECT un.notification_id, un.sent, un.state, un.created_at, un.seen_at
+                    FROM user_notification un
+                    WHERE un.user_id = $1 AND un.deleted_at IS NULL
+                      AND un.state = ANY($4::notification_state[])
+                      AND un.event_item_type = requested.entity_type
+                      AND un.event_item_id = requested.entity_id
+                    UNION
+                    SELECT un.notification_id, un.sent, un.state, un.created_at, un.seen_at
+                    FROM notification n
+                    CROSS JOIN LATERAL (
+                        SELECT un.notification_id, un.sent, un.state, un.created_at, un.seen_at
+                        FROM user_notification un
+                        WHERE un.user_id = $1 AND un.notification_id = n.id
+                          AND un.deleted_at IS NULL AND un.state = ANY($4::notification_state[])
+                        -- Probe the viewer's row per notification: a plain join
+                        -- can scan the viewer's whole history for each entity.
+                        OFFSET 0
+                    ) un
+                    WHERE n.secondary_event_item_type = requested.entity_type
+                      AND n.secondary_event_item_id = requested.entity_id
+                    UNION
+                    SELECT un.notification_id, un.sent, un.state, un.created_at, un.seen_at
+                    FROM notification n
+                    CROSS JOIN LATERAL (
+                        SELECT un.notification_id, un.sent, un.state, un.created_at, un.seen_at
+                        FROM user_notification un
+                        WHERE un.user_id = $1 AND un.notification_id = n.id
+                          AND un.deleted_at IS NULL AND un.state = ANY($4::notification_state[])
+                        OFFSET 0
+                    ) un
+                    WHERE requested.entity_type = 'channel_message'
+                      AND COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = requested.entity_id
+                ) viewer_match
+                ORDER BY viewer_match.created_at DESC, viewer_match.notification_id DESC
+                -- With no filter on the notification row, the newest matches
+                -- are the result, so limit before reading notification rows.
+                LIMIT CASE WHEN cardinality($5::text[]) = 0 AND NOT $7::bool AND NOT $8::bool THEN $6::bigint END
+            ) un
+            JOIN notification n ON n.id = un.notification_id
+            WHERE (cardinality($5::text[]) = 0 OR n.notification_event_type = ANY($5))
               AND (NOT $7::bool OR (
                   n.notification_event_type IN ('channel_message_send', 'channel_mention', 'document_mention')
                   AND COALESCE(n.metadata->>'threadId', n.metadata->>'thread_id') IS NULL
+              ))
+              AND (NOT $8::bool OR requested.entity_type <> 'channel' OR (
+                  n.notification_event_type = 'document_mention'
+                  OR (n.notification_event_type IN ('channel_message_send', 'channel_message_reply') AND (
+                      -- Mention stacks consume the mention, not its duplicate send/reply.
+                      EXISTS (
+                          SELECT 1 FROM channel_scopes scope
+                          WHERE scope.channel_id = n.event_item_id
+                            AND scope.mentioned_message_id = COALESCE(n.metadata->>'messageId', n.metadata->>'message_id')
+                      )
+                      OR (n.notification_event_type = 'channel_message_send' AND NOT EXISTS (
+                          SELECT 1 FROM channel_scopes scope
+                          WHERE scope.channel_id = n.event_item_id AND scope.thread_id <> ''
+                            AND scope.thread_id = COALESCE(n.metadata->>'messageId', n.metadata->>'message_id')
+                      ))
+                      OR (n.notification_event_type = 'channel_message_reply'
+                          AND NULLIF(COALESCE(n.metadata->>'threadId', n.metadata->>'thread_id'), '') IS NULL)
+                  ))
+                  OR (n.notification_event_type = 'channel_mention' AND (
+                      COALESCE(n.metadata->>'threadId', n.metadata->>'thread_id') = ''
+                      OR (COALESCE(n.metadata->>'threadId', n.metadata->>'thread_id') IS NULL
+                          AND COALESCE(n.metadata->>'messageId', n.metadata->>'message_id') = ''
+                          AND EXISTS (SELECT 1 FROM channel_scopes scope
+                              WHERE scope.channel_id = n.event_item_id AND scope.thread_id = ''))
+                  ))
               ))
             ORDER BY un.created_at DESC, un.notification_id DESC
             LIMIT $6
         ) matched
         "#,
         user_id.as_ref(), &ids, &types, &query.states as _, &query.event_types, limit,
-        query.top_level_messages_only,
+        query.top_level_messages_only, query.channel_feed_only, NotificationState::ACTIVE as _,
     ).fetch_all(pool).await?;
 
     for row in rows {

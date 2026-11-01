@@ -29,7 +29,7 @@ pub struct EmailThreadMailCacheFacts {
 /// Canonical body-free preview choices for each Mail tab.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct EmailThreadMailPreviews {
-    /// Latest non-trashed message for ALL, INBOX, Calendar, and Shared.
+    /// Latest present message outside spam and trash for ALL, INBOX, Calendar, and Shared.
     pub all: Option<EmailPreview>,
     /// Latest non-trashed draft, even if a newer non-draft exists.
     pub draft: Option<EmailPreview>,
@@ -91,11 +91,12 @@ pub struct EmailDraftAggregate {
     pub has_calendar_attachment: bool,
     /// Maximum inbound or Macro-draft timestamp.
     pub latest_inbound_message_ts: Option<DateTime<Utc>>,
-    /// Maximum non-spam or Macro-draft timestamp.
+    /// Maximum non-spam or Macro-draft timestamp; provider drafts without a date
+    /// use creation time so each clean draft retains an All Mail contribution.
     pub latest_non_spam_message_ts: Option<DateTime<Utc>>,
     /// Maximum outbound timestamp.
     pub latest_outbound_message_ts: Option<DateTime<Utc>>,
-    /// Latest non-trashed preview.
+    /// Latest non-trashed preview; the non-draft baseline also excludes spam.
     pub preview: Option<EmailPreview>,
     /// Preview ordering uses internal date or creation date, never edit time.
     pub preview_ts: Option<DateTime<Utc>>,

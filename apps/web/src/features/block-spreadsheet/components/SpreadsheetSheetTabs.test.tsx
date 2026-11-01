@@ -5,16 +5,13 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { createSignal, type ParentProps } from 'solid-js';
+import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   SpreadsheetSheetTabs,
   type SpreadsheetSheetTabsProps,
 } from './SpreadsheetSheetTabs';
 
-vi.mock('@ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
-}));
 vi.mock('@core/mobile/mobileWidth', () => ({ isMobileWidth: () => true }));
 
 let animationStyle: HTMLStyleElement;

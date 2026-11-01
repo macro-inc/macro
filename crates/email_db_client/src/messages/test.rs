@@ -550,3 +550,38 @@ async fn filter_existing_provider_message_ids_partitions_known_and_missing(
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("draft_exists_with_id"))
+)]
+async fn parsed_reads_preserve_restored_draft_generation(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    use crate::messages::get_parsed::{
+        get_paginated_parsed_messages_by_thread_id, get_parsed_message_by_id,
+        get_parsed_messages_by_id_batch,
+    };
+    let draft_id = Uuid::parse_str("00000000-0000-0000-0000-00000000e501")?;
+    sqlx::query!(
+        "UPDATE email_messages SET draft_generation = 2 WHERE id = $1",
+        draft_id
+    )
+    .execute(&pool)
+    .await?;
+    let single = get_parsed_message_by_id(&pool, &draft_id).await?.unwrap();
+    assert_eq!(single.draft_generation, 2);
+    assert_eq!(serde_json::to_value(&single)?["draft_generation"], 2);
+    let batch = get_parsed_messages_by_id_batch(&pool, &[draft_id]).await?;
+    assert_eq!(batch[0].draft_generation, 2);
+    let page =
+        get_paginated_parsed_messages_by_thread_id(&pool, single.thread_db_id, 0, 100).await?;
+    assert_eq!(
+        page.iter()
+            .find(|message| message.db_id == draft_id)
+            .unwrap()
+            .draft_generation,
+        2
+    );
+    Ok(())
+}

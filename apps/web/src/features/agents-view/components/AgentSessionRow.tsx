@@ -16,7 +16,10 @@ export function AgentSessionRow(props: {
   trailing?: JSX.Element;
   timestamp: string;
   unread?: boolean;
+  failed?: boolean;
   active?: boolean;
+  /** When true, hides the leading icon slot to save horizontal space. */
+  hideLeading?: boolean;
   children?: JSX.Element;
   onOpen?: (event: MouseEvent) => void;
 }) {
@@ -28,7 +31,8 @@ export function AgentSessionRow(props: {
       class={cn(
         'relative text-ink',
         metadata.toArray().length > 0 &&
-          'h-auto min-h-12 items-start py-1.5 touch:h-auto'
+          'h-auto min-h-12 items-start py-1.5 touch:h-auto',
+        props.hideLeading && 'pl-3'
       )}
       data-agent-session-row={props.id}
       data-kind={props.kind}
@@ -39,7 +43,9 @@ export function AgentSessionRow(props: {
         class="absolute inset-0 rounded-lg outline-none focus-visible:outline-2 focus-visible:outline-accent"
         aria-label={props.title}
         aria-description={[
-          conversationStateLabel(props.state),
+          props.failed
+            ? 'Last turn failed'
+            : conversationStateLabel(props.state),
           props.unread ? 'Unread' : undefined,
         ]
           .filter(Boolean)
@@ -47,9 +53,11 @@ export function AgentSessionRow(props: {
         aria-current={props.active ? 'page' : undefined}
         {...pressHandlers((event) => props.onOpen?.(event))}
       />
-      <ViewSidebar.Icon class="pointer-events-none relative text-ink-muted">
-        {props.leading}
-      </ViewSidebar.Icon>
+      <Show when={!props.hideLeading}>
+        <ViewSidebar.Icon class="pointer-events-none relative text-ink-muted">
+          {props.leading}
+        </ViewSidebar.Icon>
+      </Show>
       <span class="pointer-events-none relative min-w-0 flex-1">
         <span class="flex min-w-0 items-center gap-2">
           <span class="min-w-0 flex-1 truncate">{props.title}</span>
@@ -64,10 +72,11 @@ export function AgentSessionRow(props: {
   );
 }
 
-/** One leading dot combines activity and unread state; read dormant rows are empty. */
+/** One dot combines turn failure, activity, and unread state. */
 export function AgentSessionStatusIndicator(props: {
   state: ConversationState;
   unread?: boolean;
+  failed?: boolean;
 }) {
   return (
     <Show
@@ -75,6 +84,7 @@ export function AgentSessionStatusIndicator(props: {
         props.state === 'starting' ||
         props.state === 'working' ||
         props.state === 'waiting' ||
+        props.failed ||
         props.unread
       }
     >
@@ -82,9 +92,12 @@ export function AgentSessionStatusIndicator(props: {
         data-agent-status-indicator
         aria-label={props.unread ? 'Unread' : undefined}
         class={cn(
-          'size-1.5 rounded-full',
-          props.state === 'waiting' ? 'bg-warning' : 'bg-accent',
-          (props.state === 'starting' || props.state === 'working') &&
+          'size-1.5 shrink-0 rounded-full',
+          props.failed && 'bg-failure',
+          !props.failed &&
+            (props.state === 'waiting' ? 'bg-warning' : 'bg-accent'),
+          !props.failed &&
+            (props.state === 'starting' || props.state === 'working') &&
             'motion-safe:animate-pulse'
         )}
       />

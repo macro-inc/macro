@@ -2,17 +2,12 @@ import type { EmailMessage } from '@app/features/email-message/core/email-messag
 
 import { getFirstName } from './name';
 
-/**
- * Check if a message is from the current user
- */
-function isMessageFromCurrentUser(
-  message: EmailMessage,
-  currentUserEmail?: string
+export function isViewerAddress(
+  address: string | null | undefined,
+  viewerEmail: string | undefined
 ): boolean {
-  if (!currentUserEmail) return false;
-  const fromEmail = message.from?.email?.toLowerCase();
-  const userEmail = currentUserEmail.toLowerCase();
-  return fromEmail !== undefined && fromEmail === userEmail;
+  if (!address || !viewerEmail) return false;
+  return address.toLowerCase() === viewerEmail.toLowerCase();
 }
 
 /**
@@ -22,7 +17,7 @@ export function getSenderDisplayName(
   message: EmailMessage,
   currentUserEmail?: string
 ): string {
-  if (isMessageFromCurrentUser(message, currentUserEmail)) {
+  if (isViewerAddress(message.from?.email, currentUserEmail)) {
     return 'Me';
   }
   const from = message.from;
@@ -53,7 +48,7 @@ export function getRecipientDisplayName(
   recipient: Recipient,
   currentUserEmail?: string
 ): string {
-  if (recipient.email === currentUserEmail) return 'Me';
+  if (isViewerAddress(recipient.email, currentUserEmail)) return 'Me';
   return recipient.name
     ? getFirstName(recipient.name)
     : (recipient.email?.split('@')[0] ?? '');

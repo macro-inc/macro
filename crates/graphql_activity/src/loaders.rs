@@ -78,6 +78,17 @@ pub trait ActivityFeedReader: Send + Sync + 'static {
         limit: NonZeroU32,
     ) -> impl Future<Output = Result<ActivityFeedPage, ActivityReadFailed>> + Send + 'a;
 
+    /// One page of the activity of the viewer's teammates on entities
+    /// shared with the viewer, paginated like
+    /// [`subject_feed`](Self::subject_feed). A page may come up short, or
+    /// empty, while `next` is set.
+    fn teammate_feed<'a>(
+        &'a self,
+        viewer_id: &'a str,
+        cursor: Option<(DateTime<Utc>, Uuid)>,
+        limit: NonZeroU32,
+    ) -> impl Future<Output = Result<ActivityFeedPage, ActivityReadFailed>> + Send + 'a;
+
     /// Aggregate the subject's activity inside one local-date window.
     fn subject_overview<'a>(
         &'a self,
@@ -111,6 +122,18 @@ impl ActivityFeedReader for NoOpActivityReader {
     async fn subject_feed(
         &self,
         _subject_id: &str,
+        _cursor: Option<(DateTime<Utc>, Uuid)>,
+        _limit: NonZeroU32,
+    ) -> Result<ActivityFeedPage, ActivityReadFailed> {
+        Ok(ActivityFeedPage {
+            records: Vec::new(),
+            next: None,
+        })
+    }
+
+    async fn teammate_feed(
+        &self,
+        _viewer_id: &str,
         _cursor: Option<(DateTime<Utc>, Uuid)>,
         _limit: NonZeroU32,
     ) -> Result<ActivityFeedPage, ActivityReadFailed> {
@@ -215,6 +238,21 @@ where
             .await
             .map_err(|error| {
                 tracing::error!(?error, "activity feed load failed");
+                ActivityReadFailed
+            })
+    }
+
+    async fn teammate_feed(
+        &self,
+        viewer_id: &str,
+        cursor: Option<(DateTime<Utc>, Uuid)>,
+        limit: NonZeroU32,
+    ) -> Result<ActivityFeedPage, ActivityReadFailed> {
+        self.reads
+            .teammate_feed(viewer_id, cursor, limit)
+            .await
+            .map_err(|error| {
+                tracing::error!(?error, "team activity feed load failed");
                 ActivityReadFailed
             })
     }

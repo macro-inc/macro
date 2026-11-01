@@ -44,6 +44,9 @@ import type { Bot } from './generated/schemas/bot';
 import type { BotChannel } from './generated/schemas/botChannel';
 import type { BotOwnerProfile } from './generated/schemas/botOwnerProfile';
 import type { BotToken } from './generated/schemas/botToken';
+import type { CalendarJoinRequest } from './generated/schemas/calendarJoinRequest';
+import { CalendarJoinRequestErrorCode } from './generated/schemas/calendarJoinRequestErrorCode';
+import type { CalendarJoinRequestsResponse } from './generated/schemas/calendarJoinRequestsResponse';
 import type { CalendarMentionPreviewRequest } from './generated/schemas/calendarMentionPreviewRequest';
 import type { CalendarMentionPreviewResponse } from './generated/schemas/calendarMentionPreviewResponse';
 import type { CalendarOccurrenceResponse } from './generated/schemas/calendarOccurrenceResponse';
@@ -58,6 +61,8 @@ import {
   CloudStorageItemType as CloudStorageItemTypeMap,
 } from './generated/schemas/cloudStorageItemType';
 import type { CreateAgentRequest } from './generated/schemas/createAgentRequest';
+import type { CreateCanvasDocumentRequest } from './generated/schemas/createCanvasDocumentRequest';
+import type { CreateCanvasDocumentResponse } from './generated/schemas/createCanvasDocumentResponse';
 import type { CreateChannelLabelRequest } from './generated/schemas/createChannelLabelRequest';
 import type { CreateChannelRequest } from './generated/schemas/createChannelRequest';
 import type { CreateChannelResponse } from './generated/schemas/createChannelResponse';
@@ -70,7 +75,6 @@ import type { CreateDocumentRequest } from './generated/schemas/createDocumentRe
 import type { CreatedUserApiKey } from './generated/schemas/createdUserApiKey';
 import type { CreateEntityMentionRequest } from './generated/schemas/createEntityMentionRequest';
 import type { CreateEntityMentionResponse } from './generated/schemas/createEntityMentionResponse';
-import type { CreateInstructionsDocumentResponse } from './generated/schemas/createInstructionsDocumentResponse';
 import type { CreateMarkdownDocumentRequest } from './generated/schemas/createMarkdownDocumentRequest';
 import type { CreateMarkdownHandler200 } from './generated/schemas/createMarkdownHandler200';
 import type { CreateProjectResponse } from './generated/schemas/createProjectResponse';
@@ -109,7 +113,6 @@ import type { GetDocumentPermissionsResponseDataV2 } from './generated/schemas/g
 import type { GetDocumentProcessingResultResponse } from './generated/schemas/getDocumentProcessingResultResponse';
 import type { GetDocumentResponseData } from './generated/schemas/getDocumentResponseData';
 import type { GetDocumentSearchResponse } from './generated/schemas/getDocumentSearchResponse';
-import type { GetInstructionsDocumentResponse } from './generated/schemas/getInstructionsDocumentResponse';
 import type { GetOrCreateChannelResponse } from './generated/schemas/getOrCreateChannelResponse';
 import type { GetOrCreateDmRequest } from './generated/schemas/getOrCreateDmRequest';
 import type { GetOrCreatePrivateRequest } from './generated/schemas/getOrCreatePrivateRequest';
@@ -168,11 +171,11 @@ import type { StorageRowsQuery } from './generated/schemas/storageRowsQuery';
 import type { StoredGithubPullRequest } from './generated/schemas/storedGithubPullRequest';
 import type { SyncServiceVersionID } from './generated/schemas/syncServiceVersionID';
 import type { TableDetail } from './generated/schemas/tableDetail';
-import type { TeamCalendarPage } from './generated/schemas/teamCalendarPage';
 import type { TeamOutOfOfficeResponse } from './generated/schemas/teamOutOfOfficeResponse';
 import type { TypedSuccessResponse } from './generated/schemas/typedSuccessResponse';
 import type { UpdateAgentRequest } from './generated/schemas/updateAgentRequest';
 import type { UpdateCrmTeamSettingsRequest } from './generated/schemas/updateCrmTeamSettingsRequest';
+import type { UpdateSharePermissionRequestV2 } from './generated/schemas/updateSharePermissionRequestV2';
 import type { UploadExtractFolderHandler200 } from './generated/schemas/uploadExtractFolderHandler200';
 import type { UploadGrant } from './generated/schemas/uploadGrant';
 import type { UserApiKeysList } from './generated/schemas/userApiKeysList';
@@ -236,6 +239,28 @@ export function dssFetch<T extends Record<string, any> = never>(
   | Promise<Result<T, ResultError<FetchWithTokenErrorCode>[]>>
   | Promise<Result<void, ResultError<FetchWithTokenErrorCode>[]>> {
   return fetchWithToken<T>(`${dssHost}${url}`, init);
+}
+
+/**
+ * Join-request failures carry a machine-readable `{ code, message }` body;
+ * surface it so callers can explain a refusal.
+ */
+async function calendarJoinRequestErrorHandler(response: Response) {
+  const body = (await response.json().catch(() => null)) as {
+    code?: string;
+    message?: string;
+  } | null;
+  const code =
+    body?.code && body.code in CalendarJoinRequestErrorCode
+      ? (body.code as CalendarJoinRequestErrorCode)
+      : undefined;
+  if (code) {
+    return { code, message: body?.message ?? '' };
+  }
+  return {
+    code: 'HTTP_ERROR' as const,
+    message: `HTTP error! status: ${response.status}`,
+  };
 }
 
 export async function getDocumentPermissionToken(
@@ -441,6 +466,18 @@ export const storageServiceClient = {
       method: 'PUT',
       body: JSON.stringify({ sharing }),
     }),
+  getCrmPipelinePermissions: (id: string) =>
+    dssFetch<SharePermissionV2>(`/crm/pipelines/${id}/permissions`, {
+      method: 'GET',
+    }),
+  updateCrmPipelinePermissions: (
+    id: string,
+    request: UpdateSharePermissionRequestV2
+  ) =>
+    dssFetch<SharePermissionV2>(`/crm/pipelines/${id}/permissions`, {
+      method: 'PATCH',
+      body: JSON.stringify(request),
+    }),
   trashCrmPipeline: (id: string) =>
     dssFetch(`/crm/pipelines/${id}/trash`, {
       method: 'PUT',
@@ -582,19 +619,27 @@ export const storageServiceClient = {
     ).map((result) => result);
   },
 
-  async listTeamCalendar(args: {
-    start: string;
-    end: string;
-    cursor?: string;
-    limit?: number;
-    signal?: AbortSignal;
-  }) {
-    const params = new URLSearchParams({ start: args.start, end: args.end });
-    if (args.cursor) params.set('cursor', args.cursor);
-    if (args.limit !== undefined) params.set('limit', String(args.limit));
-    return dssFetch<TeamCalendarPage>(
-      `/calendar-events/team?${params.toString()}`,
-      { method: 'GET', signal: args.signal }
+  async requestToJoinCalendarEvent(eventId: string) {
+    return await fetchWithToken<
+      CalendarJoinRequest,
+      CalendarJoinRequestErrorCode
+    >(`${dssHost}/calendar-events/${eventId}/join-requests`, {
+      method: 'POST',
+      errorResponseHandler: calendarJoinRequestErrorHandler,
+    });
+  },
+
+  async listCalendarEventJoinRequests(eventId: string) {
+    return await dssFetch<CalendarJoinRequestsResponse>(
+      `/calendar-events/${eventId}/join-requests`,
+      { method: 'GET' }
+    );
+  },
+
+  async getCalendarEventIcs(eventId: string) {
+    return await dssFetch<Uint8Array<ArrayBuffer>>(
+      `/calendar-events/${eventId}/ics`,
+      { method: 'GET' }
     );
   },
 
@@ -1443,8 +1488,16 @@ export const storageServiceClient = {
   },
 
   /**
-   * Creates a markdown document and initializes its sync-service content on the backend.
+   * Creates a native Canvas with durable shared content ready before returning.
    */
+  async createCanvasDocument(request: CreateCanvasDocumentRequest) {
+    return dssFetch<CreateCanvasDocumentResponse>('/documents/create_canvas', {
+      method: 'POST',
+      body: JSON.stringify(request),
+    });
+  },
+
+  /** Creates a markdown document and initializes its sync-service content on the backend. */
   async createMarkdownDocument(request: CreateMarkdownDocumentRequest) {
     const result = await dssFetch<CreateMarkdownHandler200>(
       `/documents/create_markdown`,
@@ -1796,9 +1849,12 @@ export const storageServiceClient = {
   }: {
     id: string;
   }): Promise<Result<ForeignEntity, ResultError<FetchWithTokenErrorCode>[]>> {
-    return await dssFetch<ForeignEntity>(`/foreign_entity/${id}`, {
-      method: 'GET',
-    });
+    return await dssFetch<ForeignEntity>(
+      `/foreign_entity/${encodeURIComponent(id)}`,
+      {
+        method: 'GET',
+      }
+    );
   },
 
   /**
@@ -2522,20 +2578,6 @@ export const storageServiceClient = {
         method: 'GET',
       })
     ).map((result) => result.data);
-  },
-
-  instructions: {
-    async create() {
-      return await dssFetch<CreateInstructionsDocumentResponse>(
-        '/instructions',
-        {
-          method: 'POST',
-        }
-      );
-    },
-    get: async () => {
-      return await dssFetch<GetInstructionsDocumentResponse>('/instructions');
-    },
   },
 
   views: {

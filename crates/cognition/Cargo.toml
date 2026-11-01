@@ -1,0 +1,26 @@
+[package]
+name = "cognition"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+ai_toolset = { path = "../ai_toolset" }
+async-trait = { workspace = true }
+jev = { path = "../jev" }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"] }
+macro_tower_layers = { path = "../macro_tower_layers" }
+macro_user_id = { path = "../macro_user_id" }
+reqwest = { workspace = true }
+rootcause = { workspace = true }
+schemars = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+tracing = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["io-util", "net"] }
+wiremock = { workspace = true }

@@ -1,3 +1,4 @@
+import { Telemetry } from '@macro-inc/observability';
 import { createMemo, For, type ParentProps, Show } from 'solid-js';
 import { Message, type MessageActions, type MessageData } from '../Message';
 import { Thread } from '../Thread';
@@ -165,7 +166,11 @@ export function Replies(props: RepliesProps) {
                   onClick={(event) => {
                     const parent = ctx.parent();
                     if (!parent) return;
-                    replyAction()?.({ message: parent, event });
+                    Promise.resolve(
+                      replyAction()?.({ message: parent, event })
+                    ).catch((error) =>
+                      Telemetry.error(error, { surface: 'channel-thread' })
+                    );
                   }}
                   aria-label="Reply"
                 />

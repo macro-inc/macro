@@ -1,14 +1,24 @@
 import { previewKeys } from '@queries/preview/keys';
 import type { CalendarOccurrenceItem } from '@service-storage/generated/schemas/calendarOccurrenceItem';
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import {
+  QueryClient,
+  QueryClientProvider,
+  QueryObserver,
+} from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
 import type { JSX } from 'solid-js';
 import { render } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  type CalendarSyncController,
+  setActiveCalendarSyncController,
+} from '../graphql/sync-controller';
 import { invalidateInvitationScheduling } from '../invitations';
 import { calendarKeys } from '../keys';
 import {
+  isGuestInviteRefused,
   useDeleteCalendarEventMutation,
+  useInviteCalendarEventGuestsMutation,
   useRsvpCalendarEventMutation,
   useUpdateCalendarEventMutation,
 } from '../mutations';
@@ -17,12 +27,14 @@ import type { CalendarOccurrencesData } from '../occurrences';
 const rsvpCalendarEventMock = vi.hoisted(() => vi.fn());
 const deleteCalendarEventMock = vi.hoisted(() => vi.fn());
 const updateCalendarEventMock = vi.hoisted(() => vi.fn());
+const inviteCalendarEventGuestsMock = vi.hoisted(() => vi.fn());
 
 vi.mock('@service-email/client', () => ({
   emailClient: {
     rsvpCalendarEvent: rsvpCalendarEventMock,
     deleteCalendarEvent: deleteCalendarEventMock,
     updateCalendarEvent: updateCalendarEventMock,
+    inviteCalendarEventGuests: inviteCalendarEventGuestsMock,
   },
 }));
 
@@ -192,6 +204,30 @@ function deferredResult() {
   return { promise, resolve };
 }
 
+/**
+ * Keeps viewport A on screen, so a settled write refetches it, and holds that
+ * refetch open until the test answers it.
+ */
+function watchViewportA() {
+  let answer!: (data: CalendarOccurrencesData) => void;
+  const refetch = vi.fn(
+    () =>
+      new Promise<CalendarOccurrencesData>((resolve) => {
+        answer = resolve;
+      })
+  );
+  const unsubscribe = new QueryObserver(testQueryClient, {
+    queryKey: calendarKeys.occurrences('user', viewportA).queryKey,
+    queryFn: refetch,
+    staleTime: Number.POSITIVE_INFINITY,
+  }).subscribe(() => {});
+  return {
+    refetch,
+    answer: (data: CalendarOccurrencesData) => answer(data),
+    unsubscribe,
+  };
+}
+
 beforeEach(() => {
   vi.clearAllMocks();
   testQueryClient = new QueryClient({
@@ -203,6 +239,7 @@ beforeEach(() => {
 afterEach(() => {
   dispose?.();
   dispose = undefined;
+  setActiveCalendarSyncController(undefined);
   testQueryClient.clear();
 });
 
@@ -553,6 +590,27 @@ describe('useDeleteCalendarEventMutation', () => {
     expect(items.map((item) => item.event.id)).toEqual(['event-1']);
   });
 
+  it('finishes once the provider deletes the event, before the viewport refetch returns', async () => {
+    deleteCalendarEventMock.mockResolvedValue(ok({}));
+    const viewport = watchViewportA();
+    const remove = renderHook(() => useDeleteCalendarEventMutation());
+
+    const deleted = remove.mutateAsync({ eventId: 'event-1' });
+    await vi.waitFor(() => expect(viewport.refetch).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(remove.isSuccess).toBe(true));
+    await deleted;
+    expect(viewportData(viewportA)?.items.map((item) => item.event.id)).toEqual(
+      ['event-2']
+    );
+
+    viewport.answer({ items: [recurringItem()], syncStatus: 'ready' });
+    await vi.waitFor(() => expect(testQueryClient.isFetching()).toBe(0));
+    expect(viewportData(viewportA)?.items.map((item) => item.event.id)).toEqual(
+      ['event-2']
+    );
+    viewport.unsubscribe();
+  });
+
   it('restores removed items when the request fails', async () => {
     deleteCalendarEventMock.mockResolvedValue(failure());
     const remove = renderHook(() => useDeleteCalendarEventMutation());
@@ -642,6 +700,84 @@ describe('useUpdateCalendarEventMutation', () => {
     });
   });
 
+  it('finishes a save once the provider accepts it, then shows the refetched event', async () => {
+    updateCalendarEventMock.mockResolvedValue(ok({ id: 'event-1' }));
+    const viewport = watchViewportA();
+    const update = renderHook(() => useUpdateCalendarEventMutation());
+    const titleOfEvent1 = () =>
+      viewportData(viewportA)?.items.find((item) => item.event.id === 'event-1')
+        ?.event.title;
+
+    const saved = update.mutateAsync({
+      eventId: 'event-1',
+      patch: { title: 'Renamed' },
+    });
+    await vi.waitFor(() => expect(viewport.refetch).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(update.isSuccess).toBe(true));
+    await saved;
+    expect(titleOfEvent1()).toBe('Renamed');
+
+    const refetched = standaloneItem();
+    refetched.event.title = 'Renamed by the provider';
+    viewport.answer({ items: [refetched], syncStatus: 'ready' });
+    await vi.waitFor(() =>
+      expect(titleOfEvent1()).toBe('Renamed by the provider')
+    );
+    viewport.unsubscribe();
+  });
+
+  it("keeps a newer edit on screen when an earlier save's refresh lands during it", async () => {
+    const deltas: Array<() => void> = [];
+    setActiveCalendarSyncController({
+      answering: () => true,
+      runDelta: () =>
+        new Promise<void>((resolve) => {
+          deltas.push(resolve);
+        }),
+    } as unknown as CalendarSyncController);
+    let serverTitle = 'First';
+    const read = vi.fn(async (): Promise<CalendarOccurrencesData> => {
+      const item = standaloneItem();
+      item.event.title = serverTitle;
+      return { items: [item, recurringItem()], syncStatus: 'ready' };
+    });
+    const unsubscribe = new QueryObserver(testQueryClient, {
+      queryKey: calendarKeys.occurrences('user', viewportA).queryKey,
+      queryFn: read,
+      staleTime: Number.POSITIVE_INFINITY,
+    }).subscribe(() => {});
+    const second = deferredResult();
+    updateCalendarEventMock
+      .mockResolvedValueOnce(ok({ id: 'event-1' }))
+      .mockReturnValueOnce(second.promise);
+    const update = renderHook(() => useUpdateCalendarEventMutation());
+    const titleOfEvent1 = () =>
+      viewportData(viewportA)?.items.find((item) => item.event.id === 'event-1')
+        ?.event.title;
+
+    await update.mutateAsync({ eventId: 'event-1', patch: { title: 'First' } });
+    const saving = update.mutateAsync({
+      eventId: 'event-1',
+      patch: { title: 'Second' },
+    });
+    await vi.waitFor(() => expect(titleOfEvent1()).toBe('Second'));
+
+    deltas[0]();
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    await vi.waitFor(() => expect(testQueryClient.isFetching()).toBe(0));
+    expect(titleOfEvent1()).toBe('Second');
+
+    serverTitle = 'Second';
+    second.resolve(ok({ id: 'event-1' }));
+    await saving;
+    await vi.waitFor(() => expect(deltas).toHaveLength(2));
+    deltas[1]();
+    await vi.waitFor(() => expect(read).toHaveBeenCalledTimes(1));
+    await vi.waitFor(() => expect(testQueryClient.isFetching()).toBe(0));
+    expect(titleOfEvent1()).toBe('Second');
+    unsubscribe();
+  });
+
   it('scopes an optimistic edit to the targeted occurrence, or widens to the series', async () => {
     const keys = [
       '2026-08-04T09:00:00Z',
@@ -703,6 +839,147 @@ describe('useUpdateCalendarEventMutation', () => {
     expect(descriptionAt(keys[0])).toBe('shared notes');
     expect(descriptionAt(keys[1])).toBe('shared notes');
     expect(descriptionAt(keys[2])).toBe('shared notes');
+  });
+});
+
+describe('useInviteCalendarEventGuestsMutation', () => {
+  const attendeesOf = (eventId: string, range = viewportA) =>
+    viewportData(range)?.items.find((item) => item.event.id === eventId)?.event
+      .attendees;
+
+  it('shows the new guests as unanswered on every viewport while the request is in flight', async () => {
+    const pending = deferredResult();
+    inviteCalendarEventGuestsMock.mockReturnValue(pending.promise);
+    const invite = renderHook(() => useInviteCalendarEventGuestsMutation());
+
+    const sent = invite.mutateAsync({
+      eventId: 'event-1',
+      guests: [
+        { email: 'dana@example.com', optional: true },
+        { email: 'Other@example.com' },
+      ],
+    });
+    await vi.waitFor(() =>
+      expect(inviteCalendarEventGuestsMock).toHaveBeenCalled()
+    );
+
+    for (const range of [viewportA, viewportB]) {
+      expect(attendeesOf('event-1', range)).toEqual([
+        {
+          email: 'self@example.com',
+          isSelf: true,
+          responseStatus: 'needs_action',
+        },
+        {
+          email: 'other@example.com',
+          isSelf: false,
+          responseStatus: 'declined',
+        },
+        {
+          email: 'dana@example.com',
+          responseStatus: 'needs_action',
+          isOrganizer: false,
+          isOptional: true,
+          isSelf: false,
+        },
+      ]);
+    }
+    expect(inviteCalendarEventGuestsMock).toHaveBeenCalledWith('event-1', {
+      calendarId: undefined,
+      guests: [
+        { email: 'dana@example.com', optional: true },
+        { email: 'Other@example.com' },
+      ],
+      scope: undefined,
+      recurrenceId: undefined,
+    });
+    pending.resolve(ok({ id: 'event-1' }));
+    expect(await sent).toBe('sent');
+  });
+
+  it('adds guests to the targeted occurrence alone', async () => {
+    const keys = ['2026-08-04T09:00:00Z', '2026-08-05T09:00:00Z'];
+    const occurrence = (key: string): CalendarOccurrenceItem =>
+      ({
+        event: {
+          id: 'event-4',
+          recurrenceLines: ['RRULE:FREQ=DAILY'],
+          time: { kind: 'timed', startsAt: key, endsAt: key },
+          attendees: [],
+        },
+        occurrence: {
+          eventId: 'event-4',
+          occurrenceKey: key,
+          recurrenceId: key,
+          time: { kind: 'timed', startsAt: key, endsAt: key },
+        },
+      }) as unknown as CalendarOccurrenceItem;
+    testQueryClient.setQueryData(
+      calendarKeys.occurrences('user', viewportA).queryKey,
+      { items: keys.map(occurrence), syncStatus: 'ready' }
+    );
+    inviteCalendarEventGuestsMock.mockResolvedValue(ok({ id: 'event-4' }));
+    const invite = renderHook(() => useInviteCalendarEventGuestsMutation());
+    const emailsAt = (key: string) =>
+      viewportData(viewportA)
+        ?.items.find((item) => item.occurrence.occurrenceKey === key)
+        ?.event.attendees.map((attendee) => attendee.email);
+
+    await invite.mutateAsync({
+      eventId: 'event-4',
+      guests: [{ email: 'dana@example.com' }],
+      scope: 'this_event',
+      recurrenceId: keys[1],
+      occurrenceKey: keys[1],
+    });
+
+    expect(emailsAt(keys[0])).toEqual([]);
+    expect(emailsAt(keys[1])).toEqual(['dana@example.com']);
+  });
+
+  it('removes the optimistic guests when the organizer does not allow inviting', async () => {
+    inviteCalendarEventGuestsMock.mockResolvedValue(
+      err([
+        {
+          code: 'guests_cannot_invite' as const,
+          message: 'Only the organizer can invite guests.',
+        },
+      ])
+    );
+    const invite = renderHook(() => useInviteCalendarEventGuestsMutation());
+
+    let error: unknown;
+    try {
+      await invite.mutateAsync({
+        eventId: 'event-1',
+        guests: [{ email: 'dana@example.com' }],
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(isGuestInviteRefused(error)).toBe(true);
+    expect(attendeesOf('event-1')?.map((attendee) => attendee.email)).toEqual([
+      'self@example.com',
+      'other@example.com',
+    ]);
+  });
+
+  it('does not read other failures as a refusal', async () => {
+    inviteCalendarEventGuestsMock.mockResolvedValue(failure());
+    const invite = renderHook(() => useInviteCalendarEventGuestsMutation());
+
+    let error: unknown;
+    try {
+      await invite.mutateAsync({
+        eventId: 'event-1',
+        guests: [{ email: 'dana@example.com' }],
+      });
+    } catch (caught) {
+      error = caught;
+    }
+
+    expect(isGuestInviteRefused(error)).toBe(false);
   });
 });
 

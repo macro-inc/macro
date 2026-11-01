@@ -52,6 +52,7 @@ workspace-members = [
     "xtask_nextest_filter",
     "xtask_doppler_bins",
     "xtask_graphql_soup_schema",
+    "xtask_graphql_schema_compat",
     "xtask_cache_wasm",
     "xtask_kafka_topics",
     "xtask_workflows",

@@ -1,3 +1,4 @@
+import '../tests/board-layout';
 import type { CardPosition } from '@service-storage/generated/schemas/cardPosition';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import {
@@ -54,14 +55,18 @@ beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
     function (this: HTMLElement) {
-      if (this.classList.contains('overflow-auto'))
+      if (this.hasAttribute('data-kanban-board-viewport'))
         return new DOMRect(0, 0, 880, 500);
       const lane = this.closest('[data-kanban-lane]');
       const x = lane?.getAttribute('aria-label') === 'To do lane' ? 300 : 0;
+      const card = this.hasAttribute('data-kanban-card-layout')
+        ? this.querySelector('[data-kanban-card]')
+        : this;
       const cardIndex = lane
-        ? Array.from(lane.querySelectorAll('[data-kanban-card]')).indexOf(this)
+        ? Array.from(lane.querySelectorAll('[data-kanban-card]')).indexOf(card!)
         : 0;
-      return this.hasAttribute('data-row-id')
+      return this.hasAttribute('data-row-id') ||
+        this.hasAttribute('data-kanban-card-layout')
         ? new DOMRect(x + 8, 60 + Math.max(0, cardIndex) * 100, 264, 80)
         : new DOMRect(x, 0, 280, 500);
     }

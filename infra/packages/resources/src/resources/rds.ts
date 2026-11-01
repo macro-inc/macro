@@ -116,7 +116,7 @@ export class Database extends pulumi.ComponentResource {
         parameterGroupName: 'default.postgres16',
         enabledCloudwatchLogsExports: ['postgresql', 'upgrade'],
         password: args.dbArgs.password,
-        multiAz: true,
+        multiAz: stack === 'prod',
         storageEncrypted: true,
         backupRetentionPeriod: 7, // Number of days to retain backups
         backupWindow: '03:00-04:00', // UTC time

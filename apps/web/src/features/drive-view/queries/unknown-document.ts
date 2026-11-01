@@ -1,4 +1,7 @@
-import { type FileDocumentData, loadFileDocumentData } from './file-document';
+import {
+  type FileDocumentData,
+  loadFileDocumentData,
+} from '@queries/storage/file-document';
 
 export type UnknownDocumentData = FileDocumentData;
 

@@ -3,8 +3,9 @@ import { throwOnErr } from '@core/util/result';
 import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
 import type { OpResult } from '@service-storage/generated/schemas/opResult';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 import { errAsync, okAsync, ResultAsync } from 'neverthrow';
+import { match } from 'ts-pattern';
 import { v7 as uuidv7 } from 'uuid';
 import {
   boardWithStatusColumn,
@@ -13,9 +14,13 @@ import {
 import type { CardMove } from '../../database/core/board-moves';
 import type { DatabaseViewColumn } from '../../database/core/database-view';
 import { createKeyedSerializer } from '../../database/core/keyed-serializer';
+import {
+  newTimelineWithTimeRangeColumn,
+  timelineWithTimeRangeColumn,
+} from '../../database/core/timeline-range';
 import type { NewView } from '../../database/core/view-creation';
 import type { CardMoved, ViewChange } from '../../database/core/view-state';
-import { boardLayout } from '../../database/core/views';
+import { boardLayout, timelineLayout } from '../../database/core/views';
 import type { DatabaseOpFailure } from '../../database/core/write-failure';
 import type { Pipeline } from '../core/pipeline';
 import type { CrmRecordDependencies } from './dependencies';
@@ -23,17 +28,24 @@ import { crmKeys } from './keys';
 
 type ViewOpResult = Extract<OpResult, { kind: 'view' }>;
 
+function pipelineTableQueryOptions(
+  deps: CrmRecordDependencies,
+  pipelineId: string
+) {
+  return queryOptions({
+    queryKey: crmKeys.pipelineTable(pipelineId).queryKey,
+    queryFn: () =>
+      throwOnErr(() => deps.storage.getCrmPipelineTable(pipelineId)),
+  });
+}
+
 /** The pipeline's single table, whose stored views the toolbar lists. */
 export function usePipelineTableQuery(
   deps: CrmRecordDependencies,
   pipeline: Pipeline
 ) {
   return useQuery(
-    () => ({
-      queryKey: crmKeys.pipelineTable(pipeline.id).queryKey,
-      queryFn: () =>
-        throwOnErr(() => deps.storage.getCrmPipelineTable(pipeline.id)),
-    }),
+    () => pipelineTableQueryOptions(deps, pipeline.id),
     () => deps.client
   );
 }
@@ -71,7 +83,7 @@ export function createPipelineViews(
       .mapErr(([error]): DatabaseOpFailure => ({ kind: 'ops', error }))
       .orElse((failure) => {
         // A refusal shows what is stored instead of what was patched in.
-        void deps.client.invalidateQueries({ queryKey: key });
+        deps.client.invalidateQueries({ queryKey: key });
         return errAsync(failure);
       });
   const lastView = (results: OpResult[]) => {
@@ -88,8 +100,23 @@ export function createPipelineViews(
     options: [uuidv7(), uuidv7(), uuidv7()] as [string, string, string],
   });
 
+  /** A batch adding a column and then changing `view`. */
+  const withColumn = (view: DatabaseView, ops: DatabaseOp[]) =>
+    inOrder(view.id, () =>
+      apply(ops)
+        .andThen(lastView)
+        .map((stored) => {
+          upsert(stored);
+          // The new column arrives with the table read.
+          deps.client.invalidateQueries({ queryKey: key });
+        })
+    );
+
   return {
-    /** Add a view that starts from `current`; a board without a grouping column adds a Status column. */
+    /**
+     * Add a view that starts from `current`; a board without a grouping
+     * column adds a Status column, and a timeline without a time range a Time range column.
+     */
     create(
       current: DatabaseView,
       input: NewView,
@@ -107,24 +134,34 @@ export function createPipelineViews(
           },
         },
       ];
-      let ops: DatabaseOp[];
-      if (input.layout === 'table')
-        ops = created(
-          current.layout.kind === 'table'
-            ? current.layout
-            : { kind: 'table', columns: [] }
-        );
-      else if (input.groupBy.kind === 'column')
-        ops = created(boardLayout(input.groupBy.columnId, columns));
-      else
-        ops = newBoardWithStatusColumn({
-          tableId: pipeline.tableId,
-          viewId,
-          name: input.name,
-          query: current.query,
-          columns,
-          status: status(),
-        });
+      const creation = {
+        tableId: pipeline.tableId,
+        viewId,
+        name: input.name,
+        query: current.query,
+        columns,
+      };
+      const ops = match(input)
+        .with({ layout: 'table' }, () =>
+          created(
+            current.layout.kind === 'table'
+              ? current.layout
+              : { kind: 'table', columns: [] }
+          )
+        )
+        .with({ layout: 'board', groupBy: { kind: 'column' } }, ({ groupBy }) =>
+          created(boardLayout(groupBy.columnId, columns))
+        )
+        .with({ layout: 'board', groupBy: { kind: 'new-status' } }, () =>
+          newBoardWithStatusColumn({ ...creation, status: status() })
+        )
+        .with({ layout: 'timeline', range: { kind: 'column' } }, ({ range }) =>
+          created(timelineLayout(range.columnId, columns))
+        )
+        .with({ layout: 'timeline', range: { kind: 'new-column' } }, () =>
+          newTimelineWithTimeRangeColumn({ ...creation, column: uuidv7() })
+        )
+        .exhaustive(() => created({ kind: 'table', columns: [] }));
       return inOrder(listKey, () => apply(ops).andThen(lastView)).map(
         (view) => {
           upsert(view);
@@ -154,14 +191,19 @@ export function createPipelineViews(
       view: DatabaseView,
       columns: readonly DatabaseViewColumn[]
     ) {
-      return inOrder(view.id, () =>
-        apply(boardWithStatusColumn({ view, columns, status: status() }))
-          .andThen(lastView)
-          .map((stored) => {
-            upsert(stored);
-            // The new column arrives with the table read.
-            void deps.client.invalidateQueries({ queryKey: key });
-          })
+      return withColumn(
+        view,
+        boardWithStatusColumn({ view, columns, status: status() })
+      );
+    },
+    /** Lay a view out as a timeline along a new Time range column, in one batch. */
+    showAsTimelineWithTimeRangeColumn(
+      view: DatabaseView,
+      columns: readonly DatabaseViewColumn[]
+    ) {
+      return withColumn(
+        view,
+        timelineWithTimeRangeColumn({ view, columns, column: uuidv7() })
       );
     },
     remove(view: DatabaseView) {

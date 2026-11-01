@@ -35,7 +35,9 @@ export function useTagsQuery() {
 }
 
 export function invalidateTags() {
-  queryClient.invalidateQueries({ queryKey: propertiesKeys.tags.queryKey });
+  queryClient.invalidateQueries({
+    queryKey: propertiesKeys.tags.queryKey,
+  });
 }
 
 /**

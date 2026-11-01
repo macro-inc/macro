@@ -1,11 +1,14 @@
+import XIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import XIcon from '@phosphor/x.svg';
+import { Button } from '@ui/components/Button';
+import { ButtonGroup } from '@ui/components/ButtonGroup';
 import { type JSX, Show } from 'solid-js';
 
 export function ToolbarPopover(props: {
   label: string;
   count?: number;
   compact?: boolean;
+  grouped?: boolean;
   icon: JSX.Element;
   children: JSX.Element;
 }) {
@@ -18,14 +21,12 @@ export function ToolbarPopover(props: {
       overflowPadding={8}
     >
       <Popover.Trigger
-        class="flex h-8 shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 text-xs outline-none hover:bg-hover hover:text-ink focus-visible:ring-2 focus-visible:ring-ink/50 data-expanded:bg-hover [&>svg]:shrink-0"
-        classList={{
-          'text-accent': !!props.count,
-          'text-ink-muted': !props.count,
-          'justify-center px-2': props.compact,
-        }}
         aria-label={`${props.label}${props.count ? ` ${props.count}` : ''}`}
-        title={props.label}
+        as={props.grouped ? ButtonGroup.Button : Button}
+        variant="ghost"
+        size={props.compact && !props.count ? 'icon-md' : 'md'}
+        class={props.count ? 'text-accent' : undefined}
+        tooltip={props.label}
       >
         {props.icon}
         <Show when={!props.compact}>{props.label}</Show>

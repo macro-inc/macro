@@ -81,6 +81,14 @@ async fn share_referenced_item_with_channel(
     item: &ReferencedShareItem,
     sharer_access: Option<AccessLevel>,
 ) -> anyhow::Result<ReferenceShareOutcome> {
+    // A direct agent conversation's sessions are private to their owner, and
+    // their sharing settings refuse to share them; posting one's link
+    // elsewhere does not either.
+    if item.entity_type() == ReferencedShareItemType::AgentSession
+        && is_direct_conversation_session(db, item.entity_id()).await?
+    {
+        return Ok(ReferenceShareOutcome::NotPermitted);
+    }
     let file_type = match item.entity_type() {
         ReferencedShareItemType::Document => get_document_file_type(db, item.entity_id()).await?,
         _ => None,
@@ -90,6 +98,25 @@ async fn share_referenced_item_with_channel(
     };
     ensure_referenced_item_visible_to_channel(db, channel_id, item, level).await?;
     Ok(ReferenceShareOutcome::Shared)
+}
+
+async fn is_direct_conversation_session(db: &PgPool, session_id: &str) -> anyhow::Result<bool> {
+    let session_id = macro_uuid::string_to_uuid(session_id)?;
+    sqlx::query_scalar!(
+        r#"SELECT EXISTS (
+               SELECT 1
+               FROM agent_conversation_sessions session
+               JOIN comms_channel_agents agent
+                 ON agent.channel_id = session.channel_id
+                AND agent.bot_id = session.bot_id
+               WHERE session.session_id = $1
+                 AND agent.kind = 'direct'
+           ) AS "private!""#,
+        session_id,
+    )
+    .fetch_one(db)
+    .await
+    .context("failed to read whether a session belongs to a direct agent conversation")
 }
 
 async fn get_document_file_type(
@@ -121,14 +148,16 @@ async fn ensure_referenced_item_visible_to_channel(
             .context("failed to insert thread share permissions")?;
     }
 
-    // Session, calendar event, database and form channel grants are canonical
-    // entity-access rows, and a reference keeps any grant the owner already chose.
+    // Session, calendar event, database, form and external chat channel
+    // grants are canonical entity-access rows, and a reference keeps any grant
+    // the owner already chose.
     if matches!(
         item.entity_type(),
         ReferencedShareItemType::AgentSession
             | ReferencedShareItemType::CalendarEvent
             | ReferencedShareItemType::Database
             | ReferencedShareItemType::Form
+            | ReferencedShareItemType::ExternalChat
     ) {
         let mut transaction = db.begin().await?;
         entity_access_db_utils::channel_share::insert_if_absent(
@@ -193,6 +222,7 @@ fn entity_access_type_for(item_type: ReferencedShareItemType) -> EntityType {
         ReferencedShareItemType::Call => EntityType::Call,
         ReferencedShareItemType::CalendarEvent => EntityType::CalendarEvent,
         ReferencedShareItemType::Form => EntityType::Form,
+        ReferencedShareItemType::ExternalChat => EntityType::ExternalChat,
     }
 }
 
@@ -209,5 +239,6 @@ fn entity_access_db_type_for(
         ReferencedShareItemType::Call => entity_access_db_utils::EntityType::Call,
         ReferencedShareItemType::CalendarEvent => entity_access_db_utils::EntityType::CalendarEvent,
         ReferencedShareItemType::Form => entity_access_db_utils::EntityType::Form,
+        ReferencedShareItemType::ExternalChat => entity_access_db_utils::EntityType::ExternalChat,
     }
 }

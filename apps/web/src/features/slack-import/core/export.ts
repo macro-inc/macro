@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-/** Browser-owned subset of the effective limits in SLACK_ARCHIVE_IMPORT_CONTRACT.md. */
+/** Browser-owned subset of the effective limits in docs/runbooks/slack-archive-import-contract.md. */
 export type ArchiveLimits = {
   jsonBytes: number;
   selectedBytes: number;

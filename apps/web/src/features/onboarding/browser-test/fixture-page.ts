@@ -23,6 +23,9 @@ export async function openFixture(
     [FIXTURE_KEYS, world, checkoutOutcome] as const
   );
   await page.goto(path);
+  // Vite may reload once while optimizing a cold dependency graph. Wait for
+  // the fixture before tests seed the step or inspect its fake backend.
+  await page.waitForFunction(() => Boolean(window.onboardingFixture));
 }
 
 export const fakeWorld = (page: Page) =>

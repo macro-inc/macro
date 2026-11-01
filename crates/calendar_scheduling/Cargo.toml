@@ -10,7 +10,7 @@ default = []
 ai_tools = ["dep:ai_toolset", "dep:async-trait", "dep:schemars", "dep:anyhow"]
 postgres = ["dep:sqlx"]
 inbound = ["dep:axum", "dep:macro_authorization"]
-calendar = ["dep:calendar_events", "dep:teams", "dep:macro_user_id"]
+calendar = ["dep:calendar_events", "dep:teams", "dep:macro_user_id", "dep:reqwest"]
 
 [dependencies]
 reqwest = { workspace = true, optional = true }
@@ -39,3 +39,4 @@ macro_user_id = { path = "../macro_user_id", optional = true }
 model_user = { path = "../model_user" }
 reqwest = { workspace = true }
 tokio = { workspace = true }
+wiremock = { workspace = true }

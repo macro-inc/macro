@@ -1,4 +1,6 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { QueryKey } from '@tanstack/query-core';
+import { RecoverableIDB } from '../../persistence/recoverable-idb';
 
 export type PersistedQueryEntry = Readonly<{
   queryHash: string;
@@ -29,27 +31,16 @@ type PerQueryPersistenceOptions = Readonly<{
 const STORE_NAME = 'queries';
 const DEFAULT_DEBOUNCE_MS = 1000;
 
-const dbCache = new Map<string, IDBDatabase>();
+const dbCache = new Map<string, RecoverableIDB>();
 
-function openDB(dbName: string): Promise<IDBDatabase> {
+function database(dbName: string): RecoverableIDB {
   const cached = dbCache.get(dbName);
-  if (cached) return Promise.resolve(cached);
-  return new Promise((resolve, reject) => {
-    const req = indexedDB.open(dbName, 1);
-    req.onupgradeneeded = () => {
-      const db = req.result;
-      if (!db.objectStoreNames.contains(STORE_NAME)) {
-        db.createObjectStore(STORE_NAME);
-      }
-    };
-    req.onsuccess = () => {
-      const db = req.result;
-      db.onclose = () => dbCache.delete(dbName);
-      dbCache.set(dbName, db);
-      resolve(db);
-    };
-    req.onerror = () => reject(req.error);
+  if (cached) return cached;
+  const db = new RecoverableIDB(dbName, 1, (db) => {
+    db.createObjectStore(STORE_NAME);
   });
+  dbCache.set(dbName, db);
+  return db;
 }
 
 async function withStore<T>(
@@ -57,9 +48,8 @@ async function withStore<T>(
   mode: IDBTransactionMode,
   fn: (store: IDBObjectStore) => IDBRequest<T>
 ): Promise<T> {
-  const db = await openDB(dbName);
+  const tx = await database(dbName).transaction(STORE_NAME, mode);
   return new Promise<T>((resolve, reject) => {
-    const tx = db.transaction(STORE_NAME, mode);
     const store = tx.objectStore(STORE_NAME);
     const req = fn(store);
     req.onsuccess = () => resolve(req.result);
@@ -109,9 +99,8 @@ export function createPerQueryIDBStore(
 
     try {
       await enqueueWrite(async () => {
-        const db = await openDB(dbName);
+        const tx = await database(dbName).transaction(STORE_NAME, 'readwrite');
         if (generation !== currentGeneration) return;
-        const tx = db.transaction(STORE_NAME, 'readwrite');
         const store = tx.objectStore(STORE_NAME);
 
         for (const [hash, entry] of puts) {
@@ -144,7 +133,7 @@ export function createPerQueryIDBStore(
     if (timer) return;
     timer = setTimeout(() => {
       timer = null;
-      void flush();
+      fireAndForget(flush(), 'query-persistence');
     }, debounceMs);
   };
 
@@ -188,8 +177,7 @@ export function createPerQueryIDBStore(
       pendingPuts.clear();
       pendingDeletes.clear();
       await enqueueWrite(async () => {
-        const db = await openDB(dbName);
-        const tx = db.transaction(STORE_NAME, 'readwrite');
+        const tx = await database(dbName).transaction(STORE_NAME, 'readwrite');
         tx.objectStore(STORE_NAME).clear();
         await new Promise<void>((resolve, reject) => {
           tx.oncomplete = () => resolve();

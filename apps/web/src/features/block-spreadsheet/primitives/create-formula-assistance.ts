@@ -1,9 +1,12 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { CompletionContext } from '@ironcalc/wasm';
 import { createSignal, onCleanup } from 'solid-js';
 import {
   type FormulaCompletion,
   formulaCompletion,
   insertFunction,
+  type TableReferences,
+  tableCompletion,
 } from '../core/formula-completion';
 import { SPREADSHEET_MAX_CELL_LENGTH } from '../core/spreadsheet-document';
 
@@ -15,7 +18,9 @@ export type CompleteFormula = (
 /** Coalesce keystrokes while the worker loads; never replace a newer draft with old help. */
 export function createFormulaAssistance(
   complete: CompleteFormula,
-  replace: (text: string, cursor: number) => void
+  replace: (text: string, cursor: number) => void,
+  /** Tables to suggest; their names and columns complete without the worker. */
+  tables?: () => TableReferences | undefined
 ) {
   const [completion, setCompletion] = createSignal<FormulaCompletion>();
   const [selected, setSelected] = createSignal(0);
@@ -71,18 +76,41 @@ export function createFormulaAssistance(
     const previous = latest ?? shown;
     if (previous?.text === text && previous.cursor === cursor) return;
     version++;
+    const references = tables?.();
+    const local = references && tableCompletion(text, cursor, references);
+    if (local) {
+      latest = undefined;
+      shown = { text, cursor };
+      setSelected(0);
+      setCompletion(local);
+      return;
+    }
     latest = { text, cursor };
     shown = undefined;
     setCompletion(undefined);
-    void drain();
+    fireAndForget(drain(), 'spreadsheet-editor');
   }
 
   function accept(index = selected()) {
     const result = completion();
-    if (result?.kind !== 'list' || !shown) return;
-    const name = result.names[index];
-    if (!name) return;
-    const next = insertFunction(shown.text, shown.cursor, result.from, name);
+    if (!shown) return;
+    let next: { text: string; cursor: number } | undefined;
+    if (result?.kind === 'references') {
+      const item = result.items[index];
+      if (!item) return;
+      next = {
+        text:
+          shown.text.slice(0, result.from) +
+          item.insert +
+          shown.text.slice(result.to),
+        cursor: result.from + item.insert.length,
+      };
+    } else if (result?.kind === 'list') {
+      const name = result.names[index];
+      if (!name) return;
+      next = insertFunction(shown.text, shown.cursor, result.from, name);
+    }
+    if (!next) return;
     dismiss();
     if (next.text.length > SPREADSHEET_MAX_CELL_LENGTH) return;
     replace(next.text, next.cursor);
@@ -98,13 +126,17 @@ export function createFormulaAssistance(
       dismiss();
       return true;
     }
-    if (result?.kind !== 'list') return false;
+    const count =
+      result?.kind === 'list'
+        ? result.names.length
+        : result?.kind === 'references'
+          ? result.items.length
+          : 0;
+    if (!count) return false;
     if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
       event.preventDefault();
       const delta = event.key === 'ArrowDown' ? 1 : -1;
-      setSelected(
-        (index) => (index + delta + result.names.length) % result.names.length
-      );
+      setSelected((index) => (index + delta + count) % count);
       return true;
     }
     if ((event.key === 'Tab' && !event.shiftKey) || event.key === 'Enter') {

@@ -1,9 +1,11 @@
-import OpenIcon from '@phosphor/arrow-square-out.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import GripIcon from '@phosphor/dots-six-vertical.svg';
-import DotsIcon from '@phosphor/dots-three.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import OpenIcon from '@icon/system/regular/arrows-out-simple.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import EmptyIcon from '@icon/system/regular/circle-dashed.svg';
+import GripIcon from '@icon/system/regular/dots-six-vertical.svg';
+import DotsIcon from '@icon/system/regular/dots-three.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import { TagDot } from '@property/tags/TagDot';
 import type { DatabaseOpsError } from '@service-storage/databases';
 import type { ViewLayout } from '@service-storage/generated/schemas/viewLayout';
 import { Key } from '@solid-primitives/keyed';
@@ -19,31 +21,21 @@ import {
   onCleanup,
   Show,
 } from 'solid-js';
-import {
-  Kanban,
-  KanbanCard,
-  KanbanCardInsertion,
-  KanbanHandle,
-  KanbanLane,
-} from '../../../components/kanban/kanban';
+import { KanbanHandle } from '../../../components/kanban/kanban';
+import { KanbanBoard } from '../../../components/kanban/kanban-board';
+import type { KanbanBoardColumn } from '../../../components/kanban/kanban-board-types';
 import type {
   Board,
   LaneKey,
 } from '../../../lib/core/database-sql/generated/types';
 import { isEditableInput } from '../../../lib/core/util/isEditableInput';
-import { useOptionEditing } from '../context/option-editing';
-import {
-  type DatabaseEntityType,
-  inferDatabaseNumber,
-} from '../core/column-inference';
-import { columnSchemaMessage } from '../core/column-schema';
+import type { DatabaseEntityType } from '../core/column-inference';
 import {
   type DatabaseOption,
   type DatabaseViewColumn,
   databaseCellValues,
   isOptionColumn,
 } from '../core/database-view';
-import { isDatabaseNameTaken } from '../core/property-creation';
 import {
   cellTitle,
   type DatabaseRow,
@@ -52,8 +44,9 @@ import {
   rowValue,
 } from '../core/table';
 import { cardTitleColumn, laneId, laneLabel } from '../core/views';
+import { BoardLaneHeader } from './board-lane-header';
 import type { DatabaseTableProps } from './database-table';
-import { OptionEditor } from './option-editor';
+import { NewBoardGroup } from './new-board-group';
 import { PropertyIcon } from './property-icon';
 import { SelectPill } from './select-pill';
 
@@ -91,7 +84,6 @@ type DatabaseBoardProps = {
   /** The lanes, every one, in their new order. */
   onLaneOrderChange?: (order: LaneKey[]) => void;
   onHideLane?: (lane: LaneKey) => void;
-  onHideEmptyLanes?: (hide: boolean) => void;
   /** Resolves whether the record was saved. `open` asks to show it once it is. */
   onCreate: (
     lane: LaneKey,
@@ -99,6 +91,8 @@ type DatabaseBoardProps = {
     intentId: string,
     options?: { open: true }
   ) => Promise<boolean>;
+  /** Starts a record in `lane` in the host's form in place of an inline card. */
+  onCompose?: (lane: LaneKey) => void;
   onAddGroup?: (label: string) => Promise<DatabaseGroupAdded>;
   /** Hands the host a way to start a card, as the toolbar's New record does. */
   controlsRef?: (controls: DatabaseBoardControls) => void;
@@ -121,7 +115,10 @@ type CardDraft = {
 type DraftSubmission = 'next' | 'open' | 'stay';
 
 export function DatabaseBoard(props: DatabaseBoardProps) {
-  let viewport: HTMLDivElement | undefined;
+  let boardControls:
+    | { revealColumn: (id: string) => void; revealFooter: (id: string) => void }
+    | undefined;
+  let focusDraft: string | undefined;
   const lanes = createMemo((): BoardGroup[] => {
     const rows = new Map(props.rows.map((row) => [row.rowId, row]));
     return props.board.lanes
@@ -145,6 +142,16 @@ export function DatabaseBoard(props: DatabaseBoardProps) {
         };
       });
   });
+  const columns = createMemo((): KanbanBoardColumn[] =>
+    lanes().map((group) => ({
+      id: group.key,
+      label: `${group.label} lane`,
+      itemIds: group.rows.map((row) => row.rowId),
+    }))
+  );
+  const groupsById = createMemo(
+    () => new Map(lanes().map((group) => [group.key, group]))
+  );
   const laneOf = (key: string): LaneKey =>
     lanes().find((lane) => lane.key === key)?.lane ?? { kind: 'none' };
   const [announcement, setAnnouncement] = createSignal('');
@@ -168,20 +175,32 @@ export function DatabaseBoard(props: DatabaseBoardProps) {
       drafts.map((draft) => (draft.id === id ? { ...draft, ...change } : draft))
     );
   const removeDraft = (id: string) => {
+    if (focusDraft === id) focusDraft = undefined;
     draftElements.delete(id);
     setDrafts((drafts) => drafts.filter((draft) => draft.id !== id));
   };
   function startDraft(lane: string) {
+    if (props.onCompose) {
+      props.onCompose(laneOf(lane));
+      return;
+    }
     const open = laneDrafts(lane).find(
       (draft) => !isSaving(draft) && !draft.title.trim()
     );
     const id = open?.id ?? `${draftPrefix}:${++draftSequence}`;
+    focusDraft = id;
     if (!open)
       setDrafts((drafts) => [
         ...drafts.filter((draft) => !props.createComplete?.(draft.id)),
         { id, lane, title: '', saving: false },
       ]);
-    draftElements.get(id)?.focus();
+    boardControls?.revealFooter(lane);
+    const element = draftElements.get(id);
+    if (element?.isConnected) {
+      focusDraft = undefined;
+      element.focus();
+      element.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    }
   }
   function cancelDraft(id: string, returnFocus: boolean) {
     const draft = drafts().find((draft) => draft.id === id);
@@ -251,16 +270,22 @@ export function DatabaseBoard(props: DatabaseBoardProps) {
     );
   }
   return (
-    <div
-      ref={viewport}
-      class="min-h-0 flex-1 overflow-auto px-5 py-5 [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-ink/50"
-    >
+    <div class="flex min-h-0 min-w-0 flex-1 flex-col [&_button:focus-visible]:ring-2 [&_button:focus-visible]:ring-ink/50">
       <p class="sr-only" role="status" aria-live="polite">
         {announcement()}
       </p>
-      <Kanban
-        getViewport={() => viewport}
-        canDropCard={(drop) =>
+      <KanbanBoard.Root
+        mode="ordered"
+        columns={columns()}
+        animationScope={JSON.stringify([
+          props.groupColumn.id,
+          props.layout.title,
+          props.layout.cardFields,
+        ])}
+        controlsRef={(controls) => {
+          boardControls = controls;
+        }}
+        canMove={(drop) =>
           props.rows.some((row) => row.rowId === drop.id) &&
           lanes().some((lane) => lane.key === drop.toLane) &&
           canMove()
@@ -274,53 +299,68 @@ export function DatabaseBoard(props: DatabaseBoardProps) {
           if (target) move(drop.id, target, drop.beforeId);
         }}
       >
-        <div
-          class="flex min-h-full min-w-fit items-start gap-4 pb-4"
+        <KanbanBoard.Columns
           aria-label={`Board grouped by ${props.groupColumn.name}`}
+          endColumn={
+            props.canEdit && props.groupColumn.writable && props.onAddGroup
+              ? () => (
+                  <NewBoardGroup
+                    column={props.groupColumn}
+                    onSave={props.onAddGroup!}
+                  />
+                )
+              : undefined
+          }
         >
-          <Key each={lanes()} by="key">
-            {(group) => (
-              <BoardLane
-                group={group()}
-                {...props}
-                groups={lanes()}
-                drafts={laneDrafts(group().key)}
-                canSetTitle={canSetTitle()}
-                titlePlaceholder={titleField()?.name ?? 'Record title'}
-                acceptsRecords={canMove()}
-                canMove={canMove()}
-                isSaving={isSaving}
-                onStartDraft={() => startDraft(group().key)}
-                onDraftInput={(id, title) => updateDraft(id, { title })}
-                onSubmitDraft={(id, submission) =>
-                  void submitDraft(id, submission)
-                }
-                onCancelDraft={cancelDraft}
-                draftRef={(id, element) => draftElements.set(id, element)}
-                newButtonRef={(element) => newButtons.set(group().key, element)}
-                onMoveCard={(rowId, lane) => move(rowId, lane)}
-                onReorder={(direction) => {
-                  const index = lanes().findIndex(
-                    (item) => item.key === group().key
-                  );
-                  const target =
-                    lanes()[index + (direction === 'left' ? -1 : 1)];
-                  if (target) reorder(group().key, target.key);
-                }}
-              />
-            )}
-          </Key>
-          <Show
-            when={
-              props.canEdit && props.groupColumn.writable && props.onAddGroup
-            }
-          >
-            {(addGroup) => (
-              <NewBoardGroup column={props.groupColumn} onSave={addGroup()} />
-            )}
-          </Show>
-        </div>
-      </Kanban>
+          {(column) => (
+            <Show when={groupsById().get(column().id)}>
+              {(group) => (
+                <BoardLane
+                  group={group()}
+                  {...props}
+                  groups={lanes()}
+                  drafts={laneDrafts(group().key)}
+                  canSetTitle={canSetTitle()}
+                  titlePlaceholder={titleField()?.name ?? 'Record title'}
+                  acceptsRecords={canMove()}
+                  canMove={canMove()}
+                  isSaving={isSaving}
+                  onStartDraft={() => startDraft(group().key)}
+                  onDraftInput={(id, title) => updateDraft(id, { title })}
+                  onSubmitDraft={(id, submission) =>
+                    fireAndForget(submitDraft(id, submission), 'database')
+                  }
+                  onCancelDraft={cancelDraft}
+                  draftRef={(id, element) => {
+                    draftElements.set(id, element);
+                    queueMicrotask(() => {
+                      if (focusDraft !== id || !element.isConnected) return;
+                      focusDraft = undefined;
+                      element.focus();
+                      element.scrollIntoView?.({
+                        block: 'nearest',
+                        inline: 'nearest',
+                      });
+                    });
+                  }}
+                  newButtonRef={(element) =>
+                    newButtons.set(group().key, element)
+                  }
+                  onMoveCard={(rowId, lane) => move(rowId, lane)}
+                  onReorder={(direction) => {
+                    const index = lanes().findIndex(
+                      (item) => item.key === group().key
+                    );
+                    const target =
+                      lanes()[index + (direction === 'left' ? -1 : 1)];
+                    if (target) reorder(group().key, target.key);
+                  }}
+                />
+              )}
+            </Show>
+          )}
+        </KanbanBoard.Columns>
+      </KanbanBoard.Root>
     </div>
   );
 }
@@ -345,14 +385,11 @@ function BoardLane(
     onMoveCard: (rowId: string, lane: BoardGroup) => void;
   }
 ) {
-  const editing = useOptionEditing();
   const hasOpenDraft = () =>
     props.drafts.some((draft) => !props.isSaving(draft));
   const savingCount = () => props.drafts.filter(props.isSaving).length;
   return (
-    <KanbanLane
-      id={props.group.key}
-      label={`${props.group.label} lane`}
+    <KanbanBoard.Column
       canReorder={!!props.onLaneOrderChange}
       onKeyDown={(event) => {
         // "n" adds a card to the lane holding focus, as Enter does on its header.
@@ -372,99 +409,107 @@ function BoardLane(
         props.onStartDraft();
       }}
     >
-      <KanbanHandle
-        label={
-          props.onLaneOrderChange
-            ? `Reorder ${props.group.label} lane`
-            : `${props.group.label} lane`
-        }
-        class="mb-2 flex min-h-9 items-center gap-1.5 rounded px-1.5 outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
-        onKeyDown={
-          props.onLaneOrderChange || props.acceptsRecords
-            ? (event) => {
-                if (event.target !== event.currentTarget) return;
-                if (
-                  props.onLaneOrderChange &&
-                  event.altKey &&
-                  (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
-                ) {
-                  event.preventDefault();
-                  event.stopPropagation();
-                  props.onReorder(event.key === 'ArrowLeft' ? 'left' : 'right');
-                } else if (props.acceptsRecords && event.key === 'Enter') {
-                  event.preventDefault();
-                  props.onStartDraft();
+      <KanbanBoard.Header>
+        <KanbanHandle
+          label={
+            props.onLaneOrderChange
+              ? `Reorder ${props.group.label} lane`
+              : `${props.group.label} lane`
+          }
+          class="flex min-h-7 min-w-0 w-full items-center gap-2 rounded outline-none focus-visible:ring-2 focus-visible:ring-ink/50"
+          onKeyDown={
+            props.onLaneOrderChange || props.acceptsRecords
+              ? (event) => {
+                  if (event.target !== event.currentTarget) return;
+                  if (
+                    props.onLaneOrderChange &&
+                    event.altKey &&
+                    (event.key === 'ArrowLeft' || event.key === 'ArrowRight')
+                  ) {
+                    event.preventDefault();
+                    event.stopPropagation();
+                    props.onReorder(
+                      event.key === 'ArrowLeft' ? 'left' : 'right'
+                    );
+                  } else if (props.acceptsRecords && event.key === 'Enter') {
+                    event.preventDefault();
+                    props.onStartDraft();
+                  }
                 }
-              }
-            : undefined
+              : undefined
+          }
+        >
+          <BoardLaneHeader
+            column={props.groupColumn}
+            option={props.group.option}
+            label={props.group.label}
+            count={props.group.rows.length + savingCount()}
+            canEdit={props.canEdit}
+            icon={<LaneIcon group={props.group} column={props.groupColumn} />}
+            onHide={
+              props.onHideLane
+                ? () => props.onHideLane?.(props.group.lane)
+                : undefined
+            }
+            onAdd={props.acceptsRecords ? props.onStartDraft : undefined}
+          >
+            <LaneHeading
+              group={props.group}
+              renderMentionValue={props.renderMentionValue}
+            />
+          </BoardLaneHeader>
+        </KanbanHandle>
+      </KanbanBoard.Header>
+      <KanbanBoard.Cards
+        itemsLabel="records"
+        empty={
+          <Show when={!props.drafts.length}>
+            <p class="px-2 py-6 text-center text-xs text-ink-extra-muted">
+              {props.acceptsRecords ? 'Drop a record here' : 'No records'}
+            </p>
+          </Show>
+        }
+        footer={
+          <div class="flex flex-col gap-3 pt-3">
+            <Key each={props.drafts} by="id">
+              {(draft) => (
+                <NewBoardCard
+                  title={draft().title}
+                  titlePlaceholder={props.titlePlaceholder}
+                  icon={
+                    <LaneIcon group={props.group} column={props.groupColumn} />
+                  }
+                  canSetTitle={props.canSetTitle}
+                  saving={props.isSaving(draft())}
+                  ref={(element) => props.draftRef(draft().id, element)}
+                  onInput={(title) => props.onDraftInput(draft().id, title)}
+                  onSubmit={(submission) =>
+                    props.onSubmitDraft(draft().id, submission)
+                  }
+                  onCancel={(returnFocus) =>
+                    props.onCancelDraft(draft().id, returnFocus)
+                  }
+                />
+              )}
+            </Key>
+            <Show when={props.acceptsRecords && !hasOpenDraft()}>
+              <Button
+                ref={props.newButtonRef}
+                variant="ghost"
+                size="lg"
+                aria-label="New record"
+                class="justify-start rounded-md text-sm text-ink-placeholder"
+                onClick={props.onStartDraft}
+              >
+                <PlusIcon class="size-3.5" />
+                New
+              </Button>
+            </Show>
+          </div>
         }
       >
-        <LanePill
-          group={props.group}
-          column={props.groupColumn}
-          renderMentionValue={props.renderMentionValue}
-        />
-        <span class="text-xs tabular-nums text-ink-placeholder">
-          {props.group.rows.length + savingCount()}
-        </span>
-        <span class="ml-auto flex items-center" data-kanban-no-drag>
-          <Show when={editing}>
-            {(optionEditing) => (
-              <Show when={props.canEdit && props.group.option}>
-                {(option) => (
-                  <OptionEditor
-                    column={props.groupColumn}
-                    option={option()}
-                    editing={optionEditing()}
-                  />
-                )}
-              </Show>
-            )}
-          </Show>
-          <Show when={props.onHideLane || props.onHideEmptyLanes}>
-            <Dropdown>
-              <Dropdown.Trigger
-                variant="ghost"
-                size="icon-xs"
-                aria-label={`${props.group.label} lane menu`}
-              >
-                <CaretDownIcon class="size-3" />
-              </Dropdown.Trigger>
-              <Dropdown.Content class="min-w-44">
-                <Show when={props.onHideLane}>
-                  <Dropdown.Item
-                    onSelect={() => props.onHideLane?.(props.group.lane)}
-                  >
-                    Hide lane
-                  </Dropdown.Item>
-                </Show>
-                <Show when={props.onHideEmptyLanes}>
-                  <Dropdown.CheckboxItem
-                    checked={props.layout.hideEmptyLanes}
-                    onChange={(checked) => props.onHideEmptyLanes?.(checked)}
-                  >
-                    Hide empty lanes
-                  </Dropdown.CheckboxItem>
-                </Show>
-              </Dropdown.Content>
-            </Dropdown>
-          </Show>
-          <Show when={props.acceptsRecords}>
-            <Button
-              size="icon-xs"
-              label={`Add record to ${props.group.label}`}
-              tooltipDisabled
-              title={`Add record to ${props.group.label}`}
-              onClick={props.onStartDraft}
-            >
-              <PlusIcon class="size-3.5" />
-            </Button>
-          </Show>
-        </span>
-      </KanbanHandle>
-      <div class="flex min-h-10 flex-col gap-2">
-        <div class="relative flex flex-col gap-2">
-          <Key each={props.group.rows} by="rowId">
+        {(id) => (
+          <Show when={props.group.rows.find((row) => row.rowId === id)}>
             {(row) => (
               <BoardCard
                 row={row()}
@@ -483,47 +528,58 @@ function BoardLane(
                 onMove={props.onMoveCard}
               />
             )}
-          </Key>
-          <KanbanCardInsertion laneId={props.group.key} />
-        </div>
-        <Show when={props.group.rows.length === 0 && !props.drafts.length}>
-          <div class="flex min-h-20 items-center justify-center rounded-lg border border-dashed border-edge-muted/70 px-4 text-xs text-ink-placeholder">
-            {props.acceptsRecords ? 'Drop a record here' : 'No records'}
-          </div>
-        </Show>
-        <Key each={props.drafts} by="id">
-          {(draft) => (
-            <NewBoardCard
-              title={draft().title}
-              titlePlaceholder={props.titlePlaceholder}
-              canSetTitle={props.canSetTitle}
-              saving={props.isSaving(draft())}
-              ref={(element) => props.draftRef(draft().id, element)}
-              onInput={(title) => props.onDraftInput(draft().id, title)}
-              onSubmit={(submission) =>
-                props.onSubmitDraft(draft().id, submission)
-              }
-              onCancel={(returnFocus) =>
-                props.onCancelDraft(draft().id, returnFocus)
-              }
+          </Show>
+        )}
+      </KanbanBoard.Cards>
+    </KanbanBoard.Column>
+  );
+}
+
+function LaneIcon(props: { group: BoardGroup; column: DatabaseViewColumn }) {
+  return (
+    <span
+      aria-hidden="true"
+      class="flex size-4 shrink-0 items-center justify-center"
+    >
+      <Show
+        when={props.group.lane.kind !== 'none'}
+        fallback={<EmptyIcon class="size-4 text-ink-muted" />}
+      >
+        <Show
+          when={props.group.option || props.column.dataType === 'TAG'}
+          fallback={
+            <PropertyIcon
+              type={props.column.dataType}
+              entityType={props.column.specificEntityType}
+              class="size-4 text-ink-muted"
             />
-          )}
-        </Key>
-        <Show when={props.acceptsRecords && !hasOpenDraft()}>
-          <Button
-            ref={props.newButtonRef}
-            variant="ghost"
-            size="xs"
-            aria-label="New record"
-            class="h-7 justify-start gap-1.5 rounded-md px-1.5 text-ink-placeholder"
-            onClick={props.onStartDraft}
-          >
-            <PlusIcon class="size-3.5" />
-            New
-          </Button>
+          }
+        >
+          <TagDot
+            color={props.group.option?.color ?? undefined}
+            class="size-2.5"
+          />
         </Show>
-      </div>
-    </KanbanLane>
+      </Show>
+    </span>
+  );
+}
+
+function LaneHeading(props: {
+  group: BoardGroup;
+  renderMentionValue?: (id: string, type: DatabaseEntityType) => JSX.Element;
+}) {
+  const person = () => {
+    const lane = props.group.lane;
+    const render = props.renderMentionValue;
+    return lane.kind === 'user' && render ? { id: lane.id, render } : undefined;
+  };
+  return (
+    <KanbanBoard.ColumnLabel title={props.group.label}>
+      <Show when={person()} fallback={props.group.label}>
+        {(shown) => shown().render(shown().id, 'USER')}
+      </Show>
+    </KanbanBoard.ColumnLabel>
   );
 }
 
@@ -555,127 +611,6 @@ function LanePill(props: {
         </span>
       )}
     </Show>
-  );
-}
-
-function NewBoardGroup(props: {
-  column: DatabaseViewColumn;
-  onSave: (label: string) => Promise<DatabaseGroupAdded>;
-}) {
-  const [adding, setAdding] = createSignal(false);
-  const [draft, setDraft] = createSignal('');
-  const [pending, setPending] = createSignal(false);
-  const [error, setError] = createSignal('');
-  let input: HTMLInputElement | undefined;
-  const cancel = () => {
-    if (!pending()) {
-      setAdding(false);
-      setError('');
-    }
-  };
-  async function save(event: SubmitEvent) {
-    event.preventDefault();
-    const entered = draft().trim();
-    if (!entered || pending()) return;
-    const number =
-      props.column.dataType === 'SELECT_NUMBER'
-        ? inferDatabaseNumber(entered)
-        : undefined;
-    if (props.column.dataType === 'SELECT_NUMBER' && number === undefined) {
-      setError('Enter a valid number for this group.');
-      return;
-    }
-    const label = number === undefined ? entered : String(number);
-    if (
-      isDatabaseNameTaken(
-        label,
-        props.column.options.map((option) => option.label)
-      )
-    ) {
-      setError('A group with this name already exists.');
-      return;
-    }
-    setPending(true);
-    setError('');
-    const added = await props.onSave(label);
-    setPending(false);
-    added.match(
-      () => {
-        setAdding(false);
-        setDraft('');
-      },
-      (error) => setError(columnSchemaMessage(error))
-    );
-  }
-  return (
-    <div class="w-64 shrink-0 pt-2">
-      <Show
-        when={adding()}
-        fallback={
-          <Button
-            size="xs"
-            class="gap-2"
-            onClick={() => {
-              setDraft('');
-              setAdding(true);
-              queueMicrotask(() => input?.focus());
-            }}
-          >
-            <PlusIcon class="size-3.5" />
-            New group
-          </Button>
-        }
-      >
-        <form
-          class="rounded-xl border border-edge-muted bg-panel p-3 shadow-sm"
-          onSubmit={(event) => void save(event)}
-        >
-          <p class="mb-2 block text-xs font-medium text-ink-muted">
-            New {props.column.name.toLowerCase()} group
-          </p>
-          <input
-            ref={input}
-            value={draft()}
-            maxlength={200}
-            aria-label="New group name"
-            placeholder={
-              props.column.dataType === 'SELECT_NUMBER'
-                ? 'Enter a number…'
-                : 'Group name…'
-            }
-            readOnly={pending()}
-            class="w-full rounded-md border border-edge-muted bg-input px-2.5 py-2 text-xs outline-none focus:border-ink/50"
-            onInput={(event) => {
-              setDraft(event.currentTarget.value);
-              setError('');
-            }}
-            onKeyDown={(event) => {
-              if (event.key === 'Escape') {
-                event.preventDefault();
-                cancel();
-              }
-            }}
-          />
-          <Show when={error()}>
-            <p role="alert" class="mt-2 text-xs leading-5 text-failure-ink">
-              {error()}
-            </p>
-          </Show>
-          <div class="mt-3 flex items-center gap-2">
-            <Button
-              size="sm"
-              type="submit"
-              disabled={pending() || !draft().trim()}
-            >
-              {pending() ? 'Adding…' : 'Add group'}
-            </Button>
-            <Button size="xs" disabled={pending()} onClick={cancel}>
-              Cancel
-            </Button>
-          </div>
-        </form>
-      </Show>
-    </div>
   );
 }
 
@@ -723,67 +658,147 @@ function BoardCard(props: {
         : [];
     });
   return (
-    <KanbanCard
+    <KanbanBoard.Card
       id={props.row.rowId}
-      laneId={props.laneId}
       canDrag={props.canEdit}
       pending={props.pending}
     >
-      <div class="min-w-0 rounded-lg p-3">
-        <Show
-          when={props.renderCell && props.titleColumn}
-          fallback={
-            <button
-              type="button"
-              class="block w-full text-left"
-              onClick={() => props.onOpen(props.row.rowId)}
-              aria-label={`Open ${title()}`}
-            >
-              <span
-                role="heading"
-                aria-level={3}
-                class="block break-words pr-10 text-sm font-semibold leading-5 text-ink"
+      <div
+        class="grid grid-cols-[1.5rem_minmax(0,1fr)_auto] gap-x-2 p-3"
+        data-card-grid
+      >
+        <KanbanBoard.CardHeader class="col-span-full grid-cols-subgrid p-0 last:pb-0">
+          <Show
+            when={props.canEdit}
+            fallback={<span aria-hidden="true" class="size-6" />}
+          >
+            <KanbanHandle label={`Drag ${title()}`}>
+              <Button
+                variant="ghost"
+                aria-label={`Drag ${title()}`}
+                tooltip={{ content: `Drag ${title()}`, disabled: true }}
+                size="icon-xs"
+                class="size-6 touch-none text-ink-muted"
+                title="Drag to another group, or use the Move menu"
+                tabindex={-1}
               >
-                {renderedTitle()}
-              </span>
-            </button>
-          }
-        >
-          {(column) => (
-            <div
-              class="min-w-0 pr-16 text-sm font-semibold"
-              data-kanban-no-drag
-            >
-              {props.renderCell?.(() => props.row, column)}
-            </div>
-          )}
-        </Show>
+                <GripIcon class="size-4" />
+              </Button>
+            </KanbanHandle>
+          </Show>
+          <Show
+            when={props.renderCell && props.titleColumn}
+            fallback={
+              <button
+                type="button"
+                class="min-w-0 break-words text-left text-sm font-medium leading-6 text-ink hover:underline"
+                onClick={() => props.onOpen(props.row.rowId)}
+                aria-label={`Open ${title()}`}
+              >
+                <span role="heading" aria-level={3}>
+                  {renderedTitle()}
+                </span>
+              </button>
+            }
+          >
+            {(column) => (
+              <div
+                class="min-w-0 text-sm font-medium leading-6 text-ink [&_[data-cell-text-editor]]:min-h-6 [&_[data-cell-text-editor]]:break-words [&_[data-cell-text-editor]]:border-0 [&_[data-cell-text-editor]]:bg-transparent [&_[data-cell-text-editor]]:p-0 [&_[data-cell-text-editor]]:text-sm [&_[data-cell-text-editor]]:font-medium [&_[data-cell-text-editor]]:leading-6 [&_[data-cell-text-editor]]:ring-0 [&_[data-cell-text-editor][aria-invalid=true]]:ring-1 [&_[data-cell-text-editor][aria-invalid=true]]:ring-failure"
+                data-kanban-no-drag
+              >
+                {props.renderCell?.(() => props.row, column)}
+              </div>
+            )}
+          </Show>
+          <KanbanBoard.CardActions>
+            <Show when={props.renderCell}>
+              <Button
+                variant="ghost"
+                aria-label={`Open ${title()}`}
+                tooltip={{ content: `Open ${title()}`, disabled: true }}
+                size="icon-xs"
+                title="Open record details"
+                onClick={() => props.onOpen(props.row.rowId)}
+              >
+                <OpenIcon class="size-3.5" />
+              </Button>
+            </Show>
+            <Show when={props.canEdit}>
+              <Dropdown>
+                <Dropdown.Trigger
+                  variant="ghost"
+                  size="icon-xs"
+                  aria-label={`Move ${title()}`}
+                  title="Move to another group"
+                >
+                  <DotsIcon class="size-4" />
+                </Dropdown.Trigger>
+                <Dropdown.Content class="min-w-44">
+                  <Dropdown.Group>
+                    <Dropdown.GroupLabel>Move to</Dropdown.GroupLabel>
+                    <For each={props.groups}>
+                      {(group) => (
+                        <Dropdown.Item
+                          disabled={group.key === props.laneId}
+                          onSelect={() => props.onMove(props.row.rowId, group)}
+                        >
+                          <span class="flex-1">
+                            <LanePill
+                              group={group}
+                              column={props.groupColumn}
+                              renderMentionValue={props.renderMentionValue}
+                            />
+                          </span>
+                          <Show when={group.key === props.laneId}>
+                            <CheckIcon class="size-3.5" />
+                          </Show>
+                        </Dropdown.Item>
+                      )}
+                    </For>
+                  </Dropdown.Group>
+                </Dropdown.Content>
+              </Dropdown>
+            </Show>
+          </KanbanBoard.CardActions>
+        </KanbanBoard.CardHeader>
         <Show when={metadata().length}>
-          <div class="mt-3 flex flex-col gap-2 border-t border-edge-muted/50 pt-2.5">
-            <For each={metadata()}>
+          <KanbanBoard.CardFields class="col-start-2 col-span-2 p-0 pt-2">
+            <Key each={metadata()} by="id">
               {(column) => (
                 <div
-                  class="flex min-w-0 items-center gap-2"
+                  class="flex min-h-6 min-w-0 max-w-40 items-center gap-2 rounded pl-1.5 hover:bg-hover has-[[aria-invalid=true]]:ring-1 has-[[aria-invalid=true]]:ring-failure"
                   data-card-field
-                  title={`${column.name}: ${formatCellValue(column, rowValue(props.row, column.id))}`}
+                  title={`${column().name}: ${formatCellValue(column(), rowValue(props.row, column().id))}`}
                   data-kanban-no-drag={props.renderCell ? '' : undefined}
                 >
                   <PropertyIcon
-                    type={column.dataType}
-                    relation={!!column.relation}
-                    class="size-3 shrink-0 text-ink-placeholder"
+                    type={column().dataType}
+                    entityType={column().specificEntityType}
+                    relation={!!column().relation}
+                    class="size-3.5 shrink-0 text-ink-placeholder"
                   />
-                  <div class="min-w-0 flex-1" aria-label={column.name}>
+                  <div
+                    class="min-w-0 flex-1 [&_[data-cell-text-editor]]:h-6 [&_[data-cell-text-editor]]:min-h-6 [&_[data-cell-text-editor]]:max-h-6 [&_[data-cell-text-editor]]:overflow-auto [&_[data-cell-text-editor]]:whitespace-pre [&_[data-cell-text-editor]]:[scrollbar-width:none] [&_[data-cell-text-editor]]:border-0 [&_[data-cell-text-editor]]:bg-transparent [&_[data-cell-text-editor]]:px-0 [&_[data-cell-text-editor]]:py-0.5 [&_[data-cell-text-editor]]:text-xs [&_[data-cell-text-editor]]:[font-weight:inherit] [&_[data-cell-text-editor]]:leading-5 [&_[data-cell-text-editor]]:ring-0"
+                    classList={{
+                      'font-medium': column().dataType === 'STRING',
+                      // Reserve usable editor space even when the value is empty.
+                      'min-w-16':
+                        !!props.renderCell &&
+                        (column().dataType === 'STRING' ||
+                          column().dataType === 'NUMBER'),
+                    }}
+                    aria-label={column().name}
+                  >
                     <Show
                       when={props.renderCell}
                       fallback={
                         <Show
-                          when={isOptionColumn(column)}
+                          when={isOptionColumn(column())}
                           fallback={
-                            <span class="truncate text-xs text-ink-muted">
+                            <span class="block truncate text-xs text-ink-muted">
                               {formatCellValue(
-                                column,
-                                rowValue(props.row, column.id)
+                                column(),
+                                rowValue(props.row, column().id)
                               )}
                             </span>
                           }
@@ -791,14 +806,14 @@ function BoardCard(props: {
                           <span class="flex min-w-0 flex-wrap gap-1">
                             <For
                               each={databaseCellValues(
-                                rowValue(props.row, column.id),
-                                column
+                                rowValue(props.row, column().id),
+                                column()
                               )}
                             >
                               {(value) => (
                                 <SelectPill
                                   label={String(value)}
-                                  column={column}
+                                  column={column()}
                                 />
                               )}
                             </For>
@@ -807,90 +822,26 @@ function BoardCard(props: {
                       }
                     >
                       {(render) =>
-                        render()(
-                          () => props.row,
-                          () => column
-                        )
+                        render()(() => props.row, column, {
+                          preserveSize: true,
+                        })
                       }
                     </Show>
                   </div>
                 </div>
               )}
-            </For>
-          </div>
+            </Key>
+          </KanbanBoard.CardFields>
         </Show>
       </div>
-      <Show when={props.renderCell}>
-        <Button
-          size="icon-xs"
-          label={`Open ${title()}`}
-          tooltipDisabled
-          class="absolute top-3 right-13"
-          data-kanban-no-drag
-          onClick={() => props.onOpen(props.row.rowId)}
-        >
-          <OpenIcon class="size-3.5" />
-        </Button>
-      </Show>
-      <Show when={props.canEdit}>
-        <div class="absolute top-3 right-2 flex items-start gap-0.5">
-          <KanbanHandle label={`Drag ${title()}`}>
-            <Button
-              size="icon-xs"
-              label={`Drag ${title()}`}
-              tooltipDisabled
-              class="touch-none opacity-60 group-hover:opacity-100 focus-visible:opacity-100"
-              title="Drag to another group, or use the Move menu"
-              tabindex={-1}
-            >
-              <GripIcon class="size-4" />
-            </Button>
-          </KanbanHandle>
-          <Dropdown>
-            <Dropdown.Trigger
-              variant="ghost"
-              size="icon-xs"
-              class="size-5 rounded text-ink-muted"
-              aria-label={`Move ${title()}`}
-              data-kanban-no-drag
-              title="Move to another group"
-            >
-              <DotsIcon class="size-4" />
-            </Dropdown.Trigger>
-            <Dropdown.Content class="min-w-44">
-              <Dropdown.Group>
-                <Dropdown.GroupLabel>Move to</Dropdown.GroupLabel>
-                <For each={props.groups}>
-                  {(group) => (
-                    <Dropdown.Item
-                      disabled={group.key === props.laneId}
-                      onSelect={() => props.onMove(props.row.rowId, group)}
-                    >
-                      <span class="flex-1">
-                        <LanePill
-                          group={group}
-                          column={props.groupColumn}
-                          renderMentionValue={props.renderMentionValue}
-                        />
-                      </span>
-                      <Show when={group.key === props.laneId}>
-                        <CheckIcon class="size-3.5" />
-                      </Show>
-                    </Dropdown.Item>
-                  )}
-                </For>
-              </Dropdown.Group>
-            </Dropdown.Content>
-          </Dropdown>
-        </div>
-      </Show>
-    </KanbanCard>
+    </KanbanBoard.Card>
   );
 }
 
 /** A card-shaped title field: Enter saves it, Escape or leaving it empty drops it. */
 function NewBoardCard(props: {
   title: string;
+  icon: JSX.Element;
   titlePlaceholder: string;
   canSetTitle: boolean;
   saving: boolean;
@@ -910,54 +861,59 @@ function NewBoardCard(props: {
     }
   };
   return (
-    <div class="rounded-lg border border-edge-muted bg-surface-3 p-3 shadow-sm">
-      <Show
-        when={!props.saving}
-        fallback={
-          <div role="status" aria-label="Saving new record">
-            <p class="break-words text-[13px] font-medium leading-5 text-ink opacity-70">
-              {props.title.trim() || 'Unnamed'}
-            </p>
-          </div>
-        }
-      >
+    <div class="rounded-lg border border-edge-muted bg-surface-3 shadow-sm">
+      <KanbanBoard.CardHeader>
+        <span class="flex size-6 items-center justify-center">
+          {props.icon}
+        </span>
         <Show
-          when={props.canSetTitle}
+          when={!props.saving}
           fallback={
-            <button
-              ref={props.ref}
-              type="button"
-              class="w-full text-left text-[13px] leading-5 text-ink-placeholder outline-none"
-              onClick={() => props.onSubmit('open')}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') onKeyDown(event);
-              }}
-              onBlur={() => props.onCancel(false)}
-            >
-              Add record
-            </button>
+            <div role="status" aria-label="Saving new record">
+              <p class="break-words text-[13px] font-medium leading-5 text-ink opacity-70">
+                {props.title.trim() || 'Unnamed'}
+              </p>
+            </div>
           }
         >
-          <textarea
-            ref={props.ref}
-            rows={1}
-            aria-label="New record title"
-            aria-description="Enter to add, Shift+Enter to add and open, Escape to cancel"
-            placeholder={`${props.titlePlaceholder}…`}
-            value={props.title}
-            maxlength={2000}
-            class="block w-full resize-none bg-transparent text-[13px] font-medium leading-5 text-ink outline-none field-sizing-content placeholder:font-normal placeholder:text-ink-placeholder"
-            onInput={(event) => props.onInput(event.currentTarget.value)}
-            onKeyDown={onKeyDown}
-            onBlur={() => {
-              // Switching windows is not leaving the card.
-              if (!document.hasFocus()) return;
-              if (props.title.trim()) props.onSubmit('stay');
-              else props.onCancel(false);
-            }}
-          />
+          <Show
+            when={props.canSetTitle}
+            fallback={
+              <button
+                ref={props.ref}
+                type="button"
+                class="w-full text-left text-[13px] leading-5 text-ink-placeholder outline-none"
+                onClick={() => props.onSubmit('open')}
+                onKeyDown={(event) => {
+                  if (event.key === 'Escape') onKeyDown(event);
+                }}
+                onBlur={() => props.onCancel(false)}
+              >
+                Add record
+              </button>
+            }
+          >
+            <textarea
+              ref={props.ref}
+              rows={1}
+              aria-label="New record title"
+              aria-description="Enter to add, Shift+Enter to add and open, Escape to cancel"
+              placeholder={`${props.titlePlaceholder}…`}
+              value={props.title}
+              maxlength={2000}
+              class="block w-full resize-none bg-transparent text-[13px] font-medium leading-5 text-ink outline-none field-sizing-content placeholder:font-normal placeholder:text-ink-placeholder"
+              onInput={(event) => props.onInput(event.currentTarget.value)}
+              onKeyDown={onKeyDown}
+              onBlur={() => {
+                // Switching windows is not leaving the card.
+                if (!document.hasFocus()) return;
+                if (props.title.trim()) props.onSubmit('stay');
+                else props.onCancel(false);
+              }}
+            />
+          </Show>
         </Show>
-      </Show>
+      </KanbanBoard.CardHeader>
     </div>
   );
 }

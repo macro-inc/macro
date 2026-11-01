@@ -1,0 +1,17 @@
+---
+title: CreateCompany
+description: >-
+  Add a company to the user's team CRM by name and web domain, as New Company in
+  the CRM does.
+---
+
+# CreateCompany
+
+Add a company to the user's team CRM by name and web domain, as New Company in the CRM does. Companies a team emails are usually added automatically, so check ListCompanies first. Set its stage, owner, and other properties afterwards with SetEntityProperty (entity type company).
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `name` | string | Yes | The company's display name, e.g. "Acme". |
+| `domain` | string | Yes | The company's web domain, e.g. "acme.com" — no scheme or path. Contacts are matched to the company by this domain. |

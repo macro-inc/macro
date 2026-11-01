@@ -33,6 +33,8 @@ export const BlockRegistry = [
   'agent',
   // A task project (`project` is a folder).
   'initiative',
+  // A CRM pipeline, shown in the Customers view.
+  'pipeline',
 ] as const;
 
 /** Aliases for block types that share a concrete block implementation. */

@@ -259,7 +259,11 @@ async function activate(
               case 'drain-engine':
                 if (draining) return;
                 draining = true;
-                void queue.finally(() => requestShutdown?.());
+                // activate awaits the same queue and reports its failure.
+                queue.then(
+                  () => requestShutdown?.(),
+                  () => requestShutdown?.()
+                );
                 break;
               case 'engine-request':
                 if (draining) return;
@@ -391,6 +395,13 @@ async function activate(
   self.close();
 }
 
+// An uncaught error reaches the page's worker `error` listener; a rejection does not.
+const failWorker = (error: unknown): void => {
+  setTimeout(() => {
+    throw error;
+  });
+};
+
 self.onmessage = (event: MessageEvent<unknown>) => {
   if (
     typeof event.data === 'object' &&
@@ -424,5 +435,5 @@ self.onmessage = (event: MessageEvent<unknown>) => {
     port?.close();
     return;
   }
-  void activate(parsed.value, port);
+  activate(parsed.value, port).catch(failWorker);
 };

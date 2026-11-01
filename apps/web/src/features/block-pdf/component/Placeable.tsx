@@ -5,6 +5,7 @@ import { type IPlaceable, PayloadMode } from '@block-pdf/type/placeables';
 import { getPdfPageRect } from '@block-pdf/util/pdfjsUtils';
 import { PDF_TO_CSS_UNITS } from '@block-pdf/util/pixelsPerInch';
 import { setEquals } from '@core/util/compareUtils';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isInDOMRect } from '@core/util/rect';
 import { debounce } from '@solid-primitives/scheduled';
 import {
@@ -343,7 +344,7 @@ export const Placeable: Component<{
 
   const debouncedUpdatePlaceablePosition = debounce(
     (...args: Parameters<typeof updatePlaceablePosition>) => {
-      updatePlaceablePosition(...args);
+      fireAndForget(updatePlaceablePosition(...args), 'pdf-placeable');
       resetPlaceablePosition();
     },
     100

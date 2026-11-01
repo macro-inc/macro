@@ -14,13 +14,33 @@ use uuid::Uuid;
 
 use super::GraphqlEmailQuery;
 
+mod senders;
+
 #[derive(Default)]
 struct FakeEmailUserService {
     requested_users: Mutex<Vec<MacroUserIdStr<'static>>>,
     fail: bool,
+    unavailable_inbox: bool,
 }
 
 impl EmailUserService for FakeEmailUserService {
+    async fn get_user_email_senders(
+        &self,
+        macro_id: MacroUserIdStr<'static>,
+        link_id: Uuid,
+    ) -> Result<Vec<email::domain::senders::SendAsAddress>, EmailErr> {
+        self.requested_users.lock().unwrap().push(macro_id);
+        if link_id == Uuid::from_u128(3) {
+            return Err(EmailErr::SendAsPermissionRequired);
+        }
+        assert_eq!(link_id, Uuid::from_u128(2));
+        Ok(vec![email::domain::senders::SendAsAddress {
+            email_address: EmailStr::try_from("alias@example.com".to_owned()).unwrap(),
+            display_name: Some("Alias".to_owned()),
+            verified: true,
+        }])
+    }
+
     async fn get_user_email_labels(
         &self,
         macro_id: MacroUserIdStr<'static>,
@@ -44,7 +64,13 @@ impl EmailUserService for FakeEmailUserService {
                 "sensitive link database detail".to_owned(),
             ));
         }
-        Ok(vec![link()])
+        let mut links = vec![link()];
+        if self.unavailable_inbox {
+            let mut unavailable = link();
+            unavailable.id = Uuid::from_u128(3);
+            links.push(unavailable);
+        }
+        Ok(links)
     }
 }
 

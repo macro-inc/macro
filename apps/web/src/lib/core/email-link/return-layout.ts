@@ -1,6 +1,15 @@
+import type { ConsentScopes } from '@service-auth/client';
+import type { InboxAddition } from './link-outcome';
+
 const RETURN_LAYOUT_KEY = 'macro:inbox-link:return-layout';
 
-/** Where the app should land once the Gmail consent round trip comes back. */
+const CONSENT_SCOPES: ReadonlyArray<ConsentScopes> = [
+  'gmail',
+  'gmail_and_calendar',
+  'calendar',
+];
+
+/** What the callback needs once the inbox consent round trip comes back. */
 export type InboxLinkReturn = {
   /**
    * The base-relative layout URL the flow started from — path plus query and
@@ -8,20 +17,29 @@ export type InboxLinkReturn = {
    * survives with it.
    */
   url: string;
+  /**
+   * The permissions the flow asked consent for, so a refused consent can be
+   * retried with the same request (a calendar entry point asks for the
+   * mailbox and calendar together).
+   */
+  scopes?: ConsentScopes;
+  /** Set only for a plain add; see {@link InboxAddition}. */
+  addition?: InboxAddition;
 };
 
 type StoredInboxLinkReturn = InboxLinkReturn & { linkId: string };
 
 /**
- * Remember where to return once Gmail consent completes.
+ * Remember where to return once inbox consent completes, and for a plain add
+ * which inboxes were already connected.
  *
- * On web and desktop the consent screen is a full page navigation, so the app
- * — split layout included — is torn down and rebuilt from the callback URL.
+ * Web consent is a full page navigation; desktop opens the system browser and
+ * its return deep link replaces the app route with the callback URL.
  * The layout lives in the URL, so stashing it here is what lets the callback
  * put the user back where they were instead of falling back to a default.
  *
  * `sessionStorage` rather than the OAuth `state`: the layout path carries
- * document and channel ids, and `state` is handed to Google.
+ * document and channel ids, and `state` is handed to the provider.
  *
  * Keyed by the link id the init call minted, which the callback receives back
  * as `link_id`, so an abandoned flow's leftovers can't hijack a later one.
@@ -40,11 +58,11 @@ export function rememberInboxLinkReturn(
 }
 
 /**
- * Read and clear the layout stashed by {@link rememberInboxLinkReturn} for
- * this link. Returns undefined when nothing was stashed or the stash belongs
- * to a different flow.
+ * What {@link rememberInboxLinkReturn} stashed for this link, left in place.
+ * Returns undefined when nothing was stashed or the stash belongs to a
+ * different flow.
  */
-export function consumeInboxLinkReturn(
+export function readInboxLinkReturn(
   linkId: string
 ): InboxLinkReturn | undefined {
   let raw: string | null;
@@ -59,18 +77,26 @@ export function consumeInboxLinkReturn(
   try {
     stored = JSON.parse(raw) as Partial<StoredInboxLinkReturn>;
   } catch {
-    stored = undefined;
-  }
-
-  // A stash that can't be matched is dead weight either way, so drop it.
-  try {
-    sessionStorage.removeItem(RETURN_LAYOUT_KEY);
-  } catch {
-    // Nothing to do — the read already succeeded.
+    return undefined;
   }
 
   if (!stored || stored.linkId !== linkId || typeof stored.url !== 'string') {
     return undefined;
   }
-  return { url: stored.url };
+  const scopes = CONSENT_SCOPES.find((value) => value === stored.scopes);
+  return { url: stored.url, scopes, addition: stored.addition };
+}
+
+/** Read and clear the stash, as {@link readInboxLinkReturn} reads it. */
+export function consumeInboxLinkReturn(
+  linkId: string
+): InboxLinkReturn | undefined {
+  const stored = readInboxLinkReturn(linkId);
+  // A stash that can't be matched is dead weight either way, so drop it.
+  try {
+    sessionStorage.removeItem(RETURN_LAYOUT_KEY);
+  } catch {
+    // Storage is unavailable, so there is nothing left to clear.
+  }
+  return stored;
 }

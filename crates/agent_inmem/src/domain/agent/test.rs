@@ -21,6 +21,14 @@ use macro_user_id::user_id::MacroUserIdStr;
 
 struct Harness {
     notifications: std::sync::Mutex<Vec<SessionNotification>>,
+    summaries:
+        std::sync::Mutex<Vec<agent_runtime_protocol::domain::context::ContextSummaryNotification>>,
+}
+
+/// What a scripted client saw while it ran a scenario.
+struct Recorded<Out> {
+    summaries: Vec<agent_runtime_protocol::domain::context::ContextSummaryNotification>,
+    out: Out,
 }
 
 struct CancelledEngine;
@@ -85,6 +93,48 @@ async fn with_model_access<Engine: TurnEngine, Out>(
     model_access: Arc<dyn InMemModelAccess>,
     scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId, Arc<AgentState>) -> Out,
 ) -> (Vec<SessionNotification>, Vec<SessionConfigOption>, Out) {
+    let (notifications, recorded) = record(
+        engine,
+        admission,
+        model_access,
+        Arc::new(agent_api_keys::domain::NoAgentKeys),
+        scenario,
+    )
+    .await;
+    let (config_options, out) = recorded.out;
+    (notifications, config_options, out)
+}
+
+/// Like [`with_admission`] with admission off, keeping every summary the
+/// client was told of.
+async fn with_summaries<Engine: TurnEngine, Out>(
+    engine: Arc<Engine>,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId, Arc<AgentState>) -> Out,
+) -> Recorded<Out> {
+    let (_, recorded) = record(
+        engine,
+        Arc::new(DisabledAiAdmissionService),
+        Arc::new(crate::testing::TestModelAccess::paid()),
+        Arc::new(agent_api_keys::domain::NoAgentKeys),
+        scenario,
+    )
+    .await;
+    Recorded {
+        summaries: recorded.summaries,
+        out: recorded.out.1,
+    }
+}
+
+async fn record<Engine: TurnEngine, Out>(
+    engine: Arc<Engine>,
+    admission: Arc<dyn AiAdmissionService>,
+    model_access: Arc<dyn InMemModelAccess>,
+    agent_keys: Arc<dyn agent_api_keys::domain::AgentKeys>,
+    scenario: impl AsyncFnOnce(ConnectionTo<Agent>, SessionId, Arc<AgentState>) -> Out,
+) -> (
+    Vec<SessionNotification>,
+    Recorded<(Vec<SessionConfigOption>, Out)>,
+) {
     let store = Arc::new(SessionStore::new());
     let session_id = AgentSessionId::new();
     store.insert(
@@ -92,19 +142,20 @@ async fn with_model_access<Engine: TurnEngine, Out>(
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
         ),
         engine,
         admission,
+        agent_keys,
         model_access,
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
         turn_lock: tokio::sync::Mutex::new(()),
         mcp: Arc::new(crate::domain::mcp::NoMcpServers),
         mcp_tools: std::sync::Mutex::new(None),
-        mcp_servers: std::sync::Mutex::new(Vec::new()),
         mcp_connect: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
         enable_dev_commands: true,
@@ -115,8 +166,10 @@ async fn with_model_access<Engine: TurnEngine, Out>(
 
     let harness = Arc::new(Harness {
         notifications: std::sync::Mutex::new(Vec::new()),
+        summaries: std::sync::Mutex::new(Vec::new()),
     });
     let observed = Arc::clone(&harness);
+    let summarized = Arc::clone(&harness);
     let out = Client
         .builder()
         .on_receive_notification(
@@ -126,6 +179,17 @@ async fn with_model_access<Engine: TurnEngine, Out>(
                     .lock()
                     .expect("notifications lock")
                     .push(notification);
+                Ok(())
+            },
+            agent_client_protocol::on_receive_notification!(),
+        )
+        .on_receive_notification(
+            async move |summary: agent_runtime_protocol::domain::context::ContextSummaryNotification, _connection| {
+                summarized
+                    .summaries
+                    .lock()
+                    .expect("summaries lock")
+                    .push(summary);
                 Ok(())
             },
             agent_client_protocol::on_receive_notification!(),
@@ -170,7 +234,14 @@ async fn with_model_access<Engine: TurnEngine, Out>(
         .lock()
         .expect("notifications lock")
         .clone();
-    (notifications, out.0.unwrap_or_default(), out.1)
+    let summaries = harness.summaries.lock().expect("summaries lock").clone();
+    (
+        notifications,
+        Recorded {
+            summaries,
+            out: (out.0.unwrap_or_default(), out.1),
+        },
+    )
 }
 
 fn text_prompt(session: &SessionId, text: &str) -> PromptRequest {
@@ -267,21 +338,22 @@ async fn deterministic_commands_skip_admission_but_provider_commands_do_not() {
         engine.clone(),
         admission.clone(),
         async |connection, session, _| {
-            for command in ["/compact", "/ask choose | a | b"] {
+            connection
+                .send_request(text_prompt(&session, "/ask choose | a | b"))
+                .block_task()
+                .await
+                .unwrap();
+            assert!(admission.calls.lock().unwrap().is_empty());
+            // Any other command text, `/compact` included, is a message for
+            // the provider, and is gated like one.
+            for command in ["/compact", "/develop something"] {
                 connection
                     .send_request(text_prompt(&session, command))
                     .block_task()
                     .await
-                    .unwrap();
+                    .unwrap_err();
             }
-            assert!(admission.calls.lock().unwrap().is_empty());
-            // Unknown/development command text that reaches the provider is still gated.
-            connection
-                .send_request(text_prompt(&session, "/develop something"))
-                .block_task()
-                .await
-                .unwrap_err();
-            assert_eq!(admission.calls.lock().unwrap().len(), 1);
+            assert_eq!(admission.calls.lock().unwrap().len(), 2);
         },
     )
     .await;
@@ -420,6 +492,132 @@ async fn cancel_during_billing_does_not_start_engine_or_write_history() {
     assert!(engine.requests().is_empty());
 }
 
+/// An agent with its own key for `provider`, or none.
+struct OneAgentKey(Option<agent_api_keys::domain::ModelProvider>);
+
+#[async_trait::async_trait]
+impl agent_api_keys::domain::AgentKeys for OneAgentKey {
+    async fn usable_provider(
+        &self,
+        _bot_id: macro_uuid::Uuid,
+        _user: &MacroUserIdStr<'_>,
+    ) -> agent_api_keys::domain::Result<Option<agent_api_keys::domain::ModelProvider>> {
+        Ok(self.0)
+    }
+
+    async fn usable_key(
+        &self,
+        bot_id: macro_uuid::Uuid,
+        _user: &MacroUserIdStr<'_>,
+    ) -> agent_api_keys::domain::Result<Option<agent_api_keys::domain::UsableAgentKey>> {
+        Ok(self
+            .0
+            .map(|provider| agent_api_keys::domain::UsableAgentKey {
+                bot_id,
+                key: agent_api_keys::domain::ProviderApiKey::parse(provider, "sk-ant-api03-abc")
+                    .expect("valid key"),
+            }))
+    }
+}
+
+fn be_agent(state: &AgentState, bot: bot_id::BotId) {
+    state
+        .store
+        .get_mut(&state.session_id)
+        .expect("session")
+        .identity = Some(crate::domain::engine::AgentIdentity {
+        bot,
+        name: "Grunk".to_owned(),
+        handle: "grunk".to_owned(),
+    });
+}
+
+#[tokio::test]
+async fn an_agent_with_its_own_key_runs_turns_on_it_without_spending_the_allowance() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content(
+        "reply".into(),
+    )]));
+    let admission = Arc::new(TestAdmission::new(Err(AiAdmissionError::Denied(
+        DenyReason::AllowanceExhausted,
+    ))));
+    let bot = bot_id::BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    record(
+        engine.clone(),
+        admission.clone(),
+        Arc::new(crate::testing::TestModelAccess::paid()),
+        Arc::new(OneAgentKey(Some(
+            agent_api_keys::domain::ModelProvider::Anthropic,
+        ))),
+        async |connection, session, state| {
+            be_agent(&state, bot);
+            connection
+                .send_request(text_prompt(&session, "hello"))
+                .block_task()
+                .await
+                .expect("the turn runs on the agent's key");
+        },
+    )
+    .await;
+
+    assert_eq!(engine.requests()[0].agent_key, Some(bot.as_uuid()));
+    assert!(
+        admission.calls.lock().unwrap().is_empty(),
+        "the owner's allowance is never asked"
+    );
+}
+
+#[tokio::test]
+async fn an_agent_with_a_key_offers_only_its_providers_models() {
+    let engine = Arc::new(ScriptedEngine::new(vec![]));
+    let bot = bot_id::BotId::new_from_uuid(macro_uuid::generate_uuid_v7());
+    let (_, recorded) = record(
+        engine,
+        Arc::new(DisabledAiAdmissionService),
+        // A free plan alone would offer only the free model.
+        Arc::new(crate::testing::TestModelAccess::new(
+            crate::domain::model_access::ModelAccess::Free,
+        )),
+        Arc::new(OneAgentKey(Some(
+            agent_api_keys::domain::ModelProvider::Anthropic,
+        ))),
+        async |connection, session, state| {
+            // Attach seeds the agent and its model before `session/new`; this
+            // harness opens the session first, so put them back.
+            be_agent(&state, bot);
+            use_model(&state, "anthropic/claude-sonnet-5-5");
+            let resumed = connection
+                .send_request(ResumeSessionRequest::new(session.clone(), "/"))
+                .block_task()
+                .await
+                .expect("resumed");
+            let other = connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    MODEL_CONFIG_ID,
+                    SessionConfigValueId::new("other-model"),
+                ))
+                .block_task()
+                .await;
+            (resumed.config_options.unwrap_or_default(), other.is_err())
+        },
+    )
+    .await;
+    let (options, other_refused) = recorded.out.1;
+
+    let selection = agent_fold::domain::model_selection::model_selection(&options)
+        .expect("resume should advertise a model select");
+    assert_eq!(selection.current, "anthropic/claude-sonnet-5-5");
+    assert_eq!(
+        selection
+            .options
+            .iter()
+            .map(|model| model.id.as_str())
+            .collect::<Vec<_>>(),
+        vec!["anthropic/claude-sonnet-5-5"]
+    );
+    assert!(other_refused, "another provider's model cannot be picked");
+}
+
 #[tokio::test]
 async fn new_session_advertises_the_engine_supported_models() {
     let (_notifications, config_options, ()) =
@@ -501,10 +699,10 @@ async fn new_session_advertises_its_slash_commands() {
             // A round trip so the advertisement, sent right after the
             // session/new response, has landed before the client is torn down.
             connection
-                .send_request(text_prompt(&session, "/compact"))
+                .send_request(text_prompt(&session, "hello"))
                 .block_task()
                 .await
-                .expect("compaction should complete");
+                .expect("the prompt should complete");
         },
     )
     .await;
@@ -640,6 +838,155 @@ async fn tool_calls_are_stamped_with_their_names_and_subagent_flag() {
     );
 }
 
+/// The tool frames of a turn, one line each: what a reader of the log sees
+/// happen to its calls.
+fn tool_frames(notifications: &[SessionNotification]) -> Vec<String> {
+    let status = |status: Option<ToolCallStatus>| {
+        status.map_or_else(
+            || "-".to_owned(),
+            |status| {
+                serde_json::to_value(status)
+                    .expect("a status serializes")
+                    .to_string()
+            },
+        )
+    };
+    let input = |input: Option<&serde_json::Value>| {
+        input.map_or_else(|| "-".to_owned(), serde_json::Value::to_string)
+    };
+    notifications
+        .iter()
+        .filter_map(|notification| match &notification.update {
+            SessionUpdate::ToolCall(call) => Some(format!(
+                "open {} {} {} {}",
+                call.tool_call_id.0,
+                call.title,
+                status(Some(call.status)),
+                input(call.raw_input.as_ref())
+            )),
+            SessionUpdate::ToolCallUpdate(update) => Some(format!(
+                "update {} {} {}",
+                update.tool_call_id.0,
+                status(update.fields.status),
+                input(update.fields.raw_input.as_ref())
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A call the model is still writing opens `pending` at once, is peeked at
+/// as its arguments stream - at most once per window, so a burst of
+/// fragments is one peek - and starts under the same id once finished.
+#[tokio::test]
+async fn a_streamed_tool_call_opens_pending_and_is_peeked_at_while_written() {
+    let engine = Arc::new(ScriptedEngine::new(vec![
+        StreamPart::ToolCallStarted(agent::ToolCallStart {
+            id: "call-1".into(),
+            name: "NameSearch".into(),
+            mcp: None,
+        }),
+        StreamPart::ToolCallArgs {
+            id: "call-1".into(),
+            delta: "{\"query\":\"road".into(),
+        },
+        StreamPart::ToolCallArgs {
+            id: "call-1".into(),
+            delta: "map\"}".into(),
+        },
+        StreamPart::ToolCall(agent::ToolCall {
+            id: "call-1".into(),
+            name: "NameSearch".into(),
+            json: serde_json::json!({"query": "roadmap"}),
+            mcp: None,
+        }),
+        StreamPart::ToolResponse(agent::ToolResponse::Json {
+            id: "call-1".into(),
+            json: serde_json::json!({"hits": 1}),
+            name: "NameSearch".into(),
+        }),
+    ]));
+
+    let (notifications, _, _) = with_agent(Arc::clone(&engine), async |connection, session| {
+        connection
+            .send_request(text_prompt(&session, "find the roadmap"))
+            .block_task()
+            .await
+            .expect("the prompt should complete")
+    })
+    .await;
+
+    assert_eq!(
+        tool_frames(&notifications),
+        vec![
+            r#"open call-1 NameSearch "pending" -"#,
+            r#"update call-1 - {"query":"road"}"#,
+            r#"update call-1 "in_progress" {"query":"roadmap"}"#,
+            r#"update call-1 "completed" -"#,
+        ]
+    );
+    let open = notifications
+        .iter()
+        .find_map(|notification| match &notification.update {
+            SessionUpdate::ToolCall(call) => Some(call),
+            _ => None,
+        })
+        .expect("the call opened");
+    assert_eq!(
+        open.meta.clone().map(serde_json::Value::Object),
+        Some(serde_json::json!({"macro": {"toolName": "NameSearch"}})),
+        "the fold reads the tool's name from the opening frame"
+    );
+}
+
+/// A turn that ends while the model is still writing a call closes the
+/// call's row as failed, and the call - which never ran - stays out of the
+/// history the next turn is built from.
+#[tokio::test]
+async fn a_call_the_turn_ends_while_writing_closes_and_stays_out_of_history() {
+    let engine = Arc::new(ScriptedEngine::new(vec![
+        StreamPart::Content("On it.".into()),
+        StreamPart::ToolCallStarted(agent::ToolCallStart {
+            id: "call-1".into(),
+            name: "CreateDocument".into(),
+            mcp: None,
+        }),
+        StreamPart::ToolCallArgs {
+            id: "call-1".into(),
+            delta: "{\"title\":\"Pl".into(),
+        },
+    ]));
+
+    let (notifications, _, _) = with_agent(Arc::clone(&engine), async |connection, session| {
+        for prompt in ["write it up", "again"] {
+            connection
+                .send_request(text_prompt(&session, prompt))
+                .block_task()
+                .await
+                .expect("the prompt should complete");
+        }
+    })
+    .await;
+
+    let frames = tool_frames(&notifications);
+    assert_eq!(
+        frames[..3],
+        [
+            r#"open call-1 CreateDocument "pending" -"#.to_owned(),
+            r#"update call-1 - {"title":"Pl"}"#.to_owned(),
+            r#"update call-1 "failed" -"#.to_owned(),
+        ]
+    );
+    assert_eq!(
+        engine.requests()[1].messages,
+        vec![
+            "write it up".to_owned(),
+            "On it.".to_owned(),
+            "again".to_owned()
+        ]
+    );
+}
+
 #[tokio::test]
 async fn turns_accumulate_history_and_send_the_model() {
     let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
@@ -718,79 +1065,600 @@ async fn attached_files_reach_the_model_and_stay_in_history() {
     );
 }
 
-#[tokio::test]
-async fn compact_clears_history_without_running_a_turn() {
-    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
+/// Answers turns from `turns`, and the calls that condense the conversation
+/// from `summaries` (a summary) or `reads` (an image read for one), each
+/// summary `delay` late. The first `failures` summaries fail instead.
+struct CondensingEngine {
+    turns: ScriptedEngine,
+    summaries: ScriptedEngine,
+    reads: ScriptedEngine,
+    delay: std::time::Duration,
+    failures: std::sync::atomic::AtomicUsize,
+}
 
-    with_agent(Arc::clone(&engine), async |connection, session| {
-        connection
-            .send_request(text_prompt(&session, "remember this"))
-            .block_task()
-            .await
-            .expect("the prompt should complete");
-        let response = connection
-            .send_request(text_prompt(&session, "/compact"))
-            .block_task()
-            .await
-            .expect("compaction should complete");
-        assert_eq!(response.stop_reason, StopReason::EndTurn);
-        connection
-            .send_request(text_prompt(&session, "after"))
-            .block_task()
-            .await
-            .expect("the prompt should complete");
+impl CondensingEngine {
+    fn new() -> Self {
+        Self {
+            turns: ScriptedEngine::new(vec![StreamPart::Content("ok".into())]),
+            summaries: ScriptedEngine::new(vec![StreamPart::Content("SUMMARY".into())]),
+            reads: ScriptedEngine::new(vec![StreamPart::Content("a red square".into())]),
+            delay: std::time::Duration::ZERO,
+            failures: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+}
+
+/// A model call that fails at once.
+fn failed_call() -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+    let (parts, receiver) = tokio::sync::mpsc::channel(1);
+    parts
+        .try_send(Err(agent::AgentError::Other(anyhow::anyhow!(
+            "summary unavailable"
+        ))))
+        .unwrap();
+    receiver
+}
+
+impl TurnEngine for CondensingEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        if request.purpose == TurnPurpose::Conversation {
+            return self.turns.run_turn(request);
+        }
+        if request
+            .messages
+            .iter()
+            .any(|message| message.attachments.is_some())
+        {
+            return self.reads.run_turn(request);
+        }
+        if self
+            .failures
+            .fetch_update(Ordering::Relaxed, Ordering::Relaxed, |left| {
+                left.checked_sub(1)
+            })
+            .is_ok()
+        {
+            return failed_call();
+        }
+        let delay = self.delay;
+        let mut summary = self.summaries.run_turn(request);
+        let (parts, receiver) = tokio::sync::mpsc::channel(8);
+        tokio::spawn(async move {
+            tokio::time::sleep(delay).await;
+            while let Some(part) = summary.recv().await {
+                if parts.send(part).await.is_err() {
+                    break;
+                }
+            }
+        });
+        receiver
+    }
+}
+
+/// Text of `bytes` bytes, a third as many tokens by the estimate.
+fn big(bytes: usize) -> String {
+    "x".repeat(bytes)
+}
+
+/// Run the session on `model` from here on. `other-model` is one the
+/// catalog has no window for, so it gets the 128k-token fallback: a summary
+/// starts at 76,800 tokens, a turn waits from 96,000 or on a message of
+/// 12,800, and one message may take 64,000.
+fn use_model(state: &AgentState, model: &str) {
+    state
+        .store
+        .get_mut(&state.session_id)
+        .expect("the session exists")
+        .model = model.to_owned();
+}
+
+/// Wait for the summary being written, if any, to land or fail.
+async fn summary_settled(state: &AgentState) {
+    let settled = state.store.get(&state.session_id).and_then(|session| {
+        session
+            .summarizing
+            .pending
+            .as_ref()
+            .map(|summary| summary.settled.clone())
+    });
+    if let Some(mut settled) = settled {
+        let _ = settled.changed().await;
+    }
+}
+
+async fn prompt(connection: &ConnectionTo<Agent>, session: &SessionId, text: &str) {
+    connection
+        .send_request(text_prompt(session, text))
+        .block_task()
+        .await
+        .expect("the prompt should complete");
+}
+
+/// Send a message showing `count` images, `photo-<first>.png` on. Twelve
+/// are 19,200 tokens, however short their message.
+async fn show_images(
+    connection: &ConnectionTo<Agent>,
+    session: &SessionId,
+    first: usize,
+    count: usize,
+) {
+    let mut blocks = vec![ContentBlock::Text(TextContent::new("compare these"))];
+    blocks.extend((first..first + count).map(|index| {
+        ContentBlock::ResourceLink(
+            ResourceLink::new(
+                format!("photo-{index}.png"),
+                format!("https://static.example/file/photo-{index}"),
+            )
+            .mime_type("image/png".to_owned()),
+        )
+    }));
+    connection
+        .send_request(PromptRequest::new(session.clone(), blocks))
+        .block_task()
+        .await
+        .expect("the prompt should complete");
+}
+
+#[tokio::test]
+async fn a_long_conversation_is_summarized_in_the_background_while_its_message_runs_on_all_of_it() {
+    let engine = Arc::new(CondensingEngine::new());
+    let recorded = with_summaries(Arc::clone(&engine), async |connection, session, state| {
+        use_model(&state, "other-model");
+        // Six messages of 12,000 tokens each: under a long message, and
+        // 72,000 tokens in all, short of a summary.
+        for _ in 0..6 {
+            prompt(&connection, &session, &big(36_000)).await;
+        }
+        let fifth_prompt = match state
+            .store
+            .get(&state.session_id)
+            .expect("the session")
+            .history
+            .get(8)
+        {
+            Some(HistoryEntry::User { request_id, .. }) => Some(request_id.clone()),
+            _ => None,
+        };
+        // 84,000 tokens with this one: the summary starts, and the message
+        // does not wait for it.
+        prompt(&connection, &session, &big(36_000)).await;
+        summary_settled(&state).await;
+        prompt(&connection, &session, "continue").await;
+        let session = state.store.get(&state.session_id).expect("the session");
+        (session.summarizing.pending.is_none(), fifth_prompt)
     })
     .await;
 
-    let requests = engine.requests();
-    assert_eq!(requests.len(), 2, "/compact must not reach the engine");
+    let turns = engine.turns.requests();
+    let mut whole = Vec::new();
+    for _ in 0..6 {
+        whole.extend([big(36_000), "ok".to_owned()]);
+    }
+    whole.push(big(36_000));
     assert_eq!(
-        requests[1].messages,
-        vec!["after".to_owned()],
-        "compaction empties the conversation"
+        turns[6].messages, whole,
+        "the message that started the summary ran on the whole history"
+    );
+    let summaries = engine.summaries.requests();
+    assert_eq!(summaries.len(), 1);
+    assert_eq!(summaries[0].model, compaction::SUMMARY_MODEL);
+    assert_eq!(summaries[0].purpose, TurnPurpose::Summary);
+    assert!(summaries[0].messages[0].contains(&big(36_000)));
+    assert!(
+        summaries[0].messages[0].len() < 6 * 36_000,
+        "the latest turn stays word for word, and the latest message is not in its own summary"
+    );
+    assert_eq!(
+        turns[7].messages,
+        [
+            crate::domain::session::SUMMARY_PREAMBLE.to_owned(),
+            "SUMMARY".to_owned(),
+            big(36_000),
+            "ok".to_owned(),
+            big(36_000),
+            "ok".to_owned(),
+            "continue".to_owned()
+        ],
+        "the next message reads the summary in place of the first five turns"
+    );
+    assert_eq!(recorded.summaries.len(), 1, "the log records the summary");
+    assert_eq!(recorded.summaries[0].text, "SUMMARY");
+    assert_eq!(recorded.summaries[0].replaces, 10);
+    let (free, fifth_prompt) = recorded.out;
+    assert!(free, "the slot is free once the summary lands");
+    assert!(fifth_prompt.is_some());
+    assert_eq!(
+        recorded.summaries[0].through, fifth_prompt,
+        "the log names the summary's last turn by its prompt's request"
+    );
+}
+
+/// A long paste compacts the conversation before it runs, rather than in
+/// the background, so it has room at once.
+#[tokio::test]
+async fn a_long_message_waits_for_the_summary_it_starts() {
+    let mut engine = CondensingEngine::new();
+    // Long enough that a turn not waiting would run first.
+    engine.delay = std::time::Duration::from_millis(200);
+    let engine = Arc::new(engine);
+    with_summaries(Arc::clone(&engine), async |connection, session, state| {
+        use_model(&state, "other-model");
+        // 60,000 tokens in messages short of a long one.
+        for _ in 0..5 {
+            prompt(&connection, &session, &big(36_000)).await;
+        }
+        // 20,000 tokens, past 12,800: long, and with it the conversation
+        // reaches 80,000, past where a summary starts.
+        prompt(&connection, &session, &big(60_000)).await;
+    })
+    .await;
+
+    assert_eq!(engine.summaries.requests().len(), 1);
+    assert_eq!(
+        engine.turns.requests()[5].messages,
+        [
+            crate::domain::session::SUMMARY_PREAMBLE.to_owned(),
+            "SUMMARY".to_owned(),
+            big(36_000),
+            "ok".to_owned(),
+            big(60_000)
+        ],
+        "the long message ran on the summary of the first four turns"
     );
 }
 
 #[tokio::test]
-async fn compact_with_a_file_attached_is_a_prompt_about_the_file() {
-    // The command word alone is the control. With a file alongside, the user
-    // is asking about that file, and compacting would drop it unseen.
-    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
-    let notes = "https://static.example/file/33333333-3333-4333-8333-333333333333";
-
+async fn a_turn_waits_for_its_summary_when_the_conversation_would_not_fit_its_model() {
+    let mut engine = CondensingEngine::new();
+    // Long enough that a turn not waiting would run first.
+    engine.delay = std::time::Duration::from_millis(200);
+    let engine = Arc::new(engine);
     with_agent(Arc::clone(&engine), async |connection, session| {
+        // 120,000 tokens: far from a summary on a million-token model.
+        for _ in 0..4 {
+            prompt(&connection, &session, &big(90_000)).await;
+        }
         connection
-            .send_request(text_prompt(&session, "remember this"))
-            .block_task()
-            .await
-            .expect("the prompt should complete");
-        connection
-            .send_request(PromptRequest::new(
+            .send_request(SetSessionConfigOptionRequest::new(
                 session.clone(),
-                vec![
-                    ContentBlock::Text(TextContent::new("/compact")),
-                    ContentBlock::ResourceLink(
-                        ResourceLink::new("notes.txt", notes).mime_type("text/plain".to_owned()),
-                    ),
-                ],
+                MODEL_CONFIG_ID,
+                "other-model",
             ))
             .block_task()
             .await
-            .expect("the prompt should complete");
+            .expect("the model changes");
+        prompt(&connection, &session, "continue").await;
+    })
+    .await;
+
+    assert_eq!(engine.summaries.requests().len(), 1);
+    let turns = engine.turns.requests();
+    assert_eq!(
+        turns.last().expect("the last turn").messages,
+        [
+            crate::domain::session::SUMMARY_PREAMBLE.to_owned(),
+            "SUMMARY".to_owned(),
+            "continue".to_owned()
+        ],
+        "the turn ran on the summary, not on more than its model holds"
+    );
+}
+
+/// An engine whose summaries fail, counting how often one was tried.
+struct FailedSummaryEngine {
+    turns: ScriptedEngine,
+    attempts: std::sync::atomic::AtomicUsize,
+}
+
+impl TurnEngine for FailedSummaryEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        if request.purpose == TurnPurpose::Summary {
+            self.attempts.fetch_add(1, Ordering::Relaxed);
+            failed_call()
+        } else {
+            self.turns.run_turn(request)
+        }
+    }
+}
+
+impl FailedSummaryEngine {
+    fn new() -> Self {
+        Self {
+            turns: ScriptedEngine::new(vec![StreamPart::Content("noted".into())]),
+            attempts: std::sync::atomic::AtomicUsize::new(0),
+        }
+    }
+
+    fn attempts(&self) -> usize {
+        self.attempts.load(Ordering::Relaxed)
+    }
+}
+
+#[tokio::test]
+async fn a_failed_summary_is_tried_again_only_once_the_conversation_has_grown() {
+    let engine = Arc::new(FailedSummaryEngine::new());
+    let recorded = with_summaries(Arc::clone(&engine), async |connection, session, state| {
+        use_model(&state, "other-model");
+        for _ in 0..6 {
+            prompt(&connection, &session, &big(36_000)).await;
+        }
+        // 84,000 tokens: a summary starts, and fails.
+        prompt(&connection, &session, &big(36_000)).await;
+        summary_settled(&state).await;
+        prompt(&connection, &session, "continue").await;
+        summary_settled(&state).await;
+        let after_a_short_message = engine.attempts();
+        // 13,334 tokens more, past a tenth of the window since the failure.
+        prompt(&connection, &session, &big(40_000)).await;
+        summary_settled(&state).await;
+        after_a_short_message
+    })
+    .await;
+
+    assert_eq!(
+        recorded.out, 1,
+        "a message that barely grew the conversation does not try again"
+    );
+    assert_eq!(
+        engine.attempts(),
+        2,
+        "one that grew it by a tenth of the window does"
+    );
+    assert!(recorded.summaries.is_empty(), "nothing landed to record");
+    let mut whole = Vec::new();
+    for _ in 0..7 {
+        whole.extend([big(36_000), "noted".to_owned()]);
+    }
+    whole.push("continue".to_owned());
+    assert_eq!(
+        engine.turns.requests()[7].messages,
+        whole,
+        "the message ran on the whole history"
+    );
+}
+
+#[tokio::test]
+async fn a_turn_that_would_not_fit_waits_out_one_failed_summary_and_the_next_none() {
+    let engine = Arc::new(FailedSummaryEngine::new());
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        // 120,000 tokens: far from a summary on a million-token model.
+        for _ in 0..4 {
+            prompt(&connection, &session, &big(90_000)).await;
+        }
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "other-model",
+            ))
+            .block_task()
+            .await
+            .expect("the model changes");
+        // Past three quarters of the window: this turn waits for a summary,
+        // which fails, and runs on the whole history.
+        prompt(&connection, &session, "continue").await;
+        // Grown too little since to try again, so nothing is waited for.
+        prompt(&connection, &session, "and again").await;
+    })
+    .await;
+
+    assert_eq!(engine.attempts(), 1);
+    assert_eq!(engine.turns.requests().len(), 6, "both turns ran");
+}
+
+#[tokio::test]
+async fn a_summary_that_runs_long_lands_cut_at_its_limit() {
+    let mut engine = CondensingEngine::new();
+    engine.summaries = ScriptedEngine::new(vec![StreamPart::Content(
+        "y".repeat(compaction::SUMMARY_BYTES + 4_000),
+    )]);
+    let engine = Arc::new(engine);
+    let recorded = with_summaries(Arc::clone(&engine), async |connection, session, state| {
+        use_model(&state, "other-model");
+        for _ in 0..7 {
+            prompt(&connection, &session, &big(36_000)).await;
+        }
+        summary_settled(&state).await;
+    })
+    .await;
+
+    assert_eq!(recorded.summaries.len(), 1, "it lands rather than failing");
+    assert_eq!(
+        recorded.summaries[0].text,
+        "y".repeat(compaction::SUMMARY_BYTES)
+    );
+}
+
+/// An engine whose summaries wait until they are cancelled, saying when one
+/// has started.
+struct HangingSummaryEngine {
+    turns: ScriptedEngine,
+    summarizing: Arc<tokio::sync::Notify>,
+}
+
+impl TurnEngine for HangingSummaryEngine {
+    fn supported_models(&self) -> &[&str] {
+        crate::testing::TEST_MODELS
+    }
+
+    fn run_turn(
+        &self,
+        request: TurnRequest,
+    ) -> tokio::sync::mpsc::Receiver<Result<StreamPart, agent::AgentError>> {
+        if request.purpose == TurnPurpose::Summary {
+            self.summarizing.notify_one();
+            HangingEngine.run_turn(request)
+        } else {
+            self.turns.run_turn(request)
+        }
+    }
+}
+
+#[tokio::test]
+async fn a_stop_while_a_turn_waits_for_its_summary_stops_the_turn() {
+    let summarizing = Arc::new(tokio::sync::Notify::new());
+    let engine = Arc::new(HangingSummaryEngine {
+        turns: ScriptedEngine::new(vec![StreamPart::Content("noted".into())]),
+        summarizing: Arc::clone(&summarizing),
+    });
+    let (_, _, response) = with_agent(engine, async |connection, session| {
+        for _ in 0..4 {
+            prompt(&connection, &session, &big(90_000)).await;
+        }
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "other-model",
+            ))
+            .block_task()
+            .await
+            .expect("the model changes");
+        let pending = connection.send_request(text_prompt(&session, "continue"));
+        summarizing.notified().await;
+        connection
+            .send_notification(agent_client_protocol::schema::v1::CancelNotification::new(
+                session.clone(),
+            ))
+            .expect("the cancel notification should send");
+        pending
+            .block_task()
+            .await
+            .expect("a stopped turn completes")
+    })
+    .await;
+    assert_eq!(response.stop_reason, StopReason::Cancelled);
+}
+
+#[tokio::test]
+async fn images_count_toward_the_context_and_are_each_read_for_the_summary() {
+    let engine = Arc::new(CondensingEngine::new());
+    with_summaries(Arc::clone(&engine), async |connection, session, state| {
+        use_model(&state, "other-model");
+        // The fourth brings the conversation to 76,800 tokens.
+        for batch in 0..4 {
+            show_images(&connection, &session, batch * 12, 12).await;
+        }
+        summary_settled(&state).await;
+    })
+    .await;
+
+    let reads = engine.reads.requests();
+    assert_eq!(reads.len(), 36, "one read per image the summary covers");
+    assert!(reads.iter().all(|read| read.images.len() == 1
+        && read.model == compaction::SUMMARY_MODEL
+        && read.purpose == TurnPurpose::Summary));
+    let summaries = engine.summaries.requests();
+    assert_eq!(summaries.len(), 1);
+    assert!(summaries[0].messages[0].contains("IMAGE photo-0.png: a red square"));
+    assert!(summaries[0].messages[0].contains("IMAGE photo-35.png: a red square"));
+    assert!(
+        summaries[0].images.is_empty(),
+        "the summary reads the descriptions, not the images"
+    );
+}
+
+#[tokio::test]
+async fn images_a_failed_summary_read_are_not_read_again() {
+    let engine = Arc::new(CondensingEngine {
+        failures: std::sync::atomic::AtomicUsize::new(1),
+        ..CondensingEngine::new()
+    });
+    with_summaries(Arc::clone(&engine), async |connection, session, state| {
+        use_model(&state, "other-model");
+        // A summary of the first 36 images reads them all, then fails.
+        for batch in 0..4 {
+            show_images(&connection, &session, batch * 12, 12).await;
+        }
+        summary_settled(&state).await;
+        // Nine more grow the conversation past a tenth of the window, and
+        // the next summary covers 48.
+        show_images(&connection, &session, 48, 9).await;
+        summary_settled(&state).await;
+    })
+    .await;
+
+    assert_eq!(
+        engine.reads.requests().len(),
+        48,
+        "the 36, then only the 12 the failed summary had not read"
+    );
+    let summaries = engine.summaries.requests();
+    assert_eq!(summaries.len(), 1, "the second summary landed");
+    assert!(summaries[0].messages[0].contains("IMAGE photo-0.png: a red square"));
+    assert!(summaries[0].messages[0].contains("IMAGE photo-47.png: a red square"));
+}
+
+#[tokio::test]
+async fn a_conversation_longer_than_one_summary_call_reads_is_summarized_in_parts() {
+    let engine = Arc::new(CondensingEngine::new());
+    with_summaries(Arc::clone(&engine), async |connection, session, state| {
+        // Gemini's window: a summary starts at 629,145 tokens, and covers
+        // the three messages before the fourth, past the 400,000 one summary
+        // call reads.
+        use_model(&state, chat::domain::models::FREE_MODEL);
+        for _ in 0..4 {
+            prompt(&connection, &session, &big(610_000)).await;
+        }
+        summary_settled(&state).await;
+    })
+    .await;
+
+    let summaries = engine.summaries.requests();
+    assert_eq!(summaries.len(), 2);
+    assert!(summaries[1].messages[0].starts_with("Earlier summary:\nSUMMARY"));
+}
+
+#[tokio::test]
+async fn a_message_is_too_long_by_its_model_s_window() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
+    with_admission(
+        Arc::clone(&engine),
+        Arc::new(DisabledAiAdmissionService),
+        async |connection, session, state| {
+            // 66,667 tokens: past half of a 128k window.
+            use_model(&state, "other-model");
+            let error = connection
+                .send_request(text_prompt(&session, &big(200_000)))
+                .block_task()
+                .await
+                .expect_err("too long for this model");
+            assert!(format!("{error:?}").contains("This message is too long"));
+            use_model(&state, "anthropic/claude-sonnet-5-5");
+            prompt(&connection, &session, &big(200_000)).await;
+        },
+    )
+    .await;
+    assert_eq!(engine.requests().len(), 1, "only the message that fit ran");
+}
+
+#[tokio::test]
+async fn compact_is_a_message_like_any_other() {
+    let engine = Arc::new(ScriptedEngine::new(vec![StreamPart::Content("ok".into())]));
+    with_agent(Arc::clone(&engine), async |connection, session| {
+        prompt(&connection, &session, "remember this").await;
+        prompt(&connection, &session, "/compact").await;
     })
     .await;
 
     let requests = engine.requests();
-    assert_eq!(requests.len(), 2, "the attached prompt runs a turn");
-    assert_eq!(
-        requests[1].messages,
-        vec![
-            "remember this".to_owned(),
-            "ok".to_owned(),
-            "/compact".to_owned()
-        ],
-        "the conversation is kept, not compacted"
-    );
+    assert_eq!(requests.len(), 2);
+    assert_eq!(requests[1].purpose, TurnPurpose::Conversation);
+    assert_eq!(requests[1].messages, ["remember this", "ok", "/compact"]);
 }
 
 #[tokio::test]
@@ -947,12 +1815,14 @@ async fn serve_with_mcp(
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
         ),
         engine,
         admission: Arc::new(DisabledAiAdmissionService),
+        agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
         model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
@@ -960,7 +1830,6 @@ async fn serve_with_mcp(
         enable_dev_commands: false,
         mcp,
         mcp_tools: std::sync::Mutex::new(None),
-        mcp_servers: std::sync::Mutex::new(Vec::new()),
         mcp_connect: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
     });
@@ -988,83 +1857,6 @@ async fn serve_with_mcp(
     (connection, session, abort)
 }
 
-#[derive(Default)]
-struct RefreshingConnector {
-    connected: AtomicBool,
-    fail: AtomicBool,
-    asked: std::sync::Mutex<Vec<Vec<String>>>,
-}
-
-impl crate::domain::mcp::McpToolConnector for Arc<RefreshingConnector> {
-    async fn refresh(
-        &self,
-        _: AgentSessionId,
-        advertised: Vec<AcpMcpServer>,
-    ) -> anyhow::Result<Option<Vec<AcpMcpServer>>> {
-        anyhow::ensure!(!self.fail.load(Ordering::SeqCst), "refresh failed");
-        assert!(
-            !advertised.is_empty(),
-            "retain the attached session credential"
-        );
-        let servers = if self.connected.load(Ordering::SeqCst) {
-            vec![AcpMcpServer::Http(
-                agent_client_protocol::schema::v1::McpServerHttp::new(
-                    "notion",
-                    "https://egress.test/mcp/notion",
-                ),
-            )]
-        } else {
-            vec![]
-        };
-        Ok(Some(servers))
-    }
-    async fn connect(
-        &self,
-        servers: Vec<agent_client_protocol::schema::v1::McpServerHttp>,
-    ) -> Option<RemoteMcpToolSet> {
-        self.asked
-            .lock()
-            .unwrap()
-            .push(servers.into_iter().map(|server| server.name).collect());
-        None
-    }
-}
-
-#[tokio::test]
-async fn each_turn_refreshes_newly_connected_apps_without_recreating_the_session() {
-    let connector = Arc::new(RefreshingConnector::default());
-    let state = Arc::new(AgentState {
-        session_id: AgentSessionId::new(),
-        owner: model_owner::Owner::User(MacroUserIdStr::try_from_email("owner@macro.com").unwrap()),
-        engine: Arc::new(ScriptedEngine::new(vec![])),
-        admission: Arc::new(DisabledAiAdmissionService),
-        model_access: Arc::new(crate::testing::TestModelAccess::paid()),
-        store: Arc::new(SessionStore::new()),
-        active_cancel: std::sync::Mutex::new(Vec::new()),
-        turn_lock: tokio::sync::Mutex::new(()),
-        enable_dev_commands: false,
-        mcp: Arc::new(connector.clone()),
-        mcp_tools: std::sync::Mutex::new(None),
-        mcp_servers: std::sync::Mutex::new(Vec::new()),
-        mcp_connect: std::sync::Mutex::new(None),
-        client_renders_forms: AtomicBool::new(false),
-    });
-    state.start_connect_mcp(test_mcp_servers());
-    state.mcp_tools_for_turn().await.unwrap();
-    assert!(connector.asked.lock().unwrap().last().unwrap().is_empty());
-    connector.connected.store(true, Ordering::SeqCst);
-    state.mcp_tools_for_turn().await.unwrap();
-    assert_eq!(
-        connector.asked.lock().unwrap().last().unwrap(),
-        &vec!["notion".to_string()]
-    );
-    connector.connected.store(false, Ordering::SeqCst);
-    state.mcp_tools_for_turn().await.unwrap();
-    assert!(connector.asked.lock().unwrap().last().unwrap().is_empty());
-    connector.fail.store(true, Ordering::SeqCst);
-    assert!(state.mcp_tools_for_turn().await.is_err());
-}
-
 /// The servers `session/new` carries are dialed in the background, minus
 /// Macro's own, whose tools this runtime already has natively.
 #[tokio::test]
@@ -1081,12 +1873,14 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
         ),
         engine: Arc::new(ScriptedEngine::new(Vec::new())),
         admission: Arc::new(DisabledAiAdmissionService),
+        agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
         model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
@@ -1094,7 +1888,6 @@ async fn session_new_dials_the_advertised_servers_except_macros_own() {
         enable_dev_commands: false,
         mcp: Arc::new(Arc::clone(&spy)),
         mcp_tools: std::sync::Mutex::new(None),
-        mcp_servers: std::sync::Mutex::new(Vec::new()),
         mcp_connect: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
     });
@@ -1171,12 +1964,14 @@ async fn first_prompt_waits_for_background_mcp_connect() {
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
         ),
         engine: Arc::clone(&engine) as Arc<dyn TurnEngine>,
         admission: Arc::new(DisabledAiAdmissionService),
+        agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
         model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
@@ -1184,7 +1979,6 @@ async fn first_prompt_waits_for_background_mcp_connect() {
         enable_dev_commands: false,
         mcp: Arc::new(Arc::clone(&connector)),
         mcp_tools: std::sync::Mutex::new(None),
-        mcp_servers: std::sync::Mutex::new(Vec::new()),
         mcp_connect: std::sync::Mutex::new(None),
         client_renders_forms: AtomicBool::new(false),
     });
@@ -1276,12 +2070,14 @@ where
         crate::domain::session::SessionState::new("anthropic/claude-sonnet-5-5".into()),
     );
     let state = Arc::new(AgentState {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         session_id,
         owner: model_owner::Owner::User(
             MacroUserIdStr::try_from_email("owner@macro.com").expect("a valid user id"),
         ),
         engine,
         admission: Arc::new(DisabledAiAdmissionService),
+        agent_keys: Arc::new(agent_api_keys::domain::NoAgentKeys),
         model_access: Arc::new(crate::testing::TestModelAccess::paid()),
         store,
         active_cancel: std::sync::Mutex::new(Vec::new()),
@@ -1289,7 +2085,6 @@ where
         client_renders_forms: AtomicBool::new(false),
         mcp: Arc::new(crate::domain::mcp::NoMcpServers),
         mcp_tools: std::sync::Mutex::new(None),
-        mcp_servers: std::sync::Mutex::new(Vec::new()),
         mcp_connect: std::sync::Mutex::new(None),
         enable_dev_commands,
     });
@@ -1756,7 +2551,8 @@ async fn a_user_tool_review_is_a_tool_scoped_form_elicitation_naming_the_tool() 
     );
 }
 
-/// The timeout still guards a turn that is silent with nothing asked.
+/// The timeout still guards a turn that is silent with nothing asked, and
+/// the turn it stops failed: nobody pressed Stop.
 #[tokio::test(start_paused = true)]
 async fn a_silent_turn_with_no_question_out_is_stopped_by_the_idle_timeout() {
     let (notifications, _config_options, response) =
@@ -1765,11 +2561,15 @@ async fn a_silent_turn_with_no_question_out_is_stopped_by_the_idle_timeout() {
                 .send_request(text_prompt(&session, "hang"))
                 .block_task()
                 .await
-                .expect("the turn should complete")
         })
         .await;
 
-    assert_eq!(response.stop_reason, StopReason::Cancelled);
+    let error = response.expect_err("a timed-out turn fails");
+    assert!(
+        error.to_string().contains("produced nothing")
+            || format!("{error:?}").contains("produced nothing"),
+        "got {error:?}"
+    );
     assert!(
         spoken(&notifications).contains("produced nothing"),
         "got {:?}",
@@ -2082,7 +2882,11 @@ async fn changing_speed_applies_to_next_turn_and_rejects_unsupported_models() {
     struct SpeedEngine(ScriptedEngine);
     impl TurnEngine for SpeedEngine {
         fn supported_models(&self) -> &[&str] {
-            &["anthropic/claude-sonnet-5-5", "anthropic/claude-opus-5-5"]
+            &[
+                "anthropic/claude-sonnet-5-5",
+                "anthropic/claude-opus-5-5",
+                "openai/gpt-6-astra",
+            ]
         }
         fn run_turn(
             &self,
@@ -2113,11 +2917,31 @@ async fn changing_speed_applies_to_next_turn_and_rejects_unsupported_models() {
             .block_task()
             .await
             .unwrap();
+        assert!(
+            connection
+                .send_request(SetSessionConfigOptionRequest::new(
+                    session.clone(),
+                    "speed",
+                    "fast",
+                ))
+                .block_task()
+                .await
+                .is_err()
+        );
+        connection
+            .send_request(SetSessionConfigOptionRequest::new(
+                session.clone(),
+                MODEL_CONFIG_ID,
+                "openai/gpt-6-astra",
+            ))
+            .block_task()
+            .await
+            .unwrap();
         connection
             .send_request(SetSessionConfigOptionRequest::new(
                 session.clone(),
                 "speed",
-                "fast",
+                "ultrafast",
             ))
             .block_task()
             .await
@@ -2144,6 +2968,25 @@ async fn changing_speed_applies_to_next_turn_and_rejects_unsupported_models() {
     })
     .await;
     let requests = engine.0.requests();
-    assert_eq!(requests[0].speed, agent::ModelSpeed::Fast);
+    assert_eq!(requests[0].speed, agent::ModelSpeed::Ultrafast);
     assert_eq!(requests[1].speed, agent::ModelSpeed::Standard);
+}
+
+#[test]
+fn a_turn_that_ends_on_a_tool_call_has_not_replied() {
+    let mut output = TurnOutput::default();
+    output.observe(&StreamPart::Content("Let me look.".to_owned()));
+    output.observe(&StreamPart::ToolCall(agent::ToolCall {
+        id: "call-1".to_owned(),
+        name: "ExecuteCode".to_owned(),
+        json: serde_json::json!({}),
+        mcp: None,
+    }));
+    output.observe(&StreamPart::Content("\n\n".to_owned()));
+    assert_eq!(output.text_chars, 14);
+    assert_eq!(output.tool_calls, 1);
+    assert!(!output.replied);
+
+    output.observe(&StreamPart::Content("Found it.".to_owned()));
+    assert!(output.replied);
 }

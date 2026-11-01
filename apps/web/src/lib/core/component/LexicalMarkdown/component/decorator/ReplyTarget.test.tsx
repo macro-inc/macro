@@ -1,3 +1,4 @@
+import { projectHostedContent } from '@app/features/projects/open-project';
 import { MessageReferenceNavigation } from '@core/messages/message-reference-navigation';
 import type {
   ReplyTargetDecoratorProps,
@@ -14,6 +15,10 @@ vi.mock('@components/app/split-layout/layout', () => ({
 vi.mock('@core/block', () => ({
   useMaybeBlockId: () => undefined,
   useMaybeBlockName: () => undefined,
+}));
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
+  isFeatureEnabled: () => true,
 }));
 vi.mock('@core/user', () => ({
   getDisplayName: () => 'Eric',
@@ -73,12 +78,6 @@ it.each<{
     params: { comment_id: 'message-id' },
   },
   {
-    parentType: 'initiative',
-    type: 'component',
-    id: 'initiative-view~parent-id~overview~message-id',
-    params: {},
-  },
-  {
     parentType: 'document',
     type: 'md',
     id: 'parent-id',
@@ -109,6 +108,26 @@ it.each<{
     expect(mocks.open).toHaveBeenCalledWith(type, id, params, true);
   }
 );
+
+it('opens a quoted project message through the project opener', () => {
+  render(() => (
+    <ReplyTarget
+      parent={{ type: 'initiative', id: 'parent-id' }}
+      targetMessageId="message-id"
+      targetThreadId="root-id"
+      displayText="Quoted text"
+      senderId="macro|eric@macro.test"
+      key="node-key"
+      theme={{}}
+    />
+  ));
+  fireEvent.click(screen.getByRole('button', { name: 'Quoted message' }));
+  expect(mocks.open).not.toHaveBeenCalled();
+  expect(mocks.openWithSplit).toHaveBeenCalledWith(
+    projectHostedContent('parent-id', 'overview', 'message-id'),
+    { preferNewSplit: true }
+  );
+});
 
 it('reissues call quote navigation with a fresh route request each time', () => {
   render(() => (

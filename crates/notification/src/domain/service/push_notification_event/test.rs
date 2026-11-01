@@ -37,6 +37,20 @@ impl MockNotifRepo {
 }
 
 impl NotificationRepository for MockNotifRepo {
+    async fn notification_is_withdrawn(
+        &self,
+        _notification_id: uuid::Uuid,
+    ) -> Result<bool, Report> {
+        unreachable!("this service does not deliver queued workflow notifications")
+    }
+
+    async fn complete_notification_publication(
+        &self,
+        _notification_id: uuid::Uuid,
+    ) -> Result<(), Report> {
+        unreachable!("this service does not publish notifications")
+    }
+
     async fn delete_device_by_endpoint(&self, endpoint_arn: &str) -> Result<(), Report> {
         self.deleted_endpoints
             .lock()
@@ -207,6 +221,7 @@ impl NotificationRepository for MockNotifRepo {
         _: &str,
         _: &str,
         _: &crate::domain::models::device::DeviceType,
+        _native_call_capable: bool,
     ) -> Result<(), Report> {
         unimplemented!()
     }

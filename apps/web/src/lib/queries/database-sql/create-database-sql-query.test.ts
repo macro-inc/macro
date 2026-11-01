@@ -11,6 +11,7 @@ import type { CacheHost } from '@graphql-cache/host/types';
 import type {
   CacheRevision,
   EntityFilterCacheResult,
+  ReadResult,
 } from '@graphql-cache/protocol';
 import type { SoupQuery } from '@service-storage/graphql/generated/graphql';
 import {
@@ -187,6 +188,18 @@ describe('createDatabaseSqlQuery', () => {
           {
             client: () => client,
             cacheHost: () => ({
+              readQuery: async () =>
+                cacheHit
+                  ? {
+                      kind: 'hit',
+                      data: {
+                        user: {
+                          id: 'macro|viewer@databases.test',
+                          soup: { items: [acme], nextCursor: null },
+                        },
+                      },
+                    }
+                  : { kind: 'miss' },
               onCacheChanged: () => () => {},
               entityFilter: vi.fn(),
               readRecordsByKeys: vi.fn(),
@@ -207,7 +220,7 @@ describe('createDatabaseSqlQuery', () => {
       else expect(query.outcome()).toBeUndefined();
       expect(query.error()).toBeUndefined();
       expect(query.loading()).toBe(true);
-      expect(policies).toEqual(['cache-only', 'network-only']);
+      expect(policies).toEqual(['network-only']);
       expect(loadingStates).toEqual([true]);
       finishNetwork?.();
       await vi.waitFor(() =>
@@ -219,6 +232,69 @@ describe('createDatabaseSqlQuery', () => {
       expect(loadingStates).toEqual([true, false]);
     }
   );
+
+  it('lands an after-write refresh while its initial cache probe is still pending', async () => {
+    let finishCache!: (result: ReadResult) => void;
+    const readQuery = vi.fn(
+      () =>
+        new Promise<ReadResult>((resolve) => {
+          finishCache = resolve;
+        })
+    );
+    const policies: string[] = [];
+    const exchange: Exchange = () => (incoming) =>
+      pipe(
+        incoming,
+        mergeMap((operation) => {
+          if (operation.kind === 'teardown') return empty;
+          policies.push(operation.context.requestPolicy);
+          return fromValue({
+            operation,
+            data: {
+              user: {
+                id: 'macro|viewer@databases.test',
+                soup: { items: [globex], nextCursor: null },
+              },
+            },
+            stale: false,
+            hasNext: false,
+          });
+        })
+      );
+    const client = createClient({
+      url: 'http://test.invalid/graphql',
+      exchanges: [exchange],
+    });
+    const query = createRoot((cleanup) => {
+      dispose = cleanup;
+      return createDatabaseSqlQuery(
+        () => ({ schema, sql: 'SELECT name FROM crm.deals' }),
+        {
+          client: () => client,
+          cacheHost: () => ({
+            readQuery,
+            onCacheChanged: () => () => {},
+            entityFilter: vi.fn(),
+            readRecordsByKeys: vi.fn(),
+          }),
+          people: async () => [],
+          catalog: async () => catalog,
+          open: names,
+        }
+      );
+    });
+    await vi.waitFor(() => expect(readQuery).toHaveBeenCalledOnce());
+    expect((await query.refresh('after-write'))._unsafeUnwrap()).toEqual({
+      landed: true,
+    });
+    finishCache({ kind: 'miss' });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(query.error()).toBeUndefined();
+    expect(query.outcome()?.rows).toEqual([
+      [{ type: 'text', value: 'Globex' }],
+    ]);
+    expect(policies).toEqual(['network-only']);
+  });
 
   it('shows a row the cache learns about without reading the network again', async () => {
     const requests: Operation[] = [];
@@ -258,6 +334,15 @@ describe('createDatabaseSqlQuery', () => {
       async () => reconciled
     );
     const host = {
+      readQuery: async () => ({
+        kind: 'hit' as const,
+        data: {
+          user: {
+            id: 'macro|viewer@databases.test',
+            soup: { items: [acme], nextCursor: null },
+          },
+        },
+      }),
       onCacheChanged: (callback: (revision: CacheRevision) => void) => {
         cacheChanged = callback;
         return () => {};
@@ -272,7 +357,7 @@ describe('createDatabaseSqlQuery', () => {
       }),
     } satisfies Pick<
       CacheHost,
-      'onCacheChanged' | 'entityFilter' | 'readRecordsByKeys'
+      'onCacheChanged' | 'entityFilter' | 'readRecordsByKeys' | 'readQuery'
     >;
 
     const query = createRoot((cleanup) => {
@@ -294,7 +379,7 @@ describe('createDatabaseSqlQuery', () => {
     );
     expect(
       requests.map((operation) => operation.context.requestPolicy)
-    ).toEqual(['cache-only', 'network-only']);
+    ).toEqual(['network-only']);
 
     cacheChanged(revision);
 
@@ -304,7 +389,7 @@ describe('createDatabaseSqlQuery', () => {
         [{ type: 'text', value: 'Acme' }],
       ])
     );
-    expect(requests).toHaveLength(2);
+    expect(requests).toHaveLength(1);
     expect(entityFilter).toHaveBeenCalledWith({
       filters: requests[0]?.variables?.input.initial.filters,
       sortMethod: 'CREATED_AT',
@@ -486,6 +571,15 @@ describe('createDatabaseSqlQuery', () => {
     let cacheChanged = (_revision: CacheRevision) => {};
     // The cache has not heard of the refreshed rows yet.
     const host = {
+      readQuery: async () => ({
+        kind: 'hit' as const,
+        data: {
+          user: {
+            id: 'macro|viewer@databases.test',
+            soup: { items: [acme], nextCursor: null },
+          },
+        },
+      }),
       onCacheChanged: (callback: (revision: CacheRevision) => void) => {
         cacheChanged = callback;
         return () => {};
@@ -505,7 +599,7 @@ describe('createDatabaseSqlQuery', () => {
       }),
     } satisfies Pick<
       CacheHost,
-      'onCacheChanged' | 'entityFilter' | 'readRecordsByKeys'
+      'onCacheChanged' | 'entityFilter' | 'readRecordsByKeys' | 'readQuery'
     >;
     const query = createRoot((cleanup) => {
       dispose = cleanup;

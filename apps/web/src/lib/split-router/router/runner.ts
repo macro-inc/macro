@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   createMachine,
   type Machine,
@@ -51,6 +52,11 @@ type Run = Machine<RunState, RunEvent>;
 type PaneRun = { pane: PaneId; machine: Run };
 
 type Settle = (result: NavigationResult) => void;
+
+export type RegisterCommitCallback = (
+  navigation: Navigation,
+  callback: () => void
+) => void;
 
 const URL_KEY = '@url';
 
@@ -132,22 +138,28 @@ export type Runner = ReturnType<typeof createRunner>;
  */
 export function createRunner(options: {
   /** Phase work for a run; `waiting` hears when a phase goes async. */
-  phases(waiting: (state: Running) => void): MachineScopes<RunState, RunEvent>;
+  phases(
+    waiting: (state: Running) => void,
+    onCommit: RegisterCommitCallback
+  ): MachineScopes<RunState, RunEvent>;
   /** Panes still open; runs of the others are dropped once idle. */
   live(): readonly PaneId[];
 }) {
   const inFlight = createInFlight();
-  const settlers = new WeakMap<Navigation, Settle>();
-  const outstanding: Promise<unknown>[] = [];
+  const settlers = new WeakMap<
+    Navigation,
+    { settle: Settle; callbacks: (() => void)[] }
+  >();
+  const outstanding = new Set<Promise<unknown>>();
   const waiters: (() => void)[] = [];
   const paneRuns: PaneRun[] = [];
   let committing = 0;
   let disposed = false;
 
   const track = async (promise: Promise<unknown>) => {
-    outstanding.push(promise);
+    outstanding.add(promise);
     await promise;
-    outstanding.splice(outstanding.indexOf(promise), 1);
+    outstanding.delete(promise);
   };
 
   /** Starts `navigation`; one that never waits has settled by the time `start` returns. */
@@ -155,23 +167,33 @@ export function createRunner(options: {
     navigation: Navigation,
     begin: () => void
   ): MaybePromise<NavigationResult> => {
-    const deferred = Promise.withResolvers<NavigationResult>();
+    let resolve!: (value: NavigationResult) => void;
+    const promise = new Promise<NavigationResult>((settle) => {
+      resolve = settle;
+    });
     let result: NavigationResult | undefined;
 
-    settlers.set(navigation, (value) => {
-      result = value;
-      deferred.resolve(value);
+    settlers.set(navigation, {
+      settle(value) {
+        result = value;
+        resolve(value);
+      },
+      callbacks: [],
     });
-    void track(deferred.promise);
+    fireAndForget(track(promise), 'split-router');
     begin();
 
-    return result ?? deferred.promise;
+    return result ?? promise;
   };
 
   const settle = (navigation: Navigation, result: NavigationResult) => {
     const settler = settlers.get(navigation);
     settlers.delete(navigation);
-    settler?.(result);
+    settler?.settle(result);
+  };
+
+  const onCommit: RegisterCommitCallback = (navigation, callback) => {
+    settlers.get(navigation)?.callbacks.push(callback);
   };
 
   const isOpen = () => {
@@ -200,7 +222,19 @@ export function createRunner(options: {
     committing += 1;
 
     try {
-      return navigation.apply(entries);
+      const result = navigation.apply(entries);
+      const callbacks = settlers.get(navigation)?.callbacks.splice(0) ?? [];
+      if (result.status === 'committed') {
+        for (const callback of callbacks) {
+          if (disposed) break;
+          try {
+            callback();
+          } catch (error) {
+            console.error('Split router commit callback failed', error);
+          }
+        }
+      }
+      return result;
     } catch (error) {
       console.error('Split router could not commit a navigation', error);
       return CANCELLED_RESULT;
@@ -215,7 +249,10 @@ export function createRunner(options: {
     key: string,
     execute: (command: RunCommand) => void
   ): Run => {
-    const scopes = options.phases((state) => inFlight.show(key, state));
+    const scopes = options.phases(
+      (state) => inFlight.show(key, state),
+      onCommit
+    );
     const machine = createMachine<RunState, RunEvent, RunCommand>({
       initial: IDLE,
       def: runDef,
@@ -331,7 +368,10 @@ export function createRunner(options: {
   ) => {
     const landed = navigation.revert?.();
 
-    void mapMaybe(landed, () => dispatch({ t: 'revert-landed' }));
+    fireAndForget(
+      mapMaybe(landed, () => dispatch({ t: 'revert-landed' })),
+      'split-router'
+    );
   };
 
   const executeGate = (
@@ -372,7 +412,7 @@ export function createRunner(options: {
     if (isOpen()) return;
 
     const opened = new Promise<void>((resolve) => waiters.push(resolve));
-    void track(opened);
+    fireAndForget(track(opened), 'split-router');
 
     return opened;
   };
@@ -439,7 +479,7 @@ export function createRunner(options: {
 
     /** Resolves once nothing is in flight. */
     async settled(): Promise<void> {
-      while (outstanding.length > 0) {
+      while (outstanding.size > 0) {
         await Promise.all(outstanding);
       }
     },

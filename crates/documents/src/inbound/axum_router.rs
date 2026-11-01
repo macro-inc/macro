@@ -21,8 +21,9 @@ mod tests;
 
 pub mod content_uploaded;
 pub mod copy_document;
-pub mod create_document;
 #[cfg(feature = "document_create")]
+pub mod create_canvas;
+pub mod create_document;
 pub mod create_markdown;
 #[cfg(feature = "document_create")]
 pub mod create_skill;
@@ -39,6 +40,7 @@ pub mod get_github_pull_request_tasks;
 pub mod get_github_pull_requests;
 pub mod get_location;
 pub mod get_short_id;
+pub mod get_text;
 pub mod put_interaction;
 pub mod put_snapshot;
 pub mod sync_content_updated;
@@ -62,10 +64,13 @@ use lexical_client::LexicalClient;
 use macro_authorization::{MacroAuthorizationService, MacroAuthorizationState};
 use model_error_response::ErrorResponse;
 use serde::Deserialize;
+// Existing router composition state; the text handler uses domain services, never SQL.
+// ast-grep-ignore: rust-no-sqlx-in-inbound
 use sqlx::PgPool;
 use task_dedup::PgTaskDedupService;
 
 #[cfg(feature = "document_create")]
+use self::create_canvas::create_canvas_handler;
 use self::create_markdown::create_markdown_handler;
 #[cfg(feature = "document_create")]
 use self::create_skill::create_skill_handler;
@@ -245,6 +250,10 @@ where
                 .delete(delete_document_handler::<T, Svc, Auth>),
         )
         .route(
+            "/{document_id}/text-content",
+            axum::routing::get(get_text::get_text_handler::<T, Svc, Auth>),
+        )
+        .route(
             "/{document_id}/location_v3",
             axum::routing::get(get_location_v3_handler::<T, Svc, Auth>),
         )
@@ -324,6 +333,10 @@ where
 
     #[cfg(feature = "document_create")]
     let router = router
+        .route(
+            "/create_canvas",
+            axum::routing::post(create_canvas_handler::<T, Svc, Auth>),
+        )
         .route(
             "/create_markdown",
             axum::routing::post(create_markdown_handler::<T, Svc, Auth>),

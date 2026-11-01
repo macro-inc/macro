@@ -7,6 +7,14 @@ import {
 import { isQueryObject } from './live-query';
 import { applyQueryPatches } from './query-patches';
 
+/** Expected cancellation when teardown or a generation change drops the operation's cursor mid-read. */
+export class QueryReadInvalidatedError extends Error {
+  constructor() {
+    super('query read was invalidated');
+    this.name = 'QueryReadInvalidatedError';
+  }
+}
+
 /** One cursor per active operation. Generation/disposal invalidates in-flight reads too. */
 export function createDocumentQueryReader(
   host: Pick<CacheHost, 'readQuery' | 'watchQuery'>
@@ -48,8 +56,7 @@ export function createDocumentQueryReader(
         });
         const full = !update || update.kind === 'unsupported';
         const fallback = full ? await host.readQuery(args) : undefined;
-        if (states.get(key) !== state)
-          throw new Error('query read was invalidated');
+        if (states.get(key) !== state) throw new QueryReadInvalidatedError();
         const revision = !full
           ? parseCacheRevision(update.revision)
           : undefined;

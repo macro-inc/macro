@@ -9,7 +9,10 @@ import {
   Show,
 } from 'solid-js';
 import { BulkDeleteView, type PartialDeleteHandler } from './BulkDeleteView';
-import { BulkMoveToProjectView } from './BulkMoveToProjectView';
+import {
+  BulkMoveToProjectView,
+  type MovedFolder,
+} from './BulkMoveToProjectView';
 import { BulkRenameEntitiesView } from './BulkRenameEntitiesView';
 
 const BulkEditEntityModalContent = (props: {
@@ -18,6 +21,7 @@ const BulkEditEntityModalContent = (props: {
   view: 'rename' | 'moveToProject' | 'delete' | null;
   entities: EntityData[];
   onFinish?: () => void;
+  onMoved?: (folder: MovedFolder) => void;
   onCancel?: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
@@ -25,6 +29,11 @@ const BulkEditEntityModalContent = (props: {
   const handleFinish = () => {
     props.setIsOpen(false);
     props.onFinish?.();
+  };
+  const handleMoved = (folder: MovedFolder) => {
+    const { onMoved } = props;
+    handleFinish();
+    onMoved?.(folder);
   };
   const handleCancel = () => {
     props.setIsOpen(false);
@@ -37,8 +46,8 @@ const BulkEditEntityModalContent = (props: {
   return (
     <Dialog
       open={props.isOpen()}
-      position="center"
-      class={props.view === 'moveToProject' ? 'w-120' : 'w-110'}
+      position={props.view === 'moveToProject' ? 'top' : 'center'}
+      class={props.view === 'moveToProject' ? 'w-140' : 'w-110'}
       onOpenChange={(open) => {
         if (!open) {
           handleCancel();
@@ -46,33 +55,37 @@ const BulkEditEntityModalContent = (props: {
         props.setIsOpen(open);
       }}
     >
-      <ActionDialogShell>
-        <Show when={props.view === 'rename'}>
-          <BulkRenameEntitiesView
-            entities={props.entities}
-            onFinish={handleFinish}
-            onCancel={handleCancel}
-            onError={handleError}
-          />
-        </Show>
-        <Show when={props.view === 'moveToProject'}>
-          <BulkMoveToProjectView
-            entities={props.entities}
-            onFinish={handleFinish}
-            onCancel={handleCancel}
-            onError={handleError}
-          />
-        </Show>
-        <Show when={props.view === 'delete'}>
-          <BulkDeleteView
-            onPartialDelete={props.onPartialDelete}
-            entities={props.entities}
-            onFinish={handleFinish}
-            onCancel={handleCancel}
-            onError={handleError}
-          />
-        </Show>
-      </ActionDialogShell>
+      <Show
+        when={props.view === 'moveToProject'}
+        fallback={
+          <ActionDialogShell>
+            <Show when={props.view === 'rename'}>
+              <BulkRenameEntitiesView
+                entities={props.entities}
+                onFinish={handleFinish}
+                onCancel={handleCancel}
+                onError={handleError}
+              />
+            </Show>
+            <Show when={props.view === 'delete'}>
+              <BulkDeleteView
+                onPartialDelete={props.onPartialDelete}
+                entities={props.entities}
+                onFinish={handleFinish}
+                onCancel={handleCancel}
+                onError={handleError}
+              />
+            </Show>
+          </ActionDialogShell>
+        }
+      >
+        <BulkMoveToProjectView
+          entities={props.entities}
+          onMoved={handleMoved}
+          onCancel={handleCancel}
+          onError={handleError}
+        />
+      </Show>
     </Dialog>
   );
 };
@@ -103,6 +116,7 @@ const [globalModalProps, setGlobalModalProps] = createSignal<{
   view: 'rename' | 'moveToProject' | 'delete';
   entities: EntityData[];
   onFinish?: () => void;
+  onMoved?: (folder: MovedFolder) => void;
   onCancel?: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
@@ -115,6 +129,7 @@ export const openBulkEditModal = (props: {
   view: 'rename' | 'moveToProject' | 'delete';
   entities: EntityData[];
   onFinish?: () => void;
+  onMoved?: (folder: MovedFolder) => void;
   onCancel?: () => void;
   onError?: (error: unknown) => void;
   onPartialDelete?: PartialDeleteHandler;
@@ -155,6 +170,7 @@ export const GlobalBulkEditEntityModal = () => {
           view={props().view}
           entities={props().entities}
           onFinish={handleFinish}
+          onMoved={props().onMoved}
           onCancel={handleCancel}
           onError={handleError}
           onPartialDelete={props().onPartialDelete}

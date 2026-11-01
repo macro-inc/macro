@@ -1294,6 +1294,27 @@
           }
         }
       },
+      "CalendarEventJoinRequestMetadata": {
+        "type": "object",
+        "description": "A channel member who sees a calendar event only through a channel share\nasked the person who shared it to add them as a guest. Sent to the sharer,\nwith the requester as sender.",
+        "required": ["requestId", "eventId", "title"],
+        "properties": {
+          "eventId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The shared calendar event entity the request is for."
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable request identity, answered from the event's details."
+          },
+          "title": {
+            "type": "string",
+            "description": "Event title when the request was made."
+          }
+        }
+      },
       "CalendarEventReminderMetadata": {
         "type": "object",
         "description": "A calendar event alarm came due. Like [`ReminderMetadata`], these are\nself-notifications: `sender_id` must stay `None` or the only recipient is\nfiltered out. Everything the alert renders rides in here so the\ndispatcher never has to resolve the event again at display time.",
@@ -1364,6 +1385,10 @@
           "invitedBy": {
             "type": "string",
             "description": "The user who sent the invitation"
+          },
+          "isDirectMessage": {
+            "type": "boolean",
+            "description": "Whether this is a direct message rather than a channel invitation.\nOlder notification payloads retain channel-invitation wording."
           },
           "messageContent": {
             "type": ["string", "null"],
@@ -1674,6 +1699,10 @@
             "$ref": "#/components/schemas/DeviceType",
             "description": "The device platform type (iOS or Android)."
           },
+          "nativeCallCapable": {
+            "type": "boolean",
+            "description": "Whether this Android binary supports native Telecom incoming calls."
+          },
           "token": {
             "type": "string",
             "description": "The device push notification token."
@@ -1740,6 +1769,64 @@
           }
         }
       },
+      "EntityAccessGrantedMetadata": {
+        "type": "object",
+        "description": "A person granted you access to a shared entity.",
+        "required": ["requestId", "revision", "entityName", "accessLevel"],
+        "properties": {
+          "accessLevel": {
+            "$ref": "#/components/schemas/RequestedAccessLevel",
+            "description": "Requested or granted permission."
+          },
+          "entityName": {
+            "type": "string",
+            "description": "Shared item's name."
+          },
+          "fileType": {
+            "type": ["string", "null"],
+            "description": "Document file type for routing."
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable request identity."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Revision that generated this notification."
+          }
+        }
+      },
+      "EntityAccessRequestedMetadata": {
+        "type": "object",
+        "description": "A person requested access to a shared entity.",
+        "required": ["requestId", "revision", "entityName", "accessLevel"],
+        "properties": {
+          "accessLevel": {
+            "$ref": "#/components/schemas/RequestedAccessLevel",
+            "description": "Requested or granted permission."
+          },
+          "entityName": {
+            "type": "string",
+            "description": "Shared item's name."
+          },
+          "fileType": {
+            "type": ["string", "null"],
+            "description": "Document file type for routing."
+          },
+          "requestId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable request identity."
+          },
+          "revision": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Revision that generated this notification."
+          }
+        }
+      },
       "EntityType": {
         "type": "string",
         "description": "The type of an entity in Macro",
@@ -1766,7 +1853,8 @@
           "initiative",
           "database",
           "database_row",
-          "form"
+          "form",
+          "external_chat"
         ]
       },
       "ErrorResponse": {
@@ -1779,6 +1867,31 @@
             "description": "Message to explain failure"
           }
         }
+      },
+      "ExternalChatMessageMetadata": {
+        "type": "object",
+        "description": "A live message in an independently shared external chat.",
+        "required": ["provider", "chatName", "messageId"],
+        "properties": {
+          "chatName": {
+            "type": "string",
+            "description": "The chat's name."
+          },
+          "messageId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Stable message id; retries use it as their notification id."
+          },
+          "provider": {
+            "$ref": "#/components/schemas/ExternalChatProvider",
+            "description": "The messaging service the chat lives in."
+          }
+        }
+      },
+      "ExternalChatProvider": {
+        "type": "string",
+        "description": "The messaging service an external chat lives in.",
+        "enum": ["whatsapp"]
       },
       "GetAllUserNotificationsResponse": {
         "type": "object",
@@ -2200,6 +2313,14 @@
             "type": "string",
             "description": "The user who sent the invitation"
           },
+          "inviteePlan": {
+            "$ref": "#/components/schemas/InviteePlan",
+            "description": "What the invitee gets by joining, as the team stood when the invite was sent."
+          },
+          "reminder": {
+            "type": "boolean",
+            "description": "Whether this email reminds the invitee of an invite they have not answered."
+          },
           "role": {
             "type": ["string", "null"],
             "description": "Role/permission level in the team"
@@ -2223,6 +2344,11 @@
             "description": "The name of the team being invited to"
           }
         }
+      },
+      "InviteePlan": {
+        "type": "string",
+        "description": "What a team invitee gets by joining.",
+        "enum": ["free", "premium"]
       },
       "ItemSharedMetadata": {
         "type": "object",
@@ -2420,6 +2546,36 @@
           },
           {
             "type": "object",
+            "description": "Someone requested more access to a shared entity.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/EntityAccessRequestedMetadata",
+                "description": "Someone requested more access to a shared entity."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["entity_access_requested"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An owner granted requested access.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/EntityAccessGrantedMetadata",
+                "description": "An owner granted requested access."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["entity_access_granted"]
+              }
+            }
+          },
+          {
+            "type": "object",
             "description": "Someone commented, replied, or mentioned the recipient on a project.",
             "required": ["content", "tag"],
             "properties": {
@@ -2580,6 +2736,21 @@
               "tag": {
                 "type": "string",
                 "enum": ["reminder"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A live message in a shared external chat.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/ExternalChatMessageMetadata",
+                "description": "A live message in a shared external chat."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["external_chat_message"]
               }
             }
           },
@@ -2762,6 +2933,21 @@
                 "enum": ["channel_message_reaction"]
               }
             }
+          },
+          {
+            "type": "object",
+            "description": "A channel member asked to be added as a guest of an event the\nuser shared with the channel.",
+            "required": ["content", "tag"],
+            "properties": {
+              "content": {
+                "$ref": "#/components/schemas/CalendarEventJoinRequestMetadata",
+                "description": "A channel member asked to be added as a guest of an event the\nuser shared with the channel."
+              },
+              "tag": {
+                "type": "string",
+                "enum": ["calendar_event_join_request"]
+              }
+            }
           }
         ],
         "description": "Mirrors [`model_notifications::NotificationEvent`] but uses `tag` / `content`\nas the serde adjacently-tagged field names so it can be deserialized from the\nshape produced by [`UserNotificationRow::into_tagged`] +\n[`UserNotificationRow::into_json`].\n\nOnly includes variants whose metadata types implement the `Notification` trait."
@@ -2841,18 +3027,65 @@
       },
       "PushNotificationData": {
         "type": "object",
+        "description": "the value we send as the payload in the ios notification\nThis data is accessible to the client",
         "required": ["notificationId"],
         "properties": {
+          "navigation": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PushNotificationNavigation",
+                "description": "Destination to open without fetching the notification record first."
+              }
+            ]
+          },
           "notificationId": {
             "type": "string",
             "format": "uuid",
             "description": "The id of the notification record (UserNotification.id)"
+          },
+          "recipientId": {
+            "type": ["string", "null"],
+            "description": "Account that owns the receiving device, set during per-recipient delivery."
           },
           "senderProfilePictureUrl": {
             "type": ["string", "null"],
             "description": "The sender's profile picture URL, used by the Notification Service Extension\nto download and attach as a rich notification image."
           }
         }
+      },
+      "PushNotificationNavigation": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Open a channel at a specific message.",
+            "required": ["channelId", "messageId", "threadId", "type"],
+            "properties": {
+              "channelId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Channel containing the message."
+              },
+              "messageId": {
+                "type": "string",
+                "format": "uuid",
+                "description": "Message to highlight."
+              },
+              "threadId": {
+                "type": ["string", "null"],
+                "format": "uuid",
+                "description": "Root of the message's thread; null identifies a top-level message."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["channel"]
+              }
+            }
+          }
+        ],
+        "description": "A destination carried by a push notification. Access is checked when opened."
       },
       "RealtimeNotif_TaggedContent_Value": {
         "allOf": [
@@ -3005,6 +3238,11 @@
             "description": "the thread id"
           }
         }
+      },
+      "RequestedAccessLevel": {
+        "type": "string",
+        "description": "Permission level used by an access request, excluding ownership.",
+        "enum": ["view", "comment", "edit"]
       },
       "TaskAssignedMetadata": {
         "type": "object",

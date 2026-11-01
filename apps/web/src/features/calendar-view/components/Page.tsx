@@ -19,6 +19,7 @@ import {
   DEFAULT_CALENDAR_SOURCE,
 } from '@app/features/calendar/types';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
+import { GUEST_EDITS_RESTRICTED } from '@app/features/calendar/utils/event-guest-editing';
 import {
   type CalendarEventTimeChange,
   calendarEventTimeFromFullCalendar,
@@ -29,16 +30,19 @@ import {
   scrollEventChipIntoView,
   timeGridScroller,
 } from '@app/features/calendar/utils/time-grid-scroller';
-import { useTeamCalendarOverlay } from '@app/features/calendar-team/calendar-team';
 import { mergeCalendarOverlays } from '@app/features/calendar-team/core/merge';
 import { useOpenEventComposer } from '@app/features/calendar-view/components/use-open-event-composer';
 import { useQuickCallsFlag } from '@app/features/meetings/use-quick-calls-flag';
 import { toast } from '@core/component/Toast/Toast';
 import { ScrollIndicators } from '@core/component/VerticalScrollIndicators';
 import { isMobile } from '@core/mobile/isMobile';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { DateSelectArg, DatesSetArg } from '@fullcalendar/core';
 import { useVisibleCalendarsQuery } from '@queries/calendar/calendars';
-import { useUpdateCalendarEventMutation } from '@queries/calendar/mutations';
+import {
+  isGuestEditRefused,
+  useUpdateCalendarEventMutation,
+} from '@queries/calendar/mutations';
 import {
   type CalendarOccurrenceQueryRange,
   createCalendarOccurrenceQueryRange,
@@ -172,10 +176,16 @@ function CalendarPageDataStatus(props: {
               We couldn’t load your calendar events. Try again.
             </p>
             <Button
-              variant="accent"
+              aria-label="Retry loading calendar"
+              tooltip="Retry loading calendar"
+              variant="primary"
               size="sm"
-              label="Retry loading calendar"
-              onClick={() => void props.data.occurrencesQuery.refetch()}
+              onClick={() =>
+                fireAndForget(
+                  props.data.occurrencesQuery.refetch(),
+                  'calendar-view'
+                )
+              }
             >
               Retry
             </Button>
@@ -237,21 +247,8 @@ export function Page(props: {
     isSourceVisible: isRenderedSourceVisible,
     refetchOnWindowFocus: isActive,
   });
-  const teamCalendar = useTeamCalendarOverlay({
-    range,
-    enabled: () => calendarView.displaySettings.showTeamCalendars,
-    // Hide sensitive shared payloads immediately, before the deferred grid redraw.
-    isSourceVisible: calendarView.isSourceVisible,
-  });
-  const teamEvents = createMemo(() =>
-    mergeCalendarOverlays([], teamOoo.visibleEvents(), teamCalendar.events())
-  );
   const visibleEvents = createMemo(() =>
-    mergeCalendarOverlays(
-      data.visibleEvents(),
-      teamOoo.visibleEvents(),
-      teamCalendar.events()
-    )
+    mergeCalendarOverlays(data.visibleEvents(), teamOoo.events())
   );
   const eventsById = createMemo(
     () => new Map(visibleEvents().map((event) => [event.id, event]))
@@ -324,6 +321,10 @@ export function Page(props: {
       {
         onError: (error) => {
           change.revert();
+          if (isGuestEditRefused(error)) {
+            toast.failure(GUEST_EDITS_RESTRICTED);
+            return;
+          }
           toast.failure('Failed to update event', {
             subtext: error.message,
           });
@@ -360,6 +361,9 @@ export function Page(props: {
           onEventSelect: (event, element) => {
             if (isActive()) calendarView.selectEvent(event, element);
           },
+          onSelectedEventMount: (event, element) => {
+            if (isActive()) calendarView.reanchorSelectedEvent(event, element);
+          },
         }}
         eventTimeChangePending={updateEventTime.isPending}
         onDatesSet={handleDatesSet}
@@ -369,32 +373,13 @@ export function Page(props: {
           <CalendarPageHost
             id={props.id}
             data={data}
-            teamEvents={teamEvents}
+            teamEvents={teamOoo.events}
             eventsById={eventsById}
             grid={grid}
             onLoadingBlockingChange={setLoadingDecorationBlocking}
           />
         )}
       </CalendarGrid>
-      <Show when={teamCalendar.isError()}>
-        <div
-          role="status"
-          class="absolute bottom-2 right-2 z-10 max-w-sm rounded-lg border border-edge-muted bg-surface px-3 py-2 text-xs text-ink-muted"
-        >
-          Team calendars unavailable. Availability is unknown.{' '}
-          <button type="button" class="underline" onClick={teamCalendar.retry}>
-            Retry
-          </button>
-        </div>
-      </Show>
-      <Show when={teamCalendar.isLoading()}>
-        <div
-          role="status"
-          class="absolute bottom-2 right-2 z-10 rounded-lg border border-edge-muted bg-surface px-3 py-2 text-xs text-ink-muted"
-        >
-          Loading team calendars…
-        </div>
-      </Show>
     </div>
   );
 }
@@ -469,7 +454,7 @@ function CalendarPageHost(props: {
         props.data.occurrencesQuery.isStale &&
         !props.data.occurrencesQuery.isFetching
       ) {
-        void props.data.occurrencesQuery.refetch();
+        fireAndForget(props.data.occurrencesQuery.refetch(), 'calendar-view');
       }
     })
   );

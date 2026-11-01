@@ -1,6 +1,7 @@
 import { queryClient } from '@queries/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { SharePermissionV2 } from '@service-storage/generated/schemas/sharePermissionV2';
+import type { UpdateSharePermissionRequestV2 } from '@service-storage/generated/schemas/updateSharePermissionRequestV2';
 import type { Pipeline } from '../core/pipeline';
 import { crmKeys } from './keys';
 
@@ -8,6 +9,9 @@ import { crmKeys } from './keys';
 export async function fetchPipelineSharePermissions(id: string) {
   const pipeline = await storageServiceClient.getCrmPipeline(id);
   if (pipeline.isErr()) return pipeline;
+  // Editors share the pipeline, so only they read its recipients.
+  if (pipeline.value.grant === 'edit' || pipeline.value.grant === 'owner')
+    return storageServiceClient.getCrmPipelinePermissions(id);
   return pipeline.map(
     (value): SharePermissionV2 => ({
       id,
@@ -18,6 +22,14 @@ export async function fetchPipelineSharePermissions(id: string) {
       teamShareAccessLevel: value.sharing === 'team' ? 'edit' : null,
     })
   );
+}
+
+/** Grant, change or remove channel and direct-message access. */
+export function updatePipelineSharePermissions(
+  id: string,
+  request: Pick<UpdateSharePermissionRequestV2, 'channelSharePermissions'>
+) {
+  return storageServiceClient.updateCrmPipelinePermissions(id, request);
 }
 
 export async function updatePipelineTeamShare(id: string, shared: boolean) {

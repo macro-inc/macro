@@ -14,7 +14,7 @@ pub(crate) struct IsIpad(pub(crate) bool);
 
 /// `UIUserInterfaceIdiomPad`, from `<UIKit/UIDevice.h>`.
 #[cfg(target_os = "ios")]
-const UI_USER_INTERFACE_IDIOM_PAD: objc2::ffi::NSInteger = 1;
+const UI_USER_INTERFACE_IDIOM_PAD: objc2_legacy::ffi::NSInteger = 1;
 
 /// Reads `[[UIDevice currentDevice] userInterfaceIdiom]`, excluding iOS apps
 /// running on an Apple Silicon Mac (which also report the iPad idiom).
@@ -27,9 +27,9 @@ const UI_USER_INTERFACE_IDIOM_PAD: objc2::ffi::NSInteger = 1;
 /// silently become `.phone`, making this return `false` with no compile error.
 #[cfg(target_os = "ios")]
 pub(crate) fn detect_is_ipad() -> bool {
-    use objc2::ffi::NSInteger;
-    use objc2::runtime::{AnyObject, Bool};
-    use objc2::{class, msg_send};
+    use objc2_legacy::ffi::NSInteger;
+    use objc2_legacy::runtime::{AnyObject, Bool};
+    use objc2_legacy::{class, msg_send};
 
     // SAFETY: `+[UIDevice currentDevice]`, `-[UIDevice userInterfaceIdiom]`,
     // `+[NSProcessInfo processInfo]` and `-[NSProcessInfo isiOSAppOnMac]` all

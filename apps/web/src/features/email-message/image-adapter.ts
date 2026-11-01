@@ -1,4 +1,8 @@
 import type { EmailMessage } from '@app/features/email-message/core/email-message';
+import {
+  normalizeContentId,
+  staticFileIdsByContentId,
+} from '@app/features/email-message/core/inline-images';
 import { SERVER_HOSTS } from '@core/constant/servers';
 import { isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
@@ -8,14 +12,7 @@ export function resolveCidImages(
   root: ShadowRoot,
   attachments: EmailMessage['attachments']
 ): void {
-  const contentIdToSfsId = new Map<string, string>();
-  for (const att of attachments ?? []) {
-    const contentId = att.content_id;
-    const sfsId = att.sfs_id;
-    if (!contentId || !sfsId) continue;
-    const normalized = contentId.replace(/[<>]/g, '');
-    contentIdToSfsId.set(normalized, sfsId);
-  }
+  const contentIdToSfsId = staticFileIdsByContentId(attachments);
 
   const cidImages = root.querySelectorAll('img[src^="cid:"]');
   for (const img of cidImages) {
@@ -23,9 +20,7 @@ export function resolveCidImages(
     if (img.dataset.cidResolved === 'true') continue;
     const src = img.getAttribute('src');
     if (!src?.startsWith('cid:')) continue;
-    const rawCid = src.slice(4);
-    const normalizedCid = rawCid.replace(/[<>]/g, '');
-    const sfsId = contentIdToSfsId.get(normalizedCid);
+    const sfsId = contentIdToSfsId.get(normalizeContentId(src.slice(4)));
     if (!sfsId) continue;
     img.src = `${SERVER_HOSTS['static-file']}/file/${sfsId}`;
     img.dataset.cidResolved = 'true';

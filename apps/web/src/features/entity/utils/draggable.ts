@@ -1,17 +1,22 @@
-import { useDragOperation } from '@components/app/ItemDragAndDrop';
+import { useOptionalDragOperation } from '@components/app/ItemDragAndDrop';
 import { createSubRoot } from '@solid-primitives/rootless';
 import { createDraggable } from '@thisbeyond/solid-dnd';
 import {
   type Accessor,
+  createContext,
   createEffect,
   createUniqueId,
   getOwner,
   mergeProps,
   onCleanup,
   untrack,
+  useContext,
 } from 'solid-js';
-import type { EntityDragData } from '../types/drag';
+import type { EntityDragData, EntityDragSelection } from '../types/drag';
 import type { EntityData } from '../types/entity';
+
+/** Lets a list tell its rows what dragging them carries. */
+export const EntityDragSelectionContext = createContext<EntityDragSelection>();
 
 export function createEntityDraggable(options: {
   entity: EntityData;
@@ -19,7 +24,10 @@ export function createEntityDraggable(options: {
   /** Opt-in by the owning view; legacy rows register eagerly. */
   deferUntilInteraction?: Accessor<boolean>;
 }): (element: HTMLElement) => void {
-  const { isAltKey } = useDragOperation();
+  const operation = useOptionalDragOperation();
+  if (!operation) return () => {};
+  const { isAltKey } = operation;
+  const selection = useContext(EntityDragSelectionContext);
   const draggableId = `${options.entity.id}-${options.splitId ?? createUniqueId()}`;
 
   const create = () => {
@@ -30,6 +38,7 @@ export function createEntityDraggable(options: {
       dragType: 'entity' as const,
       splitId: options.splitId,
       operation: () => (isAltKey() ? 'copy' : 'move'),
+      selection,
     });
     return createDraggable(draggableId, dragData);
   };

@@ -7,7 +7,8 @@
 //! AWS credentials anywhere).
 //!
 //! Critical path: `path-check` (no Rust compile on a warm binary cache) →
-//! `test`. `check` (fmt + clippy) and `doppler-config` run alongside `test`.
+//! `test`. `check` (fmt + clippy), `doppler-config`, and
+//! `graphql-schema-compat` run alongside `test`.
 
 use gh_workflow::{
     Container, Env, Event, Expression, Job, Port, PullRequest, PullRequestType, Run, Step, Workflow,
@@ -40,6 +41,7 @@ pub fn code_check_cloud_storage() -> Workflow {
         .add_job("check", check())
         .add_job("doppler-config", doppler_config())
         .add_job("test", test())
+        .add_job("graphql-schema-compat", graphql_schema_compat())
         .add_job("status-check", status_check())
 }
 
@@ -62,6 +64,10 @@ fn path_check() -> Job {
         .add_output(
             "doppler_candidates",
             "${{ steps.filter.outputs.doppler_candidates }}",
+        )
+        .add_output(
+            "graphql_schema",
+            "${{ steps.filter.outputs.graphql_schema }}",
         )
         .add_output(
             "rust_packages",
@@ -99,6 +105,10 @@ fn check() -> Job {
         .add_step(steps::setup_nix())
         .add_step(steps::setup_dev_shell())
         .add_step(steps::configure_namespace_sccache(vars::CI_SCCACHE_NAME))
+        .add_step(
+            Step::new("Check embedded code execution assets")
+                .run("nix build --no-link .#checks.x86_64-linux.code-execution-assets"),
+        )
         .add_step(cargo_fmt())
         .add_step(cargo_clippy())
         .add_step(steps::show_sccache_stats())
@@ -140,6 +150,24 @@ fn doppler_config() -> Job {
         .add_step(steps::teardown_nix())
 }
 
+/// Fails when `static_assets/schema.graphql` drops or narrows something
+/// clients built against the base branch still send. The checkout is the PR
+/// merge commit, so its first parent is the base branch tip.
+fn graphql_schema_compat() -> Job {
+    steps::gated_job()
+        .cond(Expression::new(
+            "needs.path-check.outputs.should_run == 'true' && github.event.pull_request.draft == false && needs.path-check.outputs.graphql_schema == 'true'",
+        ))
+        .runs_on(runners::Runner::Small.to_string())
+        .add_step(steps::checkout(false, false).add_with(("fetch-depth", 2)))
+        .add_step(steps::setup_rust_light())
+        .add_step(
+            Step::new("Check GraphQL schema compatibility").run(
+                "cargo run --locked --manifest-path tooling/xtask/Cargo.toml -- graphql-schema-compat --base HEAD^1",
+            ),
+        )
+}
+
 /// cargo nextest against postgres + redis service containers. Skipped when
 /// the path filter selected no Rust packages (Nix-only / unmapped files) or
 /// when `skip_tests` is set (`.sqlx`-only diffs still clippy the snapshot).
@@ -154,6 +182,7 @@ fn test() -> Job {
             "${{ needs.path-check.outputs.rust_packages }}",
         ))
         .add_env(("NEXTEST_TEST_THREADS", vars::NEXTEST_TEST_THREADS))
+        .add_env(("CARGO_BUILD_JOBS", vars::RUST_TEST_BUILD_JOBS))
         .add_env(("RUSTFLAGS", "-Dwarnings -C link-arg=-fuse-ld=mold"))
         // The default 10-minute idle timeout can stop the server during long
         // link or test phases, which resets the stats reported at the end.
@@ -169,8 +198,33 @@ fn test() -> Job {
         .add_step(configure_postgres())
         .add_step(prepare_tests())
         .add_step(run_tests())
+        .add_step(setup_execution_runtime())
+        .add_step(test_execution_runtime())
         .add_step(steps::show_sccache_stats())
         .add_step(steps::teardown_nix())
+}
+
+/// Install the same pinned runtime shipped in the agent harness container.
+fn setup_execution_runtime() -> Step<gh_workflow::Use> {
+    Step::new("Set up code execution runtime")
+        .uses(
+            "denoland",
+            "setup-deno",
+            "22d081ff2d3a40755e97629de92e3bcbfa7cf2ed",
+        ) // v2
+        .add_with(("deno-version", "2.9.6"))
+        .if_condition(Expression::new(
+            "env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')",
+        ))
+}
+
+/// Exercise the real permission boundary and authenticated SDK execution in CI.
+fn test_execution_runtime() -> Step<Run> {
+    Step::new("Test Deno sandbox and authenticated SDK execution")
+        .run("cargo test --locked -p code_execution -- --ignored --test-threads=2\ncargo test --locked -p agent_harness_service authenticated_mcp_runs_javascript_and_persists_source_and_result -- --ignored")
+        .if_condition(Expression::new(
+            "env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')",
+        ))
 }
 
 /// Always-run collector used as the required status check. Its name must stay
@@ -185,6 +239,7 @@ fn status_check() -> Job {
             "check".to_string(),
             "doppler-config".to_string(),
             "test".to_string(),
+            "graphql-schema-compat".to_string(),
         ])
         .add_step(check_job_results())
 }
@@ -234,6 +289,10 @@ fn paths_filter() -> Step<gh_workflow::Use> {
                   - '**/src/doppler_config.rs'
                   - '**/Cargo.toml'
                   - 'tooling/xtask/crates/xtask_doppler_bins/**'
+                  - .github/workflows/code_check_cloud_storage.yml
+                graphql_schema:
+                  - 'static_assets/schema.graphql'
+                  - 'tooling/xtask/crates/xtask_graphql_schema_compat/**'
                   - .github/workflows/code_check_cloud_storage.yml
             "#},
         ))
@@ -357,12 +416,14 @@ fn check_job_results() -> Step<Run> {
         echo "check: ${{ needs.check.result }}"
         echo "doppler-config: ${{ needs.doppler-config.result }}"
         echo "test: ${{ needs.test.result }}"
+        echo "graphql-schema-compat: ${{ needs.graphql-schema-compat.result }}"
 
         # Fail if any job failed (skipped and success are both OK)
         if [[ "${{ needs.path-check.result }}" == "failure" ]] || \
            [[ "${{ needs.check.result }}" == "failure" ]] || \
            [[ "${{ needs.doppler-config.result }}" == "failure" ]] || \
-           [[ "${{ needs.test.result }}" == "failure" ]]; then
+           [[ "${{ needs.test.result }}" == "failure" ]] || \
+           [[ "${{ needs.graphql-schema-compat.result }}" == "failure" ]]; then
           echo "❌ One or more jobs failed"
           exit 1
         fi

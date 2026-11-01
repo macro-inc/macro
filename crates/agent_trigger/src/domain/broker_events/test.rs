@@ -367,3 +367,68 @@ fn channel_kinds_round_trip_in_snake_case() {
         assert_eq!(parsed, kind);
     }
 }
+
+/// A turn of an agent's private conversation travels with why it was called,
+/// and the conversation's own history stands in for the channel around it.
+#[test]
+fn a_conversation_turn_carries_its_trigger_without_the_channel() {
+    let person = trigger_context::ContextPerson {
+        id: "macro|agent-trigger@macro.com".to_owned(),
+        name: "agent-trigger@macro.com".to_owned(),
+        email: None,
+    };
+    let discussion = trigger_context::DiscussionContext {
+        agent_request: None,
+        surface: trigger_context::DiscussionSurface::Channel {
+            id: Uuid::from_u128(1),
+            name: None,
+            channel_type: trigger_context::ChannelType::DirectMessage,
+        },
+        prompt_message_id: Uuid::from_u128(2),
+        sender: person.clone(),
+        reply_target: trigger_context::ReplyTarget::None,
+        thread: None,
+        channel: vec![trigger_context::ContextThread {
+            root_id: Uuid::from_u128(3),
+            messages: vec![trigger_context::ContextMessage {
+                id: Uuid::from_u128(3),
+                author: person,
+                content: "an earlier turn".to_owned(),
+                posted_at: Utc::now(),
+                attachments: Vec::new(),
+            }],
+            messages_omitted: false,
+        }],
+    };
+    let decision = TriggerDecision::ConversationMessage {
+        bot_id: BotId::TEST_A,
+        session_id: AgentSessionId::TEST_A,
+        message: posted(MessageParent::Channel(Uuid::from_u128(1)), None),
+    };
+
+    let context = crate::domain::context::discussion_trigger(&decision, discussion.clone());
+    assert_eq!(
+        context,
+        TriggerContext::Conversation(trigger_context::DiscussionContext {
+            channel: Vec::new(),
+            ..discussion
+        })
+    );
+
+    let event = AgentSessionMacroEvent::from_decision(
+        decision,
+        Some(ChannelType::DirectMessage),
+        Some(context.clone()),
+    )
+    .expect("a channel type was supplied");
+    let AgentTriggerTopicEvent::New(NewAgentSessionEvent::ConversationMessage(turn)) =
+        &event.event().event
+    else {
+        panic!("a conversation turn keeps its own shape: {event:?}");
+    };
+    assert_eq!(turn.context, Some(context));
+    let wire = serde_json::to_value(&event.event().event).expect("serialize event");
+    assert_eq!(wire["metadata"]["source"], "conversation_message");
+    assert_eq!(wire["metadata"]["context"]["kind"], "conversation");
+    assert!(wire["metadata"]["context"].get("channel").is_none());
+}

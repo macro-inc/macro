@@ -97,7 +97,10 @@ mod legacy_upgrade {
 
     fn zip_names(bytes: &[u8]) -> Vec<String> {
         let archive = zip::ZipArchive::new(std::io::Cursor::new(bytes)).unwrap();
-        archive.file_names().map(str::to_string).collect()
+        archive
+            .file_names()
+            .map(|name| name.unwrap().into_owned())
+            .collect()
     }
 
     fn assert_main_content_type(bytes: &[u8], content_type: &str) {

@@ -13,6 +13,7 @@ import {
   csvImportEdits,
   type FindOptions,
   findCells,
+  indentEdits,
   replaceCellText,
   sortedRangeCopies,
   trimWhitespaceEdits,
@@ -120,6 +121,11 @@ export function createSheetActions(
     grid.commit();
     if (source.canEdit())
       source.setCells(borderEdits(grid.selection(), border));
+  }
+  function indent(change: 1 | -1) {
+    grid.commit();
+    if (source.canEdit())
+      source.setCells(indentEdits(source.cells(), grid.selection(), change));
   }
   function clearFormatting() {
     grid.format(SPREADSHEET_DEFAULT_STYLE);
@@ -329,6 +335,7 @@ export function createSheetActions(
     pending,
     clearNotice: () => setNotice(''),
     borders,
+    indent,
     clearFormatting,
     trimWhitespace,
     sort,

@@ -27,4 +27,7 @@ export const EventName = {
   channelmentioned: 'channel.mentioned',
   channelmessage_patched: 'channel.message_patched',
   channelmessage_attachment_created: 'channel.message_attachment_created',
+  callstarted: 'call.started',
+  callended: 'call.ended',
+  github: 'github',
 } as const;

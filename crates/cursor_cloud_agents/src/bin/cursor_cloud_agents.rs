@@ -20,7 +20,8 @@
 //! work is invisible to it, and its edits land on a Cursor-side branch.
 //!
 //! Environment:
-//! - `CURSOR_API_KEY` (required): a `crsr_…` user or service-account key.
+//! - `CURSOR_API_KEY` (required): a `grok_…` (or older `crsr_…`) user or
+//!   service-account key.
 //! - `CURSOR_REF`: starting ref for new agents (default `main`).
 //! - `CURSOR_MODEL`: model id (default: server default).
 //! - `CURSOR_API_BASE`: API base url (default `https://api.cursor.com`).
@@ -144,7 +145,10 @@ async fn main() -> ExitCode {
             Arc::new(cursor_cloud_agents::outbound::memory_journal::MemoryJournal::default()),
             cursor_cloud_agents::domain::ports::NoArtifactStore,
         )
-        .with_default_model(configured_model),
+        .with_default_model(configured_model)
+        .with_image_fetcher(Arc::new(
+            cursor_cloud_agents::outbound::http_prompt_images::HttpPromptImageFetcher::new(),
+        )),
     );
     match serve(service, notifier, tokio::io::stdin(), tokio::io::stdout()).await {
         Ok(()) => ExitCode::SUCCESS,

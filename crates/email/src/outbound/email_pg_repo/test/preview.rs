@@ -263,3 +263,74 @@ async fn returned_thread_without_message_timestamps_has_created_at(
     assert_eq!(returned.created_at, created);
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../fixtures",
+        scripts("email_dynamic_query", "email_dynamic_query_multi_inbox")
+    )
+)]
+async fn inbox_pages_through_tied_threads_across_links(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    // Threads 4 and 5 (first inbox) and 201 (second inbox) share a timestamp,
+    // and their updated_at runs opposite to their ids.
+    sqlx::query(
+        "UPDATE email_threads
+         SET inbox_visible = true,
+             latest_inbound_message_ts = '2024-01-12 07:00:00+00',
+             updated_at = CASE id
+                 WHEN '20000004-0000-0000-0000-000000000004' THEN '2024-03-03 00:00:00+00'::timestamptz
+                 WHEN '20000005-0000-0000-0000-000000000005' THEN '2024-03-02 00:00:00+00'::timestamptz
+                 ELSE '2024-03-01 00:00:00+00'::timestamptz
+             END
+         WHERE id IN (
+             '20000004-0000-0000-0000-000000000004',
+             '20000005-0000-0000-0000-000000000005',
+             '20000201-0000-0000-0000-000000000201'
+         )",
+    )
+    .execute(&pool)
+    .await?;
+    let link_ids = [
+        Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?,
+        Uuid::parse_str("dddddddd-dddd-dddd-dddd-dddddddddddd")?,
+    ];
+
+    let mut ids = Vec::new();
+    let mut query = Query::new(None, SimpleSortMethod::UpdatedAt, ());
+    loop {
+        let page =
+            crate::outbound::email_pg_repo::preview_views::new_inbox::new_inbox_preview_cursor(
+                &pool, &link_ids, 2, &query,
+            )
+            .await?;
+        let Some(last) = page.last() else { break };
+        query = Query::new(
+            Some(Cursor {
+                id: last.id,
+                limit: 2,
+                val: CursorVal {
+                    sort_type: SimpleSortMethod::UpdatedAt,
+                    last_val: last.sort_ts,
+                },
+                filter: (),
+            }),
+            SimpleSortMethod::UpdatedAt,
+            (),
+        );
+        ids.extend(page.iter().map(|row| row.id.to_string()));
+    }
+
+    assert_eq!(
+        ids,
+        vec![
+            "20000001-0000-0000-0000-000000000001",
+            "20000201-0000-0000-0000-000000000201",
+            "20000005-0000-0000-0000-000000000005",
+            "20000004-0000-0000-0000-000000000004",
+            "20000007-0000-0000-0000-000000000007",
+        ],
+        "each inbox thread appears once, newest first, ties broken by id"
+    );
+    Ok(())
+}

@@ -146,6 +146,7 @@ pub(crate) struct ScriptedEngine {
 /// What one turn asked of the engine, as far as tests care.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub(crate) struct RecordedTurn {
+    pub(crate) purpose: crate::domain::engine::TurnPurpose,
     /// Model the turn was to run on.
     pub(crate) model: String,
     /// Reasoning effort the turn was to use.
@@ -160,6 +161,8 @@ pub(crate) struct RecordedTurn {
     pub(crate) instructions: Option<String>,
     /// Who the agent is, as handed to the engine.
     pub(crate) identity: Option<AgentIdentity>,
+    /// The agent whose own key the turn ran on, if any.
+    pub(crate) agent_key: Option<macro_uuid::Uuid>,
 }
 
 impl ScriptedEngine {
@@ -185,6 +188,7 @@ impl TurnEngine for ScriptedEngine {
             .lock()
             .expect("requests lock")
             .push(RecordedTurn {
+                purpose: request.purpose,
                 model: request.model.clone(),
                 reasoning_effort: request.reasoning_effort,
                 speed: request.speed,
@@ -209,6 +213,7 @@ impl TurnEngine for ScriptedEngine {
                     .collect(),
                 instructions: request.instructions.clone(),
                 identity: request.identity.clone(),
+                agent_key: request.agent_key.as_ref().map(|key| key.bot_id),
             });
         let (parts, receiver) = mpsc::channel(64);
         let script = self.script.clone();

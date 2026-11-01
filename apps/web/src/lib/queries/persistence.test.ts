@@ -1,4 +1,8 @@
-import { partialMatchKey } from '@tanstack/query-core';
+import {
+  keepPreviousData,
+  partialMatchKey,
+  QueryObserver,
+} from '@tanstack/query-core';
 import { QueryClient } from '@tanstack/solid-query';
 import { describe, expect, it, vi } from 'vitest';
 import { authKeys } from './auth/keys';
@@ -157,7 +161,7 @@ describe('setupQueryPersistence', () => {
 
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: messageQueryKey,
       queryFn: () => new Promise(() => {}),
     });
@@ -197,7 +201,7 @@ describe('setupQueryPersistence', () => {
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
     // Trigger an 'added' event by fetching (prefetchQuery triggers added)
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: ['channel', 'a'],
       queryFn: () => new Promise(() => {}), // never resolves
     });
@@ -227,7 +231,7 @@ describe('setupQueryPersistence', () => {
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
     // Trigger added event
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: ['channel', 'a'],
       queryFn: () => new Promise(() => {}),
     });
@@ -275,7 +279,7 @@ describe('setupQueryPersistence', () => {
     });
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: ['channel', 'old'],
       queryFn: () => new Promise(() => {}),
     });
@@ -304,7 +308,7 @@ describe('setupQueryPersistence', () => {
     const scope = createScope(['identity'], store, { maxAge: undefined });
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: ['identity', 'user'],
       queryFn: () => new Promise(() => {}),
     });
@@ -455,7 +459,7 @@ describe('setupQueryPersistence', () => {
     const scope = createScope(['channel'], store, { buster: 'new-buster' });
     setupQueryPersistence({ queryClient, scopes: [scope] });
 
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey: ['channel', 'v'],
       queryFn: () => new Promise(() => {}),
     });
@@ -500,7 +504,7 @@ describe('setupQueryPersistence', () => {
     const second = persistence.restoreQuery(queryKey);
     expect(first).toBe(second);
     expect(queryClient.getQueryState(queryKey)?.fetchStatus).toBe('idle');
-    void queryClient.prefetchQuery({
+    queryClient.prefetchQuery({
       queryKey,
       queryFn: () => new Promise(() => {}),
     });
@@ -652,6 +656,111 @@ describe('account persistence reset', () => {
     expect(store.entries.has('["private","unhydrated"]')).toBe(false);
     persistence.dispose();
     queryClient.clear();
+  });
+
+  it('keeps mounted observers receiving query updates across a reset', async () => {
+    const queryClient = new QueryClient();
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [createScope(['private'], createMockStore())],
+    });
+    const queryKey = ['session', 'user'];
+    queryClient.setQueryData(queryKey, { owner: 'alice' });
+    queryClient.setQueryData(['session', 'unobserved'], { owner: 'alice' });
+    const observer = new QueryObserver(queryClient, {
+      queryKey,
+      queryFn: () => new Promise<never>(() => {}),
+      enabled: false,
+    });
+    const results: unknown[] = [];
+    const unsubscribe = observer.subscribe((result) => {
+      results.push(result.data);
+    });
+
+    await persistence.clear();
+    expect(observer.getCurrentResult().data).toBeUndefined();
+    expect(
+      queryClient.getQueryCache().find({ queryKey: ['session', 'unobserved'] })
+    ).toBeUndefined();
+
+    queryClient.setQueryData(queryKey, { owner: 'bob' });
+    expect(observer.getCurrentResult().data).toEqual({ owner: 'bob' });
+    expect(results.at(-1)).toEqual({ owner: 'bob' });
+    unsubscribe();
+    persistence.dispose();
+    queryClient.clear();
+  });
+
+  it('removes account seeds without refetching or stranding mounted observers', async () => {
+    const queryClient = new QueryClient();
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [createScope(['private'], createMockStore())],
+    });
+    const queryKey = ['private', 'seeded'];
+    const queryFn = vi.fn(async () => ({ owner: 'bob' }));
+    const observer = new QueryObserver(queryClient, {
+      queryKey,
+      queryFn,
+      initialData: { owner: 'alice' },
+      placeholderData: { owner: 'alice' },
+      staleTime: Infinity,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    expect(observer.getCurrentResult().data).toEqual({ owner: 'alice' });
+
+    await persistence.clear();
+    expect(observer.getCurrentResult().data).toBeUndefined();
+    expect(queryFn).not.toHaveBeenCalled();
+    observer.setOptions(observer.options);
+    expect(observer.getCurrentResult().data).toBeUndefined();
+    observer.setOptions({
+      ...observer.options,
+      placeholderData: keepPreviousData,
+    });
+    expect(observer.getCurrentResult().data).toBeUndefined();
+
+    // A later ordinary reset must not restore the old constructor's seed.
+    observer.setOptions({ ...observer.options, enabled: false });
+    await queryClient.resetQueries({ queryKey });
+    expect(observer.getCurrentResult().data).toBeUndefined();
+
+    queryClient.setQueryData(queryKey, { owner: 'bob' });
+    expect(observer.getCurrentResult().data).toEqual({ owner: 'bob' });
+    unsubscribe();
+    persistence.dispose();
+    queryClient.clear();
+  });
+
+  it('keeps periodic refetches working after clearing an observed query', async () => {
+    vi.useFakeTimers();
+    const queryClient = new QueryClient();
+    const persistence = setupQueryPersistence({
+      queryClient,
+      scopes: [createScope(['private'], createMockStore())],
+    });
+    const queryFn = vi.fn(async () => ({ owner: 'bob' }));
+    const observer = new QueryObserver(queryClient, {
+      queryKey: ['private', 'polling'],
+      queryFn,
+      initialData: { owner: 'alice' },
+      staleTime: Infinity,
+      refetchInterval: 1_000,
+      refetchIntervalInBackground: true,
+    });
+    const unsubscribe = observer.subscribe(() => {});
+    try {
+      await persistence.clear();
+      expect(queryFn).not.toHaveBeenCalled();
+      await vi.advanceTimersByTimeAsync(1_000);
+      expect(queryFn).toHaveBeenCalledOnce();
+      expect(observer.getCurrentResult().data).toEqual({ owner: 'bob' });
+    } finally {
+      unsubscribe();
+      persistence.dispose();
+      queryClient.clear();
+      vi.useRealTimers();
+    }
   });
 
   it('attempts every durable wipe even when one store fails', async () => {

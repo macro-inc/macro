@@ -1,3 +1,4 @@
+import { autoUpdate } from '@floating-ui/dom';
 import {
   type CollisionDetector,
   createDraggable,
@@ -11,9 +12,11 @@ import {
   createSignal,
   type JSX,
   onCleanup,
+  onMount,
   Show,
   useContext,
 } from 'solid-js';
+import { Portal } from 'solid-js/web';
 import { cloneDragPreview } from '../drag-drop/drag-preview';
 import { DragSessionSensors } from '../drag-drop/drag-session-sensors';
 import { findKanbanCollision, LANE_INSERTION_INSET } from './kanban-collision';
@@ -294,20 +297,74 @@ export function KanbanCardInsertion(props: {
 
   return (
     <Show when={active()}>
+      <CardInsertionMarker {...props} />
+    </Show>
+  );
+}
+
+/** Paint above the drag preview without escaping either board scroll clip. */
+function CardInsertionMarker(props: { laneId: string; beforeId?: string }) {
+  let anchor!: HTMLSpanElement;
+  let marker!: HTMLSpanElement;
+  onMount(() => {
+    const update = () => {
+      const rect = anchor.getBoundingClientRect();
+      let left = 0;
+      let right = 0;
+      let top = -1;
+      let bottom = -1;
+      for (const viewport of [
+        anchor.closest('[data-kanban-scroll]'),
+        anchor.closest('[data-kanban-board-viewport]'),
+      ]) {
+        if (!viewport) continue;
+        const clip = viewport.getBoundingClientRect();
+        left = Math.max(left, clip.left - rect.left);
+        right = Math.max(right, rect.right - clip.right);
+        top = Math.max(top, clip.top - rect.top);
+        bottom = Math.max(bottom, rect.bottom - clip.bottom);
+      }
+      marker.style.left = `${rect.left}px`;
+      marker.style.top = `${rect.top}px`;
+      marker.style.width = `${rect.width}px`;
+      marker.style.height = `${rect.height}px`;
+      marker.style.clipPath = `inset(${top}px ${right}px ${bottom}px ${left}px)`;
+      marker.style.setProperty(
+        '--color-accent',
+        getComputedStyle(anchor).backgroundColor
+      );
+      marker.style.visibility =
+        left + right < rect.width && top + bottom < rect.height
+          ? 'visible'
+          : 'hidden';
+    };
+    onCleanup(autoUpdate(anchor, marker, update));
+  });
+  return (
+    <>
       <span
+        ref={anchor}
         aria-hidden="true"
-        data-kanban-insertion="card"
-        data-lane-id={props.laneId}
-        data-before-row-id={props.beforeId}
         class={cn(
-          'pointer-events-none absolute -inset-x-2 z-10 h-0.5 rounded-full bg-accent',
+          'pointer-events-none invisible absolute -inset-x-2 h-0.5 bg-accent',
           props.beforeId ? '-top-1.5' : '-bottom-1.5'
         )}
-      >
-        <span class="absolute top-1/2 left-0 size-1 -translate-y-1/2 rounded-full bg-accent" />
-        <span class="absolute top-1/2 right-0 size-1 -translate-y-1/2 rounded-full bg-accent" />
-      </span>
-    </Show>
+      />
+      <Portal>
+        <span
+          ref={marker}
+          aria-hidden="true"
+          data-kanban-insertion="card"
+          data-lane-id={props.laneId}
+          data-before-row-id={props.beforeId}
+          class="pointer-events-none fixed z-[1001] rounded-full bg-accent"
+          style={{ visibility: 'hidden' }}
+        >
+          <span class="absolute top-1/2 left-0 size-1 -translate-y-1/2 rounded-full bg-accent" />
+          <span class="absolute top-1/2 right-0 size-1 -translate-y-1/2 rounded-full bg-accent" />
+        </span>
+      </Portal>
+    </>
   );
 }
 
@@ -370,7 +427,7 @@ export function KanbanLane(props: {
           droppable.ref(node);
         }}
         class={cn(
-          'relative flex w-72 shrink-0 flex-col rounded-xl border border-transparent bg-surface-1 p-2 transition-colors',
+          'relative flex w-72 shrink-0 flex-col rounded-xl border border-edge-frame bg-[color-mix(in_oklch,var(--color-panel)_94%,var(--color-ink))] p-2 transition-colors',
           draggable.isActiveDraggable && 'opacity-35',
           highlighted() && 'ring-2 ring-accent',
           props.class
@@ -445,7 +502,12 @@ export function KanbanCard(props: {
           props.pending && 'ring-1 ring-ink/20'
         )}
         onMouseDown={(event) => {
-          if (!event.currentTarget.contains(event.target)) {
+          // A secondary press opens the card's menu; it must not restart an
+          // active drag's origin.
+          if (
+            event.button !== 0 ||
+            !event.currentTarget.contains(event.target)
+          ) {
             return;
           }
 

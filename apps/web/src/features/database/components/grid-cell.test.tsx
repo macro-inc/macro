@@ -8,6 +8,7 @@ import {
 import userEvent from '@testing-library/user-event';
 import { createSignal, onMount } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { CellMentionEditor } from '../../../components/cell-text-editor/CellMentionEditor';
 import type { DatabaseMention } from '../core/column-inference';
 import type {
   DatabaseCellValue,
@@ -25,6 +26,8 @@ vi.mock('@property/utils/focus', () => ({
   // Like the real helper, focus after the menu has taken focus on open.
   useSearchInputFocus: (input: () => HTMLElement | undefined) =>
     setTimeout(() => input()?.focus(), 100),
+  useAutoFocus: (element: () => HTMLElement | undefined) =>
+    setTimeout(() => element()?.focus(), 100),
 }));
 
 const column: DatabaseViewColumn = {
@@ -41,6 +44,7 @@ beforeEach(() => {
     '[role="menu"], [role="dialog"] { animation-name: none; }';
   document.head.append(style);
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+  Element.prototype.scrollIntoView = vi.fn();
 });
 afterEach(() => {
   cleanup();
@@ -83,6 +87,132 @@ function MentionPicker(props: DatabaseMentionPickerProps) {
 }
 
 describe('grid cell', () => {
+  it.each([true, false])(
+    'preserves inline editor bounds only when requested (%s)',
+    async (preserveSize) => {
+      let width = 54;
+      vi.spyOn(
+        HTMLButtonElement.prototype,
+        'getBoundingClientRect'
+      ).mockImplementation(() => new DOMRect(0, 0, width, 24));
+      const { container } = render(() => (
+        <GridCell
+          column={column}
+          value="Original"
+          canEdit
+          preserveSize={preserveSize}
+          onWrite={vi.fn(async () => true)}
+          onAddOption={vi.fn(async () => true)}
+        />
+      ));
+      const cell = container.firstElementChild as HTMLDivElement;
+      fireEvent.click(screen.getByRole('button', { name: /Name: Original/ }));
+      expect(cell.style.width).toBe(preserveSize ? '54px' : '');
+      expect(cell.style.height).toBe(preserveSize ? '24px' : '');
+      fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+      await waitFor(() => expect(cell.style.width).toBe(''));
+      expect(cell.style.height).toBe('');
+      width = 72;
+      fireEvent.keyDown(
+        screen.getByRole('button', { name: /Name: Original/ }),
+        {
+          key: 'F2',
+        }
+      );
+      expect(cell.style.width).toBe(preserveSize ? '72px' : '');
+      fireEvent.keyDown(screen.getByRole('textbox'), { key: 'Escape' });
+    }
+  );
+  it('keeps the active text editor and draft when an earlier save infers the column type', () => {
+    const [schema, setSchema] = createSignal({ ...column, inferType: true });
+    const onWrite = vi.fn(async () => true);
+    const onNavigate = vi.fn(() => true);
+    render(() => (
+      <GridCell
+        column={schema()}
+        value={null}
+        canEdit
+        renderTextEditor={(props) => (
+          <CellMentionEditor
+            {...props}
+            convertPaste={(text) => text}
+            renderMenu={() => null}
+          />
+        )}
+        onWrite={onWrite}
+        onAddOption={vi.fn(async () => true)}
+        onNavigate={onNavigate}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: /Name: Empty/ }));
+    const editor = screen.getByRole('textbox', { name: 'Edit Name' });
+    editor.textContent = '456';
+    fireEvent.input(editor);
+    setSchema({ ...column, dataType: 'NUMBER', inferType: false });
+    expect(screen.getByRole('textbox', { name: 'Edit Name' })).toBe(editor);
+    expect(document.activeElement).toBe(editor);
+    expect(editor.textContent).toBe('456');
+    fireEvent.keyDown(editor, { key: 'Tab' });
+    expect(onWrite).toHaveBeenCalledExactlyOnceWith(456);
+    expect(onNavigate).toHaveBeenCalledExactlyOnceWith(1);
+  });
+  it.each(['STRING', 'NUMBER', 'BOOLEAN', 'SELECT_STRING'] as const)(
+    'clears a selected %s cell with either Delete key',
+    async (dataType) => {
+      const onWrite = vi.fn(async () => true);
+      render(() => (
+        <GridCell
+          column={{
+            ...column,
+            dataType,
+            options: [{ id: 'open', label: 'Open', color: null }],
+          }}
+          value={
+            dataType === 'STRING' || dataType === 'SELECT_STRING' ? 'Open' : 12
+          }
+          canEdit
+          onWrite={onWrite}
+          onAddOption={vi.fn(async () => true)}
+        />
+      ));
+      const trigger =
+        dataType === 'BOOLEAN'
+          ? screen.getByRole('checkbox')
+          : screen.getByRole('button');
+      trigger.focus();
+      for (const key of ['Delete', 'Backspace']) {
+        fireEvent.keyDown(trigger, { key });
+        await waitFor(() => expect(onWrite).toHaveBeenLastCalledWith(null));
+      }
+      expect(onWrite).toHaveBeenCalledTimes(2);
+      expect(screen.queryByRole('textbox')).toBeNull();
+    }
+  );
+
+  it('keeps an empty cell visually blank when the host supplies no placeholder', () => {
+    const onWrite = vi.fn(async () => true);
+    render(() => (
+      <GridCell
+        column={column}
+        value={null}
+        emptyLabel=""
+        canEdit
+        onWrite={onWrite}
+        onAddOption={vi.fn(async () => true)}
+      />
+    ));
+    const cell = screen.getByRole('button', {
+      name: 'Name: Empty. Click to edit',
+    });
+    expect(cell.textContent).toBe('');
+    fireEvent.click(cell);
+    const input = screen.getByRole('textbox', {
+      name: 'Edit Name',
+    }) as HTMLInputElement;
+    expect(input.placeholder).toBe('');
+    fireEvent.keyDown(input, { key: 'Enter' });
+    expect(onWrite).not.toHaveBeenCalled();
+  });
   it.each(['STRING', 'SELECT_STRING'] as const)(
     'lets Tab leave a %s editor at a grid boundary',
     async (dataType) => {
@@ -545,6 +675,48 @@ describe('grid cell', () => {
     expect(onWrite).not.toHaveBeenCalled();
   });
 
+  it.each([true, false])(
+    'right-click changes an openable reference only when editable (%s)',
+    async (canEdit) => {
+      const onOpenMention = vi.fn();
+      const onMention = vi.fn(async () => true);
+      render(() => (
+        <GridCell
+          column={{
+            ...column,
+            name: 'File',
+            dataType: 'ENTITY',
+            specificEntityType: 'DOCUMENT',
+          }}
+          value="project-plan"
+          canEdit={canEdit}
+          onWrite={vi.fn(async () => true)}
+          onAddOption={vi.fn(async () => true)}
+          onOpenMention={onOpenMention}
+          onMention={onMention}
+          renderMentionValue={() => <span>Project plan</span>}
+          renderMentionPicker={(props) => <MentionPicker {...props} />}
+        />
+      ));
+      const button = screen.getByRole('button', { name: 'File: Project plan' });
+      fireEvent.contextMenu(button);
+      expect(onOpenMention).not.toHaveBeenCalled();
+      if (canEdit) {
+        await screen.findByRole('textbox', { name: 'Find an item' });
+        await userEvent.keyboard('{Escape}');
+        await waitFor(() => expect(document.activeElement).toBe(button));
+        expect(onMention).not.toHaveBeenCalled();
+      } else {
+        expect(screen.queryByRole('dialog')).toBeNull();
+        fireEvent.click(button);
+        expect(onOpenMention).toHaveBeenCalledExactlyOnceWith(
+          'project-plan',
+          'DOCUMENT'
+        );
+      }
+    }
+  );
+
   it('keeps the selected label through a delayed write and hands it to the entity renderer when the schema arrives', async () => {
     const [value, setValue] = createSignal<DatabaseCellValue>(null);
     const [schema, setSchema] = createSignal<DatabaseViewColumn>({
@@ -806,29 +978,176 @@ describe('grid cell', () => {
     );
   });
 
-  it('keeps an invalid numeric draft focused instead of navigating on Tab', () => {
-    const onWrite = vi.fn(async () => true);
-    const onNavigate = vi.fn(() => true);
+  it.each([1, -1] as const)(
+    'lets Tab leave an invalid number in direction %s without saving',
+    async (direction) => {
+      const onWrite = vi.fn(async () => true);
+      render(() => (
+        <>
+          <button type="button">Before grid</button>
+          <GridCell
+            column={{ ...column, dataType: 'NUMBER' }}
+            value={12}
+            canEdit
+            onWrite={onWrite}
+            onAddOption={vi.fn(async () => true)}
+          />
+          <button type="button">After grid</button>
+        </>
+      ));
+      fireEvent.keyDown(screen.getByRole('button', { name: /Name: 12/ }), {
+        key: 'x',
+      });
+      const input = screen.getByRole('textbox', { name: 'Edit Name' });
+      await userEvent.tab({ shift: direction === -1 });
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', {
+          name: direction === -1 ? 'Before grid' : 'After grid',
+        })
+      );
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(input.getAttribute('aria-invalid')).toBe('true');
+      expect((input as HTMLInputElement).value).toBe('x');
+      expect(onWrite).not.toHaveBeenCalled();
+    }
+  );
+
+  it('hides validation on blur but keeps the draft invalid and allows another field to save', async () => {
+    const writeNumber = vi.fn(async () => true);
+    const writeNotes = vi.fn(async () => true);
     render(() => (
-      <GridCell
-        column={{ ...column, dataType: 'NUMBER' }}
-        value={12}
-        canEdit
-        onWrite={onWrite}
-        onAddOption={vi.fn(async () => true)}
-        onNavigate={onNavigate}
-      />
+      <>
+        <GridCell
+          column={{ ...column, dataType: 'NUMBER' }}
+          value={12}
+          canEdit
+          onWrite={writeNumber}
+          onAddOption={vi.fn(async () => true)}
+        />
+        <GridCell
+          column={{ ...column, id: 'notes', name: 'Notes' }}
+          value="Original"
+          canEdit
+          onWrite={writeNotes}
+          onAddOption={vi.fn(async () => true)}
+        />
+      </>
     ));
-    fireEvent.keyDown(screen.getByRole('button', { name: /Name: 12/ }), {
-      key: 'x',
-    });
-    const input = screen.getByRole('textbox', { name: 'Edit Name' });
-    fireEvent.keyDown(input, { key: 'Tab' });
+    await userEvent.click(screen.getByRole('button', { name: /Name: 12/ }));
+    const input = screen.getByRole('textbox', {
+      name: 'Edit Name',
+    }) as HTMLInputElement;
+    fireEvent.input(input, { target: { value: 'invalid' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
     expect(screen.getByRole('alert').textContent).toBe('Enter a valid number');
-    expect(document.activeElement).toBe(input);
-    expect(onNavigate).not.toHaveBeenCalled();
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    await userEvent.click(
+      screen.getByRole('button', { name: /Notes: Original/ })
+    );
+    const notes = screen.getByRole('textbox', { name: 'Edit Notes' });
+    expect(document.activeElement).toBe(notes);
+    expect(screen.queryByRole('alert')).toBeNull();
+    expect(input.value).toBe('invalid');
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(
+      document.getElementById(input.getAttribute('aria-errormessage')!)
+        ?.textContent
+    ).toBe('Enter a valid number');
+    fireEvent.input(notes, { target: { value: 'Updated notes' } });
+    fireEvent.keyDown(notes, { key: 'Enter' });
+    await waitFor(() =>
+      expect(writeNotes).toHaveBeenCalledExactlyOnceWith('Updated notes')
+    );
+    expect(writeNumber).not.toHaveBeenCalled();
+    await userEvent.click(input);
+    expect(screen.getByRole('alert').textContent).toBe('Enter a valid number');
+    fireEvent.input(input, { target: { value: 'still invalid' } });
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    fireEvent.input(input, { target: { value: '24' } });
+    expect(input.getAttribute('aria-invalid')).toBe('false');
+    expect(screen.queryByRole('alert')).toBeNull();
+    fireEvent.keyDown(input, { key: 'Enter' });
+    await waitFor(() =>
+      expect(writeNumber).toHaveBeenCalledExactlyOnceWith(24)
+    );
+  });
+
+  it('validates on blur without reopening the hint or taking focus back', async () => {
+    const onWrite = vi.fn(async () => true);
+    render(() => (
+      <>
+        <GridCell
+          column={{ ...column, dataType: 'NUMBER' }}
+          value={12}
+          canEdit
+          onWrite={onWrite}
+          onAddOption={vi.fn(async () => true)}
+        />
+        <button type="button">Another control</button>
+      </>
+    ));
+    await userEvent.click(screen.getByRole('button', { name: /Name: 12/ }));
+    const input = screen.getByRole('textbox', { name: 'Edit Name' });
+    fireEvent.input(input, { target: { value: 'invalid' } });
+    const outside = screen.getByRole('button', { name: 'Another control' });
+    await userEvent.click(outside);
+    expect(document.activeElement).toBe(outside);
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.queryByRole('alert')).toBeNull();
+    await userEvent.click(input);
+    expect(screen.getByRole('alert').textContent).toBe('Enter a valid number');
+    await userEvent.keyboard('{Escape}');
+    expect(screen.queryByRole('textbox')).toBeNull();
+    expect(screen.queryByRole('alert')).toBeNull();
     expect(onWrite).not.toHaveBeenCalled();
   });
+
+  it.each(['Tab', 'ArrowDown', 'ArrowUp'])(
+    'navigates from an invalid number to another grid editor with %s',
+    async (key) => {
+      const onWrite = vi.fn(async () => true);
+      let next: GridCellControl | undefined;
+      const navigate = vi.fn(() => {
+        next?.edit();
+        return Boolean(next);
+      });
+      render(() => (
+        <>
+          <GridCell
+            column={{ ...column, dataType: 'NUMBER' }}
+            value={12}
+            canEdit
+            onWrite={onWrite}
+            onAddOption={vi.fn(async () => true)}
+            onNavigate={navigate}
+            onNavigateRow={navigate}
+          />
+          <GridCell
+            column={{ ...column, id: 'notes', name: 'Notes' }}
+            value="Original"
+            canEdit
+            onWrite={onWrite}
+            onAddOption={vi.fn(async () => true)}
+            onReady={(control) => {
+              next = control;
+            }}
+          />
+        </>
+      ));
+      fireEvent.keyDown(screen.getByRole('button', { name: /Name: 12/ }), {
+        key: 'x',
+      });
+      const input = screen.getByRole('textbox', { name: 'Edit Name' });
+      fireEvent.keyDown(input, { key });
+      expect(navigate).toHaveBeenCalledWith(key === 'ArrowUp' ? -1 : 1);
+      expect(document.activeElement).toBe(
+        screen.getByRole('textbox', { name: 'Edit Notes' })
+      );
+      expect(input.getAttribute('aria-invalid')).toBe('true');
+      expect(screen.queryByRole('alert')).toBeNull();
+      expect(onWrite).not.toHaveBeenCalled();
+    }
+  );
 
   it.each(['9007199254740993', '-9007199254740993', '0x10', '1e309'])(
     'keeps the numeric draft %s instead of silently coercing it on save',
@@ -929,8 +1248,8 @@ describe('grid cell', () => {
       name: 'Search Status options',
     });
     await waitFor(() => expect(document.activeElement).toBe(search));
-    // The rows are Clear value, To do, then Done.
-    await userEvent.keyboard('{ArrowDown}{ArrowDown}{ArrowDown}');
+    // Clear value is a footer button; only To do and Done are list options.
+    await userEvent.keyboard('{ArrowDown}{ArrowDown}');
     expect(search.getAttribute('aria-activedescendant')).toBe(option.id);
     expect(document.activeElement).toBe(search);
     await userEvent.tab();
@@ -1236,6 +1555,144 @@ describe('grid cell', () => {
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(screen.getByRole('button').textContent).toContain('one, two');
     expect(onWrite).not.toHaveBeenCalled();
+  });
+
+  describe('time-range cells', () => {
+    const trip: DatabaseViewColumn = {
+      ...column,
+      id: 'trip',
+      name: 'Trip',
+      dataType: 'DATE_RANGE',
+    };
+    /** A day of the shown month; days of the months around it are disabled. */
+    const day = (label: string) =>
+      screen
+        .getAllByRole('gridcell')
+        .find(
+          (cell) => cell.textContent === label && !cell.hasAttribute('disabled')
+        );
+
+    const renderTrip = (value: DatabaseCellValue) => {
+      const onWrite = vi.fn(async () => true);
+      render(() => (
+        <GridCell
+          column={trip}
+          value={value}
+          canEdit
+          onWrite={onWrite}
+          onAddOption={vi.fn(async () => true)}
+        />
+      ));
+      return onWrite;
+    };
+    const field = (end: 'start' | 'end') =>
+      screen.getByRole('button', { name: `Edit Trip ${end} date` });
+    const time = (end: 'start' | 'end') =>
+      screen.getByRole('combobox', { name: `Trip ${end} time` });
+    // The open menu hides the rest of the page from the accessibility tree.
+    const cell = () =>
+      screen.getByRole('button', { name: /^Trip: /, hidden: true });
+
+    it('opens on the start field and keeps the menu open while picking days', async () => {
+      const onWrite = renderTrip(
+        '2026-03-02T00:00:00.000Z/2026-03-03T00:00:00.000Z'
+      );
+      cell().focus();
+      await userEvent.keyboard('{Enter}');
+      await waitFor(() => expect(document.activeElement).toBe(field('start')));
+
+      await userEvent.click(field('end'));
+      await userEvent.click(day('20')!);
+      expect(onWrite).toHaveBeenLastCalledWith(
+        '2026-03-02T00:00:00.000Z/2026-03-20T00:00:00.000Z'
+      );
+      expect(cell().getAttribute('aria-expanded')).toBe('true');
+
+      // A new start carries the end along, keeping the range's days.
+      await userEvent.click(field('start'));
+      await userEvent.click(day('10')!);
+      expect(onWrite).toHaveBeenLastCalledWith(
+        '2026-03-10T00:00:00.000Z/2026-03-28T00:00:00.000Z'
+      );
+      expect(cell().getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('turns off All day at the next full hour, then picks and types times', async () => {
+      vi.useFakeTimers({ toFake: ['Date'], now: new Date(2026, 2, 1, 14, 20) });
+      const onWrite = renderTrip(
+        '2026-03-02T00:00:00.000Z/2026-03-03T00:00:00.000Z'
+      );
+      await userEvent.click(cell());
+      await userEvent.click(
+        await screen.findByRole('switch', { name: 'All day' })
+      );
+      expect(onWrite).toHaveBeenLastCalledWith(
+        `${new Date(2026, 2, 2, 15).toISOString()}/${new Date(2026, 2, 3, 16).toISOString()}`
+      );
+
+      await userEvent.click(time('end'));
+      await userEvent.click(screen.getByRole('option', { name: '6:30 PM' }));
+      expect(onWrite).toHaveBeenLastCalledWith(
+        `${new Date(2026, 2, 2, 15).toISOString()}/${new Date(2026, 2, 3, 18, 30).toISOString()}`
+      );
+
+      // A typed start keeps the range's length.
+      await userEvent.click(time('start'));
+      await userEvent.keyboard('9a{Enter}');
+      expect(onWrite).toHaveBeenLastCalledWith(
+        `${new Date(2026, 2, 2, 9).toISOString()}/${new Date(2026, 2, 3, 12, 30).toISOString()}`
+      );
+      expect((time('start') as HTMLInputElement).value).toBe('9:00 AM');
+      expect(cell().getAttribute('aria-expanded')).toBe('true');
+      vi.useRealTimers();
+    });
+
+    it('shows an end before the start without saving it', async () => {
+      const onWrite = renderTrip(
+        '2026-03-10T00:00:00.000Z/2026-03-12T00:00:00.000Z'
+      );
+      await userEvent.click(screen.getByRole('button', { name: /^Trip: Mar/ }));
+      await userEvent.click(field('end'));
+      await userEvent.click(day('4')!);
+      expect(screen.getByRole('alert').textContent).toBe(
+        'The end can’t be before the start.'
+      );
+      expect(onWrite).not.toHaveBeenCalled();
+    });
+
+    it('starts an empty range on the first day picked, and clears a range', async () => {
+      vi.useFakeTimers({ toFake: ['Date'], now: new Date(2026, 2, 1, 9) });
+      const onWrite = renderTrip(null);
+      await userEvent.click(cell());
+      expect(field('start').textContent).toContain('Start date');
+      await userEvent.click(field('start'));
+      await userEvent.click(day('16')!);
+      expect(onWrite).toHaveBeenLastCalledWith(
+        '2026-03-16T00:00:00.000Z/2026-03-16T00:00:00.000Z'
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Clear Trip' }));
+      expect(onWrite).toHaveBeenLastCalledWith(null);
+      await waitFor(() =>
+        expect(cell().getAttribute('aria-expanded')).toBe('false')
+      );
+      vi.useRealTimers();
+    });
+
+    it('closes a date list on Escape, then the menu', async () => {
+      renderTrip('2026-03-02T00:00:00.000Z/2026-03-03T00:00:00.000Z');
+      await userEvent.click(cell());
+      await userEvent.click(field('end'));
+      await userEvent.keyboard('{Escape}');
+      await waitFor(() =>
+        expect(field('end').getAttribute('aria-expanded')).toBe('false')
+      );
+      expect(cell().getAttribute('aria-expanded')).toBe('true');
+      await userEvent.keyboard('{Escape}');
+      await waitFor(() =>
+        expect(cell().getAttribute('aria-expanded')).toBe('false')
+      );
+    });
   });
 
   describe('date cells', () => {

@@ -1,3 +1,4 @@
+import '../tests/board-layout';
 import {
   cleanup,
   fireEvent,
@@ -18,17 +19,21 @@ beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
   vi.spyOn(HTMLElement.prototype, 'getBoundingClientRect').mockImplementation(
     function (this: HTMLElement) {
-      if (this.classList.contains('overflow-auto'))
+      if (this.hasAttribute('data-kanban-board-viewport'))
         return new DOMRect(0, 0, 880, 500);
       const lane = this.closest('[data-kanban-lane]');
       const label = lane?.getAttribute('aria-label');
       const x =
         (label === 'To do lane' ? 300 : label === 'Later lane' ? 600 : 0) -
         scrollOffset;
+      const card = this.hasAttribute('data-kanban-card-layout')
+        ? this.querySelector('[data-kanban-card]')
+        : this;
       const cardIndex = lane
-        ? Array.from(lane.querySelectorAll('[data-kanban-card]')).indexOf(this)
+        ? Array.from(lane.querySelectorAll('[data-kanban-card]')).indexOf(card!)
         : 0;
-      return this.hasAttribute('data-row-id')
+      return this.hasAttribute('data-row-id') ||
+        this.hasAttribute('data-kanban-card-layout')
         ? new DOMRect(x + 8, 60 + Math.max(0, cardIndex) * 100, 264, 80)
         : new DOMRect(x, 0, 280, 500);
     }
@@ -338,7 +343,7 @@ describe('board card drag', () => {
       />
     ));
     fireEvent.mouseDown(
-      screen.getByRole('button', { name: 'Open Last card' }),
+      screen.getByRole('button', { name: 'Drag Last card' }),
       {
         button: 0,
         clientX: 40,
@@ -349,6 +354,8 @@ describe('board card drag', () => {
     expect(marker()).toBeNull();
     movePointer(40, 70);
     expect(marker()?.dataset.beforeRowId).toBe('first');
+    // The marker escapes the virtual row's stacking context above the preview.
+    expect(marker()?.closest('[data-kanban-lane]')).toBeNull();
     dropPointer(40, 70);
     await waitFor(() =>
       expect(onMove).toHaveBeenCalledWith(
@@ -704,7 +711,7 @@ describe('board lane drag', () => {
     );
     movePointer(560, 20);
     scrollOffset = 300;
-    fireEvent.scroll(document.querySelector('.overflow-auto')!);
+    fireEvent.scroll(document.querySelector('[data-kanban-board-viewport]')!);
     expect(
       marker()?.closest('[data-kanban-lane]')?.getAttribute('aria-label')
     ).toBe('Later lane');

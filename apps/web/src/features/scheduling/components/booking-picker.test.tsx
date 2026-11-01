@@ -32,6 +32,7 @@ const intro: PublicEvent = {
   description: 'A short hello.',
   durationMinutes: 30,
   location: '',
+  macroCall: false,
   googleMeet: true,
   questions: [
     { id: 'question-topic', label: 'What should we cover?', required: true },
@@ -47,6 +48,7 @@ const review: PublicEvent = {
   description: 'An hour on your designs.',
   durationMinutes: 60,
   location: 'Studio 4',
+  macroCall: false,
   googleMeet: false,
   questions: [],
   requiresConfirmation: true,
@@ -111,6 +113,19 @@ async function fillDetails(user: ReturnType<typeof userEvent.setup>) {
 }
 
 describe('BookingPicker', () => {
+  it('names a Macro call on the booking page', () => {
+    render(() => (
+      <BookingPicker
+        profile={profile}
+        event={{ ...intro, macroCall: true, googleMeet: false }}
+        source={{ slots: vi.fn(), book: vi.fn() }}
+        onReceipt={vi.fn()}
+      />
+    ));
+    expect(screen.getByText('Macro call')).toBeTruthy();
+    expect(screen.queryByText('Google Meet')).toBeNull();
+  });
+
   it('books the chosen time with the attendee details and hands back the receipt', async () => {
     const user = userEvent.setup();
     const source: BookingSource = {

@@ -1,6 +1,10 @@
 import { DEFAULT_ROUTE } from '@app/constants/defaultRoute';
+import { openAddInboxDialog } from '@app/features/inbox/AddInboxDialog';
+import { AdminConsentRequiredDialog } from '@app/features/inbox/AdminConsentRequiredDialog';
 import { ShareInboxConflictDialog } from '@app/features/inbox/ShareInboxConflictDialog';
+import { onboardingPathWithStep } from '@app/features/onboarding/core/next-target';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import type { AppEvents } from '@app/lib/analytics/app-events';
 import { updateUserAuth } from '@core/auth';
 import { redirectToEmailAuth } from '@core/auth/email';
 import { publishLoginSuccess } from '@core/auth/login-events';
@@ -8,18 +12,37 @@ import { LoadingBlock } from '@core/component/LoadingBlock';
 import { toast } from '@core/component/Toast/Toast';
 import { settingsTabToSlug } from '@core/constant/settingsTabsConfig';
 import { useEmailLinks } from '@core/email-link';
-import { consumeInboxLinkReturn } from '@core/email-link/return-layout';
+import {
+  announceAlreadyConnected,
+  announceConsentCancelled,
+  announceLinkedInbox,
+} from '@core/email-link/link-outcome';
+import {
+  consumeInboxLinkReturn,
+  readInboxLinkReturn,
+} from '@core/email-link/return-layout';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { whenSettled } from '@core/util/whenSettled';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
+import { Telemetry } from '@macro-inc/observability';
+import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
 import {
   invalidateAllAfterLogin,
   useUserInfoQuery,
 } from '@queries/auth/user-info';
+import type { ConsentScopes } from '@service-auth/client';
 import { useNavigate, useSearchParams } from '@solidjs/router';
 import { Button } from '@ui';
-import { createSignal, onCleanup, onMount, Show, Suspense } from 'solid-js';
+import {
+  createSignal,
+  Match,
+  onCleanup,
+  onMount,
+  Suspense,
+  Switch,
+} from 'solid-js';
 
 type EmailAuthParams = {
   callbackPath: string;
@@ -76,7 +99,9 @@ function EmailSignupCallback(props: Pick<EmailAuthParams, 'successPath'>) {
     query,
     async () => {
       const onSuccess = () => {
-        onSuccessfulAuth();
+        onSuccessfulAuth().catch((error) =>
+          Telemetry.error(error, { surface: 'email-auth' })
+        );
         navigateToSuccess();
       };
 
@@ -109,12 +134,69 @@ function EmailSignupCallback(props: Pick<EmailAuthParams, 'successPath'>) {
 const POST_LINK_FALLBACK_ROUTE = `${DEFAULT_ROUTE}/~/settings/${settingsTabToSlug('Connected')}`;
 
 /**
- * Handles the OAuth callback after an already-authenticated user adds another Gmail
- * inbox via /link/gmail. Reads `link_id` from the query string and invokes init to
- * provision the second `email_links` row. Falls back to a toast on failure.
+ * The `email_link_notice` the auth service sends an administrator back with
+ * after they approve Macro for their Microsoft 365 tenant.
+ */
+const ADMIN_CONSENT_GRANTED_NOTICE = 'admin_consent_granted';
+
+/**
+ * The `email_link_error` values the auth service redirects back with when a
+ * consent screen ends without a usable grant. Anything else is a generic
+ * failure.
+ */
+const ADMIN_CONSENT_REQUIRED_ERROR = 'admin_consent_required';
+const CONSENT_CANCELLED_ERROR = 'cancelled';
+/** Google's consent came back without the email permissions; nothing was connected. */
+const GMAIL_NOT_GRANTED_ERROR = 'gmail_not_granted';
+
+const stringParam = (value: string | string[] | undefined) =>
+  typeof value === 'string' ? value : null;
+
+/**
+ * Google's consent left the email permissions unchecked, so nothing was
+ * connected and the partial grant was revoked. The prompt outlives the
+ * callback page and stays until the person dismisses it or tries again with
+ * the permissions the flow asked for.
+ */
+function promptForEmailAccess(scopes: ConsentScopes | undefined) {
+  const toastId = toast.custom(
+    {
+      title: 'Email access required',
+      content: () =>
+        "Macro connects an account's email and calendar together, so keep the email permissions checked. The account was not connected.",
+      actions: [
+        {
+          label: 'Try again',
+          onClick: () => {
+            toast.dismiss(toastId);
+            openAddInboxDialog({ scopes });
+          },
+        },
+      ],
+    },
+    {
+      persistent: true,
+      region: isMobile() ? 'mobile-prompt-region' : 'prompt-region',
+    }
+  );
+}
+
+/**
+ * Handles the OAuth callback after an already-authenticated user adds another
+ * inbox via /link/gmail or /link/outlook. Reads `link_id` from the query string
+ * and invokes init to provision the second `email_links` row. Every outcome is
+ * announced: init also succeeds when the account chooser returned an inbox the
+ * user already had, which a plain add reports as already connected.
  *
- * Consent runs as a full page navigation, so the split layout — which lives in
- * the URL — is gone by the time this mounts. The add-inbox flow stashed it
+ * A consent screen that ended without a usable grant arrives with
+ * `email_link_error` instead: a cancel says nothing was connected, a tenant
+ * that needs admin approval gets the dialog with the approval link, a Google
+ * consent that left out the email permissions gets a prompt that stays until
+ * dismissed and retries the same request, and anything else gets a toast.
+ * An administrator who approved the tenant arrives with `email_link_notice`.
+ *
+ * Web consent navigates the page; desktop returns from the system browser via
+ * a deep link. Both replace the split layout URL. The add-inbox flow stashed it
  * against this `link_id`; restoring it is what keeps enabling calendar (or
  * adding an inbox) from clobbering whatever the user had open.
  */
@@ -122,6 +204,10 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { query, initEmailLink } = useEmailLinks();
+  const analytics = useAnalytics();
+  const trackOutcome = (
+    outcome: AppEvents['email_link_callback_result']['outcome']
+  ) => analytics.track('email_link_callback_result', { outcome });
   let disposed = false;
   onCleanup(() => {
     disposed = true;
@@ -131,6 +217,9 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
     emailAddress: string;
     ownerEmail: string;
   } | null>(null);
+  const [adminConsent, setAdminConsent] = createSignal<{
+    url: string | undefined;
+  } | null>(null);
 
   const navigateToSuccess = () => {
     navigate(props.successPath, { replace: true });
@@ -138,12 +227,16 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
 
   const userInfoQuery = useUserInfoQuery();
 
-  // Return to the layout the flow left from, if this callback belongs to a
-  // flow that stashed one. Consent replaced the page, so nothing in memory
-  // survived — the stash is the only record of what the user had open.
+  const linkId = stringParam(searchParams.link_id);
+  // What the flow stashed against this attempt, if it stashed anything: the
+  // layout it left from (the callback replaced the layout URL) and, for a
+  // plain add, the inboxes already connected when it started. It is cleared
+  // only on leaving, so a reload while init runs can still use it.
+  const stashed = linkId ? readInboxLinkReturn(linkId) : undefined;
+
   // Reports true when it navigated, so callers can fall through otherwise.
-  const restoreLayoutBeforeConsent = (linkId: string) => {
-    const stored = consumeInboxLinkReturn(linkId);
+  const restoreLayoutBeforeConsent = () => {
+    const stored = linkId ? consumeInboxLinkReturn(linkId) : undefined;
     if (!stored) return false;
     navigate(stored.url, { replace: true });
     return true;
@@ -153,7 +246,7 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   // onboarding for a first-run user, then the layout they left, then a
   // form-factor default — the list view on mobile, where the desktop settings
   // split doesn't exist and the toast is the confirmation.
-  const navigateAfterLink = (linkId: string) => {
+  const navigateAfterLink = () => {
     if (disposed) return;
     // A first-run user connected this inbox from the onboarding flow:
     // return straight to it. Landing in mail settings would mount the app
@@ -163,10 +256,10 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
       !isNativeMobilePlatform() &&
       userInfoQuery.data?.tutorialComplete === false
     ) {
-      navigate('/onboarding', { replace: true });
+      navigate(onboardingPathWithStep(searchParams.step), { replace: true });
       return;
     }
-    if (restoreLayoutBeforeConsent(linkId)) return;
+    if (restoreLayoutBeforeConsent()) return;
     if (isMobile()) {
       navigateToSuccess();
       return;
@@ -177,23 +270,26 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
   const runInit = async (linkId: string, forceShare: boolean) => {
     try {
       await initEmailLink({ linkId, forceShare }).match(
-        async () => {
+        async (connectedLinkId) => {
           // Pull the newly-provisioned link into the cache before leaving the
           // callback so the inbox panel shows it immediately on return rather
           // than flashing a stale list until its own refetch lands.
           await query.refetch();
-          toast.success('Account connected');
-          navigateAfterLink(linkId);
+          trackOutcome(announceLinkedInbox(connectedLinkId, stashed?.addition));
+          navigateAfterLink();
         },
         async (err) => {
           if (err.tag === 'AlreadyInitialized') {
+            trackOutcome('already_initialized');
             await query.refetch();
-            navigateAfterLink(linkId);
+            announceAlreadyConnected(stashed?.addition?.provider);
+            navigateAfterLink();
             return;
           }
           // The mailbox is already connected by someone else. Hold the callback open
           // and let the user confirm sharing it before retrying with forceShare.
           if (err.tag === 'SharedInboxConflict' && !forceShare) {
+            trackOutcome('shared_inbox_conflict');
             setConflict({
               linkId,
               emailAddress: err.emailAddress,
@@ -201,43 +297,103 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
             });
             return;
           }
+          if (err.tag === 'PaymentRequired') {
+            trackOutcome('payment_required');
+            toast.failure(
+              'A professional subscription is required to add another inbox.'
+            );
+            navigateAfterLink();
+            return;
+          }
           if (err.tag === 'NoGmailGrant') {
+            trackOutcome('no_gmail_grant');
             toast.failure(
               'Gmail access was not granted. Please allow all requested permissions and try again.'
             );
-            navigateAfterLink(linkId);
+            navigateAfterLink();
             return;
           }
+          trackOutcome('failed');
           toast.failure('Failed to add inbox');
-          navigateAfterLink(linkId);
+          navigateAfterLink();
         }
       );
     } catch {
+      trackOutcome('exception');
       if (disposed) return;
       toast.failure(
         'Failed to finish connecting your account. Please try again from Settings.'
       );
-      navigateAfterLink(linkId);
+      navigateAfterLink();
     }
+  };
+
+  // The consent screen ended without a grant. The pending link is already
+  // released server-side; this only explains the outcome and hands off.
+  const handleConsentFailure = (error: string) => {
+    if (error === CONSENT_CANCELLED_ERROR) {
+      announceConsentCancelled();
+      navigateAfterLink();
+      return;
+    }
+    if (error === GMAIL_NOT_GRANTED_ERROR) {
+      trackOutcome('gmail_not_granted');
+      // The retry asks for what this flow asked for: a calendar entry point
+      // wants email and calendar together, not email alone.
+      promptForEmailAccess(stashed?.scopes);
+      navigateAfterLink();
+      return;
+    }
+    if (error !== ADMIN_CONSENT_REQUIRED_ERROR) {
+      toast.failure('Failed to connect your account. Please try again.');
+      navigateAfterLink();
+      return;
+    }
+    setAdminConsent({ url: undefined });
+    fireAndForget(loadAdminConsentUrl(), 'email-auth');
+  };
+
+  // The approval link is built server-side so the client never carries the
+  // Microsoft client id. The dialog stays open while it loads; a failure
+  // leaves the copy action disabled with an explanation.
+  const loadAdminConsentUrl = async () => {
+    const providers = await fetchEmailConnectionProviders();
+    setAdminConsent((current) =>
+      current
+        ? { ...current, url: providers.outlook_admin_consent_url ?? undefined }
+        : current
+    );
   };
 
   // Completing consent does not depend on the old inbox list loading first.
   // A paused or slow query must not prevent the new grant from being applied.
   onMount(() => {
-    const linkId =
-      typeof searchParams.link_id === 'string' ? searchParams.link_id : null;
+    if (
+      stringParam(searchParams.email_link_notice) ===
+      ADMIN_CONSENT_GRANTED_NOTICE
+    ) {
+      toast.success('Approved. Try connecting again.');
+      openAddInboxDialog();
+      navigateAfterLink();
+      return;
+    }
+    const linkError = stringParam(searchParams.email_link_error);
+    if (linkError) {
+      handleConsentFailure(linkError);
+      return;
+    }
     if (!linkId) {
+      trackOutcome('missing_link_id');
       toast.failure('Missing link id in callback URL');
       navigateToSuccess();
       return;
     }
 
-    void runInit(linkId, false);
+    fireAndForget(runInit(linkId, false), 'email-auth');
   });
 
   return (
-    <Show
-      when={conflict()}
+    <Switch
       fallback={
         <div class="flex size-full items-center justify-center p-6">
           <div
@@ -252,42 +408,49 @@ function EmailLinkCallback(props: Pick<EmailAuthParams, 'successPath'>) {
               We’re applying your Google permissions. Calendar events may take a
               few minutes to sync after you return.
             </p>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => {
-                const linkId =
-                  typeof searchParams.link_id === 'string'
-                    ? searchParams.link_id
-                    : undefined;
-                if (linkId) navigateAfterLink(linkId);
-                else navigateToSuccess();
-              }}
-            >
+            <Button variant="secondary" size="sm" onClick={navigateAfterLink}>
               Back to app
             </Button>
           </div>
         </div>
       }
     >
-      {(c) => (
-        <ShareInboxConflictDialog
-          open
-          emailAddress={c().emailAddress}
-          ownerEmail={c().ownerEmail}
-          onCancel={() => {
-            const linkId = c().linkId;
-            setConflict(null);
-            if (!restoreLayoutBeforeConsent(linkId)) navigateToSuccess();
-          }}
-          onShare={() => {
-            const linkId = c().linkId;
-            setConflict(null);
-            void runInit(linkId, true);
-          }}
-        />
-      )}
-    </Show>
+      <Match when={adminConsent()}>
+        {(consent) => (
+          <AdminConsentRequiredDialog
+            open
+            adminConsentUrl={consent().url}
+            onClose={() => {
+              setAdminConsent(null);
+              navigateAfterLink();
+            }}
+            onConnectDifferentAccount={() => {
+              setAdminConsent(null);
+              openAddInboxDialog();
+              navigateAfterLink();
+            }}
+          />
+        )}
+      </Match>
+      <Match when={conflict()}>
+        {(c) => (
+          <ShareInboxConflictDialog
+            open
+            emailAddress={c().emailAddress}
+            ownerEmail={c().ownerEmail}
+            onCancel={() => {
+              setConflict(null);
+              if (!restoreLayoutBeforeConsent()) navigateToSuccess();
+            }}
+            onShare={() => {
+              const linkId = c().linkId;
+              setConflict(null);
+              fireAndForget(runInit(linkId, true), 'email-auth');
+            }}
+          />
+        )}
+      </Match>
+    </Switch>
   );
 }
 

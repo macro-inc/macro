@@ -1,4 +1,4 @@
-//! The browser-facing envelopes around the serializable domain vocabulary.
+//! The reader-facing envelopes around the serializable domain vocabulary.
 //!
 //! The renderable message, tool, permission, and metadata types live in
 //! [`crate::domain::model`] and define their wire representation directly.
@@ -11,8 +11,8 @@
 
 use crate::domain::log::AgentSessionId;
 use crate::domain::model::{
-    Author, FoldEvent, FoldedMessage as ModelFoldedMessage, MessagePart, SessionMetadata,
-    StopReason,
+    Author, FoldEvent, FoldedMessage as ModelFoldedMessage, MessagePart, Segment, SessionMetadata,
+    StopReason, TurnPhase,
 };
 use serde::Serialize;
 use specta::Type;
@@ -20,7 +20,7 @@ use specta::Type;
 #[cfg(test)]
 mod test;
 
-/// One renderable message, scoped to its agent session for the browser.
+/// One renderable message, scoped to its agent session for its reader.
 #[derive(Serialize, Type)]
 #[serde(rename_all = "camelCase")]
 pub struct FoldedMessage {
@@ -42,20 +42,43 @@ pub struct FoldedMessage {
     /// confirmed. A reader shows it as sending; it flips off in place when
     /// the confirmed frame arrives.
     pending: bool,
+    /// How an agent's reply reads as a conversation, the same boundaries the
+    /// server posts channel messages by. Empty on a user's message.
+    segments: Vec<Segment>,
+    /// What an agent's unfinished reply is doing now; absent once its turn
+    /// has ended and on a user's message.
+    phase: Option<TurnPhase>,
+    /// When a user's prompt was posted, RFC 3339. Absent on agent and control
+    /// messages, until the log confirms a prompt, and on history a runtime
+    /// replayed on load.
+    posted_at: Option<String>,
 }
 
 impl FoldedMessage {
     /// Build the browser form of `message`, keyed to `session`.
     #[must_use]
     pub fn new(session: AgentSessionId, message: ModelFoldedMessage) -> Self {
+        let parts = message.parts.into_inner();
+        let closed = message.stop.is_some();
+        let (segments, phase) = if matches!(message.author, Author::Agent) {
+            (
+                crate::domain::model::segments(&parts, closed),
+                crate::domain::model::phase(&parts, closed),
+            )
+        } else {
+            (Vec::new(), None)
+        };
         Self {
             agent_session_id: session.to_string(),
             turn: message.id.0,
             author: message.author,
             request_id: message.request_id.map(|id| id.to_string()),
-            parts: message.parts.into_inner(),
+            parts,
             stop: message.stop,
             pending: message.pending,
+            segments,
+            phase,
+            posted_at: message.posted_at.map(|at| at.to_rfc3339()),
         }
     }
 }

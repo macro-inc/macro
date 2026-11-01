@@ -1,30 +1,50 @@
 //! `Build AppImage` — reusable workflow that builds the Tauri desktop AppImage
 //! via Nix. Called from [`super::build_desktop_on_tag`].
 
+use std::collections::HashMap;
+
 use gh_workflow::{
     Event, Job, Level, Permissions, Run, Step, Workflow, WorkflowCall, WorkflowCallInput,
+    WorkflowCallSecret,
 };
 
-use crate::workflows::{runners, steps};
+use crate::workflows::{runners, steps, vars};
 
 /// Tag pattern for desktop release builds (CalVer: `v2026.6.23.1`).
 /// Shared with the DMG workflow and the parent orchestrator.
 pub const DESKTOP_TAG_PATTERN: &str = "v[0-9]*";
 
+/// Secrets a caller must forward to the reusable desktop build workflows. A
+/// called workflow cannot read repository secrets on its own, and the desktop
+/// bundle is built with PostHog's key inlined, so the key has to arrive here.
+/// The parent orchestrator inlines these jobs instead, and reads the secret
+/// directly.
+pub fn desktop_build_secrets() -> HashMap<String, WorkflowCallSecret> {
+    HashMap::from([(
+        "POSTHOG_API_KEY".to_string(),
+        WorkflowCallSecret {
+            description: "PostHog project API key inlined into the desktop bundle".into(),
+            required: true,
+        },
+    )])
+}
+
 /// Build the reusable workflow.
 pub fn build_appimage() -> Workflow {
     Workflow::new("Build AppImage")
-        .on(
-            Event::default().workflow_call(WorkflowCall::default().add_input(
-                "ref",
-                WorkflowCallInput {
-                    description: "Git ref to check out and build".into(),
-                    required: true,
-                    input_type: "string".into(),
-                    default: None,
-                },
-            )),
-        )
+        .on(Event::default().workflow_call(
+            WorkflowCall::default()
+                .add_input(
+                    "ref",
+                    WorkflowCallInput {
+                        description: "Git ref to check out and build".into(),
+                        required: true,
+                        input_type: "string".into(),
+                        default: None,
+                    },
+                )
+                .secrets(desktop_build_secrets()),
+        ))
         .add_job("build-appimage", build_appimage_job("${{ inputs.ref }}"))
 }
 
@@ -32,7 +52,7 @@ pub fn build_appimage() -> Workflow {
 pub fn build_appimage_job(ref_expr: &str) -> Job {
     Job::default()
         .name("Build AppImage")
-        .runs_on(runners::Runner::RustCi.to_string())
+        .runs_on(runners::Runner::Mid.with_cache_tag("desktop-linux"))
         .add_step(steps::checkout_ref(ref_expr))
         .add_step(steps::mount_nix_cache_volume())
         .add_step(steps::setup_nix())
@@ -75,6 +95,7 @@ fn nix_build_appimage() -> Step<Run> {
     Step::new("Build AppImage with Nix")
         .run(include_str!("scripts/build_appimage.sh"))
         .shell("bash")
+        .add_env(("VITE_POSTHOG_API_KEY", vars::POSTHOG_API_KEY))
 }
 
 fn collect_appimage() -> Step<Run> {

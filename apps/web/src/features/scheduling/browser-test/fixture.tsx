@@ -1,6 +1,6 @@
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
-import { themeCssVars } from '../../theme/utils/themeColorTokens';
+import { themeCssVars } from '../../theme/utils/themeCssVars';
 import { BookingReceiptView } from '../views/booking-receipt-view';
 import { FixtureCalendars } from './calendars';
 import '@fontsource-variable/inter';
@@ -18,10 +18,12 @@ import {
   searchSettings,
 } from '../../settings/core/settings-search';
 import { SettingsPage } from '../../settings/primitives';
+import type { BookingLinksState } from '../booking-links-search';
 import {
   type SchedulingCapabilities,
   SchedulingProvider,
 } from '../context/scheduling-context';
+import { bookingLinkAgentSeed } from '../core/booking-agent';
 import {
   type Booking,
   type BookingReceipt,
@@ -29,21 +31,19 @@ import {
   newSchedule,
   type PublicProfile,
   type SchedulingProfile,
+  schedulingProfileForSave,
 } from '../core/types';
+import { BookingWorkspaceView } from '../views/booking-workspace-view';
 import { PublicBookingView } from '../views/public-booking-view';
-import { SchedulingSettingsView } from '../views/settings-view';
 
 function Fixture() {
-  const [settingsTab, setSettingsTab] =
-    createSignal<SettingsTab>('Booking links');
+  const [settingsTab, setSettingsTab] = createSignal<SettingsTab>('Calendar');
   const [settingsSearch, setSettingsSearch] = createSignal('');
   const [selectedResult, setSelectedResult] =
     createSignal<SettingsSearchResult>();
   const settingsGroups = SETTINGS_TAB_GROUPS.map((group) => ({
     ...group,
-    items: group.items.filter(
-      (item) => item.tab === 'Calendar' || item.tab === 'Booking links'
-    ),
+    items: group.items.filter((item) => item.tab === 'Calendar'),
   })).filter((group) => group.items.length > 0);
   const settingsResults = createMemo(() =>
     searchSettings(settingsGroups, settingsSearch())
@@ -72,12 +72,22 @@ function Fixture() {
     });
     for (const [key, value] of Object.entries(vars))
       document.documentElement.style.setProperty(key, value);
+    // Match the contrast token to the fixture's neutral accent.
+    document.documentElement.style.setProperty(
+      '--color-accent-contrast',
+      isDark ? '#171717' : '#ffffff'
+    );
     document.documentElement.style.colorScheme = isDark ? 'dark' : 'light';
+    document.documentElement.dataset.themeLight = String(!isDark);
   };
   onMount(() => applyTheme(false));
-  const [screen, setScreen] = createSignal<'settings' | 'public' | 'receipt'>(
-    'settings'
-  );
+  const [screen, setScreen] = createSignal<
+    'workspace' | 'settings' | 'public' | 'receipt'
+  >('workspace');
+  const [workspaceSearch, setWorkspaceSearch] = createStore<BookingLinksState>({
+    tab: 'links',
+    owner: 'me',
+  });
   const [slug, setSlug] = createSignal<string>();
   const schedule = newSchedule('America/New_York');
   const event = {
@@ -112,6 +122,24 @@ function Fixture() {
           id: crypto.randomUUID(),
           title: 'Team introduction',
           slug: 'team-introduction',
+          mode: 'collective',
+          hosts: ['macro|alex@example.com', 'macro|sam@example.com'],
+        },
+      ],
+      revision: 1,
+    },
+    operations: {
+      id: '00000000-0000-4000-8000-000000000003',
+      name: 'Operations team',
+      description: 'Meet the operations team.',
+      schedules: [schedule],
+      defaultScheduleId: schedule.id,
+      eventTypes: [
+        {
+          ...event,
+          id: crypto.randomUUID(),
+          title: 'Operations introduction',
+          slug: 'operations-introduction',
           mode: 'collective',
           hosts: ['macro|alex@example.com', 'macro|sam@example.com'],
         },
@@ -205,12 +233,20 @@ function Fixture() {
   const capabilities: SchedulingCapabilities = {
     userId: () => 'macro|alex@example.com',
     scopes: () => [
-      { id: 'me', name: 'Personal', canEdit: true },
+      { id: 'me', name: 'Personal', canEdit: true, canManageBookings: true },
       {
         id: 'team',
         teamId: 'team',
         name: 'Design team',
         canEdit: !readOnlyTeam(),
+        canManageBookings: !readOnlyTeam(),
+      },
+      {
+        id: 'operations',
+        teamId: 'operations',
+        name: 'Operations team',
+        canEdit: true,
+        canManageBookings: true,
       },
     ],
     members: () => [
@@ -241,6 +277,9 @@ function Fixture() {
       }
     },
     openTeamSettings: () => setNotice('Macro team settings shortcut selected'),
+    createBookingLinkWithAgent: async (scope) => {
+      setNotice(`Agent draft (not sent): ${bookingLinkAgentSeed(scope).input}`);
+    },
     createSource: (scope, range) => {
       return {
         profile: () => profiles()[scope().id],
@@ -262,7 +301,7 @@ function Fixture() {
           const booking = bookings().find((b) => b.id === id);
           if (
             !booking ||
-            (!scope().canEdit &&
+            (!scope().canManageBookings &&
               !booking.hosts.includes('macro|alex@example.com'))
           )
             throw new Error('Forbidden');
@@ -283,7 +322,10 @@ function Fixture() {
           if (!scope().canEdit) throw new Error('Forbidden');
           setProfiles({
             ...profiles(),
-            [scope().id]: { ...p, revision: p.revision + 1 },
+            [scope().id]: {
+              ...schedulingProfileForSave(p),
+              revision: p.revision + 1,
+            },
           });
           setActive(scope().id);
         },
@@ -311,6 +353,9 @@ function Fixture() {
         <span class="text-ink-muted">
           Sample data only · no invitations sent
         </span>
+        <button type="button" onClick={() => setScreen('workspace')}>
+          Booking workspace
+        </button>
         <button type="button" onClick={() => setScreen('settings')}>
           Settings
         </button>
@@ -343,6 +388,17 @@ function Fixture() {
         class="min-h-0 flex-1 mx-auto w-full"
         style={{ 'max-width': narrow() ? '390px' : undefined }}
       >
+        <Show when={screen() === 'workspace'}>
+          <SchedulingProvider value={capabilities}>
+            <BookingWorkspaceView
+              search={workspaceSearch}
+              onSearchChange={(patch) => {
+                setWorkspaceSearch(patch);
+                if (patch.owner) setActive(patch.owner);
+              }}
+            />
+          </SchedulingProvider>
+        </Show>
         <Show when={screen() === 'settings'}>
           <SchedulingProvider value={capabilities}>
             <ViewShell.Root asidePreferenceKey="scheduling-preview" resizable>
@@ -362,23 +418,17 @@ function Fixture() {
                     setSettingsTab(result.tab);
                     setSelectedResult({ ...result });
                   }}
-                  onLogout={() => setNotice('Preview only')}
                 />
               </ViewShell.Aside>
               <ViewShell.Main>
                 <ViewShell.TopBar />
                 <SettingsSearchTarget result={selectedResult()}>
-                  <Show
-                    when={settingsTab() === 'Calendar'}
-                    fallback={<SchedulingSettingsView />}
+                  <SettingsPage
+                    title="Calendar"
+                    description="Manage your connected accounts, calendar visibility, and colors."
                   >
-                    <SettingsPage
-                      title="Calendar"
-                      description="Manage your connected accounts, calendar visibility, and colors."
-                    >
-                      <FixtureCalendars notify={setNotice} />
-                    </SettingsPage>
-                  </Show>
+                    <FixtureCalendars notify={setNotice} />
+                  </SettingsPage>
                 </SettingsSearchTarget>
               </ViewShell.Main>
             </ViewShell.Root>
@@ -420,7 +470,11 @@ function Fixture() {
                   timeZone: r.timeZone,
                   hosts: e.hosts,
                   status: e.requiresConfirmation ? 'pending' : 'confirmed',
-                  location: 'Google Meet',
+                  location: e.macroCall
+                    ? 'https://macro.com/app/meet/join/0123456789abcdef0123456789abcdef'
+                    : e.googleMeet
+                      ? 'Google Meet'
+                      : e.location,
                   answers: r.answers,
                 };
                 setBookings([...bookings(), booking]);

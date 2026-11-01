@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH targets AS (\n                SELECT * FROM UNNEST($1::text[], $2::text[]) AS t(entity_type, entity_id)\n            ),\n            edges AS (\n                SELECT em.source_entity_type::text AS source_type,\n                       em.source_entity_id AS source_id\n                FROM comms_entity_mentions em\n                JOIN targets t\n                    ON em.entity_type = t.entity_type AND em.entity_id = t.entity_id\n                WHERE em.source_entity_type IN ('document', 'message')\n                UNION\n                SELECT 'message', a.message_id::text\n                FROM comms_attachments a\n                JOIN targets t\n                    ON a.entity_type = t.entity_type AND a.entity_id = t.entity_id\n            )\n            SELECT\n                e.source_type AS \"source_type!\",\n                e.source_id AS \"source_id!\",\n                m.id AS \"message_id?\",\n                m.thread_id AS \"thread_id?\",\n                m.parent_entity_type AS \"parent_entity_type?\",\n                m.parent_entity_id AS \"parent_entity_id?\"\n            FROM edges e\n            LEFT JOIN comms_messages m\n                ON m.id = CASE WHEN e.source_type = 'message' THEN e.source_id::uuid END\n               AND m.deleted_at IS NULL\n            WHERE e.source_type = 'document' OR m.id IS NOT NULL\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "source_type!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "source_id!",
+        "type_info": "Varchar"
+      },
+      {
+        "ordinal": 2,
+        "name": "message_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "thread_id?",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 4,
+        "name": "parent_entity_type?",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "parent_entity_id?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      true,
+      true,
+      false,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "0e5c42e814545530f52fc27eeb9b0e06fb87a9035bc8c0f3af875dc46a5f02f7"
+}

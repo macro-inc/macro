@@ -42,6 +42,22 @@ describe('layoutMarginCards', () => {
   it('pins the active card and moves its neighbours around it', () => {
     const placed = layoutMarginCards(
       [
+        { id: 'a', top: 100 },
+        { id: 'b', top: 110 },
+        { id: 'c', top: 120 },
+      ],
+      heights,
+      'b',
+      10
+    );
+    expect(placed.get('b')).toBe(110);
+    expect(placed.get('a')).toBe(50);
+    expect(placed.get('c')).toBe(170);
+  });
+
+  it('pushes the stack down rather than above the top of the margin', () => {
+    const placed = layoutMarginCards(
+      [
         { id: 'a', top: 0 },
         { id: 'b', top: 10 },
         { id: 'c', top: 20 },
@@ -50,8 +66,8 @@ describe('layoutMarginCards', () => {
       'b',
       10
     );
-    expect(placed.get('b')).toBe(10);
-    expect(placed.get('a')).toBe(-50);
-    expect(placed.get('c')).toBe(70);
+    expect(placed.get('a')).toBe(0);
+    expect(placed.get('b')).toBe(60);
+    expect(placed.get('c')).toBe(120);
   });
 });

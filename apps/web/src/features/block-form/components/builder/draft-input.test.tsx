@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it } from 'vitest';
 import type { FormOption } from '../../core/form-model';
-import { DraftInput } from './draft-input';
+import { DraftInput, DraftTextarea } from './draft-input';
 import { OptionListEditor } from './option-list-editor';
 
 afterEach(cleanup);
@@ -52,6 +52,32 @@ describe('DraftInput', () => {
     fireEvent.keyDown(input, { key: 'Escape' });
     expect(input.value).toBe('Full name');
     expect(committed).toEqual([]);
+  });
+});
+
+describe('DraftTextarea', () => {
+  it('commits a single-line name trimmed on Enter and refuses an empty one', () => {
+    const committed: string[] = [];
+    render(() => (
+      <DraftTextarea
+        singleLine
+        aria-label="Form name"
+        value="Untitled form"
+        onCommit={(next) => {
+          committed.push(next);
+        }}
+      />
+    ));
+    const field = screen.getByLabelText<HTMLTextAreaElement>('Form name');
+    field.focus();
+    fireEvent.input(field, { target: { value: '  Team survey  ' } });
+    fireEvent.keyDown(field, { key: 'Enter' });
+    expect(committed).toEqual(['Team survey']);
+    field.focus();
+    fireEvent.input(field, { target: { value: '   ' } });
+    field.blur();
+    expect(committed).toEqual(['Team survey']);
+    expect(field.value).toBe('Untitled form');
   });
 });
 

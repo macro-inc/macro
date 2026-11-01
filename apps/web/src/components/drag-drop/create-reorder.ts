@@ -106,6 +106,11 @@ export function createReorderItem(
       if (
         !options.canDrag() ||
         event.button !== 0 ||
+        // Solid portals bubble through their component owner, even when the
+        // menu is physically outside the handle. Those presses must not drag.
+        !(event.currentTarget instanceof Element) ||
+        !(event.target instanceof Node) ||
+        !event.currentTarget.contains(event.target) ||
         (event.target instanceof Element &&
           event.target.closest(options.ignore))
       )

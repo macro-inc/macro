@@ -1,0 +1,18 @@
+[package]
+name = "feature_flags"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+macro_user_id = { path = "../macro_user_id" }
+rootcause = { workspace = true }
+reqwest = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+tokio = { workspace = true, features = ["time"] }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+wiremock = { workspace = true }

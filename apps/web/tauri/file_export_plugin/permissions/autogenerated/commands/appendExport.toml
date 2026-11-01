@@ -1,0 +1,13 @@
+# Automatically generated - DO NOT EDIT!
+
+"$schema" = "../../schemas/schema.json"
+
+[[permission]]
+identifier = "allow-appendExport"
+description = "Enables the appendExport command without any pre-configured scope."
+commands.allow = ["appendExport"]
+
+[[permission]]
+identifier = "deny-appendExport"
+description = "Denies the appendExport command without any pre-configured scope."
+commands.deny = ["appendExport"]

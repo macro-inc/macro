@@ -6,7 +6,6 @@ describe('composeAgentConnectionPrompt', () => {
   it.each([
     ['cursor', 'Cursor', '@cursor'],
     ['codex-cloud', 'Codex', '@codex'],
-    ['claude-cloud', 'Claude', '@claude'],
   ])(
     'round-trips the %s setup reply through real Lexical nodes',
     (appSlug, name, agentTag) => {

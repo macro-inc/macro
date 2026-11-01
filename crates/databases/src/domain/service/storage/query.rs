@@ -6,7 +6,7 @@ use crate::domain::{
 };
 use database_sql::{Catalog, Cell, Row};
 use models_databases::{
-    OptionId, RowId, ViewId,
+    DateRange, OptionId, RowId, ViewId,
     views::{DatabaseView, ViewLayout},
 };
 use models_properties::service::property_value::PropertyValue;
@@ -26,6 +26,10 @@ pub(super) fn row(row: &RowRef, cells: &HashMap<uuid::Uuid, PropertyValue>) -> R
                         PropertyValue::Num(value) => Cell::Number(*value),
                         PropertyValue::Str(value) => Cell::Text(value.clone()),
                         PropertyValue::Date(value) => Cell::Date(*value),
+                        PropertyValue::DateRange(range) => Cell::DateRange(DateRange {
+                            start: range.start(),
+                            end: range.end(),
+                        }),
                         PropertyValue::SelectOption(ids) => {
                             Cell::Options(ids.iter().copied().map(OptionId::from_uuid).collect())
                         }
@@ -48,6 +52,7 @@ pub(super) fn rows(
     request: &StorageRowsQuery,
 ) -> Result<Vec<RowId>, DatabaseError> {
     let catalog = Catalog {
+        scope: None,
         tables: vec![engine_table(entry, "")],
     };
     let query = if request.row_ids.is_some() {

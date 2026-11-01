@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { ArchiveError } from '../../../features/slack-import/core/export';
+import { RecoverableIDB } from '../../persistence/recoverable-idb';
 
 export const MAX_RECORD_BYTES = 1024 * 1024;
 const PAGE_BYTES = 1024 * 1024;
@@ -123,12 +124,55 @@ export async function deleteMessageStore(sessionId: string): Promise<void> {
 /** One writer per session. Transactions and cursor pages are byte- and count-bounded. */
 export class MessageStore {
   private totalBytes = 0;
+  private initialized = false;
+  private retired = false;
+  private readonly ownerStore = `owner:${crypto.randomUUID()}`;
+  private readonly database: RecoverableIDB;
 
   private constructor(
-    private readonly db: IDBDatabase,
     private readonly sessionId: string,
     private readonly maxBytes: number
-  ) {}
+  ) {
+    this.database = new RecoverableIDB(
+      databaseName(sessionId),
+      1,
+      (db, tx) => {
+        // Recovery cannot silently replace staged history with an empty database.
+        if (this.initialized) {
+          tx.abort();
+          return;
+        }
+        const messages = db.createObjectStore('messages', {
+          keyPath: ['conversation', 'time'],
+        });
+        messages.createIndex('conversation', 'conversation');
+        // Including this empty store in transactions fences a replacement even
+        // when the old connection was already closed and missed versionchange.
+        db.createObjectStore(this.ownerStore);
+      },
+      () => {
+        // Another importer deleted/replaced this session. Never revive the old owner.
+        this.retired = true;
+        // A retired store has no caller left to report a close failure to.
+        this.database.close().catch(() => undefined);
+      }
+    );
+  }
+
+  private async transaction(mode: IDBTransactionMode) {
+    try {
+      return await this.database.transaction(
+        ['messages', this.ownerStore],
+        mode
+      );
+    } catch (error) {
+      if (error instanceof DOMException && error.name === 'NotFoundError') {
+        this.retired = true;
+        await this.database.close();
+      }
+      throw error;
+    }
+  }
 
   static async open(
     sessionId: string,
@@ -137,19 +181,10 @@ export class MessageStore {
     // Reusing a caller's session after termination must never reuse partial history.
     await deleteMessageStore(sessionId);
     try {
-      const db = await new Promise<IDBDatabase>((resolve, reject) => {
-        const request = indexedDB.open(databaseName(sessionId), 1);
-        request.onupgradeneeded = () => {
-          const messages = request.result.createObjectStore('messages', {
-            keyPath: ['conversation', 'time'],
-          });
-          messages.createIndex('conversation', 'conversation');
-        };
-        request.onsuccess = () => resolve(request.result);
-        request.onerror = () => reject(request.error);
-      });
-      db.onversionchange = () => db.close();
-      return new MessageStore(db, sessionId, maxBytes);
+      const store = new MessageStore(sessionId, maxBytes);
+      await store.database.open();
+      store.initialized = true;
+      return store;
     } catch (error) {
       throw storageError(error);
     }
@@ -187,8 +222,8 @@ export class MessageStore {
   ): Promise<void> {
     if (signal?.aborted) throw new ArchiveError('cancelled');
     try {
+      const tx = await this.transaction('readwrite');
       await new Promise<void>((resolve, reject) => {
-        const tx = this.db.transaction('messages', 'readwrite');
         const store = tx.objectStore('messages');
         let bytes = this.totalBytes;
         let failure: ArchiveError | undefined;
@@ -240,7 +275,8 @@ export class MessageStore {
             }
           };
         };
-        next();
+        if (signal?.aborted) tx.abort();
+        else next();
       });
     } catch (error) {
       throw storageError(error);
@@ -252,8 +288,8 @@ export class MessageStore {
     after?: string
   ): Promise<StoredMessage[]> {
     try {
+      const tx = await this.transaction('readonly');
       return await new Promise<StoredMessage[]>((resolve, reject) => {
-        const tx = this.db.transaction('messages', 'readonly');
         const range = IDBKeyRange.bound(
           [conversation, after ?? ''],
           [conversation, '\uffff'],
@@ -302,7 +338,14 @@ export class MessageStore {
   }
 
   async dispose(): Promise<void> {
-    this.db.close();
-    await deleteMessageStore(this.sessionId);
+    let ownsDatabase = false;
+    try {
+      const db = await this.database.open();
+      ownsDatabase = db.objectStoreNames.contains(this.ownerStore);
+    } catch {
+      // A retired or missing database has no scratch history for us to remove.
+    }
+    await this.database.close();
+    if (ownsDatabase && !this.retired) await deleteMessageStore(this.sessionId);
   }
 }

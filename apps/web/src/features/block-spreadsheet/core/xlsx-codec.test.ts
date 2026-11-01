@@ -177,6 +177,189 @@ describe('Excel workbook files', () => {
     expect(result.sheets[0].cells).toEqual(sheet.cells);
   });
 
+  it("exports accounting as Excel's accounting format and imports it back", async () => {
+    const sheet = simpleSheet();
+    sheet.cells = {
+      A1: { value: '1234.5', format: 'accounting' },
+      A2: { value: '-3', format: 'accounting', decimals: 0 },
+    };
+    const encoded = await encodeXlsx({ sheets: [sheet] });
+    // ExcelJS drops backslashes from the codes it reads, so read the part.
+    const styles = strFromU8(unzipSync(encoded.bytes)['xl/styles.xml']);
+    expect(styles).toContain(
+      'formatCode="_(&quot;$&quot;* #,##0.00_);_(&quot;$&quot;* \\(#,##0.00\\);_(&quot;$&quot;* &quot;-&quot;??_);_(@_)"'
+    );
+    expect(styles).toContain(
+      'formatCode="_(&quot;$&quot;* #,##0_);_(&quot;$&quot;* \\(#,##0\\);_(&quot;$&quot;* &quot;-&quot;_);_(@_)"'
+    );
+    const decoded = await decodeXlsx(encoded.bytes);
+    expect(decoded.sheets[0].cells).toEqual({
+      A1: { value: '1234.5', format: 'accounting', decimals: 2 },
+      A2: { value: '-3', format: 'accounting', decimals: 0 },
+    });
+  });
+
+  it("exports checkboxes as Excel's checkbox format over boolean values and imports them back", async () => {
+    const sheet = simpleSheet();
+    sheet.cells = {
+      A1: { value: 'TRUE', checkbox: true },
+      A2: { value: 'FALSE', checkbox: true, horizontalAlign: 'left' },
+      A3: { value: 'TRUE' },
+    };
+    const encoded = await encodeXlsx({ sheets: [sheet] });
+    const entries = unzipSync(encoded.bytes);
+    expect(
+      strFromU8(entries['xl/featurePropertyBag/featurePropertyBag.xml'])
+    ).toContain('<bag type="Checkbox"/>');
+    expect(strFromU8(entries['[Content_Types].xml'])).toContain(
+      '<Override PartName="/xl/featurePropertyBag/featurePropertyBag.xml" ContentType="application/vnd.ms-excel.featurepropertybag+xml"/>'
+    );
+    expect(strFromU8(entries['xl/_rels/workbook.xml.rels'])).toContain(
+      'Type="http://schemas.microsoft.com/office/2022/11/relationships/FeaturePropertyBag" Target="featurePropertyBag/featurePropertyBag.xml"'
+    );
+    const styles = strFromU8(entries['xl/styles.xml']);
+    expect(styles.match(/<xfpb:xfComplement i="0"\/>/g)).toHaveLength(2);
+    expect(styles).toContain(
+      '<alignment horizontal="left" vertical="center"/><extLst><ext uri="{C7286773-470A-42A8-94C5-96B5CB345126}"'
+    );
+    const worksheet = strFromU8(entries['xl/worksheets/sheet1.xml']);
+    expect(worksheet).toMatch(/<c r="A1" s="\d+" t="b"><v>1<\/v><\/c>/);
+    expect(worksheet).toMatch(/<c r="A2" s="\d+" t="b"><v>0<\/v><\/c>/);
+    expect((await decodeXlsx(encoded.bytes)).sheets[0].cells).toEqual(
+      sheet.cells
+    );
+
+    // Excel may number and order its bags differently; follow the links.
+    entries['xl/featurePropertyBag/featurePropertyBag.xml'] =
+      strToU8(`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<FeaturePropertyBags xmlns="http://schemas.microsoft.com/office/spreadsheetml/2022/featurepropertybag"><bag type="XFComplements" extRef="XFComplementsMapperExtRef"><a k="MappedFeaturePropertyBags"><bagId>3</bagId><bagId>1</bagId></a></bag><bag type="XFComplement"><bagId k="XFControls">2</bagId></bag><bag type="XFControls"><bagId k="CellControl">4</bagId></bag><bag type="XFComplement"/><bag type="Checkbox"><i k="default">0</i></bag></FeaturePropertyBags>`);
+    const reordered = (index: string) => {
+      entries['xl/styles.xml'] = strToU8(
+        styles.replaceAll('xfComplement i="0"', `xfComplement i="${index}"`)
+      );
+      return decodeXlsx(zipSync(entries));
+    };
+    expect((await reordered('1')).sheets[0].cells.A1).toEqual({
+      value: 'TRUE',
+      checkbox: true,
+    });
+    expect((await reordered('0')).sheets[0].cells.A1).toEqual({
+      value: 'TRUE',
+    });
+  });
+
+  it('round trips indented line items through Excel alignment', async () => {
+    const sheet = simpleSheet();
+    sheet.cells = {
+      A1: { value: 'Revenue' },
+      A2: { value: 'Product', indent: 1 },
+      A3: { value: 'Hardware', indent: 2, horizontalAlign: 'left' },
+      B2: { value: '1200', indent: 1, horizontalAlign: 'right' },
+      C2: { value: 'Centered', indent: 3, horizontalAlign: 'center' },
+    };
+    const encoded = await encodeXlsx({ sheets: [sheet] });
+    const external = new ExcelJS.Workbook();
+    await external.xlsx.load(encoded.bytes.slice().buffer);
+    const exported = external.worksheets[0];
+    // Excel indents only left- and right-aligned text.
+    expect(exported.getCell('A2').alignment).toMatchObject({
+      horizontal: 'left',
+      indent: 1,
+    });
+    expect(exported.getCell('A3').alignment).toMatchObject({
+      horizontal: 'left',
+      indent: 2,
+    });
+    expect(exported.getCell('B2').alignment).toMatchObject({
+      horizontal: 'right',
+      indent: 1,
+    });
+    expect(exported.getCell('C2').alignment.indent).toBeUndefined();
+    const decoded = await decodeXlsx(encoded.bytes);
+    expect(decoded.sheets[0].cells).toEqual({
+      A1: { value: 'Revenue' },
+      A2: { value: 'Product', indent: 1, horizontalAlign: 'left' },
+      A3: { value: 'Hardware', indent: 2, horizontalAlign: 'left' },
+      B2: { value: '1200', indent: 1, horizontalAlign: 'right' },
+      C2: { value: 'Centered', horizontalAlign: 'center' },
+    });
+  });
+
+  it('imports indents only where Excel shows them, up to its limit', async () => {
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Ledger');
+    for (const [address, alignment] of [
+      ['A1', { horizontal: 'left', indent: 3 }],
+      ['A2', { horizontal: 'right', indent: 400 }],
+      ['A3', { indent: 2 }],
+      ['A4', { horizontal: 'distributed', indent: 2 }],
+    ] as const) {
+      sheet.getCell(address).value = 'Line item';
+      sheet.getCell(address).alignment = alignment;
+    }
+    const cells = (await decodeXlsx(await file(workbook))).sheets[0].cells;
+    expect(cells.A1).toMatchObject({ horizontalAlign: 'left', indent: 3 });
+    expect(cells.A2).toMatchObject({ horizontalAlign: 'right', indent: 250 });
+    expect(cells.A3.indent).toBeUndefined();
+    expect(cells.A4.indent).toBeUndefined();
+  });
+
+  it('exports date and time formats as their Excel codes and imports them back', async () => {
+    const sheet = simpleSheet();
+    sheet.cells = {
+      A1: { value: '46023', format: 'date', numberFormat: 'mmm yyyy' },
+      A2: { value: '46023', format: 'date', numberFormat: 'mmm dd, yyyy' },
+      A3: { value: '46023', format: 'date', numberFormat: 'mm/dd/yyyy' },
+      A4: { value: '46023', format: 'date', numberFormat: 'dd/mm/yyyy' },
+      A5: { value: '46023', format: 'date', numberFormat: 'yyyy-mm-dd' },
+      A6: {
+        value: '46023',
+        format: 'date',
+        numberFormat: 'dddd, mmmm d, yyyy',
+      },
+      A7: { value: '46023', format: 'date' },
+      A8: { value: '0.5', format: 'time', numberFormat: 'h:mm AM/PM' },
+    };
+    const encoded = await encodeXlsx({ sheets: [sheet] });
+    const workbook = new ExcelJS.Workbook();
+    await workbook.xlsx.load(encoded.bytes.slice().buffer);
+    const exported = workbook.worksheets[0];
+    expect(exported.getCell('A1').value).toEqual(
+      new Date(Date.UTC(2026, 0, 1))
+    );
+    expect(exported.getCell('A1').numFmt).toBe('mmm yyyy');
+    expect(exported.getCell('A6').numFmt).toBe('dddd, mmmm d, yyyy');
+    expect(exported.getCell('A7').numFmt).toBe('m/d/yyyy');
+    const decoded = await decodeXlsx(encoded.bytes);
+    expect(decoded.sheets[0].cells).toEqual(sheet.cells);
+  });
+
+  it('imports dollar formats with a repeated fill as accounting, keeping variants for export', async () => {
+    const variant = '_($* #,##0.00_);_($* (#,##0.00);_($* "-"??_);_(@_)';
+    const workbook = new ExcelJS.Workbook();
+    const sheet = workbook.addWorksheet('Ledger');
+    sheet.getCell('A1').value = 10;
+    sheet.getCell('A1').numFmt = variant;
+    sheet.getCell('A2').value = 10;
+    sheet.getCell('A2').numFmt = '$#,##0.00';
+    sheet.getCell('A3').value = 10;
+    sheet.getCell('A3').numFmt =
+      '_(* #,##0.00_);_(* \\(#,##0.00\\);_(* "-"??_);_(@_)';
+    const imported = await decodeXlsx(await file(workbook));
+    const cells = imported.sheets[0].cells;
+    expect(cells.A1).toEqual({
+      value: '10',
+      format: 'accounting',
+      decimals: 2,
+      numberFormat: variant,
+    });
+    expect(cells.A2).toEqual({ value: '10', format: 'currency', decimals: 2 });
+    expect(cells.A3.format).toBe('number');
+    const reopened = new ExcelJS.Workbook();
+    await reopened.xlsx.load((await encodeXlsx(imported)).bytes.slice().buffer);
+    expect(reopened.worksheets[0].getCell('A1').numFmt).toBe(variant);
+  });
+
   it('imports and round trips an independently generated openpyxl workbook', async () => {
     // This fixture was written by Python openpyxl, not the ExcelJS codec under test.
     const bytes = readFileSync(

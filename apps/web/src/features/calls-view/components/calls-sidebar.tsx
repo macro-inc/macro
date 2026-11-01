@@ -2,16 +2,18 @@ import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import { useSoup } from '@app/features/next-soup/soup-context';
 import { SoupSearchbar } from '@app/features/next-soup/soup-view/filters-bar/soup-view-search-bar';
+import { NewCallButton } from '@app/features/next-soup/soup-view/NewCallButton';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useApplyPreset } from '@app/features/next-soup/soup-view/soup-view-tabs';
 import { VIEW_TAB_LISTS } from '@app/features/next-soup/soup-view/tab-lists';
 import { usePreference } from '@app/preferences/use-preference';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import GlobeIcon from '@phosphor/globe.svg';
-import HashIcon from '@phosphor/hash.svg';
-import PhoneIcon from '@phosphor/phone.svg';
-import PhoneSlashIcon from '@phosphor/phone-slash.svg';
-import PhoneXIcon from '@phosphor/phone-x.svg';
+import { fireAndForget } from '@core/util/fireAndForget';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import GlobeIcon from '@icon/system/regular/globe.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import PhoneSlashIcon from '@icon/system/regular/phone-slash.svg';
+import PhoneXIcon from '@icon/system/regular/phone-x.svg';
 import {
   SidebarTagsSection,
   selectSidebarTag,
@@ -26,11 +28,12 @@ import {
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { GranolaPromoChip } from '../../granola-connect/components/GranolaPromoChip';
+import { createGranolaConnection } from '../../granola-connect/primitives/create-granola-connection';
 import {
   CALL_AUDIENCES,
   type CallAudienceId,
   type CallChannelOption,
-  callViewLabel,
   collectCallChannels,
   selectCallAudience,
 } from '../core/call-filters';
@@ -97,7 +100,7 @@ function Section(props: {
 }
 
 /** Views, audience, channel, and tag navigation for the Calls list. */
-export function CallsSidebar() {
+export function CallsSidebar(props: { onNavigate: () => void }) {
   const soup = useSoup();
   const view = useSoupView();
   const { applyTabPreset } = useApplyPreset();
@@ -112,12 +115,15 @@ export function CallsSidebar() {
     );
 
   const activeTab = () => view.activeTab() ?? VIEW_TAB_PRESETS.calls.default;
+  const granola = createGranolaConnection();
 
-  const selectAudience = (id: CallAudienceId) =>
+  const selectAudience = (id: CallAudienceId) => {
+    props.onNavigate();
     soup.predicates.set(({ andIds, orIds }) => ({
       and: selectCallAudience(andIds, id),
       or: orIds,
     }));
+  };
 
   // Audience filters only narrow loaded pages, and a sparse page leaves no
   // list to scroll, so keep paging until enough matches show or pages run out.
@@ -131,7 +137,7 @@ export function CallsSidebar() {
       view.source.hasNextPage() &&
       !view.source.isFetching()
     ) {
-      void view.source.fetchNextPage();
+      fireAndForget(view.source.fetchNextPage(), 'calls-view');
     }
   });
 
@@ -141,23 +147,32 @@ export function CallsSidebar() {
   );
   const activeChannelIds = () =>
     view.queryFilters.state.include.callChannelId ?? [];
-  const selectChannel = (id: string) =>
+  const selectChannel = (id: string) => {
+    props.onNavigate();
     view.queryFilters.set({
       include: { callChannelId: selectSidebarTag(activeChannelIds(), id) },
     });
+  };
 
   return (
     <ViewSidebar.Root aria-label="Calls navigation">
-      <ViewSidebar.Header>
+      <ViewSidebar.Header
+        searchLabel="Search calls"
+        search={() => (
+          <div onFocusIn={props.onNavigate}>
+            <Layer depth={2}>
+              <SoupSearchbar variant="secondary" placeholder="Search calls" />
+            </Layer>
+          </div>
+        )}
+      >
         <div class="flex min-w-0 items-center gap-1">
           <ViewSidebar.CloseButton class="shrink-0" />
           <ViewSidebar.Title>Calls</ViewSidebar.Title>
         </div>
       </ViewSidebar.Header>
       <ViewSidebar.Primary>
-        <Layer depth={2}>
-          <SoupSearchbar variant="secondary" placeholder="Search calls" />
-        </Layer>
+        <NewCallButton presentation="sidebar" />
       </ViewSidebar.Primary>
 
       <ViewSidebar.Content>
@@ -167,8 +182,11 @@ export function CallsSidebar() {
               <Row
                 active={activeTab() === tab.value}
                 icon={TAB_ICONS[tab.value] ?? PhoneIcon}
-                label={callViewLabel(tab)}
-                onClick={() => applyTabPreset('calls', tab.value)}
+                label={tab.label}
+                onClick={() => {
+                  props.onNavigate();
+                  applyTabPreset('calls', tab.value);
+                }}
               />
             )}
           </For>
@@ -212,11 +230,28 @@ export function CallsSidebar() {
 
         <SidebarTagsSection
           activeIds={view.tagFilter.activeIds()}
-          onActiveIdsChange={view.tagFilter.onChange}
+          onActiveIdsChange={(ids) => {
+            props.onNavigate();
+            view.tagFilter.onChange(ids);
+          }}
           open={isOpen('tags')}
           onOpenChange={(open) => setOpen('tags', open)}
         />
       </ViewSidebar.Content>
+
+      {/* Hidden while loading so a connected user never sees it flash. */}
+      <Show
+        when={
+          granola.status() === 'available' || granola.status() === 'disabled'
+        }
+      >
+        <ViewSidebar.Footer class="border-0">
+          <GranolaPromoChip
+            onConnect={() => fireAndForget(granola.connect(), 'calls-view')}
+            connecting={granola.connecting()}
+          />
+        </ViewSidebar.Footer>
+      </Show>
     </ViewSidebar.Root>
   );
 }

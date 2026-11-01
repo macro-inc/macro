@@ -1,4 +1,5 @@
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { refreshInBackground } from '@queries/database-sql/create-database-sql-query';
 import {
   applyDatabaseOps,
@@ -51,6 +52,11 @@ import {
   DatabaseTextEditor,
   DatabaseTextValue,
 } from '../database-mentions';
+import { createDatabaseDocumentNavigation } from '../navigation-adapter';
+import {
+  type DatabaseGridHost,
+  trackQueryRuns,
+} from '../primitives/track-query-runs';
 import { createColumnCasts } from '../queries/column-casts';
 import {
   addDatabaseColumnOptions,
@@ -58,6 +64,7 @@ import {
 } from '../queries/columns';
 import { createDatabaseRelations } from '../queries/database-relations';
 import { useRelatedDatabaseSync } from '../queries/database-relations-sync';
+import { useDatabaseSubscription } from '../queries/database-subscription';
 import { createMacroDatabaseApi, editorTable } from '../queries/editor-api';
 import { useFormsAskingColumns } from '../queries/forms-usage';
 import { deleteDatabaseOption, updateDatabaseOption } from '../queries/options';
@@ -71,7 +78,11 @@ import {
 } from '../queries/views';
 
 export type DatabaseGridProps = {
+  /** Host framing for the records area, below the toolbar. */
+  contentClass?: string;
   databaseId: string;
+  /** Where the grid is shown, for analytics. */
+  host: DatabaseGridHost;
   table: TableDetail;
   canEdit: boolean;
   /** The view on screen: a stored one, or the table's own All records. */
@@ -153,6 +164,7 @@ function RelatedDatabaseSync(props: {
 
 function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
   const queryClient = useQueryClient();
+  const openDocumentMention = createDatabaseDocumentNavigation();
   // Keep the final schema for this table available to already-queued writes
   // after its tab is closed; a new selected table must never redirect them.
   let ownedTable = props.table;
@@ -185,6 +197,12 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
     onTableChanged: (listener) =>
       useDatabaseTableChanges((change) => listener(change.tableId)),
   });
+  trackQueryRuns({
+    databaseId,
+    tableId: props.tableId,
+    host: props.host,
+    view: () => props.view,
+  });
   const source = withRelationLabels(
     createDatabaseRowsSource({
       databaseId,
@@ -195,10 +213,17 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
         tableChangesOf({ databaseId, tableId: props.tableId, readRows }),
       onTableChanged: (listener) => {
         useDatabaseTableChanges((change) => {
-          if (change.tableId !== props.tableId) return;
+          if (
+            change.databaseId !== databaseId ||
+            change.tableId !== props.tableId
+          )
+            return;
           listener(change.version);
           if (props.stored && props.view.layout.kind === 'board')
-            void refreshCardPositions(databaseId, props.view.id);
+            fireAndForget(
+              refreshCardPositions(databaseId, props.view.id),
+              'database-cache'
+            );
         });
         // An undo or redo is read back as soon as it answers, ahead of its ping.
         onCleanup(
@@ -232,6 +257,9 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
     }),
     relations
   );
+  // Embedded grids have no database BlockContainer to subscribe for them.
+  // Tracking is reference-counted across grids and full database blocks.
+  useDatabaseSubscription(databaseId, () => refreshInBackground(source));
   const boardViewId = () =>
     props.stored && props.view.layout.kind === 'board'
       ? props.view.id
@@ -243,7 +271,10 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
       if (positions.isSuccess)
         return { kind: 'ready', positions: positions.data };
       if (positions.isError)
-        return { kind: 'failed', retry: () => void positions.refetch() };
+        return {
+          kind: 'failed',
+          retry: () => fireAndForget(positions.refetch(), 'database-view'),
+        };
       return { kind: 'loading' };
     },
     setPositions: (change) => {
@@ -314,7 +345,10 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
               inferNewColumns
             >
               <DatabaseRecords
-                contentClass="mx-4 mb-4 mt-1 rounded-xl border border-edge-muted"
+                contentClass={
+                  props.contentClass ??
+                  'mx-4 mb-4 mt-1 rounded-xl border border-edge-muted'
+                }
                 view={props.view}
                 stored={props.stored}
                 preparingView={props.preparingView}
@@ -327,6 +361,7 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
                 renderTextValue={renderTextValue}
                 renderMentionPicker={renderMentionPicker}
                 renderMentionValue={renderMentionValue}
+                onOpenDocumentMention={openDocumentMention}
                 renderRelationCell={(cell) => (
                   <DatabaseRelationCell
                     {...cell}
