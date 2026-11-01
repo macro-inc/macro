@@ -634,6 +634,37 @@ async fn deletion_retains_a_fenced_remote_cleanup_intent(db: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_discard_while_the_worker_writes_a_save_runs_after_that_write(db: PgPool) {
+    let (sync, repo, input, link) = setup(&db, true).await;
+    let saving = sync
+        .claim_draft(Uuid::now_v7(), DraftClaimMode::All)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(
+        repo.delete_draft_message(input.db_id, input.thread_db_id, &[link], Some(ACTOR), 0)
+            .await
+            .unwrap()
+            .is_some()
+    );
+    // The write still records its outcome under its lease: here Outlook
+    // reports the draft was edited there.
+    sync.checkpoint_draft(&saving, &checkpoint(&saving, DraftStage::Updating))
+        .await
+        .unwrap();
+    sync.fail_draft(&saving, DraftFailure::Conflict)
+        .await
+        .unwrap();
+    let discard = sync
+        .claim_draft(Uuid::now_v7(), DraftClaimMode::All)
+        .await
+        .unwrap()
+        .unwrap();
+    assert!(discard.delete_requested);
+    assert!(discard.checkpoint.is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn sync_before_creation_response_binds_the_existing_macro_message(db: PgPool) {
     let (sync, _, input, link) = setup(&db, false).await;
     let lease = sync
