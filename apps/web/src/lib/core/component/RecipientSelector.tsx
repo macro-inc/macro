@@ -782,6 +782,11 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   // row the pointer rests on can change under it. Enter on a complete address
   // adds that address unless an arrow key picked another row since the edit.
   let rowPickedByKey = false;
+  const commitTypedAddressOnEnter = (e: KeyboardEvent) => {
+    if (rowPickedByKey || e.isComposing) return false;
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return false;
+    return commitEmails([inputValue()]);
+  };
 
   const onInputChange = (next: string) => {
     rowPickedByKey = false;
@@ -1056,13 +1061,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                       if (
                         e.key === 'Enter' &&
                         context.isOpen() &&
-                        !rowPickedByKey &&
-                        !e.isComposing &&
-                        !e.metaKey &&
-                        !e.ctrlKey &&
-                        !e.altKey &&
-                        !e.shiftKey &&
-                        commitEmails([inputValue()])
+                        commitTypedAddressOnEnter(e)
                       ) {
                         e.preventDefault();
                         context.close();
