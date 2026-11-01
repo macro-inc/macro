@@ -1781,6 +1781,30 @@
     "path": "/v1/user_notifications",
     "write": false
   },
+  "notification.bulkDeleteUserNotificationsV2": {
+    "label": "Bulk Delete User Notifications V2",
+    "method": "DELETE",
+    "path": "/v1/user_notifications/bulk",
+    "write": true
+  },
+  "notification.bulkMarkNotificationsDone": {
+    "label": "Bulk Mark Notifications Done",
+    "method": "PATCH",
+    "path": "/v1/user_notifications/bulk/done",
+    "write": true
+  },
+  "notification.bulkMarkNotificationsSeen": {
+    "label": "Bulk Mark Notifications Seen",
+    "method": "PATCH",
+    "path": "/v1/user_notifications/bulk/seen",
+    "write": true
+  },
+  "notification.bulkMarkNotificationsUndone": {
+    "label": "Bulk Mark Notifications Undone",
+    "method": "PATCH",
+    "path": "/v1/user_notifications/bulk/undone",
+    "write": true
+  },
   "notification.bulkGetTypedNotificationsByEventItemIds": {
     "label": "Bulk Get Typed Notifications By Event Item Ids",
     "method": "POST",
@@ -1811,41 +1835,17 @@
     "path": "/v1/user_notifications/preferences/{notification_event_type}/enable",
     "write": true
   },
+  "notification.deleteUserNotificationV2": {
+    "label": "Delete User Notification V2",
+    "method": "DELETE",
+    "path": "/v1/user_notifications/{notification_id}",
+    "write": true
+  },
   "notification.getTypedNotificationById": {
     "label": "Get Typed Notification By Id",
     "method": "GET",
     "path": "/v1/user_notifications/{notification_id}",
     "write": false
-  },
-  "notification.bulkDeleteUserNotificationsV2": {
-    "label": "Bulk Delete User Notifications V2",
-    "method": "DELETE",
-    "path": "/v2/user_notifications/bulk",
-    "write": true
-  },
-  "notification.bulkMarkNotificationsDone": {
-    "label": "Bulk Mark Notifications Done",
-    "method": "PATCH",
-    "path": "/v2/user_notifications/bulk/done",
-    "write": true
-  },
-  "notification.bulkMarkNotificationsSeen": {
-    "label": "Bulk Mark Notifications Seen",
-    "method": "PATCH",
-    "path": "/v2/user_notifications/bulk/seen",
-    "write": true
-  },
-  "notification.bulkMarkNotificationsUndone": {
-    "label": "Bulk Mark Notifications Undone",
-    "method": "PATCH",
-    "path": "/v2/user_notifications/bulk/undone",
-    "write": true
-  },
-  "notification.deleteUserNotificationV2": {
-    "label": "Delete User Notification V2",
-    "method": "DELETE",
-    "path": "/v2/user_notifications/{notification_id}",
-    "write": true
   },
   "properties.listProperties": {
     "label": "List Properties",
