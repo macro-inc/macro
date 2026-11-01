@@ -290,9 +290,12 @@ export type EmailThreadParticipants = Array<{ email: string; name?: string }>;
 
 export type EmailAttachment = {
   id: string;
+  messageId?: string;
   filename?: string | null;
   mimeType?: string | null;
   sizeBytes?: number | null;
+  /** Set on parts the body can reference inline through `cid:`. */
+  contentId?: string | null;
 };
 
 /** A thread's Focus classification; present only on Focus list rows. */

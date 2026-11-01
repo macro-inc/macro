@@ -794,9 +794,11 @@ export const mapApiSoupItemToEntity = (
 
       const attachments = item.data.attachments?.map((a) => ({
         id: a.id,
+        messageId: a.messageId,
         filename: a.filename,
         mimeType: a.mimeType,
         sizeBytes: a.sizeBytes,
+        contentId: a.contentId,
       }));
 
       // The thread preview has no link id of its own; its participants and
