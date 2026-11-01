@@ -18,7 +18,7 @@ import { ContextMenu } from '@kobalte/core/context-menu';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import { createDroppable } from '@thisbeyond/solid-dnd';
 import { Badge, cn } from '@ui';
-import { For, Show } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
 import { canLabelChannel } from '../../../core/channel-label-eligibility';
 import { ChannelLabelMenuItems as OriginalChannelLabelMenuItems } from '../ChannelLabelRows';
 import {
@@ -33,18 +33,22 @@ import {
   ChannelSectionDropdown,
 } from './ChannelSectionMenu';
 
-/** A custom section with the same heading and controls as built-in sections. */
-export function ChannelLabelRow(props: { label: ChannelLabel }) {
+/** One drop target and highlight around the full custom section. */
+export function ChannelLabelDropZone(props: {
+  label: ChannelLabel;
+  children: JSX.Element;
+}) {
   const rail = useChannelsRail();
-  const state = useChannelRailLabelState(() => props.label);
   const droppable = createDroppable(
     `${rail.railId}:channel-label:label:${props.label.id}`,
     {
       dragType: 'channel-label-target',
       dndScope: rail.railId,
-      target: {
-        kind: props.label.rule ? 'smart-tag' : 'label',
-        labelId: props.label.id,
+      get target() {
+        return {
+          kind: props.label.rule ? ('smart-tag' as const) : ('label' as const),
+          labelId: props.label.id,
+        };
       },
       isDropTargetDisabled: () => !rail.labelsAvailable(),
     } satisfies ChannelLabelDropData
@@ -59,45 +63,54 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
     <div
       ref={droppable.ref}
       class={cn(
-        'group/channel-label relative min-w-0 rounded-lg',
-        isDropTarget() && 'bg-selected'
+        'group/channel-label relative min-w-0 shrink-0 rounded-lg',
+        isDropTarget() && 'bg-selected ring-1 ring-inset ring-accent'
       )}
     >
-      <ChannelSectionContextMenu
-        section={rowKeyForLabel(props.label.id)}
-        actions={<ChannelLabelActions label={props.label} />}
-      >
-        <ChannelSectionHeading
-          id={state().domId}
-          label={props.label.name}
-          title={
-            props.label.rule
-              ? t('channelLabels.nameContains', {
-                  text: props.label.rule.contains,
-                })
-              : props.label.name
-          }
-          open={state().open}
-          focused={state().focused}
-          unreadCount={state().unreadCount}
-          onToggle={() => rail.activateRow(rowKeyForLabel(props.label.id))}
-          badge={
-            <Show when={props.label.teamId}>
-              <Badge variant="secondary" size="xs">
-                {t('channelSections.sharedShort')}
-              </Badge>
-            </Show>
-          }
-        >
-          <ChannelSectionDropdown
-            section={rowKeyForLabel(props.label.id)}
-            label={props.label.name}
-          >
-            <ChannelLabelActions label={props.label} />
-          </ChannelSectionDropdown>
-        </ChannelSectionHeading>
-      </ChannelSectionContextMenu>
+      {props.children}
     </div>
+  );
+}
+
+/** A custom section with the same heading and controls as built-in sections. */
+export function ChannelLabelRow(props: { label: ChannelLabel }) {
+  const rail = useChannelsRail();
+  const state = useChannelRailLabelState(() => props.label);
+  return (
+    <ChannelSectionContextMenu
+      section={rowKeyForLabel(props.label.id)}
+      actions={<ChannelLabelActions label={props.label} />}
+    >
+      <ChannelSectionHeading
+        id={state().domId}
+        label={props.label.name}
+        title={
+          props.label.rule
+            ? t('channelLabels.nameContains', {
+                text: props.label.rule.contains,
+              })
+            : props.label.name
+        }
+        open={state().open}
+        focused={state().focused}
+        unreadCount={state().unreadCount}
+        onToggle={() => rail.activateRow(rowKeyForLabel(props.label.id))}
+        badge={
+          <Show when={props.label.teamId}>
+            <Badge variant="secondary" size="xs">
+              {t('channelSections.sharedShort')}
+            </Badge>
+          </Show>
+        }
+      >
+        <ChannelSectionDropdown
+          section={rowKeyForLabel(props.label.id)}
+          label={props.label.name}
+        >
+          <ChannelLabelActions label={props.label} />
+        </ChannelSectionDropdown>
+      </ChannelSectionHeading>
+    </ChannelSectionContextMenu>
   );
 }
 

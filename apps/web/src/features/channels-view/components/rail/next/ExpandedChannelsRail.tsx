@@ -49,7 +49,7 @@ import {
   groupChannelRailSections,
 } from './build-channel-rail-rows';
 import { ChannelFavoriteRow } from './ChannelFavoriteRow';
-import { ChannelLabelRow } from './ChannelLabelRows';
+import { ChannelLabelDropZone, ChannelLabelRow } from './ChannelLabelRows';
 import { ChannelSectionHeading } from './ChannelSectionHeading';
 import {
   ChannelSectionContextMenu,
@@ -338,7 +338,7 @@ function BrowseSection(props: {
       onCleanup(() => cancelAnimationFrame(frame));
     })
   );
-  return (
+  const content = (
     <ResizableRailSection
       section={props.sectionKey}
       label={label()}
@@ -387,6 +387,20 @@ function BrowseSection(props: {
         </Virtualizer>
       </Show>
     </ResizableRailSection>
+  );
+  return (
+    <Show
+      when={
+        props.section.heading.kind === 'label'
+          ? props.section.heading.label
+          : undefined
+      }
+      fallback={content}
+    >
+      {(label) => (
+        <ChannelLabelDropZone label={label()}>{content}</ChannelLabelDropZone>
+      )}
+    </Show>
   );
 }
 
@@ -446,7 +460,7 @@ function ExpandedBrowse() {
     <div class="flex min-h-0 flex-1 flex-col">
       <div
         ref={setScrollRoot}
-        class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto px-(--sidebar-gutter)"
+        class="scrollbar-hidden flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto px-(--sidebar-gutter)"
       >
         <For each={keys()}>
           {(key) => (

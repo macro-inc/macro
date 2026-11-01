@@ -15,11 +15,7 @@ export function ChannelSectionHeading(props: {
   children?: JSX.Element;
 }) {
   return (
-    <CollapsibleSection.Root
-      open={props.open}
-      onOpenChange={props.onToggle}
-      class="pt-2"
-    >
+    <CollapsibleSection.Root open={props.open} onOpenChange={props.onToggle}>
       <CollapsibleSection.Header
         class={cn('rounded-lg pr-0', props.focused && 'bg-hover text-ink')}
       >

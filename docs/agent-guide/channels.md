@@ -930,7 +930,9 @@ Team channels disclosure. Empty sections remain visible with a short hint; empty
 Favorites explains how to add a favorite. Private conversations use a lock icon in
 the sidebar and mobile feed, including favorited private conversations.
 All section headers use the shared collapsible-section styling without leading
-icons.
+icons or top padding; the section stack supplies an 8px flex gap. Custom-section
+drop zones and highlights cover both the header and its content, including the
+empty state.
 Section, DM, and search containers use the 8px outer sidebar gutter; headings
 and rows add their own item padding so headings align with the Chat title.
 Content is indented by 8px under every section, including Favorites, custom
@@ -999,8 +1001,9 @@ team. Neither kind accepts DMs. A personal assignment never changes a shared
 assignment. Names are unique within each scope, case-insensitively.
 
 Each heading has one sliders-icon menu, also available by right-clicking the header.
-**Sort** opens its independent sorting options, and **Filter** contains **Unread only**. The unread label sits on the left
-and its switch on the right; toggling it keeps the submenu open.
+**Sort** opens its independent single-select options with a checkmark on the right.
+**Filter** contains **Unread only**. The unread label sits on the left and its
+switch on the right; toggling it keeps the submenu open.
 Custom sections include editing, Mark all as read, and a destructive Delete
 action in the same menu. Click and right-click menus use the same standard
 context-menu rows, spacing, and selection indicators. Use the heading's caret

@@ -509,13 +509,14 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Use `--sidebar-gutter` for the outer section, DM, and search containers; shared headings and rows provide their own item padding.
   Indent all section content by 8px, including Favorites, custom sections, DMs, and empty states; keep unsectioned search results unindented.
   Reuse shared collapsible section headers and their hidden-caret behavior without leading icons; keep a neutral Shared badge next to the name before the caret, apply focus backgrounds across the full header row, and omit trailing header padding.
+  Space sections with the stack's flex gap, not header padding; wrap each custom section's header and content in one drop target and highlight.
   Name the team-channel section after the current team, falling back to Team channels while its name is unavailable.
   Keep available channel rows visible during section hydration and refetches; pass server-returned member IDs to `queries/channel/by-ids`, whose single Soup owner selects cached rows and fetches missing records. Keep entity-ID hydration generic in Soup, with channel identities, batching, and unread refreshes in the channel query layer; append per-section skeletons only while unresolved members load.
   Show lock icons for private conversations and visible per-section options; keep empty sections usable as drop targets without an all-sections management menu.
   Create all section types through New → New section in a wider dialog with Smart in the body and Shared in the footer; keep collapse on the header and style deletion as destructive.
   Keep per-section sorting and unread filters personal, and filter after membership assignment so hidden rows never leak into another section.
   Default Favorites to Custom order and persist drag reordering through the shared favorites mutation; preserve hidden and non-channel favorite positions, disable dragging under automatic sorts, show an insertion line at the actual destination edge, and keep the original rail unchanged.
-  Share the sliders-icon section menu's Sort, Filter, and actions with a header context menu; keep the Unread only label left and its switch right, and keep the submenu open when toggled.
+  Share the sliders-icon section menu's Sort, Filter, and actions with a header context menu; use trailing `SingleSelectCheck` marks for sorting, keep the Unread only label left and its switch right, and keep the filter submenu open when toggled.
   Compose the section click and right-click menus with `ContextMenuContent`, `MenuItem`, `MenuGroup`, and `MenuSeparator`; do not nest padded `Dropdown.Group` elements inside a context-menu surface.
   Use checkbox items in Add to section to toggle membership within each scope without changing the other scope.
 - Route supported move, trash, restore, permanent-delete, duplicate, and share-policy
