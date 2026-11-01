@@ -179,6 +179,7 @@ export function InlineTaskProperties() {
             entityType={entityType}
             variant="secondary"
             size="xs"
+            class={documentKind === 'task' ? 'touch:min-h-9' : undefined}
             showAddButton={documentKind === 'document' && canEdit()}
           />
           <Key each={inlineProperties()} by="propertyId">
@@ -186,6 +187,9 @@ export function InlineTaskProperties() {
               <InlinePropertyValue
                 property={property()}
                 entityId={blockId}
+                iconClass={
+                  documentKind === 'task' ? 'touch:size-4 shrink-0' : undefined
+                }
                 canManage={
                   !property().propertyId.startsWith('pending:') ||
                   defaultDefinitionIds().includes(

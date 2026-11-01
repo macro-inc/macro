@@ -22,6 +22,7 @@ export function ProjectLinkPill(props: {
   property: PropertyValue;
   fallback: JSX.Element;
   class?: string;
+  iconClass?: string;
   variant?: 'secondary' | 'ghost';
 }) {
   const ctx = useProperty();
@@ -55,7 +56,12 @@ export function ProjectLinkPill(props: {
           class="group/project-link min-w-0 shrink justify-start"
           onClick={open}
         >
-          <ProjectIcon class="size-3 shrink-0 not-touch:group-hover/project-link:hidden not-touch:group-focus-visible/project-link:hidden" />
+          <ProjectIcon
+            class={cn(
+              'size-3 shrink-0 not-touch:group-hover/project-link:hidden not-touch:group-focus-visible/project-link:hidden',
+              props.iconClass
+            )}
+          />
           <ArrowUpRightIcon class="hidden size-3 shrink-0 not-touch:group-hover/project-link:block not-touch:group-focus-visible/project-link:block" />
           <span class="min-w-0 max-w-60 truncate">{name()}</span>
         </ButtonGroup.Button>

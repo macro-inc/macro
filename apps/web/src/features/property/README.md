@@ -28,8 +28,9 @@ use the regular cube icon through `Property.Icon`. Keep these state indicators
 static and readable in compact rows. When composing a project icon separately,
 pass `hideIcon` to `Property.Text` to avoid duplicate glyphs.
 Status and Priority option icons share a 12px default, including desktop and
-mobile edit menus and title property pills. Side-panel Status/Priority values
-use explicit 16px icons; other display callers can override the size.
+mobile edit menus and desktop title property pills. Task-detail title pills
+use 16px value and empty-state icons on touch; side-panel Status/Priority
+values use explicit 16px icons. Other callers can override the size.
 Editable list cells use the shared ghost `Property.Pill` styling. Project hover
 cards use a cube header with the assigned value below it; empty Project hover
 cards retain the one-line empty message.
@@ -43,7 +44,8 @@ chip count stable while a picker or its nested editor is active so resizing
 cannot discard the editing session. Hosts without a controller retain their
 explicit or default chip limit.
 Tag chips, overflow chips, and inline tag pills retain their compact desktop
-height on touch instead of adopting the shared button touch minimum.
+height on touch instead of adopting the shared button touch minimum, except
+the task-detail title-row tags selector, which retains the 36px touch target.
 
 ## Side-panel collections
 

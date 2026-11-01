@@ -44,6 +44,7 @@ type Props = {
   /** Hide the icon (text-only empty state). */
   hideIcon?: boolean;
   class?: string;
+  iconClass?: string;
 };
 
 /**
@@ -60,7 +61,10 @@ export function PropertyEmpty(props: Props) {
       )}
     >
       <Show when={!props.hideIcon}>
-        <PropertyEmptyIcon propertyDefinitionId={props.propertyDefinitionId} />
+        <PropertyEmptyIcon
+          propertyDefinitionId={props.propertyDefinitionId}
+          class={props.iconClass}
+        />
       </Show>
       <Show when={props.label}>
         <span

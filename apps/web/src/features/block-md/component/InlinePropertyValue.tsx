@@ -21,6 +21,7 @@ type InlinePropertyValueProps = {
   /** Label rendered when the property is empty. Defaults to "None". */
   emptyLabel?: JSX.Element;
   class?: string;
+  iconClass?: string;
   canManage?: boolean;
   canRemove?: boolean;
   /** The editor the pill opens; see `PropertyValuePill`. */
@@ -94,6 +95,7 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
           : undefined
       }
       class={props.class}
+      iconClass={props.iconClass}
       emptyLabel={props.emptyLabel}
       opensProject={
         props.entityId !== undefined &&

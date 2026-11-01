@@ -129,6 +129,10 @@ split, and an already open project is focused instead of opened again), and the
 caret changes the project. Hovering the name turns its icon into an arrow. People
 who can't edit the task get the name alone, so they can still open the project.
 An empty or unavailable project keeps the plain pill, and composers never split it.
+On touch devices, the property pills beneath the task title use 16px Status,
+Priority, and Project icons, including empty values; their desktop sizing is
+unchanged. The tags selector in that row has a 36px minimum touch height.
+Task-list tags and property icons retain their separate compact sizing.
 Empty values in the Properties panel show No status, No priority, Unassigned,
 No due date, or No project with the shared empty-value icons; custom fields show
 Not set. Click the empty value to open its existing picker or inline editor.
