@@ -330,8 +330,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   with separate search-empty and retry states. Company/contact touch headers use a
   Switch view drawer that honors host collapse and square copy-link islands; keep
   phone breadcrumbs above the switcher and leave the workspace view strip unchanged.
-  Open linked items inside Customers with their source breadcrumbs, retain entity
-  menus and sharing, and return breadcrumb sections to their captured history entry.
+  Open linked items inside Customers with source and record breadcrumbs, without
+  section labels or extra preview-title separators; retain entity menus and sharing,
+  and return the current record breadcrumb to its captured section and history entry.
   Record search fills the row beside filters with header spacing; section creation
   replaces the default floating dock action through FloatRegion. See
   `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.

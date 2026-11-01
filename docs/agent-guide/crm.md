@@ -287,7 +287,9 @@ and adds References.
 In workspace activity and a company or contact's embedded sections, clicking a
 Task, Email, Note, Call, or Database opens its authorized detail inside Customers.
 The CRM sidebar stays in place and the breadcrumb shows the source view, record
-trail and section (when present), and selected item. The item URL is nested under
+trail (when present), and selected item, without section labels such as Tasks or
+Files or an extra separator before preview titles. The current record breadcrumb
+returns to the captured section and entry state. The item URL is nested under
 `/app/companies` or `/app/companies/pipeline/<uuid>`; record items also retain
 `/<record-type>/<record-id>/<section>` before `/item/<item-type>/<item-id>`.
 Back and Forward restore the item and source; selecting the source breadcrumb or

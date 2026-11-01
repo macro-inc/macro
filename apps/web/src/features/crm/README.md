@@ -118,9 +118,11 @@ routes from workspace activity and record sections. The route stores the item
 name and record trail in entry state; its parent retains the source tab and
 section. `route-adapter.ts` owns item navigation and close/history restoration;
 `views/item-detail.tsx` renders authorized details in the existing CRM shell
-with source, trail, section and item breadcrumbs. Preview headers append their
-own live title and menu after the source trail, as in Drive; do not duplicate the
-selected title in the prefix. Modified clicks keep their existing split behavior.
+with source, record trail and item breadcrumbs, omitting section labels such as
+Tasks and Files. The current record breadcrumb returns to the captured section
+and entry state. Preview headers append their own live title and menu after the
+source trail without an extra separator; do not duplicate the selected title in
+the prefix. Modified clicks keep their existing split behavior.
 Standalone record previews retain their normal navigation outside the workspace.
 Record-detail lists and activity membership remain unchanged.
 Sidebar Tasks reuse the production Tasks filters, sort, grouping, and list/board/Gantt

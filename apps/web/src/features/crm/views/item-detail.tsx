@@ -7,7 +7,6 @@ import type { EntityDetailTarget } from '@app/components/entity-detail/entity-de
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { FileDetailBreadcrumbItem } from '@app/features/drive-view/views/FileDetailBreadcrumbItem';
 import { MarkdownDetail } from '@app/features/drive-view/views/MarkdownDetail';
-import { t } from '@app/lib/i18n';
 import { MarkdownDetailBreadcrumbItem } from '@block-md/component/MarkdownDetailBreadcrumbItem';
 import { SidePanel } from '@components/app/side-panel';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
@@ -30,7 +29,6 @@ export function CrmItemDetail(props: {
   const panel = useSplitPanelOrThrow();
   const item = () => route.item()!;
   const records = route.records;
-  const section = () => route.section() ?? 'overview';
   const value = () => `item:${item().itemType}:${item().itemId}`;
   const target = (): EntityDetailTarget => {
     const current = item();
@@ -75,11 +73,12 @@ export function CrmItemDetail(props: {
       onChange={(next) => {
         if (next === 'crm-view')
           return records().length ? route.close() : route.closeItem();
-        if (next === 'crm-section') return route.closeItem();
         const index = records().findIndex(
           (record) => `${record.type}:${record.id}` === next
         );
-        if (index !== -1) route.open(records().slice(0, index + 1));
+        if (index === -1) return;
+        if (index === records().length - 1) return route.closeItem();
+        route.open(records().slice(0, index + 1));
       }}
     >
       <ViewBreadcrumbs.Item
@@ -123,22 +122,6 @@ export function CrmItemDetail(props: {
           );
         }}
       </For>
-      <Show when={records().length > 0}>
-        <ViewBreadcrumbs.Item
-          value="crm-section"
-          metadata={null}
-          order={records().length + 1}
-        >
-          {(crumb) => (
-            <ViewBreadcrumbs.Button
-              isActive={crumb.isActive()}
-              onClick={crumb.onSelect}
-            >
-              {t(`tabs.record-${section()}`)}
-            </ViewBreadcrumbs.Button>
-          )}
-        </ViewBreadcrumbs.Item>
-      </Show>
       <SidePanel.Root floating>
         <div class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden">
           <Show when={nativeDocument()}>
@@ -175,9 +158,7 @@ export function CrmItemDetail(props: {
                       <ViewBreadcrumbs.Outlet
                         aria-label="CRM item location"
                         class="max-w-[min(40vw,24rem)] overflow-hidden"
-                      >
-                        <ViewBreadcrumbs.Separator />
-                      </ViewBreadcrumbs.Outlet>
+                      />
                     </>
                   }
                 />
@@ -187,13 +168,11 @@ export function CrmItemDetail(props: {
                 <CrmDocumentDetail
                   target={current()}
                   value={value()}
-                  order={records().length + 2}
+                  order={records().length + 1}
                   headerLeading={
                     <>
                       {props.navigation}
-                      <ViewBreadcrumbs.Outlet aria-label="CRM item location">
-                        <ViewBreadcrumbs.Separator />
-                      </ViewBreadcrumbs.Outlet>
+                      <ViewBreadcrumbs.Outlet aria-label="CRM item location" />
                     </>
                   }
                 />
