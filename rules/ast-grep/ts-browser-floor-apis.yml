@@ -1,0 +1,44 @@
+id: ts-browser-floor-apis
+language: typescript
+# Twin of tsx-browser-floor-apis — ast-grep rules are single-language, and
+# `tsx` only scans .tsx files.
+severity: error
+message: This API needs Safari 17.4, newer than the Safari/iOS 16.4 floor in apps/web/package.json `browserslist`. Use `anyAbortSignal` from `@core/util/abort-signal` for `AbortSignal.any`, and `new Promise` for `Promise.withResolvers`.
+note: |-
+  The iOS app's WebKit follows the device's iOS version, and esbuild lowers
+  syntax to the floor but never adds missing APIs. Below Safari 17.4,
+  `AbortSignal.any` threw before every list request, so mail and Home never
+  loaded. A `typeof` check doesn't count as a use. Add an API here when one
+  turns out to be newer than the floor, and update this rule when the floor
+  moves.
+files:
+  - apps/web/src/**
+  - packages/collaboration/src/**
+  - packages/email-renderer/src/**
+  - packages/graphics/src/**
+  - packages/lexical-core/**
+  - packages/loro-mirror/src/**
+  - packages/machine/src/**
+  - packages/observability/src/**
+  - packages/spreadsheet/src/**
+ignores:
+  # Tests and browser harnesses run in Node or current Chromium, not the
+  # supported webviews.
+  - '**/*.test.ts'
+  - '**/*.spec.ts'
+  - '**/*.e2e.ts'
+  - '**/*.d.ts'
+  - '**/__tests__/**'
+  - '**/browser-test/**'
+  - '**/fuzz/**'
+  - '**/tests/**'
+  - '**/test-utils/**'
+  - '**/scripts/**'
+  - '**/testing.ts'
+rule:
+  any:
+    - pattern: AbortSignal.any
+    - pattern: Promise.withResolvers
+  not:
+    inside:
+      pattern: typeof $API

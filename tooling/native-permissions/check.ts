@@ -9,7 +9,7 @@ import {
   missingTrue,
 } from './native-permissions';
 
-const repoRoot = resolve(import.meta.dir, '../../..');
+const repoRoot = resolve(import.meta.dir, '../..');
 const tauriDir = resolve(repoRoot, 'apps/web/tauri');
 // The macOS release bundles from the Chromium (CEF) config; iOS from src-tauri.
 const macosDir = resolve(tauriDir, 'desktop-cef');
