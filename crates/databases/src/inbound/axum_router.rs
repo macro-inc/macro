@@ -11,9 +11,6 @@ pub mod casts;
 pub mod history;
 /// Typed, batched writes, schema and data: `POST /{id}/ops`.
 pub mod ops;
-/// A query page of a table's rows at one version:
-/// `POST /{id}/tables/{table_id}/rows`.
-pub mod rows;
 /// Saved, immutable queries that document nodes point at.
 pub mod saved_queries;
 /// Native database recipient sharing.
@@ -24,7 +21,6 @@ mod test;
 pub mod transfer;
 /// A board's card places: `GET /{id}/views/{view_id}/positions`.
 pub mod views;
-use crate::domain::ports::DatabaseRowPages;
 use crate::domain::sharing::DatabaseSharingService;
 use crate::domain::transfer::DatabaseTransferService;
 use casts::{column_casts_handler, column_conversion_handler};
@@ -121,7 +117,7 @@ pub fn databases_router<Service, EntityAccess, Authorization, RouterState>(
     state: DatabasesRouterState<Service, EntityAccess, Authorization>,
 ) -> Router<RouterState>
 where
-    Service: DatabasesService + DatabaseSharingService + DatabaseTransferService + DatabaseRowPages,
+    Service: DatabasesService + DatabaseSharingService + DatabaseTransferService,
     EntityAccess: EntityAccessService,
     Authorization: MacroAuthorizationService,
     RouterState: Send + Sync + 'static,
@@ -168,10 +164,6 @@ where
         .route(
             "/{id}/tables/{table_id}/changes",
             get(history::table_changes_handler::<Service, EntityAccess, Authorization>),
-        )
-        .route(
-            "/{id}/tables/{table_id}/rows",
-            post(rows::table_rows_handler::<Service, EntityAccess, Authorization>),
         )
         .route(
             "/{id}/tables/{table_id}/rows/{row_id}/history",

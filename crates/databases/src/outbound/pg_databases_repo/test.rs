@@ -24,8 +24,6 @@ mod rename_column;
 #[cfg(feature = "gateway")]
 mod reorder_tables;
 mod required;
-#[cfg(feature = "gateway")]
-mod row_pages;
 mod saved_queries;
 #[cfg(feature = "gateway")]
 mod schema_ops;

@@ -58,8 +58,7 @@ and cells. The core storage adapter purges its journal in the same transaction.
 ## Reads and writes
 
 1. Rows are read as Soup items, scoped to the databases the caller can reach as
-   `entity_access` answers it. A reader writing with `baseVersions` reads pages
-   with their version from the primary: `POST /databases/{id}/tables/{table_id}/rows`.
+   `entity_access` answers it.
 2. Every write to a database's schema or data is one batch of typed ops
    (`models_databases::DatabaseOp`, `POST /databases/{id}/ops`,
    `DatabasesService::apply_ops`), grouped by the resource they change. Each op
@@ -144,9 +143,8 @@ domain ports, including transaction and locking requirements.
 
 The document storage service mounts the routes. Writes inside a database go
 through `POST /databases/{id}/ops`; the other routes are the database list and
-detail, create, starter, CSV import, a table's row pages, a board's card
-positions, a column's casts and type inference, awareness, permissions and
-saved queries.
+detail, create, starter, CSV import, a board's card positions, a column's casts
+and type inference, awareness, permissions and saved queries.
 
 ## Validation
 
@@ -181,9 +179,7 @@ unrelated property APIs bypass it; the migration only adds the nullable flag.
 
 Host-owned storage reads accept the common `ViewQuery` and retained row IDs.
 The storage service reads bounded batches, evaluates the shared query compiler
-and fold over the complete table, then returns pages with table versions. It
-reads the table's version before and after; a batch committing in between
-bumps it, so the read answers a version conflict rather than a mixed page. This
+and fold over the complete table, then returns pages with table versions. This
 preserves filtering, option ordering, row positions and sorting across pages.
 The current implementation scans the table for each page; indexed query pushdown
 is a future optimization, not a different query language for each host.

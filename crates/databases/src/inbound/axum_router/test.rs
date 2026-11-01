@@ -4,7 +4,6 @@ use uuid::Uuid;
 use crate::domain::models::{RowId, SchemaError, TableId};
 
 mod fakes;
-mod row_pages;
 
 #[test]
 fn an_infer_type_request_takes_camel_case_and_an_optional_entity_type() {

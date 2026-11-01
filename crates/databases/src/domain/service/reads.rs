@@ -1,11 +1,9 @@
-//! Reads of one live table of the receipt's database: plain cells for a
-//! domain that decides access itself, and query pages for its viewers.
+//! Plain reads of a table's cells for a domain that decides access itself.
 
 use super::*;
 use crate::domain::journal::cell_value;
 use crate::domain::models::Column;
-use crate::domain::ports::{DatabaseRowPages, DatabaseRowReads, DatabaseStorage};
-use crate::domain::storage::{DatabaseStorageService, StorageRows, StorageRowsQuery};
+use crate::domain::ports::DatabaseRowReads;
 use models_databases::{CellValue, CellWrite};
 
 impl<Repository, Definitions, Cells, Events, Access, Broker>
@@ -25,7 +23,18 @@ where
         receipt: &EntityAccessReceipt<ViewAccessLevel>,
         table_id: TableId,
     ) -> Result<(Vec<RowRef>, Vec<Column>), DatabaseError> {
-        self.live_table(receipt, table_id).await?;
+        let database_id = receipt_database_id(receipt)?;
+        let held = self
+            .repository
+            .get_database(database_id)
+            .await
+            .map_err(repository_error)?
+            .filter(|(database, tables)| {
+                database.trashed_at.is_none() && tables.iter().any(|table| table.id == table_id)
+            });
+        if held.is_none() {
+            return Err(DatabaseError::NotFound);
+        }
         let rows = self
             .repository
             .row_refs(table_id)
@@ -115,30 +124,5 @@ where
     ) -> Result<u64, DatabaseError> {
         let (table_rows, _) = self.readable_table(&receipt, table_id).await?;
         u64::try_from(table_rows.len()).map_err(repository_error)
-    }
-}
-
-impl<Repository, Definitions, Cells, Events, Access, Broker> DatabaseRowPages
-    for DatabasesServiceImpl<Repository, Definitions, Cells, Events, Access, Broker>
-where
-    Repository: DatabasesRepo,
-    Definitions: ColumnDefinitionStore,
-    Cells: CellStore + DatabaseStorage,
-    Events: TableEventPublisher,
-    Access: AccessDirectory,
-    Broker: MacroEventBroker,
-{
-    /// The storage read brackets its statements with the table's version and
-    /// refuses when it moved; every committed batch bumps it in the batch's
-    /// transaction, so the page is the table as it stood at that version.
-    #[tracing::instrument(skip(self, receipt, query), err)]
-    async fn row_page(
-        &self,
-        receipt: EntityAccessReceipt<ViewAccessLevel>,
-        table_id: TableId,
-        query: StorageRowsQuery,
-    ) -> Result<StorageRows, DatabaseError> {
-        let database_id = self.live_table(&receipt, table_id).await?;
-        self.storage_rows(database_id, table_id, query).await
     }
 }

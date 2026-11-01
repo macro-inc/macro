@@ -1,6 +1,5 @@
 //! The router's collaborators, just enough to drive a request: a `valid`
-//! bearer token, one fixed grant or none, and a service recording applied
-//! batches.
+//! bearer token, one fixed grant, and a service recording applied batches.
 
 use std::sync::{Arc, Mutex};
 
@@ -29,13 +28,11 @@ use crate::domain::models::{
     DatabaseError, DatabaseId, InferColumnType, InferColumnTypeOutcome, ListedDatabase, OpBatch,
     QueryDefinition, QueryId, SavedQuery, SavedQueryError, Table, TableId, Viewer,
 };
-use crate::domain::ports::{DatabaseRowPages, DatabasesService};
+use crate::domain::ports::DatabasesService;
 use crate::domain::sharing::DatabaseSharingService;
-use crate::domain::storage::{StorageRows, StorageRowsQuery};
 use crate::domain::transfer::{DatabaseTransferService, ImportTable};
 use crate::inbound::axum_router::casts::column_conversion_handler;
 use crate::inbound::axum_router::ops::apply_ops_handler;
-use crate::inbound::axum_router::rows::table_rows_handler;
 use crate::inbound::axum_router::{DatabasesRouterState, databases_router};
 
 const USER: &str = "macro|ops-router@macro.com";
@@ -85,7 +82,7 @@ pub(super) fn ops_router(level: AccessLevel) -> (Router, Arc<RecordingService>) 
     let service = Arc::new(RecordingService::default());
     let state = DatabasesRouterState::new(
         service.clone(),
-        Arc::new(GrantingAccess(Some(level))),
+        Arc::new(GrantingAccess(level)),
         authorization_state(),
     );
     let router = Router::new()
@@ -103,7 +100,7 @@ pub(super) fn conversion_router(level: AccessLevel) -> (Router, Arc<RecordingSer
     let service = Arc::new(RecordingService::default());
     let state = DatabasesRouterState::new(
         service.clone(),
-        Arc::new(GrantingAccess(Some(level))),
+        Arc::new(GrantingAccess(level)),
         authorization_state(),
     );
     let router = Router::new()
@@ -115,36 +112,20 @@ pub(super) fn conversion_router(level: AccessLevel) -> (Router, Arc<RecordingSer
     (router, service)
 }
 
-/// The table rows route alone, for a caller without a grant.
-pub(super) fn ungranted_rows_router() -> Router {
-    let state = DatabasesRouterState::new(
-        Arc::new(RecordingService::default()),
-        Arc::new(GrantingAccess(None)),
-        authorization_state(),
-    );
-    Router::new()
-        .route(
-            "/{id}/tables/{table_id}/rows",
-            post(table_rows_handler::<RecordingService, GrantingAccess, Authorization>),
-        )
-        .with_state(state)
-}
-
 /// Every databases route, for a caller holding `level` on every database.
 pub(super) fn full_router(level: AccessLevel) -> Router {
     databases_router::<RecordingService, GrantingAccess, Authorization, ()>(
         DatabasesRouterState::new(
             Arc::new(RecordingService::default()),
-            Arc::new(GrantingAccess(Some(level))),
+            Arc::new(GrantingAccess(level)),
             authorization_state(),
         ),
     )
 }
 
-/// Grants every caller the one level it holds; with none, refuses them as
-/// `entity_access` refuses a caller without a grant.
+/// Grants every caller the one level it holds.
 #[derive(Clone)]
-struct GrantingAccess(Option<AccessLevel>);
+struct GrantingAccess(AccessLevel);
 
 impl EntityAccessService for GrantingAccess {
     async fn generate_entity_access_receipt<T: RequiredPermission>(
@@ -173,7 +154,7 @@ impl EntityAccessService for GrantingAccess {
         _entity_id: &str,
         _entity_type: EntityType,
     ) -> Result<Option<AccessLevel>, AccessError> {
-        Ok(self.0)
+        Ok(Some(self.0))
     }
 
     async fn check_access(
@@ -183,7 +164,7 @@ impl EntityAccessService for GrantingAccess {
         _entity_type: EntityType,
         _required_level: AccessLevel,
     ) -> Result<AccessLevel, AccessError> {
-        self.0.ok_or(AccessError::Unauthorized)
+        Ok(self.0)
     }
 
     async fn check_public_access(
@@ -202,8 +183,9 @@ impl EntityAccessService for GrantingAccess {
         _entity_type: EntityType,
         _user_org_id: Option<i64>,
     ) -> Result<EntityPermission, AccessError> {
-        let access_level = self.0.ok_or(AccessError::Unauthorized)?;
-        Ok(EntityPermission::AccessLevel { access_level })
+        Ok(EntityPermission::AccessLevel {
+            access_level: self.0,
+        })
     }
 
     async fn get_crm_entity_permission_with_team(
@@ -411,17 +393,6 @@ impl DatabasesService for RecordingService {
     }
     async fn get_query(&self, _: Viewer, _: QueryId) -> Result<SavedQuery, SavedQueryError> {
         unimplemented!("{ONLY_OPS}")
-    }
-}
-
-impl DatabaseRowPages for RecordingService {
-    async fn row_page(
-        &self,
-        _: EntityAccessReceipt<ViewAccessLevel>,
-        _: TableId,
-        _: StorageRowsQuery,
-    ) -> Result<StorageRows, DatabaseError> {
-        unimplemented!("a caller without a grant is refused before the service")
     }
 }
 
