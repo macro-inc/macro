@@ -134,6 +134,13 @@ that path. Calendar navigation defaults to Day on phones and Week on desktop; th
 recent choice is remembered locally for navigation that does not specify a period. An
 opened event is reflected in the pane-owned `sN.calendar.eventId` search parameter.
 
+The phone header shows only the month; the month picker keeps the year on each
+choice. **Go to today** returns to today's date and scrolls Day/Week to the current
+time, including when today is already selected. Month view returns to the current
+month. Verify after scrolling away from the current hour and after choosing a
+different date; a subsequent date change must cancel a pending Today scroll.
+[Phone calendar after Today navigation](media/calendar-navigation/phone.png).
+
 Opening a calendar row in Home clears its loaded reminder dots immediately;
 failed read writes restore them. Opening event details directly from the grid
 or by a link to the event also marks the event's notifications read, a join

@@ -99,6 +99,10 @@ above the event whenever a late section changes its height. Keep the guest
 editors' `overlap`: without it their height follows the room below the button,
 so they never overflow, never flip, and squeeze the chosen people to nothing.
 
+Keep the phone calendar header month-only and retain years in its picker.
+Calendar Today navigation scrolls to the current hour after the active grid
+renders; queue it with date navigation so a newer request cancels both.
+
 The desktop app's local runtime setup (find an agent, connect, create the
 agent, retry, open a session) has a backend-free browser regression over a
 scripted runtime:
