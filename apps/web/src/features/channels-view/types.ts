@@ -15,6 +15,8 @@ export type ChannelSectionKey = ChannelsRailSection | `label:${string}`;
 export type ChannelSectionPreferences = {
   sort?: ChannelListSort | 'name' | 'manual';
   unreadOnly?: boolean;
+  /** Preferred expanded body height in pixels; absent means size to content. */
+  height?: number;
 };
 
 export type ChannelsQueryScope = ChannelsGroup | 'recents';

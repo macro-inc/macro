@@ -12,6 +12,7 @@ import { z } from 'zod';
 import {
   CHANNELS_DEFAULT_RAIL_WIDTH,
   CHANNELS_DEFAULT_SORT_BY,
+  clampChannelSectionHeight,
   clampChannelsRailWidth,
 } from './constants';
 import type { ChannelsViewState } from './types';
@@ -104,6 +105,11 @@ const channelsPreferencesSchema = z.object({
             .enum(['viewed_at', 'updated_at', 'created_at', 'name', 'manual'])
             .optional(),
           unreadOnly: z.boolean().optional(),
+          height: z
+            .number()
+            .finite()
+            .transform(clampChannelSectionHeight)
+            .optional(),
         })
         .optional()
     )
