@@ -36,7 +36,11 @@ WITH limited_companies AS (
         )
         UNION ALL
         -- Companies the user has viewed, under every sort. Bounded by the size
-        -- of the user's company history rather than the team.
+        -- of the user's company history rather than the team: each history
+        -- row looks up its company. As a plain join, a generic plan that
+        -- expects a small team and a long history reads and sorts the whole
+        -- team for a merge join instead. The LIMIT keeps the lookup per row;
+        -- ids are unique, so it drops nothing.
         (
             SELECT *
             FROM (
@@ -50,12 +54,19 @@ WITH limited_companies AS (
                     END AS sort_ts,
                     uh."updatedAt"::timestamptz AS viewed_at
                 FROM "UserHistory" uh
-                JOIN crm_companies c ON c.id::text = uh."itemId"
+                CROSS JOIN LATERAL (
+                    SELECT
+                        c.id, c.team_id, c.custom_name, c.email_sync, c.hidden,
+                        c.first_interaction, c.last_interaction
+                    FROM crm_companies c
+                    WHERE c.id::text = uh."itemId"
+                      AND c.team_id = $1
+                      AND c.hidden = COALESCE($5::bool, FALSE)
+                    LIMIT 1
+                ) c
                 WHERE cardinality($2::uuid[]) = 0
                   AND uh."userId" = $8
                   AND uh."itemType" = 'crm_company'
-                  AND c.team_id = $1
-                  AND c.hidden = COALESCE($5::bool, FALSE)
             ) viewed
             WHERE $6::timestamptz IS NULL OR (sort_ts, id::text) < ($6, $7)
             ORDER BY sort_ts DESC NULLS LAST, id DESC
