@@ -419,7 +419,7 @@ impl SequenceRepo for PgSequenceRepo {
             EnrollmentRecord,
             r#"SELECT e.id, e.sequence_id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,
                       s.link_id AS sequence_link_id, e.link_id, e.email, e.contact_name,
-                      e.steps AS "steps: Json<Vec<Step>>", e.status, e.reason, e.next_step, e.due_at,
+                      '[]'::jsonb AS "steps!: Json<Vec<Step>>", e.status, e.reason, e.next_step, e.due_at,
                       e.attempts, e.timezone, e.send_time, e.replies_after
                FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id
                WHERE e.sequence_id = $1 AND e.status = ANY($2)

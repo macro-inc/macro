@@ -18,6 +18,10 @@ pub const MAX_BODY: usize = 50_000;
 pub const MAX_FOOTER: usize = 300;
 /// Longest delay between two steps.
 pub const MAX_DELAY_DAYS: u16 = 365;
+/// The longest value a token can fill in: an address.
+const MAX_TOKEN_VALUE: usize = 320;
+/// The longest a body may become once personalized.
+const MAX_RENDERED_BODY: usize = 2 * MAX_BODY;
 /// What a missing name personalizes to.
 const FALLBACK_NAME: &str = "there";
 
@@ -105,7 +109,10 @@ pub fn check_limits(name: &str, footer: &str, steps: &[Step]) -> Result<(), Inva
         if step.subject.chars().count() > MAX_SUBJECT {
             return Err(InvalidSequence::new(Problem::SubjectTooLong, position));
         }
-        if step.body.chars().count() > MAX_BODY {
+        // Personalization can't grow a body far past the limit: every token
+        // counts as the longest value it can take.
+        let body = step.body.chars().count();
+        if body > MAX_BODY || body + token_count(&step.body) * MAX_TOKEN_VALUE > MAX_RENDERED_BODY {
             return Err(InvalidSequence::new(Problem::BodyTooLong, position));
         }
         if step.delay_days > MAX_DELAY_DAYS {
@@ -151,6 +158,10 @@ fn check_tokens(text: &str, position: Option<usize>) -> Result<(), InvalidSequen
     }
 }
 
+fn token_count(text: &str) -> usize {
+    regex!(r"\{\{\s*\w+\s*\}\}").find_iter(text).count()
+}
+
 /// Tokens a contact can't fill in, including a stray `{{` or `}}`.
 fn unknown_tokens(text: &str) -> Vec<String> {
     let mut unknown: Vec<String> = regex!(r"\{\{\s*(\w+)\s*\}\}")
@@ -187,12 +198,43 @@ const MAX_NAME_CHARS: usize = 100;
 pub fn sanitize_name(name: &str) -> Option<String> {
     let cleaned: String = name
         .chars()
-        .filter(|c| !c.is_control() && !matches!(c, '\u{200e}' | '\u{200f}' | '\u{202a}'..='\u{202e}' | '\u{2066}'..='\u{2069}'))
+        .filter(|c| !c.is_control() && !is_invisible(*c))
         .take(MAX_NAME_CHARS)
         .collect();
     let cleaned = cleaned.trim();
-    (!cleaned.is_empty() && !cleaned.contains("://") && !cleaned.contains('@'))
-        .then(|| cleaned.to_owned())
+    let looks_like_markup = cleaned.contains("://")
+        || cleaned.contains("//")
+        || cleaned.contains(['@', '[', ']', '<', '>', '*', '`', '|', '\\']);
+    (!cleaned.is_empty() && !looks_like_markup).then(|| cleaned.to_owned())
+}
+
+/// Format characters that render as nothing or reorder text: zero-width
+/// spaces, joiners other than the emoji joiner, direction marks and overrides,
+/// word joiners, the byte-order mark and tag characters.
+fn is_invisible(c: char) -> bool {
+    matches!(
+        c,
+        '\u{00ad}'
+            | '\u{061c}'
+            | '\u{180e}'
+            | '\u{200b}'
+            | '\u{200c}'
+            | '\u{200e}'
+            | '\u{200f}'
+            | '\u{202a}'..='\u{202e}'
+            | '\u{2060}'..='\u{206f}'
+            | '\u{feff}'
+            | '\u{fff9}'..='\u{fffb}'
+            | '\u{e0000}'..='\u{e007f}'
+    )
+}
+
+/// Text as it is stored: control characters other than line breaks and tabs
+/// removed (Postgres rejects NUL, and none of them belong in an email).
+pub fn clean_text(text: &str) -> String {
+    text.chars()
+        .filter(|c| !c.is_control() || matches!(c, '\n' | '\r' | '\t'))
+        .collect()
 }
 
 /// The first name to greet someone by, from a display name.

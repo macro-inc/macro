@@ -20,6 +20,9 @@ use super::{
     timing,
 };
 
+/// A step this far past its send time and still unsent needs attention.
+pub(super) const STUCK_AFTER: Duration = Duration::minutes(30);
+
 /// Most contacts one enroll request may add.
 pub const MAX_ENROLL: usize = 50;
 /// How far ahead an enrollment may start.
@@ -76,6 +79,17 @@ fn invalid(problem: Problem) -> SequenceError {
         position: None,
         tokens: Vec::new(),
     })
+}
+
+fn clean_steps(steps: Vec<Step>) -> Vec<Step> {
+    steps
+        .into_iter()
+        .map(|step| Step {
+            subject: render::clean_text(&step.subject),
+            body: render::clean_text(&step.body),
+            ..step
+        })
+        .collect()
 }
 
 /// The step still waiting to send, if any.
@@ -135,6 +149,12 @@ where
         input: NewSequence,
     ) -> Result<Sequence, SequenceError> {
         let owner = self.owner(user_id).await?;
+        let input = NewSequence {
+            name: render::clean_text(&input.name),
+            link_id: input.link_id,
+            footer: render::clean_text(&input.footer),
+            steps: clean_steps(input.steps),
+        };
         render::check_limits(&input.name, &input.footer, &input.steps)?;
         if input.link_id.is_some() {
             self.check_sender(&owner, input.link_id, false).await?;
@@ -189,13 +209,13 @@ where
             return Err(SequenceError::InvalidTransition);
         }
         if let Some(name) = patch.name {
-            sequence.name = name;
+            sequence.name = render::clean_text(&name);
         }
         if let Some(footer) = patch.footer {
-            sequence.footer = footer;
+            sequence.footer = render::clean_text(&footer);
         }
         if let Some(steps) = patch.steps {
-            sequence.steps = steps;
+            sequence.steps = clean_steps(steps);
         }
         render::check_limits(&sequence.name, &sequence.footer, &sequence.steps)?;
         if let Some(link_id) = patch.link_id {
@@ -239,7 +259,7 @@ where
                 continue;
             };
             if self
-                .withdraw(tx, &row, step, CancelExpectation::Any)
+                .withdraw(tx, &row, step, CancelExpectation::Scheduled)
                 .await?
                 == CancelOutcome::Cancelled
                 && row.status == EnrollmentStatus::Active
@@ -272,7 +292,7 @@ where
         {
             let history = self.repo.history(&mut tx, row.id).await.map_err(internal)?;
             if let Some(step) = in_flight(&history) {
-                self.withdraw(&mut tx, &row, step, CancelExpectation::Any)
+                self.withdraw(&mut tx, &row, step, CancelExpectation::Scheduled)
                     .await?;
             }
         }
@@ -481,15 +501,14 @@ where
             .map_err(internal)?
             .ok_or(SequenceError::NotFound)?;
         match action {
+            // From any status: a contact can ask to be removed after replying.
             EnrollmentAction::Unsubscribe => {
-                if !enrollment.status.is_live() {
-                    return Err(SequenceError::ActionUnavailable);
-                }
                 self.repo
                     .unsubscribe_address(owner.team_id, &enrollment.email)
                     .await
                     .map_err(internal)?;
-                self.stop_address(owner.team_id, &enrollment.email).await?;
+                // The opt-out is committed; stopping is best effort and self-healing.
+                let _ = self.stop_address(owner.team_id, &enrollment.email).await;
             }
             EnrollmentAction::Pause | EnrollmentAction::Resume | EnrollmentAction::Stop => {
                 let mut tx = self.repo.begin().await.map_err(internal)?;
@@ -529,7 +548,8 @@ where
         }
         let history = self.repo.history(tx, row.id).await.map_err(internal)?;
         if let Some(step) = in_flight(&history) {
-            self.withdraw(tx, row, step, CancelExpectation::Any).await?;
+            self.withdraw(tx, row, step, CancelExpectation::Scheduled)
+                .await?;
         }
         row.status = EnrollmentStatus::Paused;
         row.reason = None;
@@ -554,18 +574,21 @@ where
         }
         let mut history = self.repo.history(tx, row.id).await.map_err(internal)?;
         if let Some(step) = in_flight(&history).cloned() {
+            // Takes back a draft the owner restored; never their own send.
             match self
-                .withdraw(tx, row, &step, CancelExpectation::Any)
+                .withdraw(tx, row, &step, CancelExpectation::Draft)
                 .await?
             {
-                CancelOutcome::Cancelled | CancelOutcome::Changed => {}
+                CancelOutcome::Cancelled => {}
+                // Gmail may have it: never resent, the sequence moves past it.
                 CancelOutcome::DeliveryStarted
-                    if row.reason == Some(EnrollmentReason::StepStuck) =>
+                    if row.reason == Some(EnrollmentReason::StepStuck)
+                        || now > step.scheduled_at + STUCK_AFTER =>
                 {
                     self.mark_unknown(tx, row, &step).await?;
                 }
                 CancelOutcome::Gone => self.mark_unknown(tx, row, &step).await?,
-                CancelOutcome::DeliveryStarted | CancelOutcome::Sent => {
+                CancelOutcome::DeliveryStarted | CancelOutcome::Sent | CancelOutcome::Changed => {
                     return Err(SequenceError::StepInDelivery);
                 }
             }
@@ -702,7 +725,8 @@ where
     ) -> Result<(), SequenceError> {
         let history = self.repo.history(tx, row.id).await.map_err(internal)?;
         if let Some(step) = in_flight(&history) {
-            self.withdraw(tx, row, step, CancelExpectation::Any).await?;
+            self.withdraw(tx, row, step, CancelExpectation::Scheduled)
+                .await?;
         }
         row.status = EnrollmentStatus::Stopped;
         row.reason = Some(reason);

@@ -229,14 +229,14 @@ async fn pending_step_stays_out_of_mail_lists(pool: Pool<Postgres>) -> anyhow::R
     let mut conn = pool.acquire().await?;
     assert_eq!(
         PgSequenceSteps
-            .cancel_step(&mut conn, step, CancelExpectation::Any)
+            .cancel_step(&mut conn, step, CancelExpectation::Draft)
             .await?,
         CancelOutcome::Cancelled
     );
     assert_eq!(lists(&pool).await?.showing(thread), Vec::<&str>::new());
     assert_eq!(
         PgSequenceSteps
-            .cancel_step(&mut conn, step, CancelExpectation::Any)
+            .cancel_step(&mut conn, step, CancelExpectation::Draft)
             .await?,
         CancelOutcome::Gone
     );

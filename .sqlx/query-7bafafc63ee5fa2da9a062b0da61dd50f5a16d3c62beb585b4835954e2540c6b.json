@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "SELECT e.id, e.sequence_id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,\n                      s.link_id AS sequence_link_id, e.link_id, e.email, e.contact_name,\n                      e.steps AS \"steps: Json<Vec<Step>>\", e.status, e.reason, e.next_step, e.due_at,\n                      e.attempts, e.timezone, e.send_time, e.replies_after\n               FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id\n               WHERE e.sequence_id = $1 AND e.status = ANY($2)\n               ORDER BY e.id\n               FOR UPDATE OF e",
+  "query": "SELECT e.id, e.sequence_id, s.user_id AS owner_id, e.team_id, s.status AS sequence_status,\n                      s.link_id AS sequence_link_id, e.link_id, e.email, e.contact_name,\n                      '[]'::jsonb AS \"steps!: Json<Vec<Step>>\", e.status, e.reason, e.next_step, e.due_at,\n                      e.attempts, e.timezone, e.send_time, e.replies_after\n               FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id\n               WHERE e.sequence_id = $1 AND e.status = ANY($2)\n               ORDER BY e.id\n               FOR UPDATE OF e",
   "describe": {
     "columns": [
       {
@@ -50,7 +50,7 @@
       },
       {
         "ordinal": 9,
-        "name": "steps: Json<Vec<Step>>",
+        "name": "steps!: Json<Vec<Step>>",
         "type_info": "Jsonb"
       },
       {
@@ -110,7 +110,7 @@
       true,
       false,
       true,
-      false,
+      null,
       false,
       true,
       false,
@@ -121,5 +121,5 @@
       true
     ]
   },
-  "hash": "dda8f7c28f878ec7f4094f2385cc4ae04e9b4b2ffd6f2599cbc510ed0d0f3df2"
+  "hash": "7bafafc63ee5fa2da9a062b0da61dd50f5a16d3c62beb585b4835954e2540c6b"
 }

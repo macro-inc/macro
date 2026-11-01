@@ -67,6 +67,9 @@ CREATE INDEX email_sequence_enrollments_due_idx ON email_sequence_enrollments (d
 CREATE INDEX email_sequence_enrollments_live_idx ON email_sequence_enrollments (link_id, email)
     WHERE status IN ('active', 'paused', 'needs_attention');
 CREATE INDEX email_sequence_enrollments_team_email_idx ON email_sequence_enrollments (team_id, email);
+-- CRM deletes contacts in bulk; each delete sets references here to NULL.
+CREATE INDEX email_sequence_enrollments_crm_contact_idx ON email_sequence_enrollments (crm_contact_id)
+    WHERE crm_contact_id IS NOT NULL;
 
 -- What happened to each step's email. No foreign key to email_messages: an
 -- inbox deletion removes its messages and the history must survive it.

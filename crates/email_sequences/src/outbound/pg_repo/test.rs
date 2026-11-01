@@ -3,7 +3,7 @@
 
 use super::*;
 use crate::domain::{
-    models::{CrmPerson, EnrollSkip, EnrollmentAction},
+    models::{CrmPerson, EnrollSkip, EnrollmentAction, SequenceError},
     ports::{NewSequence, OwnerAccess},
     service::{EnrollRequest, SequencePatch, Sequences},
 };
@@ -776,14 +776,92 @@ async fn reply_rules_each_stop_the_enrollment(pool: PgPool) {
         status(&pool, bob).await,
         ("stopped".into(), Some("replied".into()), 1)
     );
-    // A reply never unsubscribes.
-    let unsubscribed = sqlx::query_scalar!(
-        r#"SELECT count(*) AS "count!" FROM email_sequence_recipients WHERE unsubscribed_at IS NOT NULL"#
+    // A reply never unsubscribes, but the owner can add the address after one.
+    let unsubscribed = || async {
+        sqlx::query_scalar!(
+            r#"SELECT count(*) AS "count!" FROM email_sequence_recipients WHERE unsubscribed_at IS NOT NULL"#
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    };
+    assert_eq!(unsubscribed().await, 0);
+    svc.act(OWNER, bob, EnrollmentAction::Unsubscribe)
+        .await
+        .unwrap();
+    assert_eq!(unsubscribed().await, 1);
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sequences"))
+)]
+async fn a_step_the_owner_takes_over_in_mail_stays_theirs(pool: PgPool) {
+    let (svc, _) = service(&pool);
+    let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    let enrollment = enroll(&svc, OWNER, sequence, ADA).await;
+    make_due(&pool, enrollment).await;
+    svc.sweep(Utc::now()).await;
+    let step = in_flight(&pool, enrollment).await.unwrap();
+    sqlx::query!(
+        "UPDATE email_scheduled_messages SET delivery_status = 'failed', processing = true WHERE message_id = $1",
+        step
     )
-    .fetch_one(&pool)
+    .execute(&pool)
     .await
     .unwrap();
-    assert_eq!(unsubscribed, 0);
+    sqlx::query!(
+        "UPDATE email_sequence_enrollments SET attempts = 3 WHERE id = $1",
+        enrollment
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    svc.sweep(Utc::now()).await;
+    assert_eq!(
+        status(&pool, enrollment).await.1.as_deref(),
+        Some("step_failed")
+    );
+
+    // The owner restores the failed draft in Mail to fix it.
+    sqlx::query!(
+        "DELETE FROM email_scheduled_messages WHERE message_id = $1",
+        step
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    svc.sweep(Utc::now()).await;
+    svc.act(OWNER, enrollment, EnrollmentAction::Pause)
+        .await
+        .unwrap();
+    assert!(
+        message_exists(&pool, step).await,
+        "pause leaves their draft"
+    );
+
+    // Then schedules it themselves; the sweep leaves their send alone.
+    sqlx::query!(
+        r#"INSERT INTO email_scheduled_messages (link_id, message_id, send_time)
+           VALUES ($1, $2, now() + interval '10 seconds')"#,
+        OWNER_LINK,
+        step
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    svc.sweep(Utc::now()).await;
+    assert!(message_exists(&pool, step).await);
+    assert_eq!(in_flight(&pool, enrollment).await, Some(step));
+    assert!(matches!(
+        svc.act(OWNER, enrollment, EnrollmentAction::Resume).await,
+        Err(SequenceError::StepInDelivery)
+    ));
+
+    // Once it is sent, it counts as the sequence's step.
+    deliver(&pool, step).await;
+    svc.sweep(Utc::now()).await;
+    assert_eq!(status(&pool, enrollment).await, ("paused".into(), None, 1));
 }
 
 #[sqlx::test(

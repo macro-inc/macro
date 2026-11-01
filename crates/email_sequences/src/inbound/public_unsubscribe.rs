@@ -20,6 +20,7 @@ pub const UNSUBSCRIBE_PATH: &str = "/public/sequences/unsubscribe/{token}";
 const CONFIRM_PAGE: &str = include_str!("public_unsubscribe/confirm.html");
 const DONE_PAGE: &str = include_str!("public_unsubscribe/done.html");
 const INVALID_PAGE: &str = include_str!("public_unsubscribe/invalid.html");
+const RETRY_PAGE: &str = include_str!("public_unsubscribe/retry.html");
 
 /// Build the public router.
 pub fn unsubscribe_router<Api, T>(service: Arc<Api>) -> Router<T>
@@ -63,7 +64,7 @@ async fn unsubscribe<Api: SequencesApi>(
         Ok(false) => page(StatusCode::NOT_FOUND, INVALID_PAGE),
         Err(error) => {
             tracing::error!(error = ?error, "unsubscribe failed");
-            page(StatusCode::INTERNAL_SERVER_ERROR, INVALID_PAGE)
+            page(StatusCode::INTERNAL_SERVER_ERROR, RETRY_PAGE)
         }
     }
 }

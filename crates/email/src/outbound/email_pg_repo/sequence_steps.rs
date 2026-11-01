@@ -267,7 +267,7 @@ impl SequenceStepStore for PgSequenceSteps {
             return Ok(CancelOutcome::Sent);
         }
         let schedule = sqlx::query!(
-            r#"SELECT sent, processing, delivery_status, delivery_started_at, delivery_claim_id
+            r#"SELECT sent, processing, delivery_status, delivery_started_at, delivery_claim_id, source
                FROM email_scheduled_messages WHERE message_id = $1 AND link_id = $2 FOR UPDATE"#,
             message_id,
             locked.link_id,
@@ -281,6 +281,10 @@ impl SequenceStepStore for PgSequenceSteps {
         if let Some(schedule) = schedule {
             if schedule.sent {
                 return Ok(CancelOutcome::Sent);
+            }
+            // The owner scheduled or sent it from Mail: it is theirs.
+            if schedule.source.is_none() {
+                return Ok(CancelOutcome::Changed);
             }
             // The rule `change_schedule` applies: a submitted or uncertain
             // delivery can't be withdrawn; a failed one can.
@@ -333,7 +337,7 @@ impl SequenceStepStore for PgSequenceSteps {
     ) -> Result<StepState, EmailErr> {
         let Some(row) = sqlx::query!(
             r#"SELECT m.is_sent, m.internal_date_ts, m.updated_at, m.global_id,
-                      s.message_id AS "scheduled?", s.send_time AS "send_time?",
+                      s.message_id AS "scheduled?", s.send_time AS "send_time?", s.source,
                       s.processing AS "processing?", s.delivery_status AS "delivery_status?",
                       s.delivery_started_at, s.delivery_claim_id, s.delivery_message_id,
                       (COALESCE((m.mailbox_state->>'provider_missing')::boolean, false)
@@ -358,20 +362,22 @@ impl SequenceStepStore for PgSequenceSteps {
                 global_id: row.global_id,
             });
         }
-        match (row.scheduled, row.send_time, row.delivery_status) {
-            (Some(_), Some(send_time), Some(delivery_status)) => Ok(StepState::Scheduled {
-                send_time,
-                status: schedule_status(
-                    &delivery_status,
-                    row.processing.unwrap_or_default(),
-                    row.delivery_claim_id.is_some(),
-                    row.delivery_started_at.is_some(),
-                ),
-            }),
-            _ => Ok(StepState::Unscheduled {
-                discarded: row.discarded,
-            }),
-        }
+        Ok(match (row.scheduled, row.send_time, row.delivery_status) {
+            (Some(_), Some(send_time), Some(delivery_status)) if row.source.is_some() => {
+                StepState::Scheduled {
+                    send_time,
+                    status: schedule_status(
+                        &delivery_status,
+                        row.processing.unwrap_or_default(),
+                        row.delivery_claim_id.is_some(),
+                        row.delivery_started_at.is_some(),
+                    ),
+                }
+            }
+            (Some(_), _, _) => StepState::TakenOver,
+            (None, _, _) if row.discarded => StepState::Discarded,
+            (None, _, _) => StepState::TakenOver,
+        })
     }
 
     async fn is_sent_in(

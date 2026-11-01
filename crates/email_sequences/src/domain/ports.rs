@@ -168,7 +168,8 @@ pub trait SequenceRepo: Send + Sync + 'static {
         tx: &mut Self::Tx,
         id: Uuid,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
-    /// Lock a sequence's live enrollments in id order.
+    /// Lock a sequence's live enrollments in id order. The rows come without
+    /// their rendered steps, which pause and delete don't read.
     fn lock_live_enrollments(
         &self,
         tx: &mut Self::Tx,

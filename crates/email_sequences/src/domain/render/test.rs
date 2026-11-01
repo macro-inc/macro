@@ -148,6 +148,12 @@ fn validation_table() {
             Some((Problem::DelayRange, Some(2))),
         ),
         (
+            "personalization would grow the body past the limit",
+            "Name",
+            with(|s| s[1].body = "{{email}} ".repeat(400)),
+            Some((Problem::BodyTooLong, Some(2))),
+        ),
+        (
             "unknown token",
             "Name",
             with(|s| s[1].body = "Hi {{company}}".into()),
@@ -188,9 +194,19 @@ fn names_are_sanitized_before_personalization() {
         ("Win a prize https://evil.example", None),
         ("ada@example.com", None),
         ("   ", None),
+        ("[Reset password](evil.example/x)", None),
+        ("**Urgent**", None),
+        ("\u{200b}", None),
+        ("Ada\u{feff} Lovelace", Some("Ada Lovelace")),
+        ("Ada 👩\u{200d}💻", Some("Ada 👩\u{200d}💻")),
     ];
     for (name, expected) in cases {
         assert_eq!(sanitize_name(name).as_deref(), expected, "{name:?}");
     }
     assert_eq!(sanitize_name(&"x".repeat(150)).map(|n| n.len()), Some(100));
+}
+
+#[test]
+fn stored_text_keeps_only_line_breaks_and_tabs() {
+    assert_eq!(clean_text("a\u{0}b\r\n\tc\u{7}"), "ab\r\n\tc");
 }

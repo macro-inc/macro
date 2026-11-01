@@ -46,14 +46,14 @@ pub struct NewStep<'a> {
     pub list_unsubscribe_url: &'a str,
 }
 
-/// What the caller saw before cancelling, so a step that moved in between is
-/// left alone.
+/// How much of a step a cancel may withdraw. A send the owner scheduled
+/// themselves from Mail is never withdrawn.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum CancelExpectation {
-    /// Withdraw it only while it is still scheduled.
+    /// Only while the sequence's own schedule is on it.
     Scheduled,
-    /// Withdraw it whatever it is, unless sent or in delivery.
-    Any,
+    /// Also an unscheduled draft: one the owner restored, or one discarded.
+    Draft,
 }
 
 /// What cancelling a step did.
@@ -87,19 +87,18 @@ pub enum StepState {
         /// Message-ID of the synced sent copy.
         global_id: Option<String>,
     },
-    /// Still scheduled.
+    /// Still on the sequence's schedule.
     Scheduled {
         /// When it is due.
         send_time: DateTime<Utc>,
         /// Delivery state.
         status: ScheduledSendStatus,
     },
-    /// An unsent draft with no schedule: removed from the schedule outside
-    /// the sequence.
-    Unscheduled {
-        /// In Trash, or deleted at the provider.
-        discarded: bool,
-    },
+    /// The owner took it over in Mail: restored it to edit, or scheduled or
+    /// sent it themselves. It is theirs until it is sent or discarded.
+    TakenOver,
+    /// Off the schedule and in Trash, or deleted at the provider.
+    Discarded,
 }
 
 /// An incoming message, as a sequence reads it to find replies and bounces.

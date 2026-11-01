@@ -4,7 +4,7 @@ use std::sync::Arc;
 
 use axum::{
     Json, Router,
-    extract::{FromRef, Path, State},
+    extract::{DefaultBodyLimit, FromRef, Path, State},
     http::StatusCode,
     response::{IntoResponse, Response},
     routing::{get, post},
@@ -211,6 +211,9 @@ impl IntoResponse for SequenceError {
 
 type Caller<Auth> = MacroAuthorizationExtractor<Auth, UserOnly>;
 
+/// Largest request body: a full sequence at the step limits, in any script.
+const MAX_REQUEST_BYTES: usize = 8 * 1024 * 1024;
+
 fn user_id<Auth: MacroAuthorizationService>(caller: &Caller<Auth>) -> &str {
     caller.authorization.macro_user_id.as_ref()
 }
@@ -242,6 +245,8 @@ where
             "/contacts/{crm_contact_id}",
             get(contact_enrollments::<Api, Auth>),
         )
+        // 20 steps of 50,000 non-Latin characters is several megabytes of JSON.
+        .layer(DefaultBodyLimit::max(MAX_REQUEST_BYTES))
         .with_state(state)
 }
 
