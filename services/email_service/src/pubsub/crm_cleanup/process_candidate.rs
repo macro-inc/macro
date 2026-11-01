@@ -6,7 +6,9 @@ use uuid::Uuid;
 
 /// Processes one cleanup candidate: claims (deletes) the candidate row, then
 /// depopulates the CRM contact if the link no longer has any message (sent or
-/// received) involving `contact_email`.
+/// received) involving `contact_email`. The message scan only runs when CRM
+/// has a contact for `contact_email` to act on; most candidates are addresses
+/// CRM never tracked.
 ///
 /// The claim happens *before* the gate check so that a message delete landing
 /// mid-processing re-inserts a fresh candidate for the next nightly run
@@ -67,6 +69,25 @@ pub async fn process_candidate(
         tracing::debug!("User has no team; skipping CRM cleanup");
         return Ok(());
     };
+
+    // Without a target `depopulate_contact` is a no-op, so the message scan
+    // below could not change the outcome.
+    let has_target = ctx
+        .crm_service
+        .has_depopulate_target(&team_id, contact_email)
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: anyhow::Error::from(e)
+                    .context("Failed to check for a CRM contact to tear down"),
+            })
+        })?;
+
+    if !has_target {
+        tracing::debug!("No CRM contact to tear down; skipping message scan");
+        return Ok(());
+    }
 
     let still_has_any =
         email_db_client::contacts::get::link_has_any_message_with(&ctx.db, link.id, contact_email)
