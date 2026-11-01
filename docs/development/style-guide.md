@@ -24,6 +24,7 @@ ID; deletions leave gaps and new rules take the next free number. A rule line re
 | [`config-and-service-urls.md`](../../.agents/rules/config-and-service-urls.md) | CS 14–18 | Everywhere |
 | [`CODING.md`](../../CODING.md) | CS 24, 26, 28, 29, 32–35, 71 | Everywhere; read before writing code |
 | [`observability.md`](../../.agents/rules/observability.md) | | Everywhere |
+| [`checks.md`](../../.agents/rules/checks.md) | | Adding a lint, code rule or CI check: `tooling/`, `rules/ast-grep/`, linter configs, workflows |
 | [`rust/guardrails.md`](../../.agents/rules/rust/guardrails.md) | | Backend: tests, migrations, crate boundaries |
 | [`rust/db.md`](../../.agents/rules/rust/db.md) | CS | Migrations, SQL, DB clients, outbound adapters |
 | [`rust/architecture.md`](../../.agents/rules/rust/architecture.md) | CS | Rust |
