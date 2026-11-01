@@ -1,5 +1,8 @@
 import { toast } from '@core/component/Toast/Toast';
-import type { ScheduledAction } from '@service-scheduled-action/generated/schemas';
+import type {
+  CodeUpgrade,
+  ScheduledAction,
+} from '@service-scheduled-action/generated/schemas';
 import {
   cleanup,
   fireEvent,
@@ -37,6 +40,8 @@ const mocks = vi.hoisted(() => ({
   openChat: vi.fn(async (_input: string) => {}),
   status: (): string => 'success',
   history: (): HistoryRecord[] => [],
+  codeUpgrades: (): CodeUpgrade[] => [],
+  refetchUpgrades: vi.fn(async () => {}),
   metadataStatus: (): string => 'success',
   chatMetadata: (): { chat?: { name: string } } | undefined => ({
     chat: { name: 'Run transcript' },
@@ -92,6 +97,7 @@ vi.mock('@core/block', async (importOriginal) => ({
   useBlockId: () => 'routine-id',
 }));
 vi.mock('@core/component/AI/constant', () => ({
+  DEFAULT_MODEL: 'claude-sonnet-4-6',
   defaultModelForPlan: () => 'claude-sonnet-4-6',
 }));
 vi.mock('@core/auth/license', () => ({ useHasPaidAccess: () => () => true }));
@@ -292,6 +298,14 @@ vi.mock('./queries/schedules', () => ({
       return mocks.history();
     },
   }),
+  useCodeUpgradesQuery: () => ({
+    isSuccess: true,
+    isPending: false,
+    get data() {
+      return mocks.codeUpgrades();
+    },
+    refetch: mocks.refetchUpgrades,
+  }),
   useUpdateScheduleMutation: () => ({ mutateAsync: mocks.update }),
   useCreateScheduleMutation: () => ({ mutate: mocks.create, isPending: false }),
   useRunScheduleNowMutation: () => ({ mutate: mocks.run, isPending: false }),
@@ -353,6 +367,7 @@ beforeEach(() => {
   mocks.metadataStatus = () => 'success';
   mocks.chatMetadata = () => ({ chat: { name: 'Run transcript' } });
   mocks.agentMetadata = () => ({ name: 'Agent transcript' });
+  mocks.codeUpgrades = () => [];
   mocks.history = () => [
     {
       id: 'run-id',
@@ -1018,5 +1033,72 @@ describe('routine editor triggers', () => {
     setSchedules([]);
     render(() => <Routine />);
     expect(screen.getByText('Routine not found.')).toBeTruthy();
+  });
+});
+
+describe('routine code that needs an update', () => {
+  const code = (source: string, sdk: string) => ({
+    steps: [{ type: 'code', title: 'File invoices', source }],
+    sdk,
+  });
+  const paused: ScheduledAction = {
+    ...cron,
+    enabled: false,
+    task: code('macro.tasks.create(x)', '0.2.0+old'),
+  };
+  const upgrade = (task?: object): CodeUpgrade => ({
+    id: 'upgrade',
+    fromSdk: '0.2.0+old',
+    toSdk: '0.3.0+new',
+    outcome: 'needs_update',
+    reason: '“File invoices” failed a dry run.',
+    previousTask: paused.task,
+    task,
+    createdAt: '2026-11-01T09:00:00Z',
+    updatedAt: '2026-11-01T09:00:00Z',
+  });
+
+  it('shows why it paused and saves the proposed update when approved', async () => {
+    setSchedules([paused]);
+    mocks.update.mockResolvedValue({
+      ...paused,
+      task: code('macro.tasks.add(x)', '0.3.0+new'),
+    });
+    mocks.codeUpgrades = () => [
+      upgrade(code('macro.tasks.add(x)', '0.3.0+new')),
+    ];
+    render(() => <Routine />);
+    expect(screen.getByText('Paused: its code needs an update')).toBeTruthy();
+    expect(screen.getByText('“File invoices” failed a dry run.')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Review the update' }));
+    expect(screen.getByText('macro.tasks.add(x)')).toBeTruthy();
+    fireEvent.click(screen.getByRole('button', { name: 'Approve and resume' }));
+    await vi.advanceTimersByTimeAsync(0);
+    expect(mocks.update).toHaveBeenCalledWith({
+      scheduleId: cron.id,
+      body: expect.objectContaining({
+        task: expect.objectContaining({
+          steps: [
+            {
+              type: 'code',
+              title: 'File invoices',
+              source: 'macro.tasks.add(x)',
+            },
+          ],
+        }),
+      }),
+    });
+    expect(mocks.setEnabled).toHaveBeenCalledWith({
+      scheduleId: 'routine-id',
+      enabled: true,
+    });
+    expect(mocks.refetchUpgrades).toHaveBeenCalled();
+  });
+
+  it('shows nothing once its code checks against that SDK', () => {
+    setSchedules([{ ...paused, task: code('x', '0.3.0+new') }]);
+    mocks.codeUpgrades = () => [upgrade()];
+    render(() => <Routine />);
+    expect(screen.queryByText('Paused: its code needs an update')).toBeNull();
   });
 });

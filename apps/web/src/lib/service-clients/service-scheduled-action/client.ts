@@ -12,6 +12,7 @@ import {
 } from '../ai-usage-limit';
 import type {
   ActionExecutionRecord,
+  CodeUpgrade,
   CreateScheduledAction,
   InProgressExecution,
   RoutineTemplate,
@@ -101,6 +102,12 @@ export const scheduledActionClient = {
   listHistory: async (args: { scheduleId: string }) =>
     scheduledActionFetch<ActionExecutionRecord[]>(
       `/scheduled-actions/${args.scheduleId}/history`,
+      { method: 'GET' }
+    ),
+
+  listCodeUpgrades: async (args: { scheduleId: string }) =>
+    scheduledActionFetch<CodeUpgrade[]>(
+      `/scheduled-actions/${args.scheduleId}/code-upgrades`,
       { method: 'GET' }
     ),
 

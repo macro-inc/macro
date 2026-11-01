@@ -92,6 +92,12 @@ function actionDone(step: ToolStepDraft): string {
     .exhaustive();
 }
 
+/** How many SDK calls a code step made: "3 calls", or "128+ calls" when more ran than were kept. */
+export function callCount(count: number, truncated: boolean): string {
+  if (truncated) return `${count}+ calls`;
+  return count === 1 ? '1 call' : `${count} calls`;
+}
+
 /**
  * A short description of what a run did at one step: by the step in the
  * configuration the run used, else by the kind of step there now
@@ -127,6 +133,10 @@ export function describeHistoryStep(
     .with({ kind: 'agent' }, (record) =>
       record.error ? `AI failed: ${record.error}` : 'Asked AI'
     )
+    .with({ kind: 'code' }, (record) => {
+      const title = (step?.kind === 'code' && step.title.trim()) || 'Ran code';
+      return record.error ? `${title} failed: ${record.error}` : title;
+    })
     .exhaustive();
 }
 

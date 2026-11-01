@@ -139,6 +139,8 @@ export function RoutineEditor(props: {
   /** The routine menu, shown right after its name. */
   actions?: JSX.Element;
   feedback?: JSX.Element;
+  /** Above the sections, for what the owner has to act on first. */
+  notice?: JSX.Element;
 }) {
   const tabs = () =>
     props.showHistory === false
@@ -294,6 +296,7 @@ export function RoutineEditor(props: {
                   )}
                 </Show>
               </header>
+              <Show when={props.notice}>{(notice) => notice()}</Show>
               <RoutineSection
                 label="Trigger"
                 aside={props.nextRun && `Next run: ${props.nextRun}`}

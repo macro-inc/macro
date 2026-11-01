@@ -915,6 +915,7 @@ export function summarizeStep(step: StepDraft): string {
       (step) => step.instructions.trim().split('\n')[0] ?? ''
     )
     .with({ kind: 'if' }, (step) => step.condition.trim())
+    .with({ kind: 'code' }, (step) => step.summary.trim())
     .with({ kind: 'choose' }, (step) =>
       step.options
         .map((option) => option.label.trim())
@@ -940,6 +941,7 @@ export function stepNeedsInput(step: StepDraft): boolean {
   return flattenSteps([step]).some((step) =>
     match(step)
       .with({ kind: 'agent' }, (step) => !step.instructions.trim())
+      .with({ kind: 'code' }, (step) => !step.source.trim())
       .with({ kind: 'if' }, (step) => !step.condition.trim())
       .with({ kind: 'choose' }, (step) =>
         step.options.some((option) => !option.label.trim())
@@ -976,6 +978,7 @@ export function triggerFields(
 export function stepTitle(step: StepDraft): string {
   return match(step)
     .with({ kind: 'agent' }, () => 'Ask AI')
+    .with({ kind: 'code' }, (step) => step.title.trim() || 'Run code')
     .with({ kind: 'if' }, () => 'If')
     .with({ kind: 'choose' }, (step) => describeChoice(step))
     .with({ kind: 'tool' }, (step) => describeToolStep(step))

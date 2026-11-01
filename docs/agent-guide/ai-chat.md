@@ -742,6 +742,16 @@ show **Run unavailable** without a link, including failed preparation that creat
 no resource. Runs of routines with steps that never reached an agent read **Ran
 steps**; a line under each such row lists what every step did. Live pending rows remain neutral; persisted unsuccessful runs keep
 the failure-colored timestamp even when their transcript is still available.
+A run's detail lists a code step's SDK calls in order, with how each ended
+(**Would do** in a dry run, **Not allowed** outside the step's write scopes)
+and how long it took; arguments and results are never shown.
+
+Code steps (written by AI through CreateRoutine) open read-only on the routine's
+Overview: summary, **Can change** scopes and the code. When an SDK release
+breaks a routine's code and AI's update fails its checks, the routine pauses
+and its Overview leads with **Paused: its code needs an update**: the reason,
+**Review the update** (each changed step before and after) and **Approve and
+resume**, which saves the update, checks it again and turns the routine on.
 
 ## Start a standalone chat
 

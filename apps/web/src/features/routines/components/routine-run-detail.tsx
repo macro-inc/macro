@@ -7,6 +7,7 @@ import { Button, cn } from '@ui';
 import { For, Match, Show, Switch } from 'solid-js';
 import type { HistoryRecord, HistoryStep } from '../core/history';
 import { failedStep, type RunOutcome, runOutcome } from '../core/step-history';
+import { CallList } from './routine-code-step';
 
 const OUTCOME_LABEL: Record<RunOutcome, string> = {
   running: 'Running',
@@ -52,7 +53,7 @@ function runMeta(record: HistoryRecord): string {
 
 /** The step as it would read had it succeeded; its error shows apart. */
 function withoutError(step: HistoryStep): HistoryStep {
-  return step.kind === 'tool' || step.kind === 'agent'
+  return step.kind === 'tool' || step.kind === 'agent' || step.kind === 'code'
     ? { ...step, error: undefined }
     : step;
 }
@@ -117,10 +118,12 @@ function RunStep(props: {
   onOpenConversation?: () => void;
 }) {
   const error = () =>
-    props.step.kind === 'tool' || props.step.kind === 'agent'
+    props.step.kind === 'tool' ||
+    props.step.kind === 'agent' ||
+    props.step.kind === 'code'
       ? props.step.error
       : undefined;
-  const ai = () => props.step.kind !== 'tool';
+  const ai = () => props.step.kind !== 'tool' && props.step.kind !== 'code';
   return (
     <li class="relative grid grid-cols-[1.375rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 pb-4">
       <Show when={!props.last}>
@@ -155,6 +158,24 @@ function RunStep(props: {
       <Show when={error()}>
         {(message) => (
           <span class="col-start-2 text-xs text-failure">{message()}</span>
+        )}
+      </Show>
+      <Show
+        when={
+          props.step.kind === 'code' && props.step.calls.length > 0
+            ? props.step
+            : undefined
+        }
+      >
+        {(step) => (
+          <span class="col-start-2 grid gap-1">
+            <CallList calls={step().calls} />
+            <Show when={step().callsTruncated}>
+              <span class="text-xs text-ink-muted">
+                More calls ran than are shown.
+              </span>
+            </Show>
+          </span>
         )}
       </Show>
       <Show when={decisionBars(props.step).length}>

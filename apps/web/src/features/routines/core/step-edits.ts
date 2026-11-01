@@ -39,6 +39,12 @@ export function copyStep(step: StepDraft, steps: StepDraft[]): StepDraft {
     match(item)
       .returnType<StepDraft>()
       .with({ kind: 'agent' }, (item) => ({ ...item, id: newStepId() }))
+      .with({ kind: 'code' }, (item) => ({
+        ...item,
+        id: newStepId(),
+        // Later code reads outputs by name, which a copy can't follow.
+        output: undefined,
+      }))
       .with({ kind: 'tool' }, (item) => ({
         ...item,
         id: newStepId(),

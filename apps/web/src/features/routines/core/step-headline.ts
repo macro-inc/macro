@@ -108,6 +108,11 @@ export function stepHeadline(step: StepDraft): {
       title: 'Ask AI',
       summary: firstLine(step.instructions),
     }))
+    .with({ kind: 'code' }, (step) => ({
+      title: step.title.trim() || 'Run code',
+      summary: step.summary.trim(),
+      mode: 'Code',
+    }))
     .with({ kind: 'if' }, (step) => ({
       title: 'If',
       summary: step.condition.trim(),

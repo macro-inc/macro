@@ -20,6 +20,38 @@ export const routineTools = [
 ] as const;
 type RoutineToolName = (typeof routineTools)[number];
 
+/** Areas a code step may change; reads are always allowed. The scheduler owns this list. */
+export const writeScopes = [
+  'email',
+  'calendar',
+  'workspace',
+  'properties',
+  'contacts',
+  'ai',
+] as const;
+export type WriteScope = (typeof writeScopes)[number];
+
+/** What each write scope lets a code step change, for its owner. */
+export const WRITE_SCOPE_LABELS: Record<WriteScope, string> = {
+  email: 'Email',
+  calendar: 'Calendar',
+  workspace: 'Documents, tasks and channels',
+  properties: 'Properties',
+  contacts: 'Contacts',
+  ai: 'AI that can act',
+};
+
+/** TypeScript against Macro's SDK, written by the AI that built the routine. */
+export type CodeStepDraft = {
+  id: string;
+  kind: 'code';
+  /** Names the output for later steps. */
+  output?: string;
+  title: string;
+  summary: string;
+  source: string;
+  writes: WriteScope[];
+};
 export type AgentStepDraft = {
   id: string;
   kind: 'agent';
@@ -60,6 +92,7 @@ export type ChooseStepDraft = {
 };
 export type StepDraft =
   | AgentStepDraft
+  | CodeStepDraft
   | ToolStepDraft
   | IfStepDraft
   | ChooseStepDraft;
@@ -77,11 +110,23 @@ export const STEP_LIMITS = {
   instructions: 20_000,
   /** Serialized bytes of one tool step's arguments. */
   argumentBytes: 16 * 1024,
+  /** Characters in a code step's title. */
+  codeTitle: 80,
+  /** Bytes of a code step's source. */
+  sourceBytes: 64 * 1024,
 } as const;
 
 const stepIdSchema = z.string().regex(/^[a-z][a-z0-9_]{0,31}$/);
 
 export type WireStep =
+  | {
+      type: 'code';
+      id?: string | null;
+      title: string;
+      summary?: string | null;
+      source: string;
+      writes?: WriteScope[];
+    }
   | {
       type: 'agent';
       model?: string | null;
@@ -114,6 +159,14 @@ export type WireStep =
 
 const wireStepSchema: z.ZodType<WireStep> = z.lazy(() =>
   z.discriminatedUnion('type', [
+    z.object({
+      type: z.literal('code'),
+      id: stepIdSchema.nullish(),
+      title: z.string(),
+      summary: z.string().nullish(),
+      source: z.string(),
+      writes: z.array(z.enum(writeScopes)).optional(),
+    }),
     z.object({
       type: z.literal('agent'),
       model: routineModelSchema.nullish(),
@@ -154,6 +207,15 @@ const programSchema = z.looseObject({ steps: z.array(wireStepSchema) });
 /** Editor state, as saved with unsent composer drafts. */
 export const stepDraftSchema: z.ZodType<StepDraft> = z.lazy(() =>
   z.discriminatedUnion('kind', [
+    z.object({
+      id: z.string(),
+      kind: z.literal('code'),
+      output: z.string().optional(),
+      title: z.string(),
+      summary: z.string(),
+      source: z.string(),
+      writes: z.array(z.enum(writeScopes)),
+    }),
     z.object({
       id: z.string(),
       kind: z.literal('agent'),
@@ -245,6 +307,15 @@ function fromWire(steps: WireStep[]): StepDraft[] | undefined {
         const target = targetFromWire(step);
         return target && agentStep(target, step.instructions);
       })
+      .with({ type: 'code' }, (step) => ({
+        id: newStepId(),
+        kind: 'code',
+        output: step.id ?? undefined,
+        title: step.title,
+        summary: step.summary ?? '',
+        source: step.source,
+        writes: step.writes ?? [],
+      }))
       .with({ type: 'tool' }, (step) => ({
         id: newStepId(),
         kind: 'tool',
@@ -312,6 +383,14 @@ export function stepsToWire(steps: StepDraft[]): WireStep[] {
         ...targetToWire(routineTargetSchema.parse(step.target)),
         instructions: step.instructions.trim(),
       }))
+      .with({ kind: 'code' }, (step) => ({
+        type: 'code',
+        ...(step.output ? { id: step.output } : {}),
+        title: step.title.trim(),
+        ...(step.summary.trim() ? { summary: step.summary.trim() } : {}),
+        source: step.source,
+        ...(step.writes.length ? { writes: step.writes } : {}),
+      }))
       .with({ kind: 'tool' }, (step) => ({
         type: 'tool',
         ...(step.output ? { id: step.output } : {}),
@@ -348,7 +427,7 @@ export function stepsToWire(steps: StepDraft[]): WireStep[] {
 function stepBranches(step: StepDraft): StepDraft[][] {
   return match(step)
     .returnType<StepDraft[][]>()
-    .with({ kind: 'agent' }, { kind: 'tool' }, () => [])
+    .with({ kind: 'agent' }, { kind: 'code' }, { kind: 'tool' }, () => [])
     .with({ kind: 'if' }, (step) => [step.yes, step.no])
     .with({ kind: 'choose' }, (step) => [
       ...step.options.map((option) => option.steps),
@@ -375,7 +454,12 @@ export function updateStep(
     if (step.id === id) return update(step);
     return match(step)
       .returnType<StepDraft>()
-      .with({ kind: 'agent' }, { kind: 'tool' }, (step) => step)
+      .with(
+        { kind: 'agent' },
+        { kind: 'code' },
+        { kind: 'tool' },
+        (step) => step
+      )
       .with({ kind: 'if' }, (step) => ({
         ...step,
         yes: updateStep(step.yes, id, update),
@@ -402,7 +486,12 @@ export function mapSteps(
     update(
       match(step)
         .returnType<StepDraft>()
-        .with({ kind: 'agent' }, { kind: 'tool' }, (step) => step)
+        .with(
+          { kind: 'agent' },
+          { kind: 'code' },
+          { kind: 'tool' },
+          (step) => step
+        )
         .with({ kind: 'if' }, (step) => ({
           ...step,
           yes: mapSteps(step.yes, update),
@@ -573,12 +662,12 @@ function validateToolArguments(steps: StepDraft[]): string | null {
           )
         )
           return 'A step uses a field from a step that may not have run before it. Keep it below that step, in the same branch.';
-        if (step.output) {
-          if (outputs.has(step.output))
-            return 'Two steps name their output the same. Remove one and add it again.';
-          outputs.add(step.output);
-          visible.push(step.output);
-        }
+      }
+      if ((step.kind === 'tool' || step.kind === 'code') && step.output) {
+        if (outputs.has(step.output))
+          return 'Two steps name their output the same. Remove one and add it again.';
+        outputs.add(step.output);
+        visible.push(step.output);
       }
       for (const branch of stepBranches(step)) {
         const scope = visible.length;
@@ -617,6 +706,15 @@ export function validateSteps(
         return routineTargetSchema.safeParse(step.target).success
           ? null
           : 'Choose a valid model or agent.';
+      })
+      .with({ kind: 'code' }, (step) => {
+        const title = step.title.trim();
+        if (!title || [...title].length > STEP_LIMITS.codeTitle)
+          return 'Give each code step a short title.';
+        const bytes = new TextEncoder().encode(step.source).length;
+        if (!step.source.trim() || bytes > STEP_LIMITS.sourceBytes)
+          return 'A code step’s code is empty or too long. Ask AI to rewrite it.';
+        return null;
       })
       .with({ kind: 'tool' }, (step) => validateTool(step))
       .with({ kind: 'if' }, (step) => {

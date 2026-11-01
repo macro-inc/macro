@@ -6,6 +6,7 @@ import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
 import ChatIcon from '@icon/system/regular/chat-circle-text.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import CheckSquareIcon from '@icon/system/regular/check-square.svg';
+import CodeIcon from '@icon/system/regular/code.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import DotsIcon from '@icon/system/regular/dots-three.svg';
 import EnvelopeIcon from '@icon/system/regular/envelope-simple.svg';
@@ -56,7 +57,9 @@ import {
 } from '../core/step-catalog';
 import { copyStep, wrapInIf } from '../core/step-edits';
 import { stepHeadline } from '../core/step-headline';
+import { callCount } from '../core/step-history';
 import { AddStep } from './routine-add-step';
+import { CodeStepBody } from './routine-code-step';
 import { DecisionBody, DecisionBranches } from './routine-decision-step';
 import { RoutineSurface, RoutineTray } from './routine-editor';
 import {
@@ -128,7 +131,7 @@ function shownSteps(steps: StepDraft[]): StepDraft[] {
     step,
     ...match(step)
       .returnType<StepDraft[]>()
-      .with({ kind: 'agent' }, { kind: 'tool' }, () => [])
+      .with({ kind: 'agent' }, { kind: 'code' }, { kind: 'tool' }, () => [])
       .with({ kind: 'if' }, (step) => shownSteps([...step.yes, ...step.no]))
       .with({ kind: 'choose' }, (step) =>
         shownSteps([
@@ -329,6 +332,7 @@ export function actionIcon(key: StepActionKey): Component<{ class?: string }> {
 export function stepIcon(step: StepDraft): Component<{ class?: string }> {
   return match(step)
     .with({ kind: 'agent' }, () => SparkleIcon)
+    .with({ kind: 'code' }, () => CodeIcon)
     .with({ kind: 'if' }, () => GitBranchIcon)
     .with({ kind: 'choose' }, (step) =>
       pickAction(step) ? SparkleIcon : GitForkIcon
@@ -339,7 +343,7 @@ export function stepIcon(step: StepDraft): Component<{ class?: string }> {
 
 /** Steps where AI judges something: agents and decisions. */
 function usesAi(step: StepDraft): boolean {
-  return step.kind !== 'tool';
+  return step.kind !== 'tool' && step.kind !== 'code';
 }
 
 export function StepIcon(props: { step: StepDraft }) {
@@ -384,6 +388,11 @@ export function runOutcome(record: HistoryStep): RunOutcome {
     }))
     .with({ kind: 'tool' }, { kind: 'agent' }, (record) =>
       record.error ? { failed: record.error } : {}
+    )
+    .with({ kind: 'code' }, (record) =>
+      record.error
+        ? { failed: record.error }
+        : { text: callCount(record.calls.length, record.callsTruncated) }
     )
     .exhaustive();
 }
@@ -641,6 +650,9 @@ export function StepBody(props: {
     <Switch>
       <Match when={props.step.kind === 'agent' && props.step}>
         {(step) => <AgentBody step={step()} onChange={props.onChange} />}
+      </Match>
+      <Match when={props.step.kind === 'code' && props.step}>
+        {(step) => <CodeStepBody step={step()} path={props.path} />}
       </Match>
       <Match when={props.step.kind === 'tool' && props.step}>
         {(step) => (

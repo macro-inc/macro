@@ -1,0 +1,122 @@
+import { Badge, cn } from '@ui';
+import { For, Show } from 'solid-js';
+import { match } from 'ts-pattern';
+import type { CallStatus, HistoryCall } from '../core/history';
+import { type CodeStepDraft, WRITE_SCOPE_LABELS } from '../core/routine-steps';
+import { callCount } from '../core/step-history';
+import { Field, useSteps } from './routine-steps';
+import { StepNote } from './routine-tool-step';
+
+/** A code step: what it does, where it may make changes, and its code. AI writes and changes it. */
+export function CodeStepBody(props: { step: CodeStepDraft; path: string }) {
+  const steps = useSteps();
+  const calls = () => {
+    const record = steps.run()?.get(props.path);
+    return record?.kind === 'code' ? record : undefined;
+  };
+  return (
+    <div class="grid min-w-0 gap-3">
+      <Show when={props.step.summary.trim()}>
+        {(summary) => <p class="text-sm text-ink-muted">{summary()}</p>}
+      </Show>
+      <Field label="Can change">
+        <div class="flex min-w-0 flex-wrap gap-1">
+          <For
+            each={props.step.writes}
+            fallback={
+              <span class="text-xs text-ink-muted">Nothing; it only reads</span>
+            }
+          >
+            {(scope) => (
+              <Badge variant="secondary" size="xs">
+                {WRITE_SCOPE_LABELS[scope]}
+              </Badge>
+            )}
+          </For>
+        </div>
+      </Field>
+      <Field label="Code">
+        <pre class="max-h-80 min-w-0 overflow-auto rounded-xl border border-edge-frame bg-control px-3 py-2 font-mono text-xs leading-relaxed text-ink">
+          <code>{props.step.source}</code>
+        </pre>
+        <StepNote>
+          Written by AI and checked against Macro’s SDK when saved. Ask AI to
+          change it.
+        </StepNote>
+      </Field>
+      <Show when={calls()}>
+        {(record) => (
+          <Field
+            label={`Last run: ${callCount(record().calls.length, record().callsTruncated)}`}
+          >
+            <CallList calls={record().calls} />
+          </Field>
+        )}
+      </Show>
+    </div>
+  );
+}
+
+const STATUS_LABEL: Record<CallStatus, string> = {
+  completed: 'Done',
+  failed: 'Failed',
+  skipped: 'Would do',
+  refused: 'Not allowed',
+  unknown: 'Unknown',
+};
+
+function duration(ms: number | undefined): string {
+  if (ms === undefined) return '';
+  return ms < 1000 ? `${ms} ms` : `${(ms / 1000).toFixed(1)} s`;
+}
+
+/** A code step's SDK calls in one run, in the order they started. */
+export function CallList(props: { calls: HistoryCall[] }) {
+  return (
+    <ol class="grid min-w-0 gap-1 text-xs">
+      <For each={props.calls}>
+        {(call) => (
+          <li class="flex min-w-0 items-center gap-2">
+            <span
+              aria-hidden="true"
+              class={cn(
+                'size-1.5 shrink-0 rounded-full',
+                match(call.status)
+                  .with('completed', () =>
+                    call.write ? 'bg-success' : 'bg-edge'
+                  )
+                  .with('failed', 'refused', () => 'bg-failure')
+                  .with('skipped', 'unknown', () => 'bg-ink-extra-muted')
+                  .exhaustive()
+              )}
+            />
+            <span
+              class={cn(
+                'min-w-0 flex-1 truncate',
+                call.write ? 'text-ink' : 'text-ink-muted'
+              )}
+              title={call.operation}
+            >
+              {call.label}
+            </span>
+            <Show when={call.status !== 'completed'}>
+              <span
+                class={cn(
+                  'shrink-0',
+                  call.status === 'failed' || call.status === 'refused'
+                    ? 'text-failure'
+                    : 'text-ink-muted'
+                )}
+              >
+                {STATUS_LABEL[call.status]}
+              </span>
+            </Show>
+            <span class="w-14 shrink-0 text-right tabular-nums text-ink-extra-muted">
+              {duration(call.durationMs)}
+            </span>
+          </li>
+        )}
+      </For>
+    </ol>
+  );
+}

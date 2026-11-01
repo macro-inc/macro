@@ -10,6 +10,7 @@ import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import { Button, cn, Dropdown, ToggleSwitch, Tooltip } from '@ui';
 import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
+import { CodeReviewNotice } from '../components/routine-code-review';
 import { RoutineEditor } from '../components/routine-editor';
 import { RoutineRunButton } from '../components/routine-run-button';
 import type { RoutineDetailSlots } from '../context/routine-slots';
@@ -348,6 +349,19 @@ export function RoutineDetailView(props: {
                 )}
               </Show>
             </>
+          }
+          notice={
+            <Show when={isOwned() && props.source.codeReview()}>
+              {(review) => (
+                <CodeReviewNotice
+                  review={review()}
+                  pending={props.source.codeUpdatePending()}
+                  onApprove={() =>
+                    fireAndForget(props.source.approveCodeUpdate(), 'routines')
+                  }
+                />
+              )}
+            </Show>
           }
           feedback={
             <>

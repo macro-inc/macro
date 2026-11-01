@@ -88,7 +88,13 @@ export function mapStepTexts(
         ...tool,
         arguments: mapStrings(tool.arguments, fill) as Record<string, unknown>,
       }))
-      .with({ kind: 'if' }, { kind: 'choose' }, (decision) => decision)
+      // Code reads its inputs from the trigger; a template can't fill it in.
+      .with(
+        { kind: 'code' },
+        { kind: 'if' },
+        { kind: 'choose' },
+        (step) => step
+      )
       .exhaustive()
   );
 }

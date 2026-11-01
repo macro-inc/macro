@@ -165,3 +165,69 @@ describe('skipped runs', () => {
     });
   });
 });
+
+describe('code steps in run history', () => {
+  it('decodes each SDK call a code step made', () => {
+    const record = toHistoryRecord({
+      id: 'record',
+      result: {
+        version: 1,
+        steps: [
+          {
+            path: '0',
+            kind: 'code',
+            calls: [
+              {
+                operation: 'cognition.decisions',
+                label: 'Classify content',
+                status: 'completed',
+                started_ms: 3,
+                duration_ms: 240,
+              },
+              {
+                operation: 'email.archiveThread',
+                label: 'Archive Thread',
+                write: true,
+                status: 'refused',
+                started_ms: 250,
+                duration_ms: 0,
+              },
+            ],
+            calls_truncated: true,
+            error: 'Error: can’t make changes in email',
+          },
+        ],
+      },
+      resource_id: null,
+      start_time: '2026-11-01T09:00:00Z',
+      end_time: '2026-11-01T09:00:01Z',
+      is_success: false,
+    });
+    expect(record.steps).toEqual([
+      {
+        path: '0',
+        kind: 'code',
+        calls: [
+          {
+            operation: 'cognition.decisions',
+            label: 'Classify content',
+            write: false,
+            status: 'completed',
+            startedMs: 3,
+            durationMs: 240,
+          },
+          {
+            operation: 'email.archiveThread',
+            label: 'Archive Thread',
+            write: true,
+            status: 'refused',
+            startedMs: 250,
+            durationMs: 0,
+          },
+        ],
+        callsTruncated: true,
+        error: 'Error: can’t make changes in email',
+      },
+    ]);
+  });
+});

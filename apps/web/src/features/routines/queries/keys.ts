@@ -9,6 +9,9 @@ export const scheduledActionKeys = createQueryKeys('scheduledAction', {
   history: (params: { scheduleId: string }) => ({
     queryKey: [params.scheduleId, 'history'],
   }),
+  codeUpgrades: (params: { scheduleId: string }) => ({
+    queryKey: [params.scheduleId, 'code-upgrades'],
+  }),
   template: (params: { scheduleId: string }) => ({
     queryKey: [params.scheduleId, 'template'],
   }),

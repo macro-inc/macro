@@ -44,6 +44,45 @@ const stepSchema = z.discriminatedUnion('kind', [
     kind: z.literal('agent'),
     error: z.string().optional(),
   }),
+  z
+    .object({
+      path: z.string(),
+      kind: z.literal('code'),
+      calls: z
+        .array(
+          z.object({
+            operation: z.string(),
+            label: z.string(),
+            write: z.boolean().optional(),
+            status: z.enum([
+              'completed',
+              'failed',
+              'skipped',
+              'refused',
+              'unknown',
+            ]),
+            started_ms: z.number(),
+            duration_ms: z.number().optional(),
+          })
+        )
+        .optional(),
+      calls_truncated: z.boolean().optional(),
+      error: z.string().optional(),
+    })
+    .transform((step) => ({
+      path: step.path,
+      kind: step.kind,
+      calls: (step.calls ?? []).map((call) => ({
+        operation: call.operation,
+        label: call.label,
+        write: call.write ?? false,
+        status: call.status,
+        startedMs: call.started_ms,
+        durationMs: call.duration_ms,
+      })),
+      callsTruncated: step.calls_truncated ?? false,
+      error: step.error,
+    })),
 ]);
 const stepsSchema = z.object({ steps: z.array(stepSchema) });
 const errorSchema = z.object({ error: z.string() });

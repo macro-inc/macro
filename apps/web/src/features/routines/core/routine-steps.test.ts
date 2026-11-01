@@ -295,3 +295,46 @@ describe('the scheduler’s rules on tool arguments, checked before saving', () 
     ).toMatch(/too long/);
   });
 });
+
+describe('code steps', () => {
+  const code: WireStep = {
+    type: 'code',
+    id: 'invoice',
+    title: 'Label invoices',
+    summary: 'Asks whether the email is an invoice and labels it.',
+    source: 'export async function main({ macro }: StepContext) {}',
+    writes: ['email'],
+  };
+
+  it('round-trip, keeping their output name, summary and writes', () => {
+    const steps = stepsFromTask({ steps: [code], sdk: '0.2.2+abc' });
+    expect(steps?.[0]).toMatchObject({
+      kind: 'code',
+      output: 'invoice',
+      title: 'Label invoices',
+      writes: ['email'],
+    });
+    expect(stepsToWire(steps ?? [])).toEqual([code]);
+  });
+
+  it('need a title and code, and never need an event', () => {
+    const [step] = stepsFromTask({ steps: [code] }) ?? [];
+    if (step?.kind !== 'code') throw new Error('expected a code step');
+    expect(validateSteps([step], [daily], valid)).toBeNull();
+    expect(stepsNeedEvent([step])).toBe(false);
+    expect(validateSteps([{ ...step, title: ' ' }], [daily], valid)).toContain(
+      'title'
+    );
+    expect(validateSteps([{ ...step, source: '' }], [daily], valid)).toContain(
+      'code'
+    );
+  });
+
+  it('name outputs other steps can read', () => {
+    const [step] = stepsFromTask({ steps: [code] }) ?? [];
+    if (!step) throw new Error('expected a code step');
+    expect(validateSteps([step, { ...step, id: 'copy' }], [daily], valid)).toBe(
+      'Two steps name their output the same. Remove one and add it again.'
+    );
+  });
+});

@@ -146,6 +146,7 @@ export function deriveRoutineName(draft: ScheduleDraft): string {
     .with({ kind: 'if' }, (step) => deriveScheduleName(step.condition))
     .with({ kind: 'choose' }, (step) => deriveScheduleName(step.question))
     .with({ kind: 'agent' }, (step) => deriveScheduleName(step.instructions))
+    .with({ kind: 'code' }, (step) => deriveScheduleName(step.title))
     .exhaustive();
 }
 

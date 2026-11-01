@@ -14,7 +14,7 @@ function Branch(props: { label: string; steps: StepDraft[] }) {
 
 function branches(step: StepDraft): JSX.Element {
   return match(step)
-    .with({ kind: 'agent' }, { kind: 'tool' }, () => null)
+    .with({ kind: 'agent' }, { kind: 'code' }, { kind: 'tool' }, () => null)
     .with({ kind: 'if' }, (step) => (
       <>
         <Branch label="Yes" steps={step.yes} />
