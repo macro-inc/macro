@@ -80,6 +80,14 @@ impl CrmService for FakeCrm {
         unimplemented!("FakeCrm.depopulate_contact")
     }
 
+    async fn has_depopulate_target(
+        &self,
+        _team_id: &uuid::Uuid,
+        _email: &str,
+    ) -> Result<bool, CrmError> {
+        unimplemented!("FakeCrm.has_depopulate_target")
+    }
+
     async fn link_contact_pairs_with_sources(
         &self,
         _pairs: &[(uuid::Uuid, String)],
