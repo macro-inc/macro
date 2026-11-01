@@ -83,11 +83,17 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 ## Gotchas
 
+- Answer third-party failures as 502/503, not 500: match
+  `GithubError::Upstream(error)` before a route's 500 catch-all, and answer a
+  `FusionAuthClientError` whose `upstream()` is set with that error's
+  `into_response()`. Document 502/503 with `UpstreamErrorResponse` in the
+  route's `utoipa::path`.
 - Fail closed if team cleanup encounters an external chat: external chats require human ownership.
 
 - GitHub reconnect preserves the current link until OAuth completes. A different
   account returns 409; disconnect first to switch accounts. Missing grants report
-  reauthentication, while infrastructure failures remain server errors.
+  reauthentication; GitHub or FusionAuth outages answer 502/503, and other
+  failures remain server errors.
   Deploy grant-refresh support before releasing clients that omit the pre-OAuth
   disconnect; older callbacks leave an existing grant unchanged.
 - FusionAuth reports a link owner that was deleted as `UserDoesNotExist`. That

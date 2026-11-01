@@ -21,7 +21,9 @@ Type design, idioms, errors and observability, performance, and tests.
 - **CS-13** Model tri-state data (not-loaded / missing / present) as one flat
   enum, not nested `Option`s or ad-hoc flags.
 - **CS-19** Give third-party errors their own variant — don't collapse e.g. a
-  `jsonwebtoken` failure into a generic internal error.
+  `jsonwebtoken` failure into a generic internal error. A provider outage
+  (5xx, 429, unreachable, undecodable) is an `upstream_error::UpstreamError`,
+  answered 502/503 — see `crates/upstream_error`.
 - **CS-20** Depending on a rate-limited external provider requires a fallback
   (fallback model, retry story, or documented degradation).
 - **CS-21** Wire usage metering on every invocation path — MCP-triggered tool

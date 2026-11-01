@@ -234,6 +234,8 @@ export * from './trialEligibility';
 export * from './updateAutoReloadRequest';
 export * from './updateAutoReloadRequestMonthlySpendLimitCents';
 export * from './updateOverageRequest';
+export * from './upstreamErrorCode';
+export * from './upstreamErrorResponse';
 export * from './usageSnapshot';
 export * from './usageSnapshotBlockedReason';
 export * from './userLanguage';

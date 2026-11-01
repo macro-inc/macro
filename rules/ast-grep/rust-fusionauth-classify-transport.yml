@@ -1,0 +1,32 @@
+id: rust-fusionauth-classify-transport
+language: rust
+severity: error
+message: Map FusionAuth request failures with `FusionAuthClientError::transport`, not a hand-written error.
+note: |-
+  A FusionAuth request that gets no usable answer (unreachable, timed out,
+  undecodable body) is an upstream failure, answered as 503/502. A
+  hand-written `Generic` makes it a 500 that blames our code. Map the
+  `send()`, `json()`, and `text()` futures with
+  `.map_err(FusionAuthClientError::transport)`, and unexpected statuses with
+  `FusionAuthClientError::unexpected_response` (see crates/upstream_error).
+files:
+  - crates/fusionauth/src/**
+ignores:
+  - '**/test.rs'
+  - '**/test/**'
+  # These call Google and Microsoft directly, not FusionAuth. Their failures
+  # name the provider (`FusionAuthClientError::provider_transport`) or use the
+  # provider's own classified error (`MicrosoftRuntimeError`).
+  - 'crates/fusionauth/src/google/oauth.rs'
+  - 'crates/fusionauth/src/microsoft/oauth.rs'
+  - 'crates/fusionauth/src/microsoft/runtime.rs'
+rule:
+  any:
+    - pattern: $REQUEST.send().await.map_err($MAP)
+    - pattern: $RESPONSE.json().await.map_err($MAP)
+    - pattern: $RESPONSE.json::<$TYPE>().await.map_err($MAP)
+    - pattern: $RESPONSE.text().await.map_err($MAP)
+constraints:
+  MAP:
+    not:
+      regex: ^FusionAuthClientError::transport$
