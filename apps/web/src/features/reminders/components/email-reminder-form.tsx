@@ -59,7 +59,7 @@ export function EmailReminderForm(
             aria-activedescendant={
               props.times.length ? `${id}-${list.selectedIndex()}` : undefined
             }
-            placeholder={`Remind me: ${props.subject}`}
+            placeholder="Type a time, like tomorrow 9am"
             value={props.query}
             disabled={props.pending}
             onInput={(event) => {
