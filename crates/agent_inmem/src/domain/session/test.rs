@@ -8,6 +8,21 @@ fn link(name: &str, uri: &str, mime: Option<&str>) -> ContentBlock {
     ContentBlock::ResourceLink(ResourceLink::new(name, uri).mime_type(mime.map(str::to_owned)))
 }
 
+/// A prompt of `text`, under that text as the id of the request that
+/// carried it.
+fn user(text: &str) -> HistoryEntry {
+    HistoryEntry::User {
+        prompt: UserPrompt::text(text),
+        request_id: RequestId::Str(text.to_owned()),
+    }
+}
+
+fn reply(text: &str) -> HistoryEntry {
+    HistoryEntry::Assistant(vec![AssistantMessagePart::Text {
+        text: text.to_owned(),
+    }])
+}
+
 #[test]
 fn a_prompt_reads_its_text_and_its_file_links_off_the_blocks() {
     let prompt = UserPrompt::from_blocks(&[
@@ -188,4 +203,75 @@ fn image_names_and_source_uris_reach_the_model_after_history_replay() {
         assert!(serialized.contains(&format!("image_source_uri: {uri}")));
         assert!(!serialized.contains("static_file_id"));
     }
+}
+
+#[test]
+fn a_summary_reaches_the_model_as_history_it_already_acted_on() {
+    let history = [
+        HistoryEntry::Summary("The user picked blue.".to_owned()),
+        user("now red"),
+    ];
+
+    let messages = messages_for_turn(&history, &UserPrompt::text("why?"));
+
+    let texts: Vec<_> = messages
+        .iter()
+        .map(|message| (message.role, message.content.message_text_with_tools()))
+        .collect();
+    assert_eq!(
+        texts,
+        [
+            (Role::User, SUMMARY_PREAMBLE.to_owned()),
+            (Role::Assistant, "The user picked blue.".to_owned()),
+            (Role::User, "now red".to_owned()),
+            (Role::User, "why?".to_owned()),
+        ]
+    );
+}
+
+#[test]
+fn a_summary_replaces_its_entries_and_the_earlier_summary_among_them() {
+    let mut history = vec![
+        HistoryEntry::Summary("Before.".to_owned()),
+        user("one"),
+        user("two"),
+        user("three"),
+    ];
+
+    splice_summary(&mut history, "Up to two.".to_owned(), 3);
+
+    let text = |entries: &[HistoryEntry]| -> Vec<String> {
+        entries
+            .iter()
+            .map(|entry| match entry {
+                HistoryEntry::User { prompt, .. } => prompt.text.clone(),
+                HistoryEntry::Summary(summary) => format!("[{summary}]"),
+                HistoryEntry::Assistant(_) => "assistant".to_owned(),
+            })
+            .collect()
+    };
+    assert_eq!(text(&history), ["[Up to two.]", "three"]);
+
+    // A log shorter than the live history it was written from replaces
+    // what it has.
+    splice_summary(&mut history, "All.".to_owned(), 9);
+    assert_eq!(text(&history), ["[All.]"]);
+}
+
+#[test]
+fn a_turn_ends_where_the_next_prompt_starts() {
+    let history = [
+        HistoryEntry::Summary("Before.".to_owned()),
+        user("one"),
+        reply("1"),
+        user("two"),
+        user("three"),
+        reply("3"),
+    ];
+    let end = |id: &str| end_of_turn(&history, &RequestId::Str(id.to_owned()));
+
+    assert_eq!(end("one"), Some(3), "after its reply");
+    assert_eq!(end("two"), Some(4), "a turn without a reply is its prompt");
+    assert_eq!(end("three"), Some(6), "the last turn ends the history");
+    assert_eq!(end("four"), None, "no such prompt");
 }

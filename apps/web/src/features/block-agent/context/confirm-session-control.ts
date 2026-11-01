@@ -1,6 +1,6 @@
 import type { AgentSession } from '@core/agent-session/AgentSession';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { AgentAction } from '@service-agent-harness/generated/schemas';
-
 import { issueSessionAction } from '../queries/issue-session-action';
 
 /** HTTP acceptance only queues a control. Wait for its correlated ACP outcome. */
@@ -49,7 +49,9 @@ export async function confirmSessionControl(
         finish(new Error('The agent did not confirm the selected setting.')),
       60_000
     );
-    const unsubscribe = session.subscribe(() => void inspect());
-    void inspect();
+    const unsubscribe = session.subscribe(() =>
+      fireAndForget(inspect(), 'agent-session')
+    );
+    fireAndForget(inspect(), 'agent-session');
   });
 }

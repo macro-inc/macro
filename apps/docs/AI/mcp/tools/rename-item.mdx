@@ -1,0 +1,17 @@
+---
+title: RenameItem
+description: >-
+  Rename a project (shown as a folder in the app).
+---
+
+# RenameItem
+
+Rename a project (shown as a folder in the app). Renaming a project requires edit access. Use RenameDocument for documents and tasks, and RenameChannel for channels.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `entityType` | `"project"` | Yes | The kind of item to rename. |
+| `entityId` | string | Yes | The id of the item to rename. |
+| `name` | string | Yes | The new name. |

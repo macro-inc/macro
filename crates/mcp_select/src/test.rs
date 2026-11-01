@@ -3,6 +3,8 @@ use mcp_client::domain::models::McpServerRecord;
 use pipedream_mcp::domain::models::{McpServer, PipedreamConnection};
 use std::sync::Mutex;
 
+mod combined_tools;
+
 const SLACK: ConnectorRef<'static> = ConnectorRef {
     pipedream_app_slugs: &["slack", "slack_v2"],
     native_server_url: "https://mcp.slack.com/mcp",
@@ -66,10 +68,6 @@ impl McpServerStore for FakeStore {
     }
 
     async fn list(&self, _: &MacroUserIdStr<'static>) -> Result<Vec<McpServerRecord>, Self::Err> {
-        assert!(
-            self.connections.is_empty() || !self.native_records.is_empty(),
-            "Pipedream connections exclude the native stack"
-        );
         Ok(self.native_records.clone())
     }
 }
@@ -145,7 +143,7 @@ async fn unconfigured_pipedream_preserves_native_connector_selection() {
 
     assert!(matches!(
         selector.user_toolset(&user()).await,
-        UserMcpTools::Native(_)
+        UserMcpTools::Pipedream(_)
     ));
     for connector in connectors {
         assert!(matches!(
@@ -153,7 +151,7 @@ async fn unconfigured_pipedream_preserves_native_connector_selection() {
                 .connector_toolset(&user(), connector)
                 .await
                 .unwrap(),
-            Some(UserMcpTools::Native(_))
+            None
         ));
         assert!(
             !selector
@@ -166,7 +164,7 @@ async fn unconfigured_pipedream_preserves_native_connector_selection() {
 }
 
 #[tokio::test]
-async fn configured_optional_pipedream_keeps_precedence_over_native() {
+async fn configured_optional_pipedream_remains_available() {
     let configured = selector(&["slack"]);
     let selector = McpToolSelector::new(
         configured.native_store,
@@ -290,4 +288,143 @@ async fn empty_alias_list_does_not_match() {
             .unwrap()
             .is_empty()
     );
+}
+
+#[tokio::test]
+async fn native_status_survives_unrelated_pipedream_connection() {
+    let mut selector = selector(&["stripe"]);
+    selector.native_store = Arc::new(FakeStore {
+        connections: vec![],
+        native_records: vec![McpServerRecord {
+            user_id: user(),
+            url: SLACK.native_server_url.into(),
+            server_name: "Renamed".into(),
+            enabled: true,
+            credentials: Some(
+                serde_json::from_value(
+                    serde_json::json!({"client_id":"test", "token_response":null}),
+                )
+                .unwrap(),
+            ),
+        }],
+    });
+    assert!(selector.connector_connected(&user(), SLACK).await.unwrap());
+}
+
+#[tokio::test]
+async fn disabled_pipedream_is_not_connected_or_dispatched() {
+    let mut selector = selector(&["slack"]);
+    let mut records = selector.pipedream_store.connections.clone();
+    records[0].enabled = false;
+    selector.pipedream_store = Arc::new(FakeStore {
+        connections: records,
+        native_records: vec![],
+    });
+    assert!(!selector.connector_connected(&user(), SLACK).await.unwrap());
+    assert!(
+        selector
+            .connector_toolset(&user(), SLACK)
+            .await
+            .unwrap()
+            .is_none()
+    );
+}
+
+// Real MCP clients against a local JSON-RPC server exercise discovery and
+// dispatch on both stacks without requiring third-party credentials.
+async fn mock_mcp(axum::Json(request): axum::Json<serde_json::Value>) -> axum::response::Response {
+    use axum::response::IntoResponse;
+    let Some(id) = request.get("id") else {
+        return axum::http::StatusCode::ACCEPTED.into_response();
+    };
+    let result = match request["method"].as_str().unwrap_or_default() {
+        "initialize" => serde_json::json!({
+            "protocolVersion": "2025-03-26", "capabilities": {"tools": {}},
+            "serverInfo": {"name": "test", "version": "1"}
+        }),
+        "tools/list" => serde_json::json!({"tools":[{
+            "name":"ping", "description":"Test tool", "inputSchema":{"type":"object","properties":{}}
+        }]}),
+        "tools/call" => {
+            serde_json::json!({"content":[{"type":"text","text":"pong"}], "isError":false})
+        }
+        _ => serde_json::json!({}),
+    };
+    axum::Json(serde_json::json!({"jsonrpc":"2.0", "id":id, "result":result})).into_response()
+}
+
+struct HttpConnection(String);
+impl McpConnection for HttpConnection {
+    fn is_configured(&self) -> bool {
+        true
+    }
+
+    async fn connect(&self, _: &PipedreamConnection) -> anyhow::Result<McpServer> {
+        use rmcp::ServiceExt;
+        Ok(mcp_client::domain::models::client_info()
+            .serve(rmcp::transport::StreamableHttpClientTransport::from_uri(
+                self.0.clone(),
+            ))
+            .await?)
+    }
+}
+
+#[tokio::test]
+async fn mixed_stack_discovers_and_dispatches_both_and_deduplicates_names() {
+    tokio::time::timeout(std::time::Duration::from_secs(15), async {
+        let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+        let url = format!("http://{}/mcp", listener.local_addr().unwrap());
+        let server = tokio::spawn(async move {
+            axum::serve(
+                listener,
+                axum::Router::new().route("/mcp", axum::routing::post(mock_mcp)),
+            )
+            .await
+            .unwrap();
+        });
+        for hosted_name in ["Hosted", "Native"] {
+            let store = Arc::new(FakeStore {
+                connections: vec![PipedreamConnection {
+                    user_id: user(),
+                    app_slug: "stripe".into(),
+                    server_name: hosted_name.into(),
+                    account_id: "test".into(),
+                    enabled: true,
+                }],
+                native_records: vec![McpServerRecord {
+                    user_id: user(),
+                    url: url.clone(),
+                    server_name: "Native".into(),
+                    credentials: None,
+                    enabled: true,
+                }],
+            });
+            let selector =
+                McpToolSelector::new(store.clone(), store, Arc::new(HttpConnection(url.clone())));
+            let tools = selector.user_toolset(&user()).await;
+            assert!(matches!(tools, UserMcpTools::Mixed { .. }));
+            let catalog = tools.catalog();
+            assert_eq!(catalog.len(), if hosted_name == "Hosted" { 2 } else { 1 });
+            assert_eq!(
+                ToolSet::<()>::request_schemas(&tools).unwrap().len(),
+                catalog.len()
+            );
+            for tool in catalog {
+                let result = tools
+                    .dispatch_tool_call(
+                        (),
+                        RequestContext::new(user()),
+                        &tool.name,
+                        &serde_json::json!({}),
+                    )
+                    .await
+                    .unwrap()
+                    .unwrap();
+                assert!(result.to_string().contains("pong"));
+            }
+        }
+        server.abort();
+    })
+    .await
+    .expect("local MCP discovery must not hang");
 }

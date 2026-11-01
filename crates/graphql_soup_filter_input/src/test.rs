@@ -142,6 +142,7 @@ fn initiative_filters_materialize_for_browser_and_server() {
         json!({"nameContains": "Launch"}),
         json!({"dueBefore": "2026-10-01T00:00:00Z"}),
         json!({"dueAfter": "2026-09-01T00:00:00Z"}),
+        json!({"notificationState": "UNSEEN"}),
     ] {
         let value = json!({"initiativeFilter": {"literal": literal}});
         let ast = materialize_graphql_filter(value.clone()).unwrap();
@@ -187,6 +188,33 @@ fn initiative_property_filters_preserve_entity_scope() {
             ..
         }))
     ));
+}
+
+#[test]
+fn database_row_include_materializes_and_false_is_rejected() {
+    let input = json!({"databaseRowFilter": {"literal": {"include": true}}});
+    let ast = materialize_graphql_filter(input.clone()).unwrap();
+    assert_eq!(
+        ast.database_row_filter.as_deref(),
+        Some(&Expr::val(DatabaseRowLiteral::Include))
+    );
+    let graphql: GraphqlEntityFilterAst = serde_json::from_value(input).unwrap();
+    assert_eq!(
+        serde_json::to_value(ast).unwrap(),
+        serde_json::to_value(graphql.into_ast().unwrap()).unwrap()
+    );
+    assert!(
+        materialize_graphql_filter(json!({
+            "databaseRowFilter": {"literal": {"include": false}}
+        }))
+        .is_err()
+    );
+    assert!(
+        materialize_graphql_filter(json!({}))
+            .unwrap()
+            .database_row_filter
+            .is_none()
+    );
 }
 
 #[test]
@@ -284,6 +312,47 @@ fn crm_document_literals_materialize_for_browser_and_server() {
 }
 
 #[test]
+fn crm_association_materializes_for_browser_and_server() {
+    let company_id = "0198a1b2-c3d4-7e5f-8061-728394a5b700";
+    let contact_id = "0198a1b2-c3d4-7e5f-8061-728394a5b701";
+    let value = json!({
+        "crmAssociation": {"company": company_id},
+        "documentFilter": {"or": {
+            "left": {"literal": {"crmAssociated": {"contact": contact_id}}},
+            "right": {"literal": {"nameContains": "Renewal"}}
+        }}
+    });
+    let ast = materialize_graphql_filter(value.clone()).unwrap();
+    let input: GraphqlEntityFilterAst = serde_json::from_value(value).unwrap();
+    assert_eq!(
+        serde_json::to_value(&ast).unwrap(),
+        serde_json::to_value(input.into_ast().unwrap()).unwrap()
+    );
+
+    assert_eq!(
+        ast.crm_association,
+        Some(CrmAssociation::Company(
+            Uuid::parse_str(company_id).unwrap()
+        ))
+    );
+    let Some(Expr::Or(left, right)) = ast.document_filter.as_deref() else {
+        panic!("expected an OR of the association and the name literal")
+    };
+    assert!(matches!(
+        left.as_ref(),
+        Expr::Literal(DocumentLiteral::CrmAssociated(CrmAssociation::Contact(id)))
+            if id.to_string() == contact_id
+    ));
+    assert!(matches!(
+        right.as_ref(),
+        Expr::Literal(DocumentLiteral::NameContains(name)) if name == "Renewal"
+    ));
+    assert!(
+        materialize_graphql_filter(json!({"crmAssociation": {"company": "not-a-uuid"}})).is_err()
+    );
+}
+
+#[test]
 fn contacts_are_opt_in_and_normalize_full_email_filters() {
     assert!(
         materialize_graphql_filter(json!({}))
@@ -306,4 +375,15 @@ fn contacts_are_opt_in_and_normalize_full_email_filters() {
         )
         .is_err()
     );
+}
+
+#[test]
+fn activity_association_accepts_only_true() {
+    let ast = materialize_graphql_filter(json!({"crmAssociation": {"activity": true}})).unwrap();
+    assert_eq!(ast.crm_association, Some(CrmAssociation::Activity));
+    assert_eq!(
+        serde_json::to_value(CrmAssociation::Activity).unwrap(),
+        json!("activity")
+    );
+    assert!(materialize_graphql_filter(json!({"crmAssociation": {"activity": false}})).is_err());
 }

@@ -26,6 +26,7 @@ fn event() -> EventType {
         description: String::new(),
         duration_minutes: 30,
         location: String::new(),
+        macro_call: false,
         google_meet: false,
         enabled: true,
         schedule_id: Uuid::nil(),
@@ -238,4 +239,49 @@ fn primary_schedule_rejects_slots_that_leave_hours_during_fall_back() {
         .unwrap()
         .is_empty()
     );
+}
+
+#[test]
+fn saved_links_without_a_macro_call_keep_google_meet() {
+    let event: EventType = serde_json::from_value(serde_json::json!({
+        "id": Uuid::nil(),
+        "title": "Meeting",
+        "slug": "meeting",
+        "description": "",
+        "durationMinutes": 30,
+        "location": "",
+        "googleMeet": true,
+        "enabled": true,
+        "scheduleId": Uuid::nil(),
+        "mode": "collective",
+        "hosts": ["a", "b"],
+        "beforeMinutes": 0,
+        "afterMinutes": 0,
+        "noticeMinutes": 0,
+        "horizonDays": 30,
+        "intervalMinutes": 30,
+        "dailyLimit": null,
+        "requiresConfirmation": false,
+        "questions": []
+    }))
+    .unwrap();
+    assert!(event.google_meet);
+    assert!(!event.macro_call);
+}
+
+#[test]
+fn a_link_cannot_request_both_a_macro_call_and_google_meet() {
+    let mut profile = Profile {
+        id: Uuid::nil(),
+        name: "Calendar".into(),
+        description: String::new(),
+        schedules: vec![schedule()],
+        default_schedule_id: None,
+        event_types: vec![event()],
+        revision: 0,
+    };
+    profile.event_types[0].macro_call = true;
+    assert!(validate_profile(&profile, true).is_ok());
+    profile.event_types[0].google_meet = true;
+    assert!(validate_profile(&profile, true).is_err());
 }

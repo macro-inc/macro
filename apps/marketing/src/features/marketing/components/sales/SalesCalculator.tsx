@@ -2,6 +2,7 @@ import CheckIcon from '@phosphor/check.svg';
 import MinusIcon from '@phosphor/minus.svg';
 import PlusIcon from '@phosphor/plus.svg';
 import { createSignal, For, Show } from 'solid-js';
+import { demoHref } from '../../../../app/utils/utilCta';
 import {
   formatWholeUsd,
   SALES_DEFAULT_SEATS,
@@ -28,7 +29,9 @@ const TIERS: readonly { id: SalesTier; label: string }[] = [
 ];
 
 /** Thumb-sized version of the pricing calculator for the ad landing page. */
-export function SalesCalculator(props: { onBook: () => void }) {
+export function SalesCalculator(props: {
+  onBook: (event: MouseEvent) => void;
+}) {
   const [seats, setSeats] = createSignal(SALES_DEFAULT_SEATS);
   const [tier, setTier] = createSignal<SalesTier>(SALES_DEFAULT_TIER);
   const [selected, setSelected] =
@@ -156,13 +159,13 @@ export function SalesCalculator(props: { onBook: () => void }) {
               <span>every year</span>
             </p>
           </Show>
-          <button
-            type="button"
-            class="site-nav-start homepage-hero-cta"
-            onClick={() => props.onBook()}
+          <a
+            class="site-nav-start homepage-hero-cta tour-cta"
+            href={demoHref()}
+            onClick={(event) => props.onBook(event)}
           >
             Book a demo
-          </button>
+          </a>
         </div>
       </div>
       <p class="sales-calc-note">

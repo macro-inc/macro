@@ -1,3 +1,4 @@
+import { previewKeys } from '@queries/preview/keys';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { calendarKeys } from '../keys';
 import { handleRefreshCalendar } from '../sync';
@@ -5,10 +6,10 @@ import { handleRefreshCalendar } from '../sync';
 const invalidateQueriesMock = vi.hoisted(() => vi.fn());
 const isMutatingMock = vi.hoisted(() => vi.fn());
 const invalidateCalendarOccurrencesMock = vi.hoisted(() => vi.fn());
-const resetTeamCalendarQueriesMock = vi.hoisted(() => vi.fn());
+const refreshTeamCalendarQueriesMock = vi.hoisted(() => vi.fn());
 
 vi.mock('../team-cache', () => ({
-  resetTeamCalendarQueries: resetTeamCalendarQueriesMock,
+  refreshTeamCalendarQueries: refreshTeamCalendarQueriesMock,
 }));
 
 vi.mock('../../client', () => ({
@@ -35,7 +36,9 @@ describe('handleRefreshCalendar', () => {
     });
 
     expect(invalidateCalendarOccurrencesMock).toHaveBeenCalledTimes(1);
-    expect(resetTeamCalendarQueriesMock).toHaveBeenCalledTimes(1);
+    expect(refreshTeamCalendarQueriesMock).toHaveBeenCalledWith({
+      outOfOfficeChanged: true,
+    });
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
       queryKey: calendarKeys.invitations._def,
     });
@@ -43,8 +46,27 @@ describe('handleRefreshCalendar', () => {
       queryKey: calendarKeys.visibleCalendars.queryKey,
     });
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
-      queryKey: calendarKeys.teamOutOfOffice._def,
+      queryKey: calendarKeys.joinRequests._def,
     });
+  });
+
+  it("refetches a requester's view of the answered event, and nothing else", () => {
+    handleRefreshCalendar({
+      event: 'join_request_answered',
+      event_id: 'shared-event',
+    });
+
+    expect(invalidateQueriesMock).toHaveBeenCalledWith({
+      queryKey: previewKeys.item('shared-event').queryKey,
+    });
+    expect(invalidateQueriesMock).toHaveBeenCalledWith({
+      queryKey: [...calendarKeys.mentionPreview._def, 'shared-event'],
+    });
+    expect(invalidateQueriesMock).not.toHaveBeenCalledWith({
+      queryKey: calendarKeys.visibleCalendars.queryKey,
+    });
+    expect(invalidateCalendarOccurrencesMock).not.toHaveBeenCalled();
+    expect(refreshTeamCalendarQueriesMock).not.toHaveBeenCalled();
   });
 
   it('defers the occurrence refetch while an RSVP is in flight', () => {
@@ -74,6 +96,8 @@ describe('handleRefreshCalendar', () => {
     });
     handleRefreshCalendar({ event: 'synced' });
     handleRefreshCalendar({ event: 'synced', link_id: 42 });
+    handleRefreshCalendar({ event: 'join_request_answered' });
+    handleRefreshCalendar({ event: 'join_request_answered', event_id: 42 });
 
     expect(invalidateCalendarOccurrencesMock).not.toHaveBeenCalled();
     expect(invalidateQueriesMock).not.toHaveBeenCalled();
@@ -81,7 +105,36 @@ describe('handleRefreshCalendar', () => {
 
   it('clears team projections on sharing changes without touching own optimistic events', () => {
     handleRefreshCalendar({ event: 'team_sharing_changed' });
-    expect(resetTeamCalendarQueriesMock).toHaveBeenCalledTimes(1);
+    expect(refreshTeamCalendarQueriesMock).toHaveBeenCalledWith({
+      outOfOfficeChanged: true,
+    });
     expect(invalidateCalendarOccurrencesMock).not.toHaveBeenCalled();
   });
+
+  it.each(['synced', 'team_sharing_changed'])(
+    'keeps OOO rows when %s explicitly excludes OOO changes',
+    (event) => {
+      handleRefreshCalendar({
+        event,
+        link_id: 'inbox',
+        team_ooo_changed: false,
+      });
+      expect(refreshTeamCalendarQueriesMock).toHaveBeenCalledWith({
+        outOfOfficeChanged: false,
+      });
+    }
+  );
+
+  it.each([true, undefined, null, 'false', 0])(
+    'clears OOO rows for a missing or unsafe hint: %s',
+    (team_ooo_changed) => {
+      handleRefreshCalendar({
+        event: 'team_sharing_changed',
+        team_ooo_changed,
+      });
+      expect(refreshTeamCalendarQueriesMock).toHaveBeenCalledWith({
+        outOfOfficeChanged: true,
+      });
+    }
+  );
 });

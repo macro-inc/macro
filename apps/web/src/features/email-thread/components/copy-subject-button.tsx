@@ -1,5 +1,5 @@
 import { isPlaceholderSubject } from '@app/features/email-compose/core/subject-text';
-import CopyIcon from '@phosphor/copy.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
 import { CopyButton } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { Show } from 'solid-js';
@@ -27,7 +27,6 @@ export function CopySubjectButton(props: {
       <CopyButton
         variant="ghost"
         size="icon-sm"
-        noTouchResize
         aria-label="Copy subject"
         class={cn('align-middle text-inherit', props.class)}
         onClick={handleCopy}

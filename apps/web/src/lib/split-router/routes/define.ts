@@ -30,6 +30,7 @@ type SplitRouteDefinitionConstraint = {
     | readonly string[]
     | '*'
     | ((entry: Readonly<Entry>) => readonly string[]);
+  mountKey?: string;
   remountKey?: unknown;
   preload?: unknown;
   info?: SplitRouteInfo;
@@ -38,7 +39,10 @@ type SplitRouteDefinitionConstraint = {
 type RouteParamCallbacks<TParams> = {
   serializeParams?: (params: TParams) => SplitRouteRawParams;
   claim?: (params: TParams) => SplitRouteClaim | undefined;
-  toReference?: (params: TParams) => SplitReference | undefined;
+  toReference?: (
+    params: TParams,
+    query: URLSearchParams
+  ) => SplitReference | undefined;
   remountKey?: (
     params: TParams,
     context: SplitRouteRemountContext

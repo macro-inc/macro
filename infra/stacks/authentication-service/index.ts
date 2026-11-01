@@ -15,7 +15,7 @@ import { UserLinkCleanupHandler } from './user-link-cleanup-lambda';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: 'authentication-service',
 };
 

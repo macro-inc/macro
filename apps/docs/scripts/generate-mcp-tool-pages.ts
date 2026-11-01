@@ -12,7 +12,7 @@ type ToolEntry = {
   output: string;
 };
 
-/** Shape of `crates/ai_tools/schemas/tools.json`. */
+/** Shape of `crates/ai_tools/schemas/mcp-tools.json`. */
 type ToolSchemaFile = {
   $defs: Record<string, JsonSchema>;
   tools: ToolEntry[];
@@ -29,7 +29,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const docsDir = path.resolve(__dirname, '..');
 const repoRoot = path.resolve(docsDir, '../..');
 const aiToolsDir = path.join(repoRoot, 'crates', 'ai_tools');
-const toolJsonPath = path.join(aiToolsDir, 'schemas', 'tools.json');
+const toolJsonPath = path.join(aiToolsDir, 'schemas', 'mcp-tools.json');
 const outputDir = path.join(docsDir, 'AI', 'mcp', 'tools');
 const navOutputPath = path.join(docsDir, 'config', 'tool-pages.json');
 const docsJsonPath = path.join(docsDir, 'docs.json');
@@ -186,10 +186,9 @@ ${rows.join('\n')}`;
 }
 
 async function buildAndRunSchemaGenerator() {
-  await $`cd ${repoRoot} && SQLX_OFFLINE=true cargo build --bin gen_tool_schemas`;
-  await $`rm -rf ${path.join(aiToolsDir, 'schemas')}`.quiet();
+  await $`SQLX_OFFLINE=true cargo build --bin gen_tool_schemas`.cwd(repoRoot);
   const binaryPath = path.join(repoRoot, 'target', 'debug', 'gen_tool_schemas');
-  await $`cd ${aiToolsDir} && ${binaryPath}`;
+  await $`${binaryPath} --mcp`.cwd(aiToolsDir);
 }
 
 async function loadSchemas(): Promise<ToolSchemaFile> {
@@ -313,7 +312,9 @@ async function writeNavigation(navPages: string[]) {
 
 async function main() {
   const file = await loadSchemas();
-  const tools = resolveTools(file).sort((a, b) => a.name.localeCompare(b.name));
+  // Public MCP schemas omit historical frontend compatibility and private tools.
+  const tools = resolveTools(file)
+    .sort((a, b) => a.name.localeCompare(b.name));
 
   await resetGeneratedPages();
 

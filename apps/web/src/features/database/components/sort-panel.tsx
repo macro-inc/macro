@@ -1,7 +1,6 @@
-import GripIcon from '@phosphor/dots-six-vertical.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import XIcon from '@phosphor/x.svg';
-import type { DatabaseView } from '@service-storage/generated/schemas/databaseView';
+import GripIcon from '@icon/system/regular/dots-six-vertical.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
 import { DragDropProvider, DragOverlay } from '@thisbeyond/solid-dnd';
 import { Button } from '@ui/components/Button';
@@ -14,13 +13,13 @@ import { VerticalInsertionLine } from '../../../components/drag-drop/insertion-l
 import type { SortKey } from '../../../lib/core/database-sql/generated/types';
 import type { DatabaseViewColumn } from '../core/database-view';
 import { withSort, withSortMoved } from '../core/view-query';
-import type { ViewChange } from '../core/view-state';
+import type { DatabaseViewState, ViewChange } from '../core/view-state';
 import { ViewSelect } from './view-select';
 
 /** A view's sort levels, first first; drag a level's handle to change its priority. */
 export function SortPanel(props: {
   columns: DatabaseViewColumn[];
-  view: DatabaseView;
+  view: DatabaseViewState;
   onChange: (change: ViewChange) => void;
 }) {
   const [list, setList] = createSignal<HTMLElement>();
@@ -127,9 +126,10 @@ export function SortPanel(props: {
                     }
                   />
                   <Button
+                    variant="ghost"
+                    aria-label="Remove sort"
+                    tooltip={{ content: 'Remove sort', disabled: true }}
                     size="icon-sm"
-                    label="Remove sort"
-                    tooltipDisabled
                     onClick={() =>
                       setSort(withSort(sort(), key().column, null))
                     }

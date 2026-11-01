@@ -60,6 +60,10 @@ const RoutePrivacy = lazy(() =>
 const RouteDpa = lazy(() =>
   import('../routes/RouteDpa').then((module) => ({ default: module.RouteDpa }))
 );
+const RouteDeleteAccount = lazy(async () => {
+  const module = await import('../routes/RouteDeleteAccount');
+  return { default: module.RouteDeleteAccount };
+});
 const RouteTest = lazy(() =>
   import('../routes/RouteTest').then((module) => ({
     default: module.RouteTest,
@@ -117,6 +121,22 @@ const RouteGithub = lazy(() =>
     })
   )
 );
+// Resolve the requested product module (including its CSS) before replacing
+// prerendered HTML. Otherwise the root paints only the header on a cold visit.
+export function preloadProductRoute(pathname: string) {
+  const routes = new Map([
+    ['/tasks', RouteTasks],
+    ['/email', RouteEmail],
+    ['/documents', RouteDocuments],
+    ['/channels', RouteChannels],
+    ['/calls', RouteCalls],
+    ['/crm', RouteCrm],
+    ['/agents', RouteAgents],
+    ['/github', RouteGithub],
+  ]);
+  return routes.get(pathname.replace(/\/$/, ''))?.preload();
+}
+
 const RoutePricing = lazy(() =>
   import('../routes/RoutePricing').then((module) => ({
     default: module.RoutePricing,
@@ -244,12 +264,21 @@ const RootLayout: ParentComponent = (props) => {
                 width: 'calc(100vw / var(--site-scale, 1))',
               }}
             >
-              <BaseHeader
-                ctaActive={headerCtaActive()}
-                hideOpenApp={
-                  location.pathname.replace(/\/$/, '') === '/download'
+              {/* The phone signup pages are only the email capture. */}
+              <Show
+                when={
+                  ![MOBILE_SIGNUP_PATH, MOBILE_SIGNUP_SENT_PATH].includes(
+                    location.pathname.replace(/\/$/, '')
+                  )
                 }
-              />
+              >
+                <BaseHeader
+                  ctaActive={headerCtaActive()}
+                  hideOpenApp={
+                    location.pathname.replace(/\/$/, '') === '/download'
+                  }
+                />
+              </Show>
               <UtilWrap>{props.children}</UtilWrap>
             </div>
             <PageVignette />
@@ -280,6 +309,7 @@ export const App: Component<{
       <Route path="/jobs" component={RouteJobs} />
       <Route path="/terms" component={RouteTerms} />
       <Route path="/privacy" component={RoutePrivacy} />
+      <Route path="/delete-account" component={RouteDeleteAccount} />
       <Route path="/dpa" component={RouteDpa} />
       <Route path="/posts" component={PostsIndex} />
       <Route path="/posts/:slug" component={PostPage} />

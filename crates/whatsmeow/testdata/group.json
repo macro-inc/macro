@@ -1,0 +1,485 @@
+{
+  "broken_group_error": "[didn't find required attribute 'id']",
+  "broken_group_info": {
+    "addressing_mode": "",
+    "announce_version_id": "",
+    "creator_country_code": "",
+    "default_membership_approval_mode": "",
+    "disappearing_timer": 0,
+    "group_created": 0,
+    "is_announce": false,
+    "is_default_sub_group": false,
+    "is_ephemeral": false,
+    "is_incognito": false,
+    "is_join_approval_required": false,
+    "is_locked": false,
+    "is_parent": false,
+    "jid": "g.us",
+    "linked_parent_jid": "",
+    "member_add_mode": "",
+    "name": "No ID",
+    "name_set_at": 0,
+    "name_set_by": "",
+    "name_set_by_pn": "",
+    "owner_jid": "",
+    "owner_pn": "",
+    "participant_count": 0,
+    "participant_version_id": "",
+    "participants": [],
+    "suspended": false,
+    "topic": "",
+    "topic_deleted": false,
+    "topic_id": "",
+    "topic_set_at": 0,
+    "topic_set_by": "",
+    "topic_set_by_pn": ""
+  },
+  "broken_group_node": "00f803ecaaec7ffc054e6f204944",
+  "cached_after_changes": {
+    "addressing_mode": "lid",
+    "admins": [
+      "5555@lid"
+    ],
+    "community_announcement_group": true,
+    "members": [
+      "6666@s.whatsapp.net",
+      "2222@lid",
+      "3333@s.whatsapp.net",
+      "4444@s.whatsapp.net",
+      "5555@lid"
+    ],
+    "read_only": false
+  },
+  "create_node": "00f8120906faff091203630077777777771c04ec2008fc056e6f7469661aff05170000010005faeee276fc0e7061727469636970616e745f706efaeee20318fc054f776e6572fc0f61646472657373696e675f6d6f646576f801f808ef4c9efc03636b3104fc036e6577ec2eec61f801f808ecaaec7ffc0546726573683cff05170000005008ff09120363007777777777f802f809050cfaeee27604ec94fc0c70686f6e655f6e756d626572faeee20348fc0a2b31e28899e288993131f803050cfaff02987676",
+  "group_change_failures": [
+    {
+      "error": "group change doesn't contain required attributes: [didn't find required attribute 't']",
+      "node": "00f8030906faff091203630012345678901c"
+    },
+    {
+      "error": "group change subject element doesn't contain required attributes: [didn't find required attribute 'subject']",
+      "node": "00f8100908fc056e6f7469661aff05170000010005faeee276fc0e7061727469636970616e745f706efaeee20318fc054f776e657206faff091203630012345678901c04ec20f801f803ec7fecee55"
+    },
+    {
+      "error": "missing \u003cgroup\u003e element in group link",
+      "node": "00f8100906faff091203630012345678901c04ec2008fc056e6f7469661aff05170000010005faeee276fc0e7061727469636970616e745f706efaeee20318fc054f776e6572f801f803fc046c696e6bfc096c696e6b5f74797065fc097375625f67726f7570"
+    },
+    {
+      "error": "group create notification didn't contain group info",
+      "node": "00f8100904ec2008fc056e6f7469661aff05170000010005faeee276fc0e7061727469636970616e745f706efaeee20318fc054f776e657206faff091203630012345678901cf801f801ef4c"
+    }
+  ],
+  "group_changes": [
+    {
+      "event": {
+        "announce": null,
+        "delete": null,
+        "demote": [],
+        "ephemeral": null,
+        "jid": "120363001234567890@g.us",
+        "join": [
+          "5555@lid",
+          "6666@s.whatsapp.net",
+          "1111@lid"
+        ],
+        "join_reason": "invite",
+        "leave": [],
+        "link": null,
+        "locked": null,
+        "membership_approval_mode": null,
+        "name": null,
+        "new_invite_link": null,
+        "notify": "Owner",
+        "participant_version_id": "2",
+        "prev_participant_version_id": "1",
+        "promote": [],
+        "sender": "1111@lid",
+        "sender_pn": "1111@s.whatsapp.net",
+        "suspended": false,
+        "timestamp": 1700000100,
+        "topic": null,
+        "unknown_changes": [],
+        "unlink": null,
+        "unsuspended": false
+      },
+      "lid_pairs": [
+        [
+          "5555@lid",
+          "5555@s.whatsapp.net"
+        ],
+        [
+          "6666@lid",
+          "6666@s.whatsapp.net"
+        ]
+      ],
+      "node": "00f81009fc0e7061727469636970616e745f706efaeee20318fc054f776e657206faff091203630012345678901c04ec2008fc056e6f7469661aff05170000010005faeee276f801f80897ec2eec61ec2655ec7245f803f805050cfaff02555576fc0c70686f6e655f6e756d626572faff02555503f805050cfaff0266660376faff02666676f803050cfaeee276"
+    },
+    {
+      "event": {
+        "announce": null,
+        "delete": null,
+        "demote": [],
+        "ephemeral": null,
+        "jid": "120363001234567890@g.us",
+        "join": [],
+        "join_reason": "",
+        "leave": [
+          "1111@lid"
+        ],
+        "link": null,
+        "locked": null,
+        "membership_approval_mode": null,
+        "name": null,
+        "new_invite_link": null,
+        "notify": "Owner",
+        "participant_version_id": "",
+        "prev_participant_version_id": "",
+        "promote": [
+          "5555@lid",
+          "2222@lid"
+        ],
+        "sender": "1111@lid",
+        "sender_pn": "1111@s.whatsapp.net",
+        "suspended": false,
+        "timestamp": 1700000100,
+        "topic": null,
+        "unknown_changes": [],
+        "unlink": null,
+        "unsuspended": false
+      },
+      "lid_pairs": [],
+      "node": "00f8100904ec2008fc056e6f7469661aff05170000010005faeee276fc0e7061727469636970616e745f706efaeee20318fc054f776e657206faff091203630012345678901cf802f804afec72a2f801f803050cfaeee276f802fc0770726f6d6f7465f802f803050cfaff02555576f803050cfaef3e76"
+    },
+    {
+      "event": {
+        "announce": {
+          "announce_version_id": "a2",
+          "is_announce": true
+        },
+        "delete": null,
+        "demote": [
+          "2222@lid"
+        ],
+        "ephemeral": {
+          "disappearing_timer": 604800,
+          "is_ephemeral": true
+        },
+        "jid": "120363001234567890@g.us",
+        "join": [],
+        "join_reason": "",
+        "leave": [],
+        "link": null,
+        "locked": true,
+        "membership_approval_mode": true,
+        "name": {
+          "name": "Renamed",
+          "name_set_at": 1700000101,
+          "name_set_by": "1111@lid",
+          "name_set_by_pn": "1111@s.whatsapp.net"
+        },
+        "new_invite_link": "https://chat.whatsapp.com/XyZ",
+        "notify": "Owner",
+        "participant_version_id": "",
+        "prev_participant_version_id": "",
+        "promote": [],
+        "sender": "1111@lid",
+        "sender_pn": "1111@s.whatsapp.net",
+        "suspended": true,
+        "timestamp": 1700000100,
+        "topic": {
+          "topic": "New topic",
+          "topic_deleted": false,
+          "topic_id": "topic2",
+          "topic_set_at": 1700000100,
+          "topic_set_by": "1111@lid"
+        },
+        "unknown_changes": [
+          "mystery"
+        ],
+        "unlink": null,
+        "unsuspended": false
+      },
+      "lid_pairs": [
+        [
+          "2222@lid",
+          "2222@s.whatsapp.net"
+        ]
+      ],
+      "node": "00f81009fc0e7061727469636970616e745f706efaeee20318fc054f776e657206faff091203630012345678901c04ec2008fc056e6f7469661aff05170000010005faeee276f80af802fc0664656d6f7465f801f805050cfaef3e76fc0c70686f6e655f6e756d626572faef3e03f809ec7fec7ffc0752656e616d6564eceeff051700000101ed16faeee276fc06735f6f5f706efaeee203f804b708fc06746f70696332f801f802ed75fc094e657720746f706963f803ed02ec72fc026132f803ec6170fc0358795af803edc8bbff03604800f801ed2bf801fc186d656d626572736869705f617070726f76616c5f6d6f6465f801fc0973757370656e646564f801fc076d797374657279"
+    },
+    {
+      "event": {
+        "announce": {
+          "announce_version_id": "a3",
+          "is_announce": false
+        },
+        "delete": {
+          "delete_reason": "admin",
+          "deleted": true
+        },
+        "demote": [],
+        "ephemeral": {
+          "disappearing_timer": 0,
+          "is_ephemeral": false
+        },
+        "jid": "120363001234567890@g.us",
+        "join": [],
+        "join_reason": "",
+        "leave": [],
+        "link": {
+          "group": {
+            "is_default_sub_group": true,
+            "jid": "120363009999999999@g.us",
+            "name": "Community",
+            "name_set_at": 1700000003
+          },
+          "type": "parent_group",
+          "unlink_reason": ""
+        },
+        "locked": false,
+        "membership_approval_mode": null,
+        "name": null,
+        "new_invite_link": null,
+        "notify": "Owner",
+        "participant_version_id": "",
+        "prev_participant_version_id": "",
+        "promote": [],
+        "sender": "1111@lid",
+        "sender_pn": null,
+        "suspended": false,
+        "timestamp": 1700000100,
+        "topic": {
+          "topic": "",
+          "topic_deleted": true,
+          "topic_id": "topic3",
+          "topic_set_at": 1700000100,
+          "topic_set_by": "1111@lid"
+        },
+        "unknown_changes": [],
+        "unlink": {
+          "group": {
+            "is_default_sub_group": false,
+            "jid": "120363008888888888@g.us",
+            "name": "",
+            "name_set_at": 0
+          },
+          "type": "sub_group",
+          "unlink_reason": "delete_parent"
+        },
+        "unsuspended": true
+      },
+      "lid_pairs": [],
+      "node": "00f80e0918fc054f776e657206faff091203630012345678901c04ec2008fc056e6f7469661aff05170000010005faeee276f808f803fc106e6f745f616e6e6f756e63656d656e74ec72fc026133f801fc0d6e6f745f657068656d6572616cf801fc08756e6c6f636b6564f803ec52ec2eec56f804b708fc06746f70696333f801f801ec52f801fc0b756e73757370656e646564f804fc046c696e6bfc096c696e6b5f74797065fc0c706172656e745f67726f7570f801f808ecaa0cfaff091203630099999999991cec7ffc09436f6d6d756e697479eceeff051700000003f801f801fc1164656661756c745f7375625f67726f7570f806fc06756e6c696e6bfc0b756e6c696e6b5f74797065fc097375625f67726f7570fc0d756e6c696e6b5f726561736f6efc0d64656c6574655f706172656e74f801f803ecaa08ff09120363008888888888"
+    }
+  ],
+  "group_info": {
+    "addressing_mode": "lid",
+    "announce_version_id": "av1",
+    "creator_country_code": "US",
+    "default_membership_approval_mode": "request_required",
+    "disappearing_timer": 86400,
+    "group_created": 1700000000,
+    "is_announce": true,
+    "is_default_sub_group": true,
+    "is_ephemeral": true,
+    "is_incognito": true,
+    "is_join_approval_required": true,
+    "is_locked": true,
+    "is_parent": true,
+    "jid": "120363001234567890@g.us",
+    "linked_parent_jid": "120363009999999999@g.us",
+    "member_add_mode": "admin_add",
+    "name": "Team",
+    "name_set_at": 1700000001,
+    "name_set_by": "2222@lid",
+    "name_set_by_pn": "2222@s.whatsapp.net",
+    "owner_jid": "1111@lid",
+    "owner_pn": "1111@s.whatsapp.net",
+    "participant_count": 4,
+    "participant_version_id": "pv1",
+    "participants": [
+      {
+        "add_request": null,
+        "display_name": "",
+        "error": 0,
+        "is_admin": true,
+        "is_super_admin": true,
+        "jid": "1111@lid",
+        "lid": "1111@lid",
+        "phone_number": "1111@s.whatsapp.net"
+      },
+      {
+        "add_request": null,
+        "display_name": "+1∙∙∙∙∙∙∙∙22",
+        "error": 0,
+        "is_admin": true,
+        "is_super_admin": false,
+        "jid": "2222@lid",
+        "lid": "2222@lid",
+        "phone_number": ""
+      },
+      {
+        "add_request": null,
+        "display_name": "",
+        "error": 0,
+        "is_admin": false,
+        "is_super_admin": false,
+        "jid": "3333@s.whatsapp.net",
+        "lid": "3333@lid",
+        "phone_number": "3333@s.whatsapp.net"
+      },
+      {
+        "add_request": {
+          "code": "abc",
+          "expiration": 1700100000
+        },
+        "display_name": "",
+        "error": 403,
+        "is_admin": false,
+        "is_super_admin": false,
+        "jid": "4444@s.whatsapp.net",
+        "lid": "",
+        "phone_number": "4444@s.whatsapp.net"
+      }
+    ],
+    "suspended": true,
+    "topic": "Hello",
+    "topic_deleted": false,
+    "topic_id": "topic1",
+    "topic_set_at": 1700000002,
+    "topic_set_by": "2222@lid",
+    "topic_set_by_pn": "2222@s.whatsapp.net"
+  },
+  "group_lid_pairs": [
+    [
+      "1111@lid",
+      "1111@s.whatsapp.net"
+    ],
+    [
+      "",
+      ""
+    ],
+    [
+      "3333@lid",
+      "3333@s.whatsapp.net"
+    ],
+    [
+      "",
+      ""
+    ]
+  ],
+  "group_node": "00f81cecaaecbafc03617631fc0a63726561746f725f706efaeee203ec7ffc045465616deca0fc03707631edc6ec22fc0f61646472657373696e675f6d6f64657608ff09120363001234567890eca6faeee276eceeff051700000001ed16faef3e76fc06735f6f5f706efaef3e033cff051700000000fc1463726561746f725f636f756e7472795f636f6465fc025553f810f807050cfaeee27604ec94fc0c70686f6e655f6e756d626572faeee203f807050cfaef3e7604ec5648fc1c2b31e28899e28899e28899e28899e28899e28899e28899e288993232f805050cfaff0233330376faff02333376f806050cfaff02444403a8ff82403ff801f805fc0b6164645f7265717565737470fc03616263bbff051700100000f80ab71aff05170000000208fc06746f7069633105faef3e76fc0e7061727469636970616e745f706efaef3e03f801f802ed75fc0548656c6c6ff801ed02f801ed2bf803edc8bbff8386400ff802ec3cfc0961646d696e5f616464f803fc0d6c696e6b65645f706172656e740cfaff091203630099999999991cf801fc1164656661756c745f7375625f67726f7570f803fc06706172656e74fc2064656661756c745f6d656d626572736869705f617070726f76616c5f6d6f6465fc10726571756573745f7265717569726564f801fc09696e636f676e69746ff801fc186d656d626572736869705f617070726f76616c5f6d6f6465f801fc0973757370656e646564f801fc076d797374657279",
+  "group_redacted_phones": [
+    [
+      "2222@lid",
+      "+1∙∙∙∙∙∙∙∙22"
+    ]
+  ],
+  "joined_group": {
+    "create_key": "ck1",
+    "group_info": {
+      "addressing_mode": "lid",
+      "announce_version_id": "",
+      "creator_country_code": "",
+      "default_membership_approval_mode": "",
+      "disappearing_timer": 0,
+      "group_created": 1700000050,
+      "is_announce": false,
+      "is_default_sub_group": false,
+      "is_ephemeral": false,
+      "is_incognito": false,
+      "is_join_approval_required": false,
+      "is_locked": false,
+      "is_parent": false,
+      "jid": "120363007777777777@g.us",
+      "linked_parent_jid": "",
+      "member_add_mode": "",
+      "name": "Fresh",
+      "name_set_at": 0,
+      "name_set_by": "",
+      "name_set_by_pn": "",
+      "owner_jid": "",
+      "owner_pn": "",
+      "participant_count": 0,
+      "participant_version_id": "",
+      "participants": [
+        {
+          "add_request": null,
+          "display_name": "+1∙∙11",
+          "error": 0,
+          "is_admin": true,
+          "is_super_admin": true,
+          "jid": "1111@lid",
+          "lid": "1111@lid",
+          "phone_number": "1111@s.whatsapp.net"
+        },
+        {
+          "add_request": null,
+          "display_name": "",
+          "error": 0,
+          "is_admin": false,
+          "is_super_admin": false,
+          "jid": "9876@lid",
+          "lid": "9876@lid",
+          "phone_number": ""
+        }
+      ],
+      "suspended": false,
+      "topic": "",
+      "topic_deleted": false,
+      "topic_id": "",
+      "topic_set_at": 0,
+      "topic_set_by": "",
+      "topic_set_by_pn": ""
+    },
+    "notify": "Owner",
+    "reason": "invite",
+    "sender": "1111@lid",
+    "sender_pn": "1111@s.whatsapp.net",
+    "type": "new"
+  },
+  "joined_lid_pairs": [
+    [
+      "1111@lid",
+      "1111@s.whatsapp.net"
+    ],
+    [
+      "",
+      ""
+    ]
+  ],
+  "joined_redacted_phones": [
+    [
+      "1111@lid",
+      "+1∙∙11"
+    ]
+  ],
+  "requests": {
+    "add_participants": "00f80a1916ed33045a11faff091203630012345678901c08fc024944f801f80297f802f803050cfaff02555576f803050cfaff02333303",
+    "approve_request_participants": "00f80a1908fc02494416ed33045a11faff091203630012345678901cf801f802fc1a6d656d626572736869705f72657175657374735f616374696f6ef801f802fc07617070726f7665f801f803050cfaff02555576",
+    "create_community": "00f80a1908fc02494416ed33045a11fa001cf801f804ef4cec7ffc09436f6d6d756e697479f804f802ec3cfc0e616c6c5f6d656d6265725f616464f803fc06706172656e74fc2064656661756c745f6d656d626572736869705f617070726f76616c5f6d6f6465fc10726571756573745f7265717569726564f803edc8bb2df802fc186d656d626572736869705f617070726f76616c5f6d6f6465f801f803fc0a67726f75705f6a6f696ed0fc036f6666",
+    "create_group": "00f80a1908fc02494416ed33045a11fa001cf801f804ef4cec7ffc045465616df808f803050cfaff02333303f803050cfaff02555576f802ec3cfc0961646d696e5f616464f803fc0d6c696e6b65645f706172656e740cfaff091203630099999999991cf801ed2bf801ed02f805edc8bbff03604800fc077472696767657255f802fc186d656d626572736869705f617070726f76616c5f6d6f6465f801f803fc0a67726f75705f6a6f696ed0fc026f6e",
+    "delete_group_topic": "00f80a1911faff091203630012345678901c08fc02494416ed33045af801f808b708fc046e657732fc0470726576fc057072657631ec529b00",
+    "demote_participants": "00f80a1908fc02494416ed33045a11faff091203630012345678901cf801f802fc0664656d6f7465f801f803050cfaff02555576",
+    "get_group_info": "00f80a1908fc02494416ed33042911faff091203630012345678901cf801f8036dedc7e5",
+    "get_invite_link": "00f80a1908fc02494416ed33042911faff091203630012345678901cf801f801ec61",
+    "get_joined_groups": "00f80a1908fc02494416ed33042911fa001cf801f802ed78f802f8016bf801b7",
+    "get_request_participants": "00f80a1911faff091203630012345678901c08fc02494416ed330429f801f801fc1c6d656d626572736869705f617070726f76616c5f7265717565737473",
+    "info_from_invite": "00f80a1908fc02494416ed33042911faff091203630012345678901cf801f8026df801f807fc0b6164645f7265717565737470fc05636f646531bbff051700000000ec56faeee203",
+    "info_from_link": "00f80a1911fa001c08fc02494416ed330429f801f803ec6170fc03416243",
+    "join_approval_mode": "00f80a1908fc02494416ed33045a11faff091203630012345678901cf801f802fc186d656d626572736869705f617070726f76616c5f6d6f6465f801f803fc0a67726f75705f6a6f696ed0fc026f6e",
+    "join_with_invite": "00f80a1911faff091203630012345678901c08fc02494416ed33045af801f807ec6270fc05636f646531bbff051700000000ec56faeee203",
+    "join_with_link": "00f80a1908fc02494416ed33045a11fa001cf801f803ec6170fc03416243",
+    "leave_group": "00f80a1916ed33045a11fa001c08fc024944f801f802fc056c65617665f801f803ecaa08faff091203630012345678901c",
+    "member_add_mode": "00f80a1908fc02494416ed33045a11faff091203630012345678901cf801f802ec3cfc0961646d696e5f616464",
+    "remove_group_photo": "00f80b19045a11fa000387faff091203630012345678901c08fc0249441642",
+    "reset_invite_link": "00f80a1908fc02494416ed33045a11faff091203630012345678901cf801f801ec61",
+    "set_group_announce": "00f80a19045a11faff091203630012345678901c08fc02494416ed33f801f801ed02",
+    "set_group_locked": "00f80a1908fc02494416ed33045a11faff091203630012345678901cf801f801ed2b",
+    "set_group_name": "00f80a1908fc02494416ed33045a11faff091203630012345678901cf801f802ec7ffc084e6577206e616d65",
+    "set_group_not_announce": "00f80a1911faff091203630012345678901c08fc02494416ed33045af801f801fc106e6f745f616e6e6f756e63656d656e74",
+    "set_group_photo": "00f80c1911fa000387faff091203630012345678901c08fc0249441642045af801f804210443fc02ffd8",
+    "set_group_topic": "00f80a1908fc02494416ed33045a11faff091203630012345678901cf801f806b7fc0470726576fc05707265763108fc046e657731f801f802ed75fc05546f706963",
+    "set_group_unlocked": "00f80a1908fc02494416ed33045a11faff091203630012345678901cf801f801fc08756e6c6f636b6564"
+  }
+}

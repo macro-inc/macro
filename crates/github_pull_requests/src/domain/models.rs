@@ -8,6 +8,7 @@ mod diff;
 mod index;
 mod key;
 mod pull_request;
+mod update;
 
 use chrono::{DateTime, Utc};
 use foreign_entity::domain::models::{ForeignEntity, ForeignEntityError, SourceId};
@@ -25,16 +26,20 @@ pub use index::{PullRequestIndexOutcome, PullRequestIndexRecord, PullRequestInde
 pub use key::GithubKey;
 pub use pull_request::{
     EnrichGithubPullRequestsProxyRequest, EnrichGithubPullRequestsResponse,
-    EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GithubDraftOutcome,
-    GithubMergeMethod, GithubMergeOutcome, GithubMergeRejection, GithubPullRequestCheckRun,
-    GithubPullRequestComment, GithubPullRequestDetails, GithubPullRequestLabel,
-    GithubPullRequestMerge, GithubPullRequestMergeability, GithubPullRequestMergeabilityEntry,
+    EnrichedGithubPullRequest, GITHUB_PULL_REQUEST_FOREIGN_ENTITY_SOURCE, GithubMergeMethod,
+    GithubMergeOutcome, GithubMergeRejection, GithubPullRequestCheckRun, GithubPullRequestComment,
+    GithubPullRequestDetails, GithubPullRequestLabel, GithubPullRequestMerge,
+    GithubPullRequestMergeability, GithubPullRequestMergeabilityEntry,
     GithubPullRequestMergeabilityRequest, GithubPullRequestMergeabilityResponse,
     GithubPullRequestNumber, GithubPullRequestRef, GithubPullRequestReview,
     GithubPullRequestReviewDecision, GithubPullRequestReviewState, GithubPullRequestStatus,
-    GithubPullRequestUpdateRejection, GithubPullRequestUser, GithubRepositoryMergeSettings,
-    MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
-    SetGithubPullRequestDraftRequest, SetGithubPullRequestDraftResponse, latest_reviews,
+    GithubPullRequestUser, GithubRepositoryMergeSettings, MergeGithubPullRequestRequest,
+    MergeGithubPullRequestResponse, latest_reviews,
+};
+pub use update::{
+    GithubDraftOutcome, GithubPullRequestState, GithubPullRequestUpdateRejection,
+    GithubStateOutcome, SetGithubPullRequestDraftRequest, SetGithubPullRequestDraftResponse,
+    SetGithubPullRequestStateRequest, SetGithubPullRequestStateResponse,
 };
 
 /// A pull request's latest data, for the record stored for one source.

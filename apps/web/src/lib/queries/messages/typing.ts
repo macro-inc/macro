@@ -1,7 +1,8 @@
+import type { AgentTypingPhase } from '@service-storage/generated/schemas/agentTypingPhase';
 import type { MessageParent } from '@service-storage/messages';
 import { entityMessagesClient } from '@service-storage/messages';
 import { useMutation } from '@tanstack/solid-query';
-import { createSignal } from 'solid-js';
+import { batch, createSignal } from 'solid-js';
 import { parentKey } from './keys';
 
 export const TYPING_INDICATOR_TIMEOUT_MS = 8_000;
@@ -21,7 +22,12 @@ type CommsTypingPayload = {
   user_id: string;
   action: 'start' | 'stop';
   thread_id?: string | null;
+  /** Present when a bot types for an agent session. */
+  agent?: { session_id: string; phase: AgentTypingPhase } | null;
 };
+
+/** An agent session typing through its bot: whose turn, and what it is doing. */
+export type TypingAgent = { sessionId: string; phase: AgentTypingPhase };
 
 /**
  * Ephemeral store for typing indicators.
@@ -35,12 +41,43 @@ const [typingUsers, setTypingUsers] = createSignal<TypingUsersByChannel>(
 
 const typingTimeouts: TypingTimeoutsByChannel = new Map();
 
+/** What each typing agent is doing, by {@link agentKey}; humans have none. */
+const [typingAgents, setTypingAgents] = createSignal<Map<string, TypingAgent>>(
+  new Map()
+);
+
+const agentKey = (parent: MessageParent, threadId: ThreadId, userId: string) =>
+  JSON.stringify([parentKey(parent), threadId, userId]);
+
+function setTypingAgent(
+  parent: MessageParent,
+  userId: string,
+  threadId: ThreadId,
+  agent: TypingAgent | undefined
+) {
+  const key = agentKey(parent, threadId, userId);
+  setTypingAgents((prev) => {
+    const current = prev.get(key);
+    if (
+      current?.sessionId === agent?.sessionId &&
+      current?.phase === agent?.phase
+    )
+      return prev;
+    const next = new Map(prev);
+    if (agent) next.set(key, agent);
+    else next.delete(key);
+    return next;
+  });
+}
+
 function withAddedTypingUser(
   prev: TypingUsersByChannel,
   parent: MessageParent,
   userId: string,
   threadId: ThreadId
 ): TypingUsersByChannel {
+  // Agents refresh every few seconds; an unchanged set keeps readers still.
+  if (prev.get(parentKey(parent))?.get(threadId)?.has(userId)) return prev;
   const next = new Map(prev);
   const channelMap = new Map(prev.get(parentKey(parent)));
   const threadUsers = new Set(channelMap.get(threadId));
@@ -153,14 +190,21 @@ export function clearTypingIndicators(): void {
 
   typingTimeouts.clear();
   setTypingUsers(new Map());
+  setTypingAgents(new Map());
 }
 
 function addTypingUser(
   parent: MessageParent,
   userId: string,
-  threadId: ThreadId = null
+  threadId: ThreadId = null,
+  agent?: TypingAgent
 ) {
-  setTypingUsers((prev) => withAddedTypingUser(prev, parent, userId, threadId));
+  batch(() => {
+    setTypingUsers((prev) =>
+      withAddedTypingUser(prev, parent, userId, threadId)
+    );
+    setTypingAgent(parent, userId, threadId, agent);
+  });
   setTypingTimeout(parent, userId, threadId);
 }
 
@@ -170,8 +214,11 @@ function removeTypingUser(
   threadId: ThreadId = null
 ) {
   removeTypingTimeout(parent, userId, threadId);
-  setTypingUsers((prev) => {
-    return withoutTypingUser(prev, parent, userId, threadId);
+  batch(() => {
+    setTypingUsers((prev) => {
+      return withoutTypingUser(prev, parent, userId, threadId);
+    });
+    setTypingAgent(parent, userId, threadId, undefined);
   });
 }
 
@@ -186,6 +233,23 @@ export function getTypingUsers(
 }
 
 /**
+ * The typing users in a channel/thread that are agent sessions typing
+ * through their bot, with what each is doing.
+ */
+export function getTypingAgents(
+  parent: MessageParent,
+  threadId: ThreadId = null
+): Map<string, TypingAgent> {
+  const agents = typingAgents();
+  const typing = new Map<string, TypingAgent>();
+  for (const userId of getTypingUsers(parent, threadId)) {
+    const agent = agents.get(agentKey(parent, threadId, userId));
+    if (agent) typing.set(userId, agent);
+  }
+  return typing;
+}
+
+/**
  * Handle typing indicator from websocket.
  * Ignores typing events from the current user.
  */
@@ -197,7 +261,14 @@ export function handleCommsTyping(
   if (payload.user_id === currentUserId) return;
 
   if (payload.action === 'start') {
-    addTypingUser(payload.parent, payload.user_id, payload.thread_id ?? null);
+    addTypingUser(
+      payload.parent,
+      payload.user_id,
+      payload.thread_id ?? null,
+      payload.agent
+        ? { sessionId: payload.agent.session_id, phase: payload.agent.phase }
+        : undefined
+    );
   } else {
     removeTypingUser(
       payload.parent,

@@ -1,6 +1,7 @@
 import type { CacheHost } from '@graphql-cache/host/types';
 import { parseCacheRevision } from '@graphql-cache/protocol';
 import {
+  ChannelDetailSoupDocument,
   ChannelListSoupDocument,
   ChannelUnreadCacheWriteDocument,
   ChannelUnreadPresenceDocument,
@@ -16,6 +17,7 @@ const notification: SoupNotificationFieldsFragment = {
   __typename: 'GraphqlNotification',
   id: 'notification',
   entityType: 'CHANNEL',
+  targetEntityType: 'CHANNEL',
   entityId: 'channel',
   eventType: 'channel_message_send',
   state: 'UNSEEN',
@@ -240,5 +242,8 @@ describe('websocket channel unread cache writes', () => {
     expect(key).toBeDefined();
     expect(argumentsOf(ChannelListSoupDocument)).toBe(key);
     expect(argumentsOf(ChannelUnreadPresenceDocument)).toBe(key);
+    expect(
+      argumentsOf(ChannelDetailSoupDocument, 'sidebarUnreadNotifications')
+    ).toBe(key);
   });
 });

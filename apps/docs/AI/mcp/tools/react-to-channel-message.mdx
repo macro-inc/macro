@@ -1,0 +1,19 @@
+---
+title: ReactToChannelMessage
+description: >-
+  Add or remove the user's own emoji reaction on a channel message or thread
+  reply.
+---
+
+# ReactToChannelMessage
+
+Add or remove the user's own emoji reaction on a channel message or thread reply. The reaction is shown as coming from the user. Find message ids with ReadChannelMessages or ReadChannelThread. Use only when the user asks to react to a message.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `channelId` | string | Yes | Channel id containing the message. |
+| `messageId` | string | Yes | Id of the message to react to. |
+| `emoji` | string | Yes | The emoji itself as a Unicode character, for example 👍 or 🎉 — not a shortcode like :thumbsup:. |
+| `action` | `"add"` \| `"remove"` | No | Whether to add or remove a reaction. |

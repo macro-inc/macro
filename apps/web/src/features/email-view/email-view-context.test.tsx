@@ -1,3 +1,4 @@
+import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { cleanup, render } from '@solidjs/testing-library';
 import { createStore } from 'solid-js/store';
 import { afterEach, describe, expect, it, vi } from 'vitest';
@@ -11,12 +12,16 @@ const mocks = vi.hoisted(() => ({
   navigate: vi.fn(),
   useRouteParams: vi.fn(),
   useEmailLinksQuery: vi.fn(),
-  reminders: (): boolean => true,
+  /** Whether the remote flag with this PostHog key is on. */
+  flag: (_key: string): boolean => true,
   tab: (): string => 'important',
+  tagSets: (): TagSetResponse[] => [],
 }));
 
 vi.mock('@app/lib/analytics/posthog', () => ({
-  useFeatureFlag: () => () => ({ enabled: mocks.reminders() }),
+  useFeatureFlag:
+    ({ key }: { key: string }) =>
+    () => ({ enabled: mocks.flag(key), loading: false }),
 }));
 vi.mock('@app/components/list', () => ({
   createListController: () => ({}),
@@ -66,7 +71,7 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user' }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
 vi.mock('@property/tags/tag-sets-context', () => ({
-  useTagSets: () => () => [],
+  useTagSets: () => () => mocks.tagSets(),
   useTagSetsReady: () => () => true,
 }));
 vi.mock('@queries/email/link', () => ({
@@ -89,8 +94,9 @@ vi.mock('./email-route', () => ({
 afterEach(() => {
   cleanup();
   vi.clearAllMocks();
-  mocks.reminders = () => true;
+  mocks.flag = () => true;
   mocks.tab = () => 'important';
+  mocks.tagSets = () => [];
 });
 
 function mount() {
@@ -121,6 +127,22 @@ function mount() {
 }
 
 describe('email view inbox reconciliation', () => {
+  it('selects an alias atomically without clearing it or navigating twice', () => {
+    const { view } = mount();
+    view.setAliasFilter({
+      inboxId: 'saved-inbox',
+      emailAddress: 'Resident@Example.com',
+    });
+    expect(view.state.aliasFilter).toEqual({
+      inboxId: 'saved-inbox',
+      emailAddress: 'resident@example.com',
+    });
+    expect(view.state.inboxIds).toEqual(['saved-inbox']);
+    expect(mocks.navigate).toHaveBeenCalledOnce();
+    view.setInboxIds(undefined);
+    expect(view.state.aliasFilter).toBeUndefined();
+    expect(view.state.inboxIds).toBeUndefined();
+  });
   it.each([{ links: [] }, { links: [{ id: 'remaining-inbox' }] }])(
     'preserves the thread when loaded accounts invalidate the saved scope: %j',
     ({ links }) => {
@@ -161,9 +183,41 @@ it('clears persisted text search when entering and leaving Email Reminders', () 
   expect(view.state.search).toBe('');
 });
 
+describe('tag view title', () => {
+  const qaTag = '019a1f40-2c7e-7d10-9a4b-6f2b0c1d2e40';
+  const userTags = (): TagSetResponse[] => [
+    {
+      scope: 'user',
+      options: [
+        {
+          id: qaTag,
+          displayOrder: 0,
+          propertyDefinitionId: 'user-tags',
+          value: { type: 'string', value: 'QA test tag' },
+        },
+      ],
+    },
+  ];
+
+  it('names the view after the tag chosen in the sidebar', () => {
+    mocks.tagSets = userTags;
+    const { view } = mount();
+    view.showTags([qaTag]);
+    expect(view.tagViewTitle()).toBe('QA test tag');
+  });
+
+  it('keeps the tab name when a tag only filters a tab', () => {
+    mocks.tagSets = userTags;
+    const { view } = mount();
+    view.filterByTag(qaTag);
+    expect(view.state.tab).toBe('important');
+    expect(view.tagViewTitle()).toBeUndefined();
+  });
+});
+
 it('normalizes restored and route-driven Reminders when the rollout is disabled', () => {
   const [flag, setFlag] = createStore({ enabled: true });
-  mocks.reminders = () => flag.enabled;
+  mocks.flag = (key) => key !== 'enable-reminders' || flag.enabled;
   mocks.tab = () => 'reminders';
   const { view } = mount();
   expect(view.state.tab).toBe('reminders');
@@ -172,4 +226,19 @@ it('normalizes restored and route-driven Reminders when the rollout is disabled'
   expect(view.state.search).toBe('');
   view.setTab('reminders');
   expect(view.state.tab).toBe('important');
+});
+
+it('leaves a restored Focus tab when Focus or GraphQL Soup turns off', () => {
+  for (const off of ['enable-email-focus', 'enable-graphql-soup']) {
+    const [flag, setFlag] = createStore({ enabled: true });
+    mocks.flag = (key) => key !== off || flag.enabled;
+    mocks.tab = () => 'focus';
+    const { view } = mount();
+    expect(view.state.tab).toBe('focus');
+    setFlag('enabled', false);
+    expect(view.state.tab).toBe('important');
+    view.setTab('focus');
+    expect(view.state.tab).toBe('important');
+    cleanup();
+  }
 });

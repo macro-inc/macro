@@ -6,7 +6,7 @@ import { getKafkaClusterTopics } from './topics';
 
 const tags = {
   environment: stack,
-  tech_lead: 'hutch',
+  tech_lead: 'teo',
   project: pulumi.getProject(),
 };
 

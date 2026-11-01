@@ -89,4 +89,22 @@ describe('trash database', () => {
     );
     expect(cache.setQueryData).not.toHaveBeenCalled();
   });
+
+  it('reports an outcome type from a newer server as unreachable', async () => {
+    const fromNewerServer = JSON.parse(
+      '{"__typename":"GraphqlMutationDeferred"}'
+    );
+    const client: TrashDatabaseClient = {
+      mutation: () => ({
+        toPromise: async () => ({
+          data: { trashEntities: { results: [fromNewerServer] } },
+        }),
+      }),
+    };
+
+    expect(await trashDatabase(client, 'db')).toEqual(
+      err({ kind: 'unreachable' })
+    );
+    expect(cache.setQueryData).not.toHaveBeenCalled();
+  });
 });

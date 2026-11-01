@@ -15,8 +15,10 @@ fn favorites_intersect_existing_filters_and_do_not_cross_entity_types() {
     let kept = Uuid::from_u128(1);
     let removed = Uuid::from_u128(2);
     let other = Uuid::from_u128(3);
-    let mut ast = EntityFilterAst::default();
-    ast.favorites_only = Some(true);
+    let mut ast = EntityFilterAst {
+        favorites_only: Some(true),
+        ..Default::default()
+    };
     ast.email_filter.tree = Some(Arc::new(Expr::is_not(Expr::val(EmailLiteral::ThreadId(
         removed,
     )))));

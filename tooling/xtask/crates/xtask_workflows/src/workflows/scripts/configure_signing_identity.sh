@@ -34,3 +34,15 @@ if [ -z "$identity" ]; then
 fi
 echo "APPLE_SIGNING_IDENTITY=$identity" >> "$GITHUB_ENV"
 echo "Using signing identity: $identity"
+
+# The Developer ID provisioning profile authorizes the communication
+# notifications entitlement, which shows senders' avatars on notifications.
+# A signed build without it would be killed at launch, so require both.
+if [ -z "${MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64}" ]; then
+  echo "MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64 must be set alongside the Developer ID certificate" >&2
+  exit 1
+fi
+profile_path="$RUNNER_TEMP/macro-developer-id.provisionprofile"
+printf '%s' "$MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64" | base64 --decode > "$profile_path" 2>/dev/null \
+  || printf '%s' "$MACOS_DEVELOPER_ID_PROVISIONING_PROFILE_BASE64" | base64 -D > "$profile_path"
+echo "MACOS_PROVISIONING_PROFILE=$profile_path" >> "$GITHUB_ENV"

@@ -29,18 +29,18 @@ pub(super) const VERDICT_TIMEOUT: Duration = Duration::from_millis(1500);
 /// How long the rest of the line may take once the verdict is in.
 pub(super) const LINE_TIMEOUT: Duration = Duration::from_secs(2);
 
+/// Told to the turn's model when no opening line is shown, since the shared
+/// session prompt says one may be.
+pub(super) const NOT_OPENED: &str = "In this session no faster model opens your replies: \
+nothing is shown before your reply, so its first line is yours to write. Still begin with \
+substance.";
+
 const MAX_TOKENS: u64 = 64;
 
 /// The tail of the conversation the fast model reads: enough to tell "thanks"
 /// that closes a task from "thanks, now also…".
 const TRANSCRIPT_MESSAGES: usize = 6;
 const TRANSCRIPT_MESSAGE_CHARS: usize = 600;
-
-/// Told to the turn's model, so its reply does not open a second time. "May":
-/// the opener can lose the race, skip, or fail, and then nothing was shown.
-pub(super) const ALREADY_OPENED: &str = "A faster model may already have shown the first line \
-of your reply: a short acknowledgement such as \"On it.\" or \"Let me check your calendar.\". \
-Begin with substance. Do not acknowledge the request or announce what you are about to do.";
 
 /// Who the line speaks as: the session's agent and the model behind it, so a
 /// question about either is answered truthfully rather than as the fast

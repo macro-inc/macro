@@ -1,9 +1,6 @@
 use std::borrow::Cow;
 
-use crate::{
-    Result, UnauthedClient,
-    error::{FusionAuthClientError, GenericErrorResponse},
-};
+use crate::{Result, UnauthedClient, error::FusionAuthClientError};
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "snake_case")]
@@ -52,11 +49,7 @@ pub(crate) async fn complete_identity_provider_login(
         .json(&request)
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     match res.status() {
         reqwest::StatusCode::OK => {
@@ -64,12 +57,7 @@ pub(crate) async fn complete_identity_provider_login(
             let response = res
                 .json::<IdentityProviderLoginResponse>()
                 .await
-                .map_err(|e| {
-                    tracing::error!(error=?e, "unable to parse response");
-                    FusionAuthClientError::Generic(GenericErrorResponse {
-                        message: e.to_string(),
-                    })
-                })?;
+                .map_err(FusionAuthClientError::transport)?;
 
             Ok((response.token, response.refresh_token))
         }
@@ -82,18 +70,6 @@ pub(crate) async fn complete_identity_provider_login(
             tracing::trace!("user does not exist");
             Err(FusionAuthClientError::UserDoesNotExist)
         }
-        _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
-
-            tracing::error!(body=%body, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
-        }
+        _ => Err(FusionAuthClientError::unexpected_response(res).await),
     }
 }

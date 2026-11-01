@@ -162,6 +162,51 @@ describe('email sign-in', () => {
     await screen.findByTestId('signed-in');
   });
 
+  // Every check counts against the auth service's per-address attempt limit.
+  it('checks each entered code once, even when Verify is tapped after a miss', async () => {
+    const { fake } = setup();
+    click('Continue with email');
+    await typeEmail('returning@acme.com');
+    click('Continue');
+    await screen.findByText('returning@acme.com');
+    for (const wrong of ['000000', '111111', '222222']) {
+      await typeCode(wrong);
+      await screen.findByText('Invalid code.');
+      expect(screen.getByLabelText(/code/i)).toHaveProperty('value', '');
+      click(/^Verify/);
+    }
+    await typeCode('424242');
+    await screen.findByTestId('signed-in');
+    expect(fake.calls().filter((call) => call.startsWith('verify:'))).toEqual([
+      'verify:returning@acme.com:000000',
+      'verify:returning@acme.com:111111',
+      'verify:returning@acme.com:222222',
+      'verify:returning@acme.com:424242',
+    ]);
+  });
+
+  it('says to wait when code checks are rate-limited, and keeps the code to retry', async () => {
+    const { fake } = setup({
+      world: { codeAttempts: { 'returning@acme.com': 5 } },
+    });
+    click('Continue with email');
+    await typeEmail('returning@acme.com');
+    click('Continue');
+    await screen.findByText('returning@acme.com');
+    await typeCode('424242');
+    await screen.findByText(
+      'Too many attempts. Wait a minute, then try again.'
+    );
+    expect(screen.queryByText('Invalid code.')).toBeNull();
+    expect(screen.getByLabelText(/code/i)).toHaveProperty('value', '424242');
+
+    fake.update((draft) => {
+      draft.codeAttempts = {};
+    });
+    click(/^Verify/);
+    await screen.findByTestId('signed-in');
+  });
+
   it('asks for a password only for password accounts', async () => {
     setup({ world: { passwordAccounts: { 'demo@acme.com': 'hunter2' } } });
     click('Continue with email');
@@ -313,10 +358,17 @@ describe('single sign-on', () => {
   });
 });
 
+let googleSignup: Promise<void> | undefined;
+
 function Journey(props: SignupJourneySlots) {
   return (
     <section>
-      <button type="button" onClick={() => void props.onGoogle()}>
+      <button
+        type="button"
+        onClick={() => {
+          googleSignup = props.onGoogle();
+        }}
+      >
         Connect work email
       </button>
       <button type="button" onClick={props.onSignIn}>
@@ -339,6 +391,7 @@ describe('desktop sign-up', () => {
     click('Connect work email');
     await screen.findByText('new@acme.com new');
     expect(fake.calls()).toContain('sso:google:signup');
+    await googleSignup;
   });
 
   it('shows the email form inside the slides for an emailed sign-up link', () => {

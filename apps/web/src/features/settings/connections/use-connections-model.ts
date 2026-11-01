@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { useMcpServersQuery } from '@queries/mcp-servers';
 import { usePipedreamConnectionsQuery } from '@queries/pipedream-connectors';
 import { createMemo } from 'solid-js';
@@ -12,8 +13,8 @@ export function useConnectionsModel() {
   const partialError = () =>
     ready() && (pipedream.isError || nativeMcp.isError);
   const retry = () => {
-    void pipedream.refetch();
-    void nativeMcp.refetch();
+    fireAndForget(pipedream.refetch(), 'connections-settings');
+    fireAndForget(nativeMcp.refetch(), 'connections-settings');
   };
   const model = createMemo(() =>
     toConnectionsModel({

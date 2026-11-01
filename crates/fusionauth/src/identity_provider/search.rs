@@ -38,11 +38,7 @@ pub(crate) async fn get_idp_id_by_name(
         ))
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     match res.status() {
         reqwest::StatusCode::OK => {
@@ -50,11 +46,7 @@ pub(crate) async fn get_idp_id_by_name(
             let body = res
                 .json::<IdentityProviderSearchResponse>()
                 .await
-                .map_err(|e| {
-                    FusionAuthClientError::Generic(GenericErrorResponse {
-                        message: e.to_string(),
-                    })
-                })?;
+                .map_err(FusionAuthClientError::transport)?;
 
             if body.total == 0 {
                 return Err(FusionAuthClientError::NoIdentityProviderFound);
@@ -80,18 +72,6 @@ pub(crate) async fn get_idp_id_by_name(
 
             Ok(body.identity_providers[0].id.to_string())
         }
-        _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
-
-            tracing::error!(body=%body, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
-        }
+        _ => Err(FusionAuthClientError::unexpected_response(res).await),
     }
 }

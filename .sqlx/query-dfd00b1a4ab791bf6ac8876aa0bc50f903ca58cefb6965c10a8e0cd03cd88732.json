@@ -1,0 +1,20 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_run\n            SET lease_owner = $2,\n                lease_expires_at = NOW() + ($3::double precision * interval '1 second'),\n                scope = $4, review_id = $5, sharing = $6, updated_at = NOW()\n            WHERE user_id = $1 AND source = $7 AND status IN ('running', 'importing')\n              AND lease_owner IS NULL AND lease_expires_at IS NULL\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Float8",
+        "Jsonb",
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "dfd00b1a4ab791bf6ac8876aa0bc50f903ca58cefb6965c10a8e0cd03cd88732"
+}

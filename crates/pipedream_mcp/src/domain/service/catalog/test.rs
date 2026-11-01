@@ -2,10 +2,13 @@ use super::*;
 use crate::domain::models::CatalogEntry;
 use std::sync::Mutex;
 
+/// Search text, pagination cursor, and page size sent to the directory.
+type RecordedQuery = (Option<String>, Option<String>, u32);
+
 /// Fake directory returning a canned page and recording the query it got.
 struct FakeDirectory {
     page: CatalogPage,
-    seen: Mutex<Vec<(Option<String>, Option<String>, u32)>>,
+    seen: Mutex<Vec<RecordedQuery>>,
 }
 
 impl FakeDirectory {
@@ -47,6 +50,7 @@ impl ConnectorDirectory for FakeDirectory {
 
 fn directory_entry(app_slug: &str) -> CatalogEntry {
     CatalogEntry {
+        categories: vec![],
         app_slug: app_slug.to_owned(),
         display_name: app_slug.to_owned(),
         description: Some("from the directory".to_owned()),

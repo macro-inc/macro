@@ -1,7 +1,10 @@
 import { Blob as NodeBlob } from 'node:buffer';
 import 'fake-indexeddb/auto';
 import type { LocalDraft } from '@app/features/email-compose/core/local-draft';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { createDraftAutosave } from '@app/features/email-compose/primitives/draft-autosave';
+import { forceCloseDatabase } from 'fake-indexeddb';
+import { createRoot } from 'solid-js';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createLocalDraftStore } from './local-draft-store';
 
 const stores: ReturnType<typeof createLocalDraftStore>[] = [];
@@ -26,10 +29,397 @@ const snapshot = (
   attachments: [],
   status: 'dirty',
 });
+/**
+ * The next transaction commits, but the connection drops before the page hears
+ * about it, so it observes an abort instead of completion and replays.
+ */
+const landBeforeAbort = () => {
+  const transaction = IDBDatabase.prototype.transaction;
+  vi.spyOn(IDBDatabase.prototype, 'transaction').mockImplementationOnce(
+    function (this: IDBDatabase, ...args) {
+      const tx = transaction.apply(this, args);
+      Object.defineProperty(tx, 'oncomplete', {
+        set: () =>
+          tx.addEventListener('complete', () =>
+            tx.onabort?.call(tx, new Event('abort'))
+          ),
+      });
+      return tx;
+    }
+  );
+};
 afterEach(async () => {
   for (const store of stores.splice(0)) await store.close();
   vi.unstubAllGlobals();
   vi.restoreAllMocks();
+});
+
+describe('draft connection recovery', () => {
+  let connections: IDBDatabase[];
+  beforeEach(() => {
+    connections = [];
+    const original = indexedDB.open.bind(indexedDB);
+    vi.spyOn(indexedDB, 'open').mockImplementation((...args) => {
+      const request = original(...args);
+      request.addEventListener('success', () =>
+        connections.push(request.result)
+      );
+      return request;
+    });
+  });
+
+  it('reopens without losing frozen sends, cancellation decisions or editing locks', async () => {
+    const store = open();
+    const session = await store.activate('owner');
+    await store.save(session, snapshot());
+    await store.putSend(session, sendIntent(), true);
+    connections[0].close();
+    expect(await store.sends(session)).toEqual([sendIntent()]);
+    await expect(store.save(session, snapshot('Late edit', 1))).rejects.toThrow(
+      'Cancel and restore'
+    );
+    await store.putSend(session, {
+      ...sendIntent(),
+      cancellationRequested: true,
+    });
+    connections.at(-1)!.close();
+    expect((await store.sends(session))[0].cancellationRequested).toBe(true);
+    await expect(
+      store.save(session, snapshot('Still locked', 1))
+    ).rejects.toThrow('Cancel and restore');
+  });
+  it('waits for rollback and preserves the underlying request error', async () => {
+    const report = vi.fn();
+    const store = createLocalDraftStore(crypto.randomUUID(), report);
+    stores.push(store);
+    const session = await store.activate('owner');
+    await store.save(session, snapshot());
+    let aborted = false;
+    vi.spyOn(IDBObjectStore.prototype, 'get').mockImplementationOnce(function (
+      this: IDBObjectStore
+    ) {
+      this.transaction.addEventListener('abort', () => {
+        aborted = true;
+      });
+      // The session key already exists. The request's ConstraintError bubbles
+      // before IDBTransaction.error is populated.
+      return this.add('duplicate', 'session');
+    });
+    await expect(
+      store.save(session, snapshot('Rejected edit', 1))
+    ).rejects.toMatchObject({
+      name: 'ConstraintError',
+    });
+    expect(aborted).toBe(true);
+    expect(report).toHaveBeenCalledWith({
+      type: 'failed',
+      error: expect.objectContaining({ name: 'ConstraintError' }),
+    });
+    expect(await store.read(session, 'local')).toMatchObject({
+      revision: 1,
+      content: { subject: 'Keep this draft' },
+    });
+    await store.save(session, snapshot('Later edit', 1));
+    expect(await store.read(session, 'local')).toMatchObject({ revision: 2 });
+  });
+
+  it.each(['closed', 'terminated'])(
+    'saves the latest edit and continues server autosave after a connection is %s',
+    async (reason) => {
+      const store = open();
+      const session = await store.activate('owner');
+      await store.save(session, snapshot());
+      if (reason === 'closed') connections[0].close();
+      else {
+        const db = connections[0];
+        const closed = new Promise<void>((resolve) =>
+          db.addEventListener('close', () => resolve(), { once: true })
+        );
+        // fake-indexeddb accepts an instance but declares a constructor type.
+        forceCloseDatabase(
+          db as unknown as Parameters<typeof forceCloseDatabase>[0]
+        );
+        await closed;
+      }
+      const latest = snapshot('After resuming', 1);
+      const persist = vi.fn(async () => {
+        expect(await store.read(session, 'local')).toMatchObject({
+          revision: 2,
+          content: latest.content,
+        });
+      });
+      const onLocalError = vi.fn();
+      let dispose = () => {};
+      const autosave = createRoot((cleanup) => {
+        dispose = cleanup;
+        return createDraftAutosave({
+          capture: () => latest,
+          saveLocalSnapshot: async (value) => {
+            await store.save(session, value);
+          },
+          persist,
+          paused: () => false,
+          onLocalError,
+        });
+      });
+      try {
+        await autosave.save();
+        expect(persist).toHaveBeenCalledExactlyOnceWith(latest);
+        expect(onLocalError).not.toHaveBeenCalled();
+        expect(autosave.localSaveState()).toBe('saved');
+        expect(connections).toHaveLength(2);
+      } finally {
+        dispose();
+      }
+    }
+  );
+
+  it('shares a reopened connection across concurrent operations without duplicate revisions', async () => {
+    const store = open();
+    const session = await store.activate('owner');
+    await store.save(session, snapshot());
+    connections[0].close();
+    const notify = vi.fn();
+    store.subscribe(notify);
+    await Promise.all([
+      store.save(session, snapshot('New revision', 1)),
+      store.list(session),
+      store.read(session, 'local'),
+    ]);
+    expect(connections).toHaveLength(2);
+    expect(notify).toHaveBeenCalledOnce();
+    expect(await store.read(session, 'local')).toMatchObject({ revision: 2 });
+  });
+
+  it('bounds retries, reports one failure per episode and allows a later recovery', async () => {
+    const report = vi.fn();
+    const store = createLocalDraftStore(crypto.randomUUID(), report);
+    stores.push(store);
+    const session = await store.activate('owner');
+    const error = new DOMException(
+      'Connection is closing',
+      'InvalidStateError'
+    );
+    const transaction = vi
+      .spyOn(IDBDatabase.prototype, 'transaction')
+      .mockImplementation(() => {
+        throw error;
+      });
+    await expect(store.save(session, snapshot())).rejects.toBe(error);
+    expect(transaction).toHaveBeenCalledTimes(2);
+    await expect(store.save(session, snapshot())).rejects.toBe(error);
+    expect(transaction).toHaveBeenCalledTimes(4);
+    expect(report.mock.calls).toEqual([
+      [{ type: 'closed' }],
+      [{ type: 'failed', error }],
+    ]);
+    transaction.mockRestore();
+    await store.save(session, snapshot());
+    expect(report).toHaveBeenLastCalledWith({ type: 'recovered' });
+    expect(await store.read(session, 'local')).toMatchObject({ revision: 1 });
+  });
+
+  it('does not retry unrelated transaction errors', async () => {
+    const store = open();
+    const session = await store.activate('owner');
+    const error = new DOMException('Quota exhausted', 'QuotaExceededError');
+    const transaction = vi
+      .spyOn(connections[0], 'transaction')
+      .mockImplementationOnce(() => {
+        throw error;
+      });
+    await expect(store.save(session, snapshot())).rejects.toBe(error);
+    expect(transaction).toHaveBeenCalledOnce();
+    expect(connections).toHaveLength(1);
+    await store.save(session, snapshot());
+  });
+
+  it('does not replay a transaction whose body throws InvalidStateError', async () => {
+    const store = open();
+    const session = await store.activate('owner');
+    const error = new DOMException('Request failed', 'InvalidStateError');
+    const get = vi
+      .spyOn(IDBObjectStore.prototype, 'get')
+      .mockImplementationOnce(() => {
+        throw error;
+      });
+    await expect(store.save(session, snapshot())).rejects.toBe(error);
+    expect(get).toHaveBeenCalledOnce();
+    expect(connections).toHaveLength(1);
+    await store.save(session, snapshot());
+    expect(await store.read(session, 'local')).toMatchObject({ revision: 1 });
+  });
+
+  it('keeps account fences after reopening', async () => {
+    const name = crypto.randomUUID();
+    const store = open(name);
+    const session = await store.activate('owner');
+    await store.save(session, snapshot());
+    connections[0].close();
+    const other = open(name);
+    await other.clear(true);
+    await other.activate('other-owner');
+    await expect(store.save(session, snapshot('Late edit', 1))).rejects.toThrow(
+      'no longer active'
+    );
+    expect(await store.list(session)).toEqual([]);
+  });
+
+  it('retries a later open after a synchronous opening failure', async () => {
+    const store = open();
+    vi.mocked(indexedDB.open).mockImplementationOnce(() => {
+      throw new DOMException('Storage unavailable', 'UnknownError');
+    });
+    await expect(store.activate('owner')).rejects.toThrow(
+      'Storage unavailable'
+    );
+    const session = await store.activate('owner');
+    await store.save(session, snapshot());
+    expect(await store.list(session)).toHaveLength(1);
+  });
+
+  it('does not let an old close event invalidate the replacement connection', async () => {
+    const store = open();
+    const session = await store.activate('owner');
+    const old = connections[0];
+    old.close();
+    await store.save(session, snapshot());
+    old.onclose?.call(old, new Event('close'));
+    await store.list(session);
+    expect(connections).toHaveLength(2);
+  });
+
+  it('reopens and replays a save whose transaction the platform aborts mid-write', async () => {
+    const report = vi.fn();
+    const store = createLocalDraftStore(crypto.randomUUID(), report);
+    stores.push(store);
+    const session = await store.activate('owner');
+    const put = IDBObjectStore.prototype.put;
+    let interrupted = 0;
+    vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (
+      this: IDBObjectStore,
+      ...args
+    ) {
+      const request = put.apply(this, args);
+      // WebKit stops in-flight transactions when the app is backgrounded:
+      // pending requests fail before the transaction reports its abort.
+      if (this.name === 'drafts' && interrupted++ === 0)
+        this.transaction.abort();
+      return request;
+    });
+    const saved = await store.save(session, snapshot('Typed in background'));
+    expect(saved).toMatchObject({ revision: 1 });
+    expect(interrupted).toBe(2);
+    expect(connections).toHaveLength(2);
+    expect(await store.read(session, 'local')).toMatchObject({
+      revision: 1,
+      content: { subject: 'Typed in background' },
+    });
+    expect(report.mock.calls).toEqual([
+      [{ type: 'closed' }],
+      [{ type: 'recovered' }],
+    ]);
+  });
+
+  it('does not reject a save whose commit landed before the page saw an abort', async () => {
+    const store = open();
+    const session = await store.activate('owner');
+    landBeforeAbort();
+    expect(await store.save(session, snapshot())).toMatchObject({
+      revision: 1,
+    });
+    expect(await store.save(session, snapshot('Next edit', 1))).toMatchObject({
+      revision: 2,
+    });
+  });
+
+  it('bounds replays when every attempt is aborted and keeps the committed draft', async () => {
+    const report = vi.fn();
+    const store = createLocalDraftStore(crypto.randomUUID(), report);
+    stores.push(store);
+    const session = await store.activate('owner');
+    await store.save(session, snapshot('Committed earlier'));
+    const put = IDBObjectStore.prototype.put;
+    const abort = vi
+      .spyOn(IDBObjectStore.prototype, 'put')
+      .mockImplementation(function (this: IDBObjectStore, ...args) {
+        const request = put.apply(this, args);
+        if (this.name === 'drafts') this.transaction.abort();
+        return request;
+      });
+    await expect(
+      store.save(session, snapshot('Never committed', 1))
+    ).rejects.toMatchObject({ name: 'AbortError' });
+    expect(abort).toHaveBeenCalledTimes(3);
+    expect(report).toHaveBeenLastCalledWith({
+      type: 'failed',
+      error: expect.objectContaining({ name: 'AbortError' }),
+    });
+    abort.mockRestore();
+    expect(await store.read(session, 'local')).toMatchObject({
+      revision: 1,
+      content: { subject: 'Committed earlier' },
+    });
+    await store.save(session, snapshot('After returning', 1));
+    expect(report).toHaveBeenLastCalledWith({ type: 'recovered' });
+  });
+
+  it('replays an interrupted send claim on a new connection', async () => {
+    const store = open();
+    const session = await store.activate('owner');
+    await store.save(session, snapshot());
+    await store.putSend(session, sendIntent(), true);
+    const put = IDBObjectStore.prototype.put;
+    let interrupted = 0;
+    vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (
+      this: IDBObjectStore,
+      ...args
+    ) {
+      const request = put.apply(this, args);
+      if (this.name === 'sends' && interrupted++ === 0)
+        this.transaction.abort();
+      return request;
+    });
+    const claimed = await store.claimSend(session, 'attempt', 'worker', 1_000);
+    expect(claimed?.dispatch).toMatchObject({ generation: 1, owner: 'worker' });
+    expect(interrupted).toBe(2);
+    expect(connections).toHaveLength(2);
+  });
+
+  it('does not claim a send twice when the claim committed before the page saw an abort', async () => {
+    const store = open();
+    const session = await store.activate('owner');
+    await store.save(session, snapshot());
+    await store.putSend(session, sendIntent(), true);
+    landBeforeAbort();
+    // The replay finds its own lease and declines rather than sending again.
+    expect(
+      await store.claimSend(session, 'attempt', 'worker', 1_000)
+    ).toBeUndefined();
+    const [row] = await store.sends(session);
+    expect(row.submissionStarted).toBe(true);
+    expect(row.dispatch).toMatchObject({ generation: 1, owner: 'worker' });
+    // Once the lease expires, the next claim resumes the same send.
+    expect(
+      await store.claimSend(session, 'attempt', 'worker', 62_000)
+    ).toMatchObject({ dispatch: { generation: 2 } });
+  });
+
+  it('keeps persistence working when recovery reporting throws', async () => {
+    const report = vi.fn(() => {
+      throw new Error('Telemetry unavailable');
+    });
+    const store = createLocalDraftStore(crypto.randomUUID(), report);
+    stores.push(store);
+    const session = await store.activate('owner');
+    connections[0].close();
+    await store.save(session, snapshot());
+    expect(report.mock.calls).toEqual([
+      [{ type: 'closed' }],
+      [{ type: 'recovered' }],
+    ]);
+    expect(await store.list(session)).toHaveLength(1);
+  });
 });
 
 describe('durable email working copies', () => {
@@ -167,6 +557,15 @@ describe('working-copy concurrency fences', () => {
     expect(
       await store.list(await store.activate('owner', 'new-epoch'))
     ).toEqual([]);
+  });
+  it('keeps the logout fence when a landed clear is replayed', async () => {
+    const store = open();
+    await store.activate('owner', 'old-epoch');
+    landBeforeAbort();
+    await store.clear(true, 'old-epoch');
+    await expect(store.activate('owner', 'old-epoch')).rejects.toThrow(
+      'no longer active'
+    );
   });
   it('merges upload receipts committed after a snapshot was captured', async () => {
     const store = open();
@@ -325,4 +724,174 @@ describe('notification failures do not affect durable commits', () => {
     expect(await store.list(owner)).toHaveLength(1);
     expect(listener).toHaveBeenCalledOnce();
   });
+});
+
+const sendIntent = (
+  uuid = 'attempt'
+): import('./send-queue').EmailSendIntent => ({
+  uuid,
+  accountId: 'owner',
+  dispatchVersion: 2,
+  phase: 'pending',
+  locallyCancelled: false,
+  metadata: {
+    kind: 'email-send-v1',
+    payload: {
+      input: {
+        attempt: { attemptId: uuid, linkId: 'inbox' },
+        message: {
+          draftId: 'local',
+          subject: 'Approved',
+          linkId: 'inbox',
+          bodyText: 'Approved body',
+        },
+        attachmentIds: [],
+        forwardedAttachmentIds: [],
+      },
+      draft: {
+        draftId: 'local',
+        threadDbId: 'thread',
+        senderEmail: 'owner@example.com',
+        optimisticBodyHtml: null,
+        senderLinkId: 'inbox',
+        subject: 'Approved',
+        bodyText: 'Approved body',
+      },
+      workingCopy: {
+        key: 'local',
+        generation: 'generation',
+        revision: 1,
+        attachments: [],
+      },
+    },
+  },
+});
+
+describe('independent send recovery records', () => {
+  it('retains the frozen snapshot and attempt identity independently of the cache', async () => {
+    const name = crypto.randomUUID();
+    const first = open(name);
+    const owner = await first.activate('owner');
+    await first.save(owner, snapshot());
+    await first.putSend(owner, sendIntent(), true);
+    await first.close();
+    const second = open(name);
+    const restoredOwner = await second.activate('owner');
+    expect(await second.sends(restoredOwner)).toEqual([sendIntent()]);
+    await expect(
+      second.save(restoredOwner, snapshot('Late edit', 1))
+    ).rejects.toThrow('Cancel and restore');
+    expect((await second.read(restoredOwner, 'local'))?.content.subject).toBe(
+      'Keep this draft'
+    );
+  });
+  it('atomically admits only one send across tabs and rejects a stale snapshot', async () => {
+    const name = crypto.randomUUID();
+    const first = open(name),
+      second = open(name);
+    const owner = await first.activate('owner');
+    await second.activate('owner', owner.epoch);
+    await first.save(owner, snapshot());
+    const results = await Promise.allSettled([
+      first.putSend(owner, sendIntent('one'), true),
+      second.putSend(owner, sendIntent('two'), true),
+    ]);
+    expect(
+      results.filter((result) => result.status === 'fulfilled')
+    ).toHaveLength(1);
+    expect(await first.sends(owner)).toHaveLength(1);
+    await first.putSend(owner, {
+      ...(await first.sends(owner))[0],
+      cancellationRequested: true,
+    });
+    await first.restoreSend(owner, (await first.sends(owner))[0].uuid);
+    const restored = (await first.read(owner, 'local'))!;
+    await first.save(owner, {
+      ...snapshot('New edit', restored.revision),
+      generation: restored.generation,
+    });
+    await expect(first.putSend(owner, sendIntent(), true)).rejects.toThrow(
+      'changed'
+    );
+  });
+  it('keeps cancellation and restoration when a late original send settles', async () => {
+    const store = open(),
+      owner = await store.activate('owner');
+    await store.save(owner, snapshot());
+    await store.putSend(
+      owner,
+      { ...sendIntent(), cancellationRequested: true },
+      true
+    );
+    await store.putSend(owner, sendIntent());
+    expect((await store.sends(owner))[0].cancellationRequested).toBe(true);
+    await store.restoreSend(owner, sendIntent().uuid);
+    await expect(store.putSend(owner, sendIntent())).rejects.toThrow(
+      'already resolved'
+    );
+    const restored = (await store.read(owner, 'local'))!;
+    await expect(
+      store.save(owner, {
+        ...snapshot('Restored edit', restored.revision),
+        generation: restored.generation,
+      })
+    ).resolves.toMatchObject({ revision: restored.revision + 1 });
+  });
+  it('returns the restored copy when a restore that already landed is replayed', async () => {
+    const store = open(),
+      owner = await store.activate('owner');
+    await store.save(owner, snapshot());
+    await store.putSend(
+      owner,
+      { ...sendIntent(), cancellationRequested: true },
+      true
+    );
+    landBeforeAbort();
+    const restored = await store.restoreSend(owner, sendIntent().uuid);
+    expect(restored?.intent.uuid).toBe(sendIntent().uuid);
+    expect(await store.read(owner, 'local')).toMatchObject({
+      generation: restored?.draft.generation,
+      revision: restored?.draft.revision,
+    });
+    expect(await store.sends(owner)).toEqual([]);
+  });
+  it('clears send content and fences old sessions on account changes and logout', async () => {
+    const store = open(),
+      owner = await store.activate('owner');
+    await store.save(owner, snapshot());
+    await store.putSend(owner, sendIntent(), true);
+    const next = await store.activate('next', 'next-epoch');
+    expect(await store.sends(next)).toEqual([]);
+    await expect(store.putSend(owner, sendIntent())).rejects.toThrow(
+      'no longer active'
+    );
+    await store.clear(true, next.epoch);
+    expect(await store.sends(next)).toEqual([]);
+  });
+});
+
+it('a late old cancellation cannot release a newer send reservation', async () => {
+  const store = open(),
+    owner = await store.activate('owner');
+  await store.save(owner, snapshot());
+  const old = await store.putSend(
+    owner,
+    { ...sendIntent('old'), cancellationRequested: true },
+    true
+  );
+  await store.restoreSend(owner, old.uuid);
+  const restored = (await store.read(owner, 'local'))!;
+  const next = sendIntent('new');
+  next.metadata.payload.workingCopy = {
+    key: restored.key,
+    generation: restored.generation,
+    revision: restored.revision,
+    attachments: [],
+  };
+  await store.putSend(owner, next, true);
+  await expect(store.putSend(owner, old)).rejects.toThrow('already resolved');
+  await expect(
+    store.save(owner, snapshot('Late edit', restored.revision))
+  ).rejects.toThrow('Cancel and restore');
+  expect((await store.sends(owner))[0].uuid).toBe('new');
 });

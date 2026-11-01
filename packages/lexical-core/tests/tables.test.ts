@@ -24,6 +24,10 @@ import {
 } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { SupportedNodeTypes } from '../node-list';
+import {
+  $createDateMentionNode,
+  $isDateMentionNode,
+} from '../nodes/DateMentionNode';
 import { $createImageNode, $isImageNode } from '../nodes/ImageNode';
 import { $createVideoNode, $isVideoNode } from '../nodes/VideoNode';
 import { EXTERNAL_TRANSFORMERS, INTERNAL_TRANSFORMERS } from '../transformers';
@@ -318,6 +322,119 @@ describe('lists inside table cells', () => {
     editor.getEditorState().read(() => {
       const items = $getFirstCellList().getChildren().filter($isListItemNode);
       expect(items).toHaveLength(2);
+    });
+  });
+});
+
+describe('date mentions inside table cells', () => {
+  const DATE_MENTION_MARKDOWN =
+    '<m-date-mention>{"date":"2026-03-24T00:00:00.000Z","displayFormat":"March 24, 2026"}</m-date-mention>';
+
+  function $getFirstCellDateMention() {
+    const table = $getFirstTable();
+    const [row] = table.getChildren().filter($isTableRowNode);
+    const [cell] = (row as TableRowNode).getChildren().filter($isTableCellNode);
+    const mention = cell
+      .getChildren()
+      .flatMap((child) =>
+        $isDateMentionNode(child)
+          ? [child]
+          : $isElementNode(child)
+            ? child.getChildren().filter($isDateMentionNode)
+            : []
+      )[0];
+    expect(mention).toBeDefined();
+    return mention!;
+  }
+
+  it('round-trips a date mention in a cell through internal markdown', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      `<m-table><m-table-row><m-table-cell>Due ${DATE_MENTION_MARKDOWN}</m-table-cell></m-table-row></m-table>`
+    );
+
+    const markdown = exportMarkdown(editor);
+    expect(markdown).toContain(DATE_MENTION_MARKDOWN);
+
+    await importMarkdown(editor, markdown);
+    editor.getEditorState().read(() => {
+      const mention = $getFirstCellDateMention();
+      expect(mention.getDate()).toBe('2026-03-24T00:00:00.000Z');
+      expect(mention.getDisplayFormat()).toBe('March 24, 2026');
+    });
+  });
+
+  it('round-trips a date mention appended to a cell', async () => {
+    const editor = createTestEditor();
+
+    await buildEditorState(editor, () => {
+      const table = $createTableNode();
+      const row = $createTableRowNode();
+      const cell = $createTableCellNode(TableCellHeaderStates.NO_STATUS);
+      const paragraph = $createParagraphNode();
+      paragraph.append(
+        $createTextNode('Due '),
+        $createDateMentionNode({
+          date: '2026-03-24T00:00:00.000Z',
+          displayFormat: 'March 24, 2026',
+        })
+      );
+      cell.append(paragraph);
+      row.append(cell);
+      table.append(row);
+      $getRoot().append(table);
+    });
+
+    const markdown = exportMarkdown(editor);
+    expect(markdown).toContain(DATE_MENTION_MARKDOWN);
+
+    await importMarkdown(editor, markdown);
+    editor.getEditorState().read(() => {
+      const mention = $getFirstCellDateMention();
+      expect(mention.getDate()).toBe('2026-03-24T00:00:00.000Z');
+      expect(mention.getDisplayFormat()).toBe('March 24, 2026');
+    });
+  });
+
+  it('round-trips a date mention in a cell through external pipe-table markdown', async () => {
+    const editor = createTestEditor();
+    await importMarkdown(
+      editor,
+      `<m-table><m-table-row><m-table-cell>Due ${DATE_MENTION_MARKDOWN}</m-table-cell><m-table-cell>plain</m-table-cell></m-table-row></m-table>`
+    );
+
+    const markdown = exportMarkdown(editor, EXTERNAL_TRANSFORMERS);
+    expect(markdown).toContain(DATE_MENTION_MARKDOWN);
+    expect(markdown).toContain('|');
+    expect(markdown).toContain('plain');
+
+    await buildEditorState(editor, () => {
+      $getRoot().clear();
+      $convertFromMarkdownString(markdown, EXTERNAL_TRANSFORMERS);
+    });
+    editor.getEditorState().read(() => {
+      const mention = $getFirstCellDateMention();
+      expect(mention.getDate()).toBe('2026-03-24T00:00:00.000Z');
+      expect(mention.getDisplayFormat()).toBe('March 24, 2026');
+    });
+  });
+
+  it('imports an internal date mention tag from a pipe-table cell', async () => {
+    const editor = createTestEditor();
+
+    await buildEditorState(editor, () => {
+      $getRoot().clear();
+      $convertFromMarkdownString(
+        `| Due ${DATE_MENTION_MARKDOWN} | plain |`,
+        EXTERNAL_TRANSFORMERS
+      );
+    });
+
+    editor.getEditorState().read(() => {
+      const mention = $getFirstCellDateMention();
+      expect(mention.getDate()).toBe('2026-03-24T00:00:00.000Z');
+      expect(mention.getDisplayFormat()).toBe('March 24, 2026');
     });
   });
 });

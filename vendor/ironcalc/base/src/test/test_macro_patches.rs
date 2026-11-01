@@ -405,3 +405,28 @@ fn getpivotdata_reads_the_cells_of_a_described_pivot_table() {
     assert_eq!(model._get_text("F3"), "16");
     assert_eq!(model._get_text("G9"), "#REF!");
 }
+
+#[test]
+fn subtotal_leaves_out_rows_hidden_in_filtered_ranges() {
+    let mut model = new_empty_model();
+    model._set("A1", "Amount");
+    model._set("A2", "10");
+    model._set("A3", "20");
+    model._set("A4", "30");
+    model._set("C1", "=SUBTOTAL(9,A2:A4)");
+    model._set("C2", "=SUBTOTAL(109,A2:A4)");
+    model._set("C3", "=SUBTOTAL(3,A2:A4)");
+    model.set_row_hidden(0, 3, true).unwrap();
+    model.evaluate();
+    // A row hidden by hand still counts for SUBTOTAL(1-11).
+    assert_eq!(model._get_text("C1"), "60");
+    assert_eq!(model._get_text("C2"), "40");
+    model.set_filtered_ranges(
+        serde_json::from_str(r#"[{"sheet": 0, "range": [1, 1, 4, 1]}]"#).unwrap(),
+    );
+    model.evaluate();
+    // A row a filter hides counts for neither.
+    assert_eq!(model._get_text("C1"), "40");
+    assert_eq!(model._get_text("C2"), "40");
+    assert_eq!(model._get_text("C3"), "2");
+}

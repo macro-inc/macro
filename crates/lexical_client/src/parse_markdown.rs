@@ -239,6 +239,67 @@ pub enum AgentChatReplyBody {
         /// The prose, as channel markdown.
         markdown: String,
     },
+    /// The reply's segments in order: passages as written, and the steps
+    /// between them as a node viewers of the session see live.
+    Segments {
+        /// Passages and steps, in the order the agent produced them.
+        segments: Vec<AgentReplySegment>,
+        /// Show the spinner after the segments: the turn is still running.
+        pending: bool,
+        /// A closing line the harness wrote: stopped, failed, said nothing.
+        #[serde(skip_serializing_if = "Option::is_none")]
+        footer: Option<String>,
+    },
+}
+
+/// One segment of an agent's reply, as a channel message shows it.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+#[serde(tag = "kind", rename_all = "camelCase")]
+pub enum AgentReplySegment {
+    /// A passage, posted as written.
+    Prose {
+        /// The passage, as channel markdown.
+        markdown: String,
+    },
+    /// The steps between two passages.
+    Activity {
+        /// The turn whose reply this is.
+        turn: u32,
+        /// The segment's index within the reply.
+        segment: u32,
+        /// The steps as the session's fold worded them.
+        rows: Vec<AgentActivityRow>,
+        /// Whether the segment can still gain steps.
+        sealed: bool,
+    },
+}
+
+/// One step of an agent's work, for the activity node's snapshot.
+#[derive(Debug, Clone, PartialEq, Eq, serde::Serialize)]
+pub struct AgentActivityRow {
+    /// The tool call's id.
+    pub id: String,
+    /// What happened, as a verb phrase.
+    pub label: String,
+    /// What it happened to, when safe to show.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub detail: Option<String>,
+    /// Where it got to.
+    pub status: AgentActivityStatus,
+}
+
+/// Where one step of an agent's work got to.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, serde::Serialize)]
+#[serde(rename_all = "snake_case")]
+pub enum AgentActivityStatus {
+    /// Started and not finished.
+    Running,
+    /// Finished successfully.
+    Completed,
+    /// Finished unsuccessfully.
+    Failed,
+    /// Still running when its turn ended.
+    Interrupted,
 }
 
 /// A chat agent's thread message in one of its states.
@@ -248,6 +309,10 @@ pub struct AgentChatReply {
     /// Session the message speaks for; linked ahead of the body.
     pub session_id: String,
     pub body: AgentChatReplyBody,
+    /// Whether to lead with the session link. Absent means yes; a private
+    /// conversation's messages are the session and repeat no link.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub link: Option<bool>,
 }
 
 #[derive(serde::Serialize)]
@@ -386,7 +451,7 @@ impl From<LexicalResponseItem> for MarkdownParseResult {
     }
 }
 
-async fn check_response(response: reqwest::Response) -> Result<reqwest::Response> {
+pub(crate) async fn check_response(response: reqwest::Response) -> Result<reqwest::Response> {
     if response.status() == reqwest::StatusCode::OK {
         return Ok(response);
     }
@@ -655,7 +720,9 @@ impl LexicalClient {
     }
 
     async fn get_json<T: DeserializeOwned>(&self, url: &str) -> Result<T> {
-        let response = check_response(self.client.get(url).send().await?).await?;
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
+        let response = check_response(self.client.get(url).headers(headers).send().await?).await?;
         response.json().await.context("unexpected response")
     }
 }

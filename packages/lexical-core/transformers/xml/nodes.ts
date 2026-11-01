@@ -206,6 +206,16 @@ export type PullRequestMentionNode = Id & {
   version: number;
   id: string;
   label: string;
+  url?: string;
+};
+
+export type BookingLinkMentionNode = Id & {
+  type: 'booking-link-mention';
+  version: number;
+  profileId: string;
+  slug?: string;
+  label?: string;
+  url: string;
 };
 
 export type ThemeMentionNode = Id & {
@@ -259,6 +269,7 @@ export type KnownNode =
   | GroupMentionNode
   | AgentSessionMentionNode
   | PullRequestMentionNode
+  | BookingLinkMentionNode
   | TagMentionNode
   | ThemeMentionNode
   | UnknownMentionNode;

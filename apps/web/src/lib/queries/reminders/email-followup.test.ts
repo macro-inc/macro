@@ -14,6 +14,10 @@ const mocks = vi.hoisted(() => ({
   graphql: vi.fn(),
   refreshGraphql: vi.fn(),
   fetchThread: vi.fn(),
+  cacheEnabled: vi.fn(() => true),
+}));
+vi.mock('@service-storage/graphql-soup', () => ({
+  graphqlCacheEnabled: mocks.cacheEnabled,
 }));
 vi.mock('@service-storage/client', () => ({
   storageServiceClient: { reminders: { setEmailFollowup: mocks.write } },
@@ -75,8 +79,18 @@ describe('email follow-up cache reconciliation', () => {
     });
     expect(mocks.refreshGraphql).not.toHaveBeenCalled();
   });
+  it('reads the thread again, and only the lists the cache does not maintain', async () => {
+    mocks.graphql.mockReturnValue(true);
+    mocks.cacheEnabled.mockReturnValue(true);
+    await executeEmailFollowup('thread', command);
+    expect(mocks.fetchThread).toHaveBeenCalledWith('thread');
+    expect(mocks.refreshGraphql).toHaveBeenCalledExactlyOnceWith({
+      unmaintainedOnly: true,
+    });
+  });
   it('refreshes GraphQL lists and the thread even when host navigation fails', async () => {
     mocks.graphql.mockReturnValue(true);
+    mocks.cacheEnabled.mockReturnValue(false);
     const log = vi.spyOn(console, 'error').mockImplementation(() => {});
     try {
       await expect(

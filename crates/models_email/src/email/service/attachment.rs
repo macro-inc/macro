@@ -11,6 +11,9 @@ use uuid::Uuid;
 #[serde_as]
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema, JsonSchema)]
 pub struct Attachment {
+    /// Cloud reference: open this provider page instead of downloading bytes.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub reference_url: Option<String>,
     #[schemars(with = "String")]
     pub db_id: Uuid,
     // a different value is returned by the gmail API for this each time you fetch a message -
@@ -88,6 +91,15 @@ pub struct AttachmentDraft {
     pub size: i32,
     /// S3 object key where the attachment content is stored.
     pub s3_key: String,
+    /// Bytes have not yet been verified; sending must wait for completion.
+    #[serde(default)]
+    pub upload_pending: bool,
+    /// Original Content-ID retained when transferring a provider attachment.
+    #[serde(default)]
+    pub content_id: Option<String>,
+    /// Whether the attachment is referenced inline by the message body.
+    #[serde(default)]
+    pub is_inline: bool,
 }
 
 impl From<crate::db::attachment::AttachmentDraft> for AttachmentDraft {
@@ -100,6 +112,9 @@ impl From<crate::db::attachment::AttachmentDraft> for AttachmentDraft {
             sha: db.sha,
             size: db.size,
             s3_key: db.s3_key,
+            upload_pending: db.upload_pending,
+            content_id: db.content_id,
+            is_inline: db.is_inline,
         }
     }
 }
@@ -141,6 +156,10 @@ impl From<crate::db::attachment::AttachmentForwarded> for AttachmentForwarded {
 /// The attachment data we need to include when sending a message to a provider.
 #[derive(Debug, Clone, Serialize, Deserialize, ToSchema)]
 pub struct AttachmentToSend {
+    #[serde(default)]
+    pub content_id: Option<String>,
+    #[serde(default)]
+    pub is_inline: bool,
     pub file_name: String,
     pub content_type: String,
     pub data: Vec<u8>,

@@ -1,5 +1,6 @@
-import CheckIcon from '@phosphor/check.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
 import {
   createMemo,
@@ -17,7 +18,6 @@ import { OptionEditor } from './option-editor';
 import { OptionPill } from './select-pill';
 
 type PickerRow =
-  | { kind: 'clear' }
   | { kind: 'option'; option: DatabaseOption }
   | { kind: 'create'; label: string };
 
@@ -62,6 +62,8 @@ export function OptionPicker(props: {
 }) {
   const listId = createUniqueId();
   const [active, setActive] = createSignal(-1);
+  let input: HTMLInputElement | undefined;
+  let clearButton: HTMLButtonElement | undefined;
   const matches = () => {
     const term = props.search.trim().toLocaleLowerCase();
     return props.column.options.filter((option) =>
@@ -81,9 +83,6 @@ export function OptionPicker(props: {
   const rows = createMemo((): PickerRow[] => {
     const created = creatable();
     return [
-      ...(props.selected.length && !props.search.trim()
-        ? [{ kind: 'clear' } as const]
-        : []),
       ...matches().map((option) => ({ kind: 'option', option }) as const),
       ...(created !== undefined
         ? [{ kind: 'create', label: created } as const]
@@ -104,12 +103,22 @@ export function OptionPicker(props: {
   const activate = (row: PickerRow | undefined) =>
     match(row)
       .with(undefined, () => undefined)
-      .with({ kind: 'clear' }, () => props.onClear())
       .with({ kind: 'option' }, ({ option }) => props.onPick(option.label))
       .with({ kind: 'create' }, ({ label }) => props.onCreate(label))
       .exhaustive();
   const move = (step: 1 | -1) => {
     const count = rows().length;
+    if (
+      step === 1 &&
+      clearButton &&
+      props.selected.length &&
+      !props.search.trim() &&
+      active() === count - 1
+    ) {
+      setActive(-1);
+      clearButton.focus();
+      return;
+    }
     if (!count) return;
     setActive((current) =>
       current < 0
@@ -120,34 +129,39 @@ export function OptionPicker(props: {
     );
   };
   return (
-    <div class="flex w-56 flex-col">
-      <input
-        ref={props.inputRef}
-        role="combobox"
-        aria-label={`Search ${props.column.name} options`}
-        aria-expanded="true"
-        aria-controls={listId}
-        aria-activedescendant={active() >= 0 ? rowId(active()) : undefined}
-        aria-autocomplete="list"
-        placeholder="Search or create…"
-        value={props.search}
-        maxlength={200}
-        class="mb-1 h-7 w-full rounded border border-edge-muted bg-input px-2 text-xs outline-none placeholder:text-ink-placeholder focus:border-ink/50"
-        onInput={(event) => {
-          props.onSearch(event.currentTarget.value);
-          setActive(event.currentTarget.value.trim() ? 0 : -1);
-        }}
-        onKeyDown={(event) => {
-          if (event.isComposing || event.keyCode === 229) return;
-          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-            event.preventDefault();
-            move(event.key === 'ArrowDown' ? 1 : -1);
-          } else if (event.key === 'Enter') {
-            event.preventDefault();
-            activate(rows()[Math.max(active(), 0)]);
-          } else props.onKeyDown?.(event, chosen());
-        }}
-      />
+    <div class="flex w-full min-w-56 flex-col">
+      <div class="-mx-1.5 -mt-1.5 mb-1.5 border-b border-edge-divider">
+        <input
+          ref={(element) => {
+            input = element;
+            props.inputRef?.(element);
+          }}
+          role="combobox"
+          aria-label={`Search ${props.column.name} options`}
+          aria-expanded="true"
+          aria-controls={listId}
+          aria-activedescendant={active() >= 0 ? rowId(active()) : undefined}
+          aria-autocomplete="list"
+          placeholder="Search or create…"
+          value={props.search}
+          maxlength={200}
+          class="h-9 w-full bg-transparent px-3.5 text-xs text-ink outline-none placeholder:text-ink-placeholder"
+          onInput={(event) => {
+            props.onSearch(event.currentTarget.value);
+            setActive(event.currentTarget.value.trim() ? 0 : -1);
+          }}
+          onKeyDown={(event) => {
+            if (event.isComposing || event.keyCode === 229) return;
+            if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+              event.preventDefault();
+              move(event.key === 'ArrowDown' ? 1 : -1);
+            } else if (event.key === 'Enter') {
+              event.preventDefault();
+              activate(rows()[Math.max(active(), 0)]);
+            } else props.onKeyDown?.(event, chosen());
+          }}
+        />
+      </div>
       <div
         id={listId}
         role="listbox"
@@ -165,15 +179,12 @@ export function OptionPicker(props: {
               role="option"
               aria-selected={isPicked(row())}
               data-active={active() === index() ? '' : undefined}
-              class="group/option flex h-7 shrink-0 items-center gap-1.5 rounded px-1.5 text-xs data-active:bg-hover hover:bg-hover"
+              class="group/option flex h-7 shrink-0 items-center gap-1.5 rounded-md px-2 text-xs data-active:bg-hover hover:bg-hover"
               onPointerMove={() => setActive(index())}
               onPointerDown={(event) => event.preventDefault()}
               onClick={() => activate(row())}
             >
               <Switch>
-                <Match when={row().kind === 'clear'}>
-                  <span class="flex-1 text-ink-muted">Clear value</span>
-                </Match>
                 <Match when={createdOf(row())}>
                   {(label) => (
                     <>
@@ -215,11 +226,38 @@ export function OptionPicker(props: {
           )}
         </Key>
         <Show when={!rows().length}>
-          <p class="px-1.5 py-1 text-xs text-ink-placeholder">No options</p>
+          <p class="px-2 py-1 text-xs text-ink-placeholder">No options</p>
         </Show>
       </div>
+      <Show when={props.selected.length}>
+        <div class="-mx-1.5 mt-1.5 border-t border-edge-divider px-1.5 pt-1.5">
+          <button
+            type="button"
+            class="flex h-7 w-full items-center gap-1.5 rounded-md px-2 text-left text-xs text-ink-muted outline-none hover:bg-hover hover:text-ink focus-visible:bg-hover focus-visible:text-ink"
+            ref={clearButton}
+            onClick={props.onClear}
+            onKeyDown={(event) => {
+              if (event.isComposing || event.keyCode === 229) return;
+              if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+                event.preventDefault();
+                setActive(
+                  event.key === 'ArrowUp'
+                    ? rows().length - 1
+                    : rows().length
+                      ? 0
+                      : -1
+                );
+                input?.focus();
+              } else props.onKeyDown?.(event, undefined);
+            }}
+          >
+            <XIcon class="size-3.5 shrink-0" />
+            Clear value
+          </button>
+        </div>
+      </Show>
       <Show when={props.error}>
-        <p role="alert" class="px-1.5 pt-1 text-xs text-failure-ink">
+        <p role="alert" class="px-2 pt-1 text-xs text-failure-ink">
           {props.error}
         </p>
       </Show>

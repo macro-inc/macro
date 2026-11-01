@@ -18,6 +18,8 @@ use std::sync::{Arc, Mutex};
 #[derive(Clone, Default)]
 struct StubRepo {
     contact_calls: Arc<Mutex<Vec<ContactListCall>>>,
+    association_calls: Arc<Mutex<Vec<Option<(uuid::Uuid, bool)>>>>,
+    association: Option<crate::domain::association::CrmRecordAssociation>,
 }
 
 #[derive(Debug, PartialEq)]
@@ -50,6 +52,30 @@ impl CompaniesRepository for StubRepo {
             limit: query.limit,
         });
         Ok(vec![])
+    }
+
+    async fn resolve_activity(
+        &self,
+        scope: CrmContactListScope<'_>,
+    ) -> Result<crate::domain::association::CrmRecordAssociation, CrmError> {
+        self.resolve_association(scope, crate::domain::association::CrmAssociation::Activity)
+            .await
+            .map(Option::unwrap_or_default)
+    }
+
+    async fn resolve_association(
+        &self,
+        scope: CrmContactListScope<'_>,
+        _record: crate::domain::association::CrmAssociation,
+    ) -> Result<Option<crate::domain::association::CrmRecordAssociation>, CrmError> {
+        self.association_calls.lock().unwrap().push(match scope {
+            CrmContactListScope::Viewer(_) => None,
+            CrmContactListScope::Team {
+                team_id,
+                include_hidden,
+            } => Some((team_id, include_hidden)),
+        });
+        Ok(self.association.clone())
     }
 
     async fn populate_contact(
@@ -100,6 +126,19 @@ impl CompaniesRepository for StubRepo {
         _domain: &str,
         _metadata: &crate::domain::model::DomainMetadata,
     ) -> Result<(), CrmError> {
+        unimplemented!()
+    }
+
+    async fn insert_pending_domain(&self, _domain: &str) -> Result<(), CrmError> {
+        unimplemented!()
+    }
+
+    async fn claim_pending_domains(
+        &self,
+        _limit: i64,
+        _max_attempts: i16,
+        _attempted_before: DateTime<Utc>,
+    ) -> Result<Vec<String>, CrmError> {
         unimplemented!()
     }
 
@@ -466,6 +505,64 @@ async fn contact_listing_requires_a_user_bot_to_match_its_acting_user() {
             .len(),
         1
     );
+}
+
+#[tokio::test]
+async fn association_uses_the_viewer_scope_and_reports_invisible_records() {
+    use crate::domain::association::{CrmAssociation, CrmRecordAssociation};
+    let company = uuid::Uuid::from_u128(7);
+    let contact = uuid::Uuid::from_u128(8);
+    let viewer = "macro|user@example.com";
+    let resolved = CrmRecordAssociation::company(company, vec![contact]);
+    let found = CrmServiceImpl::new(
+        StubRepo {
+            association: Some(resolved.clone()),
+            ..StubRepo::default()
+        },
+        NoOpCompanyMetadataResolver,
+    );
+    assert_eq!(
+        found
+            .resolve_association(viewer, None, CrmAssociation::Company(company))
+            .await
+            .unwrap(),
+        resolved
+    );
+    let team_id = uuid::Uuid::from_u128(42);
+    let bot = bot_receipt(team_id, BotReceiptScope::Team { team_id }, TeamRole::Member);
+    found
+        .resolve_association("bot-viewer", Some(&bot), CrmAssociation::Company(company))
+        .await
+        .unwrap();
+    assert_eq!(
+        *found.companies_repository.association_calls.lock().unwrap(),
+        vec![None, Some((team_id, false))]
+    );
+    let member = receipt_with_role(TeamRole::Member);
+    assert!(matches!(
+        found
+            .resolve_association(
+                "macro|other@example.com",
+                Some(&member),
+                CrmAssociation::Company(company)
+            )
+            .await,
+        Err(CrmError::InvalidRequest(_))
+    ));
+
+    let missing = service();
+    assert!(matches!(
+        missing
+            .resolve_association(viewer, None, CrmAssociation::Company(company))
+            .await,
+        Err(CrmError::CompanyNotFoundForTeam)
+    ));
+    assert!(matches!(
+        missing
+            .resolve_association(viewer, None, CrmAssociation::Contact(contact))
+            .await,
+        Err(CrmError::ContactNotFoundForTeam)
+    ));
 }
 
 #[tokio::test]

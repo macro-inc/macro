@@ -12,7 +12,7 @@ use uuid::Uuid;
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[schemars(
     title = "ListBookingLinks",
-    description = "Discover and reuse the user's booking links before creating one. Returns shareable URLs, enabled/paused state, full drafts and revision for EditBookingLink, plus reusable availability schedules and the user's host ID. Searches title, slug and description; omit query for all (at most 100). Omit teamId for personal links; use a team ID returned in teamIds for team links. This read never creates settings. These are reusable scheduling pages, not calendar meetings."
+    description = "Discover and reuse the user's booking links before creating one. Returns shareable URLs, enabled/paused state, full drafts and revision for EditBookingLink, plus reusable availability schedules and the user's host ID. Searches title, slug and description; omit query for all (at most 100). Omit teamId for personal links; use a team ID returned in teamIds for team links. This read never creates settings. These are reusable scheduling pages, not calendar meetings. When sharing a returned URL in Markdown, use an <m-booking-link-mention> chip with profileId/slug/url, not a bare URL."
 )]
 pub struct ListBookingLinks {
     /// Existing Macro team ID, or null for personal links.

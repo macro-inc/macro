@@ -1,12 +1,14 @@
+import { NotificationSoundSettingsView } from '@app/features/notification-sounds/views/NotificationSoundSettingsView';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { toast } from '@core/component/Toast/Toast';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
-import { isTauri } from '@core/util/platform';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   EMAIL_DIGEST_NOTIFICATION_TYPE,
   NOTIFICATION_EVENT_GROUPS,
 } from '@notifications/notification-event-catalog';
 import { useNotificationSettings } from '@notifications/notification-settings';
+import { notificationsBlockedMessage } from '@notifications/notifications-blocked-message';
 import { openSnoozeNotifications } from '@notifications/SnoozeNotificationsDialog';
 import { queryReadyGate } from '@queries/gate';
 import {
@@ -17,7 +19,6 @@ import {
   useMutedEntitiesQuery,
   useUnmuteItemMutation,
 } from '@queries/notification/unsubscribes';
-import { type as osType } from '@tauri-apps/plugin-os';
 import { ToggleSwitch } from '@ui';
 import { createSignal, For, getOwner, Show } from 'solid-js';
 import { MutedItemRow } from './MutedItemRow';
@@ -64,11 +65,7 @@ export function Notifications() {
       analytics.track('notifications_toggled');
       await platformSettings.toggle(enabled);
       if (enabled && !platformSettings.isEnabled()) {
-        toast.failure(
-          isTauri() && osType() === 'macos'
-            ? 'Open System Settings → Notifications → Macro and turn on Allow notifications.'
-            : 'Allow notification permissions, then try again.'
-        );
+        toast.failure(notificationsBlockedMessage());
       }
     } catch (error) {
       console.error('Could not update notification permission', error);
@@ -132,7 +129,9 @@ export function Notifications() {
                   labelClass="sr-only"
                   checked={settings().isEnabled()}
                   disabled={pushPending()}
-                  onChange={(enabled) => void togglePush(enabled)}
+                  onChange={(enabled) =>
+                    fireAndForget(togglePush(enabled), 'notification-settings')
+                  }
                 />
               </SettingsRow>
             )}
@@ -152,6 +151,8 @@ export function Notifications() {
           </SettingsRow>
         </SettingsCard>
       </SettingsSection>
+
+      <NotificationSoundSettingsView />
 
       <For each={NOTIFICATION_EVENT_GROUPS}>
         {(group) => (
@@ -186,7 +187,12 @@ export function Notifications() {
             <SettingsRow label="Could not load snoozed items">
               <button
                 type="button"
-                onClick={() => void mutedEntitiesQuery.refetch()}
+                onClick={() =>
+                  fireAndForget(
+                    mutedEntitiesQuery.refetch(),
+                    'notification-settings'
+                  )
+                }
               >
                 Retry
               </button>
@@ -215,7 +221,9 @@ export function Notifications() {
                 {(item) => (
                   <MutedItemRow
                     item={item}
-                    onUnmute={() => void unmuteEntity(item)}
+                    onUnmute={() =>
+                      fireAndForget(unmuteEntity(item), 'notification-settings')
+                    }
                     onSnooze={() =>
                       openSnoozeNotifications([item], { owner: dialogOwner })
                     }
@@ -246,7 +254,9 @@ export function Notifications() {
               {(item) => (
                 <MutedItemRow
                   item={item}
-                  onUnmute={() => void unmuteEntity(item)}
+                  onUnmute={() =>
+                    fireAndForget(unmuteEntity(item), 'notification-settings')
+                  }
                   onSnooze={() =>
                     openSnoozeNotifications([item], { owner: dialogOwner })
                   }

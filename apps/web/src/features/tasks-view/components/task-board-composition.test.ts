@@ -1,7 +1,4 @@
-import type {
-  Kanban,
-  KanbanCrossColumnDrop,
-} from '@app/components/kanban/kanban';
+import type { Kanban, KanbanDrop } from '@app/components/kanban/kanban';
 import { cleanup, render } from '@solidjs/testing-library';
 import {
   type Accessor,
@@ -17,7 +14,7 @@ import type { TaskBoardColumn, TaskBoardTask } from '../core/task-board';
 import { TaskBoard } from './task-board';
 
 const drag = vi.hoisted(() => ({
-  drop: undefined as ((drop: KanbanCrossColumnDrop) => void) | undefined,
+  drop: undefined as ((drop: KanbanDrop) => void) | undefined,
 }));
 const scrolled = vi.hoisted(() => vi.fn());
 const visibility = vi.hoisted(() => ({ end: (): boolean => true }));
@@ -29,7 +26,10 @@ vi.mock('@app/components/kanban/kanban', async (importOriginal) => {
   return {
     ...original,
     Kanban: (props: ComponentProps<typeof Kanban>) => {
-      if (props.mode === 'cross-column') drag.drop = props.onDrop;
+      drag.drop = (drop) => {
+        if (props.mode !== 'cross-column') props.onDrop(drop);
+        else if (drop.kind === 'card') props.onDrop(drop);
+      };
       return original.Kanban(props);
     },
   };
@@ -39,7 +39,11 @@ vi.mock('@app/components/kanban/kanban-virtualizer', () => ({
   createKanbanVirtualizer: (options: {
     direction: string;
     keys: Accessor<readonly (string | number)[]>;
+    getScrollElement: () => HTMLDivElement | undefined;
   }) => ({
+    get scrollElement() {
+      return options.getScrollElement();
+    },
     getVirtualItems: () =>
       options
         .keys()
@@ -183,14 +187,14 @@ it('preserves reactive card content and column ownership across regrouping and f
   expect(document.getElementById(labelId ?? '')?.textContent).toBe('alice');
   expect(
     lane
-      ?.querySelector('[data-task-board-scroll]')
+      ?.querySelector('[data-kanban-board-scroll]')
       ?.getAttribute('aria-labelledby')
   ).toBe(labelId);
   setHidden(false);
   expect(view.queryByText('Hidden')).toBeNull();
 
   await Promise.resolve();
-  const spacer = view.container.querySelector('[data-task-board-rows]');
+  const spacer = view.container.querySelector('[data-kanban-board-rows]');
   expect(spacer?.nextElementSibling?.textContent).toBe('alice paging');
 });
 

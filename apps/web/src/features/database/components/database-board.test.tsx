@@ -7,20 +7,34 @@ import {
   waitFor,
   within,
 } from '@solidjs/testing-library';
-import { err, ok, okAsync, type Result } from 'neverthrow';
+import userEvent from '@testing-library/user-event';
+import { err, ok, okAsync, type Result, ResultAsync } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { LaneKey } from '../../../lib/core/database-sql/generated/types';
-import { OptionEditingContext } from '../context/option-editing';
+import {
+  type OptionEditing,
+  OptionEditingContext,
+} from '../context/option-editing';
 import type { DatabaseViewColumn } from '../core/database-view';
 import type { DatabaseRow } from '../core/table';
+import { boardLane } from '../tests/board-layout';
+import { BoardLaneHeader } from './board-lane-header';
 import { DatabaseBoard } from './database-board';
+import { GridCell } from './grid-cell';
 
+let menuStyles: HTMLStyleElement;
 beforeEach(() => {
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+  // JSDOM reports an empty animation name; presence expects CSS's default none.
+  menuStyles = document.createElement('style');
+  // Include the dialog overlay so its presence also finishes on close.
+  menuStyles.textContent = '* { animation-name: none; }';
+  document.head.append(menuStyles);
 });
 afterEach(() => {
   cleanup();
+  menuStyles.remove();
   vi.restoreAllMocks();
 });
 
@@ -91,6 +105,7 @@ describe('database board', () => {
     expect(
       screen
         .getAllByRole('region')
+        .filter((lane) => lane.hasAttribute('data-kanban-lane'))
         .map((lane) => lane.getAttribute('aria-label'))
     ).toEqual(['ana@macro.com lane', 'sam@macro.com lane']);
     expect(screen.queryByRole('button', { name: 'New group' })).toBeNull();
@@ -182,6 +197,7 @@ describe('database board', () => {
     expect(
       screen
         .getAllByRole('region')
+        .filter((lane) => lane.hasAttribute('data-kanban-lane'))
         .map((lane) => lane.getAttribute('aria-label'))
     ).toEqual(['Done lane', 'To do lane']);
     expect(
@@ -191,9 +207,7 @@ describe('database board', () => {
       screen.queryByRole('button', { name: 'Open Old record' })
     ).toBeNull();
     expect(
-      within(screen.getByRole('region', { name: 'Done lane' })).getByText(
-        'Drop a record here'
-      )
+      within(boardLane('Done lane')).getByText('Drop a record here')
     ).toBeTruthy();
   });
 
@@ -299,6 +313,242 @@ describe('database board', () => {
       )
     ).toEqual(['Notes: Bring draft', 'Owner: Ada']);
   });
+
+  it.each(['STRING', 'NUMBER'] as const)(
+    'reserves usable editor space for empty %s card fields',
+    async (dataType) => {
+      const title: DatabaseViewColumn = {
+        id: 'title',
+        name: 'Name',
+        dataType: 'STRING',
+        isMultiSelect: false,
+        options: [],
+        writable: true,
+      };
+      const status: DatabaseViewColumn = {
+        ...title,
+        id: 'status',
+        name: 'Status',
+        dataType: 'SELECT_STRING',
+        options: [{ id: 'todo', label: 'To do', color: null }],
+      };
+      const value: DatabaseViewColumn = {
+        ...title,
+        id: 'value',
+        name: 'Value',
+        dataType,
+      };
+      const onWrite = vi.fn(async () => true);
+      render(() => (
+        <DatabaseBoard
+          rows={[
+            {
+              rowId: 'record',
+              cells: { title: 'Empty field', status: 'To do', value: null },
+            },
+          ]}
+          columns={[title, status, value]}
+          groupColumn={status}
+          board={{
+            lanes: [
+              {
+                key: { kind: 'option', id: 'todo' },
+                hidden: false,
+                cards: ['record'],
+              },
+            ],
+          }}
+          layout={{
+            kind: 'board',
+            title: 'title',
+            groupBy: 'status',
+            lanes: [],
+            cardFields: ['value'],
+            hideEmptyLanes: false,
+          }}
+          canEdit
+          rowPending={() => false}
+          onOpen={vi.fn()}
+          onCreate={vi.fn(async () => true)}
+          renderCell={(row, column, options) => (
+            <GridCell
+              {...options}
+              column={column()}
+              value={row().cells[column().id]}
+              canEdit
+              onWrite={onWrite}
+              onAddOption={vi.fn(async () => true)}
+            />
+          )}
+        />
+      ));
+      const field = screen.getByLabelText('Value');
+      expect(field.classList.contains('min-w-16')).toBe(true);
+      const display = within(field).getByRole('button', {
+        name: 'Value: Empty. Click to edit',
+      });
+      // JSDOM has no layout; the board's reserved display area is 64 by 24.
+      vi.spyOn(display, 'getBoundingClientRect').mockReturnValue(
+        new DOMRect(0, 0, 64, 24)
+      );
+      fireEvent.click(display);
+      const editor = within(field).getByRole('textbox', { name: 'Edit Value' });
+      const cell = field.firstElementChild as HTMLDivElement;
+      expect(cell.style.width).toBe('64px');
+      expect(cell.style.height).toBe('24px');
+      fireEvent.input(editor, {
+        target: { value: dataType === 'NUMBER' ? '123.45' : 'Readable' },
+      });
+      expect(cell.style.width).toBe('64px');
+      fireEvent.keyDown(editor, { key: 'Enter' });
+      await waitFor(() =>
+        expect(onWrite).toHaveBeenCalledExactlyOnceWith(
+          dataType === 'NUMBER' ? 123.45 : 'Readable'
+        )
+      );
+      expect(cell.style.width).toBe('');
+      expect(field.classList.contains('min-w-16')).toBe(true);
+    }
+  );
+
+  it.each([false, true])(
+    'keeps an invalid card-field draft after another field saves (refresh columns: %s)',
+    async (refreshColumns) => {
+      const title: DatabaseViewColumn = {
+        id: 'title',
+        name: 'Name',
+        dataType: 'STRING',
+        isMultiSelect: false,
+        options: [],
+        writable: true,
+      };
+      const [columns, setColumns] = createSignal<DatabaseViewColumn[]>([
+        title,
+        {
+          ...title,
+          id: 'status',
+          name: 'Status',
+          dataType: 'SELECT_STRING',
+          options: [{ id: 'todo', label: 'To do', color: null }],
+        },
+        { ...title, id: 'amount', name: 'Amount', dataType: 'NUMBER' },
+        { ...title, id: 'notes', name: 'Notes' },
+      ]);
+      const [rows, setRows] = createSignal<DatabaseRow[]>([
+        {
+          rowId: 'record',
+          cells: {
+            title: 'Keep my draft',
+            status: 'To do',
+            amount: 12,
+            notes: 'Original notes',
+          },
+        },
+      ]);
+      const onWrite = vi.fn(
+        async (
+          rowId: string,
+          columnId: string,
+          value: DatabaseRow['cells'][string]
+        ) => {
+          setRows((current) =>
+            current.map((row) => ({
+              ...row,
+              cells: {
+                ...row.cells,
+                ...(row.rowId === rowId ? { [columnId]: value } : {}),
+              },
+            }))
+          );
+          if (refreshColumns)
+            setColumns((current) =>
+              current.map((column) => ({
+                ...column,
+                options: column.options.map((option) => ({ ...option })),
+              }))
+            );
+          return true;
+        }
+      );
+      render(() => (
+        <DatabaseBoard
+          rows={rows()}
+          columns={columns()}
+          groupColumn={columns()[1]}
+          board={{
+            lanes: [
+              {
+                key: { kind: 'option', id: 'todo' },
+                hidden: false,
+                cards: ['record'],
+              },
+            ],
+          }}
+          layout={{
+            kind: 'board',
+            title: 'title',
+            groupBy: 'status',
+            lanes: [],
+            cardFields: ['amount', 'notes'],
+            hideEmptyLanes: false,
+          }}
+          canEdit
+          rowPending={() => false}
+          onOpen={vi.fn()}
+          onCreate={vi.fn(async () => true)}
+          renderCell={(row, column, options) => (
+            <GridCell
+              {...options}
+              column={column()}
+              value={row().cells[column().id]}
+              canEdit
+              onWrite={(value) => onWrite(row().rowId, column().id, value)}
+              onAddOption={vi.fn(async () => true)}
+            />
+          )}
+        />
+      ));
+      await userEvent.click(
+        screen.getByRole('button', { name: /^Amount: 12\./ })
+      );
+      const invalidInput = screen.getByRole('textbox', { name: 'Edit Amount' });
+      await userEvent.clear(invalidInput);
+      await userEvent.type(invalidInput, 'invalid{Enter}');
+      expect(invalidInput.getAttribute('aria-invalid')).toBe('true');
+      await userEvent.click(
+        screen.getByRole('button', { name: /^Notes: Original notes\./ })
+      );
+      const notesInput = screen.getByRole('textbox', { name: 'Edit Notes' });
+      await userEvent.clear(notesInput);
+      await userEvent.type(notesInput, 'Saved notes{Enter}');
+      await waitFor(() =>
+        expect(onWrite).toHaveBeenCalledExactlyOnceWith(
+          'record',
+          'notes',
+          'Saved notes'
+        )
+      );
+      expect(
+        screen.getByRole('button', { name: /^Notes: Saved notes\./ })
+      ).toBeTruthy();
+      expect(screen.getByRole('textbox', { name: 'Edit Amount' })).toBe(
+        invalidInput
+      );
+      expect((invalidInput as HTMLInputElement).value).toBe('invalid');
+      expect(invalidInput.getAttribute('aria-invalid')).toBe('true');
+      expect(screen.queryByRole('alert')).toBeNull();
+      invalidInput.focus();
+      expect(screen.getByRole('alert').textContent).toBe(
+        'Enter a valid number'
+      );
+      await userEvent.clear(invalidInput);
+      await userEvent.type(invalidInput, '24{Enter}');
+      await waitFor(() =>
+        expect(onWrite).toHaveBeenLastCalledWith('record', 'amount', 24)
+      );
+      expect(onWrite).toHaveBeenCalledTimes(2);
+    }
+  );
 
   it('heads each card with its title column, an entity as its chip, never repeated among the fields', () => {
     const status: DatabaseViewColumn = {
@@ -449,7 +699,7 @@ describe('database board', () => {
         onCreate={onCreate}
       />
     ));
-    const lane = screen.getByRole('region', { name: 'To do lane' });
+    const lane = boardLane('To do lane');
     fireEvent.click(within(lane).getByRole('button', { name: 'New record' }));
     expect(within(lane).queryByRole('textbox')).toBeNull();
     fireEvent.click(within(lane).getByRole('button', { name: 'Add record' }));
@@ -459,6 +709,63 @@ describe('database board', () => {
       expect.any(String),
       { open: true }
     );
+  });
+
+  it("hands a lane's new record to the host's form instead of an inline card", () => {
+    const status: DatabaseViewColumn = {
+      id: 'status',
+      name: 'Status',
+      dataType: 'SELECT_STRING',
+      isMultiSelect: false,
+      options: [{ id: 'todo', label: 'To do', color: null }],
+      writable: true,
+    };
+    const onCreate = vi.fn(async () => true);
+    const onCompose = vi.fn();
+    render(() => (
+      <DatabaseBoard
+        rows={[]}
+        columns={[
+          {
+            id: 'title',
+            name: 'Name',
+            dataType: 'STRING',
+            isMultiSelect: false,
+            options: [],
+            writable: true,
+          },
+          status,
+        ]}
+        board={{
+          lanes: [
+            { key: { kind: 'option', id: 'todo' }, hidden: false, cards: [] },
+          ],
+        }}
+        layout={{
+          kind: 'board',
+          groupBy: 'status',
+          title: 'title',
+          lanes: [],
+          cardFields: [],
+          hideEmptyLanes: false,
+        }}
+        groupColumn={status}
+        canEdit
+        rowPending={() => false}
+        onOpen={vi.fn()}
+        onMove={vi.fn()}
+        onCreate={onCreate}
+        onCompose={onCompose}
+      />
+    ));
+    const lane = boardLane('To do lane');
+    fireEvent.click(within(lane).getByRole('button', { name: 'New record' }));
+    expect(onCompose).toHaveBeenCalledExactlyOnceWith({
+      kind: 'option',
+      id: 'todo',
+    });
+    expect(within(lane).queryByRole('textbox')).toBeNull();
+    expect(onCreate).not.toHaveBeenCalled();
   });
 
   it("moves a card from its Move menu into the chosen lane's option", async () => {
@@ -608,64 +915,6 @@ describe('database board', () => {
     ).toBeNull();
   });
 
-  it('turns hiding empty lanes on from a lane menu, checked as the layout has it', async () => {
-    const status: DatabaseViewColumn = {
-      id: 'status',
-      name: 'Status',
-      dataType: 'SELECT_STRING',
-      isMultiSelect: false,
-      options: [{ id: 'todo', label: 'To do', color: null }],
-      writable: true,
-    };
-    const onHideEmptyLanes = vi.fn();
-    render(() => (
-      <DatabaseBoard
-        rows={[]}
-        columns={[
-          {
-            id: 'title',
-            name: 'Name',
-            dataType: 'STRING',
-            isMultiSelect: false,
-            options: [],
-            writable: true,
-          },
-          status,
-        ]}
-        board={{
-          lanes: [
-            { key: { kind: 'option', id: 'todo' }, hidden: false, cards: [] },
-          ],
-        }}
-        layout={{
-          kind: 'board',
-          title: 'title',
-          groupBy: 'status',
-          lanes: [],
-          cardFields: [],
-          hideEmptyLanes: false,
-        }}
-        groupColumn={status}
-        canEdit
-        rowPending={() => false}
-        onOpen={vi.fn()}
-        onMove={vi.fn()}
-        onHideEmptyLanes={onHideEmptyLanes}
-        onCreate={vi.fn(async () => true)}
-      />
-    ));
-    const menu = screen.getByRole('button', { name: 'To do lane menu' });
-    menu.focus();
-    fireEvent.keyDown(menu, { key: 'Enter' });
-    const toggle = await screen.findByRole('menuitemcheckbox', {
-      name: 'Hide empty lanes',
-    });
-    expect(toggle.getAttribute('aria-checked')).toBe('false');
-    expect(screen.queryByRole('menuitem', { name: 'Hide lane' })).toBeNull();
-    fireEvent.keyDown(toggle, { key: 'Enter' });
-    await waitFor(() => expect(onHideEmptyLanes).toHaveBeenCalledWith(true));
-  });
-
   it('has no lane menu when the view cannot change', () => {
     const status: DatabaseViewColumn = {
       id: 'status',
@@ -772,14 +1021,16 @@ describe('database board', () => {
       </OptionEditingContext.Provider>
     ));
     expect(
-      within(screen.getByRole('region', { name: 'To do lane' })).getByRole(
-        'button',
-        { name: 'Edit To do' }
-      )
+      within(boardLane('To do lane')).getByRole('button', {
+        name: 'Rename To do',
+      })
     ).toBeTruthy();
     expect(screen.queryByRole('region', { name: 'No status lane' })).toBeNull();
     setCanEdit(false);
-    expect(screen.queryByRole('button', { name: 'Edit To do' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Rename To do' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Change To do color' })
+    ).toBeNull();
   });
 
   it('has no option editor without option editing', () => {
@@ -826,7 +1077,10 @@ describe('database board', () => {
         onCreate={vi.fn(async () => true)}
       />
     ));
-    expect(screen.queryByRole('button', { name: 'Edit To do' })).toBeNull();
+    expect(screen.queryByRole('button', { name: 'Rename To do' })).toBeNull();
+    expect(
+      screen.queryByRole('button', { name: 'Change To do color' })
+    ).toBeNull();
   });
 
   it('reorders lanes with Alt+Arrow, naming every lane in the new order', () => {
@@ -1202,7 +1456,7 @@ describe('database board', () => {
         onCreate={onCreate}
       />
     ));
-    const lane = screen.getByRole('region', { name: 'Done lane' });
+    const lane = boardLane('Done lane');
     fireEvent.click(within(lane).getByRole('button', { name: 'New record' }));
     const first = within(lane).getByRole('textbox', {
       name: 'New record title',
@@ -1229,11 +1483,7 @@ describe('database board', () => {
       expect.any(String)
     );
     expect(onCreate).toHaveBeenCalledTimes(2);
-    expect(
-      within(screen.getByRole('region', { name: 'To do lane' })).queryByRole(
-        'textbox'
-      )
-    ).toBeNull();
+    expect(within(boardLane('To do lane')).queryByRole('textbox')).toBeNull();
   });
 
   it('creates a card in the lane without an option with no option', () => {
@@ -1333,7 +1583,7 @@ describe('database board', () => {
         onCreate={onCreate}
       />
     ));
-    const lane = screen.getByRole('region', { name: 'Done lane' });
+    const lane = boardLane('Done lane');
     fireEvent.click(within(lane).getByRole('button', { name: 'New record' }));
     const input = within(lane).getByRole('textbox');
     fireEvent.input(input, { target: { value: 'Needs detail' } });
@@ -1392,7 +1642,7 @@ describe('database board', () => {
         onCreate={onCreate}
       />
     ));
-    const lane = screen.getByRole('region', { name: 'Done lane' });
+    const lane = boardLane('Done lane');
     fireEvent.click(within(lane).getByRole('button', { name: 'New record' }));
     const input = within(lane).getByRole('textbox', {
       name: 'New record title',
@@ -1451,7 +1701,7 @@ describe('database board', () => {
         onCreate={onCreate}
       />
     ));
-    const lane = screen.getByRole('region', { name: 'Done lane' });
+    const lane = boardLane('Done lane');
     fireEvent.click(within(lane).getByRole('button', { name: 'New record' }));
     fireEvent.blur(within(lane).getByRole('textbox'));
     expect(within(lane).queryByRole('textbox')).toBeNull();
@@ -1525,7 +1775,7 @@ describe('database board', () => {
         onCreate={vi.fn(async () => true)}
       />
     ));
-    const todo = screen.getByRole('region', { name: 'To do lane' });
+    const todo = boardLane('To do lane');
     const card = within(todo).getByRole('button', {
       name: 'Open Launch project',
     });
@@ -1535,7 +1785,7 @@ describe('database board', () => {
       within(todo).getByRole('textbox', { name: 'New record title' })
     );
     fireEvent.keyDown(document.activeElement!, { key: 'Escape' });
-    const done = screen.getByRole('region', { name: 'Done lane' });
+    const done = boardLane('Done lane');
     const header = within(done).getByRole('button', { name: 'Done lane' });
     header.focus();
     fireEvent.keyDown(header, { key: 'Enter' });
@@ -1691,7 +1941,7 @@ describe('database board', () => {
         onCreate={onCreate}
       />
     ));
-    const lane = screen.getByRole('region', { name: 'Done lane' });
+    const lane = boardLane('Done lane');
     fireEvent.click(within(lane).getByRole('button', { name: 'New record' }));
     const input = screen.getByRole('textbox', { name: 'New record title' });
     fireEvent.input(input, { target: { value: 'First idea' } });
@@ -1771,10 +2021,9 @@ describe('database board', () => {
     ));
     expect(addCard()).toBe(true);
     expect(
-      within(screen.getByRole('region', { name: 'Done lane' })).getByRole(
-        'textbox',
-        { name: 'New record title' }
-      )
+      within(boardLane('Done lane')).getByRole('textbox', {
+        name: 'New record title',
+      })
     ).toBeTruthy();
   });
 
@@ -1849,10 +2098,153 @@ describe('database board', () => {
       screen.queryByRole('button', { name: 'Add record to Done' })
     ).toBeNull();
     expect(screen.queryByRole('button', { name: 'New group' })).toBeNull();
-    expect(
-      within(screen.getByRole('region', { name: 'Done lane' })).getByText(
-        'No records'
+    expect(within(boardLane('Done lane')).getByText('No records')).toBeTruthy();
+  });
+});
+
+describe('board lane header', () => {
+  const column: DatabaseViewColumn = {
+    id: 'status',
+    name: 'Status',
+    dataType: 'SELECT_STRING',
+    isMultiSelect: false,
+    options: [
+      { id: 'todo', label: 'To do', color: null },
+      { id: 'done', label: 'Done', color: null },
+    ],
+    writable: true,
+  };
+  function renderHeader(editing: OptionEditing, groupColumn = column) {
+    return render(() => (
+      <OptionEditingContext.Provider value={editing}>
+        <BoardLaneHeader
+          column={groupColumn}
+          option={groupColumn.options[0]}
+          label={groupColumn.options[0].label}
+          count={2}
+          canEdit
+          icon={<span />}
+          onHide={vi.fn()}
+        >
+          {groupColumn.options[0].label}
+        </BoardLaneHeader>
+      </OptionEditingContext.Provider>
+    ));
+  }
+
+  it('saves a rename once across Enter and blur, then restores name focus', async () => {
+    let complete!: () => void;
+    const saved = new Promise<void>((resolve) => {
+      complete = resolve;
+    });
+    const editing = {
+      update: vi.fn(() => ResultAsync.fromSafePromise(saved)),
+      remove: vi.fn(() => okAsync(undefined)),
+    };
+    renderHeader(editing);
+    await userEvent.click(screen.getByRole('button', { name: 'Rename To do' }));
+    const input = screen.getByRole('textbox', { name: 'Group name' });
+    expect(document.activeElement).toBe(input);
+    fireEvent.input(input, { target: { value: 'In progress' } });
+    fireEvent.keyDown(input, { key: 'Enter' });
+    fireEvent.blur(input);
+    expect(editing.update).toHaveBeenCalledExactlyOnceWith('status', 'todo', {
+      label: 'In progress',
+    });
+    expect((input as HTMLInputElement).readOnly).toBe(true);
+    complete();
+    await waitFor(() =>
+      expect(document.activeElement).toBe(
+        screen.getByRole('button', { name: 'Rename To do' })
       )
-    ).toBeTruthy();
+    );
+  });
+
+  it('cancels a rename with Escape without saving on blur', async () => {
+    const editing = {
+      update: vi.fn(() => okAsync(undefined)),
+      remove: vi.fn(() => okAsync(undefined)),
+    };
+    renderHeader(editing);
+    const trigger = screen.getByRole('button', { name: 'Rename To do' });
+    await userEvent.click(trigger);
+    expect(trigger.isConnected).toBe(true);
+    expect(trigger.getAttribute('aria-hidden')).toBe('true');
+    expect(trigger.tabIndex).toBe(-1);
+    const input = screen.getByRole('textbox', { name: 'Group name' });
+    fireEvent.input(input, { target: { value: 'Discarded' } });
+    fireEvent.keyDown(input, { key: 'Escape' });
+    fireEvent.blur(input);
+    await waitFor(() => expect(document.activeElement).toBe(trigger));
+    expect(trigger.hasAttribute('aria-hidden')).toBe(false);
+    expect(trigger.tabIndex).toBe(0);
+    expect(editing.update).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['SELECT_STRING', 'DONE', 'Another option already has this name.'],
+    ['SELECT_NUMBER', 'not a number', 'Enter a number.'],
+  ] as const)(
+    'keeps invalid %s names in the editor without writing',
+    async (dataType, name, message) => {
+      const editing = {
+        update: vi.fn(() => okAsync(undefined)),
+        remove: vi.fn(() => okAsync(undefined)),
+      };
+      renderHeader(editing, { ...column, dataType });
+      await userEvent.click(
+        screen.getByRole('button', { name: 'Rename To do' })
+      );
+      const input = screen.getByRole('textbox', { name: 'Group name' });
+      fireEvent.input(input, { target: { value: name } });
+      fireEvent.keyDown(input, { key: 'Enter' });
+      expect(screen.getByRole('alert').textContent).toBe(message);
+      expect((input as HTMLInputElement).value).toBe(name);
+      expect(editing.update).not.toHaveBeenCalled();
+    }
+  );
+
+  it('requires delete confirmation, supports cancellation and reopening, and blocks repeat deletion', async () => {
+    let complete!: () => void;
+    const deleted = new Promise<void>((resolve) => {
+      complete = resolve;
+    });
+    const editing = {
+      update: vi.fn(() => okAsync(undefined)),
+      remove: vi.fn(() => ResultAsync.fromSafePromise(deleted)),
+    };
+    renderHeader(editing);
+    const openConfirmation = async () => {
+      await userEvent.click(
+        screen.getByRole('button', { name: 'To do lane menu' })
+      );
+      await userEvent.click(
+        await screen.findByRole('menuitem', { name: 'Delete group' })
+      );
+      return screen.findByRole('dialog', { name: 'Delete “To do”?' });
+    };
+    const dialog = await openConfirmation();
+    expect(dialog.textContent).toContain('Records will not be deleted.');
+    expect(editing.remove).not.toHaveBeenCalled();
+    await userEvent.click(
+      within(dialog).getByRole('button', { name: 'Cancel' })
+    );
+    const reopened = await openConfirmation();
+    await userEvent.click(
+      within(reopened).getByRole('button', { name: 'Delete group' })
+    );
+    expect(editing.remove).toHaveBeenCalledExactlyOnceWith('status', 'todo');
+    expect(
+      within(reopened)
+        .getByRole('button', { name: 'Deleting…' })
+        .hasAttribute('disabled')
+    ).toBe(true);
+    expect(
+      within(reopened)
+        .getByRole('button', { name: 'Cancel' })
+        .hasAttribute('disabled')
+    ).toBe(true);
+    complete();
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   });
 });

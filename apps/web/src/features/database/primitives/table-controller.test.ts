@@ -39,7 +39,10 @@ const offline: DatabaseWriteFailure = {
   error: { code: 'NETWORK_ERROR', message: 'Offline', refusal: null },
 };
 
-function setup(onSaved?: Parameters<typeof createTableController>[1]) {
+function setup(
+  onSaved?: Parameters<typeof createTableController>[1],
+  overrides: Partial<DatabaseRowsSource> = {}
+) {
   const [snapshot, setSnapshot] = createSignal<StoredTable>({
     rows: [
       { rowId: 'record', cells: { status: 'To do', title: 'Plan launch' } },
@@ -59,6 +62,7 @@ function setup(onSaved?: Parameters<typeof createTableController>[1]) {
     ),
     addOption: vi.fn<DatabaseRowsSource['addOption']>(() => okAsync(undefined)),
     retain: () => {},
+    ...overrides,
   };
   let dispose!: () => void;
   const controller = createRoot((cleanup) => {
@@ -76,6 +80,51 @@ const move: DatabaseRowMutation = {
 };
 
 describe('table controller', () => {
+  it('clears a failed-refresh warning when a background schema read succeeds', async () => {
+    const [refreshing, setRefreshing] = createSignal(false);
+    const { controller, source, setSnapshot, dispose } = setup(undefined, {
+      refreshing,
+    });
+    vi.mocked(source.refresh).mockReturnValue(
+      errAsync({ kind: 'fetch', message: 'Offline' })
+    );
+    await controller.refresh();
+    expect(controller.refreshWarning()).toBe(true);
+    setRefreshing(true);
+    setSnapshot({ version: 2, rows: [] });
+    setRefreshing(false);
+    expect(controller.refreshWarning()).toBe(false);
+    dispose();
+  });
+  it('keeps the warning when background revalidation fails', async () => {
+    const [refreshing, setRefreshing] = createSignal(false);
+    const { controller, source, dispose } = setup(undefined, {
+      refreshing,
+      error: () => ({ kind: 'fetch', message: 'Offline' }),
+    });
+    vi.mocked(source.refresh).mockReturnValue(
+      errAsync({ kind: 'fetch', message: 'Offline' })
+    );
+    await controller.refresh();
+    setRefreshing(true);
+    setRefreshing(false);
+    expect(controller.refreshWarning()).toBe(true);
+    dispose();
+  });
+  it('does not let an older failed refresh overwrite a newer success', async () => {
+    const { controller, source, dispose } = setup();
+    const old = deferred<Result<void, { kind: 'fetch'; message: string }>>();
+    vi.mocked(source.refresh)
+      .mockReturnValueOnce(new ResultAsync(old.promise))
+      .mockReturnValueOnce(okAsync(undefined));
+    const earlier = controller.refresh();
+    await controller.refresh();
+    old.resolve(err({ kind: 'fetch', message: 'Old failure' }));
+    await earlier;
+    expect(controller.refreshWarning()).toBe(false);
+    dispose();
+  });
+
   it('serializes adding a group with row writes and uses the schema refresh version', async () => {
     const { controller, source, setSnapshot, snapshot, dispose } = setup();
     const option = deferred<Result<void, DatabaseOpsError>>();

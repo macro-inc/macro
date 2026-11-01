@@ -30,6 +30,8 @@
  * queued and scheduling the pump are idempotent wakeups and are not fenced.
  */
 
+import { anyAbortSignal } from '@core/util/abort-signal';
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Client,
   CombinedError,
@@ -47,6 +49,15 @@ import type {
   MutationClaim,
   QueryRevalidationWire,
 } from '../protocol';
+import {
+  failureDetails,
+  type MutationAttemptDetails,
+  type MutationAttemptOutcome,
+  type MutationAttemptTelemetry,
+  NOOP_MUTATION_ATTEMPT_TELEMETRY,
+  NOOP_MUTATION_QUEUE_TELEMETRY,
+  recoverySkipReason,
+} from './mutation-queue-telemetry';
 import type { NormalizedCacheExchangeOptions } from './normalized-cache-exchange';
 import {
   notifyOptimisticMutationEnqueued,
@@ -64,6 +75,9 @@ const QUEUE_ATTEMPT_CONTEXT_KEY = 'normalizedCacheQueueAttempt';
 export const QUEUE_REQUEST_TIMEOUT_MS = 60_000;
 export const QUEUE_LEASE_MS = 5 * 60_000;
 const EMPTY_QUEUE_POLL_MS = 30_000;
+// A deferred admission usually waits on user info, which lands within a
+// second or two of the cache client at startup.
+const DEFERRED_ADMISSION_RETRY_MS = 1_000;
 const MAX_MUTATION_SERVER_FAILURES = 10;
 const MUTATION_LIFECYCLE_TIMEOUT_MS = 2_000;
 
@@ -100,6 +114,7 @@ export type QueueAttemptContext = AttemptToken & {
   serverFailureCount: number;
   /** Transport-only metadata; urql drops the response on error-free payloads. */
   response?: Response;
+  telemetry?: MutationAttemptTelemetry;
 };
 
 function claimOf(token: AttemptToken): MutationClaim {
@@ -160,12 +175,14 @@ export function withQueueRequestTimeout(op: Operation): Operation {
     ...op.context,
     fetch: async (input, init) => {
       const timeoutSignal = AbortSignal.timeout(QUEUE_REQUEST_TIMEOUT_MS);
-      const response = await operationFetch(input, {
-        ...init,
-        signal: init?.signal
-          ? AbortSignal.any([init.signal, timeoutSignal])
-          : timeoutSignal,
-      });
+      const send = () =>
+        operationFetch(input, {
+          ...init,
+          signal: init?.signal
+            ? anyAbortSignal([init.signal, timeoutSignal])
+            : timeoutSignal,
+        });
+      const response = await (attempt?.telemetry?.run(send) ?? send());
       if (attempt) attempt.response = response;
       return response;
     },
@@ -270,6 +287,7 @@ export type MutationQueueRunnerDeps = {
     | 'onMutationAttemptResult'
     | 'shouldRetryMutation'
     | 'onCacheError'
+    | 'mutationQueueTelemetry'
   >;
   /** Lease owner for this exchange's claims. */
   owner: string;
@@ -332,8 +350,16 @@ export function createMutationQueueRunner(
   deps: MutationQueueRunnerDeps
 ): MutationQueueRunner {
   const { host, client, options, owner, forward, writeThrough } = deps;
+  const telemetry =
+    options.mutationQueueTelemetry ?? NOOP_MUTATION_QUEUE_TELEMETRY;
   const liveQueuedOps = new Map<string, LiveQueuedOperation>();
   let storageGeneration = 0;
+  let activeAttempt: AttemptToken | undefined;
+  // Queue IDs advance in order; retries advance their lease.
+  // Keep the watermark after settlement so a late claim cannot revive an old head.
+  let latestClaim:
+    | Pick<ClaimedMutation, 'transactionId' | 'leaseGeneration'>
+    | undefined;
   // The durable queue is strictly ordered. A confirmed head keeps its server
   // response until local settlement succeeds, without repeating a server
   // effect after a cache failure. Process loss still requires server-side
@@ -346,8 +372,25 @@ export function createMutationQueueRunner(
   let deferredUntil: number | undefined;
   let drainTimer: ReturnType<typeof setTimeout> | undefined;
 
-  function isCurrent(token: StorageEpoch): boolean {
-    return token.storageGeneration === storageGeneration;
+  function isNewClaim(claim: ClaimedMutation): boolean {
+    if (!latestClaim) return true;
+    const id = BigInt(claim.transactionId);
+    const previousId = BigInt(latestClaim.transactionId);
+    return (
+      id > previousId ||
+      (id === previousId &&
+        BigInt(claim.leaseGeneration) > BigInt(latestClaim.leaseGeneration))
+    );
+  }
+
+  function isCurrent(token: StorageEpoch | AttemptToken): boolean {
+    if (token.storageGeneration !== storageGeneration) return false;
+    if (!('leaseGeneration' in token)) return true;
+    return (
+      activeAttempt?.transactionId === token.transactionId &&
+      activeAttempt?.leaseOwner === token.leaseOwner &&
+      activeAttempt?.leaseGeneration === token.leaseGeneration
+    );
   }
 
   /** Moves the head only while `token` has survived every storage reset. */
@@ -365,7 +408,7 @@ export function createMutationQueueRunner(
     drainTimer = setTimeout(
       () => {
         drainTimer = undefined;
-        void drainQueue();
+        fireAndForget(drainQueue(), 'graphql-cache-mutation-queue');
       },
       drainRequested ? 0 : delayMs
     );
@@ -403,6 +446,29 @@ export function createMutationQueueRunner(
       serverFailureCount: claimed.serverFailureCount ?? 0,
       storageGeneration: epoch.storageGeneration,
     };
+    if (!isCurrent(epoch) || !isNewClaim(claimed)) return;
+    latestClaim = claimed;
+    activeAttempt = attempt;
+    const attemptTelemetry = telemetry.attempt(claimed);
+    attempt.telemetry = attemptTelemetry;
+    // Settlement ends a sent attempt; anything that returns before sending
+    // without its own outcome was retired by a storage reset.
+    let sent = false;
+    try {
+      await routeClaimedAttempt(claimed, attempt, attemptTelemetry, () => {
+        sent = true;
+      });
+    } finally {
+      if (!sent) attemptTelemetry.finish('detached');
+    }
+  }
+
+  async function routeClaimedAttempt(
+    claimed: ClaimedMutation,
+    attempt: QueueAttemptContext,
+    attemptTelemetry: MutationAttemptTelemetry,
+    markSent: () => void
+  ): Promise<void> {
     const confirmed = confirmedOf(head);
     if (confirmed?.transactionId === claimed.transactionId) {
       // claim → settling: re-apply the server's response before admission
@@ -421,12 +487,17 @@ export function createMutationQueueRunner(
     if (!transition(attempt, PREPARING)) return;
     try {
       if (options.prepareMutationQueue) await prepareQueueRecovery();
-      if (
-        options.beforeMutationAttempt &&
-        !(await boundedMutationLifecycle(() =>
-          options.beforeMutationAttempt!(claimed)
-        ))
-      ) {
+      const admission = options.beforeMutationAttempt
+        ? await boundedMutationLifecycle(() =>
+            options.beforeMutationAttempt!(claimed)
+          )
+        : true;
+      if (admission === 'defer') {
+        await deferAdmission(claimed, attempt);
+        attemptTelemetry.finish('deferred');
+        return;
+      }
+      if (!admission) {
         // preparing → settling → idle: discard obsolete local intent.
         if (!transition(attempt, SETTLING)) return;
         await host.rollbackOptimisticWrite(
@@ -436,12 +507,13 @@ export function createMutationQueueRunner(
           'LOCAL_SUPERSEDED'
         );
         if (!transition(attempt, IDLE)) return;
+        attemptTelemetry.finish('discarded', { errorCode: 'LOCAL_SUPERSEDED' });
         resolveLiveOperationsAsQueued();
         scheduleDrain();
         return;
       }
     } catch {
-      await failPreparation(claimed, attempt);
+      await failPreparation(claimed, attempt, attemptTelemetry);
       return;
     }
     // A superseded create can already exist on the server. Replay it to
@@ -463,6 +535,7 @@ export function createMutationQueueRunner(
       if (discarded.kind !== 'discarded-superseded') {
         throw new Error('superseded mutation was unexpectedly deferred');
       }
+      attemptTelemetry.finish('superseded');
       const live = liveQueuedOps.get(claimed.transactionId);
       if (live) {
         liveQueuedOps.delete(claimed.transactionId);
@@ -478,11 +551,14 @@ export function createMutationQueueRunner(
     if (live) {
       liveQueuedOps.delete(claimed.transactionId);
       live.resolveRoute(undefined);
+      markSent();
+      attemptTelemetry.sent('live');
       forward(
         withQueueRequestTimeout(withQueueAttempt(live.operation, attempt))
       );
     } else {
       let replayOperation: Operation | undefined;
+      attemptTelemetry.sent('replay');
       try {
         const replay = client.mutation(
           replayDocument(claimed.query, claimed.operationName),
@@ -513,10 +589,16 @@ export function createMutationQueueRunner(
               : undefined
           );
           if (!isCurrent(attempt)) return;
+          attemptTelemetry.finish(
+            rolledBack.kind === 'rolled-back' ? 'rolled-back' : 'superseded',
+            error instanceof CombinedError
+              ? failureDetails(error, error.response ?? attempt.response)
+              : { failure: 'local' }
+          );
           if (rolledBack.kind === 'rolled-back') {
-            void deps.revalidate(
-              rolledBack.revalidations ?? [],
-              replayOperation
+            fireAndForget(
+              deps.revalidate(rolledBack.revalidations ?? [], replayOperation),
+              'graphql-cache-mutation-queue'
             );
           }
         } finally {
@@ -528,10 +610,34 @@ export function createMutationQueueRunner(
     resolveLiveOperationsAsQueued();
   }
 
+  /** preparing → settling → idle, keeping a head its admission cannot judge yet. */
+  async function deferAdmission(
+    claimed: ClaimedMutation,
+    attempt: QueueAttemptContext
+  ): Promise<void> {
+    try {
+      if (!transition(attempt, SETTLING)) return;
+      await host.deferOptimisticWrite(
+        claimed.transactionId,
+        claimOf(attempt),
+        Date.now() + DEFERRED_ADMISSION_RETRY_MS,
+        'Admission deferred'
+      );
+    } catch {
+      // The lease expires and the head is claimed again; nothing is lost.
+    } finally {
+      if (transition(attempt, IDLE)) {
+        resolveLiveOperationsAsQueued();
+        scheduleDrain(DEFERRED_ADMISSION_RETRY_MS);
+      }
+    }
+  }
+
   /** preparing → settling → idle for a head whose recovery state failed. */
   async function failPreparation(
     claimed: ClaimedMutation,
-    attempt: QueueAttemptContext
+    attempt: QueueAttemptContext,
+    attemptTelemetry: MutationAttemptTelemetry
   ): Promise<void> {
     queuePreparation = undefined;
     try {
@@ -573,6 +679,10 @@ export function createMutationQueueRunner(
         'LOCAL_RECOVERY_FAILED'
       );
       if (!isCurrent(attempt)) return;
+      attemptTelemetry.finish('recovery-failed', {
+        failure: 'local',
+        errorCode: 'LOCAL_RECOVERY_FAILED',
+      });
       liveQueuedOps.delete(claimed.transactionId);
       live?.resolveRoute(
         withOptimisticMutationDisposition(result, {
@@ -590,6 +700,13 @@ export function createMutationQueueRunner(
   }
 
   async function drainQueue(): Promise<void> {
+    // A retired host stays disabled for good: stop polling instead of failing
+    // every 30 seconds against the no-op host.
+    if (host.disabled) {
+      telemetry.skipped('host-disabled');
+      resolveLiveOperationsAsQueued();
+      return;
+    }
     if (isActive(head)) {
       // Every newly enqueued operation is behind the claimed head. Its
       // caller can stop waiting; durable replay now owns the mutation.
@@ -634,6 +751,7 @@ export function createMutationQueueRunner(
 
       await routeClaimedMutation(claimed, epoch);
     } catch {
+      telemetry.skipped('claim-failed');
       // Enqueue already succeeded, so callers must observe these as
       // queued even if the runner cannot currently inspect the head.
       resolveLiveOperationsAsQueued();
@@ -646,16 +764,16 @@ export function createMutationQueueRunner(
 
   async function prepareQueueRecovery(): Promise<void> {
     try {
-      queuePreparation ??= boundedMutationLifecycle(() =>
-        options.prepareMutationQueue!()
-      );
+      queuePreparation ??= (async () => {
+        const prepared = await boundedMutationLifecycle(() =>
+          options.prepareMutationQueue!()
+        );
+        if (prepared === false) queuePreparation = undefined;
+      })();
       await queuePreparation;
     } catch (error) {
       queuePreparation = undefined;
-      console.warn(
-        '[graphql-cache] Unable to prepare mutation recovery',
-        error
-      );
+      telemetry.skipped(recoverySkipReason(error));
     }
   }
 
@@ -683,7 +801,26 @@ export function createMutationQueueRunner(
     enqueue: EnqueueOptimisticMutationResult,
     epoch: StorageEpoch
   ): Promise<OperationResult | undefined> {
+    notifyOptimisticMutationEnqueued(op);
+    // Enqueue IDs are monotonic and immutable. A delayed acknowledgement must
+    // not replace the live observer for a head already claimed by the pump.
+    const stale =
+      enqueue.initialClaim.kind === 'claimed'
+        ? !isNewClaim(enqueue.initialClaim.mutation)
+        : latestClaim !== undefined &&
+          BigInt(enqueue.transactionId) <= BigInt(latestClaim.transactionId);
+    if (!isCurrent(epoch) || stale)
+      return queuedMutationResult(op, enqueue.transactionId);
     if (enqueue.upsertKind.kind === 'replaced-pending') {
+      const removedId = enqueue.upsertKind.removedTransactionId;
+      if (
+        activeAttempt?.transactionId === removedId ||
+        confirmedOf(head)?.transactionId === removedId
+      ) {
+        activeAttempt = undefined;
+        head = IDLE;
+        deferredUntil = undefined;
+      }
       const superseded = liveQueuedOps.get(
         enqueue.upsertKind.removedTransactionId
       );
@@ -703,7 +840,6 @@ export function createMutationQueueRunner(
         resolveRoute: resolve,
       });
     });
-    notifyOptimisticMutationEnqueued(op);
     try {
       await match(enqueue.initialClaim)
         .with({ kind: 'claimed' }, ({ mutation }) =>
@@ -718,7 +854,10 @@ export function createMutationQueueRunner(
           resolveLiveOperationsAsQueued();
           scheduleDrain(EMPTY_QUEUE_POLL_MS);
         })
-        .exhaustive();
+        .exhaustive(() => {
+          resolveLiveOperationsAsQueued();
+          scheduleDrain();
+        });
     } catch (error) {
       // Enqueue already succeeded. Preserve durable-runner ownership even
       // if routing or claim rollback fails unexpectedly.
@@ -743,7 +882,12 @@ export function createMutationQueueRunner(
             : 'permanently-failed',
         transactionId: attempt.transactionId,
       });
-    if (!transition(attempt, receiveResult)) return detachedResult();
+    const attemptTelemetry =
+      attempt.telemetry ?? NOOP_MUTATION_ATTEMPT_TELEMETRY;
+    if (!transition(attempt, receiveResult)) {
+      attemptTelemetry.finish('detached');
+      return detachedResult();
+    }
     const claim = claimOf(attempt);
     let retryAt: number | undefined;
     let settled = false;
@@ -753,6 +897,8 @@ export function createMutationQueueRunner(
       | 'queued'
       | 'superseded'
       | 'permanently-failed' = 'queued';
+    let outcome: MutationAttemptOutcome = 'detached';
+    let details: MutationAttemptDetails = {};
     try {
       const response = result.error?.response ?? attempt.response;
       const httpServerFailure = (response?.status ?? 0) >= 500;
@@ -769,6 +915,7 @@ export function createMutationQueueRunner(
         };
       }
       if (result.error || result.data == null) {
+        details = failureDetails(result.error, response);
         let retry = false;
         if (result.error && options.shouldRetryMutation) {
           try {
@@ -782,11 +929,11 @@ export function createMutationQueueRunner(
         // server responses, never connection failures or timeouts.
         const serverFailure =
           httpServerFailure || (result.error?.graphQLErrors.length ?? 0) > 0;
-        if (
+        const exhausted =
           retry &&
           serverFailure &&
-          attempt.serverFailureCount + 1 >= MAX_MUTATION_SERVER_FAILURES
-        ) {
+          attempt.serverFailureCount + 1 >= MAX_MUTATION_SERVER_FAILURES;
+        if (exhausted) {
           retry = false;
           result = {
             ...result,
@@ -804,7 +951,8 @@ export function createMutationQueueRunner(
         await recordAttemptResult(attempt, result, retry);
         if (!isCurrent(attempt)) return detachedResult();
         if (retry) {
-          retryAt = Date.now() + retryDelayMs(attempt.attemptCount);
+          details.retryDelayMs = retryDelayMs(attempt.attemptCount);
+          retryAt = Date.now() + details.retryDelayMs;
           const deferred = await host.deferOptimisticWrite(
             attempt.transactionId,
             claim,
@@ -818,8 +966,10 @@ export function createMutationQueueRunner(
             retryAt = undefined;
             replacementTransactionId = deferred.replacementTransactionId;
             disposition = 'superseded';
+            outcome = 'superseded';
           } else {
             disposition = 'queued';
+            outcome = 'retry-scheduled';
           }
         } else {
           const rolledBack = await host.rollbackOptimisticWrite(
@@ -833,13 +983,21 @@ export function createMutationQueueRunner(
           if (rolledBack.kind === 'discarded-superseded') {
             replacementTransactionId = rolledBack.replacementTransactionId;
             disposition = 'superseded';
+            outcome = 'superseded';
           } else {
             disposition = 'permanently-failed';
-            void deps.revalidate(rolledBack.revalidations ?? [], op);
+            outcome = exhausted ? 'retry-exhausted' : 'rolled-back';
+            fireAndForget(
+              deps.revalidate(rolledBack.revalidations ?? [], op),
+              'graphql-cache-mutation-queue'
+            );
           }
         }
       } else {
-        const confirmed = { transactionId: attempt.transactionId, result };
+        const confirmed: ConfirmedMutation = {
+          transactionId: attempt.transactionId,
+          result,
+        };
         if (!transition(attempt, confirm(confirmed))) return detachedResult();
         await recordAttemptResult(attempt, result, false);
         if (!isCurrent(attempt)) return detachedResult();
@@ -873,15 +1031,22 @@ export function createMutationQueueRunner(
           disposition = replacementTransactionId
             ? 'superseded'
             : 'permanently-failed';
+          outcome = replacementTransactionId ? 'superseded' : 'rolled-back';
+          details = { failure: 'local', errorCode: 'LOCAL_COMMIT_FAILED' };
           if (!replacementTransactionId) {
-            void deps.revalidate(committed.revalidations ?? [], op);
+            fireAndForget(
+              deps.revalidate(committed.revalidations ?? [], op),
+              'graphql-cache-mutation-queue'
+            );
           }
         } else if (committed.kind === 'committed-superseded') {
           replacementTransactionId = committed.replacementTransactionId;
           disposition = 'superseded';
+          outcome = 'superseded';
           await deps.deleteReportedRecords(result);
         } else {
           disposition = 'committed';
+          outcome = 'committed';
           await deps.deleteReportedRecords(result);
           if (!isCurrent(attempt)) return detachedResult();
           const replay = deps.replayExplicitEffects(op, result.data, () =>
@@ -903,6 +1068,8 @@ export function createMutationQueueRunner(
         // A lost acknowledgement may hide a completed transaction.
         // Preserve optimism and let a fresh durable claim decide.
         disposition = 'queued';
+        outcome = 'ack-lost';
+        details = { ...details, retryDelayMs: QUEUE_LEASE_MS };
       }
     } finally {
       if (transition(attempt, release)) {
@@ -912,6 +1079,7 @@ export function createMutationQueueRunner(
           retryAt === undefined ? 0 : Math.max(0, retryAt - Date.now())
         );
       }
+      attemptTelemetry.finish(outcome, details);
     }
     return withOptimisticMutationDisposition(
       result,
@@ -931,8 +1099,11 @@ export function createMutationQueueRunner(
 
   function resetStorage(): void {
     storageGeneration += 1;
+    activeAttempt = undefined;
+    latestClaim = undefined;
     head = IDLE;
     deferredUntil = undefined;
+    telemetry.storageReset();
     resolveLiveOperationsAsQueued();
   }
 
@@ -941,7 +1112,10 @@ export function createMutationQueueRunner(
     isCurrent,
     admit,
     settle,
-    start: () => scheduleDrain(),
+    start: () => {
+      telemetry.loaded(async () => host.inspectMutations?.());
+      scheduleDrain();
+    },
     wake: wakeDrain,
     resetStorage,
   };

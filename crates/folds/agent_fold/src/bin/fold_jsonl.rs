@@ -31,7 +31,7 @@ use std::time::Instant;
 /// A [`LogRepo`] over a session recording read from a JSONL file.
 ///
 /// Recordings (as written to `~/.agent_runtime_sessions`) are one JSON
-/// object per line: `{"direction": "to_server" | "to_runtime", "content":
+/// object per line: `{"direction": "to_server" | "to_runtime" | "notification", "content":
 /// <frame>}`. A file holds exactly one session, and the recording does not
 /// carry the session's id, so a fresh [`AgentSessionId`] is minted at load
 /// time. The file is read and parsed eagerly in [`JsonlRecording::open`];
@@ -71,6 +71,7 @@ struct RecordedLine {
 enum Direction {
     ToServer,
     ToRuntime,
+    Notification,
 }
 
 impl JsonlRecording {
@@ -95,7 +96,7 @@ impl JsonlRecording {
         self.entries
             .iter()
             .filter(|entry| match &entry.content {
-                Message::ToRuntime(_) => true,
+                Message::Notification(_) | Message::ToRuntime(_) => true,
                 Message::ToServer(message) => matches!(message, ToServerMessage::Acp(_)),
             })
             .count()
@@ -130,6 +131,9 @@ fn parse_line(
         Direction::ToServer => {
             Message::ToServer(serde_json::from_value(recorded.content).map_err(frame)?)
         }
+        Direction::Notification => {
+            Message::Notification(serde_json::from_value(recorded.content).map_err(frame)?)
+        }
         Direction::ToRuntime => {
             Message::ToRuntime(serde_json::from_value(recorded.content).map_err(frame)?)
         }
@@ -138,6 +142,7 @@ fn parse_line(
         agent_session_id: session,
         user_id: None,
         content,
+        logged_at: None,
     })
 }
 
@@ -279,6 +284,21 @@ fn render_part(part: &MessagePart) -> String {
                     resolved_by
                         .as_deref()
                         .map(|by| format!(" by {by}"))
+                        .unwrap_or_default()
+                );
+            }
+            MessagePart::TaskNotification {
+                status,
+                summary,
+                event,
+            } => {
+                let _ = writeln!(
+                    out,
+                    "[task {}] {summary}{}",
+                    status.map_or("event", |status| status.into()),
+                    event
+                        .as_deref()
+                        .map(|event| format!(": {event}"))
                         .unwrap_or_default()
                 );
             }

@@ -93,7 +93,7 @@ pub async fn track_entity(
         TrackAction::Ping => {
             ctx.api_context
                 .connection_manager
-                .refresh_connection_entity(&data.entity.extra)
+                .refresh_connection_entity(data.entity.clone())
                 .await
                 .ok();
         }

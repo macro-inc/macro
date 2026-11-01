@@ -17,16 +17,18 @@ const LIST_TIMEOUT: Duration = Duration::from_secs(10);
 const CONNECT_TIMEOUT: Duration = Duration::from_secs(3);
 const MAX_RESPONSE_BYTES: usize = 1024 * 1024;
 
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 enum Operation {
     List,
     Dispatch,
+    Create,
 }
 
 impl Operation {
     fn path(self) -> &'static str {
         match self {
             Self::List => "internal/coding-agents/list",
+            Self::Create => "internal/coding-agents/create-session",
             Self::Dispatch => "internal/coding-agents/dispatch",
         }
     }
@@ -34,14 +36,14 @@ impl Operation {
     fn timeout(self) -> Duration {
         match self {
             Self::List => LIST_TIMEOUT,
-            Self::Dispatch => DISPATCH_TIMEOUT,
+            Self::Dispatch | Self::Create => DISPATCH_TIMEOUT,
         }
     }
 
     fn uncertain_error(self) -> CodingAgentError {
         match self {
             Self::List => CodingAgentError::OperationFailed,
-            Self::Dispatch => CodingAgentError::DispatchDeliveryUnknown,
+            Self::Dispatch | Self::Create => CodingAgentError::DispatchDeliveryUnknown,
         }
     }
 }
@@ -49,9 +51,9 @@ impl Operation {
 /// Internal service client that never redirects credentials or retries dispatch.
 #[derive(Clone)]
 pub struct CodingAgentsClient {
-    client: Client,
-    base_url: Url,
-    internal_key: HeaderValue,
+    pub(super) client: Client,
+    pub(super) base_url: Url,
+    pub(super) internal_key: HeaderValue,
 }
 
 impl CodingAgentsClient {
@@ -85,6 +87,7 @@ impl CodingAgentsClient {
         })
     }
 
+    #[tracing::instrument(name = "agent_session.command", skip_all, fields(operation = ?operation), err)]
     async fn command<T: DeserializeOwned>(
         &self,
         operation: Operation,
@@ -94,9 +97,12 @@ impl CodingAgentsClient {
             .base_url
             .join(operation.path())
             .map_err(|_| CodingAgentError::OperationFailed)?;
+        let mut headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut headers);
         let response = self
             .client
             .post(url)
+            .headers(headers)
             .header(INTERNAL_API_KEY_HEADER, self.internal_key.clone())
             .timeout(operation.timeout())
             .json(command)
@@ -124,8 +130,7 @@ impl CodingAgentsClient {
                 CodingAgentError::DispatchFailed { .. } => status == StatusCode::BAD_GATEWAY,
                 CodingAgentError::DispatchDeliveryUnknown => {
                     status == StatusCode::BAD_GATEWAY
-                        || (operation == Operation::Dispatch
-                            && status == StatusCode::GATEWAY_TIMEOUT)
+                        || (operation != Operation::List && status == StatusCode::GATEWAY_TIMEOUT)
                 }
             };
             // A contradictory envelope is not evidence that dispatch was refused.
@@ -172,6 +177,14 @@ async fn bounded_body(mut response: Response) -> Result<Vec<u8>, CodingAgentErro
 }
 
 impl CodingAgentService for CodingAgentsClient {
+    fn create(
+        &self,
+        command: DispatchCodingAgentRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
+    {
+        Box::pin(async move { self.command(Operation::Create, &command).await })
+    }
+
     fn list(
         &self,
         user_id: MacroUserIdStr<'static>,

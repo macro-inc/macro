@@ -112,6 +112,17 @@ fn android_notification(
     FCMMessage::notification(title, body, identifier, data, recipient_id)
 }
 
+fn ios_notification(
+    apns: &APNSPushNotification<serde_json::Value>,
+    recipient_id: &MacroUserIdStr<'_>,
+) -> APNSPushNotification<serde_json::Value> {
+    let mut notification = apns.clone();
+    if let Some(data) = notification.push_notification_data.as_object_mut() {
+        data.insert("recipientId".into(), recipient_id.as_ref().into());
+    }
+    notification
+}
+
 #[cfg(test)]
 mod test;
 
@@ -159,7 +170,36 @@ where
         &self,
         message: QueueMessage<'static, serde_json::Value, serde_json::Value>,
     ) -> Vec<Result<DeliverySuccess, Report<DeliveryFailure>>> {
+        let access_request = message.message_type() == "entity_access_requested";
         let content = message.into_inner();
+        if access_request {
+            let notification_id = match &content {
+                NotificationChannel::ConnGateway(conn) => conn.notif.notification_id,
+                NotificationChannel::Ios(apns) => {
+                    match serde_json::from_value::<crate::domain::models::apple::PushNotificationData>(
+                        apns.notif.push_notification_data.clone(),
+                    ) {
+                        Ok(data) => data.notification_id,
+                        Err(error) => {
+                            return vec![Err(report!(error).context(DeliveryFailure::Other))];
+                        }
+                    }
+                }
+                NotificationChannel::Email(_) => {
+                    return vec![Err(report!("access requests do not use email delivery")
+                        .context(DeliveryFailure::Other))];
+                }
+            };
+            match self
+                .repository
+                .notification_is_withdrawn(notification_id)
+                .await
+            {
+                Ok(true) => return Vec::new(),
+                Ok(false) => {}
+                Err(error) => return vec![Err(error.context(DeliveryFailure::Other))],
+            }
+        }
 
         let results = match content {
             NotificationChannel::ConnGateway(ref conn) => Either::Left([self
@@ -208,6 +248,7 @@ where
         let mut out = Vec::with_capacity(total);
 
         for (user_id, user_apns) in &apns.ios_device_endpoints {
+            let ios = ios_notification(&apns.notif, user_id);
             let android = (!user_apns.android_endpoints.is_empty())
                 .then(|| android_notification(apns, user_id.clone()));
             let checkers: Vec<_> = user_apns
@@ -216,7 +257,7 @@ where
                 .map(|endpoint| MobilePushSend {
                     mobile: &self.mobile,
                     endpoint_arn: endpoint,
-                    notif: MobilePayload::Ios(&apns.notif),
+                    notif: MobilePayload::Ios(&ios),
                     attributes: &apns.attributes,
                 })
                 .chain(android.iter().flat_map(|android| {

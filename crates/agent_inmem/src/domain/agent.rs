@@ -13,17 +13,18 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 
-use crate::domain::model_access::{InMemModelAccess, ModelAccess, ModelAccessError};
+use crate::domain::model_access::{InMemModelAccess, ModelAccessError, SessionModels};
 use agent::types::{AssistantMessagePart, ChatMessage};
+use agent::{McpInfo, StreamAccumulator, StreamPart, ToolResponse};
 use agent::{ModelSpeed, ReasoningEffort};
-use agent::{StreamAccumulator, StreamPart, ToolResponse};
+use agent_api_keys::domain::{AgentKeys, ModelProvider, UsableAgentKey};
 use agent_client_protocol::schema::v1::{
     AgentCapabilities, AvailableCommand, AvailableCommandInput, AvailableCommandsUpdate,
     BooleanPropertySchema, CancelNotification, ContentBlock, ContentChunk,
     CreateElicitationRequest, ElicitationAction, ElicitationFormMode, ElicitationPropertySchema,
     ElicitationSchema, ElicitationSessionScope, EnumOption, Implementation, InitializeRequest,
     InitializeResponse, IntegerPropertySchema, Meta, NewSessionRequest, NewSessionResponse,
-    NumberPropertySchema, OtherElicitationPropertySchema, PromptRequest, PromptResponse,
+    NumberPropertySchema, OtherElicitationPropertySchema, PromptRequest, PromptResponse, RequestId,
     ResumeSessionRequest, ResumeSessionResponse, SessionCapabilities, SessionConfigOption,
     SessionId, SessionNotification, SessionResumeCapabilities, SessionUpdate,
     SetSessionConfigOptionRequest, SetSessionConfigOptionResponse, StopReason, StringFormat,
@@ -46,10 +47,13 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 use crate::domain::admission::admit_turn;
-use crate::domain::engine::{AgentIdentity, AwaitingUser, TurnEngine, TurnRequest};
+use crate::domain::engine::{
+    AgentIdentity, AwaitingUser, ReplyDelivery, TurnEngine, TurnPurpose, TurnRequest,
+};
 use crate::domain::mcp::{DynMcpToolConnector, dialable_servers};
 use crate::domain::model_options::REASONING_EFFORT_CONFIG_ID;
 use crate::domain::session::{HistoryEntry, SessionStore, UserPrompt, messages_for_turn};
+use crate::domain::tool_stream::StreamingCalls;
 use crate::domain::user_input::{
     SharedUserInputRequester, UserInputError, UserInputOutcome, UserInputRequest,
     UserInputRequester,
@@ -59,6 +63,8 @@ use mcp_toolset::RemoteMcpToolSet;
 
 #[cfg(test)]
 mod test;
+
+pub(crate) mod compaction;
 
 /// A turn that produces nothing for this long is treated as hung and
 /// cancelled, so it cannot wedge the session's turn lock forever.
@@ -119,12 +125,17 @@ pub struct AgentState {
     pub session_id: AgentSessionId,
     /// The session's owner; turns run on their behalf.
     pub owner: Owner,
+    /// How the session's replies reach their reader.
+    pub delivery: ReplyDelivery,
     /// Runs the actual turns.
     pub engine: Arc<dyn TurnEngine>,
     /// Admission for new provider-backed turns, including direct ACP requests.
     pub admission: Arc<dyn AiAdmissionService>,
     /// Current model permissions for the trusted session owner.
     pub model_access: Arc<dyn InMemModelAccess>,
+    /// Agents' own API keys, which the session's agent's turns run on
+    /// instead of the owner's Macro allowance when it has a usable one.
+    pub agent_keys: Arc<dyn AgentKeys>,
     /// Conversation state, shared with the manager so it survives reattach.
     pub store: Arc<SessionStore>,
     /// Every outstanding turn's cancellation token - the running turn and any
@@ -138,8 +149,6 @@ pub struct AgentState {
     /// The tools of those servers, once dialed; `None` until then or when
     /// there were none.
     pub mcp_tools: Mutex<Option<RemoteMcpToolSet>>,
-    /// Attached entries retain the credential used to resolve live connections.
-    pub mcp_servers: Mutex<Vec<AcpMcpServer>>,
     /// In-flight `connect_mcp` from `session/new` / `session/resume`. The
     /// handshake does not join it; the first turn does, so SearchTools still
     /// sees the catalog.
@@ -154,9 +163,10 @@ pub struct AgentState {
 
 impl AgentState {
     /// Dial the servers a session request carried and keep their tools for
-    /// the next turn. Started at `session/new`/`session/resume` so
-    /// the handshake is not held by `tools/list`; the first turn joins the
-    /// same work so SearchTools still has the catalog.
+    /// every turn until another `session/resume` hands over a new list.
+    /// Started at `session/new`/`session/resume` so the handshake is not held
+    /// by `tools/list`; the first turn joins the same work so SearchTools
+    /// still has the catalog.
     async fn connect_mcp(&self, servers: Vec<AcpMcpServer>) {
         let servers = dialable_servers(servers);
         let requested = servers.len();
@@ -177,23 +187,25 @@ impl AgentState {
     /// Start [`Self::connect_mcp`] without joining it. `session/new` and
     /// `session/resume` call this so create can return while listing runs.
     fn start_connect_mcp(self: &Arc<Self>, servers: Vec<AcpMcpServer>) {
-        *self
-            .mcp_servers
-            .lock()
-            .expect("mcp servers lock should not be poisoned") = servers.clone();
         let state = Arc::clone(self);
         let handle = tokio::spawn(async move {
             state.connect_mcp(servers).await;
         });
-        *self
+        // A resume that hands over new servers supersedes a connect still in
+        // flight; left running, the older list could land last.
+        if let Some(superseded) = self
             .mcp_connect
             .lock()
-            .expect("mcp connect lock should not be poisoned") = Some(handle);
+            .expect("mcp connect lock should not be poisoned")
+            .replace(handle)
+        {
+            superseded.abort();
+        }
     }
 
-    /// Wait for the initial listing, then refresh permitted connections so
-    /// authorization or disconnection takes effect without a new session.
-    async fn mcp_tools_for_turn(&self) -> anyhow::Result<Option<RemoteMcpToolSet>> {
+    /// The tools the next turn should compose, waiting out an in-flight
+    /// connect so the searchable catalog is not empty on turn one.
+    async fn mcp_tools_for_turn(&self) -> Option<RemoteMcpToolSet> {
         let handle = self
             .mcp_connect
             .lock()
@@ -202,19 +214,10 @@ impl AgentState {
         if let Some(handle) = handle {
             let _ = handle.await;
         }
-        let advertised = self
-            .mcp_servers
-            .lock()
-            .expect("mcp servers lock should not be poisoned")
-            .clone();
-        if let Some(servers) = self.mcp.refresh_dyn(self.session_id, advertised).await? {
-            self.connect_mcp(servers).await;
-        }
-        Ok(self
-            .mcp_tools
+        self.mcp_tools
             .lock()
             .expect("mcp tools lock should not be poisoned")
-            .clone())
+            .clone()
     }
 
     fn expect_session(&self, requested: &SessionId) -> Result<(), AcpError> {
@@ -234,15 +237,9 @@ impl AgentState {
     fn bind_acp_session(&self, acp_id: SessionId, keep_history: bool) {
         if let Some(mut state) = self.store.get_mut(&self.session_id) {
             if !keep_history || state.acp_session_id.as_ref() != Some(&acp_id) {
-                state.history.clear();
+                state.clear_history();
             }
             state.acp_session_id = Some(acp_id);
-        }
-    }
-
-    fn clear_history(&self) {
-        if let Some(mut state) = self.store.get_mut(&self.session_id) {
-            state.history.clear();
         }
     }
 
@@ -266,7 +263,69 @@ impl AgentState {
 
     /// ACP model configuration backed by the engine's supported-model source
     /// and this session's current selection.
-    fn session_config_options(&self, access: ModelAccess) -> Vec<SessionConfigOption> {
+    /// The models the session may run: the owner's plan access, or the
+    /// models of the agent's key's provider when its agent has a usable key.
+    /// A failed key lookup offers the plan's models: turns then check the
+    /// key again before running.
+    async fn session_models(&self) -> Result<SessionModels, AcpError> {
+        let access = self
+            .model_access
+            .access(&self.owner)
+            .await
+            .map_err(model_access_error)?;
+        let (Some(bot), Some(user)) = (self.agent_bot(), self.owner.as_user()) else {
+            return Ok(SessionModels::new(access, None));
+        };
+        let agent_key = self
+            .agent_keys
+            .usable_provider(bot, user)
+            .await
+            .inspect_err(
+                |error| tracing::error!(error = ?error, "could not read the agent's API key"),
+            )
+            .ok()
+            .flatten();
+        Ok(SessionModels::new(access, agent_key))
+    }
+
+    /// The agent's own key this turn runs on, decrypted for it, if the
+    /// session's agent has a usable one. A key for a provider other than
+    /// `model`'s refuses the turn rather than quietly billing Macro.
+    async fn turn_agent_key(&self, model: &str) -> Result<Option<UsableAgentKey>, AcpError> {
+        let (Some(bot), Some(user)) = (self.agent_bot(), self.owner.as_user()) else {
+            return Ok(None);
+        };
+        let key =
+            self.agent_keys
+                .usable_key(bot, user)
+                .await
+                .map_err(|error| {
+                    tracing::error!(error = ?error, "could not read the agent's API key");
+                    AcpError::new(-32603, "The agent's API key could not be read")
+                .data(serde_json::json!({ "code": "agent_api_key_unavailable", "retryable": true }))
+                })?;
+        match key {
+            Some(key) if ModelProvider::of_model(model) != Some(key.key.provider()) => {
+                let provider = key.key.provider().display_name();
+                Err(AcpError::invalid_params().data(format!(
+                    "This agent runs on its {provider} API key. Choose a {provider} model."
+                )))
+            }
+            key => Ok(key),
+        }
+    }
+
+    /// The bot id of the agent this session belongs to, if any.
+    fn agent_bot(&self) -> Option<macro_uuid::Uuid> {
+        self.store.get(&self.session_id).and_then(|session| {
+            session
+                .identity
+                .as_ref()
+                .map(|identity| identity.bot.as_uuid())
+        })
+    }
+
+    fn session_config_options(&self, access: SessionModels) -> Vec<SessionConfigOption> {
         let Some(session) = self.store.get(&self.session_id) else {
             return Vec::new();
         };
@@ -301,9 +360,18 @@ impl AgentState {
         )
     }
 
-    fn push_turn(&self, prompt: UserPrompt, parts: Vec<AssistantMessagePart>) {
+    /// Record a turn that ran: the prompt, under the id of the request that
+    /// carried it, and what the agent made of it.
+    fn push_turn(
+        &self,
+        request_id: RequestId,
+        prompt: UserPrompt,
+        parts: Vec<AssistantMessagePart>,
+    ) {
         if let Some(mut state) = self.store.get_mut(&self.session_id) {
-            state.history.push(HistoryEntry::User(prompt));
+            state
+                .history
+                .push(HistoryEntry::User { prompt, request_id });
             if !parts.is_empty() {
                 state.history.push(HistoryEntry::Assistant(parts));
             }
@@ -579,18 +647,20 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                 let state = Arc::clone(&state);
                 async move |request: NewSessionRequest, responder, connection| {
                     let state = Arc::clone(&state);
-                    let access = match state.model_access.access(&state.owner).await {
+                    let access = match state.session_models().await {
                         Ok(access) => access,
-                        Err(error) => {
-                            return responder.respond_with_error(model_access_error(error));
-                        }
+                        Err(error) => return responder.respond_with_error(error),
                     };
                     if let Some(model) = state
                         .store
                         .get(&state.session_id)
                         .map(|session| session.model.clone())
                     {
-                        state.set_model(access.default_model(&model).to_owned());
+                        state.set_model(
+                            access
+                                .default_model(&model, state.engine.supported_models())
+                                .to_owned(),
+                        );
                     }
                     let acp_id = SessionId::new(macro_uuid::generate_uuid_v7().to_string());
                     state.bind_acp_session(acp_id.clone(), false);
@@ -610,18 +680,20 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                 let state = Arc::clone(&state);
                 async move |request: ResumeSessionRequest, responder, connection| {
                     let state = Arc::clone(&state);
-                    let access = match state.model_access.access(&state.owner).await {
+                    let access = match state.session_models().await {
                         Ok(access) => access,
-                        Err(error) => {
-                            return responder.respond_with_error(model_access_error(error));
-                        }
+                        Err(error) => return responder.respond_with_error(error),
                     };
                     if let Some(model) = state
                         .store
                         .get(&state.session_id)
                         .map(|session| session.model.clone())
                     {
-                        state.set_model(access.default_model(&model).to_owned());
+                        state.set_model(
+                            access
+                                .default_model(&model, state.engine.supported_models())
+                                .to_owned(),
+                        );
                     }
                     // Kept when the state already belongs to this ACP id -
                     // either this process served the session, or a cold
@@ -652,25 +724,22 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                         "agent.acp.prompt",
                         agent.session.id = %state.session_id,
                         gen_ai.conversation.id = %state.session_id,
+                        agent.turn.reply_delivery = ?state.delivery,
                         agent.turn.ttft_ms = tracing::field::Empty,
                         agent.turn.first_text_ms = tracing::field::Empty,
                         agent.turn.admission_wait_ms = tracing::field::Empty,
+                        agent.turn.agent_key = tracing::field::Empty,
                         agent.turn.lock_wait_ms = tracing::field::Empty,
+                        agent.turn.stop_reason = tracing::field::Empty,
+                        agent.turn.text_chars = tracing::field::Empty,
+                        agent.turn.tool_calls = tracing::field::Empty,
+                        agent.turn.replied = tracing::field::Empty,
                     );
                     genai_telemetry::propagation::set_parent(&span, request.meta.as_ref());
                     let prompt = UserPrompt::from_request(&request);
-                    if prompt.is_compact_command() {
-                        state.clear_history();
-                        let _ = connection.send_notification(SessionNotification::new(
-                            request.session_id,
-                            SessionUpdate::AgentMessageChunk(ContentChunk::new(
-                                "Compacted: the earlier conversation is no longer in the \
-                                 model's context."
-                                    .into(),
-                            )),
-                        ));
-                        return responder.respond(PromptResponse::new(StopReason::EndTurn));
-                    }
+                    // The id the log keeps the request under, which the turn
+                    // is known by from here on.
+                    let request_id = responder.id().clone();
                     if state.enable_dev_commands
                         && let Some(question) = prompt.text.trim().strip_prefix(ASK_COMMAND)
                     {
@@ -683,6 +752,7 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                                     &state,
                                     &connection,
                                     request.session_id,
+                                    request_id,
                                     prompt,
                                     question,
                                     cancel,
@@ -700,9 +770,15 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     connection.spawn({
                         let connection = connection.clone();
                         async move {
-                            let result =
-                                run_turn(&state, &connection, request.session_id, prompt, cancel)
-                                    .await;
+                            let result = run_turn(
+                                &state,
+                                &connection,
+                                request.session_id,
+                                request_id,
+                                prompt,
+                                cancel,
+                            )
+                            .await;
                             // A closed connection is the only way responding fails.
                             // Admission failure must not tear down resumable state.
                             let _ = match result {
@@ -726,11 +802,9 @@ pub async fn serve(state: Arc<AgentState>, acp: AcpChannel) -> Result<(), AcpErr
                     if let Err(error) = state.expect_session(&request.session_id) {
                         return responder.respond_with_error(error);
                     }
-                    let access = match state.model_access.access(&state.owner).await {
+                    let access = match state.session_models().await {
                         Ok(access) => access,
-                        Err(error) => {
-                            return responder.respond_with_error(model_access_error(error));
-                        }
+                        Err(error) => return responder.respond_with_error(error),
                     };
                     let Some(value) = request.value.as_value_id() else {
                         return responder.respond_with_error(
@@ -835,9 +909,10 @@ fn model_access_error(error: ModelAccessError) -> AcpError {
 
 /// Run one turn to completion, streaming updates as they arrive.
 async fn run_turn(
-    state: &AgentState,
+    state: &Arc<AgentState>,
     connection: &ConnectionTo<Client>,
     acp_session_id: SessionId,
+    request_id: RequestId,
     prompt: UserPrompt,
     cancel: CancellationToken,
 ) -> Result<StopReason, AcpError> {
@@ -854,25 +929,51 @@ async fn run_turn(
     let span = tracing::Span::current();
     span.record("agent.turn.lock_wait_ms", elapsed_ms(started));
     let admission_started = Instant::now();
-    // Check at execution time, not enqueue time. Cancellation stays responsive
-    // even if billing is slow, and neither denial nor cancellation adds history.
-    tokio::select! {
+    let session_model = state
+        .store
+        .get(&state.session_id)
+        .map(|session| session.model.clone())
+        .unwrap_or_default();
+    // An agent with its own usable key runs every turn on it, never on the
+    // owner's allowance; one without runs on Macro usage.
+    let agent_key = tokio::select! {
         biased;
         _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
-        result = admit_turn(state.admission.as_ref(), &state.owner) => result.map_err(|error|
-            AcpError::new(-32603, error.to_string()).data(serde_json::json!({
-                "code": error.code(), "retryable": error.is_retryable(),
-            }))
-        )?,
+        key = state.turn_agent_key(&session_model) => key?,
+    };
+    span.record("agent.turn.agent_key", agent_key.is_some());
+    // Check at execution time, not enqueue time. Cancellation stays responsive
+    // even if billing is slow, and neither denial nor cancellation adds history.
+    if agent_key.is_none() {
+        tokio::select! {
+            biased;
+            _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
+            result = admit_turn(state.admission.as_ref(), &state.owner) => result.map_err(|error|
+                AcpError::new(-32603, error.to_string()).data(serde_json::json!({
+                    "code": error.code(), "retryable": error.is_retryable(),
+                }))
+            )?,
+        }
     }
     span.record(
         "agent.turn.admission_wait_ms",
         elapsed_ms(admission_started),
     );
+    if compaction::too_long(&prompt, &session_model) {
+        return Err(AcpError::invalid_params().data(
+            "This message is too long. Split it into smaller messages or attach it as a file.",
+        ));
+    }
+    if compaction::before_turn(state, connection, &acp_session_id, &prompt, &cancel)
+        .await
+        .is_err()
+    {
+        return Ok(StopReason::Cancelled);
+    }
     let mcp_tools = tokio::select! {
         biased;
         _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
-        tools = state.mcp_tools_for_turn() => tools.map_err(|error| AcpError::new(-32603, format!("Could not refresh connector tools: {error}")))?,
+        tools = state.mcp_tools_for_turn() => tools,
     };
     let TurnInput {
         messages,
@@ -882,10 +983,15 @@ async fn run_turn(
         identity,
         instructions,
     } = state.turn_input(&prompt);
+    // The turn already holds the key, so its provider decides the models
+    // without asking for the key again.
     let access = tokio::select! {
         biased;
         _ = cancel.cancelled() => return Ok(StopReason::Cancelled),
-        result = state.model_access.access(&state.owner) => result.map_err(model_access_error)?,
+        result = state.model_access.access(&state.owner) => SessionModels::new(
+            result.map_err(model_access_error)?,
+            agent_key.as_ref().map(|key| key.key.provider()),
+        ),
     };
     if !access.allows(&model) {
         return Err(model_access_error(ModelAccessError::Forbidden));
@@ -912,6 +1018,8 @@ async fn run_turn(
     let awaiting = Arc::new(AwaitingUser::default());
     let requester = user_input_requester(state, connection, acp_session_id.clone(), &awaiting);
     let mut parts = state.engine.run_turn(TurnRequest {
+        purpose: TurnPurpose::Conversation,
+        delivery: state.delivery,
         session_id: state.session_id,
         awaiting: Arc::clone(&awaiting),
         owner: state.owner.clone(),
@@ -927,13 +1035,16 @@ async fn run_turn(
             .clone()
             .map(|requester| requester as SharedUserInputRequester),
         reviewer: requester.map(|requester| requester as Arc<dyn UserToolReviewer>),
+        agent_key,
     });
 
     let mut accumulator = StreamAccumulator::new();
+    let mut streaming = StreamingCalls::default();
     let mut failure = None;
     let mut was_cancelled = false;
     let mut first_part_seen = false;
     let mut first_text_seen = false;
+    let mut output = TurnOutput::default();
     loop {
         match tokio::time::timeout(TURN_IDLE_TIMEOUT, parts.recv()).await {
             Ok(Some(Ok(part))) => {
@@ -941,8 +1052,10 @@ async fn run_turn(
                     StreamPart::Content(text) | StreamPart::Thinking(text) => {
                         !text.trim().is_empty()
                     }
-                    StreamPart::ToolCall(_) => true,
-                    StreamPart::ToolResponse(_) | StreamPart::Usage(_) => false,
+                    StreamPart::ToolCall(_) | StreamPart::ToolCallStarted(_) => true,
+                    StreamPart::ToolCallArgs { .. }
+                    | StreamPart::ToolResponse(_)
+                    | StreamPart::Usage(_) => false,
                 };
                 if !first_part_seen && is_output {
                     first_part_seen = true;
@@ -957,7 +1070,7 @@ async fn run_turn(
                     first_text_seen = true;
                     span.record("agent.turn.first_text_ms", elapsed_ms(started));
                 }
-                if let Some(update) = update_for_part(&part) {
+                if let Some(update) = update_for_part(&part, &mut streaming, Instant::now()) {
                     let notification = SessionNotification::new(acp_session_id.clone(), update);
                     if connection.send_notification(notification).is_err() {
                         // Nobody is listening; stop spending tokens.
@@ -965,6 +1078,7 @@ async fn run_turn(
                         break;
                     }
                 }
+                output.observe(&part);
                 accumulator.push(part);
             }
             Ok(Some(Err(error))) => {
@@ -992,7 +1106,13 @@ async fn run_turn(
     }
 
     let mut turn_parts = accumulator.into_parts();
-    for (id, _name) in close_dangling_tool_calls(&mut turn_parts) {
+    // A call the turn ended while the model was still writing never ran and
+    // is not in the history; its open row closes all the same.
+    let unfinished = streaming.into_unfinished();
+    let dangling = close_dangling_tool_calls(&mut turn_parts)
+        .into_iter()
+        .map(|(id, _name)| id);
+    for id in unfinished.into_iter().chain(dangling) {
         let _ = connection.send_notification(SessionNotification::new(
             acp_session_id.clone(),
             SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
@@ -1001,7 +1121,7 @@ async fn run_turn(
             )),
         ));
     }
-    if let Some(failure) = failure {
+    if let Some(failure) = &failure {
         let _ = connection.send_notification(SessionNotification::new(
             acp_session_id.clone(),
             SessionUpdate::AgentMessageChunk(ContentChunk::new(
@@ -1009,12 +1129,68 @@ async fn run_turn(
             )),
         ));
     }
-    state.push_turn(prompt, turn_parts);
+    state.push_turn(request_id, prompt, turn_parts);
 
-    if was_cancelled || cancel.is_cancelled() {
+    // A failure first: the idle timeout cancels the stream itself, and a turn
+    // it stopped failed rather than being stopped by the user.
+    let result = if let Some(failure) = failure {
+        Err(AcpError::internal_error().data(failure))
+    } else if was_cancelled || cancel.is_cancelled() {
         Ok(StopReason::Cancelled)
     } else {
         Ok(StopReason::EndTurn)
+    };
+    output.record(&span, &result);
+    result
+}
+
+/// What a turn said, recorded on its `agent.acp.prompt` span so a turn that
+/// ended without answering is found by query, not by reading its log.
+#[derive(Default)]
+struct TurnOutput {
+    text_chars: i64,
+    tool_calls: i64,
+    /// Text after the last tool call: the answer the reader is left with.
+    replied: bool,
+}
+
+impl TurnOutput {
+    fn observe(&mut self, part: &StreamPart) {
+        match part {
+            StreamPart::Content(text) => {
+                self.text_chars += i64::try_from(text.chars().count()).unwrap_or(i64::MAX);
+                self.replied |= !text.trim().is_empty();
+            }
+            StreamPart::ToolCall(_) => {
+                self.tool_calls += 1;
+                self.replied = false;
+            }
+            StreamPart::ToolCallStarted(_) => self.replied = false,
+            StreamPart::ToolCallArgs { .. }
+            | StreamPart::Thinking(_)
+            | StreamPart::ToolResponse(_)
+            | StreamPart::Usage(_) => {}
+        }
+    }
+
+    // `i64`, not `u64`: a `u64` reaches OpenTelemetry as a string attribute.
+    fn record(&self, span: &tracing::Span, result: &Result<StopReason, AcpError>) {
+        let stop_reason = match result {
+            Ok(StopReason::EndTurn) => "end_turn",
+            Ok(StopReason::Cancelled) => "cancelled",
+            Ok(_) => "other",
+            Err(_) => "error",
+        };
+        span.record("agent.turn.stop_reason", stop_reason);
+        span.record("agent.turn.text_chars", self.text_chars);
+        span.record("agent.turn.tool_calls", self.tool_calls);
+        span.record("agent.turn.replied", self.replied);
+        if stop_reason == "end_turn" && !self.replied {
+            tracing::warn!(
+                tool_calls = self.tool_calls,
+                "the turn ended without a reply after its last tool call"
+            );
+        }
     }
 }
 
@@ -1029,6 +1205,7 @@ async fn run_ask(
     state: &AgentState,
     connection: &ConnectionTo<Client>,
     acp_session_id: SessionId,
+    request_id: RequestId,
     prompt: UserPrompt,
     question: String,
     cancel: CancellationToken,
@@ -1047,7 +1224,11 @@ async fn run_ask(
         let text = say(
             "This client did not advertise form elicitation, so there is no way to ask.".to_owned(),
         );
-        state.push_turn(prompt, vec![AssistantMessagePart::Text { text }]);
+        state.push_turn(
+            request_id,
+            prompt,
+            vec![AssistantMessagePart::Text { text }],
+        );
         return StopReason::EndTurn;
     }
 
@@ -1066,7 +1247,11 @@ async fn run_ask(
         Err(error) => error.to_string(),
     };
     let text = say(text);
-    state.push_turn(prompt, vec![AssistantMessagePart::Text { text }]);
+    state.push_turn(
+        request_id,
+        prompt,
+        vec![AssistantMessagePart::Text { text }],
+    );
 
     if cancel.is_cancelled() {
         StopReason::Cancelled
@@ -1076,10 +1261,8 @@ async fn run_ask(
 }
 
 /// The slash commands this agent advertises over ACP: bare names, no
-/// leading slash. `/compact` is still handled if a client sends it, but it
-/// is not listed — dropping history is not a product command for this
-/// harness. `/ask` only while the host enables development commands, since
-/// the prompt handler ignores it otherwise.
+/// leading slash. `/ask` only while the host enables development commands,
+/// since the prompt handler ignores it otherwise.
 fn available_commands(state: &AgentState) -> Vec<AvailableCommand> {
     let name = |command: &str| command.trim_start_matches('/').to_owned();
     let mut commands = Vec::new();
@@ -1130,7 +1313,16 @@ fn parse_ask(question: &str) -> (String, Vec<String>) {
 }
 
 /// The `session/update` a stream part renders as, if any.
-fn update_for_part(part: &StreamPart) -> Option<SessionUpdate> {
+///
+/// A call the model is still writing opens `pending` and is peeked at as its
+/// arguments stream (see [`crate::domain::tool_stream`]); once finished it
+/// moves to `in_progress` with the real arguments. A call that arrives whole
+/// opens `in_progress` directly.
+fn update_for_part(
+    part: &StreamPart,
+    streaming: &mut StreamingCalls,
+    now: Instant,
+) -> Option<SessionUpdate> {
     match part {
         StreamPart::Content(text) => Some(SessionUpdate::AgentMessageChunk(ContentChunk::new(
             ContentBlock::from(text.clone()),
@@ -1138,20 +1330,41 @@ fn update_for_part(part: &StreamPart) -> Option<SessionUpdate> {
         StreamPart::Thinking(text) => Some(SessionUpdate::AgentThoughtChunk(ContentChunk::new(
             ContentBlock::from(text.clone()),
         ))),
-        StreamPart::ToolCall(call) => {
-            let title = call
-                .mcp
-                .as_ref()
-                .and_then(|mcp| mcp.display_name.clone())
-                .unwrap_or_else(|| call.name.clone());
+        StreamPart::ToolCallStarted(start) => {
+            streaming.open(&start.id);
             Some(SessionUpdate::ToolCall(
-                AcpToolCall::new(call.id.clone(), title)
-                    .kind(tool_kind(&call.name))
-                    .status(ToolCallStatus::InProgress)
-                    .raw_input(call.json.clone())
-                    .meta(tool_call_meta(call)),
+                AcpToolCall::new(
+                    start.id.clone(),
+                    tool_title(&start.name, start.mcp.as_ref()),
+                )
+                .kind(tool_kind(&start.name))
+                .status(ToolCallStatus::Pending)
+                .meta(tool_call_meta(&start.name, start.mcp.as_ref())),
             ))
         }
+        StreamPart::ToolCallArgs { id, delta } => {
+            streaming.push_arguments(id, delta, now).map(|peek| {
+                SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+                    id.clone(),
+                    ToolCallUpdateFields::new().raw_input(peek),
+                ))
+            })
+        }
+        StreamPart::ToolCall(call) if streaming.finish(&call.id) => {
+            Some(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
+                call.id.clone(),
+                ToolCallUpdateFields::new()
+                    .status(ToolCallStatus::InProgress)
+                    .raw_input(call.json.clone()),
+            )))
+        }
+        StreamPart::ToolCall(call) => Some(SessionUpdate::ToolCall(
+            AcpToolCall::new(call.id.clone(), tool_title(&call.name, call.mcp.as_ref()))
+                .kind(tool_kind(&call.name))
+                .status(ToolCallStatus::InProgress)
+                .raw_input(call.json.clone())
+                .meta(tool_call_meta(&call.name, call.mcp.as_ref())),
+        )),
         StreamPart::ToolResponse(ToolResponse::Json { id, json, .. }) => {
             Some(SessionUpdate::ToolCallUpdate(ToolCallUpdate::new(
                 id.clone(),
@@ -1177,19 +1390,25 @@ fn update_for_part(part: &StreamPart) -> Option<SessionUpdate> {
 /// name rather than guess from the title: `macro.toolName` (an MCP tool as
 /// `mcp__<server>__<tool>`, the convention Claude Code set) and
 /// `macro.subagent` on a delegation.
-fn tool_call_meta(call: &agent::ToolCall) -> Meta {
-    let tool_name = match &call.mcp {
+fn tool_call_meta(name: &str, mcp: Option<&McpInfo>) -> Meta {
+    let tool_name = match mcp {
         Some(mcp) => format!("mcp__{}__{}", mcp.service, mcp.tool_name),
-        None => call.name.clone(),
+        None => name.to_owned(),
     };
     let mut ours = serde_json::Map::new();
     ours.insert("toolName".to_owned(), serde_json::Value::String(tool_name));
-    if call.mcp.is_none() && call.name == SUBAGENT_TOOL {
+    if mcp.is_none() && name == SUBAGENT_TOOL {
         ours.insert("subagent".to_owned(), serde_json::Value::Bool(true));
     }
     let mut meta = Meta::new();
     meta.insert(META_NAMESPACE.to_owned(), serde_json::Value::Object(ours));
     meta
+}
+
+/// A tool call's title: an MCP tool's display name, else the tool's name.
+fn tool_title(name: &str, mcp: Option<&McpInfo>) -> String {
+    mcp.and_then(|mcp| mcp.display_name.clone())
+        .unwrap_or_else(|| name.to_owned())
 }
 
 /// A coarse [`ToolKind`] for a Macro tool name, for client iconography only.

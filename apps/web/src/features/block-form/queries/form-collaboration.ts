@@ -6,6 +6,7 @@
  * respondents see, at most once per pause in editing.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { schema } from '@loro-mirror/core';
 import { createAwareness } from '@macro-inc/collaboration/collab/awareness';
 import type { Chatter } from '@macro-inc/collaboration/collab/chatter';
@@ -168,7 +169,7 @@ class FormWAL extends WALSyncer<RawUpdate> {
   override append(update: RawUpdate): Promise<void> {
     const appended = this.appendOrHold(update);
     this.appending.add(appended);
-    void this.forget(appended);
+    fireAndForget(this.forget(appended), 'form-collaboration');
     return appended;
   }
 
@@ -288,7 +289,7 @@ function decodeSections(value: unknown): FormSection[] | undefined {
         const { rules } = gate;
         return isFilterGroup(rules) ? { ...gate, rules } : undefined;
       })
-      .exhaustive();
+      .exhaustive(() => undefined);
     if (!decoded) return undefined;
     sections.push(decoded);
   }
@@ -396,11 +397,8 @@ export function createFormCollaborationSession(
     }
   }
 
-  const wal = new FormWAL(
-    walStore,
-    deliver,
-    options.formId,
-    () => void reportSaveInBackground()
+  const wal = new FormWAL(walStore, deliver, options.formId, () =>
+    fireAndForget(reportSaveInBackground(), 'form-collaboration')
   );
 
   let publishTimer: ReturnType<typeof setTimeout> | undefined;
@@ -463,7 +461,7 @@ export function createFormCollaborationSession(
   function publishSoon() {
     clearTimeout(publishTimer);
     publishTimer = setTimeout(
-      () => void publishInBackground(),
+      () => fireAndForget(publishInBackground(), 'form-collaboration'),
       PUBLISH_DELAY_MS
     );
   }
@@ -574,7 +572,7 @@ export function createFormCollaborationSession(
       started = true;
       watch();
     }
-    void wal.flush();
+    fireAndForget(wal.flush(), 'form-collaboration');
   }
 
   async function accept(initial: InitialSync) {
@@ -612,7 +610,8 @@ export function createFormCollaborationSession(
     setReachable(true);
     unlisten = opened.source.listen((event) => {
       for (const listener of liveListeners) listener(event);
-      if (event.type === 'reconnect') void resync(event);
+      if (event.type === 'reconnect')
+        fireAndForget(resync(event), 'form-collaboration');
     });
     if (peerId !== undefined) opened.source.registerPeerId(peerId);
     const initial = await opened.doInitialSync();
@@ -650,7 +649,8 @@ export function createFormCollaborationSession(
     }
   }
 
-  const reconnectOnline = () => void ensureConnected();
+  const reconnectOnline = () =>
+    fireAndForget(ensureConnected(), 'form-collaboration');
   window.addEventListener('online', reconnectOnline);
 
   /** Whether the local copy opened the form; a failed read opens it from the server. */
@@ -700,7 +700,7 @@ export function createFormCollaborationSession(
     engine.stop();
     wal.destroy();
     connection()?.source.cleanup();
-    void disposeOnceOpened();
+    fireAndForget(disposeOnceOpened(), 'form-collaboration');
   });
 
   function apply(previous: WireFormLayout, next: WireFormLayout) {

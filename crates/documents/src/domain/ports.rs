@@ -8,6 +8,8 @@ pub mod editing;
 pub mod markdown;
 pub mod mentions;
 pub mod sync;
+#[cfg(test)]
+mod test;
 
 use std::future::Future;
 
@@ -23,6 +25,7 @@ use models_permissions::share_permission::SharePermissionV2;
 use models_permissions::share_permission::team_share::{
     AuthorizedTeamShareCommand, TeamShareFacts,
 };
+use models_properties::service::property_change_source::PropertyChangeSource;
 
 use super::content::DocumentContent;
 use super::events::InteractionReason;
@@ -199,6 +202,16 @@ pub trait DocumentRepo: Send + Sync + 'static {
         project_id: &str,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// Widen project `project_id` and every project above it to span a
+    /// document created in it with its own dates: creation moves back to
+    /// `created_at` and last edit forward to `updated_at`, never the other way.
+    fn extend_project_dates(
+        &self,
+        project_id: &str,
+        created_at: chrono::DateTime<chrono::Utc>,
+        updated_at: chrono::DateTime<chrono::Utc>,
+    ) -> impl Future<Output = Result<(), Self::Err>> + Send;
+
     /// Delete a document by ID (used for error cleanup).
     fn delete_document_by_id(
         &self,
@@ -343,6 +356,9 @@ pub trait PresignedUploadUrlPort: Send + Sync + 'static {
         destination_key: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
+    /// Remove a destination object when a multi-part document copy fails.
+    fn delete_object(&self, key: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
+
     /// Returns the raw bytes of the cached Loro snapshot, or `None` if no snapshot exists.
     fn get_snapshot(
         &self,
@@ -365,10 +381,14 @@ pub trait TaskPropertiesPort: Send + Sync + 'static {
         entity_ids: Vec<String>,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
-    /// Updates the tasks status
+    /// Updates the tasks status, credited to `credited_user` when they can edit
+    /// the task (see [`credited_task_edit_receipt`]). `source` records the
+    /// outside event behind the change on its published event.
     fn update_task_status(
         &self,
-        entity_id: &str,
+        access: &EntityAccessReceipt<EditAccessLevel>,
+        credited_user: Option<&MacroUserIdStr<'static>>,
+        source: Option<&PropertyChangeSource>,
         status: &str,
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 
@@ -426,6 +446,30 @@ pub async fn task_property_edit_receipt<A: EntityAccessService>(
                 .await
         }
     }
+}
+
+/// Pick the edit receipt a task status change is written with.
+///
+/// The change is attributed to `credited_user` when they can edit the task, so
+/// it reads as their action wherever property events go (activity, routines).
+/// Otherwise it is written with `access` and stays uncredited, so the status
+/// still changes.
+pub async fn credited_task_edit_receipt<A: EntityAccessService>(
+    entity_access: &A,
+    access: &EntityAccessReceipt<EditAccessLevel>,
+    credited_user: Option<&MacroUserIdStr<'static>>,
+) -> EntityAccessReceipt<EditAccessLevel> {
+    let Some(user) = credited_user else {
+        return access.clone();
+    };
+    let entity = access.entity();
+    entity_access
+        .generate_entity_access_receipt(user, None, &entity.entity_id, entity.entity_type)
+        .await
+        .inspect_err(|error| {
+            tracing::info!(error = ?error, "task status change left uncredited");
+        })
+        .unwrap_or_else(|_| access.clone())
 }
 
 /// Use cases for relaying document content-change events.
@@ -570,10 +614,14 @@ pub trait DocumentService: Send + Sync + 'static {
         args: EditDocumentServiceArgs,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 
-    /// Updates the tasks status to what is provided
+    /// Updates the tasks status to what is provided, credited to
+    /// `credited_user` when they can edit the task, and recording `source` as
+    /// the outside event behind the change
     fn update_task_status(
         &self,
         entity_access_receipt: EntityAccessReceipt<EditAccessLevel>,
+        credited_user: Option<MacroUserIdStr<'static>>,
+        source: Option<PropertyChangeSource>,
         status: &str,
     ) -> impl Future<Output = Result<(), DocumentError>> + Send;
 

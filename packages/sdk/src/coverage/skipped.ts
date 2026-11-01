@@ -25,11 +25,8 @@ import type { Sdk as StorageSdk } from '../../generated/storage/sdk.gen';
 import type { Sdk as UnfurlSdk } from '../../generated/unfurl/sdk.gen';
 
 export const agentHarnessExcluded = [
-  // Claude Cloud sign-in is an app-internal auth flow, not SDK surface.
-  'complete',
-  'disconnect',
-  'start',
-  'status',
+  'classify', // Command K inference is app-internal.
+  'extract', // Command K inference is app-internal.
   'loadAgentModelsHandler',
   'discoverAgentCapabilitiesHandler',
   'previewAgentSessions',
@@ -37,13 +34,12 @@ export const agentHarnessExcluded = [
   'agentSessionsForPullRequests',
   // Speculative page warm-up requires a signed-in user and is app-internal.
   'warmAgentSessionHandler',
+  // The connect chip's continuation after an app connects is app-internal.
+  'reportAgentSessionAppConnected',
 ] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
-export const agentHarnessBacklog = [
-  'answerAgentSessionToolApproval',
-  'getAgentSessionPermissions',
-  'updateAgentSessionPermissions',
-] as const satisfies readonly (keyof AgentHarnessSdk)[];
+export const agentHarnessBacklog =
+  [] as const satisfies readonly (keyof AgentHarnessSdk)[];
 
 export const authExcluded = [
   'appleLogin',
@@ -59,14 +55,19 @@ export const authExcluded = [
   'createMergeRequest',
   'createPortalSession',
   'createTeam',
+  'createTeamInviteLink',
+  // An agent's own API key is a credential managed in the app's agent settings.
+  'deleteAgentApiKey',
   'deleteCursorApiKey',
   'deleteGithubLink',
   'deleteTeam',
   'deleteTeamInviteHandler',
+  'deleteTeamInviteLink',
   'deleteUser',
   'disconnectCodex',
   'enrichGithubPullRequests',
   'generateEmailLink',
+  'getAgentApiKey',
   'getAiBillingPlans',
   'getAiBillingSummary',
   'getCodexConnection',
@@ -78,8 +79,14 @@ export const authExcluded = [
   'getReferralCode',
   // Renewal and scheduled-plan details are part of the app's billing settings.
   'getSubscriptionStatus',
+  'getTeamByInviteLink',
+  'getTeamInviteLink',
   'getTeamInvites',
+  // Introductory offers belong to the app's subscription checkout flow.
+  'getTrialEligibility',
   'getUserInvites',
+  // The interface language is an app setting, not SDK surface.
+  'getUserLanguage',
   'getUserLinkExists',
   'getUserName',
   'getUserNames',
@@ -92,6 +99,7 @@ export const authExcluded = [
   'initOutlookLink',
   'inviteToTeam',
   'joinTeam',
+  'joinTeamByInviteLink',
   'listCodexEnvironments',
   'listCursorModels',
   'listGtmInviteLinks',
@@ -110,9 +118,11 @@ export const authExcluded = [
   'patchUserTutorial',
   'pollCodexLogin',
   'postProfilePictures',
+  'putAgentApiKey',
   'putCursorApiKey',
   'putCursorDefaultModel',
   'putProfilePicture',
+  'putUserLanguage',
   'putUserName',
   'redeemGtmInviteLink',
   'refresh',
@@ -126,6 +136,7 @@ export const authExcluded = [
   'sessionCreation',
   'sessionLogin',
   'setGithubPullRequestDraft',
+  'setGithubPullRequestState',
   'ssoLogin',
   'startCodexLogin',
   'toggleTeamAutoJoinDomain',
@@ -137,22 +148,17 @@ export const authExcluded = [
   'verifyMergeRequest',
 ];
 
-export const authBacklog = [
-  'macroApiToken',
-] as const satisfies readonly (keyof AuthSdk)[];
+export const authBacklog = [] as const satisfies readonly (keyof AuthSdk)[];
 
 export const calendarExcluded = [
   // Health probe is infra, not SDK surface.
   'healthHandler',
+  // Answering a request to join a channel-shared event is a web-app action.
+  'respondToJoinRequest',
 ] as const satisfies readonly (keyof CalendarSdk)[];
 
-export const calendarBacklog = [
-  // Team sharing and availability preferences use the generated client for now.
-  'getAvailabilityCalendars',
-  'getTeamSharing',
-  'setAvailabilityCalendar',
-  'setTeamSharing',
-] as const satisfies readonly (keyof CalendarSdk)[];
+export const calendarBacklog =
+  [] as const satisfies readonly (keyof CalendarSdk)[];
 
 export const cognitionExcluded = [
   'addMcpServer',
@@ -171,17 +177,27 @@ export const cognitionExcluded = [
   'healthHandler',
   'listMcpServers',
   'listPipedreamMcpConnections',
+  'listPipedreamMcpOverlays',
   'mcpAuthCallback',
   'mcpOauthClientMetadata',
+  'recoverPipedreamMcpConnection',
   'rejectToolCall',
   // Channel discovery shares the app-only import workflow below.
   'discoverHandler',
   'runImportHandler',
-  'dismissRunHandler',
-  'retryGatherHandler',
+  // Workspace reports and cancel routes back the in-chat import review card.
+  'notionReportHandler',
+  'cancelNotionHandler',
+  'cancelWorkspaceHandler',
+  'workspaceReportHandler',
   'getStateHandler',
   'getStateHandler2',
   'completeHandler',
+  // Sidebar setup and import cards remember dismissals per user (web app only).
+  'dismissedPromptsHandler',
+  'dismissPromptHandler',
+  // Proposes SQL for the web app's in-browser engine to execute.
+  'generateDatabaseQuery',
   'setPricingHandler',
   'startMcpAuth',
   'updateMcpServer',
@@ -191,12 +207,8 @@ export const cognitionExcluded = [
   'upsertAiProjection',
 ] as const satisfies readonly (keyof CognitionSdk)[];
 
-export const cognitionBacklog = [
-  'getUsageHandler',
-  'sendChatMessage',
-  'stopChatStream',
-  'structuredCompletion',
-] as const satisfies readonly (keyof CognitionSdk)[];
+export const cognitionBacklog =
+  [] as const satisfies readonly (keyof CognitionSdk)[];
 
 export const connectionExcluded = [
   'batchSendMessageHandler',
@@ -209,7 +221,6 @@ export const connectionBacklog =
 
 export const contactsExcluded = [
   'addContact',
-  'getContacts',
 ] as const satisfies readonly (keyof ContactsSdk)[];
 
 export const contactsBacklog =
@@ -232,20 +243,9 @@ export const emailExcluded = [
 ] as const satisfies readonly (keyof EmailSdk)[];
 
 export const emailBacklog = [
-  'addDraftAttachment',
-  'addForwardedAttachment',
-  'createDraft',
-  'deleteDraft',
-  'deleteEmailFilter',
-  'deleteScheduledDraft',
-  'getScheduledMessages',
-  'getThreadCalendarInvitations',
-  'listContacts',
-  'listEmailFilters',
-  'removeDraftAttachment',
-  'removeForwardedAttachment',
-  'upsertEmailFilter',
-  'upsertScheduledMessage',
+  // Belongs on CalendarEvent beside inviteGuests; the first release keeps
+  // forwarding to the app's own surfaces, since the SDK also reaches agents.
+  'forwardCalendarEvent',
 ] as const satisfies readonly (keyof EmailSdk)[];
 
 export const notificationExcluded = [
@@ -276,16 +276,8 @@ export const scheduledActionExcluded = [
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 
-export const scheduledActionBacklog = [
-  'createScheduledAction',
-  'deleteScheduledAction',
-  'executeScheduledActionNow',
-  'getScheduledAction',
-  'listScheduledActionHistory',
-  'listScheduledActions',
-  'setScheduledActionEnabled',
-  'updateScheduledAction',
-] as const satisfies readonly (keyof ScheduledActionSdk)[];
+export const scheduledActionBacklog =
+  [] as const satisfies readonly (keyof ScheduledActionSdk)[];
 
 export const searchExcluded = [
   'simpleUnifiedSearch',
@@ -305,6 +297,10 @@ export const staticFilesBacklog =
   [] as const satisfies readonly (keyof StaticFilesSdk)[];
 
 export const storageExcluded = [
+  // Asking to join a channel-shared event, and its sharer's request list,
+  // are web-app actions.
+  'listJoinRequests',
+  'requestToJoin',
   // Browser Loro-session initialization/publication; SDK layout writes use putFormLayout.
   'collaborateForm',
   // Slack archive imports are browser-admin workflows, not SDK surface in v1.
@@ -332,13 +328,15 @@ export const storageExcluded = [
   'deleteHistoryHandler',
   'deleteUserDocumentViewLocation',
   'deleteViewHandler',
+  // Called by third parties holding a webhook's URL; its token, not the
+  // SDK's credentials, authenticates it.
+  'deliverDatabaseWebhook',
   // Old numeric comment links resolve inside the web app only.
   'entityMessageLegacy',
   'excludeDefaultViewHandler',
   'getAttachmentReferences',
   'getBatchCallRecordPreview',
   'getBatchChannelPreview',
-  'getBatchPreviewHandler',
   'getActiveCalls',
   'getBatchProjectPreview',
   'getBotOwnerProfiles',
@@ -361,6 +359,9 @@ export const storageExcluded = [
   'getRingStatus',
   'getUserDocumentViewLocation',
   'getViewsHandler',
+  // Guest chat uses a live RTC session token, not SDK account credentials.
+  'guestCallChatPost',
+  'guestCallChatRead',
   'handler',
   'healthHandler',
   'ingestTranscript',
@@ -381,7 +382,6 @@ export const storageExcluded = [
   'mentionPreviews',
   'patchViewHandler',
   'postItemsSoup',
-  'postItemsSoupAst',
   'postItemsSoupAstGrouped',
   'removeBotFromChannelByBot',
   // Storage for the web app's saved questions, not a user-facing surface.
@@ -397,98 +397,24 @@ export const storageExcluded = [
   'uploadFolderHandler',
   'upsertHistoryHandler',
   'upsertUserDocumentViewLocation',
+  // WhatsApp pairing, passkey handoff, and rollout configuration belong to the app session.
+  'whatsappCancelPairing',
+  'whatsappConnect',
+  'whatsappDisconnect',
+  // History imports and phone-number lookups need the owner's own session:
+  // each wakes their phone, and WhatsApp bans bulk checks.
+  'whatsappImportHistory',
+  'whatsappLookup',
+  'whatsappPairing',
+  'whatsappPasskey',
+  'whatsappStartLookup',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
-export const storageBacklog = [
-  // Email follow-ups are available through the generated client.
-  'getEmailFollowup',
-  'setEmailFollowup',
-  'listEmailReminders',
-  // CRM pipelines fit the crm namespace but are not wrapped yet.
-  'createCrmPipeline',
-  'applyCrmPipelineOps',
-  'getCrmPipeline',
-  'getCrmPipelineRows',
-  'queryCrmPipelineRows',
-  'getCrmPipelineTable',
-  'listCrmPipelines',
-  'renameCrmPipeline',
-  'shareCrmPipeline',
-  'trashCrmPipeline',
-  'approveHarnessPairing',
-  'claimHarnessPairing',
-  'createAgent',
-  'createAnchor',
-  'createDocument',
-  'createEntityMention',
-  'createHarnessPairing',
-  'createInitiative',
-  'createUserApiKey',
-  'deleteAnchor',
-  'deleteEntityMention',
-  'deleteHarness',
-  'deleteInitiative',
-  'deleteSelfHarness',
-  'deleteUserApiKey',
-  'editAnchor',
-  'editCallTranscript',
-  'editThreadV2',
-  'entityMessageDeleteThread',
-  'entityMessagePatchThread',
-  'getActivity',
-  'getDocumentAnchors',
-  'getDocumentByTeamSlug',
-  'getDocumentPermissionsToken',
-  'getDocumentPermissionsV2',
-  'getDocumentVersion',
-  'getEntityPermission',
-  'getGithubPullRequest',
-  'getGithubPullRequestChanges',
-  'getGithubPullRequestChangesPatch',
-  'getProjectPermissionsV2',
-  'getProjectUserAccessLevel',
-  'getHarnessPairing',
-  'getInitiative',
-  'getSelfHarness',
-  'listAgents',
-  'listHarnessAgents',
-  'listHarnessSessions',
-  'listHarnesses',
-  'listInitiatives',
-  'listOccurrences',
-  // Read-only team projections use the generated client for now.
-  'listTeamCalendar',
-  'listTeamOutOfOffice',
-  'listUserApiKeys',
-  // Meeting management uses the generated client.
-  'meetingCancel',
-  'meetingCreate',
-  'meetingInvite',
-  'meetingInvitePermissions',
-  'meetingInviteUsers',
-  'meetingList',
-  'meetingListActive',
-  'meetingLookup',
-  'meetingShare',
-  'meetingUpdate',
-  // Mixed message and activity timelines; Channel.messages() reads messages only.
-  'messageTimelineEntries',
-  'postActivity',
-  'presaveDocumentHandler',
-  'saveDocumentHandler',
-  'setChannelPicture',
-  'simpleSave',
-  'toggleShareWithTeam',
-  'updateAgent',
-  'updateInitiative',
-  'validateDocumentPermissionsToken',
-] as const satisfies readonly (keyof StorageSdk)[];
+export const storageBacklog =
+  [] as const satisfies readonly (keyof StorageSdk)[];
 
 export const unfurlExcluded = [
   'proxyRequestHandler',
 ] as const satisfies readonly (keyof UnfurlSdk)[];
 
-export const unfurlBacklog = [
-  'getUnfurl',
-  'getUnfurlBulk',
-] as const satisfies readonly (keyof UnfurlSdk)[];
+export const unfurlBacklog = [] as const satisfies readonly (keyof UnfurlSdk)[];

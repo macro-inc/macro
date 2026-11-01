@@ -1,0 +1,70 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT\n                event.id,\n                event.source_link_id,\n                event.status,\n                event.organizer_email,\n                event.is_read_only,\n                event.is_snapshot,\n                event.guests_can_modify,\n                event.guests_can_invite_others,\n                event.guests_can_see_other_guests\n            FROM calendar_events event\n            WHERE event.id = ANY($1)\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "source_link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "organizer_email",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "is_read_only",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 5,
+        "name": "is_snapshot",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 6,
+        "name": "guests_can_modify",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 7,
+        "name": "guests_can_invite_others",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 8,
+        "name": "guests_can_see_other_guests",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      false,
+      false,
+      false,
+      false,
+      false
+    ]
+  },
+  "hash": "6cb8618f8f79bc91a9b93ebcff8ed02a8ee1edb43db4117d2ee7e199745c5197"
+}

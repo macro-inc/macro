@@ -400,7 +400,7 @@ function SharingSpotlight() {
               'font-size': '12.5px',
             }}
           >
-            Q3 launch plan · everyone now has access
+            Website launch plan · everyone now has access
           </span>
         </div>
       </div>

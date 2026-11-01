@@ -57,7 +57,6 @@ fn speed_is_advertised_only_for_supported_models_with_current_value() {
     for (model, speed) in [
         ("openai/gpt-6-astra", ModelSpeed::Ultrafast),
         ("openai/gpt-6.1-sol", ModelSpeed::Ultrafast),
-        ("anthropic/claude-opus-5-5", ModelSpeed::Fast),
     ] {
         let options =
             super::session_config_options(model, &[model], ReasoningEffort::Default, speed);
@@ -70,6 +69,7 @@ fn speed_is_advertised_only_for_supported_models_with_current_value() {
         };
         assert_eq!(select.current_value.to_string(), speed.as_str());
     }
+    assert!(super::speed_config_option("anthropic/claude-opus-5-5", ModelSpeed::Fast).is_none());
     assert!(
         super::speed_config_option("anthropic/claude-sonnet-5-5", ModelSpeed::Standard).is_none()
     );

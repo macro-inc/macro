@@ -1,4 +1,4 @@
-import { type Accessor, createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal } from 'solid-js';
 import { createStore } from 'solid-js/store';
 import type {
   CrmCapabilities,
@@ -16,8 +16,7 @@ function toStageInputs(stages: DealStage[]): CrmStageInput[] {
 export function createStageEditor(input: {
   dealStages: DealStages;
   crmPermissions: Pick<CrmCapabilities, 'canEditStages'>;
-  teamCrmConfig: TeamConfigSource;
-  closedStageIds: Accessor<Set<string>>;
+  teamCrmConfig: Pick<TeamConfigSource, 'isLoading' | 'isError'>;
   replaceMutation: CrmMutation<CrmStageInput[], CrmStagesResponse>;
   resetMutation: CrmMutation<void>;
   onSuccess(message: string): void;
@@ -26,7 +25,6 @@ export function createStageEditor(input: {
     dealStages,
     crmPermissions,
     teamCrmConfig,
-    closedStageIds,
     replaceMutation,
     resetMutation,
   } = input;
@@ -40,8 +38,7 @@ export function createStageEditor(input: {
   const pending = () => replaceMutation.isPending || resetMutation.isPending;
   const loading = () => dealStages.isLoading() || teamCrmConfig.isLoading();
   const failed = () => dealStages.isError() || teamCrmConfig.isError();
-  const busy = () => pending() || teamCrmConfig.update.isPending;
-  const blocked = () => busy() || loading() || failed();
+  const blocked = () => pending() || loading() || failed();
   const [drafts, setDrafts] = createStore<Record<string, string | undefined>>(
     {}
   );
@@ -91,29 +88,11 @@ export function createStageEditor(input: {
     });
   };
 
-  const handleCustomize = () => {
-    const seed = dealStages.stages();
-    const closedLabels = new Set(
-      seed
-        .filter((stage) => closedStageIds().has(stage.id))
-        .map((stage) => stage.label)
-    );
-    const explicitClosed = teamCrmConfig.config().closedStageIds !== undefined;
+  const handleCustomize = () =>
     replace(
-      seed.map((stage) => ({ label: stage.label })),
-      {
-        successMessage: 'Stages are now customizable',
-        onSuccess: (result) => {
-          if (!explicitClosed) return;
-          teamCrmConfig.update.mutate({
-            closedStageIds: result.stages
-              .filter((stage) => closedLabels.has(stage.label))
-              .map((stage) => stage.id),
-          });
-        },
-      }
+      dealStages.stages().map((stage) => ({ label: stage.label })),
+      { successMessage: 'Stages are now customizable' }
     );
-  };
 
   const handleRename = (index: number, label: string) => {
     const stages = toStageInputs(orderedStages());
@@ -167,17 +146,6 @@ export function createStageEditor(input: {
     });
   };
 
-  const toggleClosedStage = (stageId: string) => {
-    if (blocked()) return;
-    const next = new Set(closedStageIds());
-    if (next.has(stageId)) {
-      next.delete(stageId);
-    } else {
-      next.add(stageId);
-    }
-    teamCrmConfig.update.mutate({ closedStageIds: [...next] });
-  };
-
   return {
     newStageName,
     setNewStageName,
@@ -189,7 +157,6 @@ export function createStageEditor(input: {
     pending,
     loading,
     failed,
-    busy,
     blocked,
     drafts,
     setDrafts,
@@ -203,6 +170,5 @@ export function createStageEditor(input: {
     handleAddStage,
     handleDeleteStage,
     handleReset,
-    toggleClosedStage,
   };
 }

@@ -1,3 +1,4 @@
+import { literalListItems } from '@macro-inc/spreadsheet/data-validation';
 import {
   CONDITIONAL_FORMAT_TYPES,
   type ComparisonOperator,
@@ -112,6 +113,52 @@ const THRESHOLD_TYPES: Record<string, ConditionalThreshold['type']> = {
   autoMin: 'min',
   autoMax: 'max',
 };
+
+/** The text and fill of a rule shaped as export writes a choice's color. */
+function choiceFill(rule: ConditionalFormat) {
+  const quoted =
+    rule.type === 'cellIs' &&
+    rule.operator === 'equal' &&
+    rule.formulas?.length === 1 &&
+    !rule.stopIfTrue &&
+    /^"((?:[^"]|"")*)"$/.exec(rule.formulas[0]);
+  const fill = rule.style?.fillColor;
+  if (!quoted || !fill || Object.keys(rule.style ?? {}).length !== 1) return;
+  const item = quoted[1].replace(/""/g, '"').trim();
+  return item ? { item, color: fill.toLowerCase() } : undefined;
+}
+
+/**
+ * Takes the rules that color a dropdown's choices, as export writes them, back
+ * into the dropdown's colors: a fill when a cell of exactly the dropdown's
+ * range equals one of its choices.
+ */
+function foldChoiceColors(
+  rules: ConditionalFormat[],
+  validations: DataValidation[]
+): ConditionalFormat[] {
+  return rules.filter((rule) => {
+    const choice = choiceFill(rule);
+    const dropdown =
+      choice &&
+      validations.find(
+        (validation) =>
+          validation.type === 'list' &&
+          validation.dropdown !== false &&
+          validation.range === rule.range
+      );
+    if (!choice || !dropdown) return true;
+    const key = choice.item.toLowerCase();
+    const items = literalListItems(dropdown.formulas?.[0] ?? '');
+    if (
+      (items && !items.some((item) => item.toLowerCase() === key)) ||
+      dropdown.colors?.some((entry) => entry.item.toLowerCase() === key)
+    )
+      return true;
+    dropdown.colors = [...(dropdown.colors ?? []), choice];
+    return false;
+  });
+}
 
 type Pending = {
   attributes: Attributes;
@@ -447,9 +494,12 @@ export function createSheetRulesReader(options: {
         warnings.add(
           'Some conditional formatting and data validation rules could not be imported.'
         );
-      const rules = conditional
-        .sort((a, b) => a.priority - b.priority)
-        .map(({ rule: value }) => value);
+      const rules = foldChoiceColors(
+        conditional
+          .sort((a, b) => a.priority - b.priority)
+          .map(({ rule: value }) => value),
+        validations
+      );
       if (
         rules.length > MAX_SHEET_RULES ||
         validations.length > MAX_SHEET_RULES
@@ -605,6 +655,24 @@ export function conditionalFormattingXml(
       return `<conditionalFormatting sqref="${rule.range}"><cfRule ${attributes}>${body}</cfRule></conditionalFormatting>`;
     })
     .join('');
+}
+
+/**
+ * Dropdown choice colors as Excel can show them: a fill when a cell equals
+ * the choice. Import reads these rules back into the dropdown's colors.
+ */
+export function choiceColorFormats(
+  validations: DataValidation[] | undefined
+): ConditionalFormat[] {
+  return (validations ?? []).flatMap((rule) =>
+    (rule.colors ?? []).map(({ item, color }) => ({
+      range: rule.range,
+      type: 'cellIs' as const,
+      operator: 'equal' as const,
+      formulas: [`"${item.replace(/"/g, '""')}"`],
+      style: { fillColor: color },
+    }))
+  );
 }
 
 /** A sheet's `<dataValidations>` element, or nothing. */

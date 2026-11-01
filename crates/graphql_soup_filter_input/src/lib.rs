@@ -20,11 +20,12 @@ use item_filters::{
     CallStatus, SharedEmailFilter,
     ast::{
         CrmScope, EmailFilterAst, EntityFilterAst,
-        agent_session::AgentSessionLiteral,
+        agent_session::{AgentSessionLiteral, AgentSessionSource, AgentSessionVisibility},
         calendar_event::CalendarEventLiteral,
         call::CallLiteral,
         channel::{ChannelLiteral, ChannelThreadLiteral, ChannelTypeFilter},
         chat::{ChatLiteral, ChatRole},
+        crm_association::CrmAssociation,
         crm_company::CrmCompanyLiteral,
         crm_contact::CrmContactLiteral,
         database_row::DatabaseRowLiteral,
@@ -49,8 +50,11 @@ use serde_json::Value;
 use thiserror::Error;
 use uuid::Uuid;
 
+mod reminder;
 #[cfg(test)]
 mod test;
+
+use reminder::GraphqlReminderExpr;
 
 /// Maximum accepted GraphQL filter expression depth.
 pub const MAX_FILTER_DEPTH: usize = 64;
@@ -360,6 +364,10 @@ impl TryFrom<GraphqlPropertyEntityType> for PropertyEntityType {
 pub struct GraphqlEntityFilterAst {
     /// Restrict results to the authenticated viewer's favorites when true.
     favorites_only: Option<bool>,
+    /// Restrict every entity type to items associated with this CRM record,
+    /// or to activity across visible CRM-enabled teams.
+    /// Requires an expanded, timestamp-sorted query.
+    crm_association: Option<GraphqlCrmAssociation>,
     /// The calendar event filter to apply.
     calendar_event_filter: Option<GraphqlCalendarEventExpr>,
     /// The document filter to apply.
@@ -385,6 +393,14 @@ pub struct GraphqlEntityFilterAst {
     foreign_entity_filter: Option<GraphqlForeignEntityExpr>,
     /// The GitHub pull request filter to apply, on top of the foreign entity filter.
     github_pull_request_filter: Option<GraphqlGithubPullRequestExpr>,
+    /// Ignored: Soup no longer returns reminders.
+    #[cfg_attr(
+        feature = "server",
+        graphql(
+            deprecation = "Soup no longer returns reminders (#7536). Remove after 2026-11-30."
+        )
+    )]
+    reminder_filter: Option<GraphqlReminderExpr>,
     /// The agent session filter to apply.
     agent_session_filter: Option<GraphqlAgentSessionExpr>,
     /// The initiative filter to apply. Initiatives are opt-in.
@@ -409,6 +425,10 @@ impl GraphqlEntityFilterAst {
     fn into_ast_unchecked(self) -> InputResult<EntityFilterAst> {
         Ok(EntityFilterAst {
             favorites_only: self.favorites_only,
+            crm_association: self
+                .crm_association
+                .map(GraphqlCrmAssociation::into_ast)
+                .transpose()?,
             calendar_event_filter: optional_tree(self.calendar_event_filter)?,
             document_filter: optional_tree(self.document_filter)?,
             project_filter: optional_tree(self.project_filter)?,
@@ -682,6 +702,37 @@ enum GraphqlDocumentLiteral {
     Property(GraphqlFilterPropertiesLiteral),
     /// Uploaded from an email attachment sent by, or to, a matching address.
     EmailAttachmentParticipant(GraphqlEmailValue),
+    /// Associated with a CRM record through its Companies or Contacts
+    /// property or a reference to the record. Requires an expanded,
+    /// timestamp-sorted query.
+    CrmAssociated(GraphqlCrmAssociation),
+    /// Case-insensitive substring of the document name.
+    NameContains(String),
+}
+
+/// GraphQL input naming the CRM record an association filter restricts to.
+#[cfg_attr(feature = "server", derive(async_graphql::OneofObject))]
+#[derive(Serialize, Deserialize)]
+#[serde(rename_all = "camelCase")]
+enum GraphqlCrmAssociation {
+    /// Items associated with the company or any of its contacts.
+    Company(ID),
+    /// Items associated with the contact.
+    Contact(ID),
+    /// Activity across visible CRM-enabled teams; only true is valid.
+    Activity(bool),
+}
+
+impl GraphqlCrmAssociation {
+    /// Convert this value into the ast representation.
+    fn into_ast(self) -> InputResult<CrmAssociation> {
+        Ok(match self {
+            Self::Company(id) => CrmAssociation::Company(parse_id(id, "company")?),
+            Self::Contact(id) => CrmAssociation::Contact(parse_id(id, "contact")?),
+            Self::Activity(true) => CrmAssociation::Activity,
+            Self::Activity(false) => return Err(InputError::new("activity must be true")),
+        })
+    }
 }
 
 impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
@@ -714,6 +765,8 @@ impl IntoFilterExpr<DocumentLiteral> for GraphqlDocumentLiteral {
             Self::EmailAttachmentParticipant(value) => {
                 DocumentLiteral::EmailAttachmentParticipant(value.into_ast()?)
             }
+            Self::CrmAssociated(record) => DocumentLiteral::CrmAssociated(record.into_ast()?),
+            Self::NameContains(name) => DocumentLiteral::NameContains(name),
         };
         Ok(Expr::val(literal))
     }
@@ -1158,6 +1211,82 @@ enum GraphqlAgentSessionLiteral {
     /// The owner principal option — a user (`macro|<email>`), a bot
     /// (`bot|<uuid>`), or a team (a bare hyphenated uuid).
     Owner(String),
+    /// Who started the session. Narrows the sessions a query asks for; it
+    /// does not opt the query in.
+    Source(GraphqlAgentSessionSource),
+    /// Whether the session is listed. Narrows the sessions a query asks for;
+    /// it does not opt the query in.
+    Visibility(GraphqlAgentSessionVisibility),
+}
+
+/// Who started an agent session: filter input, and the field Soup returns.
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum GraphqlAgentSessionSource {
+    /// A person, directly or through something they did.
+    User,
+    /// Another agent, which dispatched the session on its owner's behalf.
+    Agent,
+    /// A routine's unattended run.
+    Routine,
+}
+
+impl GraphqlAgentSessionSource {
+    /// Convert this GraphQL source into the filter model.
+    fn into_model(self) -> AgentSessionSource {
+        match self {
+            Self::User => AgentSessionSource::User,
+            Self::Agent => AgentSessionSource::Agent,
+            Self::Routine => AgentSessionSource::Routine,
+        }
+    }
+}
+
+impl From<AgentSessionSource> for GraphqlAgentSessionSource {
+    fn from(source: AgentSessionSource) -> Self {
+        match source {
+            AgentSessionSource::User => Self::User,
+            AgentSessionSource::Agent => Self::Agent,
+            AgentSessionSource::Routine => Self::Routine,
+        }
+    }
+}
+
+/// Where an agent session is shown: filter input, and the field Soup returns.
+#[cfg_attr(feature = "server", derive(async_graphql::Enum))]
+#[derive(Copy, Clone, Eq, PartialEq, Serialize, Deserialize)]
+#[serde(rename_all = "SCREAMING_SNAKE_CASE")]
+pub enum GraphqlAgentSessionVisibility {
+    /// Shown wherever the owner's sessions are.
+    Listed,
+    /// Left out of Home and the default Agents list, but a filter can still
+    /// ask for it; a routine's setting decides it for each of its runs.
+    Unlisted,
+    /// Out of every list and search; only a query naming the session's id
+    /// returns it.
+    Hidden,
+}
+
+impl GraphqlAgentSessionVisibility {
+    /// Convert this GraphQL visibility into the filter model.
+    fn into_model(self) -> AgentSessionVisibility {
+        match self {
+            Self::Listed => AgentSessionVisibility::Listed,
+            Self::Unlisted => AgentSessionVisibility::Unlisted,
+            Self::Hidden => AgentSessionVisibility::Hidden,
+        }
+    }
+}
+
+impl From<AgentSessionVisibility> for GraphqlAgentSessionVisibility {
+    fn from(visibility: AgentSessionVisibility) -> Self {
+        match visibility {
+            AgentSessionVisibility::Listed => Self::Listed,
+            AgentSessionVisibility::Unlisted => Self::Unlisted,
+            AgentSessionVisibility::Hidden => Self::Hidden,
+        }
+    }
 }
 
 impl IntoFilterExpr<AgentSessionLiteral> for GraphqlAgentSessionLiteral {
@@ -1174,6 +1303,10 @@ impl IntoFilterExpr<AgentSessionLiteral> for GraphqlAgentSessionLiteral {
             Self::Include(true) => AgentSessionLiteral::Include,
             Self::Id(id) => AgentSessionLiteral::Id(parse_id(id, "id")?),
             Self::Owner(owner) => AgentSessionLiteral::Owner(parse_owner(owner, "owner")?),
+            Self::Source(source) => AgentSessionLiteral::Source(source.into_model()),
+            Self::Visibility(visibility) => {
+                AgentSessionLiteral::Visibility(visibility.into_model())
+            }
         };
         Ok(Expr::val(literal))
     }
@@ -1316,6 +1449,8 @@ enum GraphqlInitiativeLiteral {
     DueBefore(String),
     /// Match projects due after this RFC 3339 timestamp.
     DueAfter(String),
+    /// Exact notification state for the requester; also opts in.
+    NotificationState(GraphqlNotificationState),
 }
 
 impl IntoFilterExpr<InitiativeLiteral> for GraphqlInitiativeLiteral {
@@ -1332,6 +1467,7 @@ impl IntoFilterExpr<InitiativeLiteral> for GraphqlInitiativeLiteral {
             Self::NameContains(name) => InitiativeLiteral::NameContains(name),
             Self::DueBefore(date) => InitiativeLiteral::DueBefore(GraphqlDateLiteral::parse(date)?),
             Self::DueAfter(date) => InitiativeLiteral::DueAfter(GraphqlDateLiteral::parse(date)?),
+            Self::NotificationState(state) => InitiativeLiteral::NotificationState(state.into()),
         };
         Ok(Expr::val(literal))
     }
@@ -1350,6 +1486,8 @@ filter_expr_input!(
 #[derive(Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 enum GraphqlDatabaseRowLiteral {
+    /// Include accessible rows of every table; must be true.
+    Include(bool),
     /// Match the rows of a table.
     TableId(ID),
     /// Match one row.
@@ -1359,6 +1497,12 @@ enum GraphqlDatabaseRowLiteral {
 impl IntoFilterExpr<DatabaseRowLiteral> for GraphqlDatabaseRowLiteral {
     fn into_expr(self) -> InputResult<Expr<DatabaseRowLiteral>> {
         Ok(Expr::val(match self {
+            Self::Include(false) => {
+                return Err(InputError::new(
+                    "database row `include` must be true; omit the filter to exclude rows",
+                ));
+            }
+            Self::Include(true) => DatabaseRowLiteral::Include,
             Self::TableId(id) => DatabaseRowLiteral::TableId(parse_id(id, "tableId")?),
             Self::Id(id) => DatabaseRowLiteral::Id(parse_id(id, "id")?),
         }))

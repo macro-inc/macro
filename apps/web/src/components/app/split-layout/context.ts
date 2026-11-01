@@ -6,6 +6,7 @@ import {
   createContext,
   type JSX,
   type Setter,
+  type Signal,
 } from 'solid-js';
 import type { SplitHandle, SplitManager } from './layoutManager';
 import type { ReplaceOwnedSlot } from './utils/createOwnedSlots';
@@ -89,8 +90,25 @@ export type SplitPanelContextType = {
   panelSize: NullableSize;
   contentOffsetTop: Accessor<number>;
   setContentOffsetTop: Setter<number>;
+  /**
+   * Whether workspace navigation is hidden in a split other than the first.
+   * Owned by the split, so it carries across the views the split shows.
+   */
+  navigationCollapsed?: Signal<boolean>;
   bottomPanel: Accessor<SplitBottomPanelRegistration | undefined>;
   registerBottomPanel: (panel: SplitBottomPanelRegistration) => () => void;
+  /**
+   * The touch sheet's pinned chrome between its handle and scrolling content,
+   * for actions that stay in reach; absent outside a touch popover.
+   */
+  drawerHeader?: Accessor<HTMLElement | undefined>;
+  /**
+   * Opens the touch sheet at a fixed 70% height while the calling owner
+   * lives, for content that grows to fill it (a composer's body); other
+   * content keeps the sheet at its natural height. Absent outside a touch
+   * popover.
+   */
+  fillDrawer?: () => void;
   layoutRefs: {
     headerLeft?: HTMLDivElement;
     headerRight?: HTMLDivElement;

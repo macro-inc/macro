@@ -7,13 +7,17 @@ const webDirectory = fileURLToPath(new URL('../../../../../', import.meta.url));
 export default defineConfig({
   testDir: directory,
   testMatch: [
+    'independent-send-recovery.browser.e2e.ts',
     'calendar-points.browser.e2e.ts',
     'coordinator.browser.e2e.ts',
+    'parking.browser.e2e.ts',
     'cache-wasm-packaging.browser.e2e.ts',
     'notification-projection.browser.e2e.ts',
     'mail-projection.browser.e2e.ts',
+    'mail-reconciliation.browser.e2e.ts',
     'mail-tabs.browser.e2e.ts',
     'query-write-scope.browser.e2e.ts',
+    'email-participants.browser.e2e.ts',
     'search-buckets.browser.e2e.ts',
   ],
   timeout: 90_000,

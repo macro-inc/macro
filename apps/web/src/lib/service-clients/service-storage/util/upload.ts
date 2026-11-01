@@ -14,6 +14,7 @@ import {
   type UploadSource,
   uploadNativeStagedFileToPresignedUrl,
 } from '@core/mobile/nativeStagedUpload';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ResultError } from '@core/util/result';
 import { waitForDocumentContentReady } from '@queries/storage/document-location';
 import { waitBulkUploadStatus } from '@service-connection/bulkUpload';
@@ -94,7 +95,10 @@ export async function upload(
     const result = await uploadWithProgress(file, name, options, progress);
     if (result.type === 'folder') {
       // The server keeps unpacking the folder after the zip is sent.
-      void result.projectId.finally(() => progress?.done());
+      fireAndForget(
+        result.projectId.finally(() => progress?.done()),
+        'file-upload'
+      );
     } else {
       progress?.done();
     }
@@ -223,13 +227,16 @@ async function uploadWithProgress(
 
     const projectIdPromise = waitBulkUploadStatus(requestId);
 
-    projectIdPromise.then((projectId) => {
-      if (projectId) {
-        toast.success(`Uploaded ${name}`);
-      } else {
-        toast.failure(`Failed to upload ${name}`);
-      }
-    });
+    fireAndForget(
+      projectIdPromise.then((projectId) => {
+        if (projectId) {
+          toast.success(`Uploaded ${name}`);
+        } else {
+          toast.failure(`Failed to upload ${name}`);
+        }
+      }),
+      'file-upload'
+    );
 
     return {
       type: 'folder',

@@ -130,10 +130,11 @@ impl ActivitySource for CallTopicEvent {
             CallTopicEvent::RecordDeleted(m) => {
                 Ingest::Purge(vec![(EntityType::Call, m.call_id.to_string())])
             }
-            // Archival/processing pipeline, not user activity.
+            // Archival/processing pipeline and integration sync, not user activity.
             CallTopicEvent::RecordUpdated(_)
             | CallTopicEvent::RecordSummarized(_)
-            | CallTopicEvent::RecordingReady(_) => Ingest::Ignore,
+            | CallTopicEvent::RecordingReady(_)
+            | CallTopicEvent::RecordImported(_) => Ingest::Ignore,
         }
     }
 }

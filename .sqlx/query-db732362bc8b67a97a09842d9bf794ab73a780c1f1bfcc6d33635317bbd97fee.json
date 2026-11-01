@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.id FROM external_chat_message m\n                JOIN whatsapp_identity_alias a ON a.chat_id = m.chat_id AND a.person_id = m.person_id\n                WHERE m.chat_id = $1 AND m.source_id = $2 AND a.jid = $3 AND m.message_id IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "db732362bc8b67a97a09842d9bf794ab73a780c1f1bfcc6d33635317bbd97fee"
+}

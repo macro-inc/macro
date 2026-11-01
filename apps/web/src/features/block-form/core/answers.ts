@@ -54,11 +54,12 @@ export function answerProblem(
       { type: 'number' },
       { type: 'boolean' },
       { type: 'date' },
+      { type: 'date_range' },
       { type: 'tag' },
       { type: 'relation' },
       () => false
     )
-    .exhaustive();
+    .exhaustive(() => false);
   return match(value)
     .with({ type: 'number' }, ({ value: number }) =>
       Number.isFinite(number) ? undefined : 'Enter a number.'
@@ -66,6 +67,15 @@ export function answerProblem(
     .with({ type: 'date' }, ({ value: date }) =>
       Number.isNaN(Date.parse(date)) ? 'Enter a valid date.' : undefined
     )
+    .with({ type: 'date_range' }, ({ value: { start, end } }) => {
+      const startTime = Date.parse(start);
+      const endTime = Date.parse(end);
+      if (Number.isNaN(startTime) || Number.isNaN(endTime))
+        return 'Enter a valid start and end date.';
+      return endTime < startTime
+        ? 'The end date can’t be before the start date.'
+        : undefined;
+    })
     .with({ type: 'link' }, ({ value: links }) => {
       if (single && links.length > 1) return 'Give one link.';
       return links.every(
@@ -97,7 +107,7 @@ export function answerProblem(
       { type: 'clear' },
       () => undefined
     )
-    .exhaustive();
+    .exhaustive(() => 'Update Macro to answer this question.');
 }
 
 /** Every problem with a section's answers, in question order. */

@@ -1,18 +1,19 @@
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { FileSidePanelSections, SidePanel } from '@components/app/side-panel';
 import {
+  blockDataSignalAs,
   useBlockId,
   useBlockNestedContext,
   useIsNestedBlock,
 } from '@core/block';
 import { DocumentBlockContainer } from '@core/component/DocumentBlockContainer';
 import { createMethodRegistration } from '@core/orchestrator';
-import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockFileSignal, blockHandleSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
 import { useSearchParams } from '@solidjs/router';
 import { Show } from 'solid-js';
-import type { CanvasView } from '../context/canvas-document-context';
+import type { CanvasView } from '../core/view';
+import type { CanvasData } from '../definition';
 import { CanvasDocument, type CanvasDocumentMethods } from './CanvasDocument';
 import { TopBar } from './TopBar';
 
@@ -23,10 +24,10 @@ export type BlockCanvasProps = {
 export default function BlockCanvas(props: BlockCanvasProps) {
   useBlockEntityCommands();
   const documentId = useBlockId();
+  const data = blockDataSignalAs<CanvasData>('canvas');
   const isNested = useIsNestedBlock();
   const nestedContext = useBlockNestedContext<'canvas'>();
   const canEdit = useCanEdit();
-  const hotkeyScope = blockHotkeyScopeSignal.get;
   const file = blockFileSignal.get;
   const blockHandle = blockHandleSignal.get;
   const [locationParams] = useSearchParams();
@@ -41,10 +42,9 @@ export default function BlockCanvas(props: BlockCanvasProps) {
         <CanvasDocument
           documentId={documentId}
           file={file()}
+          shared={data()?.shared}
           canEdit={canEdit()}
-          hotkeyScope={hotkeyScope()}
           isNested={isNested}
-          portalScope="block"
           view={props.view}
           locationParams={locationParams}
           onLocationChange={
@@ -64,9 +64,7 @@ export default function BlockCanvas(props: BlockCanvasProps) {
                   <SidePanel.Layout floating>
                     <FileSidePanelSections />
                     <div class="flex size-full min-w-0 flex-col overflow-hidden">
-                      <TopBar
-                        next={state.mode === 'next' ? state : undefined}
-                      />
+                      <TopBar state={state} />
                       {content}
                     </div>
                   </SidePanel.Layout>

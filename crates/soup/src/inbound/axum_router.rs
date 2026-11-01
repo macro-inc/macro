@@ -45,6 +45,7 @@ use item_filters::{
         email::EmailLiteral,
         foreign_entity::ForeignEntityLiteral,
         github_pull_request::GithubPullRequestLiteral,
+        initiative::InitiativeLiteral,
         project::ProjectLiteral,
         properties::{PropertiesLiteral, PropertyEntityType},
     },
@@ -660,7 +661,18 @@ where
             grouping,
         };
 
-        let items = self.service.get_user_soup_grouped(req).await?;
+        let items: Vec<_> = self.service.get_user_soup_grouped(req).await?.collect();
+        let mut keys: Vec<String> = items
+            .iter()
+            .map(|item| item.key.clone())
+            .filter(|key| !key.is_empty())
+            .collect();
+        keys.sort_unstable();
+        keys.dedup();
+        let labels = self
+            .service
+            .group_labels(user_for_favorites.copied(), &group_by_field, &keys)
+            .await?;
 
         let response = build_grouped_response(
             items,
@@ -668,6 +680,7 @@ where
             sort_method,
             params.group_key,
             filters,
+            &labels,
         );
 
         let mut items: HashMap<Uuid, SoupApiItem> = response
@@ -798,6 +811,9 @@ pub enum SoupHandlerErr {
     /// Hidden CRM company query was requested without admin privileges.
     #[error("Querying hidden CRM companies requires admin/owner team role")]
     CrmAdminRequired,
+    /// The filter is restricted to a CRM record the caller cannot see.
+    #[error("CRM record not found")]
+    CrmRecordNotFound,
     /// Ascending order was requested for a frecency-sorted query.
     #[error("sort_direction=asc is not supported with sort_method=frecency")]
     AscendingFrecencyUnsupported,
@@ -821,6 +837,7 @@ impl From<SoupErr> for SoupHandlerErr {
             SoupErr::AstErr(expand_err) => SoupHandlerErr::ExpandErr(expand_err),
             SoupErr::CrmTeamRequired => SoupHandlerErr::CrmScopeForbidden,
             SoupErr::CrmAdminRequired => SoupHandlerErr::CrmAdminRequired,
+            SoupErr::CrmRecordNotFound => SoupHandlerErr::CrmRecordNotFound,
             SoupErr::TouchedUnsupportedFilter(kind) => {
                 SoupHandlerErr::TouchedUnsupportedFilter(kind)
             }
@@ -845,6 +862,7 @@ impl IntoResponse for SoupHandlerErr {
             SoupHandlerErr::CrmScopeForbidden | SoupHandlerErr::CrmAdminRequired => {
                 StatusCode::FORBIDDEN
             }
+            SoupHandlerErr::CrmRecordNotFound => StatusCode::NOT_FOUND,
             _ => StatusCode::INTERNAL_SERVER_ERROR,
         };
         (
@@ -1037,6 +1055,7 @@ pub struct PostSoupAstRequest {
     responses(
         (status = 200, body=SoupPage),
         (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
+        (status = 404, description = "The CRM record named by `crma` or a document `crm` literal is not visible to the caller", body=ErrorResponse),
         (status = 500, body=ErrorResponse),
     )
 )]
@@ -1129,6 +1148,7 @@ enum GroupedSoupRequestMode {
     responses(
         (status = 200, body=GroupedSoupPage),
         (status = 403, description = "CRM-scoped queries require team membership, or requesting hidden CRM companies requires admin/owner team role", body=ErrorResponse),
+        (status = 404, description = "The CRM record named by `crma` or a document `crm` literal is not visible to the caller", body=ErrorResponse),
         (status = 500, body=ErrorResponse),
     )
 )]
@@ -1190,6 +1210,13 @@ pub struct ApiEntityFilterAst {
     /// Restrict to the authenticated viewer's favorites before pagination when true.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub favorites_only: Option<bool>,
+    /// Restrict every entity type to items associated with this CRM record
+    /// (wire key `crma`): its Companies or Contacts property names the
+    /// record, or it references the record. A company also matches through
+    /// its contacts. Unknown or inaccessible records answer 404; requests
+    /// that are not expanded or not timestamp-sorted answer 400.
+    #[serde(default, rename = "crma", skip_serializing_if = "Option::is_none")]
+    pub crm_association: Option<item_filters::ast::crm_association::CrmAssociation>,
     /// filters applied to canonical calendar events
     #[serde(default, rename = "calf")]
     #[schema(value_type = serde_json::Value)]
@@ -1248,6 +1275,12 @@ pub struct ApiEntityFilterAst {
     #[serde(default, rename = "asf")]
     #[schema(value_type = serde_json::Value)]
     pub agent_session_filter: LiteralTree<AgentSessionLiteral>,
+    /// Filters applied to initiatives (wire key `if`). Opt-in like agent
+    /// sessions: an omitted filter returns no initiatives, and any literal,
+    /// a notification state included, opts them in.
+    #[serde(default, rename = "if")]
+    #[schema(value_type = serde_json::Value)]
+    pub initiative_filter: LiteralTree<InitiativeLiteral>,
     /// the filters that should be applied based on entity properties
     #[serde(default, rename = "propf")]
     #[schema(value_type = serde_json::Value)]
@@ -1339,6 +1372,7 @@ impl ApiEntityFilterAst {
     fn into_entity_ast(self) -> Result<EntityFilterAst, Report> {
         let ApiEntityFilterAst {
             favorites_only,
+            crm_association,
             calendar_event_filter,
             document_filter,
             project_filter,
@@ -1352,6 +1386,7 @@ impl ApiEntityFilterAst {
             crm_company_filter,
             crm_contact_filter,
             agent_session_filter,
+            initiative_filter,
             properties_filter,
             email_crm_domains,
             email_crm_addresses,
@@ -1407,6 +1442,7 @@ impl ApiEntityFilterAst {
 
         Ok(EntityFilterAst {
             favorites_only,
+            crm_association,
             calendar_event_filter,
             document_filter,
             project_filter,
@@ -1424,7 +1460,7 @@ impl ApiEntityFilterAst {
             github_pull_request_filter,
             agent_session_filter,
             properties_filter,
-            initiative_filter: None,
+            initiative_filter,
             database_row_filter: None,
         })
     }

@@ -19,6 +19,6 @@ export interface TeamOutOfOfficeItem {
   ownerId: string;
   /** Occurrence time span. */
   time: EventTime;
-  /** Event title, absent when the event's visibility withholds details. */
+  /** Event title, absent unless the teammate shares event details. */
   title?: TeamOutOfOfficeItemTitle;
 }

@@ -248,10 +248,11 @@ describe('option picker', () => {
     expect(onCreate).not.toHaveBeenCalled();
   });
 
-  it('offers Clear value only while something is selected and nothing is typed', async () => {
+  it('clears the selected value from a keyboard-accessible footer outside the option list', async () => {
     const onClear = vi.fn();
     render(() => {
       const [search, setSearch] = createSignal('');
+      const [selected, setSelected] = createSignal(['Done']);
       return (
         <OptionPicker
           column={{
@@ -265,17 +266,20 @@ describe('option picker', () => {
             ],
             writable: true,
           }}
-          selected={['Done']}
+          selected={selected()}
           search={search()}
           onSearch={setSearch}
           onPick={vi.fn()}
-          onClear={onClear}
+          onClear={() => {
+            onClear();
+            setSelected([]);
+          }}
           onCreate={vi.fn()}
         />
       );
     });
     expect(screen.getAllByRole('option').map((row) => row.textContent)).toEqual(
-      ['Clear value', 'To do', 'Done']
+      ['To do', 'Done']
     );
     expect(
       screen.getByRole('option', { name: 'Done' }).getAttribute('aria-selected')
@@ -284,10 +288,21 @@ describe('option picker', () => {
       name: 'Search Status options',
     });
     await userEvent.type(search, 'd');
-    expect(screen.queryByRole('option', { name: 'Clear value' })).toBeNull();
+    const clear = screen.getByRole('button', { name: 'Clear value' });
+    expect(clear.closest('[role="listbox"]')).toBeNull();
     await userEvent.clear(search);
-    await userEvent.click(screen.getByRole('option', { name: 'Clear value' }));
+    await userEvent.tab();
+    expect(document.activeElement).toBe(clear);
+    await userEvent.keyboard('{ArrowUp}');
+    expect(document.activeElement).toBe(search);
+    expect(search.getAttribute('aria-activedescendant')).toBe(
+      screen.getByRole('option', { name: 'Done' }).id
+    );
+    await userEvent.keyboard('{ArrowDown}');
+    expect(document.activeElement).toBe(clear);
+    await userEvent.keyboard('{Enter}');
     expect(onClear).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('button', { name: 'Clear value' })).toBeNull();
   });
 
   it('hands Tab to its owner with the option it would choose', async () => {

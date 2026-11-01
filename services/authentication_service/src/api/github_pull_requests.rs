@@ -11,11 +11,13 @@ use github::domain::{
         GithubPullRequestMergeabilityRequest, GithubPullRequestMergeabilityResponse,
         MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
         SetGithubPullRequestDraftRequest, SetGithubPullRequestDraftResponse,
+        SetGithubPullRequestStateRequest, SetGithubPullRequestStateResponse,
     },
     ports::GithubLinkService,
 };
 use macro_authorization::{MacroAuthorizationExtractor, UserOrInternal};
 use model::response::ErrorResponse;
+use upstream_error::UpstreamErrorResponse;
 
 use crate::api::context::{ApiContext, AuthorizationService};
 
@@ -35,6 +37,7 @@ impl IntoResponse for EnrichGithubPullRequestsProxyError {
                 StatusCode::PRECONDITION_REQUIRED,
                 "reauthentication required",
             ),
+            Self::Github(GithubError::Upstream(error)) => return error.into_response(),
             Self::Github(error) => {
                 tracing::error!(error=?error, "failed to enrich GitHub pull requests");
                 (StatusCode::INTERNAL_SERVER_ERROR, "internal error")
@@ -72,6 +75,7 @@ impl IntoResponse for MergeGithubPullRequestError {
             Self::Github(GithubError::PullRequestMergeRejected { rejection, message }) => {
                 (github::inbound::merge_rejection_status(rejection), message)
             }
+            Self::Github(GithubError::Upstream(error)) => return error.into_response(),
             Self::Github(error) => {
                 tracing::error!(error=?error, "failed to merge GitHub pull request");
                 (
@@ -115,6 +119,7 @@ impl IntoResponse for UpdateGithubPullRequestError {
                 StatusCode::UNPROCESSABLE_ENTITY,
                 "too many pull requests requested".to_string(),
             ),
+            Self::Github(GithubError::Upstream(error)) => return error.into_response(),
             Self::Github(error) => {
                 tracing::error!(error=?error, "failed to update GitHub pull request");
                 (
@@ -139,6 +144,7 @@ pub fn router() -> Router<ApiContext> {
         .route("/enrich", post(handler))
         .route("/merge", post(merge_handler))
         .route("/draft", post(draft_handler))
+        .route("/state", post(state_handler))
         .route("/mergeability", post(mergeability_handler))
 }
 
@@ -154,6 +160,8 @@ pub fn router() -> Router<ApiContext> {
         (status = 404, body = ErrorResponse),
         (status = 428, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
+        (status = 502, body = UpstreamErrorResponse),
+        (status = 503, body = UpstreamErrorResponse),
     )
 )]
 #[tracing::instrument(skip(ctx, authorization, request), fields(user_id = %authorization.authorization.user.macro_user_id), err)]
@@ -192,6 +200,8 @@ pub async fn handler(
         (status = 422, body = ErrorResponse),
         (status = 428, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
+        (status = 502, body = UpstreamErrorResponse),
+        (status = 503, body = UpstreamErrorResponse),
     )
 )]
 #[tracing::instrument(skip(ctx, authorization, request), fields(user_id = %authorization.authorization.user.macro_user_id), err)]
@@ -225,6 +235,8 @@ pub async fn merge_handler(
         (status = 422, description = "GitHub declined the change", body = ErrorResponse),
         (status = 428, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
+        (status = 502, body = UpstreamErrorResponse),
+        (status = 503, body = UpstreamErrorResponse),
     )
 )]
 #[tracing::instrument(skip(ctx, authorization, request), fields(user_id = %authorization.authorization.user.macro_user_id), err)]
@@ -238,6 +250,41 @@ pub async fn draft_handler(
     let response = ctx
         .github_link_service
         .set_pull_request_draft(&authorization.authorization.user.macro_user_id, request)
+        .await?;
+
+    Ok(Json(response))
+}
+
+/// Closes a GitHub pull request, or reopens it, as the authenticated user
+/// with their own GitHub grant.
+#[utoipa::path(
+    post,
+    path = "/github_pull_requests/state",
+    operation_id = "set_github_pull_request_state",
+    request_body = SetGithubPullRequestStateRequest,
+    responses(
+        (status = 200, body = SetGithubPullRequestStateResponse),
+        (status = 401, body = ErrorResponse),
+        (status = 403, description = "The user cannot change the pull request", body = ErrorResponse),
+        (status = 404, description = "No GitHub link, or the pull request is not visible to the user", body = ErrorResponse),
+        (status = 422, description = "GitHub declined the change", body = ErrorResponse),
+        (status = 428, body = ErrorResponse),
+        (status = 500, body = ErrorResponse),
+        (status = 502, body = UpstreamErrorResponse),
+        (status = 503, body = UpstreamErrorResponse),
+    )
+)]
+#[tracing::instrument(skip(ctx, authorization, request), fields(user_id = %authorization.authorization.user.macro_user_id), err)]
+pub async fn state_handler(
+    State(ctx): State<ApiContext>,
+    authorization: MacroAuthorizationExtractor<AuthorizationService, UserOrInternal>,
+    extract::Json(request): extract::Json<SetGithubPullRequestStateRequest>,
+) -> Result<Json<SetGithubPullRequestStateResponse>, UpdateGithubPullRequestError> {
+    tracing::info!("set_github_pull_request_state");
+
+    let response = ctx
+        .github_link_service
+        .set_pull_request_state(&authorization.authorization.user.macro_user_id, request)
         .await?;
 
     Ok(Json(response))
@@ -258,6 +305,8 @@ pub async fn draft_handler(
         (status = 422, description = "Too many pull requests requested", body = ErrorResponse),
         (status = 428, body = ErrorResponse),
         (status = 500, body = ErrorResponse),
+        (status = 502, body = UpstreamErrorResponse),
+        (status = 503, body = UpstreamErrorResponse),
     )
 )]
 #[tracing::instrument(skip(ctx, authorization, request), fields(user_id = %authorization.authorization.user.macro_user_id), err)]

@@ -13,12 +13,20 @@
           ./nixos/host.nix
         ];
       };
+      databaseCollector = nixpkgs.lib.nixosSystem {
+        inherit system;
+        modules = [
+          "${nixpkgs}/nixos/maintainers/scripts/ec2/amazon-image.nix"
+          ./nixos/database-collector/host.nix
+        ];
+      };
     in
     {
       nixosConfigurations.observability = host;
+      nixosConfigurations.database-collector = databaseCollector;
       packages.${system} = {
         default = host.config.system.build.amazonImage;
-
+        database-collector = databaseCollector.config.system.build.amazonImage;
       };
       formatter.${system} = nixpkgs.legacyPackages.${system}.nixfmt;
     };

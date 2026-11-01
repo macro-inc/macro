@@ -40,7 +40,7 @@ Rust type names stay singular.
 The Macro database app, CRM pipelines, and other consumers are hosts of the same
 editor. A host supplies an authorized API and its capabilities; it should not
 reimplement database editing, pagination, option creation, or refresh behavior.
-Follow the [frontend architecture](../../../docs/FRONTEND_FEATURE_ARCHITECTURE.md).
+Follow the [frontend architecture](../../../docs/architecture/frontend-features.md).
 
 ### Target ownership
 
@@ -125,5 +125,5 @@ wire host discovery/read/write tools explicitly without bypassing its permission
 
 Read the [storage boundary](../../../crates/databases/README.md#storage-and-app-entities)
 and [domain ports](../../../crates/databases/src/domain/ports.rs) before wiring a
-consumer. Follow the [database guide](../../../docs/DATABASE_DEVELOPMENT.md) for
+consumer. Follow the [database guide](../../../docs/development/database.md) for
 schema and migration work.

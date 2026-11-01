@@ -27,7 +27,7 @@ pub use rate_limit::{RateLimitConfig, RateLimitExceeded, RateLimitKey, RateLimit
 pub use recipient::{ExclusionReason, FilteredRecipient, RecipientExclusion};
 pub use request::{NotificationResult, SendNotificationRequest, SendNotificationRequestBuilder};
 use serde::{Deserialize, Serialize, de::DeserializeOwned};
-use std::{borrow::Cow, sync::Arc};
+use std::{borrow::Cow, collections::HashSet, sync::Arc};
 use uuid::Uuid;
 
 /// Notification ID paired with its APNS collapse key, for push clearing.
@@ -44,8 +44,26 @@ pub struct NotificationIdAndCollapseKey {
 pub struct VoipPushTarget {
     /// Recipient whose VoIP-capable endpoints were resolved.
     pub recipient_id: MacroUserIdStr<'static>,
-    /// SNS endpoints registered for APNS_VOIP delivery.
-    pub endpoint_arns: Vec<String>,
+    /// Registered mobile endpoints, retaining ordinary devices for fallback decisions.
+    pub endpoints: Vec<DeviceEndpoint>,
+}
+
+/// Recipients grouped by mobile platform for delivery or exclusion.
+#[derive(Debug, Clone, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub struct MobilePushRecipients {
+    /// Users whose iOS devices are included.
+    pub ios: HashSet<MacroUserIdStr<'static>>,
+    /// Users whose Android devices are included.
+    pub android: HashSet<MacroUserIdStr<'static>>,
+}
+
+/// Native call delivery results used to select ordinary mobile fallbacks.
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct NativeCallPushResult {
+    /// Users with a successful native delivery on each platform.
+    pub delivered: MobilePushRecipients,
+    /// Users whose registered mobile platforms were all handled natively.
+    pub fully_delivered: HashSet<MacroUserIdStr<'static>>,
 }
 
 /// A compact patch describing user notification status fields that changed.

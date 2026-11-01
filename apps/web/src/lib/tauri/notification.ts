@@ -9,12 +9,18 @@ import {
   sendNotification,
 } from '@tauri-apps/plugin-notification';
 import { type as osType } from '@tauri-apps/plugin-os';
+import { showLinuxNotification } from './linux-notification';
+import { MacOSNotificationUpdateRequiredError } from './notification-errors';
+
+export { MacOSNotificationUpdateRequiredError } from './notification-errors';
 
 export function createTauriNotificationInterface(
   setDisabled: () => Promise<void>,
   shouldSend: () => boolean = () => true
 ): PlatformNotificationInterface {
-  let hasMacOSPermissionCommands = osType() === 'macos';
+  const platform = osType();
+  const isMacOS = platform === 'macos';
+  let hasMacOSPermissionCommands = isMacOS;
 
   async function getCur(): Promise<NotificationPermission> {
     // The notification plugin always reports permission as granted on desktop.
@@ -45,9 +51,17 @@ export function createTauriNotificationInterface(
         // macOS will not prompt again after denial; permission must be changed
         // in System Settings.
         if (cur === 'denied') return 'denied';
-        return await invoke<NotificationPermission>(
-          'request_macos_notification_permission'
-        );
+        try {
+          return await invoke<NotificationPermission>(
+            'request_macos_notification_permission'
+          );
+        } catch (error) {
+          // UNErrorCodeNotificationsNotAllowed: only System Settings can
+          // allow this app again, for example after it was re-signed.
+          if (typeof error === 'string' && error.includes('(UNErrorDomain 1)'))
+            return 'denied';
+          throw error;
+        }
       }
       return await requestPermission();
     },
@@ -59,6 +73,42 @@ export function createTauriNotificationInterface(
       // is in flight. Check the current preference just before dispatching.
       if (granted !== 'granted' || !shouldSend()) {
         return 'not-granted';
+      }
+
+      if (isMacOS) {
+        const { sender, conversation } = data;
+        try {
+          // macOS shows the sender as the title and the conversation beneath
+          // it; without a sender the title already names both.
+          await invoke<void>('send_macos_notification', {
+            title: sender?.name ?? data.title,
+            body: data.options?.body,
+            notificationId: data.notificationId,
+            subtitle: sender ? conversation?.name : undefined,
+            threadId: conversation?.id,
+            sender,
+            // Older native builds ignore this and keep the system sound.
+            silent: data.options?.silent,
+          });
+        } catch (error) {
+          // OTA frontend updates can reach an older native app. Its legacy
+          // sender silently drops notifications, so require a native update.
+          if (error === 'Command send_macos_notification not found') {
+            throw new MacOSNotificationUpdateRequiredError(error);
+          }
+          throw error;
+        }
+        // Native activation carries the ID through the startup-safe navigation
+        // bridge. It also works after this webview (and its callbacks) is gone.
+        return {
+          onClick: () => {},
+          onDismiss: () => {},
+          close: () => {},
+        };
+      }
+
+      if (platform === 'linux') {
+        return await showLinuxNotification(data.title, data.options);
       }
 
       if (!data.options) {

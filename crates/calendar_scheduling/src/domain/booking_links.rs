@@ -87,7 +87,6 @@ impl<Store: Repository, Calendar: Send + Sync + 'static, Members: Directory> Boo
         draft: BookingLinkDraft,
     ) -> Result<BookingLink, Error> {
         let mut profile = self.settings(user, team).await?;
-        self.authorize_link_write(user, team, &profile).await?;
         if let Some(event) = profile
             .event_types
             .iter()
@@ -127,7 +126,6 @@ impl<Store: Repository, Calendar: Send + Sync + 'static, Members: Directory> Boo
         draft: BookingLinkDraft,
     ) -> Result<BookingLink, Error> {
         let mut profile = self.settings(user, team).await?;
-        self.authorize_link_write(user, team, &profile).await?;
         let index = profile
             .event_types
             .iter()
@@ -167,25 +165,5 @@ impl<Store: Repository, Calendar: Send + Sync + 'static, Members: Directory> Boo
         }
         let profile = self.save(user, team, profile).await?;
         saved_link(&profile, &event)
-    }
-}
-
-impl<Store: Repository, Calendar, Members: Directory> Service<Store, Calendar, Members> {
-    async fn authorize_link_write(
-        &self,
-        user: &str,
-        team: Option<Uuid>,
-        profile: &Profile,
-    ) -> Result<(), Error> {
-        self.authorize(
-            user,
-            &OwnedProfile {
-                user_id: team.is_none().then(|| user.into()),
-                team_id: team,
-                profile: profile.clone(),
-            },
-            true,
-        )
-        .await
     }
 }

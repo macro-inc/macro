@@ -79,8 +79,11 @@ import {
   enableGitBlame,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { useIsAuthenticated } from '@core/context/user';
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { onElementConnect } from '@core/util/onElementConnect';
 import { bufToString } from '@core/util/string';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import {
@@ -88,9 +91,9 @@ import {
   createPeerIdValidator,
   type PeerIdValidator,
 } from '@macro-inc/lexical-core';
+import { Telemetry } from '@macro-inc/observability';
 import { useDocTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
-import { onElementConnect } from '@solid-primitives/lifecycle';
 import { isIOS } from '@solid-primitives/platform';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
@@ -146,6 +149,7 @@ export function MarkdownEditor(props: {
     permissions,
     state: documentState,
   } = useMarkdownDocument();
+  const authenticated = useIsAuthenticated();
   const { canEdit } = permissions;
   const blockId = documentId();
   const documentKind = kind();
@@ -553,11 +557,16 @@ export function MarkdownEditor(props: {
   );
 
   const [fileArrayBuffer, setFileArrayBuffer] = createSignal<ArrayBuffer>();
+  const readFileArrayBuffer = async (file: Blob) => {
+    setFileArrayBuffer(await file.arrayBuffer());
+  };
   createEffect(() => {
     const source = documentSource();
     if (source.type !== 'dss') return;
 
-    source.file.arrayBuffer().then(setFileArrayBuffer);
+    readFileArrayBuffer(source.file).catch((error) =>
+      Telemetry.error(error, { surface: 'markdown-editor' })
+    );
   });
 
   createEffect(() => {
@@ -772,7 +781,10 @@ export function MarkdownEditor(props: {
           isApplied={(tag) => documentTags.isApplied(tag.optionId)}
           onApplyTag={(tag) => {
             if (!canEdit()) return;
-            void documentTags.applyTag(tag.scope, tag.optionId);
+            fireAndForget(
+              documentTags.applyTag(tag.scope, tag.optionId),
+              'markdown-editor'
+            );
           }}
         />
 
@@ -794,7 +806,7 @@ export function MarkdownEditor(props: {
           />
         </Show>
 
-        <Show when={ENABLE_MARKDOWN_COMMENTS}>
+        <Show when={ENABLE_MARKDOWN_COMMENTS && authenticated() === true}>
           <Suspense>
             <MessageCommentsProvider
               activeComment={activeCommentIdParam}

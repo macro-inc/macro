@@ -2,6 +2,7 @@ import { ChatMessageMarkdown } from '@core/component/AI/component/message/ChatMe
 import { render, waitFor } from '@solidjs/testing-library';
 import { createSignal, type JSX } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
+import { replaceCitations } from '../../citationsUtils';
 import { StaticMarkdown, StaticMarkdownContext } from './StaticMarkdown';
 
 const agentPreview = vi.hoisted(() => ({
@@ -9,12 +10,35 @@ const agentPreview = vi.hoisted(() => ({
   mounted: vi.fn(),
 }));
 
+vi.mock('../../citationsUtils', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../../citationsUtils')>();
+  return { ...actual, replaceCitations: vi.fn(actual.replaceCitations) };
+});
+
 vi.mock('../decorator/AgentSessionMention', () => ({
   AgentSessionMention: () => {
     // Query setup can synchronously read its current reactive snapshot.
     agentPreview.mounted(agentPreview.label());
     return <span data-session-preview>{agentPreview.label()}</span>;
   },
+}));
+
+vi.mock('../decorator/BookingLinkMention', () => ({
+  BookingLinkMention: (props: {
+    profileId: string;
+    slug?: string;
+    url: string;
+  }) => (
+    <span data-test-booking-link={props.profileId} data-test-url={props.url}>
+      {props.slug ?? props.profileId}
+    </span>
+  ),
+}));
+
+vi.mock('../decorator/PullRequestMention', () => ({
+  PullRequestMention: (props: { id: string; url?: string; label?: string }) => (
+    <span data-pr-chip={props.id || props.url}>{props.label}</span>
+  ),
 }));
 
 vi.mock('@service-connection/websocket', () => ({
@@ -160,6 +184,107 @@ describe('static agent session previews', () => {
       preview
     );
     expect(agentPreview.mounted).toHaveBeenCalledTimes(mounts);
+    rendered.unmount();
+  });
+});
+
+describe('display-only markdown previews', () => {
+  it('keeps formatted message text and mention names outside the inert subtree', () => {
+    const [markdown, setMarkdown] = createSignal(
+      'Review **the plan** with <m-document-mention>{"documentId":"plan-1","documentName":"Launch plan","blockName":"md","blockParams":{}}</m-document-mention>'
+    );
+    const rendered = render(() => (
+      <StaticMarkdownContext>
+        <StaticMarkdown inert markdown={markdown()} singleLine />
+      </StaticMarkdownContext>
+    ));
+
+    const accessibleText = rendered.getByText(
+      'Review the plan with Launch plan'
+    );
+    expect(accessibleText.closest('[inert], [aria-hidden="true"]')).toBeNull();
+
+    setMarkdown('Updated **plan**');
+    expect(rendered.queryByText('Review the plan with Launch plan')).toBeNull();
+    expect(
+      rendered
+        .getByText('Updated plan')
+        .closest('[inert], [aria-hidden="true"]')
+    ).toBeNull();
+    rendered.unmount();
+  });
+});
+
+describe('static pull request mentions', () => {
+  it.each([
+    [
+      'a Macro id',
+      '<m-pr-mention>{"id":"foreign-1","label":"macro-inc/macro#7956"}</m-pr-mention>',
+      'foreign-1',
+    ],
+    [
+      'a GitHub URL',
+      '<m-pr-mention>{"url":"https://github.com/macro-inc/macro/pull/7956","label":""}</m-pr-mention>',
+      'https://github.com/macro-inc/macro/pull/7956',
+    ],
+  ])('renders a PR chip from %s', (_, markdown, target) => {
+    const rendered = render(() => (
+      <StaticMarkdownContext>
+        <StaticMarkdown markdown={markdown} target="internal" lazy={false} />
+      </StaticMarkdownContext>
+    ));
+    expect(
+      rendered.container
+        .querySelector('[data-pr-chip]')
+        ?.getAttribute('data-pr-chip')
+    ).toBe(target);
+    rendered.unmount();
+  });
+});
+
+describe('static markdown citations', () => {
+  it('keeps the rendered DOM for markdown without citations', async () => {
+    vi.mocked(replaceCitations).mockClear();
+    const rendered = render(() => (
+      <StaticMarkdownContext>
+        <StaticMarkdown markdown="plain **reply**" lazy={false} />
+      </StaticMarkdownContext>
+    ));
+    const paragraph = rendered.container.querySelector('p');
+    expect(paragraph?.textContent).toBe('plain reply');
+
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(rendered.container.querySelector('p')).toBe(paragraph);
+    expect(replaceCitations).not.toHaveBeenCalled();
+    rendered.unmount();
+  });
+
+  it('ignores a citation lookup that finishes after newer markdown', async () => {
+    const lookups = new Map<string, (content: string) => void>();
+    vi.mocked(replaceCitations).mockImplementation(
+      (input) =>
+        new Promise((resolve) => {
+          lookups.set(input, resolve);
+        })
+    );
+    const [markdown, setMarkdown] = createSignal('first [[old]]');
+    const rendered = render(() => (
+      <StaticMarkdownContext>
+        <StaticMarkdown markdown={markdown()} lazy={false} />
+      </StaticMarkdownContext>
+    ));
+    setMarkdown('second [[new]]');
+
+    lookups.get('second [[new]]')?.('second resolved');
+    await waitFor(() => {
+      expect(rendered.container.textContent).toBe('second resolved');
+    });
+    lookups.get('first [[old]]')?.('first resolved');
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(rendered.container.textContent).toBe('second resolved');
+    vi.mocked(replaceCitations).mockReset();
     rendered.unmount();
   });
 });

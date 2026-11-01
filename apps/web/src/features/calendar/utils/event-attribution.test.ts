@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import type { CalendarEvent } from '../types';
+import {
+  type CalendarEvent,
+  DEFAULT_GUEST_POLICY,
+  NO_VIEWER_CAPABILITIES,
+} from '../types';
 import { eventAttribution } from './event-attribution';
 
 function event(overrides: Partial<CalendarEvent>): CalendarEvent {
@@ -9,6 +13,8 @@ function event(overrides: Partial<CalendarEvent>): CalendarEvent {
     occurrenceKey: 'occurrence',
     isCancelled: false,
     isReadOnly: false,
+    guestPolicy: DEFAULT_GUEST_POLICY,
+    viewerCan: NO_VIEWER_CAPABILITIES,
     attendees: [],
     recurrenceLines: [],
     sourceCalendarIds: [],
@@ -39,7 +45,7 @@ describe('eventAttribution', () => {
       })
     );
 
-    expect(attribution.calendarName).toBe('Jackson Kustec');
+    expect(attribution.calendarName).toBe('jackson@example.com');
     expect(attribution.creator).toEqual({
       displayName: 'Teo Nys',
       email: 'teo@example.com',
@@ -56,7 +62,7 @@ describe('eventAttribution', () => {
       })
     );
 
-    expect(attribution.calendarName).toBe('Jackson Kustec');
+    expect(attribution.calendarName).toBe('jackson@example.com');
     expect(attribution.creator).toBeUndefined();
     expect(attribution.organizer).toBeUndefined();
   });

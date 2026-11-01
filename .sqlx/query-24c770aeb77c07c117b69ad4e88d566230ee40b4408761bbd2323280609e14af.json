@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT message_id, send_time, delivery_status, processing,\n               delivery_claim_id, delivery_started_at\n        FROM email_scheduled_messages\n        WHERE message_id = ANY($1) AND sent = false\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "send_time",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 2,
+        "name": "delivery_status",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "processing",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 4,
+        "name": "delivery_claim_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "delivery_started_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      false,
+      true,
+      true
+    ]
+  },
+  "hash": "24c770aeb77c07c117b69ad4e88d566230ee40b4408761bbd2323280609e14af"
+}

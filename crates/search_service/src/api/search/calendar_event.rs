@@ -1,4 +1,6 @@
 use crate::api::search::simple::SearchError;
+use calendar_events::domain::ics::content_without_macro_call;
+use calendar_events::domain::labels::{EventLabels, EventRole};
 use indexmap::IndexMap;
 use macro_db_client::calendar_event::get_events_for_search::{
     CalendarEventSearchInfo, get_calendar_events_for_search,
@@ -8,7 +10,7 @@ use models_properties::{EntityReference, EntityType};
 use models_search::calendar_event::{
     CalendarEventMetadata, CalendarEventOrganizer, CalendarEventSearchOccurrence,
     CalendarEventSearchResponseItem, CalendarEventSearchResponseItemWithMetadata,
-    CalendarEventSearchResult, CalendarEventSearchTime,
+    CalendarEventSearchResult, CalendarEventSearchRole, CalendarEventSearchTime,
 };
 use models_soup::SoupProperty;
 use sqlx::types::Uuid;
@@ -19,7 +21,7 @@ use crate::api::context::SearchHandlerState;
 
 /// Enriches calendar event search results with metadata and the instance each
 /// row points at.
-#[tracing::instrument(skip(ctx, results), err)]
+#[tracing::instrument(skip(ctx, results), fields(channel_shared_count), err)]
 pub(in crate::api::search) async fn enrich_calendar_events(
     ctx: &SearchHandlerState,
     user_id: &str,
@@ -42,6 +44,20 @@ pub(in crate::api::search) async fn enrich_calendar_events(
     let events = get_calendar_events_for_search(&ctx.db, user_id, &event_ids, chrono::Utc::now())
         .await
         .map_err(SearchError::InternalError)?;
+    tracing::Span::current().record(
+        "channel_shared_count",
+        events.values().filter(|event| !event.holds_meeting).count(),
+    );
+
+    // Labels only describe a row, so a failure leaves them out rather than
+    // failing the search.
+    let visible_ids: Vec<Uuid> = events.keys().copied().collect();
+    let labels = ctx
+        .calendar_event_labels
+        .event_labels(user_id, &visible_ids)
+        .await
+        .inspect_err(|e| tracing::error!(error=?e, "failed to label calendar event hits"))
+        .unwrap_or_default();
 
     // Fetch event properties (e.g. tags) so rows can render and re-check
     // them, mirroring the projects enrichment.
@@ -75,7 +91,12 @@ pub(in crate::api::search) async fn enrich_calendar_events(
         })
         .collect();
 
-    Ok(construct_search_result(results, events, properties_map))
+    Ok(construct_search_result(
+        results,
+        events,
+        labels,
+        properties_map,
+    ))
 }
 
 /// Read a timed or all-day span out of the four nullable columns the
@@ -129,9 +150,28 @@ fn to_organizer(info: &CalendarEventSearchInfo) -> Option<CalendarEventOrganizer
     })
 }
 
+/// The description the viewer may read. Only someone holding the meeting keeps
+/// its Macro call: the rest read a channel share, which carries no join link.
+/// The location plays no part, since search rows do not return it.
+fn to_description(info: &CalendarEventSearchInfo) -> Option<String> {
+    if info.holds_meeting {
+        return info.description.clone();
+    }
+    let (description, _) = content_without_macro_call(info.description.clone(), None);
+    description
+}
+
+fn to_role(role: EventRole) -> CalendarEventSearchRole {
+    match role {
+        EventRole::Organizer => CalendarEventSearchRole::Organizer,
+        EventRole::Guest => CalendarEventSearchRole::Guest,
+    }
+}
+
 pub fn construct_search_result(
     search_results: Vec<opensearch_client::search::model::SearchHit>,
     events: HashMap<Uuid, CalendarEventSearchInfo>,
+    mut labels: HashMap<Uuid, EventLabels>,
     mut properties_map: HashMap<String, Vec<SoupProperty>>,
 ) -> Vec<CalendarEventSearchResponseItemWithMetadata> {
     // construct entity hit map of id -> vec<hits> using IndexMap to preserve
@@ -164,6 +204,7 @@ pub fn construct_search_result(
                 info.end_date,
                 info.time_zone.clone(),
             )?;
+            let labels = labels.remove(&entity_id).unwrap_or_default();
             Some(CalendarEventSearchResponseItemWithMetadata {
                 metadata: Some(CalendarEventMetadata {
                     created_at: info.created_at,
@@ -175,7 +216,11 @@ pub fn construct_search_result(
                     conference_url: info.conference_url.clone(),
                     is_read_only: info.is_read_only,
                     organizer: to_organizer(info),
-                    description: info.description.clone(),
+                    calendar_name: labels.calendar_name,
+                    contributes_to_availability: labels.contributes_to_availability,
+                    inbox: labels.inbox,
+                    role: labels.role.map(to_role),
+                    description: to_description(info),
                 }),
                 properties: properties_map
                     .remove(&entity_id.to_string())

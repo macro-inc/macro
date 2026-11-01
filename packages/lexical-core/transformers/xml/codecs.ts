@@ -90,6 +90,7 @@ const KNOWN_TYPES: Record<KnownNode['type'], 1> = {
   'contact-mention': 1,
   'group-mention': 1,
   'pr-mention': 1,
+  'booking-link-mention': 1,
   'agent-session-mention': 1,
   'tag-mention': 1,
   'theme-mention': 1,
@@ -375,6 +376,19 @@ export function serializeNode(node: SerNode): FxpNode {
         [],
         nodeAttrs(n, {
           ...(n.id && { prId: n.id }),
+          ...(n.label && { label: n.label }),
+          ...(n.url && { url: n.url }),
+        })
+      )
+    )
+    .with({ type: 'booking-link-mention' }, (n) =>
+      el(
+        'booking-link-mention',
+        [],
+        nodeAttrs(n, {
+          profileId: n.profileId,
+          url: n.url,
+          ...(n.slug && { slug: n.slug }),
           ...(n.label && { label: n.label }),
         })
       )

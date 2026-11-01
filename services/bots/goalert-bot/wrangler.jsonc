@@ -1,0 +1,39 @@
+/**
+ * For more details on how to configure Wrangler, refer to:
+ * https://developers.cloudflare.com/workers/wrangler/configuration/
+ *
+ * Single prod deployment only — there is no dev environment.
+ *
+ * Secrets (set with `wrangler secret put <NAME>`):
+ *   BOT_TOKEN       - user-owned bot token (x-macro-bot-token)
+ *   ACTING_USER_ID  - the bot owner's user id; the bot acts as this user
+ *   WEBHOOK_SECRET  - shared secret embedded in the webhook URL path
+ *   DD_API_KEY      - optional; sent with trace exports to a Datadog intake
+ */
+{
+	"$schema": "node_modules/wrangler/config-schema.json",
+	"name": "goalert-bot",
+	"main": "src/worker.ts",
+	"compatibility_date": "2026-01-01",
+	// node:crypto for the constant-time webhook secret check, and
+	// AsyncLocalStorage for otel-cf-workers' span context.
+	"compatibility_flags": ["nodejs_compat"],
+	"observability": {
+		"enabled": true
+	},
+	"vars": {
+		// Macro Alerts.
+		"CHANNEL_ID": "019fb34d-fcfd-7548-9a0f-7084ea16416c",
+		// Tags exported spans with deployment.environment (matches DD_ENV).
+		"ENVIRONMENT": "production",
+		"OTEL_EXPORTER_OTLP_ENDPOINT": "https://macro-prox-prod.macroverse.workers.dev/i/otlp/v1/traces"
+	},
+	"kv_namespaces": [
+		{
+			// GoAlert alert id → posted message id (`alert:<AlertID>`).
+			"binding": "ALERT_MESSAGES",
+			// From `wrangler kv namespace create ALERT_MESSAGES` — see README.
+			"id": "3cfc0519b2254d6b9e64434658156d52"
+		}
+	]
+}

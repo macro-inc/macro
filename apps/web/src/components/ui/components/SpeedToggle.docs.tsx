@@ -13,7 +13,7 @@ function SpeedsDemo() {
         <SpeedToggle model={Model.gpt61Sol} /> GPT-6.1 Sol · 6×
       </div>
       <div class="flex items-center gap-3">
-        <SpeedToggle model={Model.opus55} /> Opus 5.5 · 2×
+        <SpeedToggle model={Model.opus55} /> Opus 5.5 · standard only
       </div>
       <div class="flex items-center gap-3">
         <SpeedToggle model={Model.sonnet55} /> Sonnet 5.5 · standard only

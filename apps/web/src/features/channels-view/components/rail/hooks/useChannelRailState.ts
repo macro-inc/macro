@@ -1,4 +1,5 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isMutedItem, muteItemForRef } from '@entity/utils/notification';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
@@ -98,15 +99,15 @@ export function useChannelRailScopeState(
     const currentScope = scope();
     const source = rail.sources[currentScope];
     const items = source.items();
-    // The Channels section renders label headings between its channels, so
-    // its virtualizer indexes come from those rows, not the source.
+    // The Team channels section renders label headings between its channels,
+    // so its virtualizer indexes come from those rows, not the source.
     const rows =
-      currentScope === 'channels' ? rail.channelSectionRows() : undefined;
+      currentScope === 'team_channels' ? rail.channelSectionRows() : undefined;
     const focusedRow = rail.list.focus.item();
     const focusedIndex =
       (focusedRow?.kind === 'conversation' &&
         focusedRow.scope === currentScope) ||
-      (focusedRow?.kind === 'label' && currentScope === 'channels')
+      (focusedRow?.kind === 'label' && currentScope === 'team_channels')
         ? focusedRow.localIndex
         : -1;
     const targetChannelId =
@@ -172,25 +173,34 @@ export function useChannelRailVirtualizer(
       return;
     }
 
-    void source.loadMore();
+    fireAndForget(source.loadMore(), 'channels-view');
   };
 
   return { registerVirtualizer, loadMoreNearEnd };
 }
+
+/** The All tab's list sections, top to bottom. */
+export const CHANNEL_LIST_GROUPS: readonly ChannelsGroup[] = [
+  'team_channels',
+  'channels',
+  'direct_messages',
+];
 
 export function useChannelRailSectionState(group: Accessor<ChannelsGroup>) {
   const rail = useChannelsRail();
   const scope = useChannelRailScopeState(group);
   const state = createMemo(() => {
     const section = group();
+    const lastOpen = CHANNEL_LIST_GROUPS.findLast((candidate) =>
+      rail.isGroupOpen(candidate)
+    );
     const rowId = rowKeyForSection(section);
     const targetChannelId = rail.channelActivity.targetChannelId(section);
 
     return {
       ...scope(),
       open: rail.isGroupOpen(section),
-      fillAvailable:
-        section === 'direct_messages' && !rail.isGroupOpen('channels'),
+      fillAvailable: lastOpen === section,
       focused: rail.list.focus.key() === rowId,
       containsFocus: rail.list.focus.item()?.group === section,
       domId: domIdForRow(rail.railId, rowId),

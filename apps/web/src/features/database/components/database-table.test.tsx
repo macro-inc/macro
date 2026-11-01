@@ -20,6 +20,8 @@ import { GridCell } from './grid-cell';
 vi.mock('@property/utils/focus', () => ({
   useSearchInputFocus: (input: () => HTMLElement | undefined) =>
     setTimeout(() => input()?.focus(), 100),
+  useAutoFocus: (element: () => HTMLElement | undefined) =>
+    setTimeout(() => element()?.focus(), 100),
 }));
 vi.mock('../../../lib/core/user/index', () => ({
   tryMacroId: (id: string) => (id.startsWith('macro|') ? id : undefined),
@@ -494,15 +496,24 @@ describe('spreadsheet interactions', () => {
     expect(onWrite).toHaveBeenLastCalledWith('one', 'notes', 'High');
   });
 
-  it('keeps invalid numeric edits in place and permits arrow navigation after Escape', async () => {
+  it('keeps invalid numeric drafts while allowing arrow navigation to another row', async () => {
     const { setColumns, onWrite } = setup();
     setColumns([{ ...name, dataType: 'NUMBER' }, notes]);
     screen.getByRole('button', { name: /Name: First\./ }).focus();
-    await userEvent.keyboard('invalid{Enter}{ArrowDown}');
+    await userEvent.keyboard('invalid{Enter}');
     const input = screen.getByRole('textbox', { name: 'Edit Name' });
     expect(document.activeElement).toBe(input);
     expect(screen.getByRole('alert').textContent).toBe('Enter a valid number');
+    await userEvent.keyboard('{ArrowDown}');
+    const next = screen
+      .getAllByRole('textbox', { name: 'Edit Name' })
+      .find((element) => element !== input);
+    expect(document.activeElement).toBe(next);
+    expect((input as HTMLInputElement).value).toBe('invalid');
+    expect(input.getAttribute('aria-invalid')).toBe('true');
+    expect(screen.queryByRole('alert')).toBeNull();
     expect(onWrite).not.toHaveBeenCalled();
+    input.focus();
     await userEvent.keyboard('{Escape}{ArrowDown}');
     expect(document.activeElement).toBe(
       screen.getByRole('button', { name: /Name: Second\./ })
@@ -856,39 +867,61 @@ describe('sort and column widths', () => {
   });
 });
 
-it('selects a rectangle with Shift-click, announces both corners and clears the cells together', async () => {
-  const { onClearCells, onCellFocus, onWrite } = setup();
-  const first = document.querySelector<HTMLElement>(
-    '[data-grid-row-id="one"] [data-grid-column="1"]'
-  )!;
-  const last = document.querySelector<HTMLElement>(
-    '[data-grid-row-id="two"] [data-grid-column="3"]'
-  )!;
-  first.dispatchEvent(
-    new MouseEvent('pointerdown', { bubbles: true, button: 0 })
-  );
-  document.dispatchEvent(
-    new MouseEvent('pointerup', { bubbles: true, button: 0 })
-  );
-  last.dispatchEvent(
-    new MouseEvent('pointerdown', { bubbles: true, button: 0, shiftKey: true })
-  );
-  expect(document.querySelectorAll('[aria-selected="true"]')).toHaveLength(6);
-  expect(onCellFocus).toHaveBeenLastCalledWith({
-    rowId: 'one',
-    columnId: 'name',
-    endRowId: 'two',
-    endColumnId: 'notes',
-    editing: false,
-  });
-  fireEvent.keyDown(last, { key: 'Delete' });
-  await waitFor(() =>
-    expect(onClearCells).toHaveBeenCalledExactlyOnceWith(
-      ['one', 'two'],
-      ['name', 'computed', 'notes']
-    )
-  );
-  expect(onWrite).not.toHaveBeenCalled();
-  fireEvent.keyDown(last, { key: 'Escape' });
-  expect(document.querySelectorAll('[aria-selected="true"]')).toHaveLength(0);
-});
+it.each(['Delete', 'Backspace'])(
+  'selects a rectangle with Shift-click and clears it with %s',
+  async (key) => {
+    const { onClearCells, onCellFocus, onWrite } = setup();
+    const first = document.querySelector<HTMLElement>(
+      '[data-grid-row-id="one"] [data-grid-column="1"]'
+    )!;
+    const last = document.querySelector<HTMLElement>(
+      '[data-grid-row-id="two"] [data-grid-column="3"]'
+    )!;
+    first.dispatchEvent(
+      new MouseEvent('pointerdown', { bubbles: true, button: 0 })
+    );
+    document.dispatchEvent(
+      new MouseEvent('pointerup', { bubbles: true, button: 0 })
+    );
+    last.dispatchEvent(
+      new MouseEvent('pointerdown', {
+        bubbles: true,
+        button: 0,
+        shiftKey: true,
+      })
+    );
+    expect(document.querySelectorAll('[aria-selected="true"]')).toHaveLength(6);
+    expect(onCellFocus).toHaveBeenLastCalledWith({
+      rowId: 'one',
+      columnId: 'name',
+      endRowId: 'two',
+      endColumnId: 'notes',
+      editing: false,
+    });
+    fireEvent.keyDown(last, { key });
+    await waitFor(() =>
+      expect(onClearCells).toHaveBeenCalledExactlyOnceWith(
+        ['one', 'two'],
+        ['name', 'computed', 'notes']
+      )
+    );
+    expect(onWrite).not.toHaveBeenCalled();
+    fireEvent.keyDown(last, { key: 'Escape' });
+    expect(document.querySelectorAll('[aria-selected="true"]')).toHaveLength(0);
+  }
+);
+
+it.each(['Delete', 'Backspace'])(
+  'clears the focused grid cell with %s',
+  async (key) => {
+    const { onClearCells } = setup();
+    const cell = document.querySelector<HTMLElement>(
+      '[data-grid-row-id="one"] [data-grid-column="1"]'
+    )!;
+    cell.focus();
+    fireEvent.keyDown(cell, { key });
+    await waitFor(() =>
+      expect(onClearCells).toHaveBeenCalledExactlyOnceWith(['one'], ['name'])
+    );
+  }
+);

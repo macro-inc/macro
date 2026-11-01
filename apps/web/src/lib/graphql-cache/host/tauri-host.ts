@@ -1,4 +1,5 @@
 import type { MutationInspection } from '../protocol';
+
 /**
  * Tauri CacheHost: talks to the native cache engine living in the Tauri
  * host process (graphql_cache_plugin) over invoke commands. The host
@@ -8,6 +9,7 @@ import type { MutationInspection } from '../protocol';
  * worker-host.ts.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import { invoke } from '@tauri-apps/api/core';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
@@ -103,12 +105,21 @@ const CALENDAR_RANGE_COMMAND = 'graphql_cache_calendar_range';
 const CALENDAR_COMMIT_COMMAND = 'graphql_cache_calendar_commit';
 const INSPECT_MUTATIONS_COMMAND = 'graphql_cache_inspect_mutations';
 
-/** An OTA bundle cannot safely replay drafts using an older native queue API. */
+const INIT_COMMAND = 'graphql_cache_init_with_schema';
+
+const DRAFTS_NEED_UPDATE =
+  'Update Macro to sync drafts saved on this device. Your queued drafts are preserved until the app is updated.';
+const CACHE_NEEDS_UPDATE =
+  'Update Macro to use the local cache on this device. Until the app is updated, drafts saved here do not sync, and queued drafts are preserved.';
+
+/**
+ * The installed native app is older than this OTA bundle and lacks a cache
+ * command it needs. OTA updates cannot add Rust commands, so only an app
+ * update helps; the bundle runs uncached until then.
+ */
 export class NativeCacheUpgradeRequiredError extends Error {
-  constructor() {
-    super(
-      'Update Macro to sync drafts saved on this device. Your queued drafts are preserved until the app is updated.'
-    );
+  constructor(message: string = DRAFTS_NEED_UPDATE) {
+    super(message);
     this.name = 'NativeCacheUpgradeRequiredError';
   }
 }
@@ -249,44 +260,50 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     }
   }
   const unlistenHydration = listenForHydration();
-  async function removeHydrationListener(): Promise<void> {
-    const unlisten = await unlistenHydration;
-    unlisten?.();
-  }
 
   async function initialize(): Promise<void> {
     const { default: schemaSdl } = await import(
       '../../../../../../static_assets/schema.graphql?raw'
     );
-    await request<void>('graphql_cache_init_with_schema', {
-      scope: options.scope,
-      hotCapacity: options.hotCapacity,
-      schemaSdl,
-    });
+    // An app from before runtime SDL loading has no such command. Its own
+    // `graphql_cache_init` would run its compiled-in schema, which can lack
+    // fields this bundle reads, so the bundle stays uncached instead.
+    try {
+      await request<void>(INIT_COMMAND, {
+        scope: options.scope,
+        hotCapacity: options.hotCapacity,
+        schemaSdl,
+      });
+    } catch (error) {
+      if (isMissingCommand(error, INIT_COMMAND)) {
+        throw new NativeCacheUpgradeRequiredError(CACHE_NEEDS_UPDATE);
+      }
+      throw error;
+    }
     // Probe before any enqueue/claim. Older binaries silently ignore new
     // metadata arguments, so waiting until a draft fails would lose correlation.
     try {
       await request<MutationInspection[]>(INSPECT_MUTATIONS_COMMAND, {});
     } catch (error) {
-      if (
-        error instanceof Error &&
-        error.message === `Command ${INSPECT_MUTATIONS_COMMAND} not found`
-      ) {
+      if (isMissingCommand(error, INSPECT_MUTATIONS_COMMAND)) {
         throw new NativeCacheUpgradeRequiredError();
       }
       throw error;
     }
   }
   const ready = initialize();
-  void (async () => {
-    try {
-      await ready;
-    } catch (error) {
-      options.onInitializationError?.(
-        error instanceof Error ? error : new Error(String(error))
-      );
-    }
-  })();
+  fireAndForget(
+    (async () => {
+      try {
+        await ready;
+      } catch (error) {
+        options.onInitializationError?.(
+          error instanceof Error ? error : new Error(String(error))
+        );
+      }
+    })(),
+    'graphql-cache-host'
+  );
 
   const opId = (opKey: number) => `${clientId}:${opKey}`;
 
@@ -677,10 +694,18 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
       hydrationSubscribers.clear();
       generationChangeSubscribers.clear();
       settlementSubscribers.clear();
-      void unlistenOps.then((fn) => fn?.());
-      void unlistenCacheChanges.then((fn) => fn?.());
-      void removeHydrationListener();
-      void unlistenSettlements.then((fn) => fn?.());
+      for (const unlisten of [
+        unlistenOps,
+        unlistenCacheChanges,
+        unlistenHydration,
+        unlistenSettlements,
+      ]) {
+        // UnlistenFn returns the unlisten IPC promise despite its void type.
+        fireAndForget(
+          unlisten.then((fn) => fn?.()),
+          'graphql-cache-host'
+        );
+      }
     },
   };
 }

@@ -3,7 +3,7 @@ use crate::domain::{
     models::{
         AttendeeResponseStatus, CalendarAttendee, CalendarEvent, CalendarEventOverride,
         CalendarOccurrence, EventReminders, EventStart, EventStatus, EventTransparency, EventType,
-        EventVisibility,
+        EventVisibility, GuestPolicy, ViewerCapabilities,
     },
     team::{TeamCalendarMember, TeamCalendarSharing},
 };
@@ -87,6 +87,9 @@ fn source(user_id: &str, uid: &str, time: EventTime) -> TeamSourceOccurrence {
         is_read_only: false,
         attendees: vec![],
         reminders: EventReminders::default(),
+        guest_policy: GuestPolicy::default(),
+        is_snapshot: false,
+        viewer_can: ViewerCapabilities::NONE,
         created_at: instant("2026-10-01T00:00:00Z"),
         updated_at: instant("2026-10-01T00:00:00Z"),
     };
@@ -317,6 +320,8 @@ fn occurrence_response_overrides_master_response() {
     row.event.attendees = vec![attendee("a@example.com", AttendeeResponseStatus::Accepted)];
     row.occurrence.recurrence_id = Some("2026-10-07T09:00:00+00:00".into());
     row.overrides = vec![CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
         visibility: None,
         transparency: None,
         sequence: None,
@@ -348,6 +353,8 @@ fn instance_transparency_controls_busy_time_and_private_series_stays_private() {
     let original = EventStart::Timed(instant("2026-10-07T09:00:00Z"));
     row.occurrence.recurrence_id = Some(original.occurrence_key());
     row.overrides = vec![CalendarEventOverride {
+        reminders: None,
+        automatic_decline: None,
         sequence: None,
         source_updated_at: None,
         recurrence_id: original.occurrence_key(),

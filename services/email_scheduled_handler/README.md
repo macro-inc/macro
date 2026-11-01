@@ -1,5 +1,8 @@
 # Email Scheduled Handler
 
-This Lambda function executes every minute to process scheduled emails. It checks for rows in the `scheduled_messages`
-table where the `send_time` has passed and publishes a message to the email service's scheduled message worker queue via
-PubSub. This triggers the scheduled message worker to process and send the queued email.
+This Lambda runs every minute and republishes eligible delivery/reconciliation
+work from `email_scheduled_messages`. It also selects resolved or superseded
+`email_deferred_message_deletions`, including rows with no remaining schedule.
+Both use the existing scheduled message queue. The email domain worker reconciles
+deferred deletion before claiming delivery; database claims prevent duplicate
+submission. Failed queue writes remain eligible for the next scan.

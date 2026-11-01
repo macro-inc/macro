@@ -1,7 +1,7 @@
 import { formatTimeZoneAbbreviation } from '@core/util/date';
-import ClockIcon from '@phosphor/clock.svg';
-import HashIcon from '@phosphor/hash.svg';
-import UserPlus from '@phosphor/user-plus.svg';
+import ClockIcon from '@icon/system/regular/clock.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import UserPlus from '@icon/system/regular/user-plus.svg';
 import { cn, HoverCard } from '@ui';
 import { differenceInCalendarDays } from 'date-fns/differenceInCalendarDays';
 import { format } from 'date-fns/format';
@@ -137,17 +137,17 @@ function getCallStatusBadgeConfig(status: CallStatus): CallStatusBadgeConfig {
   switch (status) {
     case 'ATTENDED':
       return {
-        class: 'text-ink-extra-muted border-edge-muted px-2',
+        class: 'text-ink-extra-muted border-transparent bg-ink/5 px-2',
         label: 'attended',
       };
     case 'MISSED':
       return {
-        class: 'text-warning border-edge-muted px-2',
+        class: 'text-warning border-transparent bg-warning/10 px-2',
         label: 'missed',
       };
     case 'UNATTENDED':
       return {
-        class: 'text-ink-extra-muted/70 border-edge-muted px-2',
+        class: 'text-ink-extra-muted/70 border-transparent bg-ink/5 px-2',
         label: 'unattended',
       };
   }
@@ -162,7 +162,7 @@ export function CallStatusBadge(props: { status: CallStatus }) {
 export function CallChannelNameBadge(props: { channelName: string }) {
   return (
     <Badge
-      class="ph-no-capture max-w-32 min-w-0 shrink-0 normal-case font-sans text-ink-extra-muted border-edge-muted px-2"
+      class="ph-no-capture max-w-32 min-w-0 shrink-0 normal-case font-sans text-ink-extra-muted border-transparent bg-ink/5 px-2"
       title={props.channelName}
     >
       <HashIcon class="size-3 shrink-0" />
@@ -173,7 +173,7 @@ export function CallChannelNameBadge(props: { channelName: string }) {
 
 export function CallDurationBadge(props: { duration: string }) {
   return (
-    <Badge class="normal-case text-ink-extra-muted border-edge-muted px-2">
+    <Badge class="normal-case text-ink-extra-muted border-transparent bg-ink/5 px-2">
       {props.duration}
     </Badge>
   );

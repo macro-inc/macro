@@ -1,11 +1,12 @@
 use ::crm::domain::{auth::CrmTeamReceipt, pipelines::*};
 use databases::domain::{
     models::{AppliedOps, OpBatch, RowId, TableDetail},
-    storage::{StorageRows, StorageRowsQuery},
+    storage::{StorageRow, StorageRows, StorageRowsQuery},
 };
 use entity_access::domain::models::{
     EditAccessLevel, MemberTeamRole, OwnerAccessLevel, ViewAccessLevel,
 };
+use models_permissions::share_permission::{SharePermissionV2, UpdateSharePermissionRequestV2};
 use models_soup::crm_company::SoupCrmCompany;
 
 use super::*;
@@ -68,9 +69,24 @@ impl PipelineService for RecordingPipelines {
     ) -> Result<StorageRows, PipelineError> {
         unimplemented!()
     }
+    async fn read_rows(
+        &self,
+        _: EntityAccessReceipt<ViewAccessLevel>,
+        _: &[RowId],
+    ) -> Result<Vec<StorageRow>, PipelineError> {
+        unimplemented!()
+    }
+    async fn record_rows(
+        &self,
+        _: EntityAccessReceipt<ViewAccessLevel>,
+        _: &[Uuid],
+    ) -> Result<Vec<PipelineReference>, PipelineError> {
+        unimplemented!()
+    }
     async fn apply_ops(
         &self,
         _: EntityAccessReceipt<EditAccessLevel>,
+        _: Option<bot_id::BotId>,
         _: OpBatch,
     ) -> Result<AppliedOps, PipelineError> {
         unimplemented!()
@@ -87,6 +103,19 @@ impl PipelineService for RecordingPipelines {
         _: EntityAccessReceipt<OwnerAccessLevel>,
         _: PipelineSharing,
     ) -> Result<(), PipelineError> {
+        unimplemented!()
+    }
+    async fn share_permissions(
+        &self,
+        _: EntityAccessReceipt<EditAccessLevel>,
+    ) -> Result<SharePermissionV2, PipelineError> {
+        unimplemented!()
+    }
+    async fn update_share_permissions(
+        &self,
+        _: EntityAccessReceipt<EditAccessLevel>,
+        _: UpdateSharePermissionRequestV2,
+    ) -> Result<SharePermissionV2, PipelineError> {
         unimplemented!()
     }
     async fn set_trashed(

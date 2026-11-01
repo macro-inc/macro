@@ -1,4 +1,4 @@
-import { isClaudeBotId } from '@core/constant/claudeAgent';
+import { useCodexAgentsAccess } from '@core/codex/flag';
 import { isCodexBotId } from '@core/constant/codexAgent';
 import { isCursorBotId } from '@core/constant/cursorAgent';
 import { useCursorAgentsAccess } from '@core/cursor/flag';
@@ -6,7 +6,6 @@ import type { IUser } from '@core/user/types';
 import { uniqueByKey } from '@core/util/compareUtils';
 import type { Accessor } from 'solid-js';
 import {
-  claudeMentionUser,
   codexMentionUser,
   cursorMentionUser,
   isMacroAiId,
@@ -20,8 +19,9 @@ import { useChatV3AgentsFlag } from './use-chat-v3-agents-flag';
  * Built-in agent entries shared by every message composer. Account setup does
  * not hide a mention: the harness answers with a connection prompt in the
  * thread when setup is needed, so replies link to Settings → Harness rather
- * than the entry disappearing. The built-in Cursor entry follows the Cursor
- * rollout flag. Mentions are re-tagged as bot mentions at send time.
+ * than the entry disappearing. The built-in Cursor and Codex entries
+ * follow their rollout flags. Mentions are re-tagged as bot mentions at send
+ * time.
  *
  * Macro gets exactly one entry. Both Macro bots are dropped from the incoming
  * list first, so a stray participant or channel-bot row cannot put a second
@@ -33,6 +33,7 @@ export function useAgentMentionUsers(
   enabled: Accessor<boolean> = () => true
 ): Accessor<IUser[]> {
   const canUseCursor = useCursorAgentsAccess();
+  const canUseCodex = useCodexAgentsAccess();
   const canUseAgents = useChatV3AgentsFlag();
 
   return () => {
@@ -42,17 +43,15 @@ export function useAgentMentionUsers(
     const base = mentionable.filter(
       (user) =>
         (canUseCursor() || !isCursorBotId(user.id)) &&
+        (canUseCodex() || !isCodexBotId(user.id)) &&
         !isMacroAiId(user.id) &&
         !isMacroNewId(user.id)
     );
     if (canUseCursor() && !base.some((user) => isCursorBotId(user.id))) {
       base.unshift(cursorMentionUser());
     }
-    if (!base.some((user) => isCodexBotId(user.id))) {
+    if (canUseCodex() && !base.some((user) => isCodexBotId(user.id))) {
       base.unshift(codexMentionUser());
-    }
-    if (!base.some((user) => isClaudeBotId(user.id))) {
-      base.unshift(claudeMentionUser());
     }
     base.unshift(macroMentionUser(canUseAgents()));
     return uniqueByKey(base, (user) => user.id);

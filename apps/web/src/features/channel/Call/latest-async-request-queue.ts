@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 export type LatestAsyncRequestQueue<Request> = (
   request: Request
 ) => Promise<void>;
@@ -41,7 +42,7 @@ export function createLatestAsyncRequestQueue<Request>(
       if (pending) {
         active = pending;
         pending = undefined;
-        void execute(active);
+        fireAndForget(execute(active), 'channel-call');
       }
     }
 
@@ -60,7 +61,7 @@ export function createLatestAsyncRequestQueue<Request>(
 
       if (!active) {
         active = { request, callers: [caller] };
-        void execute(active);
+        fireAndForget(execute(active), 'channel-call');
         return;
       }
 

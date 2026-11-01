@@ -1,3 +1,5 @@
+import { analytics } from '@app/lib/analytics';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { throwOnErr } from '@core/util/result';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import { queryClient } from '../client';
@@ -8,16 +10,22 @@ import { agentSessionKeys } from './keys';
 import { handleAgentSessionRenamed } from './session-metadata-sync';
 
 function refreshSessionEntity(id: string) {
-  void refreshActiveGraphqlPreviewQueries(id);
+  fireAndForget(refreshActiveGraphqlPreviewQueries(id), 'agent-session-lists');
   invalidateAllSoup();
-  void queryClient.invalidateQueries({ queryKey: agentSessionKeys._def });
-  void queryClient.invalidateQueries({
+  queryClient.invalidateQueries({ queryKey: agentSessionKeys._def });
+  queryClient.invalidateQueries({
     queryKey: previewKeys.item(id).queryKey,
   });
 }
 
+// Agent sessions report as `agent`, as BlockLoader reports their opens.
 export async function renameAgentSession(id: string, name: string) {
   await throwOnErr(() => agentHarnessServiceClient.rename(id, name));
+  analytics.track('update_entity', {
+    entityType: 'agent',
+    entityId: id,
+    property: 'name',
+  });
   handleAgentSessionRenamed({ agentSessionId: id, name });
   refreshSessionEntity(id);
 }
@@ -29,5 +37,6 @@ export async function setAgentSessionArchived(id: string, isArchived: boolean) {
 
 export async function deleteAgentSession(id: string) {
   await throwOnErr(() => agentHarnessServiceClient.delete(id));
+  analytics.track('delete_entity', { entityType: 'agent', entityId: id });
   refreshSessionEntity(id);
 }

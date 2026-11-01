@@ -547,3 +547,72 @@ fn a_compact_command_with_attachments_is_still_a_plain_prompt() {
     // control carries text and nothing else.
     assert_eq!(AgentAction::control_from_runtime(&message), None);
 }
+
+#[test]
+fn notification_prompt_survives_queue_persistence_and_is_identified_on_the_wire() {
+    use crate::domain::notification::*;
+    let notification = Notification {
+        id: macro_uuid::generate_uuid_v7(),
+        subject_id: "connection<&".into(),
+        created_at: "2026-10-21T00:00:00Z".into(),
+        event: NotificationEvent::AppConnected {
+            app: "</m-notification>injected".into(),
+        },
+    };
+    let action = AgentAction::notification(vec![notification.clone()]);
+    let persisted = serde_json::to_value(&action).unwrap();
+    let restored: AgentAction = serde_json::from_value(persisted).unwrap();
+    let message = restored
+        .to_runtime(
+            &SessionId::new("session"),
+            RequestId::Str("notification".into()),
+        )
+        .unwrap();
+    let input = input_from_runtime(&message).unwrap();
+    assert!(input.system_turn);
+    assert_eq!(input.notifications, vec![notification]);
+    let xml = notification_context(&input.notifications).unwrap();
+    assert!(xml.contains("subject=\"connection&lt;&amp;\""));
+    assert!(!xml.contains("</m-notification>injected"));
+    assert!(xml.contains("&lt;/m-notification&gt;injected"));
+}
+
+#[test]
+fn each_prompt_carries_its_own_hidden_execution_turn_without_replacing_user_content() {
+    let session = SessionId::new("acp-turn-fence");
+    let original =
+        "<m-agent-context>{\"version\":1,\"text\":\"origin\"}</m-agent-context>\nuser request";
+    let first = AgentActionId::mint();
+    let second = AgentActionId::mint();
+    for turn in [first, second] {
+        let message = AgentAction::prompt(original)
+            .to_runtime(&session, turn.to_request_id())
+            .unwrap();
+        let ToRuntimeMessage::Acp(AcpMessage(RawJsonRpcMessage::Request(request))) = message else {
+            panic!("expected ACP prompt");
+        };
+        let ClientRequest::PromptRequest(parsed) =
+            ClientRequest::parse_message(&request.method, &request.params).unwrap()
+        else {
+            panic!("expected prompt payload");
+        };
+        let ContentBlock::Text(user_text) = &parsed.prompt[0] else {
+            panic!("expected user text")
+        };
+        assert_eq!(user_text.text, original);
+        let ContentBlock::Text(hidden) = &parsed.prompt[1] else {
+            panic!("expected hidden context")
+        };
+        let hidden = hidden.text.as_str();
+        let envelope = hidden
+            .strip_prefix("<m-agent-context>")
+            .unwrap()
+            .strip_suffix("</m-agent-context>")
+            .unwrap();
+        let context: serde_json::Value = serde_json::from_str(envelope).unwrap();
+        assert_eq!(context["version"], 1);
+        let text = context["text"].as_str().unwrap();
+        assert!(text.contains(&format!("turn_id=\"{turn}\"")));
+        assert!(!text.contains(&if turn == first { second } else { first }.to_string()));
+    }
+}

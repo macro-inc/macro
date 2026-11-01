@@ -1,13 +1,12 @@
-# Two-peer scene experiment
+# Collaborative scene backend
 
-Status reviewed 2026-09-28. See the [main progress plan](../../../../docs/GRAPHICS_PARITY.md).
-Automated mapping coverage now includes pencil, rich text/labels, connectors and
-media/document references. Full Canvas Next integration is deferred while the
-[legacy bridge and colors](../../../../docs/CANVAS_LEGACY_BRIDGE.md) take priority.
-
-`@macro-inc/graphics/loro` is an experimental adapter with an in-memory transport
-harness used by tests. It uses the workspace Loro version (1.16.3). No SyncService,
-network requests, local storage, or server changes are involved.
+Canvas Next uses this adapter with the shared collaboration runtime and SyncService.
+The package itself owns no network or storage: `createLoroGraphicsBackendFromDoc`
+binds an externally owned document through `@loro-mirror/core`, observes remote
+scene changes and disposes its Mirror/subscription/history. The original snapshot-owning factory
+remains useful for standalone hosts and the in-memory test harness.
+Host bookkeeping uses `GRAPHICS_METADATA_ORIGIN` and is excluded from scene undo.
+The workspace pins Loro 1.16.3.
 
 The root graphics export stays framework/DOM/Loro-free. `GraphicsBackend` is the
 small document/history contract; `createGraphicsEditorFromBackend` proposes local
@@ -17,9 +16,11 @@ before its backend. Memory-backed hosts keep their original behavior.
 
 ## Representation
 
-- A LoroTree owns containment and sibling ordering. Node data retains the stable
+- Mirror's `schema.LoroTree` projects native containment and sibling ordering as
+  `{ data, children }`. Mirror owns generic tree creation, diffing, moves and deletion. Node data retains the stable
   graphics ID and immutable kind. The surface is the implicit root of the forest.
-- Each node has one coherent `pose` register: local matrix, geometry, coordinate
+- `schema.Value` keeps the deployed atomic registers unchanged. Each node has one
+  coherent `pose` register: local matrix, geometry, coordinate
   parent ID, and a captured world matrix. Fill and stroke are separate registers,
   so moving and restyling the same shape can merge independently.
 - Ordered Loro children project to unique core sort keys. These keys are derived,
@@ -42,7 +43,13 @@ relative to the actual parent. This keeps both replicas valid and avoids interpr
 an old local matrix in the wrong coordinate space. It is a derived interpretation:
 no repair operations or reconciliation loop are emitted.
 
-**This is a policy to evaluate, not a settled production schema.** Such a node stays
+Canvas keeps coordinate projection and pose conflict handling in the graphics
+adapter; Mirror contains no Canvas-specific geometry logic. The host sync manager
+uses `mirror: false` because this graphics backend owns the single typed scene
+Mirror on the same host-owned document. Existing native snapshots open without
+conversion or node replacement.
+
+The Canvas host currently uses this conflict policy. Such a node stays
 anchored in world space through subsequent parent transforms until it receives a
 new pose edit. Adapter diagnostics report these nodes. Captured world pose is the
 winning edit's pose, not a guarantee that both concurrent geometric intentions
@@ -94,12 +101,12 @@ seconds; states expire after 30 seconds without an update, checked on Loro's
 Ghosts are displayed only when their captured document clock matches the receiver's
 clock. A commit therefore suppresses a delayed, obsolete gesture until fresh
 presence arrives. Selection IDs still resolve against the current committed scene.
-The current ghost contract carries rectangle/ellipse dimensions and pencil samples,
-using default renderers. It does not carry complete text, connector, media or document
-geometry; do not assume every registered shape can render a valid ghost. A full
-Canvas Next peer lab needs typed preview coverage or deliberate bounds-only previews
-for these kinds, plus connector endpoint-draft awareness. Authenticated peer identity,
-payload validation and real network presence transport remain integration work.
+The ghost contract carries rectangle/ellipse dimensions and pencil samples. Text,
+connectors, media and document references use bounds-only rectangle previews.
+Canvas validates bounded presence payloads at its shared awareness boundary and
+resolves names/colors from shared peer metadata. Connector endpoint-draft awareness
+is not published; cursor/selection awareness still applies. The standalone packet
+transport remains test-only; production uses the shared awareness runtime.
 
 The cursor is a colored pointer with a rounded name-only badge, shown only while
 the peer's cursor is on the canvas. Pending ghosts replace redundant transform
@@ -124,12 +131,10 @@ previews, reordered packets, coalescing, offline/reconnect behavior and disposal
 Motion tests cover bounded debounce, mid-flight retargeting, shortest-arc rotation,
 stable ghost DOM, settling, reduced motion and animation cleanup.
 
-Production integration still needs an accepted geometry/history conflict policy,
-an explicit choice to retain cancellation or implement intent rebasing, mixed-content
-editor validation, shared collaboration runtime integration, durable initialization,
-permissions, reconnect/storage tests and deployment. Asset/text mappings now exist;
-their production acceptance is separate from basic mapping tests. This transport is
-only an in-memory test harness; do not turn it into another production sync engine.
+Canvas Next now owns durable initialization, permissions, reconnect/storage and
+shared-runtime integration. Tests exercise three sessions and rendered surfaces.
+Character-level rich text, intent rebasing and production capacity measurement
+remain follow-ups; the in-memory harness does not prove deployed transport limits.
 
 References: [Loro ordered trees](https://www.loro.dev/docs/tutorial/tree),
 [Loro undo](https://www.loro.dev/docs/advanced/undo),
@@ -158,18 +163,11 @@ text-versus-move, new labels versus moves, and local undo preserving remote move
 Image, video and document references use the existing shape geometry mapping.
 Their source bytes, resolved URLs, loading state and playback are host concerns.
 
-### Next integration gates
+### Canvas host integration
 
-Use the actual Canvas view, rich-text measurer and content/asset renderers with two
-injected Loro editors. Exercise concurrent whole-string edits, text editing versus
-remote movement, local text/scene undo, reference deletion, selection/gesture
-awareness and mixed-content layering/focus. Keep embedded document editing under
-its own existing permissions/sync; the outer scene shares only the embed reference
-and display geometry. No character CRDT, durable seed or second network engine is
-needed for this checkpoint.
-
-For the later durable host, reuse the existing collaboration infrastructure and
-the [spreadsheet session](../../../../apps/web/src/features/block-spreadsheet/queries/spreadsheet-session.ts)
-as a reference for WAL/snapshot recovery and disposal. First audit canvas document
-initialization, content routing, authorization and legacy readers; the lab does not
-prove that enabling SyncService requires no server changes.
+`apps/web/src/features/block-canvas/queries/canvas-session.ts` owns shared initialization,
+local snapshot/WAL recovery, live transport and teardown. The host imports only the
+server's winning seed and preserves original JSON/legacy metadata for export.
+Presence publication and validation stay in the host; the reusable overlay accepts
+a transport-independent `GraphicsPresence` contract. Embedded documents retain
+their own existing permissions/sync. The outer scene shares references and geometry.

@@ -5,6 +5,7 @@ import {
   enableGraphqlSoup,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { thrownResultErrorHasCode, throwOnErr } from '@core/util/result';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import {
@@ -18,6 +19,7 @@ import type {
   PropertyDefinitionDomain,
 } from '@property/types';
 import { isInstantiatedProperty } from '@property/utils';
+import { refreshCrmAssociatedSoupQueries } from '@queries/soup/crm-association';
 import { ownTouchStamp } from '@queries/soup/normalized-cache/own-touch';
 import { DeleteEntityPropertyDocument } from '@service-storage/graphql/generated/graphql';
 import { getGraphqlSoupClient } from '@service-storage/graphql-soup';
@@ -430,11 +432,14 @@ export function useDeleteEntityPropertyMutation(
     },
     ...withCallbacks<void, Error, DeleteEntityPropertyParams>(
       {
-        onSuccess: (_data, variables) =>
-          invalidatePropertiesForEntity(
+        onSuccess: (_data, variables) => {
+          // The removed row may have been a Companies or Contacts value.
+          fireAndForget(refreshCrmAssociatedSoupQueries(), 'entity-properties');
+          return invalidatePropertiesForEntity(
             variables.entityType,
             variables.entityId
-          ),
+          );
+        },
         onError(error, variables) {
           console.error('Failed to delete property', error);
           toast.failure('Failed to delete property');
@@ -929,11 +934,28 @@ class BulkSaveEntityPropertiesError extends Error {
   }
 }
 
+/** Properties whose values decide which items a CRM record lists. */
+const CRM_ASSOCIATION_PROPERTY_IDS: readonly string[] = [
+  SYSTEM_PROPERTY_IDS.COMPANIES,
+  SYSTEM_PROPERTY_IDS.CONTACTS,
+];
+
 function invalidatePropertySaveCaches(
   item: BulkSaveEntityPropertiesParams['properties'][number]
 ): void {
-  void invalidatePropertiesForEntity(item.entityType, item.entityId);
+  fireAndForget(
+    invalidatePropertiesForEntity(item.entityType, item.entityId),
+    'entity-properties'
+  );
   invalidateSoupEntity(item.entityId);
+  // CRM record lists resolve membership on the server, not from these rows.
+  if (
+    CRM_ASSOCIATION_PROPERTY_IDS.includes(
+      getPropertyDefinitionId(item.property)
+    )
+  ) {
+    fireAndForget(refreshCrmAssociatedSoupQueries(), 'entity-properties');
+  }
 }
 
 function handleCommittedPropertySave(

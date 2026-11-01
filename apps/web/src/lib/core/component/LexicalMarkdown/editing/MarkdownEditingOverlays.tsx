@@ -6,6 +6,7 @@ import { NodeAccessoryRenderer } from '../component/core/NodeAccessoryRenderer';
 import { ActionMenu } from '../component/menu/ActionsMenu';
 import { EmojiMenu } from '../component/menu/EmojiMenu';
 import { FloatingEquationMenu } from '../component/menu/FloatingEquationMenu';
+import { FloatingGifMenu } from '../component/menu/FloatingGifMenu';
 import { FloatingLinkMenu } from '../component/menu/FloatingLinkMenu';
 import { FloatingTableMenu } from '../component/menu/FloatingTableMenu';
 import { MentionsMenu } from '../component/menu/MentionsMenu/MentionsMenu';
@@ -74,6 +75,7 @@ export function MarkdownEditingOverlays(props: {
         useBlockBoundary={props.useBlockBoundary}
         showOpenTabs={props.showOpenTabs}
         disableMentionTracking={!props.source.trackMentions}
+        sourceDocumentId={props.source.id}
       />
 
       <SnippetsMenu
@@ -97,6 +99,7 @@ export function MarkdownEditingOverlays(props: {
         <FloatingLinkMenu autoLinkMatchMode="common-tlds" />
         <FloatingEquationMenu canEdit={props.canEdit} />
         <FloatingTableMenu canEdit={props.canEdit} />
+        <FloatingGifMenu canEdit={props.canEdit} />
         {props.floatingMenus}
       </FloatingMenuGroup>
 

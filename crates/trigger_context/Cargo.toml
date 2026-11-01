@@ -11,8 +11,6 @@ version = "0.1.0"
 bot_id = { path = "../bot_id" }
 chrono = { workspace = true, features = ["serde"] }
 serde = { workspace = true }
+serde_json = { workspace = true }
 uuid = { workspace = true, features = ["serde"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
-
-[dev-dependencies]
-serde_json = { workspace = true }

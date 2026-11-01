@@ -3,6 +3,7 @@
  * built from what the editor can do now.
  */
 
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { MenuDefinition, MenuEntry } from '../components/menu-bar';
 import { ADJUSTMENT_LABELS, ADJUSTMENT_TYPES } from '../core/adjustments';
 import { FILTER_KINDS, FILTER_TITLES } from '../core/filters';
@@ -224,8 +225,14 @@ export function buildMenus(args: {
       label: 'New Fill Layer',
       disabled: !edit,
       items: [
-        { label: 'Solid Color', onSelect: () => void r.newFill('solid') },
-        { label: 'Gradient', onSelect: () => void r.newFill('gradient') },
+        {
+          label: 'Solid Color',
+          onSelect: () => fireAndForget(r.newFill('solid'), 'psd-editor'),
+        },
+        {
+          label: 'Gradient',
+          onSelect: () => fireAndForget(r.newFill('gradient'), 'psd-editor'),
+        },
       ],
     },
     {
@@ -233,7 +240,7 @@ export function buildMenus(args: {
       disabled: !edit,
       items: ADJUSTMENT_TYPES.map((type) => ({
         label: ADJUSTMENT_LABELS[type],
-        onSelect: () => void r.newAdjustment(type),
+        onSelect: () => fireAndForget(r.newAdjustment(type), 'psd-editor'),
       })),
     },
     'divider',

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE agent_session_notification SET delivered_at = now(), outcome = $2, lease_until = NULL WHERE lease_id = $1 AND delivered_at IS NULL",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "242d2a7b88993ca30c8769fedf60d22e1d26a6ad63757fd3613c7dc045f65d08"
+}

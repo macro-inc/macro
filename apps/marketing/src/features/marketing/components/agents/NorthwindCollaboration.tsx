@@ -88,6 +88,7 @@ export function NorthwindCollaboration() {
   };
   const agent = createDemoPointer({
     frame: () => frame,
+    active: cursors,
     target: () =>
       cursors() && phase() >= 1
         ? '[aria-label="Document body"] h2:nth-of-type(4)'
@@ -95,6 +96,7 @@ export function NorthwindCollaboration() {
   });
   const person = createDemoPointer({
     frame: () => frame,
+    active: cursors,
     target: () =>
       cursors() && phase() >= 1
         ? '[aria-label="Document body"] p:last-of-type'
@@ -154,6 +156,7 @@ export function NorthwindCollaboration() {
         <Show when={agent()}>
           {(point) => (
             <DemoCursor
+              caret
               label="Claude"
               class="agent-demo-pointer"
               style={{ transform: `translate(${point().x}px, ${point().y}px)` }}
@@ -163,6 +166,7 @@ export function NorthwindCollaboration() {
         <Show when={person()}>
           {(point) => (
             <DemoCursor
+              caret
               label="Jacob"
               class="agent-demo-pointer"
               style={{ transform: `translate(${point().x}px, ${point().y}px)` }}

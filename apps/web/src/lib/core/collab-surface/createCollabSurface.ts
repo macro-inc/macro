@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import { createLoroManager } from '@macro-inc/collaboration/collab/manager';
 import type { RawUpdate } from '@macro-inc/collaboration/collab/shared';
@@ -11,6 +12,7 @@ import {
   LORO_WAL_DB_NAME,
 } from '@macro-inc/collaboration/collab/wal';
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
+import { Telemetry } from '@macro-inc/observability';
 import { storageServiceClient } from '@service-storage/client';
 import type { CollabSurfaceResponse } from '@service-storage/service';
 import { createCollabSurfaceSource } from '@service-sync/source';
@@ -135,7 +137,7 @@ export function createCollabSurfaceSession(
     }
   );
 
-  void (async () => {
+  const connect = async () => {
     // Load-or-create. Idempotent on the backend, so mounting the same
     // surface in several places (or racing another client) is fine.
     const ensured = await storageServiceClient.collabSurfaces.ensure({
@@ -178,7 +180,19 @@ export function createCollabSurfaceSession(
       return;
     }
     await loroManager.ingest({ kind: 'dss', snapshot: sync.value.snapshot });
-  })();
+  };
+
+  const start = async () => {
+    try {
+      await connect();
+    } catch (error) {
+      Telemetry.error(error, { surface: 'collab-surface' });
+      if (!disposed && !syncSource()) {
+        setConnectionError('failed to load or create the surface');
+      }
+    }
+  };
+  fireAndForget(start(), 'collab-surface');
 
   return {
     surfaceId,

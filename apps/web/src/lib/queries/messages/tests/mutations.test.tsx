@@ -3,6 +3,7 @@ import type {
   MessageListItem,
   MessageParent,
   MessageThread,
+  PostMessage,
 } from '@service-storage/messages';
 import { cleanup, fireEvent, render, waitFor } from '@solidjs/testing-library';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
@@ -13,6 +14,7 @@ const mocks = vi.hoisted(() => ({
   delete: vi.fn(),
   patchThread: vi.fn(),
   post: vi.fn(),
+  refreshCrmLists: vi.fn(async () => {}),
 }));
 vi.mock('../../client', () => ({
   get queryClient() {
@@ -24,6 +26,10 @@ vi.mock('@core/component/Toast/Toast', () => ({
 }));
 vi.mock('@service-storage/messages', () => ({ entityMessagesClient: mocks }));
 vi.mock('../subscription', () => ({ useMessageSubscription: () => {} }));
+vi.mock('@queries/soup/crm-association', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@queries/soup/crm-association')>()),
+  refreshCrmAssociatedSoupQueries: mocks.refreshCrmLists,
+}));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
@@ -68,6 +74,7 @@ beforeEach(() => {
   mocks.delete.mockReset();
   mocks.patchThread.mockReset();
   mocks.post.mockReset();
+  mocks.refreshCrmLists.mockClear();
   testQueryClient = new QueryClient({
     defaultOptions: { queries: { retry: false }, mutations: { retry: false } },
   });
@@ -722,6 +729,46 @@ describe('sending', () => {
       )[0].state.anchor
     ).toEqual(anchor ?? null);
   });
+
+  it.each<[string, Pick<PostMessage, 'mentions' | 'attachments'>, boolean]>([
+    [
+      'a CRM attachment',
+      { attachments: [{ entity_type: 'crm_company', entity_id: 'company' }] },
+      true,
+    ],
+    [
+      'a CRM mention',
+      { mentions: [{ entity_type: 'crm_contact', entity_id: 'contact' }] },
+      true,
+    ],
+    [
+      'a non-CRM attachment',
+      { attachments: [{ entity_type: 'document', entity_id: 'doc-2' }] },
+      false,
+    ],
+  ])(
+    'refreshes CRM record lists only after sending %s',
+    async (_name, references, refreshes) => {
+      const parent: MessageParent = { type: 'document', id: 'doc' };
+      testQueryClient.setQueryData<MessageTimelineData>(
+        getMessageTimelineQueryKey(parent),
+        {
+          pageParams: [null],
+          pages: [{ entries: [], next_cursor: null, previous_cursor: null }],
+        }
+      );
+      mocks.post.mockResolvedValue(message(parent, 'sent'));
+
+      await mountSend().mutateAsync({
+        parent,
+        message: { content: 'Hello', ...references },
+        senderId: 'macro|a@example.com',
+        optimisticId: newMessageId(),
+      });
+
+      expect(mocks.refreshCrmLists).toHaveBeenCalledTimes(refreshes ? 1 : 0);
+    }
+  );
 
   it('adopts the server id when the server ignores the client id', async () => {
     const parent: MessageParent = { type: 'document', id: 'doc' };

@@ -2,12 +2,21 @@ import CaretDown from '@phosphor/caret-down.svg';
 import ChatTeardrop from '@phosphor/chat-teardrop.svg';
 import Eye from '@phosphor/eye.svg';
 import FileText from '@phosphor/file-text.svg';
+import Hash from '@phosphor/hash-straight.svg';
 import PaperPlaneTilt from '@phosphor/paper-plane-tilt.svg';
 import Pencil from '@phosphor/pencil.svg';
 import UserCircle from '@phosphor/user-circle.svg';
 import Users from '@phosphor/users.svg';
+import X from '@phosphor/x.svg';
 import { Button } from '@ui';
-import { createSignal, createUniqueId, For, Show } from 'solid-js';
+import {
+  createSignal,
+  createUniqueId,
+  For,
+  onCleanup,
+  onMount,
+  Show,
+} from 'solid-js';
 import {
   type HomepagePersonId,
   homepagePeople,
@@ -16,7 +25,15 @@ import {
 /** GroupChannelLabel for #launch: its other members, up to 20 characters. */
 export const LAUNCH_MEMBERS = 'Julia, Teo, Gabriel +1 other';
 
-type Level = 'view' | 'comment' | 'edit';
+export type ShareLevel = 'view' | 'comment' | 'edit';
+type Level = ShareLevel;
+export type DocumentShareHandle = {
+  typeRecipient: (text: string) => void;
+  typeMessage: (text: string) => void;
+  selectChannel: () => void;
+  share: () => void;
+  reset: () => void;
+};
 const LEVELS: { value: Level; label: string; icon: typeof Eye }[] = [
   { value: 'view', label: 'View', icon: Eye },
   { value: 'comment', label: 'Comment', icon: ChatTeardrop },
@@ -94,17 +111,39 @@ export function DocumentShareSheet(props: {
   open: boolean;
   title: string;
   /** The channel the doc was mentioned in, labeled by its other members. */
-  channel?: { members: string; level: Level; fresh?: boolean };
+  channel?: { members: string; level: Level; fresh?: boolean; name?: string };
+  channelDestination?: string;
+  initialPermission?: Level;
+  onShareChannel?: (message: string, level: Level) => void;
+  onOpenChannel?: () => void;
+  onReady?: (handle: DocumentShareHandle | undefined) => void;
   entityLabel?: string;
   autoFocus?: boolean;
   onClose: () => void;
 }) {
   const titleId = createUniqueId();
   const [recipient, setRecipient] = createSignal('');
-  const [level, setLevel] = createSignal<Level>('edit');
-  const [channelLevel, setChannelLevel] = createSignal(
-    props.channel?.level ?? 'view'
+  const [level, setLevel] = createSignal<Level>(
+    props.initialPermission ?? 'edit'
   );
+  const [channelLevel, setChannelLevel] = createSignal<Level>();
+  const [message, setMessage] = createSignal('');
+  const [selectedChannel, setSelectedChannel] = createSignal(false);
+  let messageInput: HTMLTextAreaElement | undefined;
+  const showChannelOption = () =>
+    !!props.channelDestination &&
+    !selectedChannel() &&
+    !!recipient().trim() &&
+    props.channelDestination
+      .toLowerCase()
+      .includes(recipient().replace(/^#/, '').trim().toLowerCase());
+  const chooseChannel = (focusMessage = false) => {
+    if (!props.channelDestination) return;
+    setSelectedChannel(true);
+    setRecipient('#' + props.channelDestination);
+    if (focusMessage)
+      queueMicrotask(() => messageInput?.focus({ preventScroll: true }));
+  };
   const [shared, setShared] = createSignal<
     { id: string; name: string; person?: HomepagePersonId; level: Level }[]
   >([]);
@@ -112,6 +151,14 @@ export function DocumentShareSheet(props: {
   const share = () => {
     const name = recipient().trim();
     if (!name) return;
+    if (selectedChannel() && props.channelDestination) {
+      props.onShareChannel?.(message(), level());
+      setChannelLevel(undefined);
+      setSelectedChannel(false);
+      setRecipient('');
+      setMessage('');
+      return;
+    }
     const person = MATCHES.find(([pattern]) => pattern.test(name))?.[1];
     setShared((rows) => [
       ...rows.filter((row) => row.person !== person || !person),
@@ -124,6 +171,27 @@ export function DocumentShareSheet(props: {
     ]);
     setRecipient('');
   };
+  onMount(() => {
+    props.onReady?.({
+      typeRecipient: (text) => {
+        setSelectedChannel(false);
+        setRecipient(text);
+      },
+      typeMessage: setMessage,
+      selectChannel: chooseChannel,
+      share,
+      reset: () => {
+        setRecipient('');
+        setMessage('');
+        setSelectedChannel(false);
+        setLevel(props.initialPermission ?? 'edit');
+        setChannelLevel(undefined);
+        setShared([]);
+        setScope('NONE');
+      },
+    });
+    onCleanup(() => props.onReady?.(undefined));
+  });
   return (
     <Show when={props.open}>
       <div
@@ -132,7 +200,11 @@ export function DocumentShareSheet(props: {
           if (event.target === event.currentTarget) props.onClose();
         }}
         onKeyDown={(event) => {
-          if (event.key === 'Escape') props.onClose();
+          if (event.key === 'Escape' && !event.defaultPrevented) {
+            event.preventDefault();
+            event.stopPropagation();
+            props.onClose();
+          }
         }}
       >
         <section
@@ -156,17 +228,76 @@ export function DocumentShareSheet(props: {
             <span>{props.title}</span>
           </header>
           <div class="doc-share-to">
-            <input
-              aria-label="Email or group"
-              placeholder="To: Email or group"
-              value={recipient()}
-              onInput={(event) => setRecipient(event.currentTarget.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Enter' && (event.metaKey || event.ctrlKey))
-                  share();
-              }}
-            />
-            <Show when={recipient().trim()}>
+            <Show
+              when={selectedChannel()}
+              fallback={
+                <input
+                  aria-label="Email or group"
+                  placeholder="To: Email or group"
+                  value={recipient()}
+                  onInput={(event) => setRecipient(event.currentTarget.value)}
+                  onKeyDown={(event) => {
+                    if (
+                      event.key === 'Enter' &&
+                      (event.metaKey || event.ctrlKey)
+                    )
+                      share();
+                    else if (event.key === 'Enter' && showChannelOption()) {
+                      event.preventDefault();
+                      chooseChannel(true);
+                    } else if (
+                      event.key === 'ArrowDown' &&
+                      showChannelOption()
+                    ) {
+                      event.preventDefault();
+                      event.currentTarget.parentElement
+                        ?.querySelector<HTMLElement>('[role="option"]')
+                        ?.focus();
+                    }
+                  }}
+                />
+              }
+            >
+              <span class="doc-share-recipient-chip">
+                <Hash class="size-4" />
+                {props.channelDestination}
+                <button
+                  type="button"
+                  aria-label="Remove channel recipient"
+                  onClick={() => {
+                    setSelectedChannel(false);
+                    setRecipient('');
+                  }}
+                >
+                  <X class="size-3" />
+                </button>
+              </span>
+            </Show>
+            <Show when={showChannelOption()}>
+              <div
+                class="doc-share-suggestions"
+                role="listbox"
+                aria-label="Channels"
+              >
+                <button
+                  type="button"
+                  role="option"
+                  aria-selected="true"
+                  data-share-channel-option
+                  onClick={() => chooseChannel(true)}
+                >
+                  <Hash class="size-4" />
+                  <span>{props.channelDestination}</span>
+                  <span class="ml-auto text-xs text-ink-muted">Channel</span>
+                </button>
+              </div>
+            </Show>
+            <Show
+              when={
+                selectedChannel() ||
+                (!props.channelDestination && recipient().trim())
+              }
+            >
               <span class="doc-share-can">can</span>
             </Show>
             <AccessLevel
@@ -177,9 +308,12 @@ export function DocumentShareSheet(props: {
             />
           </div>
           <textarea
+            ref={messageInput}
             class="doc-share-message"
             aria-label="Optional message"
             placeholder="Optional message"
+            value={message()}
+            onInput={(event) => setMessage(event.currentTarget.value)}
           />
           <div class="doc-share-actions">
             <Button
@@ -193,7 +327,8 @@ export function DocumentShareSheet(props: {
             <Button
               variant="strong"
               depth={3}
-              disabled={!recipient().trim()}
+              disabled={!recipient().trim() || showChannelOption()}
+              data-share-submit
               onClick={share}
             >
               <PaperPlaneTilt class="size-4" />
@@ -224,12 +359,33 @@ export function DocumentShareSheet(props: {
                   data-channel-access
                 >
                   <span>
-                    <Users />
-                    <span>{channel().members}</span>
+                    <Show
+                      when={props.onOpenChannel}
+                      fallback={
+                        <>
+                          <Users />
+                          <span>{channel().members}</span>
+                        </>
+                      }
+                    >
+                      <button
+                        type="button"
+                        data-open-shared-channel
+                        class="doc-share-channel-link"
+                        aria-label={`Open #${channel().name ?? 'launch'}`}
+                        onClick={props.onOpenChannel}
+                      >
+                        <Hash class="size-4" />
+                        <span>{channel().name ?? 'launch'}</span>
+                        <span class="text-xs text-ink-muted">
+                          {channel().members}
+                        </span>
+                      </button>
+                    </Show>
                   </span>
                   <AccessLevel
                     label={`Access for ${channel().members}`}
-                    value={channelLevel()}
+                    value={channelLevel() ?? channel().level}
                     onChange={setChannelLevel}
                   />
                 </div>
@@ -268,7 +424,11 @@ export function DocumentShareSheet(props: {
               <span>
                 {LINK_SCOPES[scope()].title}
                 <span class="doc-share-status">
-                  {scope() === 'NONE' ? 'Shared' : LINK_SCOPES[scope()].label}
+                  {scope() === 'NONE'
+                    ? props.channel || shared().length
+                      ? 'Shared'
+                      : 'Not shared'
+                    : LINK_SCOPES[scope()].label}
                 </span>
               </span>
               <span

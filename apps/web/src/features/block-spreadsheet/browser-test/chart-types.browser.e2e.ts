@@ -97,7 +97,10 @@ test('more chart types are inserted from the Insert menu and downloaded', async 
   await sheet(page, 'Ratings');
   await page.locator('[data-address="B3"]').click();
   await page
-    .getByRole('button', { name: 'Insert chart or image', exact: true })
+    .getByRole('button', {
+      name: 'Insert chart, image or checkbox',
+      exact: true,
+    })
     .click();
   await page.getByRole('menuitem', { name: 'More charts' }).click();
   await page
@@ -157,7 +160,10 @@ test('100% stacked columns and combo charts are inserted from the menu', async (
   await sheet(page, 'Ratings');
   await page.locator('[data-address="B3"]').click();
   await page
-    .getByRole('button', { name: 'Insert chart or image', exact: true })
+    .getByRole('button', {
+      name: 'Insert chart, image or checkbox',
+      exact: true,
+    })
     .click();
   await page
     .getByRole('menuitem', { name: '100% stacked column', exact: true })
@@ -175,7 +181,10 @@ test('100% stacked columns and combo charts are inserted from the menu', async (
   await stacked.press('Escape');
   await page.locator('[data-address="B3"]').click();
   await page
-    .getByRole('button', { name: 'Insert chart or image', exact: true })
+    .getByRole('button', {
+      name: 'Insert chart, image or checkbox',
+      exact: true,
+    })
     .click();
   await page.getByRole('menuitem', { name: 'Column', exact: true }).click();
   const combo = page.getByRole('figure', { name: 'Chart: Chart 4' });

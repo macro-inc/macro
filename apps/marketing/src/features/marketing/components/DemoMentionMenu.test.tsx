@@ -1,4 +1,10 @@
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  within,
+} from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { mentionAtCaret } from '../core/demo-mentions';
@@ -115,7 +121,7 @@ it('inserts into nested contenteditable markup while preserving surrounding text
         >
           <p>
             <strong>Keep this </strong>
-            <span>@q3</span> and this.
+            <span>@web</span> and this.
           </p>
         </div>
       </div>
@@ -125,13 +131,13 @@ it('inserts into nested contenteditable markup while preserving surrounding text
   editor.focus();
   const query = editor.querySelector('span')!.firstChild!;
   const range = document.createRange();
-  range.setStart(query, 3);
+  range.setStart(query, 4);
   range.collapse(true);
   window.getSelection()!.removeAllRanges();
   window.getSelection()!.addRange(range);
   fireEvent.input(editor);
   fireEvent.keyDown(editor, { key: 'Enter' });
-  expect(editor.textContent).toBe('Keep this Q3 launch plan  and this.');
+  expect(editor.textContent).toBe('Keep this Website launch plan  and this.');
   expect(
     editor
       .querySelector('[data-demo-mention="plan"]')
@@ -180,13 +186,18 @@ it('supports opted-in legacy demos without changing their style scope', () => {
 it('uses the real menu category drilldown and return behavior', () => {
   const { editor } = composer();
   fireEvent.input(editor, { target: { value: '@' } });
-  fireEvent.click(screen.getByRole('button', { name: 'View all (9)' }));
+  const documents = screen
+    .getByText('Documents, Agents, & Tasks')
+    .closest('section')!;
+  fireEvent.click(
+    within(documents).getByRole('button', { name: 'View all (8)' })
+  );
   expect(screen.queryByText('People')).toBeNull();
-  expect(screen.getAllByRole('option')).toHaveLength(9);
+  expect(screen.getAllByRole('option')).toHaveLength(8);
   fireEvent.click(screen.getByRole('button', { name: '← Back to everything' }));
   expect(screen.getByText('People')).toBeTruthy();
   fireEvent.keyDown(editor, { key: 'ArrowRight' });
-  expect(screen.getAllByRole('option')).toHaveLength(7);
+  expect(screen.getAllByRole('option')).toHaveLength(8);
   fireEvent.keyDown(editor, { key: 'ArrowLeft' });
   expect(screen.getByText('Channels')).toBeTruthy();
 });

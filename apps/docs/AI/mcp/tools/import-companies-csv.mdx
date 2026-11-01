@@ -1,0 +1,20 @@
+---
+title: ImportCompaniesCsv
+description: >-
+  Import companies into the team CRM from a CSV, such as a Macro companies
+  export or a list from another CRM.
+---
+
+# ImportCompaniesCsv
+
+Import companies into the team CRM from a CSV, such as a Macro companies export or a list from another CRM. Each row needs a domain (a Domain, Domains or Website column) and may name the company (Company or Name); a row takes its first valid domain, and companies the team already has are left as they are. Stage, Owner and Revenue live on pipeline entries rather than companies: when the CSV has them, they go on entries of pipelineId, or of a new pipeline (private unless shareNewPipeline) named after the file. Give the CSV as text in csv, or as documentId for a CSV file in Macro. Returns counts and the rows that could not be imported. To add rows to a pipeline without this, use ImportPipelineCsv.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `csv` | string | No | The CSV text with a header row. Give this or documentId, not both. |
+| `documentId` | string | No | The id of a CSV file in Macro the user can open, e.g. one they uploaded. Give this or csv, not both. |
+| `pipelineId` | string | No | A company pipeline (id from ListPipelines) to put the CSV's Stage, Owner and Revenue on. Omit to create a new pipeline when the CSV has them. |
+| `newPipelineName` | string | No | The name of the new pipeline, when one is created. Defaults to the file's name. |
+| `shareNewPipeline` | boolean | No | Share the new pipeline with the team instead of keeping it private to the user. Defaults to false. |

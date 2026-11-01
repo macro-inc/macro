@@ -22,10 +22,11 @@ use crate::domain::content::{DocumentContent, DocumentContentLocation};
 use crate::domain::models::{
     CreateTaskRequest, DocumentError, EMPTY_SHA256, InitialLinkShare, NewDocument, PropertyInput,
 };
+use crate::domain::notion_markdown::NotionMarkdown;
 use crate::domain::ports::create::{
     DocumentBytesUpload, DocumentBytesUploadPort, DocumentCreationService,
 };
-use crate::domain::ports::markdown::MarkdownInitializationPort;
+use crate::domain::ports::markdown::{MarkdownInitializationPort, MarkdownSnapshot};
 use crate::domain::ports::mentions::DocumentMentionTrackingPort;
 use crate::domain::response::CreateDocumentResponseData;
 
@@ -36,6 +37,7 @@ pub struct NewDocumentMetadata {
     document_name: String,
     project_id: Option<uuid::Uuid>,
     created_at: Option<chrono::DateTime<chrono::Utc>>,
+    updated_at: Option<chrono::DateTime<chrono::Utc>>,
     skip_history: bool,
     initial_link_share: InitialLinkShare,
 }
@@ -54,6 +56,7 @@ impl NewDocumentMetadata {
                 document_name: document_name.into(),
                 project_id: None,
                 created_at: None,
+                updated_at: None,
                 skip_history: false,
                 initial_link_share: InitialLinkShare::EntityDefault,
             },
@@ -70,6 +73,7 @@ impl NewDocumentMetadata {
             team_id: kind.team_id,
             share_with_team: kind.share_with_team,
             created_at: self.created_at,
+            updated_at: self.updated_at,
             sub_type: kind.subtype.sub_type(),
             skip_history: self.skip_history,
             initial_link_share: self.initial_link_share,
@@ -99,6 +103,12 @@ impl NewDocumentMetadataBuilder {
     /// Set a custom creation timestamp.
     pub fn created_at(mut self, created_at: chrono::DateTime<chrono::Utc>) -> Self {
         self.metadata.created_at = Some(created_at);
+        self
+    }
+
+    /// Set a custom last-edit timestamp; defaults to the creation timestamp.
+    pub fn updated_at(mut self, updated_at: chrono::DateTime<chrono::Utc>) -> Self {
+        self.metadata.updated_at = Some(updated_at);
         self
     }
 
@@ -221,6 +231,25 @@ impl NewMarkdownTextDocument {
     }
 }
 
+/// A backend-created markdown document whose content comes from a Notion
+/// page: lexical-service converts the page, resolving its references
+/// through the links it carries.
+#[derive(Debug, Clone)]
+pub struct NewNotionDocument {
+    /// Common document metadata.
+    pub metadata: NewDocumentMetadata,
+    /// The Notion page body and its links.
+    pub notion: NotionMarkdown,
+    /// Markdown subtype.
+    pub subtype: MarkdownSubtype,
+}
+
+/// Where a new markdown document's content comes from.
+enum MarkdownContent {
+    Markdown(String),
+    Notion(NotionMarkdown),
+}
+
 /// A backend-created plaintext document whose file type determines the
 /// creation lifecycle.
 #[derive(Debug, Clone)]
@@ -233,6 +262,7 @@ pub struct NewPlainTextDocument {
 #[derive(Debug, Clone)]
 enum PlainTextDocumentKind {
     Markdown(MarkdownSubtype),
+    Canvas,
     Text(NonMarkdownFileType),
 }
 
@@ -354,7 +384,11 @@ impl NewPlainTextDocumentBuilder<FileType, String> {
                 }
                 MarkdownSubtype::Note => {}
             }
-            PlainTextDocumentKind::Text(NonMarkdownFileType::new(self.file_type)?)
+            if self.file_type == FileType::Canvas && self.text.trim().is_empty() {
+                PlainTextDocumentKind::Canvas
+            } else {
+                PlainTextDocumentKind::Text(NonMarkdownFileType::new(self.file_type)?)
+            }
         };
 
         Ok(NewPlainTextDocument {
@@ -557,6 +591,7 @@ where
                 )
                 .await
             }
+            PlainTextDocumentKind::Canvas => self.create_canvas(principal, metadata).await,
             PlainTextDocumentKind::Text(file_type) => {
                 self.create_text_file(
                     principal,
@@ -571,6 +606,40 @@ where
         }
     }
 
+    /// Create an empty native Canvas whose shared content is ready before returning.
+    #[tracing::instrument(skip(self, metadata), err)]
+    pub async fn create_canvas(
+        &self,
+        principal: &CreationPrincipal,
+        metadata: NewDocumentMetadata,
+    ) -> Result<CreatedDocument, DocumentError> {
+        let document = metadata.into_new_document(RepoDocumentKind {
+            file_type: Some(FileType::Canvas),
+            sha: EMPTY_SHA256.to_string(),
+            subtype: RepoDocumentSubtype::Regular,
+            team_id: None,
+            share_with_team: false,
+        });
+        let mut response = self
+            .document_service
+            .create_document(principal, document, None)
+            .await?;
+        let id = response
+            .document_response
+            .document_metadata
+            .metadata
+            .document_id
+            .clone();
+        if let Err(error) = self.document_service.initialize_canvas(&id).await {
+            self.cleanup_created_document(&id).await;
+            return Err(error);
+        }
+        response.document_response.document_metadata.content =
+            DocumentContent::ready(DocumentContentLocation::SyncService);
+        response.document_response.presigned_url = None;
+        Ok(CreatedDocument::new(response))
+    }
+
     /// Create a markdown text document and initialize sync-service.
     #[tracing::instrument(skip(self, document), err)]
     pub async fn create_markdown_text(
@@ -583,6 +652,44 @@ where
             markdown,
             subtype,
         } = document;
+        self.create_markdown(
+            principal,
+            metadata,
+            subtype,
+            MarkdownContent::Markdown(markdown),
+        )
+        .await
+    }
+
+    /// Create a markdown document from a Notion page and initialize
+    /// sync-service.
+    #[tracing::instrument(skip(self, document), err)]
+    pub async fn create_notion_markdown(
+        &self,
+        principal: &CreationPrincipal,
+        document: NewNotionDocument,
+    ) -> Result<CreatedDocument, DocumentError> {
+        let NewNotionDocument {
+            metadata,
+            notion,
+            subtype,
+        } = document;
+        self.create_markdown(
+            principal,
+            metadata,
+            subtype,
+            MarkdownContent::Notion(notion),
+        )
+        .await
+    }
+
+    async fn create_markdown(
+        &self,
+        principal: &CreationPrincipal,
+        metadata: NewDocumentMetadata,
+        subtype: MarkdownSubtype,
+        content: MarkdownContent,
+    ) -> Result<CreatedDocument, DocumentError> {
         let task = match &subtype {
             MarkdownSubtype::Note
             | MarkdownSubtype::Snippet
@@ -632,10 +739,20 @@ where
             .clone();
 
         let finalize_result = async {
-            let initial_snapshot = self
-                .markdown_initializer
-                .initialize_existing_markdown(&document_id, &markdown)
-                .await?;
+            let initialized = match &content {
+                MarkdownContent::Markdown(markdown) => MarkdownSnapshot {
+                    snapshot: self
+                        .markdown_initializer
+                        .initialize_existing_markdown(&document_id, markdown)
+                        .await?,
+                    markdown: markdown.clone(),
+                },
+                MarkdownContent::Notion(notion) => {
+                    self.markdown_initializer
+                        .initialize_existing_notion(&document_id, notion)
+                        .await?
+                }
+            };
 
             self.document_service
                 .set_document_content(
@@ -663,12 +780,15 @@ where
                     .await?;
             }
 
-            Ok(initial_snapshot)
+            Ok(initialized)
         }
         .await;
 
-        let initial_snapshot = match finalize_result {
-            Ok(initial_snapshot) => initial_snapshot,
+        let MarkdownSnapshot {
+            snapshot: initial_snapshot,
+            markdown,
+        } = match finalize_result {
+            Ok(initialized) => initialized,
             Err(error) => {
                 self.cleanup_created_document(&document_id).await;
                 return Err(error);

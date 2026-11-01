@@ -44,11 +44,18 @@ it('animates the bolt and retains its paid-speed preference across mounts', () =
   expect(localStorage.getItem('macro:ai-fast-mode')).toBe('true');
   expect(animate).toHaveBeenCalledOnce();
   view.unmount();
-  render(() => <SpeedToggle model={Model.opus55} />);
+  render(() => <SpeedToggle model={Model.gpt61Sol} />);
   expect(screen.getByRole('button').getAttribute('aria-label')).toContain(
-    'Fast mode on · 2×'
+    'Ultrafast mode on · 6×'
   );
-  expect(speedForModel(Model.opus55, true)).toBe('fast');
+  expect(speedForModel(Model.gpt61Sol, true)).toBe('ultrafast');
+});
+
+it('keeps Claude Opus on standard speed while Anthropic fast mode is off', () => {
+  setFastModeEnabled(true);
+  render(() => <SpeedToggle model={Model.opus55} />);
+  expect(screen.queryByRole('button')).toBeNull();
+  expect(speedForModel(Model.opus55, true)).toBe('standard');
 });
 
 it('leaves unsupported models at standard speed and respects reduced motion', () => {

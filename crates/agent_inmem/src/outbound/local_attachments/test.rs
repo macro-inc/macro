@@ -145,6 +145,8 @@ fn message(uri: &str) -> ChatMessage {
 
 fn request(messages: Vec<ChatMessage>) -> TurnRequest {
     TurnRequest {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
+        purpose: crate::domain::engine::TurnPurpose::Conversation,
         session_id: agent_session::domain::model::AgentSessionId::new(),
         awaiting: std::sync::Arc::default(),
         owner: Owner::from_principal_str("macro|test@macro.com").expect("user"),
@@ -158,6 +160,7 @@ fn request(messages: Vec<ChatMessage>) -> TurnRequest {
         cancel: CancellationToken::new(),
         user_input: None,
         reviewer: None,
+        agent_key: None,
     }
 }
 

@@ -1,4 +1,3 @@
-import { pipedreamAppAvailableInEnv } from '@core/component/AI/constant/mcpServers';
 import { toast } from '@core/component/Toast/Toast';
 import { queryReadyGate } from '@queries/gate';
 import {
@@ -42,11 +41,7 @@ export function createPipedreamCatalogSearch(
     if (!queryReadyGate(query)) return [];
     return (query.data?.pages ?? [])
       .flatMap((page) => page.servers)
-      .filter(
-        (entry) =>
-          pipedreamAppAvailableInEnv(entry.app_slug) &&
-          !exclude().has(entry.app_slug)
-      );
+      .filter((entry) => !exclude().has(entry.app_slug));
   };
 
   return { searchInput, onSearchInput, search, query, entries };

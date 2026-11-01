@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH sessions AS (\n                SELECT session_id\n                FROM agent_conversation_sessions\n                WHERE channel_id = $1 AND bot_id = $2\n            ),\n            shown AS (\n                -- Whatever waits or runs, however long ago it was posted.\n                SELECT turn.source_message_id\n                FROM agent_conversation_turns turn\n                JOIN sessions ON sessions.session_id = turn.session_id\n                WHERE turn.state IN ('queued', 'running')\n                UNION\n                -- Each session's first turn, where the transcript shows its\n                -- context starting fresh.\n                SELECT first.source_message_id\n                FROM sessions\n                CROSS JOIN LATERAL (\n                    SELECT source_message_id\n                    FROM agent_conversation_turns\n                    WHERE session_id = sessions.session_id\n                    ORDER BY created_at, source_message_id\n                    LIMIT 1\n                ) first\n                UNION\n                (\n                    SELECT source_message_id\n                    FROM agent_conversation_turns\n                    WHERE channel_id = $1 AND bot_id = $2\n                    ORDER BY created_at DESC, source_message_id DESC\n                    LIMIT $3\n                )\n            )\n            SELECT jsonb_build_object(\n                'source_message_id', source_message_id,\n                'bot_id', bot_id,\n                'session_id', session_id,\n                'action_id', action_id,\n                'reply_message_id', in_flight->'announcement_message_id',\n                'state', state,\n                'retryable', state IN ('failed', 'stopped', 'interrupted')\n                    AND (reply_finalized OR in_flight->>'announcement_message_id' IS NULL),\n                'created_at', created_at\n            ) AS \"value!\"\n            FROM agent_conversation_turns\n            WHERE channel_id = $1\n              AND bot_id = $2\n              AND source_message_id IN (SELECT source_message_id FROM shown)\n            ORDER BY created_at, source_message_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "value!",
+        "type_info": "Jsonb"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "011e8bbaeba91d96139da84e1f5a07d876cb20348e9150940c8932399b399e27"
+}

@@ -52,14 +52,32 @@ async fn subscription_responses(
     soup: CountingSoupService,
     patches: Vec<Patch<model_entity::Entity<'static>>>,
 ) -> Vec<async_graphql::Response> {
+    subscription_responses_from(soup.clone(), soup, patches).await
+}
+
+/// Runs `soupUpdates` with separate list (replica) and hydration (primary) readers.
+async fn subscription_responses_from(
+    replica: CountingSoupService,
+    primary: CountingSoupService,
+    patches: Vec<Patch<model_entity::Entity<'static>>>,
+) -> Vec<async_graphql::Response> {
     let (sender, receiver) = tokio::sync::mpsc::channel(16);
     for patch in patches {
         sender.send(patch).await.unwrap();
     }
     drop(sender);
-    let loader = graphql_soup::soup_item_loader(soup.clone(), Arc::new(NoOpEmailService));
+    let list_loader = graphql_soup::soup_item_loader(
+        replica.clone(),
+        Arc::new(NoOpEmailService),
+        NoOpEntityAccessService,
+    );
+    let hydration_loader = graphql_soup::PrimarySoupItemLoader(graphql_soup::soup_item_loader(
+        primary,
+        Arc::new(NoOpEmailService),
+        NoOpEntityAccessService,
+    ));
     let schema: RealtimeSchema = build_schema_with_services(
-        soup,
+        replica,
         TestRealtimeSubscriptionService {
             receiver: Arc::new(Mutex::new(Some(receiver))),
             subscribed_user: Arc::new(Mutex::new(None)),
@@ -71,7 +89,8 @@ async fn subscription_responses(
         "subscription {{ soupUpdates {{ {PATCH_SELECTION} }} }}"
     ))
     .data(MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap())
-    .data(loader);
+    .data(list_loader)
+    .data(hydration_loader);
     tokio::time::timeout(
         std::time::Duration::from_secs(5),
         schema.execute_stream(request).collect(),
@@ -117,6 +136,27 @@ async fn batch_keeps_last_operation_per_entity_and_batches_hydration() {
         1,
         "surviving updates share a DataLoader request"
     );
+}
+
+#[tokio::test]
+async fn updates_hydrate_from_the_primary_before_the_replica_replays_them() {
+    let replica = CountingSoupService {
+        return_empty_raw: true,
+        ..CountingSoupService::default()
+    };
+    let replica_calls = replica.raw_calls.clone();
+    let primary = CountingSoupService::default();
+    primary.set_raw_response(vec![soup_document(Uuid::from_u128(1))]);
+    let responses =
+        subscription_responses_from(replica, primary, vec![Patch::Updated(entity(1))]).await;
+    assert_eq!(responses.len(), 1);
+    assert!(responses[0].errors.is_empty(), "{:?}", responses[0].errors);
+    let data = responses[0].data.clone().into_json().unwrap();
+    assert_eq!(
+        data["soupUpdates"][0]["item"]["id"],
+        Uuid::from_u128(1).to_string()
+    );
+    assert_eq!(replica_calls.load(Ordering::SeqCst), 0);
 }
 
 #[tokio::test]
@@ -333,7 +373,11 @@ impl MutationEffectsQuery {
 async fn mutation_effects_share_non_nullable_hydration_and_omit_misses() {
     let soup = CountingSoupService::default();
     soup.set_raw_response(vec![soup_document(Uuid::from_u128(1))]);
-    let loader = graphql_soup::soup_item_loader(soup.clone(), Arc::new(NoOpEmailService));
+    let loader = graphql_soup::soup_item_loader(
+        soup.clone(),
+        Arc::new(NoOpEmailService),
+        NoOpEntityAccessService,
+    );
     let schema = Schema::build(MutationEffectsQuery, EmptyMutation, EmptySubscription)
         .data(loader)
         .data(entity_mutation::EntityMutationActor {
@@ -426,6 +470,8 @@ async fn pr_and_linked_session_updates_serialize_current_metadata() {
             updated_at: now,
             viewed_at: None,
             extra: (),
+            source: models_soup::agent_session::AgentSessionSource::User,
+            visibility: models_soup::agent_session::AgentSessionVisibility::Listed,
         }),
     ]);
     let calls = soup.raw_calls.clone();

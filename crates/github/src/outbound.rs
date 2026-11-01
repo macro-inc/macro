@@ -10,6 +10,8 @@ pub mod github_sync_client;
 pub mod pg_github_repo;
 #[cfg(feature = "sync")]
 pub mod pg_github_sync_repo;
+#[cfg(feature = "installation_claims")]
+pub mod pg_installation_claims;
 #[cfg(feature = "sync")]
 pub mod pull_request_diff;
 #[cfg(any(feature = "link", feature = "sync"))]

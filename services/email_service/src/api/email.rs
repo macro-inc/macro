@@ -22,6 +22,10 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         .nest("/attachments", attachments::router(state.clone()))
         .nest("/labels", labels::router(state.clone()))
         .nest("/threads", threads::router(state.clone()))
+        .route(
+            "/draft-transfers/{id}/recover",
+            axum::routing::post(drafts::transfer::recover),
+        )
         .nest("/drafts", drafts::router(state.clone()))
         .nest("/messages", messages::router(state.clone()))
         .nest("/links", links::router())

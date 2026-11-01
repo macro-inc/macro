@@ -18,6 +18,11 @@ export const CallDetailRouteView = lazyNamed(
   () => import('@app/features/block-call/route-views'),
   'CallDetailRouteView'
 );
+
+export const CallsCallDetail = lazyNamed(
+  () => import('@app/features/calls-view/views/call-detail'),
+  'CallsCallDetail'
+);
 export const PrDetailRouteView = lazyNamed(
   () => import('@app/features/block-pr/route-views'),
   'PrDetailRouteView'

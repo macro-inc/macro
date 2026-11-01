@@ -23,6 +23,7 @@ vi.mock('@ui', async () => ({
   cn: (await import('@ui/utils/classname')).cn,
   Button: (props: ComponentProps<'button'>) => <button {...props} />,
   Dropdown: (await import('@ui/components/Dropdown')).Dropdown,
+  Tooltip: (await import('@ui/components/Tooltip')).Tooltip,
 }));
 vi.mock('../context/compose-context', () => ({
   useCompose: () => ({
@@ -36,7 +37,11 @@ vi.mock('../context/compose-context', () => ({
 }));
 vi.mock('@core/component/UserIcon', () => ({ UserIcon: () => null }));
 vi.mock('@core/component/inboxIcon', () => ({ inboxIconProps: () => ({}) }));
-vi.mock('./compose-recipients', () => ({ ComposeRecipients: () => null }));
+vi.mock('./compose-recipients', () => ({
+  ComposeRecipients: (props: {
+    actions?: ComponentProps<'div'>['children'];
+  }) => <div>{props.actions}</div>,
+}));
 vi.mock('./compose-subject', () => ({ ComposeSubject: () => null }));
 vi.mock('./compose-body', () => ({
   ComposeBody: (props: { inputRef: (element: HTMLElement) => void }) => (
@@ -61,6 +66,49 @@ afterEach(() => {
 });
 
 describe('ComposeLayout root composition', () => {
+  it('omits an empty sender row while keeping Cc and Bcc controls usable', () => {
+    render(() => <ComposeLayout />);
+    expect(screen.queryByRole('group', { name: 'Sending inbox' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Cc' }));
+    expect(screen.queryByRole('button', { name: 'Cc' })).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: 'Bcc' }));
+    expect(screen.queryByRole('button', { name: 'Bcc' })).toBeNull();
+  });
+
+  it('shows a fixed sender address when inbox selection is unavailable', () => {
+    composeStatus.sender = { fromAddress: () => 'sender@example.com' };
+    render(() => <ComposeLayout />);
+    expect(
+      screen.getByRole('group', { name: 'Sending inbox' }).textContent
+    ).toContain('sender@example.com');
+  });
+
+  it('keeps the sender row while inboxes load, then shows the default inbox', () => {
+    const context = createComposeContext();
+    const inboxes = context.accounts.inboxes();
+    const [loaded, setLoaded] = createSignal(false);
+    context.accounts = {
+      ...context.accounts,
+      inboxes: () => (loaded() ? inboxes : []),
+      loading: () => !loaded(),
+      primaryId: () => (loaded() ? 'inbox' : undefined),
+    };
+    const root = mountEmailComposer(context);
+    composeStatus.sender = root.state.context;
+    try {
+      render(() => <ComposeLayout />);
+      const row = screen.getByRole('group', { name: 'Sending inbox' });
+      expect(row.getAttribute('aria-busy')).toBe('true');
+      setLoaded(true);
+      expect(screen.getByRole('group', { name: 'Sending inbox' })).toBe(row);
+      expect(row.getAttribute('aria-busy')).toBeNull();
+      expect(row.textContent).toContain('me@example.com');
+    } finally {
+      cleanup();
+      root.dispose();
+    }
+  });
+
   it('shows the missing-sender error and lets the user select the only remaining inbox', async () => {
     vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
     const context = createComposeContext();

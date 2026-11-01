@@ -2,7 +2,7 @@ use std::sync::{Arc, Mutex};
 
 use uuid::Uuid;
 
-use super::super::test_support::{Call, FakeRateLimiter, FakeTokenSource, call_log};
+use super::super::test_support::{Call, FakeGate, FakeTokenSource, call_log};
 use super::*;
 use crate::domain::models::{AccessToken, TokenFreshness};
 
@@ -36,7 +36,7 @@ async fn get_attachment_uses_attachment_quota_and_forwards_identifiers() {
     let service = EmailApiClientServiceImpl::new(
         repository,
         FakeTokenSource::new(calls.clone(), Ok(AccessToken::new("token"))),
-        FakeRateLimiter::new(calls.clone(), Ok(())),
+        FakeGate::new(calls.clone(), Ok(())),
     );
 
     let result = service
@@ -51,8 +51,9 @@ async fn get_attachment_uses_attachment_quota_and_forwards_identifiers() {
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::RateLimit(link_id, ApiOperationKind::GetAttachment),
+            Call::Acquire(link_id, ApiOperationKind::GetAttachment),
             Call::Token(link_id, TokenFreshness::Cached),
+            Call::Finish(link_id, None),
         ]
     );
 }

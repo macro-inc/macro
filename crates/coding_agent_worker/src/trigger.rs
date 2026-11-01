@@ -67,6 +67,8 @@ pub enum TriggerWork {
     /// service announces the reply into its channel from the trigger event
     /// it observed.
     PromptExisting {
+        /// Stable identity shared with the backend announcement.
+        message_id: Uuid,
         /// The session to feed.
         session: AgentSessionId,
         /// Who sent the message.
@@ -82,7 +84,7 @@ pub enum TriggerWork {
 /// errors, and the stream is left open either way.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Skipped {
-    /// The sender is not a user, so there is nobody to act for.
+    /// No valid user sender, bot attribution, or requested owner to act for.
     NotFromUser,
     /// An event shape this daemon does not recognise yet - the trigger's
     /// vocabulary is non-exhaustive on purpose.
@@ -136,11 +138,7 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
             else {
                 return Err(Skipped::Unrecognized);
             };
-            let sender = message
-                .sender
-                .as_user()
-                .cloned()
-                .ok_or(Skipped::NotFromUser)?;
+            let sender = message.invoking_user().ok_or(Skipped::NotFromUser)?;
             Ok(TriggerWork::OpenAndPrompt {
                 reuse_origin_message: false,
                 bot: bot_id,
@@ -164,12 +162,9 @@ pub fn trigger_to_work(event: AgentTriggerTopicEvent) -> Result<TriggerWork, Ski
             else {
                 return Err(Skipped::Unrecognized);
             };
-            let sender = message
-                .sender
-                .as_user()
-                .cloned()
-                .ok_or(Skipped::NotFromUser)?;
+            let sender = message.invoking_user().ok_or(Skipped::NotFromUser)?;
             Ok(TriggerWork::PromptExisting {
+                message_id: message.message_id,
                 session: session_id,
                 sender,
                 content: message.content,

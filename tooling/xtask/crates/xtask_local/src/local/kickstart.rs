@@ -112,7 +112,7 @@ impl GithubIdp {
 pub fn build(
     frontend_port: u16,
     auth_port: u16,
-    doc_cognition_port: u16,
+    proxy_origins: &[String],
     lambda_body: &str,
     reconcile_lambda_body: &str,
     google: Option<&GoogleIdp>,
@@ -124,17 +124,24 @@ pub fn build(
     let lambda_id = identity::POPULATE_JWT_LAMBDA_ID;
     let template_id = identity::PASSWORDLESS_EMAIL_TEMPLATE_ID;
 
-    let redirect_urls = json!([
+    let mut redirect_urls = vec![
         format!("http://localhost:{frontend_port}/app"),
         identity::oauth_redirect_uri(auth_port),
-        "http://authentication-service:8080/oauth/redirect",
-        // MCP client-connector callback on document_cognition_service. Must
-        // track the instance host port: a named `--port-base` stack publishes
-        // DCS somewhere other than 8085, and FusionAuth rejects (or the
-        // browser cannot reach) a callback that still points at 8085.
-        identity::oauth_redirect_uri(doc_cognition_port),
-        "https://mcp-server-local.macro.com/oauth/callback",
-    ]);
+        "http://authentication-service:8080/oauth/redirect".to_string(),
+    ];
+    // The browser may use localhost or the machine hostname for this proxy.
+    // Authorize the exact origins used by either local frontend mode.
+    for origin in proxy_origins {
+        for path in [
+            "/cognition/mcp/servers/auth/callback",
+            "/mcp/oauth/callback",
+        ] {
+            let callback = format!("{origin}{path}");
+            if !redirect_urls.contains(&callback) {
+                redirect_urls.push(callback);
+            }
+        }
+    }
 
     // Kickstart executes these in order, so each request must come after the
     // entities it references. Dependency chain:

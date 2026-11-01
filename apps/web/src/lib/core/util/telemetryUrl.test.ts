@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
-  redactCallLinkProperties,
-  redactCallLinkTokens,
+  redactLinkTokenProperties,
+  redactLinkTokens,
   telemetryUrl,
 } from './telemetryUrl';
 
@@ -32,6 +32,38 @@ describe('meeting URL telemetry', () => {
     expect(telemetryUrl(input)).toBe(expected);
   });
 
+  it.each([
+    [
+      'https://macro.com/app/team-invite?link=0a1b2c3d-secret',
+      'https://macro.com/app/team-invite?link=:inviteToken',
+    ],
+    [
+      '/app/team-invite?utm_source=slack&link=secret#top',
+      '/app/team-invite?utm_source=slack&link=:inviteToken#top',
+    ],
+    ['/app/team-invite?id=invite-id', '/app/team-invite?id=invite-id'],
+    [
+      'https://macro.com/app/login?redirect=%2Fteam-invite%3Flink%3Dsecret',
+      'https://macro.com/app/login?redirect=%2Fteam-invite%3Flink%3D:inviteToken',
+    ],
+    [
+      '/app/login?redirect=%2Fteam-invite%3Fsource%3Dslack%26link%3Dsecret&next=1',
+      '/app/login?redirect=%2Fteam-invite%3Fsource%3Dslack%26link%3D:inviteToken&next=1',
+    ],
+  ])('redacts a team invite link token in %s', (input, expected) => {
+    expect(redactLinkTokens(input)).toBe(expected);
+  });
+
+  it('redacts team invite link tokens in pageview properties', () => {
+    expect(
+      redactLinkTokenProperties({
+        $current_url: 'https://macro.com/app/team-invite?link=secret',
+      })
+    ).toEqual({
+      $current_url: 'https://macro.com/app/team-invite?link=:inviteToken',
+    });
+  });
+
   it('keeps unrelated endpoint paths intact', () => {
     expect(telemetryUrl('/call/record/id/link')).toBe('/call/record/id/link');
     expect(telemetryUrl('/calendar/meetings')).toBe('/calendar/meetings');
@@ -42,8 +74,8 @@ describe('meeting URL telemetry', () => {
   it('redacts tokens included in serialized errors and exception messages', () => {
     const message =
       'Request to https://gateway.macro.com/dss/call/join/secret/leave failed';
-    expect(redactCallLinkTokens(message)).not.toContain('secret');
-    expect(redactCallLinkTokens(JSON.stringify({ message }))).not.toContain(
+    expect(redactLinkTokens(message)).not.toContain('secret');
+    expect(redactLinkTokens(JSON.stringify({ message }))).not.toContain(
       'secret'
     );
   });
@@ -62,7 +94,7 @@ describe('meeting URL telemetry', () => {
       $set_once: initialProperties,
     };
 
-    const sanitized = redactCallLinkProperties(properties);
+    const sanitized = redactLinkTokenProperties(properties);
 
     expect(JSON.stringify(sanitized)).not.toContain('secret');
     expect(sanitized.$set).toEqual({
@@ -75,12 +107,14 @@ describe('meeting URL telemetry', () => {
     expect(sanitized.$current_url).toBe('https://macro.com/app');
     expect(sanitized.$set).not.toBe(initialProperties);
     expect(properties.$set.$initial_pathname).toBe('/app/meet/secret');
-    expect(redactCallLinkProperties(initialProperties)).toEqual(sanitized.$set);
+    expect(redactLinkTokenProperties(initialProperties)).toEqual(
+      sanitized.$set
+    );
   });
 
   it('redacts setup capabilities in serialized messages and retained person properties', () => {
     const url = 'https://macro.com/app/meet/join/private-token?source=calendar';
-    const sanitized = redactCallLinkProperties({
+    const sanitized = redactLinkTokenProperties({
       $current_url: url,
       $set: { $initial_current_url: url },
       $set_once: { $initial_referrer: url },
@@ -90,7 +124,7 @@ describe('meeting URL telemetry', () => {
       'https://macro.com/app/meet/join/:shareToken?source=calendar'
     );
     expect(
-      redactCallLinkTokens(JSON.stringify({ message: `Failed ${url}` }))
+      redactLinkTokens(JSON.stringify({ message: `Failed ${url}` }))
     ).not.toContain('private-token');
   });
 
@@ -98,7 +132,7 @@ describe('meeting URL telemetry', () => {
     const details = { count: 3 };
     const properties = { details, $set: null, $set_once: ['unchanged'] };
 
-    expect(redactCallLinkProperties(properties)).toEqual(properties);
-    expect(redactCallLinkProperties(properties).details).toBe(details);
+    expect(redactLinkTokenProperties(properties)).toEqual(properties);
+    expect(redactLinkTokenProperties(properties).details).toBe(details);
   });
 });

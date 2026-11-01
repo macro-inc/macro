@@ -4,7 +4,9 @@ use std::sync::{Arc, Mutex};
 
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
-use graphql_soup::{SoupInboxReader, SoupItemDataLoader, SoupItemLoader, SoupItemLoaderError};
+use graphql_soup::{
+    SoupEmailThreadReader, SoupItemDataLoader, SoupItemLoader, SoupItemLoaderError,
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_owner::Owner;
 use models_pagination::{Paginated, PaginatedCursor, SimpleSortMethod};
@@ -59,7 +61,7 @@ impl RecordingSoupService {
     }
 
     pub(super) fn loader(&self) -> SoupItemDataLoader {
-        SoupItemDataLoader::new(SoupItemLoader::new(self.clone(), NoInboxes))
+        SoupItemDataLoader::new(SoupItemLoader::new(self.clone(), NoThreads))
     }
 }
 
@@ -152,6 +154,15 @@ impl SoupService for RecordingSoupService {
         Ok(Vec::<ItemGroupingInfo<SoupPropertiesField>>::new().into_iter())
     }
 
+    async fn group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _group_by: &'a soup::domain::models::grouping::GroupByField,
+        _keys: &'a [String],
+    ) -> Result<soup::domain::models::grouping::GroupLabels, SoupErr> {
+        Ok(Default::default())
+    }
+
     async fn caller_tag_sets<'a>(
         &self,
         _user_id: MacroUserIdStr<'a>,
@@ -160,13 +171,17 @@ impl SoupService for RecordingSoupService {
     }
 }
 
-struct NoInboxes;
+struct NoThreads;
 
-impl SoupInboxReader for NoInboxes {
-    async fn get_inbox_ids(
+impl SoupEmailThreadReader for NoThreads {
+    async fn read_threads(
         &self,
         _user_id: MacroUserIdStr<'static>,
-    ) -> Result<Vec<Uuid>, SoupItemLoaderError> {
-        unreachable!("initiative hydration must not request email inboxes")
+        _thread_ids: Vec<Uuid>,
+    ) -> Result<
+        Vec<models_soup::email_thread::SoupEnrichedEmailThreadPreview<()>>,
+        SoupItemLoaderError,
+    > {
+        unreachable!("initiative hydration must not request email threads")
     }
 }

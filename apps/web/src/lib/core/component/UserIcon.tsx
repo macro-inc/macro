@@ -13,9 +13,10 @@ import {
   tryMacroId,
   useIsConnectedSecondaryInbox,
 } from '@core/user';
-import RobotIcon from '@phosphor/robot.svg';
-import Trash from '@phosphor-icons/core/regular/trash.svg?component-solid';
-import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
+import { fireAndForget } from '@core/util/fireAndForget';
+import RobotIcon from '@icon/system/regular/robot.svg';
+import Trash from '@icon/system/regular/trash.svg?component-solid';
+import { getOrCreateDirectMessage } from '@queries/channel/get-or-create-dm';
 import { Avatar, type AvatarSize, cn } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -143,22 +144,23 @@ export function UserIcon(props: UserIconProps) {
   });
 
   const { openWithSplit } = useSplitLayout();
-  const getOrCreateDmMutation = useGetOrCreateDirectMessageMutation();
   const isConnectedSecondaryInbox = useIsConnectedSecondaryInbox();
+
+  const openDm = async (recipientId: string, preferNewSplit: boolean) => {
+    const result = await getOrCreateDirectMessage(recipientId);
+    if (result.isErr()) {
+      console.error('failed to get or create direct message', result.error);
+      return;
+    }
+    openWithSplit(
+      { type: 'channel', id: result.value.channel_id },
+      { activate: true, preferNewSplit }
+    );
+  };
 
   const getOrCreateDm = (event: MouseEvent) => {
     if (!props.id || isConnectedSecondaryInbox(props.id)) return;
-    getOrCreateDmMutation.mutate(
-      { recipient_id: props.id },
-      {
-        onSuccess: ({ channel_id }) => {
-          openWithSplit(
-            { type: 'channel', id: channel_id },
-            { activate: true, preferNewSplit: event.shiftKey }
-          );
-        },
-      }
-    );
+    fireAndForget(openDm(props.id, event.shiftKey), 'user-icon-dm');
   };
 
   const showTooltip = () => props.showTooltip !== false;

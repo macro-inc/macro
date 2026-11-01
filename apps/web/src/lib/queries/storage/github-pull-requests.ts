@@ -223,7 +223,7 @@ function githubPullRequestRefreshQueryOptions(
       });
       if (result.isErr()) return false;
       for (const queryKey of refreshedKeys) {
-        void client.invalidateQueries({ queryKey });
+        client.invalidateQueries({ queryKey });
       }
       return true;
     },
