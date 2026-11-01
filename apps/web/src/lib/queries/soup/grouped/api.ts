@@ -7,6 +7,16 @@ import type { SoupApiItem } from '@service-storage/generated/schemas/soupApiItem
 import { match } from 'ts-pattern';
 import { type GroupByField, type GroupMeta, NOT_SET_GROUP_KEY } from './types';
 
+export const DATE_GROUP_BUCKETS = [
+  ['today', 'Today'],
+  ['yesterday', 'Yesterday'],
+  ['this_week', 'This Week'],
+  ['last_week', 'Last Week'],
+  ['this_month', 'This Month'],
+  ['last_month', 'Last Month'],
+  ['older', 'Older'],
+] as const;
+
 /** Sort methods the grouped soup endpoints accept. */
 export type GroupedSortMethod = Exclude<
   NonNullable<Params['sort_method']>,
@@ -139,7 +149,13 @@ export function resolveGroupMetaForKey(
 
       return;
     })
-    .with({ type: 'date' }, () => undefined)
+    .with({ type: 'date' }, () => {
+      const displayOrder = DATE_GROUP_BUCKETS.findIndex(
+        ([bucketKey]) => bucketKey === key
+      );
+      if (displayOrder === -1) return;
+      return { key, label: DATE_GROUP_BUCKETS[displayOrder][1], displayOrder };
+    })
     .exhaustive(() => undefined);
 }
 
