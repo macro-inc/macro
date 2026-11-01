@@ -21,8 +21,9 @@ function ContactRow(props: {
   onOpen: (event: MouseEvent) => void;
   ownerId: string;
 }) {
-  const photo = useCrmContext().createContactPhoto?.(props.contact.email);
-  const name = () => props.contact.name || props.contact.email;
+  const email = props.contact.email;
+  const photo = email ? useCrmContext().createContactPhoto?.(email) : undefined;
+  const name = () => props.contact.name || props.contact.email || '';
   const entity = (): CrmContactEntity => ({
     ...props.contact,
     type: 'crm_contact',
@@ -52,7 +53,7 @@ function ContactRow(props: {
         </Avatar>
       }
       titleTrailing={
-        <Show when={props.contact.name}>
+        <Show when={props.contact.name && props.contact.email}>
           <span class="min-w-0 truncate font-normal text-ink-extra-muted">
             {props.contact.email}
           </span>
@@ -77,13 +78,15 @@ export function CompanyContactsSection(props: {
       (contact) =>
         !query ||
         contact.name?.toLowerCase().includes(query) ||
-        contact.email.toLowerCase().includes(query)
+        contact.email?.toLowerCase().includes(query)
     );
   });
   const createContact = () => {
-    const domain = props.company?.domains?.[0]?.domain;
-    if (domain && props.company)
-      context.openCreateContact({ companyId: props.company.id, domain });
+    if (!props.company) return;
+    context.openCreateContact({
+      companyId: props.company.id,
+      domain: props.company.domains?.[0]?.domain,
+    });
   };
 
   return (
@@ -96,7 +99,7 @@ export function CompanyContactsSection(props: {
       createAction={{
         label: 'Add contact',
         onClick: createContact,
-        disabled: !props.company?.domains?.[0],
+        disabled: !props.company,
       }}
       toolbarCreate
     >
@@ -113,11 +116,7 @@ export function CompanyContactsSection(props: {
                 <CrmListEmpty
                   title="No contacts yet"
                   description="Add a contact to this company to see them here."
-                  action={
-                    props.company?.domains?.[0]
-                      ? { label: 'Add contact', onClick: createContact }
-                      : undefined
-                  }
+                  action={{ label: 'Add contact', onClick: createContact }}
                 />
               }
             >

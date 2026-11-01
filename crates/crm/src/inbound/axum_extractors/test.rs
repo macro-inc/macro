@@ -306,7 +306,7 @@ impl CrmService for FakeCrmService {
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,
         _name: &str,
-        _domain: &str,
+        _domain: Option<&str>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
         panic!("unexpected create_company call")
     }
@@ -315,7 +315,7 @@ impl CrmService for FakeCrmService {
         &self,
         _access: &CrmCompanyReceipt<ViewAccessLevel>,
         _name: &str,
-        _email: &str,
+        _email: Option<&str>,
     ) -> Result<CrmContact, CrmError> {
         panic!("unexpected create_contact call")
     }

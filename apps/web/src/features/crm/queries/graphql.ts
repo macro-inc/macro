@@ -65,7 +65,7 @@ export function toCrmContactEntity(
     companyId: contact.companyId,
     companyName: contact.companyName,
     email: contact.email,
-    name: contact.crmContactName?.trim() || contact.email,
+    name: contact.crmContactName?.trim() || contact.email || '',
     hidden: contact.hidden,
     firstInteraction: contact.firstInteraction,
     lastInteraction: contact.lastInteraction,

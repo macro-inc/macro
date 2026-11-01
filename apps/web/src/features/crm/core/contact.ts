@@ -3,7 +3,8 @@ export type CrmContact = {
   id: string;
   companyId: string;
   name?: string | null;
-  email: string;
+  /** Absent for a contact added by name alone. */
+  email?: string | null;
   hidden: boolean;
   firstInteraction: string;
   lastInteraction: string;

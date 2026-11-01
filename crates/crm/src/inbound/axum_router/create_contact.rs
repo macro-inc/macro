@@ -21,16 +21,19 @@ use super::{CrmRouterState, list_company_contacts::CrmContactResponse};
 pub struct CreateCrmContactRequest {
     /// Display name for the contact.
     pub name: String,
-    /// The contact's email address, e.g. "jane@acme.com". Its domain
-    /// must be one of the company's domains (400 otherwise).
-    pub email: String,
+    /// The contact's email address, e.g. "jane@acme.com". Optional: omit
+    /// it to add the contact by name only. A work address's domain must
+    /// be one of the company's domains (400 otherwise); personal
+    /// addresses (gmail.com etc.) are accepted at any company.
+    #[serde(default)]
+    pub email: Option<String>,
 }
 
 /// Manually create a contact under a CRM company. Access is enforced by
 /// [`CrmCompanyAccessLevelExtractor`]: the caller must be on the team
 /// that owns the company (hidden companies are reachable for
-/// admin/owner only, and the new contact then inherits `hidden`). The
-/// email's domain must be one of the company's domains (400), the
+/// admin/owner only, and the new contact then inherits `hidden`). A
+/// work email's domain must be one of the company's domains (400), the
 /// company must not already track the email (409), and the team's CRM
 /// killswitch must be on (403).
 #[utoipa::path(
@@ -65,7 +68,7 @@ pub async fn handler<
 ) -> Result<Json<CrmContactResponse>, CrmError> {
     let contact = state
         .service
-        .create_contact(&access.receipt, &req.name, &req.email)
+        .create_contact(&access.receipt, &req.name, req.email.as_deref())
         .await?;
     Ok(Json(contact.into()))
 }

@@ -189,3 +189,25 @@ async fn keyset_pages_never_repeat_or_skip_deduplicated_contacts(pool: PgPool) {
         }
     }
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures("fixtures/contact_listing.sql")
+)]
+async fn email_less_contacts_never_collapse(pool: PgPool) {
+    for contact in [id(2001), id(2002)] {
+        sqlx::query(
+            "INSERT INTO crm_contacts (id, company_id, email, name, first_interaction, last_interaction, manually_created)
+             VALUES ($1, $2, NULL, 'Solo', now(), now(), TRUE)",
+        )
+        .bind(contact)
+        .bind(id(101))
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let rows = list(&repo, Expr::val(Contact::CompanyId(id(101)))).await;
+    let listed = ids(&rows);
+    assert!(listed.contains(&id(2001)) && listed.contains(&id(2002)));
+}

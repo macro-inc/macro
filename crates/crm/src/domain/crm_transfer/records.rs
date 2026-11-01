@@ -119,7 +119,7 @@ impl<Crm: CrmService, Access: EntityAccessService> TransferRecords
         domain: &str,
     ) -> Result<Created, TransferError> {
         let team = self.team(viewer).await?;
-        match self.crm.create_company(&team, name, domain).await {
+        match self.crm.create_company(&team, name, Some(domain)).await {
             Ok(company) => Ok(Created::New(company.company.id)),
             Err(error) => refusal(error),
         }
@@ -176,7 +176,7 @@ impl<Crm: CrmService, Access: EntityAccessService> TransferRecords
             permission,
         )?;
         let receipt = CrmCompanyReceipt::new(receipt, team_id, team_role);
-        match self.crm.create_contact(&receipt, name, email).await {
+        match self.crm.create_contact(&receipt, name, Some(email)).await {
             Ok(contact) => Ok(Created::New(contact.id)),
             Err(error) => refusal(error),
         }

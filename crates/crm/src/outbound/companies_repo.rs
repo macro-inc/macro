@@ -7,7 +7,9 @@ mod association;
 mod contact_listing;
 
 use crate::domain::{
-    companies_repo::{CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor},
+    companies_repo::{
+        CompaniesRepository, CrmCompanyListSort, CrmCompanySoupCursor, NewContactEmail,
+    },
     model::{
         CrmAddressStatus, CrmCompany, CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact,
         CrmDomain, CrmDomainStatus, CrmError, CrmPermissionRole, CrmScopePrecheck, CrmTeamSettings,
@@ -559,11 +561,11 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     async fn create_company_for_team(
         &self,
         team_id: &uuid::Uuid,
-        domain: &str,
+        domain: Option<&str>,
         name: &str,
         now: DateTime<Utc>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
-        let normalized_domain = domain.to_ascii_lowercase();
+        let normalized_domain = domain.map(str::to_ascii_lowercase);
 
         let mut tx = self
             .pool
@@ -574,7 +576,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         // Same lock populate/depopulate take, so a concurrent populate
         // for the domain can't slip a row in between our existence
         // check and insert.
-        Self::lock_team_domain(&mut tx, team_id, &normalized_domain).await?;
+        if let Some(domain) = &normalized_domain {
+            Self::lock_team_domain(&mut tx, team_id, domain).await?;
+        }
 
         // Manual creation surfaces the killswitch instead of silently
         // no-oping like populate: the caller expects a company back.
@@ -582,30 +586,49 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             return Err(CrmError::CrmDisabledForTeam);
         }
 
-        if Self::find_company_by_domain(&mut tx, team_id, &normalized_domain)
-            .await?
-            .is_some()
-        {
-            return Err(CrmError::CompanyAlreadyExistsForTeam);
-        }
-
         // No email history yet: seed both interaction endpoints from
         // `now`; future populates merge real timestamps via
         // LEAST/GREATEST.
-        let (company_id, created) = Self::insert_company_with_domain(
-            &mut tx,
-            team_id,
-            &normalized_domain,
-            Some(name),
-            true,
-            now,
-            now,
-        )
-        .await?;
-        if !created {
-            // Unreachable while we hold the advisory lock; defensive.
-            return Err(CrmError::CompanyAlreadyExistsForTeam);
-        }
+        let company_id = match &normalized_domain {
+            Some(domain) => {
+                if Self::find_company_by_domain(&mut tx, team_id, domain)
+                    .await?
+                    .is_some()
+                {
+                    return Err(CrmError::CompanyAlreadyExistsForTeam);
+                }
+                let (company_id, created) = Self::insert_company_with_domain(
+                    &mut tx,
+                    team_id,
+                    domain,
+                    Some(name),
+                    true,
+                    now,
+                    now,
+                )
+                .await?;
+                if !created {
+                    // Unreachable while we hold the advisory lock; defensive.
+                    return Err(CrmError::CompanyAlreadyExistsForTeam);
+                }
+                company_id
+            }
+            // Domain-less companies have no populate key to collide on.
+            None => sqlx::query_scalar!(
+                r#"
+                INSERT INTO crm_companies
+                    (team_id, custom_name, manually_created, first_interaction, last_interaction)
+                VALUES ($1, $2, TRUE, $3, $3)
+                RETURNING id
+                "#,
+                team_id,
+                name,
+                now,
+            )
+            .fetch_one(&mut *tx)
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?,
+        };
 
         tx.commit()
             .await
@@ -627,13 +650,11 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         &self,
         team_id: &uuid::Uuid,
         company_id: &uuid::Uuid,
-        email: &str,
+        email: NewContactEmail<'_>,
         name: &str,
         now: DateTime<Utc>,
         include_hidden: bool,
     ) -> Result<CrmContact, CrmError> {
-        let normalized_email = email.to_ascii_lowercase();
-
         let mut tx = self
             .pool
             .begin()
@@ -670,30 +691,40 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             return Err(CrmError::CompanyNotFoundForTeam);
         };
 
-        // The contact must live on one of the company's domains —
+        // A work contact must live on one of the company's domains —
         // contacts are keyed by email under a domain-keyed company, and
-        // a foreign-domain contact would never receive populate
-        // updates (its domain resolves to a different company).
-        let Some((_, email_domain)) = normalized_email.split_once('@') else {
-            return Err(CrmError::InvalidRequest("email must contain an '@'".into()));
-        };
-        let domain_matches = sqlx::query_scalar!(
-            r#"
-            SELECT EXISTS (
-                SELECT 1 FROM crm_domains
-                WHERE company_id = $1 AND LOWER(domain) = $2
-            ) AS "exists!"
-            "#,
-            company_id,
-            email_domain,
-        )
-        .fetch_one(&mut *tx)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        // a foreign-domain contact would never receive populate updates
+        // (its domain resolves to a different company). Personal
+        // addresses never populate into a company, so any company may
+        // hold them.
+        let normalized_email = match email {
+            NewContactEmail::None => None,
+            NewContactEmail::Personal(email) => Some(email.to_ascii_lowercase()),
+            NewContactEmail::Work(email) => {
+                let normalized_email = email.to_ascii_lowercase();
+                let Some((_, email_domain)) = normalized_email.split_once('@') else {
+                    return Err(CrmError::InvalidRequest("email must contain an '@'".into()));
+                };
+                let domain_matches = sqlx::query_scalar!(
+                    r#"
+                    SELECT EXISTS (
+                        SELECT 1 FROM crm_domains
+                        WHERE company_id = $1 AND LOWER(domain) = $2
+                    ) AS "exists!"
+                    "#,
+                    company_id,
+                    email_domain,
+                )
+                .fetch_one(&mut *tx)
+                .await
+                .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        if !domain_matches {
-            return Err(CrmError::ContactEmailDomainMismatch);
-        }
+                if !domain_matches {
+                    return Err(CrmError::ContactEmailDomainMismatch);
+                }
+                Some(normalized_email)
+            }
+        };
 
         // New contacts inherit the company's `hidden` (matches
         // populate). `manually_created = TRUE` shields the row from the

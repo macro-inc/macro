@@ -175,8 +175,9 @@ pub struct CrmContact {
     pub id: uuid::Uuid,
     /// The id of the company the contact belongs to
     pub company_id: uuid::Uuid,
-    /// The contact's email address
-    pub email: String,
+    /// The contact's email address; `None` for a manually created
+    /// contact added by name alone
+    pub email: Option<String>,
     /// Display name observed for the contact, if any
     pub name: Option<String>,
     /// Whether the contact is hidden from CRM listings for the owning
