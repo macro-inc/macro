@@ -229,6 +229,7 @@ function TagChip(props: {
 
 function TagOverflow(props: {
   tags: ResolvedTag[];
+  visibleCount: number;
   createDocTags: CreateDocTags;
   onFilterByTag?: (id: string) => void;
   onEdit: (tag: ResolvedTag) => void;
@@ -238,7 +239,7 @@ function TagOverflow(props: {
   const [pickerOpen, setPickerOpen] = createSignal(false);
   const dots = () => props.tags.slice(0, MAX_OVERFLOW_DOTS);
   const count = () =>
-    `+${props.tags.length} ${props.tags.length === 1 ? 'tag' : 'tags'}`;
+    `${props.visibleCount > 0 ? '+' : ''}${props.tags.length} ${props.tags.length === 1 ? 'tag' : 'tags'}`;
 
   return (
     <Layer depth={2}>
@@ -291,9 +292,10 @@ function TagOverflow(props: {
 /**
  * Compact tag display for list rows, rendered from the entity's already-loaded
  * soup properties (no per-row fetch). Shows up to `maxVisible` chips then a
- * "+N tags" chip. Clicking a chip opens the TagPicker to edit the entity's
- * tags. Hovering a chip surfaces a "Filter by" link and hovering the overflow
- * lists the hidden tags. onFilterByTag applies a tag filter to the list.
+ * "+N tags" chip, or "N tags" when every tag is collapsed. Clicking a chip
+ * opens the TagPicker to edit the entity's tags. Hovering a chip surfaces a
+ * "Filter by" link and hovering the overflow lists the hidden tags.
+ * onFilterByTag applies a tag filter to the list.
  */
 export function EntityRowTags(props: {
   entityId: string;
@@ -370,6 +372,7 @@ export function EntityRowTags(props: {
         <Show when={hidden().length > 0}>
           <TagOverflow
             tags={hidden()}
+            visibleCount={visible().length}
             createDocTags={createDocTags}
             onFilterByTag={props.onFilterByTag}
             onEdit={setEditingTag}

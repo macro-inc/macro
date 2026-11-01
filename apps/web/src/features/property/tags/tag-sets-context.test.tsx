@@ -184,11 +184,11 @@ describe('TagSetsContext', () => {
     for (const registration of registrations.values()) {
       registration.setCollapsed(true);
     }
-    const overflow = view.getByRole('button', { name: '+4 tags' });
+    const overflow = view.getByRole('button', { name: '4 tags' });
     expect(first.isConnected).toBe(false);
     await fireEvent.click(overflow);
     expect(registrations.size).toBe(0);
-    expect(view.getByRole('button', { name: '+4 tags' })).toBe(overflow);
+    expect(view.getByRole('button', { name: '4 tags' })).toBe(overflow);
 
     await fireEvent.click(overflow);
     for (const registration of registrations.values()) {

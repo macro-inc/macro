@@ -39,6 +39,8 @@ cards retain the one-line empty message.
 Show at most three individual chips by default and keep the rest in overflow.
 Measure actual title, tag, and control widths; collapse more trailing chips when
 their combined content overflows, then truncate the title as a last resort.
+When every tag is collapsed, label the overflow chip “N tags”; use “+N tags”
+only when individual tag chips remain visible.
 Hidden tags keep the existing overflow picker and hover actions. Keep the visible
 chip count stable while a picker or its nested editor is active so resizing
 cannot discard the editing session. Hosts without a controller retain their

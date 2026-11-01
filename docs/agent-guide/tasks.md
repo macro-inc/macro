@@ -101,6 +101,8 @@ a full-path hover card first. Show at most three individual tag chips and keep t
 rest in the existing overflow chip. As space shrinks, move more chips into
 overflow one at a time before truncating the title.
 Open the overflow to edit all tags; hover it for hidden-tag names and filter/edit actions.
+The overflow chip reads “N tags” when it represents all tags, or “+N tags” when
+individual tag chips remain visible.
 An open picker or nested tag editor stays mounted while resizing. The share
 indicator remains immediately beside the title whenever it is shown.
 Compact desktop rows keep tags after the title and before the trailing properties;
