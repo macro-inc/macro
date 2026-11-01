@@ -449,6 +449,115 @@ export function flattenSteps(steps: StepDraft[]): StepDraft[] {
   ]);
 }
 
+/** Output ids: a lowercase letter, then up to 31 lowercase letters, digits or `_`. */
+const OUTPUT_ID = /^[a-z][a-z0-9_]{0,31}$/;
+
+/**
+ * An unused output id from `name`, as saving derives one; mirrors
+ * `RoutineProgram::assign_step_ids` in `crates/routine_program`.
+ */
+function outputId(name: string, taken: Set<string>): string {
+  let slug = '';
+  // `HasRead` → `has_read`: a capital after a lowercase letter starts a word.
+  let previousLower = false;
+  for (const c of name) {
+    if (/^[A-Za-z0-9]$/.test(c)) {
+      if (/[A-Z]/.test(c) && previousLower && !slug.endsWith('_')) slug += '_';
+      previousLower = /[a-z0-9]/.test(c);
+      slug += c.toLowerCase();
+    } else {
+      previousLower = false;
+      if (slug && !slug.endsWith('_')) slug += '_';
+    }
+  }
+  let base = slug.replace(/^_+|_+$/g, '');
+  if (!/^[a-z]/.test(base)) base = `step_${base}`;
+  // Room for a `_N` suffix; a long name ends on a word.
+  if (base.length > 28) {
+    const at = base.slice(0, 28).lastIndexOf('_');
+    base = base.slice(0, at >= 8 ? at : 28);
+  }
+  base = base.replace(/_+$/, '');
+  for (let number = 1; ; number++) {
+    const suffix = number === 1 ? '' : `_${number}`;
+    const candidate = suffix
+      ? `${base.slice(0, 32 - suffix.length).replace(/_+$/, '')}${suffix}`
+      : base;
+    if (!taken.has(candidate) && OUTPUT_ID.test(candidate)) {
+      taken.add(candidate);
+      return candidate;
+    }
+  }
+}
+
+/**
+ * Every code and tool step with its output named, as saving names it: from
+ * a code step's title or a tool step's tool, unique in the routine. Names
+ * already given stay.
+ */
+export function withNamedOutputs(steps: StepDraft[]): StepDraft[] {
+  const taken = new Set(
+    flattenSteps(steps).flatMap((step) =>
+      (step.kind === 'code' || step.kind === 'tool') && step.output
+        ? [step.output]
+        : []
+    )
+  );
+  return mapSteps(steps, (step) =>
+    match(step)
+      .returnType<StepDraft>()
+      .with({ kind: 'code' }, (step) =>
+        step.output ? step : { ...step, output: outputId(step.title, taken) }
+      )
+      .with({ kind: 'tool' }, (step) =>
+        step.output ? step : { ...step, output: outputId(step.tool, taken) }
+      )
+      .otherwise((step) => step)
+  );
+}
+
+/**
+ * The output ids saving gave steps that were sent without one, by each sent
+ * step's editor id. `saved` is the same steps as the scheduler stored them;
+ * a different shape matches nothing.
+ */
+export function assignedOutputs(
+  sent: StepDraft[],
+  saved: StepDraft[]
+): Map<string, string> {
+  const before = flattenSteps(sent);
+  const after = flattenSteps(saved);
+  const outputs = new Map<string, string>();
+  if (before.length !== after.length) return outputs;
+  before.forEach((step, index) => {
+    const stored = after[index];
+    if (
+      (step.kind === 'code' || step.kind === 'tool') &&
+      stored?.kind === step.kind &&
+      !step.output &&
+      stored.output
+    )
+      outputs.set(step.id, stored.output);
+  });
+  return outputs;
+}
+
+/** `steps` with the output ids saving gave them, so later saves keep them. */
+export function withAssignedOutputs(
+  steps: StepDraft[],
+  outputs: ReadonlyMap<string, string>
+): StepDraft[] {
+  if (!outputs.size) return steps;
+  return mapSteps(steps, (step) => {
+    const output = outputs.get(step.id);
+    return output &&
+      (step.kind === 'code' || step.kind === 'tool') &&
+      !step.output
+      ? { ...step, output }
+      : step;
+  });
+}
+
 /** The same steps, with `update` applied to the step whose id is `id`. */
 export function updateStep(
   steps: StepDraft[],

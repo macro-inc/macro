@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   agentStep,
+  assignedOutputs,
   chooseStep,
   firstAgent,
   ifStep,
@@ -10,6 +11,8 @@ import {
   stepsToWire,
   validateSteps,
   type WireStep,
+  withAssignedOutputs,
+  withNamedOutputs,
 } from './routine-steps';
 import type { RoutineTriggerDraft } from './routine-triggers';
 
@@ -336,5 +339,71 @@ describe('code steps', () => {
     expect(validateSteps([step, { ...step, id: 'copy' }], [daily], valid)).toBe(
       'Two steps name their output the same. Remove one and add it again.'
     );
+  });
+});
+
+describe('step output names', () => {
+  const code = (title: string, id?: string): WireStep =>
+    ({
+      type: 'code',
+      title,
+      source: 'export async function main() {}',
+      ...(id ? { id } : {}),
+    }) as WireStep;
+  const outputs = (steps: StepDraft[]) =>
+    flatOutputs(steps).map((step) => step.output);
+  const flatOutputs = (steps: StepDraft[]): { output?: string }[] =>
+    steps.flatMap((step) =>
+      step.kind === 'if'
+        ? [...flatOutputs(step.yes), ...flatOutputs(step.no)]
+        : step.kind === 'code' || step.kind === 'tool'
+          ? [step]
+          : []
+    );
+
+  // The same routine and names as the scheduler's own test.
+  const routine = () =>
+    stepsFromTask({
+      steps: [
+        code('Filter Important Notifications!'),
+        code('filter important notifications'),
+        { type: 'tool', tool: 'CreateDocument', arguments: {} },
+        code('2nd pass', 'kept'),
+        {
+          type: 'if',
+          condition: 'Urgent?',
+          then: [{ type: 'tool', tool: 'SendChannelMessage', arguments: {} }],
+        },
+      ] as WireStep[],
+    }) ?? [];
+
+  it('names outputs the way saving does, keeping names already given', () => {
+    const named = withNamedOutputs(routine());
+    expect(outputs(named)).toEqual([
+      'filter_important',
+      'filter_important_2',
+      'create_document',
+      'kept',
+      'send_channel_message',
+    ]);
+    expect(withNamedOutputs(named)).toEqual(named);
+    expect(
+      outputs(
+        withNamedOutputs(stepsFromTask({ steps: [code('42 ways')] }) ?? [])
+      )
+    ).toEqual(['step_42_ways']);
+  });
+
+  it('keeps the names saving gave, so a later step can’t take them', () => {
+    const sent = routine();
+    const saved = withNamedOutputs(
+      stepsFromTask({ steps: stepsToWire(sent) }) ?? []
+    );
+    const assigned = assignedOutputs(sent, saved);
+    expect(outputs(withAssignedOutputs(sent, assigned))).toEqual(
+      outputs(saved)
+    );
+    // A different shape matches nothing.
+    expect(assignedOutputs(sent, saved.slice(1)).size).toBe(0);
   });
 });

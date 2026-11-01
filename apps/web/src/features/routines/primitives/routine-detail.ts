@@ -7,6 +7,7 @@ import {
   validateRoutineApps,
   validateRoutineDraft,
 } from '../core/routine-draft';
+import { assignedOutputs, withAssignedOutputs } from '../core/routine-steps';
 import { hasOnlyScheduledTriggers } from '../core/routine-triggers';
 import { createRoutineAutosave } from './routine-autosave';
 
@@ -62,6 +63,18 @@ export function createRoutineDetail(
     const saved = await source.update(draft);
     baselineRevision = saved.revision;
     baselineKey = saved.configurationKey;
+    // Saving names steps' outputs; keep those names so a later edit, such
+    // as a new step with the same tool before this one, can't move them.
+    const outputs = assignedOutputs(
+      draft.steps ?? [],
+      saved.draft?.steps ?? []
+    );
+    if (outputs.size)
+      setRawState((current) =>
+        current?.steps
+          ? { ...current, steps: withAssignedOutputs(current.steps, outputs) }
+          : current
+      );
   });
 
   function setState(update: (prev: ScheduleDraft) => ScheduleDraft): void {

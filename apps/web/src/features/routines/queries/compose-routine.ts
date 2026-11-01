@@ -13,6 +13,7 @@ import {
   routineTools,
   type StepDraft,
   stepsFromTask,
+  withNamedOutputs,
 } from '../core/routine-steps';
 import { routineEvents } from '../core/routine-triggers';
 import { parseRoutineTriggers } from './routine-trigger-mapping';
@@ -305,7 +306,9 @@ export function draftFromComposition(
   const parsedSteps = stepsFromTask({ steps });
   if (!parsedSteps)
     return 'The draft used steps Macro can’t run. Try rephrasing.';
-  const draftSteps = withCodeProblems(parsedSteps, failures);
+  // Named as saving will name them, so placeholders that use those names
+  // pass the editor's checks.
+  const draftSteps = withCodeProblems(withNamedOutputs(parsedSteps), failures);
   // Without AI decisions the routine couldn't save, and dropping its
   // decisions would change what it does.
   if (
