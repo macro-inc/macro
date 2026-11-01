@@ -23,6 +23,7 @@ function codeMessage(code: SequenceErrorCode) {
       .with('invalid_timezone', () => t('sequences.errorInvalidTimezone'))
       .with('action_unavailable', () => t('sequences.errorActionUnavailable'))
       .with('step_in_delivery', () => t('sequences.errorStepInDelivery'))
+      .with('step_taken_over', () => t('sequences.errorStepTakenOver'))
       .with('no_team', () => t('sequences.errorNoTeam'))
       .with('crm_disabled', () => t('sequences.errorCrmDisabled'))
       .with('internal', () => t('sequences.errorInternal'))

@@ -149,30 +149,38 @@ export function SequenceEditor(props: {
                     </Show>
                   </div>
                   <div class="space-y-4 px-6 pt-4 pb-6">
-                    <label class="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
-                      {index === 0
-                        ? t('sequences.delayAfterStart')
-                        : t('sequences.delayAfterPrevious')}
-                      <Input
-                        aria-label={t('sequences.delayDays', {
-                          position: position(),
-                        })}
-                        type="number"
-                        min="0"
-                        max={SEQUENCE_LIMITS.delayDays}
-                        size="xs"
-                        class="w-16"
-                        value={step().delayDays}
-                        disabled={props.disabled}
-                        onInput={(event) =>
-                          changeStep(index, {
-                            delayDays: clampDelay(
-                              event.currentTarget.valueAsNumber
-                            ),
-                          })
-                        }
-                      />
-                    </label>
+                    {/* The first email goes out at the enrollment's start. */}
+                    <Show
+                      when={index > 0}
+                      fallback={
+                        <p class="text-xs text-ink-muted">
+                          {t('sequences.sendsAtStart')}
+                        </p>
+                      }
+                    >
+                      <label class="flex flex-wrap items-center gap-2 text-xs text-ink-muted">
+                        {t('sequences.delayAfterPrevious')}
+                        <Input
+                          aria-label={t('sequences.delayDays', {
+                            position: position(),
+                          })}
+                          type="number"
+                          min="0"
+                          max={SEQUENCE_LIMITS.delayDays}
+                          size="xs"
+                          class="w-16"
+                          value={step().delayDays}
+                          disabled={props.disabled}
+                          onInput={(event) =>
+                            changeStep(index, {
+                              delayDays: clampDelay(
+                                event.currentTarget.valueAsNumber
+                              ),
+                            })
+                          }
+                        />
+                      </label>
+                    </Show>
                     <Show when={index > 0}>
                       <Checkbox
                         checked={step().asReply === true}

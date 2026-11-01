@@ -474,9 +474,10 @@ CRM on for the team, the section and its links behave the same way.
   list is `sN.crm.tab=sequences` and one sequence opens at
   `/app/companies/sequence/<uuid>`. Only its owner sees it.
 - **Create and activate:** **New sequence**, then edit the name, **Send from**
-  inbox, emails (wait in days, optional reply in the same thread, subject,
-  message with `{{firstName}}`, `{{name}}`, `{{email}}`) and footer; the server
-  adds an unsubscribe link. **Save** keeps a draft; **Activate** saves and starts
+  inbox, emails (the first sends at the start; each later one waits days after
+  the previous and can reply in the same thread; subject, message with
+  `{{firstName}}`, `{{name}}`, `{{email}}`) and footer; the server adds an
+  unsubscribe link. **Save** keeps a draft; **Activate** saves and starts
   it. Editing needs a draft or paused sequence; edits apply to people enrolled
   afterwards. A save over a copy changed elsewhere asks to **Reload**.
 - **Enroll:** an active sequence's **Enroll people** searches CRM People (up to
@@ -486,8 +487,11 @@ CRM on for the team, the section and its links behave the same way.
 - **Statuses:** a sequence is Draft, Active or Paused. A person is Active, Paused,
   Needs attention, Stopped or Completed, with a reason (replied, bounced,
   unsubscribed, send failed, …). Rows offer Pause, Resume (**Retry** after a
-  failed or removed email), Stop and Unsubscribe (team-wide, confirmed first);
-  opening a row shows that person's emails and when each sent.
+  failed or removed email; also after a stop for a reply, bounce or lost
+  access), Stop and Unsubscribe (team-wide, confirmed first); opening a row
+  shows that person's emails and when each sent. An active sequence whose
+  inbox was disconnected says so: pause it, choose an inbox, resume it, then
+  resume its people.
 - **Contact card:** a contact's Overview lists its sequences for every teammate:
   sequence, owner, status, last and next send, never the emails. The owner's
   sequence name opens it.

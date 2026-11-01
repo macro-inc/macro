@@ -51,6 +51,8 @@ export default {
     'Edits apply to people you enroll after saving. People already enrolled keep the emails they were enrolled with.',
   connectGmail:
     'Connect a Gmail inbox of your own to send sequences. Shared inboxes and Outlook can’t send them.',
+  senderDisconnected:
+    'This sequence’s sending inbox was disconnected. Pause the sequence, choose an inbox, and resume it. Then resume the people who need attention.',
   noticeSaved: 'Sequence saved',
   noticeActivated: 'Sequence activated',
   noticePaused: 'Sequence paused',
@@ -74,7 +76,7 @@ export default {
   remove: 'Remove',
   removeEmail: 'Remove email {{position}}',
   delayDays: 'Days before email {{position}}',
-  delayAfterStart: 'Days after the start',
+  sendsAtStart: 'Sends at the start',
   delayAfterPrevious: 'Days after the previous email',
   replyInThread: 'Send as a reply in the same thread',
   subject: 'Subject',
@@ -115,15 +117,15 @@ export default {
   reasonStepStuck: 'Not sent yet',
   reasonManualDetail: 'You stopped this enrollment.',
   reasonRepliedDetail:
-    'They replied, so no more emails go out. Resume if the reply shouldn’t end the sequence.',
+    'They replied, so no more emails go out. If the reply shouldn’t end the sequence, resume to continue with the next email.',
   reasonBouncedDetail:
-    'The email couldn’t be delivered to this address. Resume to try again.',
+    'The email couldn’t be delivered to this address, so no more emails go out. Resume to continue with the next email.',
   reasonUnsubscribedDetail:
     'They unsubscribed from your team’s sequences, so no more emails go out.',
   reasonAccessLostDetail:
-    'The sequence’s owner left the team, or the team turned off Customers.',
+    'Access to this person was lost when the team or Customers changed. Resume once access is back.',
   reasonInboxUnavailableDetail:
-    'The sending inbox is disconnected or needs to be reconnected. Reconnect it, then resume.',
+    'The sending inbox is disconnected or needs to be reconnected. Reconnect it or choose another inbox for the sequence, then resume.',
   reasonStepFailedDetail:
     'Gmail refused the email after several tries. Retry to send it again.',
   reasonStepWithdrawnDetail:
@@ -131,7 +133,7 @@ export default {
   reasonStepUnknownDetail:
     'The email may have gone out, so it won’t be sent again. Resume to continue with the next one.',
   reasonStepStuckDetail:
-    'The email still hasn’t gone out well after its send time. Resume to try it again.',
+    'The email still hasn’t gone out well after its send time. Resume to continue; it’s sent again only if it never went out.',
   showSteps: 'Show emails',
   stepProgress: '{{done}} of {{total}} sent',
   lastSent: 'Last sent {{time}}',
@@ -200,6 +202,8 @@ export default {
   errorActionUnavailable: 'That action isn’t available for this person now.',
   errorStepInDelivery:
     'An email to this person is being sent right now. Try again in a minute.',
+  errorStepTakenOver:
+    'You scheduled or restored this email in Mail, so it’s yours now. Send or delete it there, then resume.',
   errorNoTeam: 'Sequences need a team with Customers turned on.',
   errorCrmDisabled: 'Turn on Customers for your team to use sequences.',
   errorInternal: 'Something went wrong. Try again.',
@@ -216,11 +220,11 @@ export default {
     'The subject of email {{position}} is longer than {{max}} characters.',
   problemBodyRequired: 'Email {{position}} needs a message.',
   problemBodyTooLong:
-    'The message of email {{position}} is longer than {{max}} characters.',
+    'The message of email {{position}} is too long once personalized. Keep it under {{max}} characters and use less personalization.',
   problemDelayRange: 'Email {{position}} must wait 0 to {{max}} days.',
   problemUnknownToken:
     'Remove personalization Macro can’t fill in: {{tokens}}.',
   problemSenderRequired: 'Choose an inbox to send from.',
   problemSenderUnavailable:
-    'The sending inbox is disconnected or needs to be reconnected.',
+    'The sequence’s sending inbox is disconnected or needs to be reconnected. Reconnect it or choose another inbox for the sequence.',
 };

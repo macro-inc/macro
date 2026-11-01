@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { getDefaultTimezone } from '@core/util/cron';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
@@ -116,7 +117,7 @@ export function EnrollView(props: {
     const result = await enroller.enroll(id, {
       crmContactIds: chosen.map((person) => person.id),
       start: startAt.toISOString(),
-      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      timezone: getDefaultTimezone(),
     });
     if (result.isErr()) {
       setError(failureMessage(result.error));

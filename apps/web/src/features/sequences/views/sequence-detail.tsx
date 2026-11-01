@@ -67,6 +67,9 @@ function SequenceDetailContent(props: {
   ]);
   const noSender = () =>
     !senders.pending() && !senders.senders().some((sender) => sender.ready);
+  // Disconnecting its inbox clears the sender but leaves the sequence on.
+  const senderDisconnected = () =>
+    status() === 'active' && !props.sequence.linkId;
 
   async function save(next?: Sequence['status']) {
     if (!(await draft.save(next))) return;
@@ -221,6 +224,9 @@ function SequenceDetailContent(props: {
           </Notice>
         </Match>
       </Switch>
+      <Show when={senderDisconnected()}>
+        <Notice>{t('sequences.senderDisconnected')}</Notice>
+      </Show>
       <Show when={noSender()}>
         <p class="mx-4 mb-2 text-xs text-ink-muted">
           {t('sequences.connectGmail')}
