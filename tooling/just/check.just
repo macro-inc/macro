@@ -7,7 +7,6 @@
 # typescript/no-floating-promises, so apps/web files are linted --type-aware.
 #
 #   just check        fast: rustfmt + biome + oxlint + ast-grep + PII   (~seconds)
-#                     + native permissions (tooling/native-permissions)
 #   just check full   also runs tsc + clippy                      (~minutes)
 #
 # Override the diff base with CHECK_BASE=<ref> (useful in shallow clones,
@@ -31,8 +30,8 @@ check *ARGS:
 
     rs=$(grep -E '^(crates|services|tooling)/.*\.rs$' <<<"$changed" || true)
     # Match the SDK and collaboration Biome configs: preserve generator output verbatim.
-    js=$(grep -E '^(apps/(web|marketing)|packages|services/(analytics-proxy|ai-editing-worker|lexical-service|websocket-service)|tooling/native-permissions)/.*\.(ts|tsx)$' <<<"$changed" | grep -Ev '^packages/(sdk/generated|collaboration/src/sync-service/generated)/' || true)
-    sg=$(grep -E '^(apps|crates|packages|services|tooling)/.*\.(rs|ts|tsx)$' <<<"$changed" || true)
+    js=$(grep -E '^(apps/(web|marketing)|packages|services/(analytics-proxy|ai-editing-worker|lexical-service|websocket-service))/.*\.(ts|tsx)$' <<<"$changed" | grep -Ev '^packages/(sdk/generated|collaboration/src/sync-service/generated)/' || true)
+    sg=$(grep -E '^(apps|crates|packages|services|tooling)/.*\.(rs|ts|tsx|plist)$' <<<"$changed" || true)
 
     fail=0
     if [ -n "$rs" ]; then
@@ -100,11 +99,6 @@ check *ARGS:
     if [ -n "$sg" ]; then
       echo "── ast-grep code rules (rule ids map to docs/development/style-guide.md)"
       bunx --yes @ast-grep/cli@0.44.1 scan --report-style=short $sg || fail=1
-    fi
-    native_changed=$(grep -E '^(apps/web/tauri/(src-tauri|desktop-cef)/(.*\.plist|tauri.*\.json)|tooling/native-permissions/)' <<<"$changed" || true)
-    if [ -n "$native_changed" ]; then
-      echo "── native media permissions (Info.plist usage strings, macOS entitlements)"
-      (bun test tooling/native-permissions && bun tooling/native-permissions/check.ts) || fail=1
     fi
     echo "── PII scan (added lines vs merge-base)"
     python3 tooling/pii/scan.py --changed --skip-gitleaks || fail=1
