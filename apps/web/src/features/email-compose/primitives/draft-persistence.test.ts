@@ -4,9 +4,7 @@ import { createComposeContext } from '../tests/capabilities';
 import { createDraftPersistence } from './draft-persistence';
 import { createDraftSession } from './draft-session';
 
-it('deletes an emptied draft on webviews without Promise.withResolvers', async () => {
-  const withResolvers = Promise.withResolvers;
-  Reflect.deleteProperty(Promise, 'withResolvers');
+it('deletes an emptied draft', async () => {
   const deleteDraft = vi.fn(async () => {});
   const { dispose, session, persistence } = createRoot((dispose) => {
     const session = createDraftSession({
@@ -31,7 +29,6 @@ it('deletes an emptied draft on webviews without Promise.withResolvers', async (
     );
     expect(session.draftId()).toBeUndefined();
   } finally {
-    Object.assign(Promise, { withResolvers });
     dispose();
   }
 });

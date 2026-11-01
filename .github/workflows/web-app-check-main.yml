@@ -48,7 +48,6 @@ jobs:
             - 'packages/sdk-docs/**'
             - 'services/ai-editing-worker/**'
             - 'packages/code-mode-sdk/**'
-            - 'tooling/platform-compat/**'
             - 'crates/code_execution/src/outbound/deno/*.mjs'
             - 'crates/agent_code_mode/src/domain/documentation.json'
             - 'crates/agent_code_mode/SKILL.md'
@@ -377,12 +376,8 @@ jobs:
     - name: Run Collaboration Package Biome
       run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
       working-directory: packages/collaboration
-    - name: Install Platform Compatibility Tooling
-      run: bun install --frozen-lockfile
-      working-directory: tooling/platform-compat
     - name: Check Browser Floor and Native Permissions
-      run: bun run check
-      working-directory: tooling/platform-compat
+      run: bunx --yes @ast-grep/cli@0.44.1 scan --filter '^(tsx?-browser-floor-apis|plist-media-.+)$'
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'

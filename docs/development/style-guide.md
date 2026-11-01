@@ -4,8 +4,7 @@ Code conventions are agent rules in [`.agents/rules/`](../../.agents/rules/). Ag
 load each file when they touch matching paths; reviewers and CodeRabbit read the
 same files. This page explains the scheme and indexes the rule files.
 
-**Check locally.** `just check` is the single gate: format, lint, code rules, the
-web browser floor ([`tooling/platform-compat`](../../tooling/platform-compat/AGENTS.md)),
+**Check locally.** `just check` is the single gate: format, lint, code rules,
 and a PII scan of added lines, scoped to your changes against `origin/main`, with
 every finding printed as `file:line [rule-id]` and the command that fixes it.
 `just check full` adds `tsc`
@@ -25,6 +24,7 @@ ID; deletions leave gaps and new rules take the next free number. A rule line re
 | [`config-and-service-urls.md`](../../.agents/rules/config-and-service-urls.md) | CS 14–18 | Everywhere |
 | [`CODING.md`](../../CODING.md) | CS 24, 26, 28, 29, 32–35, 71 | Everywhere; read before writing code |
 | [`observability.md`](../../.agents/rules/observability.md) | | Everywhere |
+| [`checks.md`](../../.agents/rules/checks.md) | | Adding a lint, code rule or CI check: `tooling/`, `rules/ast-grep/`, linter configs, workflows |
 | [`rust/guardrails.md`](../../.agents/rules/rust/guardrails.md) | | Backend: tests, migrations, crate boundaries |
 | [`rust/db.md`](../../.agents/rules/rust/db.md) | CS | Migrations, SQL, DB clients, outbound adapters |
 | [`rust/architecture.md`](../../.agents/rules/rust/architecture.md) | CS | Rust |

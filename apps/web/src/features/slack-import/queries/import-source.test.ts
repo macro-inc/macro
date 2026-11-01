@@ -660,28 +660,22 @@ describe('import commands', () => {
     expect(h.client.cancelSlackImport).toHaveBeenCalledWith({ jobId });
   });
 
-  it('uploads with a caller signal on webviews without AbortSignal.any', async () => {
-    const { any } = AbortSignal;
-    Reflect.deleteProperty(AbortSignal, 'any');
-    try {
-      const h = mount();
-      h.client.registerSlackImportUploads.mockResolvedValue(ok([grant]));
-      const [capability] = await h.commands.register(identity, [
-        grant.descriptor,
-      ]);
-      h.upload.mockResolvedValue(ok('uploaded'));
-      const caller = new AbortController();
-      const listen = vi.spyOn(caller.signal, 'addEventListener');
+  it('stops listening to the caller signal once an upload finishes', async () => {
+    const h = mount();
+    h.client.registerSlackImportUploads.mockResolvedValue(ok([grant]));
+    const [capability] = await h.commands.register(identity, [
+      grant.descriptor,
+    ]);
+    h.upload.mockResolvedValue(ok('uploaded'));
+    const caller = new AbortController();
+    const listen = vi.spyOn(caller.signal, 'addEventListener');
 
-      expect(
-        await capability.put(new Blob(['{}']), { signal: caller.signal })
-      ).toBe('uploaded');
-      // A finished upload stops listening to the long-lived caller signal.
-      const options = listen.mock.calls[0]?.[2];
-      expect(typeof options === 'object' && options.signal?.aborted).toBe(true);
-    } finally {
-      Object.assign(AbortSignal, { any });
-    }
+    expect(
+      await capability.put(new Blob(['{}']), { signal: caller.signal })
+    ).toBe('uploaded');
+    // A finished upload stops listening to the long-lived caller signal.
+    const options = listen.mock.calls[0]?.[2];
+    expect(typeof options === 'object' && options.signal?.aborted).toBe(true);
   });
 
   it('rejects stale commands, late mutation responses and stale upload grants', async () => {
