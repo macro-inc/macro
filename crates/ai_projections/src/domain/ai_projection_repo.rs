@@ -28,7 +28,11 @@ pub trait AiProjectionRepository: Clone + Send + Sync + 'static {
     /// Gets the target's instance of a projection, or creates a cold instance
     /// if one does not exist. An existing instance whose `prompt_hash` differs
     /// from the definition's is reset to cold (keeping its previous result
-    /// visible until regeneration overwrites it).
+    /// visible until regeneration overwrites it). Loading instances without a
+    /// live processing claim are also recovered as cold,
+    /// so a later read can restart abandoned generation. Active claims retain
+    /// their state and existing results remain available. Refreshing instances
+    /// can still be queued without a claim and are left intact.
     fn get_or_create_target_projection(
         &self,
         ai_projection_id: &str,

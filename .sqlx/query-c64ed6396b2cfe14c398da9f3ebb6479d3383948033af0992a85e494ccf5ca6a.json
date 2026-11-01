@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE user_ai_projection instance\n            SET status = 'cold'\n            WHERE instance.ai_projection_id = $1 AND instance.target_id = $2\n              AND instance.status = 'loading'\n              AND NOT EXISTS (\n                  SELECT 1 FROM processing_ai_projections processing\n                  WHERE processing.ai_projection_id = instance.ai_projection_id\n                    AND processing.target_id = instance.target_id\n                    AND processing.created_at >= NOW() - make_interval(secs => $3)\n              )\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Float8"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c64ed6396b2cfe14c398da9f3ebb6479d3383948033af0992a85e494ccf5ca6a"
+}
