@@ -5,13 +5,12 @@ import {
   ContextMenuTrigger,
   MENU_ITEM_CLASS,
   MenuGroup,
-  MenuItem,
   SubTrigger,
 } from '@core/component/ContextMenu';
 import SlidersIcon from '@icon/system/regular/sliders-horizontal.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import { Dropdown, ToggleSwitch } from '@ui';
+import { Dropdown, SingleSelectCheck, ToggleSwitch } from '@ui';
 import { For, type JSX } from 'solid-js';
 import type { ChannelSectionKey } from '../../../types';
 import { useChannelsRail } from '../ChannelsRailContext';
@@ -113,13 +112,16 @@ function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
             >
               <For each={options()}>
                 {(option) => (
-                  <MenuItem
-                    selectorType="radio"
-                    closeOnSelect
+                  <ContextMenu.RadioItem
+                    class={MENU_ITEM_CLASS}
                     value={option.value}
-                    groupValue={preferences().sort ?? ''}
-                    text={option.label}
-                  />
+                    closeOnSelect
+                  >
+                    <span class="flex-1">{option.label}</span>
+                    <SingleSelectCheck
+                      active={preferences().sort === option.value}
+                    />
+                  </ContextMenu.RadioItem>
                 )}
               </For>
             </ContextMenu.RadioGroup>
