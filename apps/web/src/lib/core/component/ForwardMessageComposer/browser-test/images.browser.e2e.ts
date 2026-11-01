@@ -1,4 +1,4 @@
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 
 const IMAGE =
   'iVBORw0KGgoAAAANSUhEUgAAAKAAAABkCAIAAACO1KzYAAABVUlEQVR4nO3aQQ2AMBQFwTrCFGeEoQQl6MAC6YGE7ST/Pm32+sZ+3tO3Hdf0cb9xx2ofXs0VOO4KHHcFjrsCx12B467AcVfguCtw3BU47gocdwWOuwLHXYHjrsBxV+C4K3DcFTjuChx3xx8fzX1/AsddgeOuwHFX4LgrcNwVOO4KHHcFjrsCx12B467AcVfguCtw3BU47gocdwWOuwLHXYHjrsBx1+gu7gocdwWOuwLHXYHjrsBxV+C4K3DcFTjuChx3BY67AsddgeOuwHFX4LgrcNwVOO4KHHcFjrsCx12ju7grcNwVOO4KHHcFjrsCx12B467AcVfguCtw3BU47gocdwWOuwLHXYHjrsBxV+C4K3DcFTjuChx3je7irsBxV+C4K3DcFTjuChx3BY67AsddgeOuwHFX4LgrcNwVOO4KHHcFjrsCx12B467AcVfguCtw3H0A1UmjWQj5J0YAAAAASUVORK5CYII=';
@@ -23,14 +23,8 @@ test.beforeEach(async ({ page, context }) => {
   });
 });
 
-test('pastes an image, waits for its upload and sends an inline image with multiline text', async ({
-  page,
-}, testInfo) => {
-  const editor = page.locator('[data-markdown-editable]');
-  await editor.click();
-  await page.keyboard.type('First line');
-  await page.keyboard.press('Enter');
-  await page.keyboard.type('Second line');
+async function pasteImage(page: Page) {
+  await page.locator('[data-markdown-editable]').click();
   await page.evaluate(async (encoded) => {
     const bytes = Uint8Array.from(atob(encoded), (char) => char.charCodeAt(0));
     await navigator.clipboard.write([
@@ -43,6 +37,17 @@ test('pastes an image, waits for its upload and sends an inline image with multi
   await expect(
     page.locator('[data-input-attachments="media"] img[src^="blob:"]')
   ).toBeVisible();
+}
+
+test('pastes an image, waits for its upload and sends an inline image with multiline text', async ({
+  page,
+}, testInfo) => {
+  const editor = page.locator('[data-markdown-editable]');
+  await editor.click();
+  await page.keyboard.type('First line');
+  await page.keyboard.press('Enter');
+  await page.keyboard.type('Second line');
+  await pasteImage(page);
   await expect(
     page.getByRole('button', { name: 'Share', exact: true })
   ).toBeDisabled();
@@ -71,14 +76,8 @@ test('pastes an image, waits for its upload and sends an inline image with multi
 test('removing an uploading image keeps it out of the message', async ({
   page,
 }) => {
-  await page.locator('[data-input-attach-file-picker]').setInputFiles({
-    name: 'removed.png',
-    mimeType: 'image/png',
-    buffer: Buffer.from(IMAGE, 'base64'),
-  });
-  await page
-    .getByRole('button', { name: 'Remove removed.png', exact: true })
-    .click();
+  await pasteImage(page);
+  await page.getByRole('button', { name: /^Remove / }).click();
   await page.getByRole('button', { name: 'Finish uploads' }).click();
   await expect(
     page.getByRole('button', { name: 'Share', exact: true })
@@ -128,18 +127,12 @@ test('accepts a dropped image and lets an upload failure recover', async ({
   await expect(
     page.getByRole('button', { name: 'Share', exact: true })
   ).toBeEnabled();
-  await page.locator('[data-input-attach-file-picker]').setInputFiles({
-    name: 'retry.png',
-    mimeType: 'image/png',
-    buffer: Buffer.from(IMAGE, 'base64'),
-  });
+  await pasteImage(page);
   await page.getByRole('button', { name: 'Finish uploads' }).click();
   await expect(
     page.getByRole('button', { name: 'Share', exact: true })
   ).toBeEnabled();
-  await expect(
-    page.getByRole('button', { name: 'Remove retry.png' })
-  ).toBeAttached();
+  await expect(page.getByRole('button', { name: /^Remove / })).toBeAttached();
   await page.getByRole('button', { name: 'Close share' }).click();
   await page.getByRole('button', { name: 'Open share' }).click();
   await expect(page.locator('[data-input-attachments="media"]')).toHaveCount(0);

@@ -182,9 +182,6 @@ export function ForwardMessageComposer(props: {
             <Input.Attachments kind="document" />
           </div>
         </div>
-        <div class="px-3 py-1 flex items-center">
-          <Input.AttachFilesAction disabled={props.composer.isSending()} />
-        </div>
       </div>
     </Input.Root>
   );
