@@ -1002,8 +1002,9 @@ Each heading has one sliders-icon menu, also available by right-clicking the hea
 **Sort** opens its independent sorting options, and **Filter** contains **Unread only**. The unread label sits on the left
 and its switch on the right; toggling it keeps the submenu open.
 Custom sections include editing, Mark all as read, and a destructive Delete
-action in the same menu. Menus use the standard dropdown groups and selection
-indicators. Use the heading's caret to expand/collapse it; this is not repeated
+action in the same menu. Click and right-click menus use the same standard
+context-menu rows, spacing, and selection indicators. Use the heading's caret
+to expand/collapse it; this is not repeated
 in the menu. There is no separate all-sections management menu.
 Sorting and unread filters are personal, even for a team-shared section. Date ordering
 follows each paginated source; Favorites and custom sections also offer A–Z.

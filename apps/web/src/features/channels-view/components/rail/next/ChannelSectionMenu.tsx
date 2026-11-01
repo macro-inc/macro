@@ -3,11 +3,14 @@ import { t } from '@app/lib/i18n';
 import {
   ContextMenuContent,
   ContextMenuTrigger,
+  MENU_ITEM_CLASS,
+  MenuGroup,
+  MenuItem,
+  SubTrigger,
 } from '@core/component/ContextMenu';
-import CaretRightIcon from '@icon/system/regular/caret-right.svg';
-import CheckIcon from '@icon/system/regular/check.svg';
 import SlidersIcon from '@icon/system/regular/sliders-horizontal.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
+import { DropdownMenu } from '@kobalte/core/dropdown-menu';
 import { Dropdown, ToggleSwitch } from '@ui';
 import { For, type JSX } from 'solid-js';
 import type { ChannelSectionKey } from '../../../types';
@@ -31,20 +34,24 @@ export function ChannelSectionDropdown(props: {
       >
         <SlidersIcon class="size-3.5" />
       </Dropdown.Trigger>
-      <Dropdown.Content
-        class="min-w-44"
-        onCloseAutoFocus={(event) => {
-          if (document.querySelector('[role="dialog"]')) event.preventDefault();
-        }}
-      >
-        <ChannelSectionMenuItems section={props.section} />
-        {props.children}
-      </Dropdown.Content>
+      <DropdownMenu.Portal>
+        <ContextMenuContent
+          contentComponent={DropdownMenu.Content}
+          class="min-w-44"
+          onCloseAutoFocus={(event) => {
+            if (document.querySelector('[role="dialog"]'))
+              event.preventDefault();
+          }}
+        >
+          <ChannelSectionMenuItems section={props.section} />
+          {props.children}
+        </ContextMenuContent>
+      </DropdownMenu.Portal>
     </Dropdown>
   );
 }
 
-/** Reuse the dropdown actions with the shared Kobalte menu-item primitives. */
+/** Share the standard context-menu surface and rows with the click menu. */
 export function ChannelSectionContextMenu(props: {
   section: ChannelSectionKey;
   children: JSX.Element;
@@ -87,15 +94,12 @@ function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
     { value: 'created_at' as const, label: t('channelSections.dateCreated') },
   ];
   return (
-    <Dropdown.Group>
-      <Dropdown.Sub>
-        <Dropdown.SubTrigger>
-          <span class="flex-1">{t('channelSections.sort')}</span>
-          <CaretRightIcon class="size-3 shrink-0 text-ink-extra-muted" />
-        </Dropdown.SubTrigger>
-        <Dropdown.SubContent class="min-w-44">
-          <Dropdown.Group>
-            <Dropdown.RadioGroup
+    <MenuGroup>
+      <ContextMenu.Sub>
+        <SubTrigger text={t('channelSections.sort')} />
+        <ContextMenuContent submenu class="min-w-44">
+          <MenuGroup>
+            <ContextMenu.RadioGroup
               value={preferences().sort}
               onChange={(value) => {
                 const option = options().find(
@@ -109,48 +113,44 @@ function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
             >
               <For each={options()}>
                 {(option) => (
-                  <Dropdown.RadioItem closeOnSelect value={option.value}>
-                    <span class="flex-1">{option.label}</span>
-                    <Dropdown.ItemIndicator>
-                      <CheckIcon class="size-3.5 text-accent" />
-                    </Dropdown.ItemIndicator>
-                  </Dropdown.RadioItem>
+                  <MenuItem
+                    selectorType="radio"
+                    closeOnSelect
+                    value={option.value}
+                    groupValue={preferences().sort ?? ''}
+                    text={option.label}
+                  />
                 )}
               </For>
-            </Dropdown.RadioGroup>
-          </Dropdown.Group>
-        </Dropdown.SubContent>
-      </Dropdown.Sub>
-      <Dropdown.Sub>
-        <Dropdown.SubTrigger>
-          <span class="flex-1">{t('channelSections.filter')}</span>
-          <CaretRightIcon class="size-3 shrink-0 text-ink-extra-muted" />
-        </Dropdown.SubTrigger>
-        <Dropdown.SubContent class="min-w-44">
-          <Dropdown.Group>
-            <Dropdown.CheckboxItem
-              indicator={false}
-              closeOnSelect={false}
-              checked={preferences().unreadOnly ?? false}
-              onChange={(unreadOnly) =>
-                rail.setSectionPreferences(props.section, { unreadOnly })
-              }
+            </ContextMenu.RadioGroup>
+          </MenuGroup>
+        </ContextMenuContent>
+      </ContextMenu.Sub>
+      <ContextMenu.Sub>
+        <SubTrigger text={t('channelSections.filter')} />
+        <ContextMenuContent submenu class="min-w-44">
+          <ContextMenu.CheckboxItem
+            class={MENU_ITEM_CLASS}
+            closeOnSelect={false}
+            checked={preferences().unreadOnly ?? false}
+            onChange={(unreadOnly) =>
+              rail.setSectionPreferences(props.section, { unreadOnly })
+            }
+          >
+            <span class="flex-1">{t('channelSections.unreadOnly')}</span>
+            <span
+              inert
+              aria-hidden="true"
+              class="pointer-events-none flex shrink-0 items-center"
             >
-              <span class="flex-1">{t('channelSections.unreadOnly')}</span>
-              <span
-                inert
-                aria-hidden="true"
-                class="pointer-events-none flex shrink-0 items-center"
-              >
-                <ToggleSwitch
-                  checked={preferences().unreadOnly ?? false}
-                  readOnly
-                />
-              </span>
-            </Dropdown.CheckboxItem>
-          </Dropdown.Group>
-        </Dropdown.SubContent>
-      </Dropdown.Sub>
-    </Dropdown.Group>
+              <ToggleSwitch
+                checked={preferences().unreadOnly ?? false}
+                readOnly
+              />
+            </span>
+          </ContextMenu.CheckboxItem>
+        </ContextMenuContent>
+      </ContextMenu.Sub>
+    </MenuGroup>
   );
 }

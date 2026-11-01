@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import {
   ContextMenuContent,
+  MenuGroup,
   MenuItem,
   MenuSeparator,
   SubTrigger,
@@ -16,7 +17,7 @@ import TrashIcon from '@icon/system/regular/trash.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import { createDroppable } from '@thisbeyond/solid-dnd';
-import { Badge, cn, Dropdown } from '@ui';
+import { Badge, cn } from '@ui';
 import { For, Show } from 'solid-js';
 import { canLabelChannel } from '../../../core/channel-label-eligibility';
 import { ChannelLabelMenuItems as OriginalChannelLabelMenuItems } from '../ChannelLabelRows';
@@ -104,36 +105,35 @@ function ChannelLabelActions(props: { label: ChannelLabel }) {
   const rail = useChannelsRail();
   return (
     <>
-      <Dropdown.Group>
-        <Dropdown.Item
-          onSelect={() =>
+      <MenuSeparator />
+      <MenuGroup>
+        <MenuItem
+          icon={PencilSimpleIcon}
+          text={
+            props.label.rule
+              ? t('channelLabels.editSmartLabel')
+              : t('channelSections.renameSection')
+          }
+          onClick={() =>
             fireAndForget(rail.renameLabel(props.label), 'channels-view')
           }
-        >
-          <PencilSimpleIcon class="size-3.5 text-ink-muted" />
-          {props.label.rule
-            ? t('channelLabels.editSmartLabel')
-            : t('channelSections.renameSection')}
-        </Dropdown.Item>
-        <Dropdown.Item
+        />
+        <MenuItem
+          icon={ChecksIcon}
+          text={t('channelLabels.markAllAsRead')}
           disabled={rail.labelUnreadCount(props.label) === 0}
-          onSelect={() => rail.markLabelRead(props.label)}
-        >
-          <ChecksIcon class="size-3.5 text-ink-muted" />
-          {t('channelLabels.markAllAsRead')}
-        </Dropdown.Item>
-      </Dropdown.Group>
-      <Dropdown.Group>
-        <Dropdown.Item
-          class="text-failure"
-          onSelect={() =>
-            fireAndForget(rail.deleteLabel(props.label), 'channels-view')
-          }
-        >
-          <TrashIcon class="size-3.5" />
-          {t('channelSections.deleteSection')}
-        </Dropdown.Item>
-      </Dropdown.Group>
+          onClick={() => rail.markLabelRead(props.label)}
+        />
+      </MenuGroup>
+      <MenuSeparator />
+      <MenuItem
+        icon={TrashIcon}
+        text={t('channelSections.deleteSection')}
+        class="text-failure"
+        onClick={() =>
+          fireAndForget(rail.deleteLabel(props.label), 'channels-view')
+        }
+      />
     </>
   );
 }
