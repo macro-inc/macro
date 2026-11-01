@@ -1,0 +1,19 @@
+{
+  "name": "@macro/platform-compat",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "lint-web": "bun src/lint-web.ts",
+    "check-native-permissions": "bun src/check-native-permissions.ts",
+    "test": "bun test",
+    "check": "tsc -p . && bun test && bun src/check-native-permissions.ts && bun src/lint-web.ts"
+  },
+  "devDependencies": {
+    "@mdn/browser-compat-data": "8.1.6",
+    "@types/bun": "1.4.3",
+    "@typescript-eslint/parser": "8.71.2",
+    "browserslist": "4.29.3",
+    "eslint": "10.13.0",
+    "typescript": "6.0.3"
+  }
+}

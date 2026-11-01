@@ -1,3 +1,4 @@
+import { anyAbortSignal } from '@core/util/abort-signal';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { readPendingEmailSends } from '@service-storage/email-send';
 import type { PendingEmailSendsQuery } from '@service-storage/graphql/generated/graphql';
@@ -45,7 +46,7 @@ function createServerSendObserver(accountId: string) {
     try {
       if (navigator.onLine === false) return;
       controller = new AbortController();
-      const signal = AbortSignal.any([
+      const signal = anyAbortSignal([
         controller.signal,
         AbortSignal.timeout(15_000),
       ]);

@@ -29,6 +29,21 @@ describe('createSoupRequestSignal', () => {
     timeout.mockRestore();
   });
 
+  it('works on webviews without AbortSignal.any', () => {
+    const { any } = AbortSignal;
+    Reflect.deleteProperty(AbortSignal, 'any');
+    try {
+      const query = new AbortController();
+      const signal = createSoupRequestSignal(query.signal);
+
+      query.abort();
+
+      expect(signal.aborted).toBe(true);
+    } finally {
+      Object.assign(AbortSignal, { any });
+    }
+  });
+
   it('pauses while offline and resumes when connectivity returns', async () => {
     onlineManager.setOnline(false);
     const queryFn = vi.fn(async () => 'loaded');

@@ -30,6 +30,7 @@
  * queued and scheduling the pump are idempotent wakeups and are not fenced.
  */
 
+import { anyAbortSignal } from '@core/util/abort-signal';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type Client,
@@ -178,7 +179,7 @@ export function withQueueRequestTimeout(op: Operation): Operation {
         operationFetch(input, {
           ...init,
           signal: init?.signal
-            ? AbortSignal.any([init.signal, timeoutSignal])
+            ? anyAbortSignal([init.signal, timeoutSignal])
             : timeoutSignal,
         });
       const response = await (attempt?.telemetry?.run(send) ?? send());

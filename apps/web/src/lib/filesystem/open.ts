@@ -14,6 +14,7 @@ async function openInBrowser(
   filters: Array<FileFilter>,
   multiple: boolean
 ): Promise<FileHandle[]> {
+  // eslint-disable-next-line platform-compat/browser-floor -- checked before use below.
   const openFilePicker = window?.showOpenFilePicker;
   if (!openFilePicker) {
     throw new FileSystemError(

@@ -304,6 +304,29 @@ describe('split router', () => {
     expect(routeIds(router.entry(pane(0)))).toEqual(['mail']);
   });
 
+  it('navigates on webviews without Promise.withResolvers', async () => {
+    const withResolvers = Promise.withResolvers;
+    Reflect.deleteProperty(Promise, 'withResolvers');
+    try {
+      const { router, pane } = track(setup('/home'));
+      let allow: (value: boolean) => void = () => {};
+      router.registerGuard(
+        pane(0),
+        PANE_ROUTE_LEVEL,
+        () =>
+          new Promise<boolean>((resolve) => {
+            allow = resolve;
+          })
+      );
+      const result = router.navigatePane(pane(0), '/mail');
+      allow(true);
+      await expect(result).resolves.toMatchObject({ status: 'committed' });
+      expect(routeIds(router.entry(pane(0)))).toEqual(['mail']);
+    } finally {
+      Object.assign(Promise, { withResolvers });
+    }
+  });
+
   it('a newer navigation in the same pane supersedes a pending one', async () => {
     const { router, pane } = track(
       setup('/home', {
