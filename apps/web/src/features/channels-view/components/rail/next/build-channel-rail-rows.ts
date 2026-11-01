@@ -97,7 +97,7 @@ function applySectionPreferences(
   const flush = () => {
     const preference = section ? options.preferences[section] : undefined;
     const sort =
-      preference?.sort ?? (section === 'favorites' ? 'name' : undefined);
+      preference?.sort ?? (section === 'favorites' ? 'manual' : undefined);
     const visible = entries.filter((row) => {
       if (row.kind !== 'conversation' && row.kind !== 'favorite') return true;
       return (
@@ -105,7 +105,7 @@ function applySectionPreferences(
         options.unreadChannelIds.has(channel(row)?.id ?? '')
       );
     });
-    if (sort) {
+    if (sort && sort !== 'manual') {
       const channels = visible.flatMap((row) => channel(row) ?? []);
       const ordered =
         sort === 'name'

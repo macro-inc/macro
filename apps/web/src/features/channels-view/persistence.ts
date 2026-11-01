@@ -101,7 +101,7 @@ const channelsPreferencesSchema = z.object({
       z
         .object({
           sort: z
-            .enum(['viewed_at', 'updated_at', 'created_at', 'name'])
+            .enum(['viewed_at', 'updated_at', 'created_at', 'name', 'manual'])
             .optional(),
           unreadOnly: z.boolean().optional(),
         })

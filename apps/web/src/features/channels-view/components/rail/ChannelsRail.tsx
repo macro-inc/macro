@@ -1162,13 +1162,16 @@ export function ChannelsRail(props: ChannelsRailProps) {
         section === 'channels' ||
         section === 'direct_messages'
           ? state.sortBy[section]
-          : 'name',
+          : section === 'favorites'
+            ? 'manual'
+            : 'name',
       ...state.sectionPreferences[section],
     }),
     setSectionPreferences: (section, preferences) => {
       if (
         preferences.sort &&
         preferences.sort !== 'name' &&
+        preferences.sort !== 'manual' &&
         (section === 'team_channels' ||
           section === 'channels' ||
           section === 'direct_messages')

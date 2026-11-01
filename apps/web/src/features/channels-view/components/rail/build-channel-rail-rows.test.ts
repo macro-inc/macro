@@ -5,6 +5,7 @@ import {
   buildChannelRailRows,
   buildChannelSectionRows,
 } from './build-channel-rail-rows';
+import { buildChannelRailRows as buildSectionedRailRows } from './next/build-channel-rail-rows';
 
 function channel(
   id: string,
@@ -416,4 +417,37 @@ it('renders a channel in every matching smart tag with unique navigation IDs, ex
   expect(collapsed.filter((row) => row.kind === 'conversation')).toEqual([
     { kind: 'conversation', channel: deals },
   ]);
+});
+
+it('keeps saved favorite order unless an automatic sort is selected', () => {
+  const items: Parameters<typeof buildSectionedRailRows>[2] = {
+    favorites: [zeta, deals].map((item, sortOrder) => ({
+      entityId: item.id,
+      entityType: 'channel',
+      sortOrder,
+      createdAt: '2026-01-01',
+    })),
+    team_channels: [],
+    channels: [],
+    direct_messages: [],
+    recents: [],
+    threads: [],
+  };
+  const expanded = {
+    favorites: true,
+    team_channels: false,
+    channels: false,
+    direct_messages: false,
+  };
+  const rows = (sort?: 'manual' | 'name') =>
+    buildSectionedRailRows('browse', expanded, items, [], {
+      preferences: { favorites: { sort } },
+      channelById: (id) => byId.get(id),
+      unreadChannelIds: new Set(),
+    }).flatMap((row) =>
+      row.kind === 'favorite' ? [row.favorite.entityId] : []
+    );
+  expect(rows()).toEqual(['zeta', 'deals']);
+  expect(rows('manual')).toEqual(['zeta', 'deals']);
+  expect(rows('name')).toEqual(['deals', 'zeta']);
 });

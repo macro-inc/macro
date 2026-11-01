@@ -44,6 +44,9 @@ function ChannelSectionMenuItems(props: { section: ChannelSectionKey }) {
   const rail = useChannelsRail();
   const preferences = () => rail.sectionPreferences(props.section);
   const options = () => [
+    ...(props.section === 'favorites'
+      ? [{ value: 'manual' as const, label: t('channelSections.customOrder') }]
+      : []),
     ...(props.section === 'favorites' || props.section.startsWith('label:')
       ? [{ value: 'name' as const, label: t('channelSections.alphabetical') }]
       : []),

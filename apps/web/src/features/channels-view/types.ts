@@ -13,7 +13,7 @@ export type ChannelsRailSection = 'favorites' | ChannelsGroup;
 
 export type ChannelSectionKey = ChannelsRailSection | `label:${string}`;
 export type ChannelSectionPreferences = {
-  sort?: ChannelListSort | 'name';
+  sort?: ChannelListSort | 'name' | 'manual';
   unreadOnly?: boolean;
 };
 

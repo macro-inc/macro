@@ -513,6 +513,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Show lock icons for private conversations and visible per-section options; keep empty sections usable as drop targets without an all-sections management menu.
   Create all section types through New → New section in a wider dialog with Smart in the body and Shared in the footer; keep collapse on the header and style deletion as destructive.
   Keep per-section sorting and unread filters personal, and filter after membership assignment so hidden rows never leak into another section.
+  Default Favorites to Custom order and persist drag reordering through the shared favorites mutation; preserve hidden and non-channel favorite positions, disable dragging under automatic sorts, and keep the original rail unchanged.
   Use one sliders-icon section menu with Sort and Filter submenus plus section actions; keep the Unread only label left and its switch right, and keep the submenu open when toggled.
 - Route supported move, trash, restore, permanent-delete, duplicate, and share-policy
   writes through `queries/storage/entity-mutations` when GraphQL Soup is enabled;

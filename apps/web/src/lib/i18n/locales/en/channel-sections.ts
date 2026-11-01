@@ -102,6 +102,8 @@ export default {
   lastUpdated: 'Last updated',
   dateCreated: 'Date created',
   alphabetical: 'Alphabetical',
+  customOrder: 'Custom order',
+  reorderFavoritesFailed: 'Could not reorder favorites. Please try again.',
   unreadOnly: 'Unread only',
   noUnreadConversations: 'No unread conversations',
   cancel: 'Cancel',

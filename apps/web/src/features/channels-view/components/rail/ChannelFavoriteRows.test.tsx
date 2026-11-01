@@ -1,6 +1,13 @@
 import type { ChannelEntity } from '@entity';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  renderHook,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
 import {
   type ComponentProps,
   createSignal,
@@ -11,12 +18,67 @@ import {
 } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelFavoriteRow } from './ChannelFavoriteRows';
+import { ChannelFavoriteRow as DraggableFavoriteRow } from './next/ChannelFavoriteRow';
+import {
+  reorderVisibleFavorites,
+  useFavoriteReorder,
+} from './next/useFavoriteReorder';
 
 const rail = vi.hoisted(() => ({
   channelById: (_channelId: string): ChannelEntity | undefined => undefined,
   activateRow: vi.fn(),
   prefetchRow: vi.fn(),
   list: { focus: { set: vi.fn() } },
+  railId: 'rail',
+  sectionPreferences: () => ({ sort: 'manual' }),
+}));
+
+const drag = vi.hoisted(() => ({
+  starts: [] as Array<
+    (event: { draggable: { data: Record<string, unknown> } }) => void
+  >,
+  ends: [] as Array<
+    (event: {
+      draggable: { data: Record<string, unknown> };
+      droppable: { data: Record<string, unknown> };
+    }) => void
+  >,
+  favorites: [] as Favorite[],
+  reorder: vi.fn(
+    async (_args: {
+      favorites: { entityId: string; entityType: string }[];
+    }) => ({ kind: 'committed' })
+  ),
+}));
+vi.mock('@queries/favorites/favorites', () => ({
+  useFavoritesData: () => () => ({ favorites: drag.favorites }),
+  useReorderFavoritesMutation: () => ({ mutateAsync: drag.reorder }),
+}));
+vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
+vi.mock('@macro-inc/observability', () => ({
+  Telemetry: {
+    span: async (
+      _name: string,
+      run: (span: { setAttr: () => void }) => Promise<void>
+    ) => await run({ setAttr() {} }),
+  },
+}));
+vi.mock('@thisbeyond/solid-dnd', () => ({
+  createDraggable: () => ({
+    ref() {},
+    dragActivators: {},
+    isActiveDraggable: false,
+  }),
+  createDroppable: () => ({ ref() {}, isActiveDroppable: false }),
+  useDragDropContext: () => [
+    { active: {} },
+    {
+      onDragStart: (callback: (typeof drag.starts)[number]) =>
+        drag.starts.push(callback),
+      onDragEnd: (callback: (typeof drag.ends)[number]) =>
+        drag.ends.push(callback),
+    },
+  ],
 }));
 
 vi.mock('./ChannelsRailContext', async (importOriginal) => ({
@@ -117,6 +179,9 @@ const channel = {
 let setChannel: Setter<ChannelEntity | undefined>;
 beforeEach(() => {
   vi.clearAllMocks();
+  drag.starts.length = 0;
+  drag.ends.length = 0;
+  drag.favorites = [];
   const [loaded, update] = createSignal<ChannelEntity | undefined>(undefined);
   setChannel = update;
   rail.channelById = (channelId) =>
@@ -169,5 +234,106 @@ describe('favorite rows in the chat rail', () => {
       'favorite:channel:design',
       expect.anything()
     );
+  });
+});
+
+describe('favorite reordering', () => {
+  const first: Favorite = { ...favorite, entityId: 'first' };
+  const last: Favorite = { ...favorite, entityId: 'last' };
+  const hidden: Favorite = { ...favorite, entityId: 'hidden' };
+  const document: Favorite = {
+    ...favorite,
+    entityType: 'document',
+    entityId: 'first',
+  };
+  const original = [first, document, hidden, last];
+
+  it('moves visible favorites without moving hidden or other-type slots', () => {
+    expect(
+      reorderVisibleFavorites(
+        original,
+        [first, last],
+        'favorite:channel:last',
+        'favorite:channel:first'
+      )
+    ).toEqual([last, document, hidden, first]);
+    expect(original).toEqual([first, document, hidden, last]);
+  });
+
+  it('ignores self drops, missing targets, and incomplete favorite snapshots', () => {
+    expect(
+      reorderVisibleFavorites(
+        original,
+        [first, last],
+        'favorite:channel:first',
+        'favorite:channel:first'
+      )
+    ).toBeUndefined();
+    expect(
+      reorderVisibleFavorites(
+        original,
+        [first, last],
+        'favorite:channel:first',
+        'favorite:channel:missing'
+      )
+    ).toBeUndefined();
+    expect(
+      reorderVisibleFavorites(
+        [first],
+        [first, last],
+        'favorite:channel:first',
+        'favorite:channel:last'
+      )
+    ).toBeUndefined();
+  });
+
+  it('sends the complete reordered list through the shared mutation', async () => {
+    drag.favorites = original;
+    renderHook(() => useFavoriteReorder(() => [first, last]));
+    const source = {
+      data: {
+        dndScope: 'rail:favorites',
+        favoriteKey: 'favorite:channel:last',
+      },
+    };
+    const target = {
+      data: {
+        dndScope: 'rail:favorites',
+        favoriteKey: 'favorite:channel:first',
+      },
+    };
+    drag.starts.forEach((start) => start({ draggable: source }));
+    drag.ends.forEach((end) => end({ draggable: source, droppable: target }));
+    await waitFor(() =>
+      expect(drag.reorder).toHaveBeenCalledExactlyOnceWith({
+        favorites: [last, document, hidden, first].map(
+          ({ entityId, entityType }) => ({ entityId, entityType })
+        ),
+      })
+    );
+  });
+
+  it('does not open a favorite after dragging it', () => {
+    render(() => (
+      <DraggableFavoriteRow
+        favorite={favorite}
+        reorder={{ scope: 'rail:favorites', enabled: () => true }}
+      />
+    ));
+    drag.starts.forEach((start) =>
+      start({
+        draggable: {
+          data: {
+            dndScope: 'rail:favorites',
+            favoriteKey: 'favorite:channel:design',
+          },
+        },
+      })
+    );
+    fireEvent.click(screen.getByRole('treeitem'));
+    expect(rail.activateRow).not.toHaveBeenCalled();
+    fireEvent.pointerDown(screen.getByRole('treeitem'));
+    fireEvent.click(screen.getByRole('treeitem'));
+    expect(rail.activateRow).toHaveBeenCalledOnce();
   });
 });

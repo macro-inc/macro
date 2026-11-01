@@ -24,7 +24,6 @@ import { ChannelsLiveCallsSidebar } from '../../../live-calls-sidebar';
 import { CHANNELS_TOUR } from '../../../tour';
 import type { ChannelsGroup } from '../../../types';
 import { ConversationsCreateMenu } from '../../ConversationsCreateMenu';
-import { ChannelFavoriteRow } from '../ChannelFavoriteRows';
 import { ChannelOption } from '../ChannelOption';
 import {
   type ChannelRailRow,
@@ -41,9 +40,11 @@ import {
   useChannelRailSectionState,
   useChannelRailVirtualizer,
 } from '../hooks/useChannelRailState';
+import { ChannelFavoriteRow } from './ChannelFavoriteRow';
 import { ChannelLabelRow } from './ChannelLabelRows';
 import { ChannelSectionHeading } from './ChannelSectionHeading';
 import { ChannelSectionDropdown } from './ChannelSectionMenu';
+import { useFavoriteReorder } from './useFavoriteReorder';
 
 type ChannelRailSearch = {
   isOpen: Accessor<boolean>;
@@ -209,7 +210,10 @@ function SectionStatus(props: { group: ChannelsGroup }) {
   );
 }
 
-function BrowseRow(props: { row: ChannelRailRow }) {
+function BrowseRow(props: {
+  row: ChannelRailRow;
+  favoriteReorder: ReturnType<typeof useFavoriteReorder>;
+}) {
   const rail = useChannelsRail();
   return (
     <div
@@ -259,7 +263,12 @@ function BrowseRow(props: { row: ChannelRailRow }) {
           {(row) => <ChannelLabelRow label={row().label} />}
         </Match>
         <Match when={props.row.kind === 'favorite' ? props.row : undefined}>
-          {(row) => <ChannelFavoriteRow favorite={row().favorite} />}
+          {(row) => (
+            <ChannelFavoriteRow
+              favorite={row().favorite}
+              reorder={props.favoriteReorder}
+            />
+          )}
         </Match>
         <Match when={props.row.kind === 'conversation' ? props.row : undefined}>
           {(row) => (
@@ -283,6 +292,9 @@ function ExpandedBrowse() {
   const registration = useChannelRailVirtualizer(() => 'team_channels');
   const rows = createMemo(() =>
     rail.list.items.all().filter((row) => row.group !== 'direct_messages')
+  );
+  const favoriteReorder = useFavoriteReorder(() =>
+    rows().flatMap((row) => (row.kind === 'favorite' ? [row.favorite] : []))
   );
   createScrollTopFade(scrollRoot);
   const focusIndex = () =>
@@ -322,7 +334,7 @@ function ExpandedBrowse() {
         keepMounted={focusIndex() >= 0 ? [focusIndex()] : undefined}
         onScroll={loadVisibleSections}
       >
-        {(row) => <BrowseRow row={row} />}
+        {(row) => <BrowseRow row={row} favoriteReorder={favoriteReorder} />}
       </Virtualizer>
     </div>
   );
