@@ -44,37 +44,55 @@ const REWRITE_DECLARATION_BYTES: usize = 48 * 1024;
 
 const REWRITE_INSTRUCTIONS: &str = "You maintain TypeScript that a Macro routine runs against Macro's SDK. Macro's SDK has changed and the code no longer type-checks. Rewrite it so it type-checks against the declarations you are given, changing only what the type checker's errors require. Keep exactly what it does: the same reads, the same changes, the same decisions and the same return value. Keep the module's shape: `export async function main({ macro, trigger, steps }: StepContext)`, no imports. If a call it made no longer exists, use the declarations' replacement for it.";
 
+/// Mints the short-lived token a routine's code acts as its owner with.
+pub trait RoutineCredentials: Send + Sync + 'static {
+    /// A token for `owner` that outlives one step's deadline.
+    fn mint(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+    ) -> impl std::future::Future<Output = anyhow::Result<String>> + Send;
+}
+
+impl RoutineCredentials for MacroApiTokenSigner {
+    async fn mint(&self, owner: &MacroUserIdStr<'static>) -> anyhow::Result<String> {
+        // Writes are the owner's own, not an agent's.
+        Ok(self
+            .mint_for_agent(owner, TOKEN_LIFETIME_SECONDS, None)
+            .await?)
+    }
+}
+
 /// Routine code over the harness's own executor and type checker.
-pub struct SdkRoutineCode {
+pub struct SdkRoutineCode<Credentials = MacroApiTokenSigner> {
     executor: Arc<dyn ProgramExecutor>,
     checker: Arc<dyn ProgramChecker>,
-    signer: MacroApiTokenSigner,
+    credentials: Credentials,
     hosts: BTreeMap<String, String>,
     recorder: Arc<dyn ai_usage::UsageRecorder>,
 }
 
-impl SdkRoutineCode {
+impl<Credentials> SdkRoutineCode<Credentials> {
     /// `executor` should be routines' own, so they can't take the slots
-    /// agent sessions use.
-    /// Rewrites for new SDKs are billed to the routine's owner through `recorder`.
+    /// agent sessions use. Rewrites for new SDKs are billed to the
+    /// routine's owner through `recorder`.
     pub fn new(
         executor: Arc<dyn ProgramExecutor>,
         checker: Arc<dyn ProgramChecker>,
-        signer: MacroApiTokenSigner,
+        credentials: Credentials,
         hosts: BTreeMap<String, String>,
         recorder: Arc<dyn ai_usage::UsageRecorder>,
     ) -> Self {
         Self {
             executor,
             checker,
-            signer,
+            credentials,
             hosts,
             recorder,
         }
     }
 }
 
-impl RoutineCode for SdkRoutineCode {
+impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials> {
     fn sdk(&self) -> Option<SdkFingerprint> {
         SdkFingerprint::try_from(self.checker.sdk_fingerprint().to_owned()).ok()
     }
@@ -102,11 +120,7 @@ impl RoutineCode for SdkRoutineCode {
         outcome = tracing::field::Empty,
     ))]
     async fn run(&self, owner: &MacroUserIdStr<'static>, run: CodeRun<'_>) -> CodeOutcome {
-        let token = match self
-            .signer
-            .mint_for_agent(owner, TOKEN_LIFETIME_SECONDS, None)
-            .await
-        {
+        let token = match self.credentials.mint(owner).await {
             Ok(token) => token,
             Err(error) => {
                 tracing::error!(?error, "could not mint a routine code credential");
@@ -191,7 +205,7 @@ impl RoutineCode for SdkRoutineCode {
     }
 }
 
-impl SdkRoutineCode {
+impl<Credentials> SdkRoutineCode<Credentials> {
     // The span records no code or problems: both can quote the owner's data.
     #[tracing::instrument(name = "routine.code_rewrite", skip_all, err)]
     async fn rewrite_source(

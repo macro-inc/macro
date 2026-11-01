@@ -41,7 +41,10 @@ Pulumi stacks; they do not host extra agent processes.
   composes staged search type/field extraction and Clairic content extraction
   with Nemotron temporal extraction and the shared admission/usage services.
 - `src/scheduling.rs`: routine HTTP routes and background scheduling;
-  domain/adapters live in `crates/scheduled_action`.
+  domain/adapters live in `crates/scheduled_action`. Routine tool steps run
+  through `src/routine_tools.rs`; code steps through `src/routine_code.rs`,
+  on routines' own Deno executor (own slots, CPU limit, lower priority) and
+  type checker, with the owner's token limited to each step's `writes`.
 - `src/preview.rs` + `src/preview/`: preview control routes, public HTTP and SSH listeners;
   lease/ticket and authorization logic lives in `crates/agent_preview`. The shared
   pool stores replica ownership and credential hashes; startup and ten-second
@@ -93,7 +96,9 @@ produce events, independently of public session control.
 
 ## Checks
 
-- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset).
+- `cargo test -p agent_harness_service` (`SQLX_OFFLINE` unset). Add
+  `-- --include-ignored` with Deno 2.9.6 on `PATH` for the real-runtime
+  routine code tests.
 - `just check` (`SQLX_OFFLINE=true cargo check`).
 - `just run-local` — needs `DAYTONA_API_KEY`, `DAYTONA_SNAPSHOT`,
   `GITHUB_TOKEN` in the environment or a local `.env`.
