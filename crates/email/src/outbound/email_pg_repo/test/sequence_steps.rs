@@ -1,11 +1,12 @@
 //! Sequence steps: scheduled drafts that stay out of the user's mail lists
-//! until they are sent or fail, and replies that chain one step to the next.
+//! until they are sent or fail.
 
 use super::*;
 use crate::domain::{
-    models::{CreateDraftInput, EmailErr, ScheduledSendSource, ScheduledSendStatus},
+    models::{ContactInfo, CreateDraftInput, EmailErr, ScheduledSendSource, ScheduledSendStatus},
     ports::NoOpEnqueuer,
-    scheduled::{EmailSchedulingRepo, EmailSchedulingService, ScheduleChange},
+    scheduled::{EmailSchedulingRepo, ScheduleChange},
+    sequence_steps::{CancelExpectation, CancelOutcome, NewStep, SequenceStepStore},
     service::EmailServiceImpl,
 };
 use crm::domain::service::NoOpCrmService;
@@ -15,16 +16,15 @@ use macro_user_id::cowlike::CowLike as _;
 
 // From the `email_draft` fixture.
 const LINK: Uuid = uuid::uuid!("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa");
-const OTHER_LINK: Uuid = uuid::uuid!("cccccccc-cccc-cccc-cccc-cccccccccccc");
 /// A sent message in `SENT_THREAD`; `REPLY_DRAFT` is the user's unsent reply to it.
 const SENT: Uuid = uuid::uuid!("ee000001-0000-0000-0000-000000000001");
 const SENT_THREAD: Uuid = uuid::uuid!("11111111-1111-1111-1111-111111111111");
 const REPLY_DRAFT: Uuid = uuid::uuid!("ee000002-0000-0000-0000-000000000002");
-/// A local draft that is the only message in its thread: a first step.
-const STEP: Uuid = uuid::uuid!("ee000004-0000-0000-0000-000000000004");
-const STEP_THREAD: Uuid = uuid::uuid!("33333333-3333-3333-3333-333333333333");
+/// A local draft that is the only message in its thread.
+const DRAFT: Uuid = uuid::uuid!("ee000004-0000-0000-0000-000000000004");
 /// A thread holding one received message in the inbox.
 const RECEIVED_THREAD: Uuid = uuid::uuid!("22222222-2222-2222-2222-222222222222");
+const STEP_THREAD: Uuid = uuid::uuid!("33333333-3333-3333-3333-333333333333");
 /// The fixture's sender of `SENT` and of every local draft.
 const ALICE: Uuid = uuid::uuid!("c0000001-0000-0000-0000-000000000001");
 /// The lists a local draft shows in when its thread has no received mail.
@@ -38,13 +38,6 @@ const DRAFT_LISTS: [&str; 5] = [
 
 fn actor() -> MacroUserIdStr<'static> {
     MacroUserIdStr::parse_from_str("macro|user1@test.com").unwrap()
-}
-
-fn schedule(source: Option<ScheduledSendSource>) -> ScheduleChange {
-    ScheduleChange::Set {
-        send_time: Utc::now() + chrono::Duration::hours(1),
-        source,
-    }
 }
 
 fn service(
@@ -149,27 +142,62 @@ async fn fail_delivery(pool: &Pool<Postgres>, message: Uuid) -> anyhow::Result<(
     Ok(())
 }
 
+/// Create a step through the sequence port, in its own transaction.
+async fn create_step(pool: &Pool<Postgres>, reply_to: Option<Uuid>) -> Result<Uuid, EmailErr> {
+    let steps = PgSequenceSteps;
+    let mut conn = pool.acquire().await.map_err(anyhow::Error::from)?;
+    let from = ContactInfo {
+        email: "user1@test.com".to_owned(),
+        name: None,
+        photo_url: None,
+    };
+    let to = ContactInfo {
+        email: "bob@example.com".to_owned(),
+        name: Some("Bob".to_owned()),
+        photo_url: None,
+    };
+    let contacts = steps.upsert_contacts(&mut conn, LINK, &from, &to).await?;
+    let mut tx = pool.begin().await.map_err(anyhow::Error::from)?;
+    let message = steps
+        .create_step(
+            &mut tx,
+            &NewStep {
+                link_id: LINK,
+                actor: actor().as_ref(),
+                contacts: &contacts,
+                to: &to,
+                subject: "Hello",
+                body_text: "Hi Bob",
+                reply_to,
+                send_time: Utc::now() + chrono::Duration::hours(1),
+                list_unsubscribe_url: "https://example.com/u/token",
+            },
+        )
+        .await?;
+    tx.commit().await.map_err(anyhow::Error::from)?;
+    Ok(message)
+}
+
+async fn thread_of(pool: &Pool<Postgres>, message: Uuid) -> anyhow::Result<Uuid> {
+    Ok(sqlx::query_scalar!(
+        "SELECT thread_id FROM email_messages WHERE id = $1",
+        message
+    )
+    .fetch_one(pool)
+    .await?)
+}
+
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
-async fn pending_sequence_step_stays_out_of_mail_lists(pool: Pool<Postgres>) -> anyhow::Result<()> {
+async fn pending_step_stays_out_of_mail_lists(pool: Pool<Postgres>) -> anyhow::Result<()> {
     let repo = EmailPgRepo::new(pool.clone());
-    recompute(&pool, STEP_THREAD).await?;
-    assert_eq!(lists(&pool).await?.showing(STEP_THREAD), DRAFT_LISTS);
-
-    repo.change_schedule(
-        LINK,
-        STEP,
-        &actor(),
-        schedule(Some(ScheduledSendSource::Sequence)),
-        None,
-        0,
-    )
-    .await?;
-    assert_eq!(lists(&pool).await?.showing(STEP_THREAD), Vec::<&str>::new());
+    let step = create_step(&pool, None).await?;
+    let thread = thread_of(&pool, step).await?;
+    assert_eq!(lists(&pool).await?.showing(thread), Vec::<&str>::new());
     let projection = repo
-        .thread_mail_projections_by_ids(actor(), &[STEP_THREAD])
+        .thread_mail_projections_by_ids(actor(), &[thread])
         .await?
         .remove(0);
     assert!(projection.previews.draft.is_none());
@@ -180,23 +208,38 @@ async fn pending_sequence_step_stays_out_of_mail_lists(pool: Pool<Postgres>) -> 
             .is_none_or(|state| state.drafts.is_empty()),
         "the normalized cache must not project the step into Drafts"
     );
-
-    // A time change without a source keeps the step hidden.
-    repo.change_schedule(LINK, STEP, &actor(), schedule(None), None, 0)
-        .await?;
-    let source = sqlx::query_scalar!(
-        "SELECT source FROM email_scheduled_messages WHERE message_id = $1",
-        STEP
+    let schedule = sqlx::query!(
+        "SELECT source, list_unsubscribe_url FROM email_scheduled_messages WHERE message_id = $1",
+        step
     )
     .fetch_one(&pool)
     .await?;
-    assert_eq!(source.as_deref(), Some("sequence"));
-    assert_eq!(lists(&pool).await?.showing(STEP_THREAD), Vec::<&str>::new());
+    assert_eq!(schedule.source.as_deref(), Some("sequence"));
+    assert_eq!(
+        schedule.list_unsubscribe_url.as_deref(),
+        Some("https://example.com/u/token")
+    );
 
-    // Unscheduling returns the draft to the user's lists for cleanup.
-    repo.change_schedule(LINK, STEP, &actor(), ScheduleChange::Cancel, None, 0)
+    // Unscheduling it in the composer returns the draft to the user's lists.
+    repo.change_schedule(LINK, step, &actor(), ScheduleChange::Cancel, None, 0)
         .await?;
-    assert_eq!(lists(&pool).await?.showing(STEP_THREAD), DRAFT_LISTS);
+    assert_eq!(lists(&pool).await?.showing(thread), DRAFT_LISTS);
+
+    // Withdrawing it leaves nothing behind.
+    let mut conn = pool.acquire().await?;
+    assert_eq!(
+        PgSequenceSteps
+            .cancel_step(&mut conn, step, CancelExpectation::Any)
+            .await?,
+        CancelOutcome::Cancelled
+    );
+    assert_eq!(lists(&pool).await?.showing(thread), Vec::<&str>::new());
+    assert_eq!(
+        PgSequenceSteps
+            .cancel_step(&mut conn, step, CancelExpectation::Any)
+            .await?,
+        CancelOutcome::Gone
+    );
     Ok(())
 }
 
@@ -204,57 +247,92 @@ async fn pending_sequence_step_stays_out_of_mail_lists(pool: Pool<Postgres>) -> 
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
-async fn failed_sequence_step_shows_again(pool: Pool<Postgres>) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
-    repo.change_schedule(
-        LINK,
-        STEP,
-        &actor(),
-        schedule(Some(ScheduledSendSource::Sequence)),
-        None,
-        0,
-    )
-    .await?;
-    fail_delivery(&pool, STEP).await?;
-    recompute(&pool, STEP_THREAD).await?;
-    assert_eq!(lists(&pool).await?.showing(STEP_THREAD), DRAFT_LISTS);
+async fn failed_step_shows_again(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    let step = create_step(&pool, None).await?;
+    let thread = thread_of(&pool, step).await?;
+    fail_delivery(&pool, step).await?;
+    recompute(&pool, thread).await?;
+    assert_eq!(lists(&pool).await?.showing(thread), DRAFT_LISTS);
     Ok(())
+}
+
+fn users_reply(replying_to_id: Uuid) -> CreateDraftInput {
+    CreateDraftInput {
+        frozen_signature_html: None,
+        draft_generation: 0,
+        db_id: None,
+        provider_id: None,
+        replying_to_id: Some(replying_to_id),
+        provider_thread_id: None,
+        thread_db_id: None,
+        subject: "Re: Hello World".to_owned(),
+        sender_email: None,
+        to: vec![ContactInfo {
+            email: "bob@example.com".to_owned(),
+            name: None,
+            photo_url: None,
+        }],
+        cc: vec![],
+        bcc: vec![],
+        body_text: Some("My own reply".to_owned()),
+        body_html: None,
+        body_macro: None,
+        headers_json: None,
+        send_time: None,
+        include_signature: Some(false),
+        actor: Some(actor()),
+        draft_client_binding: None,
+        thread_client_binding: None,
+    }
 }
 
 #[sqlx::test(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_draft"))
 )]
-async fn follow_up_step_hides_from_drafts_but_not_from_sent(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    let repo = EmailPgRepo::new(pool.clone());
+async fn reply_step_threads_under_a_sent_parent_only(pool: Pool<Postgres>) -> anyhow::Result<()> {
+    // Without the user's own reply draft, the thread holds only sent mail.
+    sqlx::query!("DELETE FROM email_messages WHERE id = $1", REPLY_DRAFT)
+        .execute(&pool)
+        .await?;
     recompute(&pool, SENT_THREAD).await?;
-    // An ordinary scheduled draft is still the user's draft.
-    repo.change_schedule(LINK, REPLY_DRAFT, &actor(), schedule(None), None, 0)
-        .await?;
-    let ordinary = lists(&pool).await?;
-    assert!(ordinary.drafts.contains(&SENT_THREAD));
-    assert!(ordinary.drafts_dynamic.contains(&SENT_THREAD));
+    assert!(matches!(
+        create_step(&pool, Some(DRAFT)).await,
+        Err(EmailErr::MessageNotFound(id)) if id == DRAFT
+    ));
 
-    repo.change_schedule(LINK, REPLY_DRAFT, &actor(), ScheduleChange::Cancel, None, 0)
-        .await?;
-    repo.change_schedule(
-        LINK,
-        REPLY_DRAFT,
-        &actor(),
-        schedule(Some(ScheduledSendSource::Sequence)),
-        None,
-        0,
+    let step = create_step(&pool, Some(SENT)).await?;
+    let row = sqlx::query!(
+        "SELECT thread_id, replying_to_id, headers_jsonb FROM email_messages WHERE id = $1",
+        step
     )
+    .fetch_one(&pool)
     .await?;
+    assert_eq!(row.thread_id, SENT_THREAD);
+    assert_eq!(row.replying_to_id, Some(SENT));
+    assert_eq!(
+        row.headers_jsonb,
+        Some(serde_json::json!([{ "Macro-In-Reply-To": SENT.to_string() }]))
+    );
+
     let lists = lists(&pool).await?;
     assert!(!lists.drafts.contains(&SENT_THREAD));
     assert!(!lists.drafts_dynamic.contains(&SENT_THREAD));
     assert!(lists.sent_dynamic.contains(&SENT_THREAD));
-    // The thread previews its sent message, not the pending step.
-    let all = all_mail_preview_names(&pool).await?;
-    assert_eq!(all, vec![Some("Hello World".to_owned())]);
+    assert_eq!(
+        all_mail_preview_names(&pool).await?,
+        vec![Some("Hello World".to_owned())],
+        "the thread previews its sent message, not the pending step"
+    );
+
+    // The user's own reply starts a draft of its own; it never adopts the step.
+    let service = service(pool.clone());
+    let inboxes = service.email_repo.inboxes_for_macro_id(actor()).await?;
+    let link = inboxes.iter().find(|link| link.id == LINK).unwrap();
+    let reply = service
+        .create_draft_impl(link, &inboxes, users_reply(SENT))
+        .await?;
+    assert_ne!(reply.db_id, step);
     Ok(())
 }
 
@@ -278,184 +356,6 @@ async fn all_mail_preview_names(pool: &Pool<Postgres>) -> anyhow::Result<Vec<Opt
         .filter(|row| row.id == SENT_THREAD)
         .map(|row| row.name)
         .collect())
-}
-
-fn follow_up(replying_to_id: Uuid) -> CreateDraftInput {
-    CreateDraftInput {
-        frozen_signature_html: None,
-        draft_generation: 0,
-        db_id: None,
-        provider_id: None,
-        replying_to_id: Some(replying_to_id),
-        reuse_reply_draft: true,
-        provider_thread_id: None,
-        thread_db_id: None,
-        subject: "Re: Draft only thread".to_owned(),
-        sender_email: None,
-        to: vec![crate::domain::models::ContactInfo {
-            email: "bob@example.com".to_owned(),
-            name: None,
-            photo_url: None,
-        }],
-        cc: vec![],
-        bcc: vec![],
-        body_text: Some("Following up".to_owned()),
-        body_html: None,
-        body_macro: None,
-        headers_json: None,
-        send_time: None,
-        include_signature: Some(false),
-        actor: Some(actor()),
-        draft_client_binding: None,
-        thread_client_binding: None,
-    }
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../../fixtures", scripts("email_draft"))
-)]
-async fn follow_up_replies_only_to_a_sequence_step_in_its_inbox(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    let service = service(pool.clone());
-    let inboxes = service.email_repo.inboxes_for_macro_id(actor()).await?;
-    let link = inboxes.iter().find(|link| link.id == LINK).unwrap();
-    let other = inboxes.iter().find(|link| link.id == OTHER_LINK).unwrap();
-
-    assert!(matches!(
-        service
-            .create_draft_impl(link, &inboxes, follow_up(STEP))
-            .await,
-        Err(EmailErr::CannotReplyToDraft)
-    ));
-
-    // An ordinary Send Later draft is not held for its replies.
-    service
-        .change_schedule(actor(), LINK, STEP, schedule(None), Some(false), 0)
-        .await?;
-    assert!(matches!(
-        service
-            .create_draft_impl(link, &inboxes, follow_up(STEP))
-            .await,
-        Err(EmailErr::CannotReplyToDraft)
-    ));
-    service
-        .change_schedule(actor(), LINK, STEP, ScheduleChange::Cancel, Some(false), 0)
-        .await?;
-
-    service
-        .change_schedule(
-            actor(),
-            LINK,
-            STEP,
-            schedule(Some(ScheduledSendSource::Sequence)),
-            Some(false),
-            0,
-        )
-        .await?;
-    let first = service
-        .create_draft_impl(link, &inboxes, follow_up(STEP))
-        .await?;
-    assert_eq!(first.replying_to_id, Some(STEP));
-    assert_eq!(
-        first.thread_db_id, STEP_THREAD,
-        "the follow-up joins the step's thread"
-    );
-    assert_eq!(
-        first.headers_json,
-        Some(serde_json::json!([{ "Macro-In-Reply-To": STEP.to_string() }]))
-    );
-
-    // Each create is its own step; an earlier reply to the step is not reused.
-    let second = service
-        .create_draft_impl(link, &inboxes, follow_up(STEP))
-        .await?;
-    assert_ne!(second.db_id, first.db_id);
-
-    // Saving the follow-up again keeps its reply target.
-    let mut edit = follow_up(STEP);
-    edit.db_id = Some(first.db_id);
-    edit.body_text = Some("Following up again".to_owned());
-    service.create_draft_impl(link, &inboxes, edit).await?;
-
-    // The step lives in another inbox than the sender.
-    assert!(matches!(
-        service
-            .create_draft_impl(other, &inboxes, follow_up(STEP))
-            .await,
-        Err(EmailErr::CannotReplyToDraft)
-    ));
-
-    // A failed step stays scheduled (unsent) and can still be followed up;
-    // its delivery is what decides whether the follow-up sends.
-    fail_delivery(&pool, STEP).await?;
-    service
-        .create_draft_impl(link, &inboxes, follow_up(STEP))
-        .await?;
-
-    // An unscheduled draft cannot be replied to.
-    sqlx::query!(
-        "DELETE FROM email_scheduled_messages WHERE message_id = $1",
-        STEP
-    )
-    .execute(&pool)
-    .await?;
-    assert!(matches!(
-        service
-            .create_draft_impl(link, &inboxes, follow_up(STEP))
-            .await,
-        Err(EmailErr::CannotReplyToDraft)
-    ));
-    Ok(())
-}
-
-#[sqlx::test(
-    migrator = "MACRO_DB_MIGRATIONS",
-    fixtures(path = "../../../../fixtures", scripts("email_draft"))
-)]
-async fn follow_up_to_a_sent_step_leaves_the_users_reply_draft_alone(
-    pool: Pool<Postgres>,
-) -> anyhow::Result<()> {
-    let service = service(pool.clone());
-    let inboxes = service.email_repo.inboxes_for_macro_id(actor()).await?;
-    let link = inboxes.iter().find(|link| link.id == LINK).unwrap();
-    let users_draft = || async {
-        let row = sqlx::query!(
-            "SELECT subject, body_text, updated_at FROM email_messages WHERE id = $1",
-            REPLY_DRAFT
-        )
-        .fetch_one(&pool)
-        .await?;
-        Ok::<_, anyhow::Error>((row.subject, row.body_text, row.updated_at))
-    };
-    let before = users_draft().await?;
-
-    let mut step = follow_up(SENT);
-    step.reuse_reply_draft = false;
-    let step = service.create_draft_impl(link, &inboxes, step).await?;
-    assert_ne!(step.db_id, REPLY_DRAFT, "the step is a draft of its own");
-    assert_eq!(step.replying_to_id, Some(SENT));
-    assert_eq!(step.thread_db_id, SENT_THREAD);
-    assert_eq!(users_draft().await?, before);
-
-    // By default a reply continues the user's existing draft, never the
-    // scheduled step.
-    service
-        .change_schedule(
-            actor(),
-            LINK,
-            step.db_id,
-            schedule(Some(ScheduledSendSource::Sequence)),
-            Some(false),
-            0,
-        )
-        .await?;
-    let reply = service
-        .create_draft_impl(link, &inboxes, follow_up(SENT))
-        .await?;
-    assert_eq!(reply.db_id, REPLY_DRAFT);
-    Ok(())
 }
 
 /// A thread holding only a pending sequence step, as an enrollment's first step
@@ -580,60 +480,29 @@ async fn thread_messages_carry_their_schedule_source(pool: Pool<Postgres>) -> an
         AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
     };
     let service = service(pool.clone());
-    let reply_draft = || async {
-        let receipt = EntityAccessReceipt::try_new(
-            EntityAccessAuth::Authenticated(actor()),
-            Entity {
-                entity_type: EntityType::EmailThread,
-                entity_id: SENT_THREAD.to_string(),
-            },
-            EntityPermission::AccessLevel {
-                access_level: AccessLevel::Owner,
-            },
-        )
+    let step = create_step(&pool, Some(SENT)).await?;
+    let receipt = EntityAccessReceipt::try_new(
+        EntityAccessAuth::Authenticated(actor()),
+        Entity {
+            entity_type: EntityType::EmailThread,
+            entity_id: SENT_THREAD.to_string(),
+        },
+        EntityPermission::AccessLevel {
+            access_level: AccessLevel::Owner,
+        },
+    )
+    .unwrap();
+    let message = service
+        .get_thread_with_messages_impl(receipt, 0, 20)
+        .await?
+        .unwrap()
+        .messages
+        .into_iter()
+        .find(|message| message.db_id == step)
         .unwrap();
-        let message = service
-            .get_thread_with_messages_impl(receipt, 0, 20)
-            .await?
-            .unwrap()
-            .messages
-            .into_iter()
-            .find(|message| message.db_id == REPLY_DRAFT)
-            .unwrap();
-        Ok::<_, anyhow::Error>((message.scheduled_send_status, message.scheduled_send_source))
-    };
-
-    service
-        .change_schedule(actor(), LINK, REPLY_DRAFT, schedule(None), Some(false), 0)
-        .await?;
-    assert_eq!(
-        reply_draft().await?,
-        (Some(ScheduledSendStatus::Pending), None)
-    );
-
-    service
-        .change_schedule(
-            actor(),
-            LINK,
-            REPLY_DRAFT,
-            ScheduleChange::Cancel,
-            Some(false),
-            0,
-        )
-        .await?;
-    service
-        .change_schedule(
-            actor(),
-            LINK,
-            REPLY_DRAFT,
-            schedule(Some(ScheduledSendSource::Sequence)),
-            Some(false),
-            0,
-        )
-        .await?;
     // The thread still returns a pending step, marked as one.
     assert_eq!(
-        reply_draft().await?,
+        (message.scheduled_send_status, message.scheduled_send_source),
         (
             Some(ScheduledSendStatus::Pending),
             Some(ScheduledSendSource::Sequence)

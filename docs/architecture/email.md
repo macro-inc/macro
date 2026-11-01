@@ -526,27 +526,30 @@ boundaries and exclusive all-day ends without mounting a calendar grid.
 
 ## Sequence sends
 
-Email sequences (`features/email-marketing`) send each step as a Gmail draft
-scheduled with `PUT /email/drafts/scheduled/{id}` and `"source": "sequence"`
-(Gmail only), recorded in `email_scheduled_messages.source`. A later schedule
-without `source` keeps it; unscheduling removes it.
+Email sequences (`crates/email_sequences`, the Customers "Sequences" section)
+send from the owner's own Gmail inbox through scheduled sends. The crate owns
+all sequence state; the email crate exposes the steps through one port,
+`domain/sequence_steps.rs` (`PgSequenceSteps`), whose methods run on the
+caller's connection so a step is created or withdrawn inside the transaction
+that holds its enrollment's row lock.
+
+A sweep in `pubsub_workers` creates at most one unsent step per enrollment,
+about a minute before it sends, as a draft scheduled with
+`email_scheduled_messages.source = 'sequence'` and a `list_unsubscribe_url`
+that delivery sends as `List-Unsubscribe` / `List-Unsubscribe-Post`. A reply
+step is created only after its parent is sent, so it threads like any reply.
+Inbox sync calls the crate after each committed upsert so a reply or bounce
+stops the enrollment; the sweep checks again before every step.
 
 A pending step (source set, neither sent nor failed) is not the user's mail:
 every mail list (the static views and the dynamic builder, which checks it when
 choosing candidate threads so pages stay full), the thread projection and its
 importance, the GraphQL mail cache, search, and `GET /email/drafts/scheduled`
-leave it out; `source=sequence` lists only unsent sequence sends. Threads still
-return it, with GraphQL `scheduledSendSource`, so the web thread view can skip
-it. A failed step shows again like any draft. Writers that make a message a
-pending step or stop it being one recompute the thread.
-
-Later steps are replies: `replying_to_id` may name an unsent sequence step in the
-same Gmail inbox, and `"reuse_reply_draft": false` keeps each step its own draft.
-At delivery only a sequence-step parent holds its reply (`reply_threading`): a
-`ready` parent defers it (retried, logged at info); a failed, unconfirmed or
-unscheduled one fails it. Other replies are never held. A sent parent threads the
-reply with its synced Message-ID, else the `delivery_message_id` its delivery
-minted.
+leave it out. Threads still return it, with GraphQL `scheduledSendSource`, so
+the web thread view can skip it. A failed step shows again like any draft.
+Writers that make a message a pending step or stop it being one recompute the
+thread. A reply threads under a sent parent's synced Message-ID, else the
+`delivery_message_id` its delivery minted.
 
 ## Independent send outbox
 

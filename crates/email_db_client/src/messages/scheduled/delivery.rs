@@ -24,6 +24,8 @@ pub struct DeliveryClaim {
     pub approved_snapshot: Option<serde_json::Value>,
     /// Prepared envelope/body frozen by GraphQL admission; absent for older writes.
     pub prepared_content: Option<serde_json::Value>,
+    /// One-click unsubscribe URL a sequence step sends in `List-Unsubscribe`.
+    pub list_unsubscribe_url: Option<String>,
 }
 
 /// Acquire a fresh or expired claim under the common message -> schedule lock order.
@@ -48,6 +50,7 @@ pub async fn claim_delivery(
     let schedule = sqlx::query!(
         r#"SELECT send_time, sent, processing, actor_id, delivery_claim_id,
                   delivery_started_at, delivery_message_id, delivery_status, approved_attachments,
+                  list_unsubscribe_url,
                   (send_time <= NOW() AND NOT sent AND delivery_status <> 'failed'
                    AND (CASE WHEN processing THEN
                         COALESCE(delivery_lease_expires_at, updated_at + make_interval(secs => $3)) <= NOW()
@@ -101,6 +104,7 @@ pub async fn claim_delivery(
         approved_attachments: schedule.approved_attachments,
         approved_snapshot: attempt.as_ref().and_then(|attempt| attempt.request.clone()),
         prepared_content: attempt.and_then(|attempt| attempt.prepared_content),
+        list_unsubscribe_url: schedule.list_unsubscribe_url,
     }))
 }
 

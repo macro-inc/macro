@@ -33,6 +33,8 @@ pub mod scheduled_delivery;
 #[cfg(feature = "ports")]
 pub mod send_attempt;
 #[cfg(feature = "ports")]
+pub mod sequence_steps;
+#[cfg(feature = "ports")]
 pub mod service;
 
 #[cfg(feature = "ports")]
