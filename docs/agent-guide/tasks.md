@@ -132,11 +132,12 @@ An empty or unavailable project keeps the plain pill, and composers never split 
 Enter activates a pill or any other document control reached by keyboard. After a
 mouse click, Enter still moves to the editor.
 Wide desktop task rows and group headers share their leading icon alignment.
-Below 512px of list width and on phones, group headers use no extra grid gap
-between the caret and content, retaining their existing padding. The value icon,
-label, and count stay on one line; long labels truncate. Group-header carets are
-16px, with 16px status and priority icons. Desktop list insets follow the list
-container: 8px below 640px and 12px from 640px; phone insets remain 4px.
+At the 840px compact list-container breakpoint and on phones, task group headers
+use no extra gap between the caret and content, retaining their existing padding.
+The value icon, label, and count keep their existing spacing on one line; long
+labels truncate. Group-header carets are 16px, with 16px status and priority icons.
+Desktop list insets follow the list container: 8px below 640px and 12px from 640px;
+phone insets remain 4px.
 In grouped task and project lists, the current group header stays pinned at the top
 of the scrolling pane until the next group pushes it away. The pinned header still
 collapses or expands its group; keyboard navigation keeps rows below it visible.

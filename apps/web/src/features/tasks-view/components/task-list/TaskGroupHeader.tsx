@@ -121,7 +121,7 @@ export function TaskGroupHeader(props: {
               class={cn(
                 'grid min-w-0 w-full items-center whitespace-nowrap rounded-[inherit] py-2 text-left text-xs font-semibold tracking-tight touch:min-h-11',
                 alignWithRows()
-                  ? 'grid-cols-[var(--soup-row-indicator-width)_minmax(0,1fr)] gap-x-(--soup-row-column-gap) pl-(--soup-row-padding-l) pr-3'
+                  ? 'grid-cols-[var(--soup-row-indicator-width)_minmax(0,1fr)] gap-x-(--soup-row-column-gap) pl-(--soup-row-padding-l) pr-3 @max-[840px]/u-list:gap-x-0'
                   : 'grid-cols-[1rem_minmax(0,1fr)] gap-x-0 px-2'
               )}
               aria-expanded={props.expanded}
