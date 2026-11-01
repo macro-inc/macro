@@ -25,6 +25,8 @@ export default {
   optionsFor: 'Options for {{name}}',
   expandSection: 'Expand section',
   collapseSection: 'Collapse section',
+  resizeSection: 'Resize {{name}}',
+  resizeSectionHint: 'Drag to resize. Double-click to reset.',
   expandAllSections: 'Expand all sections',
   collapseAllSections: 'Collapse all sections',
   loading: 'Loading sections…',

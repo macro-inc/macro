@@ -1,4 +1,4 @@
-import type { ListController } from '@app/components/list';
+import type { ListController, ListScrollHandle } from '@app/components/list';
 import type { ChannelPreviewSelection } from '@app/features/next-soup/utils';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import type { ChannelEntity } from '@entity';
@@ -203,6 +203,8 @@ export type ChannelsRailContext = {
     group: ChannelsRailSection | 'threads',
     element: HTMLDivElement
   ) => void;
+  /** The sectioned renderer owns its nested scroll regions and local indexes. */
+  registerBrowseScrollHandle: (handle: ListScrollHandle) => () => void;
   registerVirtualizer: (
     scope: ChannelsSourceScope,
     handle: VirtualizerHandle

@@ -50,22 +50,6 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
     const target = rail.activeDropTarget();
     return target?.kind === 'label' && target.labelId === props.label.id;
   };
-  const unreadOnly = () =>
-    rail.sectionPreferences(rowKeyForLabel(props.label.id)).unreadOnly;
-  const hasVisibleChannels = () =>
-    rail.list.items
-      .all()
-      .some(
-        (row) => row.kind === 'conversation' && row.labelId === props.label.id
-      );
-  const hasReferenceStatus = () =>
-    rail.list.items
-      .all()
-      .some(
-        (row) =>
-          row.kind === 'reference-status' &&
-          row.id === `reference-status:label:${props.label.id}`
-      );
 
   return (
     <div
@@ -104,17 +88,6 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
           <ChannelLabelActions label={props.label} />
         </ChannelSectionDropdown>
       </ChannelSectionHeading>
-      <Show
-        when={state().open && !hasVisibleChannels() && !hasReferenceStatus()}
-      >
-        <p class="pr-2 pb-2 pl-4 text-xs text-ink-extra-muted">
-          {unreadOnly()
-            ? t('channelSections.noUnreadConversations')
-            : props.label.rule
-              ? t('channelSections.emptySmartSection')
-              : t('channelSections.emptySection')}
-        </p>
-      </Show>
     </div>
   );
 }

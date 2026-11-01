@@ -8,21 +8,27 @@ import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import StarIcon from '@icon/system/regular/star.svg';
 import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
-import { Button, cn } from '@ui';
+import { createElementSize } from '@solid-primitives/resize-observer';
+import { Button } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import {
   type Accessor,
+  createEffect,
   createMemo,
   createSignal,
+  For,
   Match,
+  on,
+  onCleanup,
   Show,
   Switch,
 } from 'solid-js';
 import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
+import { CHANNEL_SECTION_MIN_HEIGHT } from '../../../constants';
 import { canLabelChannel } from '../../../core/channel-label-eligibility';
 import { ChannelsLiveCallsSidebar } from '../../../live-calls-sidebar';
 import { CHANNELS_TOUR } from '../../../tour';
-import type { ChannelsGroup } from '../../../types';
+import type { ChannelSectionKey, ChannelsGroup } from '../../../types';
 import { ConversationsCreateMenu } from '../../ConversationsCreateMenu';
 import { ChannelOption } from '../ChannelOption';
 import {
@@ -36,14 +42,16 @@ import {
   RailListLoading,
   RailListLoadingMore,
 } from '../ChannelsRailSection';
+import { useChannelRailVirtualizer } from '../hooks/useChannelRailState';
 import {
-  useChannelRailSectionState,
-  useChannelRailVirtualizer,
-} from '../hooks/useChannelRailState';
+  type ChannelRailSectionRows,
+  groupChannelRailSections,
+} from './build-channel-rail-rows';
 import { ChannelFavoriteRow } from './ChannelFavoriteRow';
 import { ChannelLabelRow } from './ChannelLabelRows';
 import { ChannelSectionHeading } from './ChannelSectionHeading';
 import { ChannelSectionDropdown } from './ChannelSectionMenu';
+import { ResizableRailSection } from './ResizableRailSection';
 import { useFavoriteReorder } from './useFavoriteReorder';
 
 type ChannelRailSearch = {
@@ -223,24 +231,7 @@ function BrowseRow(props: {
     >
       <Switch>
         <Match when={props.row.kind === 'section' ? props.row : undefined}>
-          {(row) => (
-            <>
-              <SectionHeading group={row().group} />
-              <Show
-                when={
-                  row().group === 'favorites' &&
-                  rail.isGroupOpen('favorites') &&
-                  !rail.list.items.all().some((row) => row.kind === 'favorite')
-                }
-              >
-                <p class="py-2 pr-2 pl-4 text-xs text-ink-extra-muted">
-                  {rail.sectionPreferences('favorites').unreadOnly
-                    ? t('channelSections.noUnreadConversations')
-                    : t('channelSections.emptyFavorites')}
-                </p>
-              </Show>
-            </>
-          )}
+          {(row) => <SectionHeading group={row().group} />}
         </Match>
         <Match when={props.row.kind === 'status' ? props.row : undefined}>
           {(row) => <SectionStatus group={row().group} />}
@@ -285,95 +276,214 @@ function BrowseRow(props: {
   );
 }
 
-function ExpandedBrowse() {
+type SectionHandle = {
+  root?: HTMLDivElement;
+  virtualizer?: VirtualizerHandle;
+};
+
+function BrowseSection(props: {
+  sectionKey: ChannelSectionKey;
+  section: ChannelRailSectionRows;
+  maxHeight: number;
+  favoriteReorder: ReturnType<typeof useFavoriteReorder>;
+  register: (key: ChannelSectionKey, handle: SectionHandle) => () => void;
+}) {
   const rail = useChannelsRail();
+  const handle: SectionHandle = {};
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
   const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
-  const registration = useChannelRailVirtualizer(() => 'team_channels');
-  const rows = createMemo(() =>
-    rail.list.items.all().filter((row) => row.group !== 'direct_messages')
-  );
-  const favoriteReorder = useFavoriteReorder(() =>
-    rows().flatMap((row) => (row.kind === 'favorite' ? [row.favorite] : []))
-  );
-  createScrollTopFade(scrollRoot);
+  const size = createElementSize(scrollRoot);
+  onCleanup(props.register(props.sectionKey, handle));
+  const heading = () => props.section.heading;
+  const open = () => {
+    const row = heading();
+    return row.kind === 'label'
+      ? rail.isLabelOpen(row.label.id)
+      : rail.isGroupOpen(row.group);
+  };
+  const label = () => {
+    const row = heading();
+    return row.kind === 'label'
+      ? row.label.name
+      : t(`channelSections.${row.group}`);
+  };
+  const emptyMessage = () => {
+    if (rail.sectionPreferences(props.sectionKey).unreadOnly)
+      return t('channelSections.noUnreadConversations');
+    const row = heading();
+    if (row.kind === 'section') return t('channelSections.emptyFavorites');
+    return row.label.rule
+      ? t('channelSections.emptySmartSection')
+      : t('channelSections.emptySection');
+  };
   const focusIndex = () =>
-    rows().findIndex((row) => row.id === rail.list.focus.key());
+    props.section.rows.findIndex((row) => row.id === rail.list.focus.key());
   const loadVisibleSections = () => {
-    const handle = virtualizer();
-    if (!handle) return;
-    const first = handle.findItemIndex(Math.max(0, handle.scrollOffset - 100));
-    const last = handle.findItemIndex(
-      handle.scrollOffset + handle.viewportSize + 150
+    const current = virtualizer();
+    if (!open() || !current) return;
+    const first = current.findItemIndex(
+      Math.max(0, current.scrollOffset - 100)
     );
-    for (const row of rows().slice(first, last + 1)) {
+    const last = current.findItemIndex(
+      current.scrollOffset + current.viewportSize + 150
+    );
+    for (const row of props.section.rows.slice(first, last + 1)) {
       if (row.kind !== 'status') continue;
       const source = rail.sources[row.group];
-      if (source.hasMore() && !source.isFetching())
+      if (source.hasMore() && !source.isFetching() && !source.error())
         fireAndForget(source.loadMore(), 'channels-view');
     }
   };
+  createEffect(
+    on([() => props.section.rows, open, virtualizer, () => size.height], () => {
+      if (!open()) return;
+      const frame = requestAnimationFrame(loadVisibleSections);
+      onCleanup(() => cancelAnimationFrame(frame));
+    })
+  );
   return (
-    <div
-      ref={(element) => {
-        setScrollRoot(element);
-        for (const group of ['favorites', 'team_channels', 'channels'] as const)
-          rail.registerScrollRef(group, element);
+    <ResizableRailSection
+      section={props.sectionKey}
+      label={label()}
+      open={open()}
+      maxHeight={props.maxHeight}
+      rootRef={(element) => {
+        handle.root = element;
       }}
-      class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto px-(--sidebar-gutter)"
+      scrollRef={(element) => {
+        setScrollRoot(element);
+        const row = heading();
+        if (row.kind === 'section') rail.registerScrollRef(row.group, element);
+      }}
+      header={
+        <BrowseRow row={heading()} favoriteReorder={props.favoriteReorder} />
+      }
     >
-      <Virtualizer
-        ref={(handle) => {
-          setVirtualizer(handle);
-          registration.registerVirtualizer(handle);
-        }}
-        data={rows()}
-        scrollRef={scrollRoot()}
-        itemSize={34}
-        bufferSize={300}
-        keepMounted={focusIndex() >= 0 ? [focusIndex()] : undefined}
-        onScroll={loadVisibleSections}
+      <Show
+        when={props.section.rows.length > 0}
+        fallback={
+          <p class="py-2 pr-2 pl-4 text-xs text-ink-extra-muted">
+            {emptyMessage()}
+          </p>
+        }
       >
-        {(row) => <BrowseRow row={row} favoriteReorder={favoriteReorder} />}
-      </Virtualizer>
-    </div>
+        <Virtualizer
+          ref={(current) => {
+            handle.virtualizer = current;
+            setVirtualizer(current);
+          }}
+          data={props.section.rows}
+          scrollRef={scrollRoot()}
+          itemSize={34}
+          bufferSize={200}
+          keepMounted={focusIndex() >= 0 ? [focusIndex()] : undefined}
+          onScroll={loadVisibleSections}
+        >
+          {(row) => (
+            <BrowseRow row={row} favoriteReorder={props.favoriteReorder} />
+          )}
+        </Virtualizer>
+      </Show>
+    </ResizableRailSection>
   );
 }
 
-function DirectMessages() {
+function ExpandedBrowse() {
   const rail = useChannelsRail();
-  const { state } = useChannelRailSectionState(() => 'direct_messages');
+  const [root, setRoot] = createSignal<HTMLDivElement>();
   const [scrollRoot, setScrollRoot] = createSignal<HTMLDivElement>();
-  const pagination = useChannelRailVirtualizer(() => 'direct_messages');
+  const size = createElementSize(root);
+  const scrollSize = createElementSize(scrollRoot);
+  const sections = createMemo(() =>
+    groupChannelRailSections(rail.list.items.all())
+  );
+  const keys = createMemo(() =>
+    [...sections().keys()].filter((key) => key !== 'direct_messages')
+  );
+  const handles = new Map<ChannelSectionKey, SectionHandle>();
+  const favoriteReorder = useFavoriteReorder(
+    () =>
+      sections()
+        .get('favorites')
+        ?.rows.flatMap((row) =>
+          row.kind === 'favorite' ? [row.favorite] : []
+        ) ?? []
+  );
+  createScrollTopFade(scrollRoot);
+  const register = (key: ChannelSectionKey, handle: SectionHandle) => {
+    handles.set(key, handle);
+    return () => {
+      if (handles.get(key) === handle) handles.delete(key);
+    };
+  };
+  onCleanup(
+    rail.registerBrowseScrollHandle({
+      scrollToIndex: (index, options) => {
+        const row = rail.list.items.at(index);
+        if (!row) return;
+        for (const [key, section] of sections()) {
+          const localIndex = section.rows.findIndex(
+            (item) => item.id === row.id
+          );
+          if (section.heading.id !== row.id && localIndex < 0) continue;
+          const handle = handles.get(key);
+          if (!handle) return;
+          if (localIndex >= 0)
+            handle.virtualizer?.scrollToIndex(localIndex, options);
+          const container = scrollRoot();
+          if (key !== 'direct_messages' && container && handle.root) {
+            const bounds = handle.root.getBoundingClientRect();
+            const viewport = container.getBoundingClientRect();
+            if (bounds.top < viewport.top)
+              container.scrollTop += bounds.top - viewport.top;
+            else if (bounds.bottom > viewport.bottom)
+              container.scrollTop += bounds.bottom - viewport.bottom;
+          }
+          return;
+        }
+      },
+    })
+  );
   return (
-    <div
-      class={cn(
-        'shrink-0 border-t border-edge-muted px-(--sidebar-gutter)',
-        state().open && 'flex h-1/3 min-h-24 flex-col'
-      )}
-    >
-      <SectionHeading group="direct_messages" />
-      <Show when={state().open}>
-        <div
-          ref={(element) => {
-            setScrollRoot(element);
-            rail.registerScrollRef('direct_messages', element);
-          }}
-          class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto pl-2"
-        >
-          <Virtualizer
-            ref={pagination.registerVirtualizer}
-            data={state().items}
-            scrollRef={scrollRoot()}
-            itemSize={34}
-            bufferSize={200}
-            keepMounted={state().keepMounted}
-            onScroll={pagination.loadMoreNearEnd}
-          >
-            {(channel) => <ChannelOption channel={channel} />}
-          </Virtualizer>
-          <SectionStatus group="direct_messages" />
-        </div>
+    <div ref={setRoot} class="flex min-h-0 flex-1 flex-col">
+      <div
+        ref={setScrollRoot}
+        class="scrollbar-hidden min-h-0 flex-1 overflow-y-auto px-(--sidebar-gutter)"
+      >
+        <For each={keys()}>
+          {(key) => (
+            <Show when={sections().get(key)}>
+              {(section) => (
+                <BrowseSection
+                  sectionKey={key}
+                  section={section()}
+                  maxHeight={Math.max(
+                    CHANNEL_SECTION_MIN_HEIGHT,
+                    (scrollSize.height ?? 300) - 48
+                  )}
+                  favoriteReorder={favoriteReorder}
+                  register={register}
+                />
+              )}
+            </Show>
+          )}
+        </For>
+      </div>
+      <Show when={sections().get('direct_messages')}>
+        {(section) => (
+          <div class="shrink-0 border-t border-edge-muted px-(--sidebar-gutter)">
+            <BrowseSection
+              sectionKey="direct_messages"
+              section={section()}
+              maxHeight={Math.max(
+                CHANNEL_SECTION_MIN_HEIGHT,
+                (size.height ?? 500) - 180
+              )}
+              favoriteReorder={favoriteReorder}
+              register={register}
+            />
+          </div>
+        )}
       </Show>
     </div>
   );
@@ -442,15 +552,7 @@ export function ExpandedChannelsRail(props: { search: ChannelRailSearch }) {
         }
         class="flex min-h-0 flex-1 flex-col outline-none"
       >
-        <Show
-          when={props.search.isOpen()}
-          fallback={
-            <>
-              <ExpandedBrowse />
-              <DirectMessages />
-            </>
-          }
-        >
+        <Show when={props.search.isOpen()} fallback={<ExpandedBrowse />}>
           <ExpandedSearchResults search={props.search} />
         </Show>
       </div>

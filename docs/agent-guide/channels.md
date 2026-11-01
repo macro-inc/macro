@@ -941,12 +941,16 @@ badge next to the name, before the caret. Personal sections have no scope icon o
 badge. Header focus backgrounds fill the entire header row, including its
 trailing controls, with no extra right padding.
 
-The upper sidebar uses one virtualized scroll area instead of dividing available
-height between sections. Direct messages have a separate collapsible panel fixed
-at the bottom, with their own scrolling when expanded. Collapse state, sorting,
-and sidebar width remain personal preferences. Search covers channels and DMs
-regardless of section placement. Mobile retains the recent-conversation feed
-described below.
+The upper sidebar scrolls through all sections. Each expanded section has its
+own virtualized, scrollable channel list and a resize grip below it. Drag the
+grip to choose its height, down to two rows (68px); overflow stays inside that
+section. Focus the grip and use Up/Down to resize by 20px (100px with Shift),
+or double-click to restore its automatic height. Section heights persist as
+personal preferences alongside sorting and sidebar width. Heights adapt to
+smaller panes without discarding the saved preference. Direct messages remain
+in a separate collapsible, resizable panel pinned at the bottom. Search covers
+channels and DMs regardless of section placement and restores the selected row
+in its section when closed. Mobile retains the recent-conversation feed below.
 
 Section membership comes from the server's complete visible channel-ID lists.
 The sidebar shows available channel rows immediately. One shared by-ID query

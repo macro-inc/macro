@@ -1,3 +1,4 @@
+import type { ListScrollHandle } from '@app/components/list';
 import type { ChannelPreviewSelection } from '@app/features/next-soup/utils';
 import type { ChannelEntity } from '@entity/types/entity';
 import type { WithNotification } from '@entity/types/notification';
@@ -8,6 +9,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import { onCleanup } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelsSources } from '../../queries';
 import type { ChannelRailRow } from './ChannelsRailContext';
@@ -35,9 +37,12 @@ const mocks = vi.hoisted(() => ({
   failure: vi.fn(),
   prefetch: vi.fn(),
   tab: 'browse' as 'browse' | 'threads',
+  scrollBrowse: vi.fn(),
+  scroll: (_index: number) => {},
 }));
 vi.mock('@app/components/list', () => ({
   createListController: (options: {
+    items: () => ChannelRailRow[];
     onActivate: (event: {
       item: ChannelRailRow;
       metadata: { event: MouseEvent };
@@ -66,10 +71,12 @@ vi.mock('@app/components/list', () => ({
             },
         metadata: { event },
       });
-    return {};
+    return { items: { at: (index: number) => options.items()[index] } };
   },
   listOwnedSlotName: (name: string) => name,
-  useListInteractions: vi.fn(),
+  useListInteractions: (options: { scrollHandle: () => ListScrollHandle }) => {
+    mocks.scroll = (index) => options.scrollHandle().scrollToIndex(index);
+  },
 }));
 vi.mock('@app/components/view-shell', () => ({
   useViewControlHotkeys: vi.fn(),
@@ -211,6 +218,9 @@ vi.mock('./next/ExpandedChannelsRail', async () => {
   return {
     ExpandedChannelsRail: () => {
       const rail = useChannelsRail();
+      onCleanup(
+        rail.registerBrowseScrollHandle({ scrollToIndex: mocks.scrollBrowse })
+      );
       return (
         <button
           onPointerDown={(event) => rail.prefetchRow('channel:one', event)}
@@ -281,6 +291,11 @@ beforeEach(() => {
 });
 afterEach(cleanup);
 
+it('delegates keyboard scrolling to the sectioned renderer instead of global indexes', () => {
+  mount();
+  mocks.scroll(0);
+  expect(mocks.scrollBrowse).toHaveBeenCalledExactlyOnceWith(0, undefined);
+});
 describe('explicit channel activation read marking', () => {
   it('resolves an uncached favorite before opening a split with top-level read marking', async () => {
     mocks.favoriteId = 'uncached';

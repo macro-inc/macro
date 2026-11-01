@@ -19,6 +19,7 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { ChannelFavoriteRow } from './ChannelFavoriteRows';
 import { ChannelFavoriteRow as DraggableFavoriteRow } from './next/ChannelFavoriteRow';
+import { ResizableRailSection } from './next/ResizableRailSection';
 import {
   reorderVisibleFavorites,
   useFavoriteReorder,
@@ -31,6 +32,7 @@ const rail = vi.hoisted(() => ({
   list: { focus: { set: vi.fn() } },
   railId: 'rail',
   sectionPreferences: () => ({ sort: 'manual' }),
+  setSectionPreferences: vi.fn(),
 }));
 
 const drag = vi.hoisted(() => ({
@@ -62,6 +64,9 @@ vi.mock('@macro-inc/observability', () => ({
       run: (span: { setAttr: () => void }) => Promise<void>
     ) => await run({ setAttr() {} }),
   },
+}));
+vi.mock('@solid-primitives/resize-observer', () => ({
+  createElementSize: () => ({ width: 200, height: 100 }),
 }));
 vi.mock('@thisbeyond/solid-dnd', () => ({
   createDraggable: () => ({
@@ -341,5 +346,104 @@ describe('favorite reordering', () => {
     fireEvent.pointerDown(screen.getByRole('treeitem'));
     fireEvent.click(screen.getByRole('treeitem'), { detail: 1 });
     expect(rail.activateRow).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe('resizable chat sections', () => {
+  it('saves the final zoom-adjusted size and can resize again after collapse cancels a drag', () => {
+    const [open, setOpen] = createSignal(true);
+    render(() => (
+      <ResizableRailSection
+        section="favorites"
+        label="Favorites"
+        open={open()}
+        maxHeight={400}
+        header={<span>Section</span>}
+        rootRef={() => {}}
+        scrollRef={(element) => {
+          Object.defineProperty(element, 'offsetHeight', { value: 100 });
+          vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(
+            new DOMRect(0, 0, 200, 200)
+          );
+        }}
+      >
+        Conversations
+      </ResizableRailSection>
+    ));
+    let handle = screen.getByRole('separator');
+    Object.defineProperty(handle, 'setPointerCapture', { value: vi.fn() });
+    for (const [type, y] of [
+      ['pointerdown', 100],
+      ['pointermove', 140],
+      ['pointerup', 180],
+    ] as const) {
+      const event = new MouseEvent(type, {
+        bubbles: true,
+        button: 0,
+        clientY: y,
+      });
+      Object.defineProperty(event, 'pointerId', { value: 1 });
+      handle.dispatchEvent(event);
+    }
+    expect(rail.setSectionPreferences).toHaveBeenCalledExactlyOnceWith(
+      'favorites',
+      { height: 140 }
+    );
+    const start = new MouseEvent('pointerdown', {
+      bubbles: true,
+      button: 0,
+      clientY: 100,
+    });
+    Object.defineProperty(start, 'pointerId', { value: 1 });
+    handle.dispatchEvent(start);
+    setOpen(false);
+    expect(rail.setSectionPreferences).toHaveBeenCalledTimes(1);
+    setOpen(true);
+    handle = screen.getByRole('separator');
+    Object.defineProperty(handle, 'setPointerCapture', { value: vi.fn() });
+    for (const [type, y] of [
+      ['pointerdown', 100],
+      ['pointerup', 160],
+    ] as const) {
+      const event = new MouseEvent(type, {
+        bubbles: true,
+        button: 0,
+        clientY: y,
+      });
+      Object.defineProperty(event, 'pointerId', { value: 1 });
+      handle.dispatchEvent(event);
+    }
+    expect(rail.setSectionPreferences).toHaveBeenLastCalledWith('favorites', {
+      height: 130,
+    });
+  });
+
+  it('clamps keyboard resizing and resets only the section height', () => {
+    render(() => (
+      <ResizableRailSection
+        section="favorites"
+        label="Favorites"
+        open
+        maxHeight={120}
+        header={<span>Section</span>}
+        rootRef={() => {}}
+        scrollRef={() => {}}
+      >
+        Conversations
+      </ResizableRailSection>
+    ));
+    const handle = screen.getByRole('separator');
+    fireEvent.keyDown(handle, { key: 'ArrowUp', shiftKey: true });
+    expect(rail.setSectionPreferences).toHaveBeenLastCalledWith('favorites', {
+      height: 68,
+    });
+    fireEvent.keyDown(handle, { key: 'ArrowDown', shiftKey: true });
+    expect(rail.setSectionPreferences).toHaveBeenLastCalledWith('favorites', {
+      height: 120,
+    });
+    fireEvent.dblClick(handle);
+    expect(rail.setSectionPreferences).toHaveBeenLastCalledWith('favorites', {
+      height: undefined,
+    });
   });
 });

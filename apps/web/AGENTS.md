@@ -499,8 +499,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   the shared desktop `Open in new split` action and its mobile/capacity guards.
 - Gate the Chat redesign with `enable-chat-sidebar-sections`; wait for its result, restore the tabbed rail and separate creation flows when off, and keep mobile unchanged.
   Keep the original rail renderer and label dialogs in `components/rail/`; build the redesigned rail and section dialogs in `components/rail/next/`, with shared controller, context, and row primitives outside `next/`.
-  With the flag on, keep desktop Chat on one scrolling section list with a collapsible DM panel at
-  the bottom; personal and team-shared section assignments remain independent.
+  With the flag on, keep desktop Chat sections in a scrolling stack with individually resizable, virtualized bodies and a collapsible DM panel pinned at the bottom; personal and team-shared section assignments remain independent.
+  Keep resize grips keyboard-accessible, preserve per-section heights in personal preferences, and route list navigation through the sectioned renderer's scroll handle rather than global virtualizer indexes.
   Mobile retains the recent feed. Use the unified New conversation picker and
   require explicit confirmation before creating a duplicate visible channel name.
   Use one name-first dialog for channels and conversations, with at most three inline suggestions; reveal channel privacy and invite controls only for channel creation, and retain typed names on blur.

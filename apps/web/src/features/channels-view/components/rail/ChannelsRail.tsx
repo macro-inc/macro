@@ -284,6 +284,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const [virtualizers, setVirtualizers] = createSignal<
     Partial<Record<ChannelsSourceScope, VirtualizerHandle>>
   >({});
+  const [browseScrollHandle, setBrowseScrollHandle] =
+    createSignal<ListScrollHandle>();
 
   const searchQuery = () => props.searchQuery;
   const setSearchQuery = (query: string) => props.onSearchQueryChange(query);
@@ -617,12 +619,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
     scrollToIndex: (index, options) => {
       const row = list.items.at(index);
       if (!row) return;
-      if (
-        sectionsEnabled() &&
-        !props.searchOpen &&
-        row.group !== 'direct_messages'
-      ) {
-        virtualizers().team_channels?.scrollToIndex(index, options);
+      if (sectionsEnabled() && !props.searchOpen) {
+        browseScrollHandle()?.scrollToIndex(index, options);
         return;
       }
 
@@ -660,28 +658,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
   };
 
   const scrollScopeToSelectedOrStart = (scope: ChannelsQueryScope) => {
-    let rendered: (string | undefined)[];
-    if (scope === 'team_channels' && sectionsEnabled()) {
-      rendered = visibleRows()
-        .filter((row) => row.group !== 'direct_messages')
-        .map((row) => {
-          if (row.kind === 'conversation') return row.channel.id;
-          if (row.kind === 'favorite') return row.favorite.entityId;
-          return undefined;
-        });
-    } else if (scope === 'team_channels') {
-      rendered = channelSectionRows().map((row) =>
-        row.kind === 'conversation' ? row.channel.id : undefined
-      );
-    } else if (scope === 'direct_messages' && sectionsEnabled()) {
-      rendered = visibleRows().flatMap((row) =>
-        row.kind === 'conversation' && row.scope === 'direct_messages'
-          ? [row.channel.id]
-          : []
-      );
-    } else {
-      rendered = props.sources[scope].items().map((channel) => channel.id);
-    }
+    const rendered =
+      scope === 'team_channels'
+        ? channelSectionRows().map((row) =>
+            row.kind === 'conversation' ? row.channel.id : undefined
+          )
+        : props.sources[scope].items().map((channel) => channel.id);
 
     const selectedIndex = rendered.indexOf(selectedChannel()?.id ?? '');
 
@@ -773,8 +755,16 @@ export function ChannelsRail(props: ChannelsRailProps) {
         scrollThreadsToSelectedOrStart();
       } else {
         if (sectionsEnabled()) {
-          scrollScopeToSelectedOrStart('team_channels');
-          scrollScopeToSelectedOrStart('direct_messages');
+          const selectedIndex = visibleRows().findIndex(
+            (row) =>
+              (row.kind === 'conversation' &&
+                row.channel.id === selectedChannel()?.id) ||
+              (row.kind === 'favorite' &&
+                row.favorite.entityId === selectedChannel()?.id)
+          );
+          browseScrollHandle()?.scrollToIndex(Math.max(selectedIndex, 0), {
+            align: selectedIndex >= 0 ? 'nearest' : 'start',
+          });
         } else {
           scrollFavoritesToSelectedOrStart();
           for (const scope of BROWSE_QUERY_SCOPES)
@@ -1188,6 +1178,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
         ...current,
         [group]: element,
       }));
+    },
+    registerBrowseScrollHandle: (handle) => {
+      setBrowseScrollHandle(handle);
+      return () => {
+        if (browseScrollHandle() === handle) setBrowseScrollHandle(undefined);
+      };
     },
     registerVirtualizer,
     channelActivity,

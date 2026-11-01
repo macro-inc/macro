@@ -270,7 +270,7 @@ export function buildChannelRailRows(
   if (previousLabelId) {
     appendReferenceStatus(`label:${previousLabelId}`, 'team_channels');
   }
-  // Every upper row shares one virtualizer and one scroll position.
+  // Retain visual-order indexes for callers using the flat keyboard list.
   rows.forEach((row, index) => {
     if (row.kind === 'conversation' || row.kind === 'label')
       row.localIndex = index;
@@ -294,9 +294,34 @@ export function buildChannelRailRows(
         })
       )
     );
+    rows.push({
+      kind: 'status',
+      id: 'status:direct_messages',
+      group: 'direct_messages',
+    });
   }
 
   return sectionOptions ? applySectionPreferences(rows, sectionOptions) : rows;
+}
+
+export type ChannelRailSectionRows = {
+  heading: Extract<ChannelRailRow, { kind: 'section' | 'label' }>;
+  rows: ChannelRailRow[];
+};
+
+/** Keep section identities stable while their independently scrolling rows change. */
+export function groupChannelRailSections(rows: readonly ChannelRailRow[]) {
+  const sections = new Map<ChannelSectionKey, ChannelRailSectionRows>();
+  let current: ChannelRailSectionRows | undefined;
+  for (const row of rows) {
+    if (row.kind === 'section' || row.kind === 'label') {
+      current = { heading: row, rows: [] };
+      sections.set(row.kind === 'label' ? row.id : row.group, current);
+    } else {
+      current?.rows.push(row);
+    }
+  }
+  return sections;
 }
 
 /** Page at the rendered section boundary, not a source tail hidden by a label. */

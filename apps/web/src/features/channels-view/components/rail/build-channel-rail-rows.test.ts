@@ -5,7 +5,10 @@ import {
   buildChannelRailRows,
   buildChannelSectionRows,
 } from './build-channel-rail-rows';
-import { buildChannelRailRows as buildSectionedRailRows } from './next/build-channel-rail-rows';
+import {
+  buildChannelRailRows as buildSectionedRailRows,
+  groupChannelRailSections,
+} from './next/build-channel-rail-rows';
 
 function channel(
   id: string,
@@ -450,4 +453,59 @@ it('keeps saved favorite order unless an automatic sort is selected', () => {
   expect(rows()).toEqual(['zeta', 'deals']);
   expect(rows('manual')).toEqual(['zeta', 'deals']);
   expect(rows('name')).toEqual(['deals', 'zeta']);
+});
+
+it('keeps overlapping section members and loading rows in their own scroll regions', () => {
+  const labels = [
+    label('first', 'First', ['acme']),
+    label('second', 'Second', ['acme']),
+  ];
+  const sections = buildChannelSectionRows({
+    labels,
+    channels: [acme],
+    channelsById: byId,
+    isLabelOpen: (id) => id === 'first',
+  });
+  const rows = buildSectionedRailRows(
+    'browse',
+    {
+      favorites: false,
+      team_channels: true,
+      channels: true,
+      direct_messages: true,
+    },
+    {
+      favorites: [],
+      team_channels: [acme],
+      channels: [],
+      direct_messages: [deals],
+      recents: [],
+      threads: [],
+    },
+    sections,
+    {
+      preferences: {},
+      channelById: (id) => byId.get(id),
+      unreadChannelIds: new Set(),
+      referenceStatuses: { 'label:first': 'loading' },
+    }
+  );
+  const grouped = groupChannelRailSections(rows);
+  expect(grouped.get('label:first')?.rows.map((row) => row.id)).toEqual([
+    'channel:acme:label:first',
+    'reference-status:label:first',
+  ]);
+  expect(grouped.get('label:second')?.rows).toEqual([]);
+  expect(grouped.get('direct_messages')?.rows.map((row) => row.id)).toEqual([
+    'channel:deals',
+    'status:direct_messages',
+  ]);
+  expect(
+    grouped
+      .get('team_channels')
+      ?.rows.every((row) => row.kind !== 'conversation')
+  ).toBe(true);
+  expect(
+    rows.filter((row) => row.kind === 'conversation').map((row) => row.id)
+  ).toEqual(['channel:acme:label:first', 'channel:deals']);
 });
