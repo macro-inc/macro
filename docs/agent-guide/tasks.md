@@ -138,6 +138,8 @@ Task-list tags and property icons retain their separate compact sizing.
 Empty values in the Properties panel show No status, No priority, Unassigned,
 No due date, or No project with the shared empty-value icons; custom fields show
 Not set. Click the empty value to open its existing picker or inline editor.
+The Properties panel also uses 16px Project icons on touch, for both assigned
+and empty values, without changing desktop sizes.
 Enter activates a pill or any other document control reached by keyboard. After a
 mouse click, Enter still moves to the editor.
 Wide desktop task rows and group headers share their leading icon alignment.

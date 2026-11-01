@@ -693,6 +693,11 @@ function EmptyPropertyValue(props: {
     <PropertyNS.Empty
       propertyDefinitionId={props.property.propertyDefinitionId}
       label={label()}
+      iconClass={
+        props.property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
+          ? 'touch:size-4'
+          : undefined
+      }
     />
   );
 }
@@ -762,6 +767,7 @@ function SinglePill(props: {
         <ProjectLinkPill
           property={props.property}
           variant="ghost"
+          iconClass="touch:size-4"
           fallback={pill()}
         />
       </Show>

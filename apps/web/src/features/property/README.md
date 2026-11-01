@@ -30,7 +30,9 @@ pass `hideIcon` to `Property.Text` to avoid duplicate glyphs.
 Status and Priority option icons share a 12px default, including desktop and
 mobile edit menus and desktop title property pills. Task-detail title pills
 use 16px value and empty-state icons on touch; side-panel Status/Priority
-values use explicit 16px icons. Other callers can override the size.
+values use explicit 16px icons. Side-panel Project icons, including empty
+values, use 16px on touch and retain their desktop sizes. Other callers can
+override the size.
 Editable list cells use the shared ghost `Property.Pill` styling. Project hover
 cards use a cube header with the assigned value below it; empty Project hover
 cards retain the one-line empty message.
