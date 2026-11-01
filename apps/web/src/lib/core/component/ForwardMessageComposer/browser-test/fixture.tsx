@@ -17,6 +17,9 @@ import {
 } from '../../ForwardMessageComposer';
 
 function Draft() {
+  const agentSession =
+    new URLSearchParams(window.location.search).get('entity') ===
+    'agent_session';
   const [pending, setPending] = createSignal<
     ((result: UploadResult) => void)[]
   >([]);
@@ -40,9 +43,12 @@ function Draft() {
     <>
       <section class="w-full max-w-xl border border-edge rounded-lg bg-surface overflow-hidden">
         <h1 class="text-base font-medium p-4 border-b border-edge-muted">
-          Share document
+          {agentSession ? 'Share agent session' : 'Share document'}
         </h1>
-        <ForwardMessageComposer composer={composer} />
+        <ForwardMessageComposer
+          composer={composer}
+          hideAttachFiles={agentSession}
+        />
         <div class="p-4 flex justify-end">
           <Button
             variant="primary"

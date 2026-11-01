@@ -1603,6 +1603,9 @@ Saved sessions have **Share** and **Copy Share Link** in the desktop header;
 on mobile, open the session title menu and choose **Share**. The owner can
 select people or channels, choose their access level, and send the session with
 an optional message using the same Share dialog and mobile drawer as tasks.
+Agent-session sharing hides the attachment button on desktop and mobile;
+the optional message still supports pasted images. Composer fixture screenshots:
+[desktop](media/agent-share/desktop.png) and [phone](media/agent-share/mobile.png).
 Sessions also support **Share** from entity list menus and the entity sharing
 shortcut. **People with access** lists the owner and shared conversations;
 the owner can change or remove a conversation's access. When that list holds

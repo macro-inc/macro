@@ -15,3 +15,6 @@ removal, failure recovery, and serialized inline-image payloads on desktop,
 phone, and tablet. Requests to hosted services are blocked. It does not test a
 live backend upload or delivery; `ForwardToChannel.test.tsx` checks the share
 send boundary and its upload guard. Screenshots are saved with test results.
+
+Open `/?entity=agent_session` to inspect the agent-session variant, which hides
+the attachment button while retaining the optional message and image paste.

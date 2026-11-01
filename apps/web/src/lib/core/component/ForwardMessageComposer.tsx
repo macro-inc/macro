@@ -10,7 +10,7 @@ import type { MessageEditorOptions } from '@core/messages/configured-message-edi
 import { fireAndForget } from '@core/util/fireAndForget';
 import { handleFileFolderDrop } from '@core/util/upload';
 import { Telemetry } from '@macro-inc/observability';
-import { type Accessor, createSignal, onCleanup } from 'solid-js';
+import { type Accessor, createSignal, onCleanup, Show } from 'solid-js';
 import { CustomScrollbar } from './CustomScrollbar';
 import { MarkdownShell } from './LexicalMarkdown/builder/MarkdownShell';
 import { ScrollIndicators } from './VerticalScrollIndicators';
@@ -126,6 +126,7 @@ export function createForwardMessageComposer(options: {
 
 export function ForwardMessageComposer(props: {
   composer: ReturnType<typeof createForwardMessageComposer>;
+  hideAttachFiles?: boolean;
 }) {
   return (
     <Input.Root
@@ -182,9 +183,11 @@ export function ForwardMessageComposer(props: {
             <Input.Attachments kind="document" />
           </div>
         </div>
-        <div class="px-3 py-1 flex items-center">
-          <Input.AttachFilesAction disabled={props.composer.isSending()} />
-        </div>
+        <Show when={!props.hideAttachFiles}>
+          <div class="px-3 py-1 flex items-center">
+            <Input.AttachFilesAction disabled={props.composer.isSending()} />
+          </div>
+        </Show>
       </div>
     </Input.Root>
   );
