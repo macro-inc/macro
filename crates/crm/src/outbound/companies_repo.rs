@@ -343,7 +343,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         self.query_activity(scope).await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self), fields(skipped = tracing::field::Empty), err)]
     #[allow(clippy::too_many_arguments)]
     async fn populate_contact(
         &self,
@@ -359,7 +359,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         let normalized_domain = domain.to_ascii_lowercase();
         let normalized_email = email.to_ascii_lowercase();
 
-        if self
+        let skipped = self
             .populate_changes_nothing(
                 team_id,
                 link_id,
@@ -370,8 +370,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
                 last_at,
                 is_sent,
             )
-            .await?
-        {
+            .await?;
+        tracing::Span::current().record("skipped", skipped);
+        if skipped {
             return Ok(());
         }
 
