@@ -2,7 +2,7 @@ import type {
   Sequence,
   UpdateSequenceRequest,
 } from '@service-email/generated/schemas';
-import { err, ok } from 'neverthrow';
+import { err, ok, type Result } from 'neverthrow';
 import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
 import type { SequenceFailure } from '../core/errors';
@@ -22,10 +22,11 @@ const SEQUENCE: Sequence = {
 
 function setup(answer?: SequenceFailure) {
   const [sequence, setSequence] = createSignal<Sequence | undefined>(SEQUENCE);
-  const update = vi.fn(async (request: UpdateSequenceRequest) =>
-    answer
-      ? err(answer)
-      : ok({ ...SEQUENCE, ...request, version: request.version + 1 })
+  const update = vi.fn(
+    async (
+      request: UpdateSequenceRequest
+    ): Promise<Result<Sequence, SequenceFailure>> =>
+      answer ? err(answer) : ok({ ...SEQUENCE, version: request.version + 1 })
   );
   const draft = createRoot(() => createSequenceDraft({ sequence, update }));
   return { draft, update, setSequence };
