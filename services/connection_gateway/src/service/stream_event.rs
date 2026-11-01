@@ -4,7 +4,7 @@
 //!       while StreamItems represent stream data itself
 
 use stream::domain::{StreamEvent, StreamId};
-use tokio::sync::mpsc::Sender;
+use tokio::{sync::mpsc::Sender, task::AbortHandle};
 
 use crate::model::{
     connection::ConnectionContext, message::OutgoingMessage, websocket::StreamEvents,
@@ -15,10 +15,10 @@ pub fn handle_stream_events(
     context: ConnectionContext<'_>,
     sender: Sender<OutgoingMessage>,
     incoming_message: StreamEvents,
-) {
+) -> AbortHandle {
     let repo = context.api_context.stream_manager.repo();
 
-    tokio::spawn(async move {
+    let listener = tokio::spawn(async move {
         // if any prexisting streams exist emit open entity
         if let Ok(streams) = repo
             .active_streams(&incoming_message.entity.entity_id)
@@ -69,4 +69,5 @@ pub fn handle_stream_events(
             }
         }
     });
+    listener.abort_handle()
 }

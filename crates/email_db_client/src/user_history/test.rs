@@ -271,3 +271,62 @@ async fn get_thread_summary_info_filter_out_trash(pool: Pool<Postgres>) -> Resul
 
     Ok(())
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../fixtures", scripts("get_thread_summary_info"))
+)]
+async fn get_thread_summary_info_skips_discarded_drafts(pool: Pool<Postgres>) -> Result<()> {
+    const _: &sqlx::migrate::Migrator = &MACRO_DB_MIGRATIONS;
+
+    let link_id = Uuid::parse_str("00000000-0000-0000-0000-00000000001c")?;
+    let replied_thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000301")?;
+    let draft_only_thread_id = Uuid::parse_str("00000000-0000-0000-0000-000000000309")?;
+
+    // Discarding an Outlook draft keeps its row as a `provider_missing`
+    // tombstone: a newer reply draft in thread 301, and the only message of
+    // thread 309.
+    sqlx::query!(
+        "INSERT INTO email_threads (id, link_id) VALUES ($1, $2)",
+        draft_only_thread_id,
+        link_id
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO email_messages (id, thread_id, link_id, is_draft, is_sent, from_contact_id,
+                                    internal_date_ts, mailbox_state)
+        VALUES ('00000000-0000-0000-0000-0000000e0622', $1, $3, true, false,
+                '00000000-0000-0000-0000-0000000c0020', '2025-01-11 10:00:00 +00:00',
+                '{"provider_missing": true}'),
+               ('00000000-0000-0000-0000-0000000e0623', $2, $3, true, false,
+                '00000000-0000-0000-0000-0000000c0020', '2025-01-11 10:00:00 +00:00',
+                '{"provider_missing": true}')
+        "#,
+        replied_thread_id,
+        draft_only_thread_id,
+        link_id
+    )
+    .execute(&pool)
+    .await?;
+
+    let result = get_thread_summary_info(
+        &pool,
+        &[link_id],
+        &[replied_thread_id, draft_only_thread_id],
+    )
+    .await?;
+
+    assert!(
+        !result.contains_key(&draft_only_thread_id),
+        "a thread holding only a discarded draft opens as not found, so search must drop it"
+    );
+    let replied = result.get(&replied_thread_id).unwrap();
+    assert!(
+        !replied.is_draft,
+        "a discarded reply draft must not mark its thread as a draft"
+    );
+
+    Ok(())
+}

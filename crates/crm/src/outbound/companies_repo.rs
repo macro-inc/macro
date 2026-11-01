@@ -20,6 +20,16 @@ use sqlx::PgPool;
 use std::collections::BTreeMap;
 use uuid::Uuid;
 
+/// The contact `depopulate_contact` acts on, with the flags that decide
+/// how far its teardown cascades.
+struct DepopulateTarget {
+    contact_id: Uuid,
+    contact_manually_created: bool,
+    company_id: Uuid,
+    email_sync: bool,
+    company_manually_created: bool,
+}
+
 /// PostgreSQL-backed [`CompaniesRepository`].
 #[derive(Clone)]
 pub struct CompaniesRepositoryImpl {
@@ -80,6 +90,43 @@ impl CompaniesRepositoryImpl {
         Ok(())
     }
 
+    /// Takes the domain lock, then finds the contact `depopulate_contact`
+    /// tears down. Locking before the lookup keeps a concurrent in-flight
+    /// populate from committing past it. `None` = nothing to tear down.
+    async fn lock_depopulate_target(
+        tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
+        team_id: &uuid::Uuid,
+        normalized_domain: &str,
+        normalized_email: &str,
+    ) -> Result<Option<DepopulateTarget>, CrmError> {
+        Self::lock_team_domain(tx, team_id, normalized_domain).await?;
+
+        sqlx::query_as!(
+            DepopulateTarget,
+            r#"
+            SELECT
+                ct.id AS contact_id,
+                ct.manually_created AS "contact_manually_created!",
+                co.id AS company_id,
+                co.email_sync AS "email_sync!",
+                co.manually_created AS "company_manually_created!"
+            FROM crm_contacts ct
+            JOIN crm_companies co ON co.id = ct.company_id
+            JOIN crm_domains d ON d.company_id = co.id
+            WHERE co.team_id = $1
+              AND LOWER(ct.email) = $2
+              AND LOWER(d.domain) = $3
+            LIMIT 1
+            "#,
+            team_id,
+            normalized_email,
+            normalized_domain,
+        )
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
+    }
+
     /// Team killswitch, read inside the tx (after the advisory lock) so
     /// a concurrent disable+purge can't race past us. Missing row =
     /// default false.
@@ -134,6 +181,73 @@ impl CompaniesRepositoryImpl {
         .await
         .map_err(|e| CrmError::StorageLayerError(e.into()))?;
         Ok(row.map(|r| (r.id, r.hidden)))
+    }
+
+    /// Whether `populate_contact` would leave every row as it is: a
+    /// received message from a domain with no company, or a contact whose
+    /// company, contact and source rows already cover this interaction.
+    /// A mailbox backfill enqueues a populate per message, so most repeat a
+    /// contact the CRM already has; checking before the `(team, domain)`
+    /// lock keeps them from queueing behind one another on a busy domain.
+    /// `FOR KEY SHARE` waits for a depopulate deleting the source, so a
+    /// skip can't leave a teardown standing that the locked path would
+    /// have undone.
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "mirrors populate_contact's arguments"
+    )]
+    async fn populate_changes_nothing(
+        &self,
+        team_id: &uuid::Uuid,
+        link_id: &uuid::Uuid,
+        normalized_domain: &str,
+        normalized_email: &str,
+        name: Option<&str>,
+        first_at: DateTime<Utc>,
+        last_at: DateTime<Utc>,
+        is_sent: bool,
+    ) -> Result<bool, CrmError> {
+        sqlx::query_scalar!(
+            r#"
+            SELECT
+                (NOT $8 AND NOT EXISTS (
+                    SELECT 1
+                    FROM crm_companies c
+                    JOIN crm_domains d ON d.company_id = c.id
+                    WHERE c.team_id = $1
+                      AND d.team_id = $1
+                      AND LOWER(d.domain) = $3
+                ))
+                OR EXISTS (
+                    SELECT 1
+                    FROM crm_companies c
+                    JOIN crm_domains d ON d.company_id = c.id
+                    JOIN crm_contacts ct ON ct.company_id = c.id
+                    JOIN crm_contact_sources s ON s.contact_id = ct.id
+                    WHERE c.team_id = $1
+                      AND d.team_id = $1
+                      AND LOWER(d.domain) = $3
+                      AND ct.email = $4
+                      AND s.link_id = $2
+                      AND (ct.name IS NOT NULL OR $5::text IS NULL)
+                      AND c.last_interaction >= $7
+                      AND ct.last_interaction >= $7
+                      AND (NOT $8 OR (c.first_interaction <= $6 AND ct.first_interaction <= $6))
+                    FOR KEY SHARE OF s
+                ) AS "changes_nothing!"
+            "#,
+            team_id,
+            link_id,
+            normalized_domain,
+            normalized_email,
+            name,
+            first_at,
+            last_at,
+            is_sent,
+        )
+        .fetch_one(&self.pool)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))
     }
 
     /// Merge an interaction range into a company row.
@@ -276,7 +390,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         self.query_activity(scope).await
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip(self), fields(skipped = tracing::field::Empty), err)]
     #[allow(clippy::too_many_arguments)]
     async fn populate_contact(
         &self,
@@ -291,6 +405,23 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
     ) -> Result<(), CrmError> {
         let normalized_domain = domain.to_ascii_lowercase();
         let normalized_email = email.to_ascii_lowercase();
+
+        let skipped = self
+            .populate_changes_nothing(
+                team_id,
+                link_id,
+                &normalized_domain,
+                &normalized_email,
+                name,
+                first_at,
+                last_at,
+                is_sent,
+            )
+            .await?;
+        tracing::Span::current().record("skipped", skipped);
+        if skipped {
+            return Ok(());
+        }
 
         let mut tx = self
             .pool
@@ -628,40 +759,9 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .await
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
-        // Lock BEFORE observing state: a concurrent populate could
-        // commit rows for a since-deleted sent message otherwise.
-        sqlx::query!(
-            r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))"#,
-            format!("{team_id}:{normalized_domain}"),
-        )
-        .execute(&mut *tx)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
-
-        // None here = nothing to tear down.
-        let Some(row) = sqlx::query!(
-            r#"
-            SELECT
-                ct.id AS contact_id,
-                ct.manually_created AS "contact_manually_created!",
-                co.id AS company_id,
-                co.email_sync AS "email_sync!",
-                co.manually_created AS "company_manually_created!"
-            FROM crm_contacts ct
-            JOIN crm_companies co ON co.id = ct.company_id
-            JOIN crm_domains d ON d.company_id = co.id
-            WHERE co.team_id = $1
-              AND LOWER(ct.email) = $2
-              AND LOWER(d.domain) = $3
-            LIMIT 1
-            "#,
-            team_id,
-            normalized_email,
-            normalized_domain,
-        )
-        .fetch_optional(&mut *tx)
-        .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))?
+        let Some(row) =
+            Self::lock_depopulate_target(&mut tx, team_id, &normalized_domain, &normalized_email)
+                .await?
         else {
             tx.commit()
                 .await
@@ -764,6 +864,34 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
             .map_err(|e| CrmError::StorageLayerError(e.into()))?;
 
         Ok(outcome)
+    }
+
+    #[tracing::instrument(skip(self, email), err)]
+    async fn has_depopulate_target(
+        &self,
+        team_id: &uuid::Uuid,
+        domain: &str,
+        email: &str,
+    ) -> Result<bool, CrmError> {
+        let mut tx = self
+            .pool
+            .begin()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        let target = Self::lock_depopulate_target(
+            &mut tx,
+            team_id,
+            &domain.to_ascii_lowercase(),
+            &email.to_ascii_lowercase(),
+        )
+        .await?;
+
+        tx.commit()
+            .await
+            .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+
+        Ok(target.is_some())
     }
 
     #[tracing::instrument(skip(self, pairs), fields(pair_count = pairs.len()), err)]
