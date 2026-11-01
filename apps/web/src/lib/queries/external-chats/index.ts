@@ -36,6 +36,11 @@ export type ExternalChatApi = {
   ) => Promise<Result<{ uploadId: string; audio: boolean }, SendFailure>>;
   markRead: (chatId: string, messageId: string) => Promise<unknown>;
   stopSync: (chatId: string) => Promise<unknown>;
+  /**
+   * Asks the owner's phone for the earlier messages of their chats waiting
+   * for it (WhatsApp imports per account, not per chat).
+   */
+  importHistory: () => Promise<unknown>;
 };
 
 // DSS pushes `external_chat_changed` through the connection gateway (`./sync`);

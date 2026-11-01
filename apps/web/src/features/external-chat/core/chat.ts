@@ -226,15 +226,16 @@ export function backfillStatus(
   viewerOwns: boolean
 ): string | undefined {
   if (!backfill) return undefined;
-  return match(backfill.state)
-    .with(P.union('pending', 'running'), () => 'Importing history…')
-    .with('waiting_for_phone', () =>
-      viewerOwns
-        ? 'Earlier messages not imported. Open WhatsApp on your phone, then import them.'
-        : "Earlier messages wait for the owner's phone"
-    )
-    .with(P.union('waiting_for_message', 'done', 'partial'), () => undefined)
-    .exhaustive();
+  return (
+    match(backfill.state)
+      .with(P.union('pending', 'running'), () => 'Importing history…')
+      // The owner gets the import bar with its button instead.
+      .with('waiting_for_phone', () =>
+        viewerOwns ? undefined : "Earlier messages wait for the owner's phone"
+      )
+      .with(P.union('waiting_for_message', 'done', 'partial'), () => undefined)
+      .exhaustive()
+  );
 }
 
 /** "Launch · Design", or "Launch · Announcements" for its announcement group. */
