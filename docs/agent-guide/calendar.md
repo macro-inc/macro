@@ -838,7 +838,7 @@ in that list without a marker, as documents shared that way sit beside your own;
 names the shared event, so it opens for whoever can already see it. Posting it elsewhere does
 not share it on (only someone holding the event on their own calendar can), so people without
 access see `No Access`, like any other mention they cannot open; clicking it (a tap on a phone,
-which opens a sheet) shows `You don't have access to this event`.
+which opens an opaque sheet) shows `You don't have access to this event`.
 A calendar event mentioned in a channel message opens the calendar focused on the viewer's
 own copy of the meeting. When a person holds the event on their own calendar and posts the
 mention, it is shared read-only with the channel's current members: a member without a copy of

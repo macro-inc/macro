@@ -57,12 +57,18 @@ function MobileDrawerContent(
     maxHeight?: number;
     /** Initial/start height as a percentage of the viewport (vh). Clamped to 100. Fits content when omitted. */
     targetHeight?: number;
+    /**
+     * Paint the opaque menu fill instead of the default translucent glass.
+     * Use when the sheet shows a message over page text (mention previews).
+     */
+    opaque?: boolean;
   }
 ) {
   const [local, rest] = splitProps(props, [
     'class',
     'maxHeight',
     'targetHeight',
+    'opaque',
   ]);
 
   const maxHeight = () =>
@@ -89,7 +95,10 @@ function MobileDrawerContent(
         }}
         class={cn(
           'portal-scope',
-          'fixed! inset-x-2 bottom-[calc(var(--virtual-keyboard-height,0px)+8px)] z-modal mobile-sheet glass bg-menu-glass [--color-dialog:var(--color-menu-glass)] flex flex-col max-h-[min(var(--drawer-max-h),calc(100dvh-var(--safe-top,0px)-var(--virtual-keyboard-height,0px)-16px))] data-transitioning:transition-transform data-transitioning:duration-200 ease-out motion-reduce:transition-none',
+          'fixed! inset-x-2 bottom-[calc(var(--virtual-keyboard-height,0px)+8px)] z-modal mobile-sheet glass flex flex-col max-h-[min(var(--drawer-max-h),calc(100dvh-var(--safe-top,0px)-var(--virtual-keyboard-height,0px)-16px))] data-transitioning:transition-transform data-transitioning:duration-200 ease-out motion-reduce:transition-none',
+          local.opaque
+            ? 'bg-menu [--color-dialog:var(--color-menu)]'
+            : 'bg-menu-glass [--color-dialog:var(--color-menu-glass)]',
           targetHeight() != null ? 'h-(--drawer-h)' : 'h-fit',
           virtualKeyboardVisible()
             ? 'pb-4 has-[[data-drawer-scroll-body]]:pb-0'
