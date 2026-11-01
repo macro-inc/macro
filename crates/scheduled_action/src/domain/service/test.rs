@@ -1,4 +1,5 @@
 mod admission;
+mod appearance;
 mod owned_purge;
 mod user_cleanup;
 
@@ -38,9 +39,29 @@ const FOREIGN_USER: &str = "macro|other@macro.com";
 #[derive(Default)]
 pub(crate) struct FakeRepo {
     actions: Mutex<Vec<ScheduledAction>>,
+    activities: Mutex<Vec<activity::Activity>>,
 }
 
 impl ScheduledActionRepo for FakeRepo {
+    async fn set_appearance(
+        &self,
+        change: crate::domain::appearance::ChangeAppearance,
+    ) -> Result<Option<model_entity::EntityAppearance>> {
+        let mut actions = self.actions.lock().unwrap();
+        let action = actions
+            .iter_mut()
+            .find(|action| action.id == Some(change.id))
+            .ok_or_else(|| anyhow::anyhow!("scheduled action not found"))?;
+        let Some(activity) = change.activity(&action.appearance) else {
+            return Ok(None);
+        };
+        self.activities.lock().unwrap().push(activity);
+        Ok(Some(std::mem::replace(
+            &mut action.appearance,
+            change.appearance,
+        )))
+    }
+
     async fn create_action(&self, mut action: ScheduledAction) -> Result<ScheduledAction> {
         action.id = Some(generate_uuid_v7());
         self.actions.lock().unwrap().push(action.clone());
@@ -88,6 +109,10 @@ impl ScheduledActionRepo for FakeRepo {
 
     async fn delete_action(&self, id: &Uuid) -> Result<()> {
         self.actions.lock().unwrap().retain(|a| a.id != Some(*id));
+        self.activities
+            .lock()
+            .unwrap()
+            .retain(|activity| activity.entity_id != id.to_string());
         Ok(())
     }
 
@@ -936,6 +961,7 @@ fn claim_expiry_instant_still_blocks_replacement() {
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        appearance: model_entity::EntityAppearance::default(),
     };
     let expires_at = action
         .claim_expires_at()
@@ -1006,6 +1032,7 @@ fn seeded(
         enabled: true,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        appearance: model_entity::EntityAppearance::default(),
     }
 }
 

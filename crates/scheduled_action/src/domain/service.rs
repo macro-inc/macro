@@ -12,9 +12,11 @@ use entity_access::domain::{
 use entity_registry::OwnedPurgeOutcome;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_entity::EntityAppearance;
 use model_owner::{CreationPrincipal, Owner};
 use tokio::sync::mpsc::Sender;
 
+use super::appearance::ChangeAppearance;
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
 use super::models::{
@@ -143,6 +145,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
         principal: &CreationPrincipal,
         input: CreateScheduledAction,
         template_id: Option<Uuid>,
+        appearance: EntityAppearance,
     ) -> Result<ScheduledAction>
     where
         Targets: TaskTargetValidator,
@@ -151,6 +154,9 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
         let owner_user = owner.as_user().ok_or(OwnerNotUserError {
             owner_type: owner.owner_type(),
         })?;
+        appearance
+            .validate()
+            .map_err(ActionPolicyError::InvalidAppearance)?;
         let input = ActionConfiguration::from(input);
         self.check_event_management(&input.trigger)?;
         self.check_conditions(&input.trigger)?;
@@ -176,6 +182,7 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets>
                 next_run_at,
                 claimed: None,
                 template_id,
+                appearance,
             })
             .await?;
         self.dispatcher_tx
@@ -346,7 +353,8 @@ where
         principal: &CreationPrincipal,
         input: CreateScheduledAction,
     ) -> Result<ScheduledAction> {
-        self.create(principal, input, None).await
+        self.create(principal, input, None, EntityAppearance::default())
+            .await
     }
 
     async fn create_action_from_template(
@@ -354,8 +362,10 @@ where
         principal: &CreationPrincipal,
         input: CreateScheduledAction,
         template_id: Uuid,
+        appearance: EntityAppearance,
     ) -> Result<ScheduledAction> {
-        self.create(principal, input, Some(template_id)).await
+        self.create(principal, input, Some(template_id), appearance)
+            .await
     }
 
     async fn get_actions(
@@ -382,6 +392,44 @@ where
         let action = self.load_granted(&receipt).await?;
         let input = input.into_configuration(&action);
         self.replace_configuration(action, input).await
+    }
+
+    #[tracing::instrument(err, skip_all)]
+    async fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        appearance: EntityAppearance,
+    ) -> Result<EntityAppearance> {
+        appearance
+            .validate()
+            .map_err(ActionPolicyError::InvalidAppearance)?;
+        let action = self.load_granted(&receipt).await?;
+        let id = action.id.ok_or(ActionPolicyError::NotFound)?;
+        let attribution = match receipt.auth() {
+            entity_access::domain::models::EntityAccessAuth::Authenticated(user) => {
+                activity::Attribution::direct(activity::Actor::new_from_user(user.clone()))
+            }
+            entity_access::domain::models::EntityAccessAuth::Bot(bot) => {
+                activity::Attribution::new(
+                    activity::Actor::new_from_bot(bot.bot_id()),
+                    bot.scope().acting_user_id().cloned(),
+                )
+            }
+            entity_access::domain::models::EntityAccessAuth::Internal
+            | entity_access::domain::models::EntityAccessAuth::Unauthenticated => {
+                return Err(ActionPolicyError::NotFound.into());
+            }
+        };
+        self.repo
+            .set_appearance(ChangeAppearance {
+                id,
+                appearance: appearance.clone(),
+                attribution,
+                event_id: macro_uuid::generate_uuid_v7(),
+                occurred_at: Utc::now(),
+            })
+            .await?;
+        Ok(appearance)
     }
 
     async fn set_enabled(

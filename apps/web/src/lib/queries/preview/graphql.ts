@@ -352,6 +352,7 @@ function createdPreviewRecord({
         ...base,
         __typename: 'GraphqlSoupDocument',
         documentName: name,
+        appearance: null,
         fileType: fileType ?? null,
         subType:
           subType?.type === 'task'

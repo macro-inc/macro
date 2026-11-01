@@ -30,6 +30,7 @@ fn details_become_the_schema_the_engine_builds_its_catalog_from() {
             owner_id: "macro|owner@macro.com".into(),
             created_at: Utc::now(),
             trashed_at: None,
+            appearance: None,
         },
         grant: AccessLevel::Owner,
         tables: vec![TableDetail {
@@ -336,6 +337,7 @@ fn a_shared_relation_definition_relates_each_table_to_its_own_target() {
                 owner_id: "macro|owner@macro.com".into(),
                 created_at: Utc::now(),
                 trashed_at: None,
+                appearance: None,
             },
             grant: AccessLevel::Owner,
             tables: vec![

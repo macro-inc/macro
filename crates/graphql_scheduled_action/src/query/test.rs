@@ -135,6 +135,7 @@ fn routine(
         enabled,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        appearance: Default::default(),
     }
 }
 

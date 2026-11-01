@@ -314,6 +314,22 @@ fn replace_layout_locked(
 impl FormsRepo for FakeRepo {
     type Error = FakeError;
 
+    async fn set_appearance(
+        &self,
+        id: FormId,
+        update: activity::AppearanceUpdate,
+    ) -> Result<Option<model_entity::EntityAppearance>, FakeError> {
+        let mut world = self.0.lock().unwrap();
+        let position = live(&world, id).ok_or(FakeError)?;
+        let form = &mut world.forms[position].form;
+        let previous = form.appearance.clone().unwrap_or_default();
+        if previous == update.appearance {
+            return Ok(None);
+        }
+        form.appearance = Some(update.appearance);
+        Ok(Some(previous))
+    }
+
     async fn create_form(
         &self,
         form: &Form,

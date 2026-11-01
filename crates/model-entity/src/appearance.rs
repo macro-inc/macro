@@ -1,7 +1,6 @@
 //! Shared entity presentation values. Owning domains persist and authorize changes.
 
 use serde::{Deserialize, Serialize};
-use unicode_segmentation::UnicodeSegmentation;
 use utoipa::ToSchema;
 
 /// An entity's optional icon and tint overrides; absent values retain type defaults.
@@ -104,17 +103,17 @@ impl EntityAppearance {
                 }
             }
             Some(AppearanceIcon::Emoji { value }) => {
-                let has_emoji_base = value.chars().any(|c| {
-                    matches!(c as u32,
-                        0x1f000..=0x1faff | 0x2300..=0x23ff | 0x2600..=0x27bf |
-                        0x2b00..=0x2bff | 0x00a9 | 0x00ae | 0x203c | 0x2049 |
-                        0x2122 | 0x2139 | 0x3030 | 0x303d | 0x3297 | 0x3299 | 0x20e3)
-                });
-                if value.len() <= 64
-                    && value.graphemes(true).count() == 1
-                    && !value.chars().any(char::is_control)
-                    && has_emoji_base
-                {
+                // Accept qualified and unqualified forms, but reject lookup aliases
+                // that omit a sequence component such as the combining keycap.
+                let is_emoji = value.len() <= 64
+                    && emojis::get(value).is_some_and(|emoji| {
+                        emoji
+                            .as_str()
+                            .chars()
+                            .filter(|&c| c != '\u{fe0f}')
+                            .eq(value.chars().filter(|&c| c != '\u{fe0f}'))
+                    });
+                if is_emoji {
                     Ok(())
                 } else {
                     Err("Choose a single emoji".into())

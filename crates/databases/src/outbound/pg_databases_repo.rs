@@ -83,6 +83,7 @@ pub(crate) fn stored_positions(positions: &[Position]) -> Vec<String> {
 
 /// A `database_entities` row, read by `query_as!` and mapped onto [`Database`].
 pub(crate) struct DatabaseRecord {
+    pub(crate) appearance: Option<sqlx::types::Json<model_entity::EntityAppearance>>,
     pub(crate) id: Uuid,
     pub(crate) name: String,
     pub(crate) owner_id: String,
@@ -93,6 +94,7 @@ pub(crate) struct DatabaseRecord {
 impl From<DatabaseRecord> for Database {
     fn from(record: DatabaseRecord) -> Self {
         Self {
+            appearance: record.appearance.map(|value| value.0),
             id: DatabaseId::from_uuid(record.id),
             name: record.name,
             owner_id: record.owner_id,
@@ -163,7 +165,7 @@ pub(crate) async fn insert_owned_database(
         r#"
             INSERT INTO database_entities (database_id, name, user_id)
             VALUES ($1, $2, $3)
-            RETURNING database_id AS id, name, user_id AS owner_id, created_at, trashed_at
+            RETURNING database_id AS id, name, appearance AS "appearance: _", user_id AS owner_id, created_at, trashed_at
             "#,
         database_id.into_uuid(),
         name,
@@ -242,6 +244,41 @@ where
         + 'static,
 {
     type Error = PgDatabasesRepoError;
+
+    #[tracing::instrument(skip_all, fields(database_id = %id), err)]
+    async fn set_appearance(
+        &self,
+        id: DatabaseId,
+        update: activity::AppearanceUpdate,
+    ) -> Result<Option<model_entity::EntityAppearance>, Self::Error> {
+        let mut transaction = self.pool.begin().await?;
+        let row = sqlx::query!(
+            "SELECT appearance FROM database_entities WHERE database_id = $1 AND trashed_at IS NULL FOR UPDATE",
+            id.into_uuid(),
+        ).fetch_one(&mut *transaction).await?;
+        let previous: model_entity::EntityAppearance = row
+            .appearance
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|error| sqlx::Error::Decode(Box::new(error)))?
+            .unwrap_or_default();
+        if previous == update.appearance {
+            return Ok(None);
+        }
+        sqlx::query!(
+            "UPDATE database_entities SET appearance = $2 WHERE database_id = $1",
+            id.into_uuid(),
+            sqlx::types::Json(&update.appearance) as _,
+        )
+        .execute(&mut *transaction)
+        .await?;
+        if let Some(event) = update.activity(EntityType::Database, id.to_string(), &previous) {
+            activity::outbound::pg_activity_repo::insert_activities(&mut *transaction, &[event])
+                .await?;
+        }
+        transaction.commit().await?;
+        Ok(Some(previous))
+    }
 
     #[tracing::instrument(err, skip(self))]
     async fn views_for_tables(
@@ -327,7 +364,7 @@ where
     ) -> Result<Option<(Database, Vec<Table>)>, Self::Error> {
         let Some(database) = sqlx::query_as!(
             DatabaseRecord,
-            r#"SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at FROM database_entities WHERE database_id = $1"#,
+            r#"SELECT database_id AS id, name, appearance AS "appearance: _", user_id AS owner_id, created_at, trashed_at FROM database_entities WHERE database_id = $1"#,
             id.into_uuid()
         )
         .fetch_optional(&self.pool)
@@ -489,7 +526,7 @@ where
         Ok(sqlx::query_as!(
             DatabaseRecord,
             r#"
-            SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at
+            SELECT database_id AS id, name, appearance AS "appearance: _", user_id AS owner_id, created_at, trashed_at
             FROM database_entities
             WHERE database_id = ANY($1)
             ORDER BY created_at

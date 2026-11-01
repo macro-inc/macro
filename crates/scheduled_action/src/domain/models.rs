@@ -6,6 +6,7 @@ use chrono_tz::Tz;
 use cron::Schedule as CronSchedule;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
+use model_entity::EntityAppearance;
 use model_owner::{Owner, OwnerType};
 use serde::{Deserialize, Serialize};
 use serde_json::Value;
@@ -315,6 +316,8 @@ pub enum ActionPolicyError {
     ConditionsDisabled,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
+    #[error("{0}")]
+    InvalidAppearance(String),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -351,6 +354,9 @@ pub struct ScheduledAction {
     #[serde(default)]
     #[schema(value_type = Option<String>, format = Uuid)]
     pub template_id: Option<Uuid>,
+    /// Optional presentation overrides; absent values use routine defaults.
+    #[serde(default)]
+    pub appearance: EntityAppearance,
 }
 
 impl ScheduledAction {

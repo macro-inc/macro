@@ -54,6 +54,9 @@ pub struct DocumentCreatedMetadata {
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 pub struct DocumentUpdatedMetadata {
+    /// Previous and new presentation overrides, in that order; no content edit occurred.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub appearance_change: Option<[model_entity::EntityAppearance; 2]>,
     /// The id of the updated document.
     pub document_id: String,
     /// The owner of the document.

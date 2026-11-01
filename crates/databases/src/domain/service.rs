@@ -558,6 +558,52 @@ where
         Ok(Database { name, ..database })
     }
 
+    #[tracing::instrument(skip_all, fields(database_id = %receipt.entity().entity_id), err)]
+    async fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, DatabaseError> {
+        if receipt.entity().entity_type != model_entity::EntityType::Database {
+            return Err(DatabaseError::NotFound);
+        }
+        appearance
+            .validate()
+            .map_err(DatabaseError::InvalidAppearance)?;
+        let (database, _) = self.database_for_edit(&receipt).await?;
+        let attribution = receipt_attribution(&receipt);
+        let update = activity::AppearanceUpdate {
+            appearance: appearance.clone(),
+            attribution: attribution.as_ref().map(|value| {
+                activity::Attribution::new(value.actor.clone(), value.on_behalf_of.clone())
+            }),
+            event_id: uuid::Uuid::now_v7(),
+            occurred_at: chrono::Utc::now(),
+        };
+        if let Some(previous) = self
+            .repository
+            .set_appearance(database.id, update)
+            .await
+            .map_err(repository_error)?
+        {
+            self.emit(DatabaseMacroEvent::new(
+                database.id.to_string(),
+                events::DatabaseTopicEvent::AppearanceChanged {
+                    database_id: database.id,
+                    attribution,
+                    change: activity::AppearanceChange {
+                        from: (!previous.is_default()).then_some(previous),
+                        to: (!appearance.is_default()).then(|| appearance.clone()),
+                    },
+                },
+            ));
+            let _ = self.events.database_changed(database.id).await.inspect_err(|error| {
+                tracing::warn!(error = ?error, database_id = %database.id, "failed to publish database appearance change");
+            });
+        }
+        Ok(appearance)
+    }
+
     #[tracing::instrument(skip(self, receipt), err)]
     async fn trash_database(
         &self,

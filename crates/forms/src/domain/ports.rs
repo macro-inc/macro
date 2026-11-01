@@ -80,6 +80,13 @@ pub trait FormsRepo: Send + Sync + 'static {
     /// The error type returned by repository operations.
     type Error: std::error::Error + Send + Sync + 'static;
 
+    /// Replace presentation and its history atomically, returning the previous value when changed.
+    fn set_appearance(
+        &self,
+        id: FormId,
+        update: activity::AppearanceUpdate,
+    ) -> impl Future<Output = Result<Option<model_entity::EntityAppearance>, Self::Error>> + Send;
+
     /// Store a new form with its layout, returning any table or schema conflict.
     /// Grant its owner owner access,
     /// all or nothing. `name_follows_database` records, for good, that the
@@ -278,6 +285,13 @@ pub trait FormsService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<EditAccessLevel>,
         update: UpdateForm,
     ) -> impl Future<Output = Result<Form, FormError>> + Send;
+
+    /// Replace icon and color overrides under an edit receipt.
+    fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> impl Future<Output = Result<model_entity::EntityAppearance, FormError>> + Send;
 
     /// Save a whole layout in the shared document. A successful response includes
     /// its publication result: a saved draft can need repair or a retry before

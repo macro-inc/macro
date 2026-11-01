@@ -51,6 +51,7 @@ fn world() -> Shared {
                 owner_id: OWNER.to_string(),
                 created_at: Utc::now(),
                 trashed_at: None,
+                appearance: None,
             },
             grant: AccessLevel::Owner,
             tables: vec![TableDetail {

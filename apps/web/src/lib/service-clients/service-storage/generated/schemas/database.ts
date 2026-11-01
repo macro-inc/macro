@@ -4,12 +4,14 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { DatabaseAppearance } from './databaseAppearance';
 import type { DatabaseTrashedAt } from './databaseTrashedAt';
 
 /**
  * A database: a named collection of tables, owned and shared as one entity.
  */
 export interface Database {
+  appearance?: DatabaseAppearance;
   /** Creation time. */
   created_at: string;
   /** Identifier. */

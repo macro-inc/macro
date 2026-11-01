@@ -134,6 +134,7 @@ it('preserves initiative identity, properties, and metadata separately from fold
   expect(
     mapGraphqlSoupItem({
       __typename: 'GraphqlSoupInitiative',
+      appearance: null,
       id: 'initiative',
       entityType: 'INITIATIVE',
       displayName: 'Launch',
@@ -739,6 +740,7 @@ describe('GraphQL Soup document sub types', () => {
       const { mapGraphqlSoupItem } = await import('./graphql-soup');
       const item = {
         __typename: 'GraphqlSoupDocument',
+        appearance: null,
         id: 'doc-sub-type',
         entityType: 'DOCUMENT' as GraphqlSoupEntityType,
         displayName: 'Plan',

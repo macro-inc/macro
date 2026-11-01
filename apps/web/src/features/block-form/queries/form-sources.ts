@@ -97,6 +97,7 @@ function refusalOf(code: FormErrorCode): FormRefusal {
     .with('fileUploadNeedsSignIn', () => 'file-upload-needs-sign-in')
     .with('invalidLayout', () => 'invalid-layout')
     .with('invalidName', () => 'invalid-name')
+    .with('invalidAppearance', () => 'invalid-appearance')
     .with('invalidSharing', () => 'invalid-sharing')
     .with('tallyHidden', () => 'tally-hidden')
     .with('conflict', () => 'conflict')

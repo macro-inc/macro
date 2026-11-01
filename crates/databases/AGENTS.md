@@ -14,6 +14,7 @@ service with Axum, agent-tool and Postgres adapters.
 - `src/domain/service.rs` + `src/domain/ports.rs`: orchestration and the ports
   adapters implement.
 - `src/domain/models.rs`: `Database`, `DatabaseStorage`, typed ops/results.
+- `set_appearance` updates `database_entities` presentation under Edit access, preserving content dates and committing history-only activity in the same transaction.
 
 ## Scope
 

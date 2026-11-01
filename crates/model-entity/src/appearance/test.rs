@@ -16,6 +16,21 @@ fn rejects_unknown_glyphs_and_non_emoji_input() {
             value: "😀😀".into(),
         },
         AppearanceIcon::Emoji { value: "\n".into() },
+        AppearanceIcon::Emoji {
+            value: "⌀".into()
+        },
+        AppearanceIcon::Emoji {
+            value: "∅".into()
+        },
+        AppearanceIcon::Emoji {
+            value: "😀‍😀".into()
+        },
+        AppearanceIcon::Emoji {
+            value: "🚗🏻".into(),
+        },
+        AppearanceIcon::Emoji {
+            value: "1\u{fe0f}".into(),
+        },
     ] {
         assert!(
             EntityAppearance {
@@ -30,7 +45,7 @@ fn rejects_unknown_glyphs_and_non_emoji_input() {
 
 #[test]
 fn accepts_joined_emoji_and_independent_color() {
-    for value in ["😀", "👩🏽‍💻", "🇺🇸", "1️⃣"] {
+    for value in ["😀", "👩🏽‍💻", "🇺🇸", "1️⃣", "1\u{20e3}", "♥", "♥️"] {
         assert!(
             EntityAppearance {
                 icon: Some(AppearanceIcon::Emoji {

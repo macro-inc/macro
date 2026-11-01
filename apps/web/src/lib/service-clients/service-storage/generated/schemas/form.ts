@@ -4,7 +4,9 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+
 import type { Audience } from './audience';
+import type { FormAppearance } from './formAppearance';
 import type { FormClosesAt } from './formClosesAt';
 import type { FormRespondentColumnId } from './formRespondentColumnId';
 import type { FormStatus } from './formStatus';
@@ -14,6 +16,7 @@ import type { FormSubmittedColumnId } from './formSubmittedColumnId';
  * A form: a view of one database table whose rows are its responses.
  */
 export interface Form {
+  appearance?: FormAppearance;
   /** Who may respond. */
   audience: Audience;
   /** When it stops taking responses, if it does. */

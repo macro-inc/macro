@@ -48,6 +48,13 @@ use super::models::{
 /// directly in the outbound adapter implementation.
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait DocumentRepo: Send + Sync + 'static {
+    /// Atomically replace presentation overrides and record attributed history without changing timestamps.
+    fn set_appearance(
+        &self,
+        document_id: &str,
+        update: &activity::AppearanceUpdate,
+    ) -> impl Future<Output = Result<Option<model_entity::EntityAppearance>, Self::Err>> + Send;
+
     /// The error type returned by repository operations.
     type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
 
@@ -464,6 +471,13 @@ pub trait DocumentContentEventService: Send + Sync + 'static {
 ///
 /// Orchestrates business logic using the repository and external services.
 pub trait DocumentService: Send + Sync + 'static {
+    /// Change presentation for ordinary Markdown and snippets with checked edit access.
+    fn set_appearance(
+        &self,
+        receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> impl Future<Output = Result<model_entity::EntityAppearance, DocumentError>> + Send;
+
     /// Gets the basic document ignoring access checks
     fn internal_get_basic_document(
         &self,

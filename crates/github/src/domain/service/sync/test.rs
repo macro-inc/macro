@@ -111,6 +111,7 @@ impl StubDocumentService {
 
     fn task_metadata(document_id: &str) -> DocumentMetadata {
         DocumentMetadata {
+            appearance: None,
             document_id: document_id.to_string(),
             document_version_id: 1,
             owner: "macro|test@example.com".to_string().try_into().unwrap(),
@@ -133,6 +134,17 @@ impl StubDocumentService {
 }
 
 impl DocumentService for StubDocumentService {
+    async fn set_appearance(
+        &self,
+        _receipt: entity_access::domain::models::EntityAccessReceipt<
+            models_permissions::share_permission::access_level::EditAccessLevel,
+        >,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, DocumentError> {
+        appearance.validate().map_err(DocumentError::BadRequest)?;
+        Ok(appearance)
+    }
+
     async fn internal_get_basic_document(
         &self,
         _document_id: &str,

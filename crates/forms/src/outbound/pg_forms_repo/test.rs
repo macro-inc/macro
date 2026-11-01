@@ -1,3 +1,4 @@
+use activity::domain::ports::EntityActivityReads;
 use chrono::TimeZone;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use macro_user_id::user_id::MacroUserIdStr;
@@ -157,6 +158,7 @@ async fn insert_row(pool: &PgPool, table: TableId, position: &str) -> RowId {
 
 fn form_over(table: &Table) -> Form {
     Form {
+        appearance: None,
         id: FormId::new(),
         name: "Q4 offsite RSVP".into(),
         description: "Tell us".into(),
@@ -616,4 +618,111 @@ async fn channel_grants_change_only_on_a_live_form_and_go_with_it(pool: PgPool) 
     .await
     .unwrap();
     assert_eq!(grants, 0);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn appearance_survives_reads_without_touching_content_dates(pool: PgPool) {
+    let table = insert_table(&pool).await;
+    let repo = PgFormsRepo::new(pool.clone());
+    let form = form_over(&table);
+    repo.create_form(&form, &layout_over(&table), false)
+        .await
+        .unwrap();
+    let appearance = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Emoji {
+            value: "🌱".into()
+        }),
+        color: Some(model_entity::AppearanceColor::Green),
+    };
+    let update = activity::AppearanceUpdate {
+        appearance: appearance.clone(),
+        attribution: Some(activity::Attribution::direct(
+            activity::Actor::new_from_user(user(OWNER)),
+        )),
+        event_id: Uuid::now_v7(),
+        occurred_at: Utc::now(),
+    };
+    assert_eq!(
+        repo.set_appearance(form.id, update.clone()).await.unwrap(),
+        Some(model_entity::EntityAppearance::default())
+    );
+    assert_eq!(
+        repo.set_appearance(form.id, update.clone()).await.unwrap(),
+        None
+    );
+    let saved = repo.form(form.id).await.unwrap().unwrap().form;
+    assert_eq!(saved.appearance, Some(appearance.clone()));
+    assert_eq!(saved.updated_at, form.updated_at);
+    assert_eq!(
+        repo.forms_by_ids(&[form.id]).await.unwrap()[0].appearance,
+        Some(appearance)
+    );
+    let history = activity::outbound::pg_activity_repo::PgActivityRepo::new(pool.clone());
+    let records = history
+        .entity_feed(
+            EntityType::Form,
+            &form.id.to_string(),
+            None,
+            std::num::NonZeroU32::new(10).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(records.records.len(), 1);
+    assert!(matches!(
+        records.records[0].action,
+        activity::RecordedAction::Known(activity::Action::AppearanceChanged(_))
+    ));
+    repo.set_appearance(
+        form.id,
+        activity::AppearanceUpdate {
+            appearance: model_entity::EntityAppearance::default(),
+            event_id: Uuid::now_v7(),
+            ..update
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        repo.form(form.id)
+            .await
+            .unwrap()
+            .unwrap()
+            .form
+            .appearance
+            .unwrap()
+            .is_default()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn history_failure_rolls_back_appearance(pool: PgPool) {
+    let table = insert_table(&pool).await;
+    let repo = PgFormsRepo::new(pool.clone());
+    let form = form_over(&table);
+    repo.create_form(&form, &layout_over(&table), false)
+        .await
+        .unwrap();
+    sqlx::query!("ALTER TABLE activity_events ADD CONSTRAINT refuse_appearance_test CHECK (action <> 'appearance_changed')")
+        .execute(&pool).await.unwrap();
+    assert!(
+        repo.set_appearance(
+            form.id,
+            activity::AppearanceUpdate {
+                appearance: model_entity::EntityAppearance {
+                    icon: None,
+                    color: Some(model_entity::AppearanceColor::Blue),
+                },
+                attribution: Some(activity::Attribution::direct(
+                    activity::Actor::new_from_user(user(OWNER))
+                )),
+                event_id: Uuid::now_v7(),
+                occurred_at: Utc::now(),
+            }
+        )
+        .await
+        .is_err()
+    );
+    let stored = repo.form(form.id).await.unwrap().unwrap().form;
+    assert_eq!(stored.appearance, form.appearance);
+    assert_eq!(stored.updated_at, form.updated_at);
 }

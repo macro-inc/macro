@@ -193,6 +193,7 @@ static DOCUMENT_DETAIL_CLAUSE: &str = r#"
             d."branchedFromVersionId" as "branched_from_version_id",
             d."documentFamilyId" as "document_family_id",
             d."fileType" as "file_type",
+            d.appearance as "appearance",
             d."createdAt"::timestamptz as "created_at",
             d."updatedAt"::timestamptz as "updated_at",
             d."projectId" as "project_id",
@@ -278,6 +279,7 @@ static CHAT_DETAIL_CLAUSE: &str = r#"
             NULL as "branched_from_version_id",
             NULL as "document_family_id",
             NULL as "file_type",
+            NULL::jsonb as "appearance",
             c."createdAt"::timestamptz as "created_at",
             c."updatedAt"::timestamptz as "updated_at",
             c."projectId" as "project_id",
@@ -311,6 +313,7 @@ static PROJECT_DETAIL_CLAUSE: &str = r#"
             NULL as "branched_from_version_id",
             NULL as "document_family_id",
             NULL as "file_type",
+            NULL::jsonb as "appearance",
             p."createdAt"::timestamptz as "created_at",
             p."updatedAt"::timestamptz as "updated_at",
             p."parentId" as "project_id",
@@ -359,6 +362,7 @@ static GROUPED_DOCUMENT_DETAIL_CLAUSE: &str = r#"
             d."branchedFromVersionId" as "branched_from_version_id",
             d."documentFamilyId" as "document_family_id",
             d."fileType" as "file_type",
+            d.appearance as "appearance",
             d."createdAt"::timestamptz as "created_at",
             d."updatedAt"::timestamptz as "updated_at",
             d."projectId" as "project_id",
@@ -420,6 +424,7 @@ static GROUPED_CHAT_DETAIL_CLAUSE: &str = r#"
             NULL::bigint as "branched_from_version_id",
             NULL::bigint as "document_family_id",
             NULL::text as "file_type",
+            NULL::jsonb as "appearance",
             c."createdAt"::timestamptz as "created_at",
             c."updatedAt"::timestamptz as "updated_at",
             c."projectId" as "project_id",
@@ -454,6 +459,7 @@ static GROUPED_PROJECT_DETAIL_CLAUSE: &str = r#"
             NULL::bigint as "branched_from_version_id",
             NULL::bigint as "document_family_id",
             NULL::text as "file_type",
+            NULL::jsonb as "appearance",
             p."createdAt"::timestamptz as "created_at",
             p."updatedAt"::timestamptz as "updated_at",
             p."parentId" as "project_id",
@@ -496,6 +502,7 @@ static GROUPED_CALENDAR_EVENT_DETAIL_CLAUSE: &str = r#"
             NULL::bigint as "branched_from_version_id",
             NULL::bigint as "document_family_id",
             NULL::text as "file_type",
+            NULL::jsonb as "appearance",
             event.created_at as "created_at",
             event.updated_at as "updated_at",
             NULL::text as "project_id",
@@ -560,6 +567,7 @@ static GROUPED_EMPTY_COMBINED_CLAUSE: &str = r#"
             NULL::bigint as "branched_from_version_id",
             NULL::bigint as "document_family_id",
             NULL::text as "file_type",
+            NULL::jsonb as "appearance",
             NULL::timestamptz as "created_at",
             NULL::timestamptz as "updated_at",
             NULL::text as "project_id",
@@ -1680,6 +1688,7 @@ fn build_query<'a>(
                 NULL::bigint as "branched_from_version_id",
                 NULL::bigint as "document_family_id",
                 NULL::text as "file_type",
+                NULL::jsonb as "appearance",
                 NULL::timestamptz as "created_at",
                 NULL::timestamptz as "updated_at",
                 NULL::text as "project_id",
@@ -1705,6 +1714,7 @@ fn build_query<'a>(
 
 #[derive(Debug, FromRow)]
 struct DocumentRow {
+    appearance: Option<sqlx::types::Json<model_entity::EntityAppearance>>,
     id: String,
     user_id: String,
     document_version_id: String,
@@ -1758,6 +1768,7 @@ struct ProjectRow {
 
 #[derive(Debug, FromRow)]
 struct InitiativeRow {
+    appearance: Option<sqlx::types::Json<model_entity::EntityAppearance>>,
     id: String,
     user_id: String,
     name: String,
@@ -1844,6 +1855,7 @@ impl SoupRow {
     fn into_soup_item(self) -> Result<SoupItem<()>, sqlx::Error> {
         Ok(match self {
             SoupRow::Document(DocumentRow {
+                appearance,
                 id,
                 user_id,
                 document_version_id,
@@ -1864,6 +1876,7 @@ impl SoupRow {
                 is_completed,
                 deleted_at,
             }) => SoupItem::Document(SoupDocument {
+                appearance: appearance.map(|value| value.0),
                 id: Uuid::parse_str(&id).map_err(type_err)?,
                 document_version_id: document_version_id
                     .parse()
@@ -1944,6 +1957,7 @@ impl SoupRow {
                 extra: (),
             }),
             SoupRow::Initiative(row) => SoupItem::Initiative(SoupInitiative {
+                appearance: row.appearance.map(|value| value.0),
                 id: row.id.parse().map_err(type_err)?,
                 name: row.name,
                 owner_id: Owner::from_principal_str(&row.user_id).map_err(type_err)?,

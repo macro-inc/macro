@@ -132,6 +132,17 @@ impl FakeDocumentService {
 }
 
 impl DocumentService for FakeDocumentService {
+    async fn set_appearance(
+        &self,
+        _receipt: entity_access::domain::models::EntityAccessReceipt<
+            models_permissions::share_permission::access_level::EditAccessLevel,
+        >,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, DocumentError> {
+        appearance.validate().map_err(DocumentError::BadRequest)?;
+        Ok(appearance)
+    }
+
     async fn internal_get_basic_document(
         &self,
         _document_id: &str,

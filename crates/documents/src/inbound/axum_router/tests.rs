@@ -215,6 +215,17 @@ impl FakeDocumentService {
 }
 
 impl DocumentService for FakeDocumentService {
+    async fn set_appearance(
+        &self,
+        _receipt: entity_access::domain::models::EntityAccessReceipt<
+            models_permissions::share_permission::access_level::EditAccessLevel,
+        >,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, DocumentError> {
+        appearance.validate().map_err(DocumentError::BadRequest)?;
+        Ok(appearance)
+    }
+
     async fn internal_get_basic_document(
         &self,
         document_id: &str,
@@ -574,6 +585,7 @@ fn create_document_response(owner: Owner) -> CreateDocumentResponseData {
         document_response: DocumentResponse {
             document_metadata: DocumentResponseMetadataWithContent::new(
                 DocumentResponseMetadata {
+                    appearance: None,
                     document_id: "created-document".to_string(),
                     document_version_id: 1,
                     owner,
@@ -602,6 +614,7 @@ fn get_document_response(document_id: &str) -> GetDocumentResponseData {
     GetDocumentResponseData {
         document_metadata: DocumentMetadataWithContent::new(
             DocumentMetadata {
+                appearance: None,
                 document_id: document_id.to_string(),
                 document_version_id: 1,
                 owner: Owner::from_principal_str(JWT_USER_ID)

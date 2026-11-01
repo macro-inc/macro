@@ -64,6 +64,7 @@ describe('GraphQL preview hover reactivity', () => {
       { __typename: 'GraphqlSoupDocument' }
     > = {
       __typename: 'GraphqlSoupDocument',
+      appearance: null,
       id,
       displayName: 'Roadmap',
       documentName: 'Roadmap',

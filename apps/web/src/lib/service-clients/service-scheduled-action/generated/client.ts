@@ -10,6 +10,7 @@ import type {
   AiAdmissionErrorBody,
   CreateScheduledAction,
   EmptyResponse,
+  EntityAppearance,
   InProgressExecution,
   ListScheduledActionsParams,
   RoutineTemplate,
@@ -394,6 +395,70 @@ export const deleteScheduledAction = async (
     status: res.status,
     headers: res.headers,
   } as deleteScheduledActionResponse;
+};
+
+export type setScheduledActionAppearanceResponse200 = {
+  data: EntityAppearance;
+  status: 200;
+};
+
+export type setScheduledActionAppearanceResponse400 = {
+  data: void;
+  status: 400;
+};
+
+export type setScheduledActionAppearanceResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type setScheduledActionAppearanceResponse404 = {
+  data: void;
+  status: 404;
+};
+
+export type setScheduledActionAppearanceResponseSuccess =
+  setScheduledActionAppearanceResponse200 & {
+    headers: Headers;
+  };
+export type setScheduledActionAppearanceResponseError = (
+  | setScheduledActionAppearanceResponse400
+  | setScheduledActionAppearanceResponse401
+  | setScheduledActionAppearanceResponse404
+) & {
+  headers: Headers;
+};
+
+export type setScheduledActionAppearanceResponse =
+  | setScheduledActionAppearanceResponseSuccess
+  | setScheduledActionAppearanceResponseError;
+
+export const getSetScheduledActionAppearanceUrl = (id: string) => {
+  return `/scheduled-actions/${id}/appearance`;
+};
+
+export const setScheduledActionAppearance = async (
+  id: string,
+  entityAppearance: EntityAppearance,
+  options?: RequestInit
+): Promise<setScheduledActionAppearanceResponse> => {
+  const res = await fetch(getSetScheduledActionAppearanceUrl(id), {
+    ...options,
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(entityAppearance),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: setScheduledActionAppearanceResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as setScheduledActionAppearanceResponse;
 };
 
 export type setScheduledActionEnabledResponse200 = {

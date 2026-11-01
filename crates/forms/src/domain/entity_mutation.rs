@@ -36,6 +36,7 @@ impl From<FormError> for EntityMutationErrorCode {
             | FormError::FileUploadNeedsSignIn
             | FormError::InvalidLayout(_)
             | FormError::InvalidName(_)
+            | FormError::InvalidAppearance(_)
             | FormError::InvalidSharing(_)
             | FormError::TallyHidden) => Self::invalid(rootcause::report!(error)),
             error @ (FormError::Database(_)

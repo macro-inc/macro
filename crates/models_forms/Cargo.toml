@@ -13,6 +13,7 @@ schema = ["dep:schemars", "models_databases/schema"]
 schemars = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
 macro_uuid = { path = "../macro_uuid" }
+model-entity = { path = "../model-entity" }
 models_databases = { path = "../models_databases" }
 serde = { workspace = true }
 specta = { workspace = true, features = ["chrono", "uuid"] }

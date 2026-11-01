@@ -3,6 +3,7 @@
 #[cfg(test)]
 mod test;
 
+pub mod appearance;
 pub mod create;
 pub mod delete;
 pub mod get;
@@ -114,6 +115,10 @@ where
             routing::get(get_initiative_handler::<S, Eas, Auth>)
                 .patch(update_initiative_handler::<S, Eas, Auth>)
                 .delete(delete_initiative_handler::<S, Eas, Auth>),
+        )
+        .route(
+            "/{initiative_id}/appearance",
+            routing::put(appearance::set_initiative_appearance::<S, Eas, Auth>),
         )
         .layer(middleware::from_fn_with_state(
             state.clone(),

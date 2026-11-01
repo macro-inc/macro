@@ -17,6 +17,7 @@ Shared entity identity and presentation vocabulary, without persistence or autho
 ## Recipes
 
 - Regenerate the distinct icon catalog with `bun tooling/icons/generate-entity-icons.ts` after changing selectable SVGs.
+- Validate emoji against the Unicode emoji lookup; never infer valid emoji from a Unicode block range.
 
 ## Checks
 

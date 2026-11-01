@@ -3509,3 +3509,187 @@ async fn test_get_github_pull_request_task_links_returns_requested_keys_oldest_f
         ]
     );
 }
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn appearance_persists_copies_and_preserves_content_dates(pool: Pool<Postgres>) {
+    use activity::domain::ports::EntityActivityReads;
+    let repo = test_repo(pool.clone());
+    let original = repo
+        .create_document(
+            create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
+            md_share_permission(),
+        )
+        .await
+        .unwrap();
+    let appearance = model_entity::EntityAppearance {
+        icon: Some(model_entity::AppearanceIcon::Emoji {
+            value: "🌱".into()
+        }),
+        color: Some(model_entity::AppearanceColor::Green),
+    };
+    let update = activity::AppearanceUpdate {
+        appearance: appearance.clone(),
+        attribution: None,
+        event_id: uuid::Uuid::now_v7(),
+        occurred_at: chrono::Utc::now(),
+    };
+    assert_eq!(
+        repo.set_appearance(&original.document_id, &update)
+            .await
+            .unwrap(),
+        Some(model_entity::EntityAppearance::default())
+    );
+    assert_eq!(
+        repo.set_appearance(&original.document_id, &update)
+            .await
+            .unwrap(),
+        None
+    );
+    let history = activity::outbound::pg_activity_repo::PgActivityRepo::new(pool.clone());
+    assert!(
+        history
+            .entity_feed(
+                EntityType::Document,
+                &original.document_id,
+                None,
+                std::num::NonZeroU32::new(10).unwrap()
+            )
+            .await
+            .unwrap()
+            .records
+            .is_empty()
+    );
+    let updated = repo
+        .get_document_metadata(&original.document_id)
+        .await
+        .unwrap();
+    assert_eq!(updated.appearance, Some(appearance.clone()));
+    assert_eq!(updated.updated_at, original.updated_at);
+    let copied = repo
+        .copy_document(
+            copy_args(&updated, original.owner.clone()),
+            md_share_permission(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.get_document_metadata(&copied.document_id)
+            .await
+            .unwrap()
+            .appearance,
+        Some(appearance)
+    );
+    repo.set_appearance(
+        &original.document_id,
+        &activity::AppearanceUpdate {
+            appearance: model_entity::EntityAppearance::default(),
+            ..update
+        },
+    )
+    .await
+    .unwrap();
+    assert!(
+        repo.get_document_metadata(&original.document_id)
+            .await
+            .unwrap()
+            .appearance
+            .unwrap()
+            .is_default()
+    );
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("documents_test_data"))
+)]
+async fn appearance_history_failure_rolls_back_and_retry_is_idempotent(pool: Pool<Postgres>) {
+    use activity::domain::ports::EntityActivityReads;
+    let repo = test_repo(pool.clone());
+    let original = repo
+        .create_document(
+            create_document_args(TEST_DOCUMENT_OWNER_ID, false, None),
+            md_share_permission(),
+        )
+        .await
+        .unwrap();
+    let appearance = model_entity::EntityAppearance {
+        icon: None,
+        color: Some(model_entity::AppearanceColor::Blue),
+    };
+    let update = activity::AppearanceUpdate {
+        appearance: appearance.clone(),
+        attribution: Some(activity::Attribution::new(
+            activity::Actor::new_from_user(user_id(TEST_DOCUMENT_OWNER_ID)),
+            None,
+        )),
+        event_id: uuid::Uuid::now_v7(),
+        occurred_at: chrono::Utc::now(),
+    };
+    sqlx::query!("ALTER TABLE activity_events ADD CONSTRAINT refuse_appearance_test CHECK (action <> 'appearance_changed')")
+        .execute(&pool).await.unwrap();
+    assert!(
+        repo.set_appearance(&original.document_id, &update)
+            .await
+            .is_err()
+    );
+    assert!(
+        repo.get_document_metadata(&original.document_id)
+            .await
+            .unwrap()
+            .appearance
+            .unwrap_or_default()
+            .is_default()
+    );
+    let history = activity::outbound::pg_activity_repo::PgActivityRepo::new(pool.clone());
+    assert!(
+        history
+            .entity_feed(
+                EntityType::Document,
+                &original.document_id,
+                None,
+                std::num::NonZeroU32::new(10).unwrap()
+            )
+            .await
+            .unwrap()
+            .records
+            .is_empty()
+    );
+    sqlx::query!("ALTER TABLE activity_events DROP CONSTRAINT IF EXISTS refuse_appearance_test")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.set_appearance(&original.document_id, &update)
+            .await
+            .unwrap(),
+        Some(model_entity::EntityAppearance::default())
+    );
+    assert_eq!(
+        repo.set_appearance(&original.document_id, &update)
+            .await
+            .unwrap(),
+        None
+    );
+    let page = activity::outbound::pg_activity_repo::PgActivityRepo::new(pool)
+        .entity_feed(
+            EntityType::Document,
+            &original.document_id,
+            None,
+            std::num::NonZeroU32::new(10).unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(page.records.len(), 1);
+    assert_eq!(
+        page.records[0].id,
+        activity::activity_id(update.event_id, 0)
+    );
+    assert_eq!(
+        page.records[0].occurred_at.timestamp_micros(),
+        update.occurred_at.timestamp_micros()
+    );
+    assert_eq!(page.records[0].subject_id, TEST_DOCUMENT_OWNER_ID);
+}

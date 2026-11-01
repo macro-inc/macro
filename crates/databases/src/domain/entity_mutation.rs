@@ -24,6 +24,7 @@ impl From<DatabaseError> for EntityMutationErrorCode {
             error @ DatabaseError::NotFound => Self::not_found(rootcause::report!(error)),
             error @ DatabaseError::Unauthorized => Self::forbidden(rootcause::report!(error)),
             error @ (DatabaseError::InvalidSchemaOperation(_)
+            | DatabaseError::InvalidAppearance(_)
             | DatabaseError::InvalidSharing(_)
             | DatabaseError::InvalidOp(_)
             | DatabaseError::OptionInUse

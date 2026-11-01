@@ -19,6 +19,7 @@
 #[cfg(test)]
 mod tests;
 
+pub mod appearance;
 pub mod content_uploaded;
 pub mod copy_document;
 #[cfg(feature = "document_create")]
@@ -243,6 +244,10 @@ where
 {
     // Routes that need ensure_document_exists middleware
     let document_id_routes = Router::new()
+        .route(
+            "/{document_id}/appearance",
+            axum::routing::put(appearance::set_appearance::<T, Svc, Auth>),
+        )
         .route(
             "/{document_id}",
             axum::routing::get(get_document_handler::<T, Svc, Auth>)

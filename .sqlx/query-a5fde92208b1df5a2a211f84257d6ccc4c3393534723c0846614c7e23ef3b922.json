@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO activity_events\n            (id, actor_id, subject_id, action, action_payload,\n             entity_type, entity_id, occurred_at)\n        SELECT * FROM UNNEST(\n            $1::uuid[], $2::text[], $3::text[], $4::text[], $5::jsonb[],\n            $6::text[], $7::text[], $8::timestamptz[])\n        ON CONFLICT (id) DO NOTHING\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "JsonbArray",
+        "TextArray",
+        "TextArray",
+        "TimestamptzArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "a5fde92208b1df5a2a211f84257d6ccc4c3393534723c0846614c7e23ef3b922"
+}

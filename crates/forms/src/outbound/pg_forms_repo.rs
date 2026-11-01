@@ -77,6 +77,7 @@ fn parsed<Value: std::str::FromStr>(
 
 /// One `forms` row as stored.
 struct FormRow {
+    appearance: Option<sqlx::types::Json<model_entity::EntityAppearance>>,
     id: Uuid,
     name: String,
     description: String,
@@ -103,6 +104,7 @@ impl TryFrom<FormRow> for StoredForm {
     fn try_from(row: FormRow) -> Result<Self, Self::Error> {
         Ok(StoredForm {
             form: Form {
+                appearance: row.appearance.map(|value| value.0),
                 id: FormId::from_uuid(row.id),
                 name: row.name,
                 description: row.description,
@@ -151,6 +153,43 @@ fn live_forms(rows: Vec<FormRow>) -> Result<Vec<Form>, PgFormsRepoError> {
 impl crate::domain::ports::FormsRepo for PgFormsRepo {
     type Error = PgFormsRepoError;
 
+    #[tracing::instrument(skip_all, err)]
+    async fn set_appearance(
+        &self,
+        id: FormId,
+        update: activity::AppearanceUpdate,
+    ) -> Result<Option<model_entity::EntityAppearance>, Self::Error> {
+        let mut transaction = self.pool.begin().await?;
+        let row = sqlx::query!(
+            "SELECT appearance FROM forms WHERE id = $1 AND trashed_at IS NULL FOR UPDATE",
+            id.into_uuid(),
+        )
+        .fetch_one(&mut *transaction)
+        .await?;
+        let previous: model_entity::EntityAppearance = row
+            .appearance
+            .map(serde_json::from_value)
+            .transpose()
+            .map_err(|error| sqlx::Error::Decode(Box::new(error)))?
+            .unwrap_or_default();
+        if previous == update.appearance {
+            return Ok(None);
+        }
+        sqlx::query!(
+            "UPDATE forms SET appearance = $2 WHERE id = $1",
+            id.into_uuid(),
+            sqlx::types::Json(&update.appearance) as _,
+        )
+        .execute(&mut *transaction)
+        .await?;
+        if let Some(event) = update.activity(EntityType::Form, id.to_string(), &previous) {
+            activity::outbound::pg_activity_repo::insert_activities(&mut *transaction, &[event])
+                .await?;
+        }
+        transaction.commit().await?;
+        Ok(Some(previous))
+    }
+
     #[tracing::instrument(err, skip(self, form, layout), fields(form_id = %form.id))]
     async fn create_form(
         &self,
@@ -165,9 +204,9 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 id, name, description, owner_id, database_id, table_id,
                 submitted_column_id, respondent_column_id, audience, tally_visible,
                 status, closes_at, confirmation_message, created_at, updated_at,
-                name_follows_database, is_hidden_in_drive
+                name_follows_database, is_hidden_in_drive, appearance
             )
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18)
             ON CONFLICT (table_id) DO NOTHING
             "#,
             form.id.into_uuid(),
@@ -187,6 +226,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             form.updated_at,
             name_follows_database,
             form.is_hidden_in_drive,
+            form.appearance.as_ref().map(sqlx::types::Json) as _,
         )
         .execute(&mut *transaction)
         .await;
@@ -230,7 +270,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
         sqlx::query_as!(
             FormRow,
             r#"
-            SELECT id, name, description, owner_id, database_id, table_id,
+            SELECT id, name, appearance AS "appearance: _", description, owner_id, database_id, table_id,
                    submitted_column_id, respondent_column_id, audience, tally_visible,
                    status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
                    name_follows_database, is_hidden_in_drive
@@ -250,7 +290,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             sqlx::query_as!(
                 FormRow,
                 r#"
-                SELECT id, name, description, owner_id, database_id, table_id,
+                SELECT id, name, appearance AS "appearance: _", description, owner_id, database_id, table_id,
                        submitted_column_id, respondent_column_id, audience, tally_visible,
                        status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
                    name_follows_database, is_hidden_in_drive
@@ -283,7 +323,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             sqlx::query_as!(
                 FormRow,
                 r#"
-                SELECT id, name, description, owner_id, database_id, table_id,
+                SELECT id, name, appearance AS "appearance: _", description, owner_id, database_id, table_id,
                        submitted_column_id, respondent_column_id, audience, tally_visible,
                        status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
                    name_follows_database, is_hidden_in_drive
@@ -370,7 +410,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                 tally_visible = COALESCE($8, tally_visible),
                 updated_at = $9
             WHERE id = $1
-            RETURNING id, name, description, owner_id, database_id, table_id,
+            RETURNING id, name, appearance AS "appearance: _", description, owner_id, database_id, table_id,
                       submitted_column_id, respondent_column_id, audience, tally_visible,
                       status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
                    name_follows_database, is_hidden_in_drive
@@ -404,7 +444,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             r#"
             UPDATE forms SET name = $2, updated_at = $3
             WHERE id = $1 AND trashed_at IS NULL
-            RETURNING id, name, description, owner_id, database_id, table_id,
+            RETURNING id, name, appearance AS "appearance: _", description, owner_id, database_id, table_id,
                       submitted_column_id, respondent_column_id, audience, tally_visible,
                       status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
                    name_follows_database, is_hidden_in_drive
@@ -430,7 +470,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
             r#"
             UPDATE forms SET updated_at = $2
             WHERE id = $1 AND trashed_at IS NULL
-            RETURNING id, name, description, owner_id, database_id, table_id,
+            RETURNING id, name, appearance AS "appearance: _", description, owner_id, database_id, table_id,
                       submitted_column_id, respondent_column_id, audience, tally_visible,
                       status, closes_at, confirmation_message, created_at, updated_at, trashed_at,
                       name_follows_database, is_hidden_in_drive

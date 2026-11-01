@@ -86,6 +86,7 @@ impl SoupService for RecordingSoupService {
             .filter(|_| req.user == user())
             .map(|detail| {
                 SoupItem::Initiative(SoupInitiative {
+                    appearance: detail.appearance,
                     id: detail.id.as_uuid(),
                     name: detail.name,
                     owner_id: Owner::from_principal_str(detail.owner_id.as_ref()).unwrap(),

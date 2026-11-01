@@ -42,3 +42,5 @@ the draft. Async completion stays scoped to the opening account.
 Record appearance changes as distinct entity-history activity. Exclude these
 entries from broader activity feeds, notifications, and attribution/recency
 ranking. Render entries in existing history views only; add no new history UI.
+Persist attributed history in the same transaction as the appearance write.
+Appearance broker events refresh other readers without inserting duplicate history.

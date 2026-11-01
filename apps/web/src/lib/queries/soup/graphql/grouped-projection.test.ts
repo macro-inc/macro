@@ -39,6 +39,7 @@ function row(
 > {
   return {
     __typename: 'GraphqlSoupDocument',
+    appearance: null,
     id: String(id),
     entityType: 'DOCUMENT',
     displayName: String(id),

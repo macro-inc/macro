@@ -1,3 +1,4 @@
+pub mod appearance;
 pub mod event_runs;
 pub mod event_trigger;
 pub mod execution;

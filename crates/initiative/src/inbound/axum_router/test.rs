@@ -71,6 +71,7 @@ fn share_permission() -> SharePermissionV2 {
 
 fn sample_basic() -> InitiativeBasic {
     InitiativeBasic {
+        appearance: None,
         id: existing_id(),
         name: "Launch".to_string(),
         owner_id: user(),
@@ -79,6 +80,7 @@ fn sample_basic() -> InitiativeBasic {
 
 fn sample_detail() -> InitiativeDetail {
     InitiativeDetail {
+        appearance: None,
         id: existing_id(),
         name: "Launch".to_string(),
         owner_id: user(),
@@ -94,6 +96,7 @@ fn sample_detail() -> InitiativeDetail {
 fn sample_list() -> InitiativeList {
     InitiativeList {
         initiatives: vec![InitiativeSummary {
+            appearance: None,
             id: existing_id(),
             name: "Launch".to_string(),
             updated_at: now(),
@@ -301,6 +304,14 @@ fn reject_name(name: &str) -> Result<(), InitiativeError> {
 }
 
 impl InitiativeService for FakeInitiativeService {
+    async fn set_appearance(
+        &self,
+        _receipt: EntityAccessReceipt<EditAccessLevel>,
+        appearance: model_entity::EntityAppearance,
+    ) -> Result<model_entity::EntityAppearance, InitiativeError> {
+        appearance.validate().map_err(InitiativeError::BadRequest)?;
+        Ok(appearance)
+    }
     async fn summary(
         &self,
         _receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -721,4 +732,31 @@ async fn task_membership_routes_are_gone() {
         assert!(response.status().is_client_error(), "{}", response.status());
     }
     assert!(service.calls().is_empty());
+}
+
+#[tokio::test]
+async fn appearance_requires_edit_access() {
+    for (level, expected) in [
+        (AccessLevel::View, StatusCode::UNAUTHORIZED),
+        (AccessLevel::Edit, StatusCode::OK),
+        (AccessLevel::Owner, StatusCode::OK),
+    ] {
+        let response = send(
+            build_router(
+                FakeInitiativeService::default(),
+                FakeEntityAccessService {
+                    initiative_access: Some(level),
+                },
+            ),
+            authed(axum::http::Request::put(format!(
+                "/{}/appearance",
+                existing_id()
+            )))
+            .header(header::CONTENT_TYPE, "application/json")
+            .body(json_body(serde_json::json!({"color":"blue"})))
+            .unwrap(),
+        )
+        .await;
+        assert_eq!(response.status(), expected);
+    }
 }

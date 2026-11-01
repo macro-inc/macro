@@ -218,6 +218,7 @@ fn action() -> ScheduledAction {
         updated_at: Utc::now(),
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        appearance: model_entity::EntityAppearance::default(),
     }
 }
 
@@ -617,6 +618,13 @@ async fn all_terminal_failures_and_authorization_errors_fail_without_retry() {
 // Event execution never writes to the cron repository: the worker owns finalization.
 struct UnusedRepo;
 impl ScheduledActionRepo for UnusedRepo {
+    async fn set_appearance(
+        &self,
+        _change: crate::domain::appearance::ChangeAppearance,
+    ) -> Result<Option<model_entity::EntityAppearance>> {
+        anyhow::bail!("appearance writes are not supported by this execution-only adapter")
+    }
+
     async fn create_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
         unimplemented!()
     }
@@ -884,6 +892,7 @@ async fn a_scheduled_run_tells_the_agent_which_routine_fired_and_on_what_schedul
         updated_at: scheduled_for,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        appearance: model_entity::EntityAppearance::default(),
     };
     let mut handle = ExecutionHandle::default();
     runner.prepare(&action, &mut handle).await.unwrap();
@@ -992,6 +1001,7 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
         updated_at: at,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        appearance: model_entity::EntityAppearance::default(),
     };
     let event: EventReference = serde_json::from_value(json!({
         "event_id": "01928f3e-6a2b-7c3d-8e4f-0123456789cd",
@@ -1101,6 +1111,7 @@ async fn a_manual_run_tells_the_agent_its_owner_started_it() {
         updated_at: requested_at,
         run_visibility: RunVisibility::Unlisted,
         template_id: None,
+        appearance: model_entity::EntityAppearance::default(),
     };
     let mut handle = ExecutionHandle::default();
     runner.prepare(&action, &mut handle).await.unwrap();
