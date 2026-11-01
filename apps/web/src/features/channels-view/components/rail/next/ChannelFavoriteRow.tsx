@@ -52,7 +52,7 @@ function DraggableFavoriteRow(props: FavoriteRowProps) {
   });
   let root: HTMLDivElement | undefined;
   const preventOpenAfterDrag = (event: MouseEvent) => {
-    if (!didDrag) return;
+    if (!didDrag || event.detail === 0) return;
     event.preventDefault();
     event.stopPropagation();
   };

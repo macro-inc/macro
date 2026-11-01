@@ -313,7 +313,7 @@ describe('favorite reordering', () => {
     );
   });
 
-  it('does not open a favorite after dragging it', () => {
+  it('suppresses drag clicks without blocking keyboard or later pointer activation', () => {
     render(() => (
       <DraggableFavoriteRow
         favorite={favorite}
@@ -330,10 +330,12 @@ describe('favorite reordering', () => {
         },
       })
     );
-    fireEvent.click(screen.getByRole('treeitem'));
+    fireEvent.click(screen.getByRole('treeitem'), { detail: 1 });
     expect(rail.activateRow).not.toHaveBeenCalled();
-    fireEvent.pointerDown(screen.getByRole('treeitem'));
-    fireEvent.click(screen.getByRole('treeitem'));
+    fireEvent.click(screen.getByRole('treeitem'), { detail: 0 });
     expect(rail.activateRow).toHaveBeenCalledOnce();
+    fireEvent.pointerDown(screen.getByRole('treeitem'));
+    fireEvent.click(screen.getByRole('treeitem'), { detail: 1 });
+    expect(rail.activateRow).toHaveBeenCalledTimes(2);
   });
 });
