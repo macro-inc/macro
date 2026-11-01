@@ -169,8 +169,13 @@ export class Company extends PropertiedEntity<CompanyDetail> {
     );
   }
 
-  /** Create a contact under this company. */
-  async createContact(opts: { email: string; name: string }): Promise<Contact> {
+  /**
+   * Create a contact under this company. The email is optional: a work
+   * address must use one of the company's domains, a personal address
+   * (gmail.com etc.) is accepted at any company, and omitting it adds the
+   * contact by name alone.
+   */
+  async createContact(opts: { email?: string; name: string }): Promise<Contact> {
     const contact = await this.mutate((c) =>
       c.storage.createCrmContact({
         path: { company_id: this.id },
