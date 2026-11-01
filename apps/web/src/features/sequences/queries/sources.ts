@@ -20,6 +20,7 @@ import {
   useDeleteSequenceMutation,
   useEnrollMutation,
   useEnrollmentActionMutation,
+  useEnrollmentActionsInFlight,
   useUpdateSequenceMutation,
 } from './sequences';
 
@@ -80,13 +81,13 @@ export function createEnrollmentCommands(
   sequenceId: Accessor<string>
 ): EnrollmentCommands {
   const mutation = useEnrollmentActionMutation();
+  const inFlight = useEnrollmentActionsInFlight();
   return {
     run: (enrollment, action) =>
       outcome(
         mutation.mutateAsync({ sequenceId: sequenceId(), enrollment, action })
       ),
-    pendingId: () =>
-      mutation.isPending ? mutation.variables?.enrollment.id : undefined,
+    pending: (enrollmentId) => inFlight().includes(enrollmentId),
   };
 }
 

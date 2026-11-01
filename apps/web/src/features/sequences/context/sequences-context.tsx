@@ -58,8 +58,8 @@ export type EnrollmentCommands = {
     enrollment: EnrollmentSummary,
     action: EnrollmentAction
   ): Outcome<EnrollmentSummary>;
-  /** The enrollment an action is running for. */
-  pendingId: Accessor<string | undefined>;
+  /** Whether an action is still running for this enrollment. */
+  pending(enrollmentId: string): boolean;
 };
 
 /** A CRM person who can be enrolled. */

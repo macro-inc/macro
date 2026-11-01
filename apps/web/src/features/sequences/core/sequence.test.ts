@@ -18,7 +18,7 @@ const enrollment = (status: EnrollmentStatus, reason?: EnrollmentReason) => ({
 });
 
 describe('enrollment actions', () => {
-  it('offers resume for held enrollments and stops a reply may have caused', () => {
+  it('offers resume for held enrollments and stops that may no longer hold', () => {
     expect(enrollmentActions(enrollment('paused'), 'active')).toEqual([
       'resume',
       'stop',
@@ -27,17 +27,16 @@ describe('enrollment actions', () => {
     expect(
       enrollmentActions(enrollment('needs_attention', 'step_failed'), 'active')
     ).toEqual(['resume', 'pause', 'stop', 'unsubscribe']);
-    for (const reason of ['replied', 'bounced'] as const)
+    for (const reason of ['replied', 'bounced', 'access_lost'] as const)
       expect(
         enrollmentActions(enrollment('stopped', reason), 'active')
       ).toEqual(['resume', 'unsubscribe']);
   });
 
   it('never resumes a deliberate stop or a finished enrollment, but can still opt it out', () => {
-    for (const reason of ['manual', 'access_lost'] as const)
-      expect(
-        enrollmentActions(enrollment('stopped', reason), 'active')
-      ).toEqual(['unsubscribe']);
+    expect(
+      enrollmentActions(enrollment('stopped', 'manual'), 'active')
+    ).toEqual(['unsubscribe']);
     expect(enrollmentActions(enrollment('completed'), 'active')).toEqual([
       'unsubscribe',
     ]);
@@ -103,5 +102,33 @@ describe('draft changes', () => {
       steps: [draft.steps[1], draft.steps[0]],
     });
     expect(changes?.steps?.map((step) => step.asReply)).toEqual([false, false]);
+  });
+
+  it('never gives the first email a wait, since it goes out at the start', () => {
+    const draft = toDraft(sequence);
+    expect(
+      draftChanges(sequence, {
+        ...draft,
+        steps: [{ ...draft.steps[0], delayDays: 5 }, draft.steps[1]],
+      })
+    ).toBeUndefined();
+    // Moving the second email up carries no wait into the first position.
+    expect(
+      draftChanges(sequence, {
+        ...draft,
+        steps: [draft.steps[1], draft.steps[0]],
+      })?.steps?.map((step) => step.delayDays)
+    ).toEqual([0, 0]);
+    // Removing the first email leaves the next one sending at the start.
+    expect(
+      draftChanges(sequence, { ...draft, steps: [draft.steps[1]] })?.steps?.[0]
+        .delayDays
+    ).toBe(0);
+    expect(
+      toDraft({
+        ...sequence,
+        steps: [{ ...sequence.steps[0], delayDays: 3 }],
+      }).steps[0].delayDays
+    ).toBe(0);
   });
 });

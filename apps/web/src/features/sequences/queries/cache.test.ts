@@ -4,8 +4,10 @@ import type {
   SequenceDetailResponse,
   SequenceSummary,
 } from '@service-email/generated/schemas';
+import { createStore, reconcile, unwrap } from 'solid-js/store';
 import { describe, expect, it } from 'vitest';
 import {
+  enrollmentSnapshot,
   expectedState,
   withEnrollment,
   withEnrollmentSummary,
@@ -103,6 +105,28 @@ describe('enrollment cache', () => {
     expect(
       withEnrollmentSummary({ ...enrollment('x', 'active'), steps }, stopped)
     ).toEqual({ ...stopped, steps });
+  });
+
+  it('rolls back to a copy the query store’s in-place updates can’t reach', () => {
+    // Solid Query reconciles new data into the rows its store holds; once a
+    // row arrived through a refetch, that row is the object the cache holds.
+    const [query, setQuery] = createStore<{ data?: SequenceDetailResponse }>({
+      data: structuredClone(detail),
+    });
+    const cached = unwrap(query).data;
+    const previous = enrollmentSnapshot(cached, 'x');
+
+    setQuery(
+      'data',
+      reconcile(
+        withEnrollment(cached, { ...enrollment('x', 'paused'), reason: null }),
+        { key: 'id' }
+      )
+    );
+
+    expect(cached?.enrollments[0].status).toBe('paused');
+    expect(previous).toEqual(enrollment('x', 'active'));
+    expect(enrollmentSnapshot(cached, 'missing')).toBeUndefined();
   });
 
   it('predicts every action but a team-wide opt-out', () => {

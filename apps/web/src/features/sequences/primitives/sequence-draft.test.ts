@@ -4,6 +4,7 @@ import type {
 } from '@service-email/generated/schemas';
 import { err, ok, type Result } from 'neverthrow';
 import { createRoot, createSignal } from 'solid-js';
+import { createStore, reconcile } from 'solid-js/store';
 import { describe, expect, it, vi } from 'vitest';
 import type { SequenceFailure } from '../core/errors';
 import { createSequenceDraft } from './sequence-draft';
@@ -58,6 +59,37 @@ describe('createSequenceDraft', () => {
       status: 'active',
     });
     expect(draft.changed()).toBe(false);
+  });
+
+  it('keeps its version when a refetch updates the cached sequence in place', async () => {
+    // Solid Query keeps data in a store and reconciles refetches into it by id.
+    const [query, setQuery] = createStore<{ data?: Sequence }>({
+      data: structuredClone(SEQUENCE),
+    });
+    const update = vi.fn(
+      async (
+        request: UpdateSequenceRequest
+      ): Promise<Result<Sequence, SequenceFailure>> =>
+        ok({ ...SEQUENCE, version: request.version + 1 })
+    );
+    const draft = createRoot(() =>
+      createSequenceDraft({ sequence: () => query.data, update })
+    );
+    const before = query.data;
+    draft.change({ ...draft.draft()!, footer: 'Acme' });
+
+    setQuery(
+      'data',
+      reconcile(
+        { ...SEQUENCE, name: 'Changed elsewhere', version: 4 },
+        { key: 'id' }
+      )
+    );
+    expect(query.data).toBe(before);
+    expect(query.data?.version).toBe(4);
+
+    expect(await draft.save()).toBe(true);
+    expect(update).toHaveBeenCalledWith({ version: 3, footer: 'Acme' });
   });
 
   it('keeps the edits and reports a conflict when the sequence changed elsewhere', async () => {

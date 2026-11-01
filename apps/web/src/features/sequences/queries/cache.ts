@@ -7,6 +7,7 @@ import type {
   SequenceStatus,
   SequenceSummary,
 } from '@service-email/generated/schemas';
+import { unwrap } from 'solid-js/store';
 import { match } from 'ts-pattern';
 
 const NO_COUNTS: SequenceSummary['counts'] = {
@@ -82,6 +83,21 @@ export function withEnrollment(
       ),
     }
   );
+}
+
+/**
+ * A plain copy of one cached enrollment, to roll back to. The query store
+ * reconciles later writes into the rows it holds in place, so a reference
+ * would change along with the optimistic update it is meant to undo.
+ */
+export function enrollmentSnapshot(
+  detail: SequenceDetailResponse | undefined,
+  enrollmentId: string
+): EnrollmentSummary | undefined {
+  const enrollment = detail?.enrollments.find(
+    (item) => item.id === enrollmentId
+  );
+  return enrollment && structuredClone(unwrap(enrollment));
 }
 
 /** An enrollment's frozen steps with its newer summary fields. */

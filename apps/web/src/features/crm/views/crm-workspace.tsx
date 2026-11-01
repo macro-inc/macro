@@ -327,11 +327,12 @@ export function CrmWorkspaceView(props: {
     { default: false }
   );
   const teamQuery = useCurrentTeamQuery();
-  const teamId = () =>
-    teamQuery.isSuccess ? teamQuery.data?.team.id : undefined;
+  // Gated on pending, not success: a failed refetch keeps the team it loaded,
+  // so an open sequence or pipeline stays mounted (FE-48).
+  const team = () => (teamQuery.isPending ? undefined : teamQuery.data?.team);
+  const teamId = () => team()?.id;
   const pipelinesEnabled = useCrmContext().pipelinesEnabled();
-  const crmEnabled = () =>
-    teamQuery.isSuccess && teamQuery.data?.team.crm_enabled === true;
+  const crmEnabled = () => team()?.crm_enabled === true;
   const canCreatePipeline = () => pipelinesEnabled() && crmEnabled();
   const pipelines = useCrmContext().createPipelines(() =>
     pipelinesEnabled() ? teamId() : undefined

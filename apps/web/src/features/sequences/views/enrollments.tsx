@@ -69,6 +69,10 @@ export function EnrollmentsView(props: {
     if (result.isErr()) context.feedback.failure(failureMessage(result.error));
     return result.isOk();
   }
+  const unsubscribePending = () => {
+    const enrollment = unsubscribing();
+    return !!enrollment && commands.pending(enrollment.id);
+  };
   async function unsubscribe(enrollment: EnrollmentSummary) {
     if (await run(enrollment, 'unsubscribe'))
       context.feedback.success(t('sequences.unsubscribed'));
@@ -113,7 +117,7 @@ export function EnrollmentsView(props: {
               )}
               actions={enrollmentActions(enrollment, props.sequenceStatus)}
               retry={isRetry(enrollment)}
-              busy={commands.pendingId() === enrollment.id}
+              busy={commands.pending(enrollment.id)}
               expanded={expanded().has(enrollment.id)}
               onToggle={() => toggle(enrollment.id)}
               onAction={(action) =>
@@ -137,9 +141,7 @@ export function EnrollmentsView(props: {
         onOpenChange={(open) => {
           if (!open) setUnsubscribing(undefined);
         }}
-        pending={
-          !!unsubscribing() && commands.pendingId() === unsubscribing()?.id
-        }
+        pending={unsubscribePending()}
         tone="danger"
         title={
           <span class="ph-no-capture">

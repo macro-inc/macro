@@ -20,9 +20,15 @@ import {
   type SequenceSummary,
   type UpdateSequenceRequest,
 } from '@service-email/generated/schemas';
-import { queryOptions, useMutation } from '@tanstack/solid-query';
+import {
+  type Mutation,
+  queryOptions,
+  useMutation,
+  useMutationState,
+} from '@tanstack/solid-query';
 import { isRetryable, type SequenceFailure } from '../core/errors';
 import {
+  enrollmentSnapshot,
   expectedState,
   withDetailStatus,
   withEnrollment,
@@ -32,7 +38,7 @@ import {
   withSequence,
   withSummary,
 } from './cache';
-import { sequenceKeys } from './keys';
+import { ENROLLMENT_ACTION_MUTATION_KEY, sequenceKeys } from './keys';
 
 /** Steps send on the server; an open sequence follows them about once a minute. */
 const PROGRESS_INTERVAL = 60_000;
@@ -281,6 +287,7 @@ export function useEnrollmentActionMutation() {
     EnrollmentChange,
     EnrollmentRollback
   >(() => ({
+    mutationKey: ENROLLMENT_ACTION_MUTATION_KEY,
     mutationFn: ({ enrollment, action }) =>
       throwOnErr(() => emailClient.updateEnrollment(enrollment.id, { action })),
     onMutate: async ({ sequenceId, enrollment, action }) => {
@@ -293,9 +300,10 @@ export function useEnrollmentActionMutation() {
           queryKey: sequenceKeys.enrollment(enrollment.id).queryKey,
         }),
       ]);
-      const previous = queryClient
-        .getQueryData<SequenceDetailResponse>(detailKey)
-        ?.enrollments.find((item) => item.id === enrollment.id);
+      const previous = enrollmentSnapshot(
+        queryClient.getQueryData<SequenceDetailResponse>(detailKey),
+        enrollment.id
+      );
       if (!previous) return;
       setEnrollment(sequenceId, { ...previous, ...expected });
       return { previous };
@@ -327,4 +335,26 @@ export function useEnrollmentActionMutation() {
             : undefined,
       ]),
   }));
+}
+
+/** The enrollment an action is for: every mutation under its key changes one. */
+function actionEnrollmentId({ state }: Mutation) {
+  return (state.variables as EnrollmentChange | undefined)?.enrollment.id;
+}
+
+/**
+ * Enrollments with an action still in flight. One mutation runs every row's
+ * actions, and it only follows the newest; the cache still holds each one.
+ */
+export function useEnrollmentActionsInFlight() {
+  return useMutationState(
+    () => ({
+      filters: {
+        mutationKey: ENROLLMENT_ACTION_MUTATION_KEY,
+        status: 'pending',
+      },
+      select: actionEnrollmentId,
+    }),
+    () => queryClient
+  );
 }

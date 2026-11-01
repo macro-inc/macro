@@ -7,7 +7,17 @@ import type { SequenceSource } from '../context/sequences-context';
 import type { SequenceFailure } from '../core/errors';
 import { draftChanges, type SequenceDraft, toDraft } from '../core/sequence';
 
-type Edit = { base: Sequence; draft: SequenceDraft };
+/** The saved sequence an edit started from, copied out of the query store. */
+type Base = { version: number; saved: SequenceDraft };
+type Edit = Base & { draft: SequenceDraft };
+
+/**
+ * A plain copy: the query store updates the sequence in place on a refetch, so
+ * a live reference would carry the newer version into the edit.
+ */
+function snapshot(sequence: Sequence | undefined): Base | undefined {
+  return sequence && { version: sequence.version, saved: toDraft(sequence) };
+}
 
 /**
  * Local edits over the copy they started from. A save sends only what changed,
@@ -29,9 +39,9 @@ export function createSequenceDraft(
   const change = (next: SequenceDraft) => {
     setFailure(undefined);
     setEdit((current) => {
-      const base = current?.base ?? source.sequence();
-      return base && draftChanges(base, next)
-        ? { base, draft: next }
+      const base = current ?? snapshot(source.sequence());
+      return base && draftChanges(base.saved, next)
+        ? { version: base.version, saved: base.saved, draft: next }
         : undefined;
     });
   };
@@ -41,13 +51,13 @@ export function createSequenceDraft(
   };
   /** Saves the edits and, when given, moves to `status` in the same request. */
   const save = async (status?: SequenceStatus) => {
-    const base = edit()?.base ?? source.sequence();
+    const base = edit() ?? snapshot(source.sequence());
     const current = draft();
     if (!base || !current) return false;
     setFailure(undefined);
     const result = await source.update({
       version: base.version,
-      ...draftChanges(base, current),
+      ...draftChanges(base.saved, current),
       ...(status && { status }),
     });
     if (result.isErr()) {

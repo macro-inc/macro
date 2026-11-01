@@ -54,7 +54,8 @@ export function stepSubject(steps: readonly Step[], index: number) {
   return `Re: ${subject}`;
 }
 
-export function toDraft(sequence: Sequence): SequenceDraft {
+/** A plain copy of what the editor changes, as the server stores it. */
+export function toDraft(sequence: SequenceDraft): SequenceDraft {
   return {
     name: sequence.name,
     linkId: sequence.linkId ?? null,
@@ -63,22 +64,25 @@ export function toDraft(sequence: Sequence): SequenceDraft {
   };
 }
 
-/** Steps as the server stores them: the first is never a reply. */
+/**
+ * Steps as the server stores them: the first is never a reply and never
+ * waits, since it goes out at the enrollment's start.
+ */
 function normalizeSteps(steps: readonly Step[]): Step[] {
   return steps.map((step, index) => ({
-    delayDays: step.delayDays,
+    delayDays: index === 0 ? 0 : step.delayDays,
     subject: step.subject,
     body: step.body,
     asReply: isReplyStep(steps, index),
   }));
 }
 
-/** The fields a draft changed, or `undefined` when it matches the sequence. */
+/** The fields a draft changed, or `undefined` when it matches `saved`. */
 export function draftChanges(
-  sequence: Sequence,
+  saved: SequenceDraft,
   draft: SequenceDraft
 ): Omit<UpdateSequenceRequest, 'version'> | undefined {
-  const base = toDraft(sequence);
+  const base = toDraft(saved);
   const steps = normalizeSteps(draft.steps);
   const changes: Omit<UpdateSequenceRequest, 'version'> = {
     ...(draft.name !== base.name && { name: draft.name }),
@@ -94,8 +98,15 @@ const LIVE_STATUSES: readonly EnrollmentStatus[] = [
   'paused',
   'needs_attention',
 ];
-/** A stop that a resume can undo: the server may have misread a reply. */
-const RESUMABLE_STOPS: readonly EnrollmentReason[] = ['replied', 'bounced'];
+/**
+ * A stop that a resume can undo: the server may have misread a reply or
+ * bounce, or access may be back (the server checks it again before sending).
+ */
+const RESUMABLE_STOPS: readonly EnrollmentReason[] = [
+  'replied',
+  'bounced',
+  'access_lost',
+];
 /** A step that never went out, so resuming sends it again. */
 const RETRY_REASONS: readonly EnrollmentReason[] = [
   'step_failed',
