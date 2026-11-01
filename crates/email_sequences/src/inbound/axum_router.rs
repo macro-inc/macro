@@ -118,6 +118,8 @@ pub enum SequenceErrorCode {
     ActionUnavailable,
     /// A step is being delivered; try again shortly.
     StepInDelivery,
+    /// The owner took the step's email over in Mail; send or delete it there.
+    StepTakenOver,
     /// The caller isn't in a team.
     NoTeam,
     /// The team has CRM turned off.
@@ -172,6 +174,9 @@ impl IntoResponse for SequenceError {
             }
             SequenceError::StepInDelivery => {
                 (StatusCode::CONFLICT, SequenceErrorCode::StepInDelivery)
+            }
+            SequenceError::StepTakenOver => {
+                (StatusCode::CONFLICT, SequenceErrorCode::StepTakenOver)
             }
             SequenceError::NoTeam => (StatusCode::FORBIDDEN, SequenceErrorCode::NoTeam),
             SequenceError::CrmDisabled => (StatusCode::FORBIDDEN, SequenceErrorCode::CrmDisabled),

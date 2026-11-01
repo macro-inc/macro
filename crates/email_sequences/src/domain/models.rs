@@ -508,6 +508,10 @@ pub enum SequenceError {
     /// A step is being delivered and can't be withdrawn yet.
     #[error("a step is being delivered")]
     StepInDelivery,
+    /// The owner scheduled or sent the step's email from Mail; it is theirs
+    /// until they send or delete it.
+    #[error("the step's email was taken over in Mail")]
+    StepTakenOver,
     /// The caller isn't in a team.
     #[error("not in a team")]
     NoTeam,

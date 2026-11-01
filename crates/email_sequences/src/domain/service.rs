@@ -81,12 +81,16 @@ fn invalid(problem: Problem) -> SequenceError {
     })
 }
 
+/// Steps as stored: text without control characters, and no wait before the
+/// first, which goes at each enrollment's start.
 fn clean_steps(steps: Vec<Step>) -> Vec<Step> {
     steps
         .into_iter()
-        .map(|step| Step {
+        .enumerate()
+        .map(|(index, step)| Step {
             subject: render::clean_text(&step.subject),
             body: render::clean_text(&step.body),
+            delay_days: if index == 0 { 0 } else { step.delay_days },
             ..step
         })
         .collect()
@@ -369,6 +373,10 @@ where
         if sequence.status != SequenceStatus::Active {
             return Err(SequenceError::SequenceNotActive);
         }
+        // Its inbox was disconnected: nothing could send.
+        if sequence.link_id.is_none() {
+            return Err(invalid(Problem::SenderUnavailable));
+        }
 
         let mut results = Vec::with_capacity(request.crm_contact_ids.len());
         let mut accepted: Vec<(Uuid, String, Option<String>)> = Vec::new();
@@ -551,13 +559,18 @@ where
             return Err(SequenceError::ActionUnavailable);
         }
         let history = self.repo.history(tx, row.id).await.map_err(internal)?;
-        if let Some(step) = in_flight(&history) {
-            self.withdraw(tx, row, step, CancelExpectation::Scheduled)
-                .await?;
+        // Keep when the next step was due, so resuming early keeps a planned
+        // start; a withdrawn step was due when it was scheduled.
+        if let Some(step) = in_flight(&history)
+            && self
+                .withdraw(tx, row, step, CancelExpectation::Scheduled)
+                .await?
+                == CancelOutcome::Cancelled
+        {
+            row.due_at = Some(step.scheduled_at);
         }
         row.status = EnrollmentStatus::Paused;
         row.reason = None;
-        row.due_at = None;
         self.repo.update_enrollment(tx, row).await.map_err(internal)
     }
 
@@ -567,9 +580,15 @@ where
         let now = Utc::now();
         let resumable = match row.status {
             EnrollmentStatus::Paused | EnrollmentStatus::NeedsAttention => true,
+            // A stop the server may have misread, or access that may be back
+            // (it is checked again before the next step).
             EnrollmentStatus::Stopped => matches!(
                 row.reason,
-                Some(EnrollmentReason::Replied | EnrollmentReason::Bounced)
+                Some(
+                    EnrollmentReason::Replied
+                        | EnrollmentReason::Bounced
+                        | EnrollmentReason::AccessLost
+                )
             ),
             EnrollmentStatus::Active | EnrollmentStatus::Completed => false,
         };
@@ -592,17 +611,30 @@ where
                     self.mark_unknown(tx, row, &step).await?;
                 }
                 CancelOutcome::Gone => self.mark_unknown(tx, row, &step).await?,
-                CancelOutcome::DeliveryStarted | CancelOutcome::Sent | CancelOutcome::Changed => {
+                // The owner scheduled or sent it from Mail: it is theirs until
+                // they send or delete it.
+                CancelOutcome::Changed => return Err(SequenceError::StepTakenOver),
+                CancelOutcome::DeliveryStarted | CancelOutcome::Sent => {
                     return Err(SequenceError::StepInDelivery);
                 }
             }
             history = self.repo.history(tx, row.id).await.map_err(internal)?;
         }
-        if row.status == EnrollmentStatus::Stopped {
+        // The reply or bounce that stopped it no longer counts.
+        if row.status == EnrollmentStatus::Stopped
+            && matches!(
+                row.reason,
+                Some(EnrollmentReason::Replied | EnrollmentReason::Bounced)
+            )
+        {
             row.replies_after = Some(now);
         }
         if row.link_id.is_none() {
             row.link_id = row.sequence_link_id;
+        }
+        // Its inbox was disconnected and the sequence has no other.
+        if row.link_id.is_none() {
+            return Err(invalid(Problem::SenderUnavailable));
         }
         row.attempts = 0;
         row.reason = None;
@@ -824,7 +856,8 @@ where
 }
 
 /// When step `next` is due: by the timing rule from the last recorded step,
-/// or as soon as allowed when nothing was recorded.
+/// or, when nothing was recorded, when it was planned (its start) and no
+/// sooner than allowed.
 pub(super) fn next_due(
     row: &EnrollmentRow,
     history: &[HistoryRow],
@@ -842,7 +875,7 @@ pub(super) fn next_due(
             row.clock,
             now,
         ),
-        None => timing::first_due(now, now),
+        None => timing::first_due(row.due_at.unwrap_or(now), now),
     }
 }
 

@@ -54,4 +54,7 @@ people. The server owns all state; the browser only calls the API.
   enrollments move on.
 - An unsubscribe commits before any enrollment stops; a failed stop is healed by
   the sweep, which never sends to an unsubscribed address.
+- `due_at` is when the next step is planned. Only `active` enrollments of an
+  `active` sequence are due, so a paused enrollment keeps it, and resuming
+  before a future start keeps that start.
 - Spans and logs carry ids and counts only: never addresses, names or tokens.

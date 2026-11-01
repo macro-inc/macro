@@ -212,7 +212,8 @@ async fn summaries(
                   jsonb_array_length(e.steps) AS "step_count!", e.created_at,
                   (SELECT max(h.sent_at) FROM email_sequence_steps h WHERE h.enrollment_id = e.id) AS last_sent_at,
                   COALESCE((SELECT h.scheduled_at FROM email_sequence_steps h
-                            WHERE h.enrollment_id = e.id AND h.status = 'scheduled'), e.due_at) AS next_send_at
+                            WHERE h.enrollment_id = e.id AND h.status = 'scheduled'),
+                           CASE WHEN e.status = 'active' THEN e.due_at END) AS next_send_at
            FROM email_sequence_enrollments e
            JOIN email_sequences s ON s.id = e.sequence_id
            WHERE ($1::uuid IS NULL OR e.sequence_id = $1)
@@ -458,13 +459,16 @@ impl SequenceRepo for PgSequenceRepo {
         else {
             return Ok(None);
         };
-        let steps = sqlx::query_scalar!(
+        // Deleted with its sequence since the read above: not found.
+        let Some(Json(steps)) = sqlx::query_scalar!(
             r#"SELECT steps AS "steps: Json<Vec<Step>>" FROM email_sequence_enrollments WHERE id = $1"#,
             id,
         )
-        .fetch_one(&mut *conn)
+        .fetch_optional(&mut *conn)
         .await?
-        .0;
+        else {
+            return Ok(None);
+        };
         let history = history(&mut conn, id).await?;
         let steps = steps
             .into_iter()
@@ -779,7 +783,8 @@ impl SequenceRepo for PgSequenceRepo {
                       s.status AS sequence_status, e.status, e.reason,
                       (SELECT max(h.sent_at) FROM email_sequence_steps h WHERE h.enrollment_id = e.id) AS last_sent_at,
                       COALESCE((SELECT h.scheduled_at FROM email_sequence_steps h
-                                WHERE h.enrollment_id = e.id AND h.status = 'scheduled'), e.due_at) AS next_send_at
+                                WHERE h.enrollment_id = e.id AND h.status = 'scheduled'),
+                               CASE WHEN e.status = 'active' THEN e.due_at END) AS next_send_at
                FROM email_sequence_enrollments e JOIN email_sequences s ON s.id = e.sequence_id
                WHERE e.team_id = $1 AND e.email = $2
                ORDER BY e.created_at DESC, e.id"#,

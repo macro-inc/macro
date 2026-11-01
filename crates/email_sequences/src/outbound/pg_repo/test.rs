@@ -340,6 +340,14 @@ async fn i2_every_check_stops_or_flags_instead_of_sending(pool: PgPool) {
         ("stopped".into(), Some("access_lost".into()), 0)
     );
     access.crm_on.store(true, Ordering::SeqCst);
+    // Access back: resuming picks up where it stopped.
+    svc.act(OWNER, enrollments[0], EnrollmentAction::Resume)
+        .await
+        .unwrap();
+    assert_eq!(
+        status(&pool, enrollments[0]).await,
+        ("active".into(), None, 0)
+    );
 
     access.member.store(false, Ordering::SeqCst);
     assert_eq!(
@@ -870,7 +878,7 @@ async fn a_step_the_owner_takes_over_in_mail_stays_theirs(pool: PgPool) {
     assert_eq!(in_flight(&pool, enrollment).await, Some(step));
     assert!(matches!(
         svc.act(OWNER, enrollment, EnrollmentAction::Resume).await,
-        Err(SequenceError::StepInDelivery)
+        Err(SequenceError::StepTakenOver)
     ));
 
     // Once it is sent, it counts as the sequence's step.
@@ -1228,4 +1236,142 @@ async fn an_inbox_disconnected_mid_sequence_needs_attention(pool: PgPool) {
     .unwrap();
     assert_eq!(recorded, "unknown");
     assert_eq!(pending_schedules(&pool).await, 0);
+
+    // With no inbox, nobody joins and nobody resumes until one is chosen.
+    let sender_unavailable = |result: Result<_, SequenceError>| {
+        matches!(
+            result,
+            Err(SequenceError::Invalid(InvalidSequence {
+                problem: Problem::SenderUnavailable,
+                ..
+            }))
+        )
+    };
+    let request = EnrollRequest {
+        crm_contact_ids: vec![BOB],
+        start: Utc::now(),
+        timezone: "UTC".to_owned(),
+    };
+    assert!(sender_unavailable(
+        svc.enroll(OWNER, sequence, request).await.map(|_| ())
+    ));
+    assert!(sender_unavailable(
+        svc.act(OWNER, enrollment, EnrollmentAction::Resume)
+            .await
+            .map(|_| ())
+    ));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sequences"))
+)]
+async fn pausing_before_the_start_keeps_the_start(pool: PgPool) {
+    let (svc, _) = service(&pool);
+    let mut steps = two_steps();
+    // A wait before the first email means nothing: it goes at the start.
+    steps[0].delay_days = 3;
+    let sequence = active_sequence(&svc, OWNER, OWNER_LINK, steps).await;
+    let (stored, _) = svc.get(OWNER, sequence).await.unwrap();
+    assert_eq!(stored.steps[0].delay_days, 0);
+
+    let start = Utc::now() + chrono::Duration::days(3);
+    let enrollment = svc
+        .enroll(
+            OWNER,
+            sequence,
+            EnrollRequest {
+                crm_contact_ids: vec![ADA],
+                start,
+                timezone: "UTC".to_owned(),
+            },
+        )
+        .await
+        .unwrap()[0]
+        .enrollment_id
+        .unwrap();
+    let due = || async {
+        sqlx::query_scalar!(
+            "SELECT due_at FROM email_sequence_enrollments WHERE id = $1",
+            enrollment
+        )
+        .fetch_one(&pool)
+        .await
+        .unwrap()
+    };
+    let planned = due().await.unwrap();
+
+    svc.act(OWNER, enrollment, EnrollmentAction::Pause)
+        .await
+        .unwrap();
+    let paused = svc.enrollment(OWNER, enrollment).await.unwrap();
+    assert_eq!(
+        paused.enrollment.next_send_at, None,
+        "a paused row shows no send"
+    );
+    svc.act(OWNER, enrollment, EnrollmentAction::Resume)
+        .await
+        .unwrap();
+    assert_eq!(due().await, Some(planned));
+
+    // A step withdrawn by a pause goes as soon as allowed after resuming.
+    make_due(&pool, enrollment).await;
+    svc.sweep(Utc::now()).await;
+    assert!(in_flight(&pool, enrollment).await.is_some());
+    svc.act(OWNER, enrollment, EnrollmentAction::Pause)
+        .await
+        .unwrap();
+    let before = Utc::now();
+    svc.act(OWNER, enrollment, EnrollmentAction::Resume)
+        .await
+        .unwrap();
+    let resumed = due().await.unwrap();
+    assert!(resumed >= before + chrono::Duration::minutes(2));
+    assert!(resumed < before + chrono::Duration::minutes(3));
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("sequences"))
+)]
+async fn the_sweep_catches_a_bounce_in_a_thread_of_its_own(pool: PgPool) {
+    let (svc, _) = service(&pool);
+    let sequence = active_sequence(&svc, OWNER, OWNER_LINK, two_steps()).await;
+    let enrollment = enroll(&svc, OWNER, sequence, ADA).await;
+    first_step_sent(&svc, &pool, enrollment).await;
+
+    // A delay notice changes nothing: the provider is still trying.
+    incoming(
+        &pool,
+        OWNER_LINK,
+        "mailer-daemon@googlemail.com",
+        serde_json::json!([
+            {"name": "Subject", "value": "Delivery Status Notification (Delay)"},
+            {"name": "Content-Type", "value": "multipart/report; report-type=delivery-status"}
+        ]),
+        None,
+    )
+    .await;
+    make_due(&pool, enrollment).await;
+    svc.sweep(Utc::now()).await;
+    let step = in_flight(&pool, enrollment).await.unwrap();
+    assert_eq!(status(&pool, enrollment).await, ("active".into(), None, 1));
+
+    // The bounce the hook missed is found while the next step waits, and
+    // the step is withdrawn.
+    incoming(
+        &pool,
+        OWNER_LINK,
+        "MAILER-DAEMON@mx.example.org",
+        serde_json::json!([{"name": "X-Failed-Recipients", "value": "ada@example.com"}]),
+        None,
+    )
+    .await;
+    svc.sweep(Utc::now()).await;
+    assert_eq!(in_flight(&pool, enrollment).await, None);
+    assert!(!message_exists(&pool, step).await);
+    assert_eq!(
+        status(&pool, enrollment).await,
+        ("stopped".into(), Some("bounced".into()), 1)
+    );
 }
