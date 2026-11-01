@@ -27,7 +27,10 @@ import {
 } from '../ChannelsRailContext';
 import { useChannelRailLabelState } from '../hooks/useChannelRailState';
 import { ChannelSectionHeading } from './ChannelSectionHeading';
-import { ChannelSectionDropdown } from './ChannelSectionMenu';
+import {
+  ChannelSectionContextMenu,
+  ChannelSectionDropdown,
+} from './ChannelSectionMenu';
 
 /** A custom section with the same heading and controls as built-in sections. */
 export function ChannelLabelRow(props: { label: ChannelLabel }) {
@@ -59,35 +62,40 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
         isDropTarget() && 'bg-selected'
       )}
     >
-      <ChannelSectionHeading
-        id={state().domId}
-        label={props.label.name}
-        title={
-          props.label.rule
-            ? t('channelLabels.nameContains', {
-                text: props.label.rule.contains,
-              })
-            : props.label.name
-        }
-        open={state().open}
-        focused={state().focused}
-        unreadCount={state().unreadCount}
-        onToggle={() => rail.activateRow(rowKeyForLabel(props.label.id))}
-        badge={
-          <Show when={props.label.teamId}>
-            <Badge variant="secondary" size="xs">
-              {t('channelSections.sharedShort')}
-            </Badge>
-          </Show>
-        }
+      <ChannelSectionContextMenu
+        section={rowKeyForLabel(props.label.id)}
+        actions={<ChannelLabelActions label={props.label} />}
       >
-        <ChannelSectionDropdown
-          section={rowKeyForLabel(props.label.id)}
+        <ChannelSectionHeading
+          id={state().domId}
           label={props.label.name}
+          title={
+            props.label.rule
+              ? t('channelLabels.nameContains', {
+                  text: props.label.rule.contains,
+                })
+              : props.label.name
+          }
+          open={state().open}
+          focused={state().focused}
+          unreadCount={state().unreadCount}
+          onToggle={() => rail.activateRow(rowKeyForLabel(props.label.id))}
+          badge={
+            <Show when={props.label.teamId}>
+              <Badge variant="secondary" size="xs">
+                {t('channelSections.sharedShort')}
+              </Badge>
+            </Show>
+          }
         >
-          <ChannelLabelActions label={props.label} />
-        </ChannelSectionDropdown>
-      </ChannelSectionHeading>
+          <ChannelSectionDropdown
+            section={rowKeyForLabel(props.label.id)}
+            label={props.label.name}
+          >
+            <ChannelLabelActions label={props.label} />
+          </ChannelSectionDropdown>
+        </ChannelSectionHeading>
+      </ChannelSectionContextMenu>
     </div>
   );
 }
@@ -137,12 +145,6 @@ function SectionMenuItems(props: { channel: ChannelEntity }) {
     rail
       .labels()
       .filter((label) => !label.rule && canLabelChannel(props.channel, label));
-  const current = (shared: boolean) =>
-    labels().find(
-      (label) =>
-        Boolean(label.teamId) === shared &&
-        label.channelIds.includes(props.channel.id)
-    );
   return (
     <Show
       when={
@@ -186,27 +188,28 @@ function SectionMenuItems(props: { channel: ChannelEntity }) {
                     ? t('channelSections.shared')
                     : t('channelSections.personal')}
                 </div>
-                <ContextMenu.RadioGroup
-                  value={current(shared)?.id ?? ''}
-                  onChange={(labelId) =>
-                    rail.setChannelLabel(props.channel.id, labelId)
-                  }
+                <For
+                  each={labels().filter(
+                    (label) => Boolean(label.teamId) === shared
+                  )}
                 >
-                  <For
-                    each={labels().filter(
-                      (label) => Boolean(label.teamId) === shared
-                    )}
-                  >
-                    {(label) => (
-                      <MenuItem
-                        selectorType="radio"
-                        value={label.id}
-                        groupValue={current(shared)?.id ?? ''}
-                        text={label.name}
-                      />
-                    )}
-                  </For>
-                </ContextMenu.RadioGroup>
+                  {(label) => (
+                    <MenuItem
+                      selectorType="checkbox"
+                      checked={label.channelIds.includes(props.channel.id)}
+                      text={label.name}
+                      onChange={(checked) =>
+                        checked
+                          ? rail.setChannelLabel(props.channel.id, label.id)
+                          : rail.setChannelLabel(
+                              props.channel.id,
+                              undefined,
+                              label.id
+                            )
+                      }
+                    />
+                  )}
+                </For>
                 <MenuItem
                   icon={PlusIcon}
                   text={t('channelSections.newSection')}

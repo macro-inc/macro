@@ -1,8 +1,13 @@
 import { ViewSidebar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
+import {
+  ContextMenuContent,
+  ContextMenuTrigger,
+} from '@core/component/ContextMenu';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import SlidersIcon from '@icon/system/regular/sliders-horizontal.svg';
+import { ContextMenu } from '@kobalte/core/context-menu';
 import { Dropdown, ToggleSwitch } from '@ui';
 import { For, type JSX } from 'solid-js';
 import type { ChannelSectionKey } from '../../../types';
@@ -36,6 +41,33 @@ export function ChannelSectionDropdown(props: {
         {props.children}
       </Dropdown.Content>
     </Dropdown>
+  );
+}
+
+/** Reuse the dropdown actions with the shared Kobalte menu-item primitives. */
+export function ChannelSectionContextMenu(props: {
+  section: ChannelSectionKey;
+  children: JSX.Element;
+  actions?: JSX.Element;
+}) {
+  return (
+    <ContextMenu>
+      <ContextMenuTrigger as="div" class="min-w-0">
+        {props.children}
+      </ContextMenuTrigger>
+      <ContextMenu.Portal>
+        <ContextMenuContent
+          class="min-w-44"
+          onCloseAutoFocus={(event) => {
+            if (document.querySelector('[role="dialog"]'))
+              event.preventDefault();
+          }}
+        >
+          <ChannelSectionMenuItems section={props.section} />
+          {props.actions}
+        </ContextMenuContent>
+      </ContextMenu.Portal>
+    </ContextMenu>
   );
 }
 
