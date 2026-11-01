@@ -89,6 +89,9 @@ async fn waits_for_an_in_flight_populate(pool: PgPool) -> anyhow::Result<()> {
     let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
 
     let mut populate = pool.begin().await?;
+    let populate_pid = sqlx::query_scalar!(r#"SELECT pg_backend_pid() AS "pid!""#)
+        .fetch_one(&mut *populate)
+        .await?;
     sqlx::query!(
         r#"SELECT pg_advisory_xact_lock(hashtextextended($1, 0))"#,
         format!("{team_id}:acme.com"),
@@ -113,8 +116,10 @@ async fn waits_for_an_in_flight_populate(pool: PgPool) -> anyhow::Result<()> {
         loop {
             let waiting = sqlx::query_scalar!(
                 r#"SELECT EXISTS (
-                    SELECT 1 FROM pg_locks WHERE locktype = 'advisory' AND NOT granted
+                    SELECT 1 FROM pg_stat_activity
+                    WHERE datname = current_database() AND $1 = ANY(pg_blocking_pids(pid))
                 ) AS "waiting!""#,
+                populate_pid,
             )
             .fetch_one(&pool)
             .await?;
