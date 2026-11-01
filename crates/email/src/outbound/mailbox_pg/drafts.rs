@@ -196,10 +196,14 @@ impl DraftRepository for PgMailboxSync {
     }
 
     async fn release_draft(&self, lease: &DraftLease, seconds: u32) -> Result<(), MailboxError> {
+        // A discard that arrived during this lease restarts from inspection,
+        // which deletes whichever version Outlook holds; this step's
+        // checkpoint can expect a version a lost response never confirmed.
         let changed = sqlx::query!(r#"
-            UPDATE email_mailbox_drafts SET lease_id = NULL,lease_until = NULL,available_at = now() + make_interval(secs => $3::double precision)
+            UPDATE email_mailbox_drafts SET lease_id = NULL,lease_until = NULL,available_at = now() + make_interval(secs => $3::double precision),
+                checkpoint = CASE WHEN delete_requested AND NOT $4 AND checkpoint->>'stage' IS DISTINCT FROM 'creating' THEN NULL ELSE checkpoint END
             WHERE message_id = $1 AND lease_id = $2 AND lease_until > now() AND state = 'running'
-        "#,lease.message_id,lease.lease_id,f64::from(seconds)).execute(&self.db).await.map_err(db_error)?.rows_affected();
+        "#,lease.message_id,lease.lease_id,f64::from(seconds),lease.delete_requested).execute(&self.db).await.map_err(db_error)?.rows_affected();
         if changed != 1 {
             return Err(MailboxError::Stale);
         }
