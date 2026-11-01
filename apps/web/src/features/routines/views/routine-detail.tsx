@@ -2,6 +2,7 @@ import { getDisplayName } from '@core/user/displayName';
 import { tryMacroId } from '@core/user/macroId';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { formatRelativeDate } from '@core/util/time';
+import { formatDateAndTime } from '@entity';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import DotsIcon from '@icon/system/regular/dots-three.svg';
@@ -23,6 +24,7 @@ import {
   withDraftSteps,
 } from '../core/routine-draft';
 import { stepsNeedEvent } from '../core/routine-steps';
+import { type RunItem, runStartLine } from '../core/run-start';
 import {
   describeHistoryStep,
   latestStepRun,
@@ -101,6 +103,8 @@ export function RoutineDetailView(props: {
   onCompose?(): void;
   onOpenTemplate?(templateId: string): void;
   onOpenRun(resource: HistoryResource, newSplit: boolean): void;
+  /** Opens the item an event run was about. */
+  onOpenItem?(item: RunItem, newSplit: boolean): void;
 }) {
   const connectedApps = props.slots.createConnectedApps();
   const {
@@ -415,6 +419,19 @@ export function RoutineDetailView(props: {
               </Show>
               <RoutineHistory
                 records={props.source.history()}
+                describeStart={(record) =>
+                  record.run &&
+                  runStartLine(
+                    record.run,
+                    record.startedAt,
+                    (id) =>
+                      id === props.userId()
+                        ? 'you'
+                        : getDisplayName(tryMacroId(id)) || 'someone',
+                    formatDateAndTime
+                  )
+                }
+                onOpenItem={props.onOpenItem}
                 describeStep={(step, record) =>
                   describeHistoryStep(
                     step,

@@ -160,6 +160,12 @@ export function RoutineDetail(props: {
             preferNewSplit: newSplit,
           })
         }
+        onOpenItem={(item, newSplit) =>
+          layout.openWithSplit(
+            { type: item.block, id: item.id },
+            { activate: true, preferNewSplit: newSplit }
+          )
+        }
         onCopyPrompt={async (prompt) => {
           if (await writeClipboardData({ 'text/plain': prompt }))
             toast.success('Prompt copied');

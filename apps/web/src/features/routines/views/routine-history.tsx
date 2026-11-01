@@ -34,6 +34,7 @@ import {
 export type { HistoryRecord } from '../core/history';
 
 import type { HistoryMetadata } from '../context/history';
+import { type RunItem, runItem } from '../core/run-start';
 
 export type { HistoryMetadata } from '../context/history';
 
@@ -45,6 +46,10 @@ type RoutineHistoryProps = {
   onOpen: (resource: HistoryResource, newSplit: boolean) => void;
   /** Describes what a run did at a step, for routines with steps. */
   describeStep?: (step: HistoryStep, record: HistoryRecord) => string;
+  /** A run's header line: what started it, when, and since when. */
+  describeStart?: (record: HistoryRecord) => string | undefined;
+  /** Opens the item an event run was about. */
+  onOpenItem?: (item: RunItem, newSplit: boolean) => void;
 };
 
 function OutcomeIcon(props: { outcome: RunOutcome }) {
@@ -503,6 +508,12 @@ export function RoutineHistory(props: RoutineHistoryProps): JSX.Element {
           const describe = (step: HistoryStep) =>
             props.describeStep?.(step, record()) ?? step.kind;
           const resource = () => record().resource;
+          const openItem = () => {
+            const run = record().run;
+            const item = run && runItem(run.start);
+            const open = props.onOpenItem;
+            return item && open ? () => open(item, false) : undefined;
+          };
           return (
             <div
               class={cn(
@@ -523,6 +534,8 @@ export function RoutineHistory(props: RoutineHistoryProps): JSX.Element {
                 record={record()}
                 title={stepLines(record(), describe).title}
                 describe={describe}
+                startLine={props.describeStart?.(record())}
+                onOpenItem={openItem()}
                 onOpenConversation={
                   resource()
                     ? () => {

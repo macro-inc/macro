@@ -744,12 +744,19 @@ steps**; a line under each such row lists what every step did. Live pending rows
 the failure-colored timestamp even when their transcript is still available.
 A run's detail lists a code step's SDK calls in order, with how each ended
 (**Would do** in a dry run, **Not allowed** outside the step's write scopes)
-and how long it took; arguments and results are never shown.
+and how long it took; arguments and results are never shown. Under its title,
+a line says what started the run (the schedule and its time zone, the event,
+or **Run by** a person), when it was due if it started a minute or more
+later, and **since** the previous run's start (**first run** otherwise); an
+email, channel or task event adds **Open item**. Each tool and code step has
+**Show output**, collapsed by default, with what the step returned as JSON.
+Runs recorded before this change have neither.
 
 **Draft it** on a new routine can write code steps too. It reads the same
 code-step guide CreateRoutine does, plus SDK signatures relevant to the
-description, then type-checks each code step and asks the model to fix
-errors, twice at most. A step that still fails stays in the draft with its
+description, then type-checks the routine's code steps together (a step that
+misreads an earlier step's output fails) and asks the model to fix errors,
+twice at most. A step that still fails stays in the draft with its
 errors listed, and the routine can't be created until it is drafted again or
 the step is removed.
 

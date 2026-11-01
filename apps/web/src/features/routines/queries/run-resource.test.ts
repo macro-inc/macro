@@ -231,3 +231,86 @@ describe('code steps in run history', () => {
     ]);
   });
 });
+
+describe('step outputs and run starts in run history', () => {
+  const run = (startedBy: unknown, extra: object = {}) =>
+    toHistoryRecord({
+      id: 'record',
+      result: {
+        version: 1,
+        steps: [
+          {
+            path: '0',
+            kind: 'code',
+            output: { count: 2, ids: ['a', 'b'] },
+          },
+          {
+            path: '1',
+            kind: 'tool',
+            tool: 'CreateDocument',
+            output: { documentId: 'doc-1' },
+          },
+          { path: '2', kind: 'tool', tool: 'Comment' },
+        ],
+        run: {
+          at: '2026-11-01T08:00:00Z',
+          started_by: startedBy,
+          ...extra,
+        },
+      },
+      start_time: '2026-11-01T08:00:01Z',
+      is_success: true,
+    });
+
+  it('keeps what each step returned', () => {
+    const steps = run({ kind: 'manual', by: 'macro|owner@example.com' }).steps;
+    expect(
+      steps?.map((step) =>
+        step.kind === 'tool' || step.kind === 'code' ? step.output : null
+      )
+    ).toEqual([
+      { count: 2, ids: ['a', 'b'] },
+      { documentId: 'doc-1' },
+      undefined,
+    ]);
+  });
+
+  it('decodes what started the run, when it counts as happening, and the run before', () => {
+    expect(
+      run(
+        {
+          kind: 'schedule',
+          schedule: '0 0 9 * * *',
+          timezone: 'Europe/Paris',
+        },
+        {
+          timezone: 'Europe/Paris',
+          previous_at: '2026-10-31T08:00:00Z',
+        }
+      ).run
+    ).toEqual({
+      at: '2026-11-01T08:00:00Z',
+      timezone: 'Europe/Paris',
+      previousAt: '2026-10-31T08:00:00Z',
+      start: {
+        kind: 'schedule',
+        schedule: '0 0 9 * * *',
+        timezone: 'Europe/Paris',
+      },
+    });
+    expect(
+      run({ kind: 'event', event: 'email.message_received', entity_id: 't-1' })
+        .run?.start
+    ).toEqual({
+      kind: 'event',
+      event: 'email.message_received',
+      entityId: 't-1',
+    });
+    expect(
+      run({ kind: 'event', event: 'channel.mentioned', entity_id: null }).run
+        ?.start
+    ).toEqual({ kind: 'event', event: 'channel.mentioned' });
+    // Runs recorded before runs kept what started them have none.
+    expect(run({ kind: 'unknown' }).run).toBeUndefined();
+  });
+});

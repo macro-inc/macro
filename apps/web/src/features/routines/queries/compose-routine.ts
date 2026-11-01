@@ -49,6 +49,8 @@ const MAX_CODE_FIXES = 2;
 
 /** A drafted code step the type checker rejects, and what to fix it with. */
 export type CodeFailure = {
+  /** Which code step, in program order from zero. */
+  index: number;
   title: string;
   source: string;
   problems: string[];
@@ -230,9 +232,16 @@ function withCodeProblems(
   steps: StepDraft[],
   failures: readonly CodeFailure[]
 ): StepDraft[] {
+  // Failures count code steps in program order, as the check does.
+  const indexes = new Map(
+    flattenSteps(steps)
+      .filter((step) => step.kind === 'code')
+      .map((step, index) => [step.id, index])
+  );
   return mapSteps(steps, (step) => {
     if (step.kind !== 'code') return step;
-    const failure = failures.find((item) => item.source === step.source);
+    const index = indexes.get(step.id);
+    const failure = failures.find((item) => item.index === index);
     return failure ? { ...step, problems: failure.problems } : step;
   });
 }
@@ -331,28 +340,32 @@ async function codeGuidance(
 }
 
 /**
- * Type-check every code step in a drafted routine, as saving it would.
- * Steps whose check couldn't run are left for saving to check.
+ * Type-check a drafted routine's code steps together, as saving it would, so
+ * a step that misreads an earlier step's output fails. A check that couldn't
+ * run leaves the steps for saving to check.
  */
 async function codeFailures(output: unknown): Promise<CodeFailure[]> {
-  const checked = await Promise.all(
-    draftedCodeSteps(output).map(async (step) => {
-      const result = await scheduledActionClient.checkCode({
-        source: step.source,
-      });
-      return result.isOk() && result.value.problems.length
-        ? [
-            {
-              title: step.title,
-              source: step.source,
-              problems: result.value.problems,
-              declarations: result.value.declarations,
-            },
-          ]
-        : [];
-    })
-  );
-  return checked.flat();
+  const parsed = compositionSchema.safeParse(output);
+  const drafted = draftedCodeSteps(output);
+  if (!parsed.success || !drafted.length) return [];
+  const result = await scheduledActionClient.checkCode({
+    steps: parsed.data.steps,
+  });
+  if (result.isErr()) return [];
+  return result.value.steps.flatMap((step) => {
+    const source = drafted[step.index]?.source;
+    return source === undefined
+      ? []
+      : [
+          {
+            index: step.index,
+            title: step.title,
+            source,
+            problems: step.problems,
+            declarations: step.declarations,
+          },
+        ];
+  });
 }
 
 /** One structured completion; undefined when it failed or didn't complete. */

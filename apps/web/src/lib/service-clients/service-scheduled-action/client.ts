@@ -113,10 +113,11 @@ export const scheduledActionClient = {
       body: JSON.stringify({ task: args.task }),
     }),
 
-  checkCode: async (args: { source: string }) =>
+  /** Check a drafted routine's code steps together, as saving would. */
+  checkCode: async (args: { steps: readonly unknown[] }) =>
     scheduledActionFetch<CodeCheck>('/scheduled-actions/code/check', {
       method: 'POST',
-      body: JSON.stringify({ source: args.source }),
+      body: JSON.stringify({ steps: args.steps }),
     }),
 
   listCodeUpgrades: async (args: { scheduleId: string }) =>

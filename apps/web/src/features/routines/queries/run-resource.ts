@@ -3,7 +3,12 @@ import type {
   ExecutionResult,
 } from '@service-scheduled-action/generated/schemas';
 import { z } from 'zod';
-import type { HistoryRecord, HistorySkip, HistoryStep } from '../core/history';
+import type {
+  HistoryRecord,
+  HistoryRun,
+  HistorySkip,
+  HistoryStep,
+} from '../core/history';
 
 const resourceSchema = z.object({
   type: z.enum(['chat', 'agent']),
@@ -37,6 +42,7 @@ const stepSchema = z.discriminatedUnion('kind', [
     path: z.string(),
     kind: z.literal('tool'),
     tool: z.string(),
+    output: z.unknown().optional(),
     error: z.string().optional(),
   }),
   z.object({
@@ -67,6 +73,7 @@ const stepSchema = z.discriminatedUnion('kind', [
         )
         .optional(),
       calls_truncated: z.boolean().optional(),
+      output: z.unknown().optional(),
       error: z.string().optional(),
     })
     .transform((step) => ({
@@ -81,9 +88,46 @@ const stepSchema = z.discriminatedUnion('kind', [
         durationMs: call.duration_ms,
       })),
       callsTruncated: step.calls_truncated ?? false,
+      output: step.output,
       error: step.error,
     })),
 ]);
+const runSchema = z
+  .object({
+    run: z.object({
+      at: z.string(),
+      timezone: z.string().optional(),
+      previous_at: z.string().optional(),
+      started_by: z.discriminatedUnion('kind', [
+        z.object({
+          kind: z.literal('schedule'),
+          schedule: z.string(),
+          timezone: z.string(),
+        }),
+        z.object({
+          kind: z.literal('event'),
+          event: z.string(),
+          entity_id: z.string().nullish(),
+        }),
+        z.object({ kind: z.literal('manual'), by: z.string() }),
+      ]),
+    }),
+  })
+  .transform(
+    ({ run }): HistoryRun => ({
+      at: run.at,
+      timezone: run.timezone,
+      previousAt: run.previous_at,
+      start:
+        run.started_by.kind === 'event'
+          ? {
+              kind: 'event',
+              event: run.started_by.event,
+              entityId: run.started_by.entity_id ?? undefined,
+            }
+          : run.started_by,
+    })
+  );
 const stepsSchema = z.object({ steps: z.array(stepSchema) });
 const errorSchema = z.object({ error: z.string() });
 const revisionSchema = z.object({ configuration_revision: z.number().int() });
@@ -171,6 +215,7 @@ export function toHistoryRecord(record: {
     success: record.is_success,
     skipped: getHistorySkip(record),
     steps: getHistorySteps(record),
+    run: runSchema.safeParse(record.result).data,
     revision: revisionSchema.safeParse(record.result).data
       ?.configuration_revision,
     error: errorSchema.safeParse(record.result).data?.error,

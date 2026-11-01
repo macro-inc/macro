@@ -273,6 +273,7 @@ const composerContext = {
 };
 
 const failing: CodeFailure = {
+  index: 0,
   title: 'Surface important notifications',
   source: 'macro.notifications.guess()',
   problems: [
@@ -334,8 +335,16 @@ describe('composeRoutine', () => {
   const checks = (problems: string[]) =>
     ok({
       sdk: '0.3.0+x',
-      problems,
-      declarations: problems.length ? 'decls' : '',
+      steps: problems.length
+        ? [
+            {
+              index: 0,
+              title: 'Surface important notifications',
+              problems,
+              declarations: 'decls',
+            },
+          ]
+        : [],
     });
 
   beforeEach(() => {
@@ -370,6 +379,52 @@ describe('composeRoutine', () => {
     expect(first.additional_instructions).toContain(guidance.reference);
     expect(second.prompt).toContain('TS2339 [ERROR]: no guess');
     expect(second.prompt).toContain('decls');
+    // The routine's steps are checked together, as the model wrote them.
+    expect(clients.checkCode).toHaveBeenCalledWith({
+      steps: notifications('bad').steps,
+    });
+  });
+
+  it('shows each problem on the code step the check names', async () => {
+    const twoSteps = {
+      ...notifications('first'),
+      steps: [
+        ...notifications('first').steps,
+        {
+          type: 'code',
+          title: 'Report',
+          summary: 'Reports the count.',
+          writes: [],
+          source: 'second',
+        },
+      ],
+    };
+    clients.structuredCompletion.mockResolvedValue(completed(twoSteps));
+    clients.checkCode.mockResolvedValue(
+      ok({
+        sdk: '0.3.0+x',
+        steps: [
+          {
+            index: 1,
+            title: 'Report',
+            problems: ["Property 'total' does not exist"],
+            declarations: '',
+          },
+        ],
+      })
+    );
+    const draft = await composeRoutine(
+      'count and report',
+      composerContext,
+      'claude' as never
+    );
+    if (typeof draft === 'string') throw new Error(draft);
+    expect(draft.steps?.[0]).not.toHaveProperty('problems');
+    expect(draft.steps?.[1]).toMatchObject({
+      kind: 'code',
+      source: 'second',
+      problems: ["Property 'total' does not exist"],
+    });
   });
 
   it('stops after a bounded number of fixes and shows what still fails', async () => {

@@ -4,7 +4,7 @@ import CheckIcon from '@icon/system/regular/check.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Button, cn } from '@ui';
-import { For, Match, Show, Switch } from 'solid-js';
+import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import type { HistoryRecord, HistoryStep } from '../core/history';
 import { failedStep, type RunOutcome, runOutcome } from '../core/step-history';
 import { CallList } from './routine-code-step';
@@ -85,6 +85,33 @@ function decisionBars(
         },
       ]
     : [{ label: 'Best option', value: step.probability, chosen: false }];
+}
+
+/** A step's output as JSON, indented. */
+function outputText(output: unknown): string {
+  return JSON.stringify(output, null, 2) ?? 'null';
+}
+
+/** What a step returned, collapsed until asked for. */
+function StepOutput(props: { output: unknown }) {
+  const [open, setOpen] = createSignal(false);
+  return (
+    <span class="col-start-2 grid min-w-0 gap-1">
+      <button
+        type="button"
+        class="w-fit text-xs text-ink-muted hover:text-ink"
+        aria-expanded={open()}
+        onClick={() => setOpen(!open())}
+      >
+        {open() ? 'Hide output' : 'Show output'}
+      </button>
+      <Show when={open()}>
+        <pre class="max-h-64 min-w-0 overflow-auto rounded-lg border border-edge-frame bg-control px-3 py-2 font-mono text-xs leading-relaxed text-ink">
+          <code>{outputText(props.output)}</code>
+        </pre>
+      </Show>
+    </span>
+  );
 }
 
 function DecisionBar(props: { label: string; value: number; chosen: boolean }) {
@@ -178,6 +205,16 @@ function RunStep(props: {
           </span>
         )}
       </Show>
+      <Show
+        when={
+          (props.step.kind === 'tool' || props.step.kind === 'code') &&
+          props.step.output !== undefined
+            ? props.step
+            : undefined
+        }
+      >
+        {(step) => <StepOutput output={step().output} />}
+      </Show>
       <Show when={decisionBars(props.step).length}>
         <span class="col-start-2 grid gap-1.5">
           <For each={decisionBars(props.step)}>
@@ -207,6 +244,10 @@ export function RunDetail(props: {
   record: HistoryRecord;
   title: string;
   describe: (step: HistoryStep) => string;
+  /** What started the run, when, and since when; absent for older runs. */
+  startLine?: string;
+  /** Opens the item the run's event was about, when the app can. */
+  onOpenItem?: () => void;
   /** Opens the run's agent session, when it has one. */
   onOpenConversation?: () => void;
 }) {
@@ -227,6 +268,25 @@ export function RunDetail(props: {
             {props.title}
           </h2>
           <span class="text-xs text-ink-muted">{runMeta(props.record)}</span>
+          <Show when={props.startLine}>
+            {(line) => (
+              <span class="flex min-w-0 flex-wrap items-center gap-x-2 text-xs text-ink-muted">
+                {line()}
+                <Show when={props.onOpenItem}>
+                  {(open) => (
+                    <button
+                      type="button"
+                      class="inline-flex items-center gap-0.5 text-ink-muted underline-offset-2 hover:text-ink hover:underline"
+                      onClick={() => open()()}
+                    >
+                      Open item
+                      <ArrowUpRightIcon class="size-3" />
+                    </button>
+                  )}
+                </Show>
+              </span>
+            )}
+          </Show>
         </div>
         <Show
           when={

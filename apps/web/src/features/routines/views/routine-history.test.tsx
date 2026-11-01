@@ -493,6 +493,51 @@ describe('routine history steps', () => {
     );
   });
 
+  it('says what started a run and shows each step’s output on request', () => {
+    const onOpenItem = vi.fn();
+    const run = toHistoryRecord({
+      id: 'run-code',
+      result: {
+        version: 1,
+        resource: null,
+        steps: [{ path: '0', kind: 'code', output: { important: 3 } }],
+        run: {
+          at: '2026-11-01T09:00:00Z',
+          started_by: {
+            kind: 'event',
+            event: 'email.message_received',
+            entity_id: 'thread-1',
+          },
+        },
+      },
+      start_time: '2026-11-01T09:00:00Z',
+      is_success: true,
+    });
+    render(() => (
+      <RoutineHistory
+        {...sources()}
+        records={[run]}
+        isPending={false}
+        describeStep={() => 'Triaged'}
+        describeStart={() => 'New email received · first run'}
+        onOpenItem={onOpenItem}
+      />
+    ));
+    const details = within(screen.getByRole('region', { name: 'Run details' }));
+    expect(details.getByText('New email received · first run')).toBeTruthy();
+    fireEvent.click(details.getByRole('button', { name: 'Open item' }));
+    expect(onOpenItem).toHaveBeenCalledWith(
+      { block: 'email', id: 'thread-1' },
+      false
+    );
+    // Outputs stay collapsed until asked for.
+    expect(details.queryByText(/"important": 3/)).toBeNull();
+    const toggle = details.getByRole('button', { name: 'Show output' });
+    expect(toggle.getAttribute('aria-expanded')).toBe('false');
+    fireEvent.click(toggle);
+    expect(details.getByText(/"important": 3/)).toBeTruthy();
+  });
+
   it('opens an agent step’s conversation from the run', () => {
     const source = sources();
     const program = record('agent', 'program', {

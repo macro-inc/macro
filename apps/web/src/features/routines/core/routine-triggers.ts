@@ -386,17 +386,19 @@ export function eventTriggerDescription(trigger: EventTriggerDraft) {
     .join(' ');
 }
 
+/** One event's name in words, such as "New email received". */
+export function eventLabel(event: string): string {
+  return (
+    routineEvents.find((item) => item.value === event)?.label ??
+    legacyEventLabels[event as RoutineEventName] ??
+    event
+  );
+}
+
 export function eventTriggerLabel(trigger: EventTriggerDraft) {
   if (trigger.events.includes('github'))
     return githubTriggerLabel(trigger.github);
-  return trigger.events
-    .map(
-      (event) =>
-        routineEvents.find((item) => item.value === event)?.label ??
-        legacyEventLabels[event] ??
-        event
-    )
-    .join(', ');
+  return trigger.events.map(eventLabel).join(', ');
 }
 export type TriggerFrequency = ScheduleTriggerDraft['frequency'];
 export const triggerFrequencies: { value: TriggerFrequency; label: string }[] =
@@ -611,7 +613,7 @@ const pad = (value: string) => value.padStart(2, '0');
  * A cron expression in words when it is a plain daily, weekly or monthly
  * schedule, such as one written with a day range ("2-6") through the API.
  */
-function describeCronExpression(cron: string): string | undefined {
+export function describeCronExpression(cron: string): string | undefined {
   const [second, minute, hour, day, month, weekday, year] = cron
     .trim()
     .split(/\s+/);
