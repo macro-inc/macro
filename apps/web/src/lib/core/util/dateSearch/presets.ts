@@ -1,4 +1,5 @@
 import { addDays, addWeeks, endOfDay, endOfWeek, nextDay } from 'date-fns';
+import type { ParsedTime } from './parseTime';
 
 interface DatePreset {
   id: string;
@@ -6,7 +7,10 @@ interface DatePreset {
   shortLabel?: string;
   keywords: string[];
   getDate: (baseDate?: Date) => Date;
-  category?: 'quick' | 'week' | 'month' | 'year' | 'weekday';
+  /** A time of day the preset names, kept unless the query names one. */
+  time?: ParsedTime;
+  /** Weekday and time-of-day presets appear only when searched for. */
+  category?: 'quick' | 'week' | 'month' | 'year' | 'weekday' | 'time';
 }
 
 function getNextWeekday(weekday: 0 | 1 | 2 | 3 | 4 | 5 | 6, baseDate: Date) {
@@ -22,9 +26,18 @@ const DATE_PRESETS: DatePreset[] = [
     id: 'today',
     label: 'Today',
     shortLabel: 'Today',
-    keywords: ['today', 'tod', 'end', 'end of day', 'eod'],
+    keywords: ['today', 'tod'],
     getDate: (baseDate = new Date()) => endOfDay(baseDate),
     category: 'quick',
+  },
+  {
+    id: 'end-of-day',
+    label: 'End of day',
+    shortLabel: 'EOD',
+    keywords: ['end of day', 'eod'],
+    getDate: (baseDate = new Date()) => endOfDay(baseDate),
+    time: { hours: 17, minutes: 0 },
+    category: 'time',
   },
   {
     id: 'tomorrow',
@@ -63,7 +76,7 @@ const DATE_PRESETS: DatePreset[] = [
     id: 'in-1-week',
     label: 'In 1 week',
     shortLabel: '1w',
-    keywords: ['1 week', '1w', 'one week', 'week', 'next week', 'nw'],
+    keywords: ['1 week', '1w', 'one week', 'week'],
     getDate: (baseDate = new Date()) => addWeeks(baseDate, 1),
     category: 'week',
   },
@@ -131,6 +144,14 @@ const DATE_PRESETS: DatePreset[] = [
     getDate: (baseDate = new Date()) => getNextWeekday(0, baseDate),
     category: 'weekday',
   },
+  {
+    id: 'next-week',
+    label: 'Next week',
+    shortLabel: 'NW',
+    keywords: ['next week', 'nw'],
+    getDate: (baseDate = new Date()) => getNextWeekday(1, baseDate),
+    category: 'weekday',
+  },
 ];
 
 export type { DatePreset };
@@ -139,7 +160,9 @@ export function searchPresets(query: string): DatePreset[] {
   const normalizedQuery = query.toLowerCase().trim();
 
   if (!normalizedQuery) {
-    return DATE_PRESETS.filter((p) => p.category !== 'weekday');
+    return DATE_PRESETS.filter(
+      (p) => p.category !== 'weekday' && p.category !== 'time'
+    );
   }
 
   return DATE_PRESETS.filter((preset) => {

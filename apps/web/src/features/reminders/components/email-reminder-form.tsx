@@ -1,3 +1,4 @@
+import type { TimeOption } from '@core/util/dateSearch/timeOptions';
 import {
   Button,
   CommandMenuEmptyState,
@@ -10,10 +11,7 @@ import {
   Tabs,
 } from '@ui';
 import { createUniqueId, Show } from 'solid-js';
-import type {
-  EmailReminderCondition,
-  ReminderTimeOption,
-} from '../core/email-reminder';
+import type { EmailReminderCondition } from '../core/email-reminder';
 import { formatReminderInstant } from '../reminder-schedule';
 
 /** Email snooze command menu; selecting a time saves immediately. */
@@ -25,7 +23,7 @@ export function EmailReminderForm(
     onQueryChange: (value: string) => void;
     condition: EmailReminderCondition;
     onConditionChange: (value: EmailReminderCondition) => void;
-    times: readonly ReminderTimeOption[];
+    times: readonly TimeOption[];
     pending: boolean;
     ready?: boolean;
     error?: string;

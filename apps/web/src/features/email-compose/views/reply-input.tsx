@@ -814,6 +814,7 @@ function LoadedReplyInputView(props: ReplyInputViewProps) {
                       onCancelSchedule={cancelSchedule}
                       operation={scheduleOperation()}
                       disabled={schedulePickerDisabled()}
+                      hotkeyScope={composeHotkeyScope}
                     />
                   </div>
                 </Show>

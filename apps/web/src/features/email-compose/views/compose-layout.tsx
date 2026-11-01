@@ -73,7 +73,8 @@ export function ComposeLayout(props: {
   as?: Component<
     Pick<JSX.HTMLAttributes<HTMLDivElement>, 'children' | 'class' | 'ref'>
   >;
-  toolbar?: JSX.Element;
+  /** Receives the composer's hotkey scope for toolbar shortcuts. */
+  toolbar?: (hotkeyScope: string) => JSX.Element;
   header?: JSX.Element;
   notice?: JSX.Element;
   class?: string;
@@ -308,7 +309,7 @@ export function ComposeLayout(props: {
           mobileScrollRef={() => mobileScrollRef}
           onAddFiles={ctx.onAddAttachments}
         />
-        {props.toolbar}
+        {props.toolbar?.(composeHotkeyScope)}
       </div>
     </Dynamic>
   );

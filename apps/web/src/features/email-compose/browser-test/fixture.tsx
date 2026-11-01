@@ -2,6 +2,7 @@ import '@fontsource-variable/inter';
 import '../../../index.css';
 import { toast } from '@core/component/Toast/Toast';
 import { ToastRegion } from '@core/component/Toast/ToastRegion';
+import { useHotKeyRoot, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg?component-solid';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg?component-solid';
 import PaperclipIcon from '@icon/system/regular/paperclip.svg';
@@ -46,6 +47,9 @@ function Fixture() {
   >('idle');
   const [scheduledItems, setScheduledItems] = createSignal<ScheduledItem[]>([]);
   const [commitCount, setCommitCount] = createSignal(0);
+  useHotKeyRoot();
+  const [attachComposeHotkeys, composeHotkeyScope] =
+    useHotkeyDOMScope('compose-email');
 
   const selectedTime = () => {
     const current = schedule();
@@ -244,6 +248,7 @@ function Fixture() {
             }
           >
             <section
+              ref={attachComposeHotkeys}
               class="flex flex-1 flex-col p-4"
               aria-label="Compose email"
             >
@@ -305,6 +310,7 @@ function Fixture() {
                       onSelectTime={selectTime}
                       onCancelSchedule={cancelSchedule}
                       operation={operation()}
+                      hotkeyScope={mobile ? undefined : composeHotkeyScope}
                     />
                   </div>
                   <SendButton

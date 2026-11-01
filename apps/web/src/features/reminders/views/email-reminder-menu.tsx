@@ -1,7 +1,11 @@
+import { createTimeOptions } from '@core/util/dateSearch/timeOptions';
 import { type ComponentProps, createSignal } from 'solid-js';
 import { EmailReminderForm } from '../components/email-reminder-form';
 import type { EmailReminderCondition } from '../core/email-reminder';
-import { createReminderTimeOptions } from '../primitives/create-reminder-time-options';
+import {
+  REMINDER_DEFAULT_TIME,
+  reminderQuickPresets,
+} from '../reminder-schedule';
 
 type Props = Omit<
   ComponentProps<typeof EmailReminderForm>,
@@ -13,7 +17,11 @@ type Props = Omit<
 export function EmailReminderMenu(props: Props) {
   const [query, setQuery] = createSignal('');
   const [condition, setCondition] = createSignal<EmailReminderCondition>();
-  const times = createReminderTimeOptions(query);
+  const times = createTimeOptions({
+    query,
+    defaultTime: REMINDER_DEFAULT_TIME,
+    presets: reminderQuickPresets,
+  });
   return (
     <EmailReminderForm
       {...props}

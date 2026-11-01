@@ -60,12 +60,16 @@ function formatParsedTime(time: ParsedTime): string {
 }
 
 /**
- * Apply a parsed time to a date, returning a new Date with the time set.
+ * The date at that wall-clock time, or null when the time doesn't exist that
+ * day (a daylight-saving gap).
  */
-function applyTime(date: Date, time: ParsedTime): Date {
+function applyTime(date: Date, time: ParsedTime): Date | null {
   const result = new Date(date);
   result.setHours(time.hours, time.minutes, 0, 0);
-  return result;
+  return result.getHours() === time.hours &&
+    result.getMinutes() === time.minutes
+    ? result
+    : null;
 }
 
 /**
@@ -256,8 +260,12 @@ export function useDateSearch(params: {
   defaultTime?: ParsedTime;
   showTimeInResults?: boolean;
   maxItems?: number;
+  /** Leave out results at or before the current time. */
+  futureOnly?: boolean;
 }) {
   const baseDate = params.baseDate || new Date();
+  const contextText = (date: Date) =>
+    formatDateWithContext(date, baseDate, params.showTimeInResults ?? true);
 
   const dateOptions = createMemo(() => {
     const query = params.query().trim();
@@ -266,23 +274,21 @@ export function useDateSearch(params: {
     if (!query) {
       const presets = searchPresets('');
       return presets
-        .map((preset): DateOption => {
-          let date = preset.getDate(baseDate);
-          if (params.defaultTime) {
-            date = applyTime(date, params.defaultTime);
-          }
-          return {
-            id: preset.id,
-            displayText: preset.label,
-            secondaryText: formatDateWithContext(
+        .flatMap((preset): DateOption[] => {
+          const day = preset.getDate(baseDate);
+          const time = preset.time ?? params.defaultTime;
+          const date = time ? applyTime(day, time) : day;
+          if (!date) return [];
+          return [
+            {
+              id: preset.id,
+              displayText: preset.label,
+              secondaryText: contextText(date),
               date,
-              baseDate,
-              params.showTimeInResults ?? true
-            ),
-            date,
-            type: 'preset',
-            score: 0,
-          };
+              type: 'preset',
+              score: 0,
+            },
+          ];
         })
         .filter((option) => option.date > new Date())
         .slice(0, PRESET_COUNT);
@@ -291,6 +297,31 @@ export function useDateSearch(params: {
     // Extract time component if present (e.g., "9am", "tomorrow 3:30pm")
     const parsedTime = parseTime(query);
     const dateQuery = parsedTime ? parsedTime.rest : query;
+    // An hour typed without am/pm ("tom 5") offers both halves of the day,
+    // the likely one first; `rank` keeps the other just below it.
+    const typedTimes = parsedTime
+      ? [parsedTime.time, parsedTime.alternate].flatMap((time, rank) =>
+          time ? [{ time, rank }] : []
+        )
+      : [];
+    /** `day` at each of `times`, or at `fallback` when there are none. */
+    const onDay = (
+      day: Date,
+      fallback: ParsedTime | undefined,
+      times = typedTimes
+    ) => {
+      const entries: { time: ParsedTime | undefined; rank: number }[] =
+        times.length ? times : [{ time: fallback, rank: 0 }];
+      return entries.flatMap(({ time, rank }) => {
+        const date = time ? applyTime(day, time) : day;
+        const typedTime = times.length ? time : undefined;
+        return date ? [{ date, rank, typedTime }] : [];
+      });
+    };
+    const withTime = (label: string, time: ParsedTime | undefined) =>
+      time ? `${label} at ${formatParsedTime(time)}` : label;
+    const optionId = (base: string, rank: number) =>
+      rank ? `${base}-alternate` : base;
 
     // 1. Try parsing as duration DSL (3d, 1w, etc.)
     // Only parse the date portion; if time was extracted and nothing remains, skip duration parsing
@@ -298,103 +329,79 @@ export function useDateSearch(params: {
     const parsedDuration = durationInput
       ? parseDurationString(durationInput)
       : null;
-    if (parsedDuration) {
-      let durationDate = parseDateFromDuration(durationInput, new Date());
-      if (durationDate) {
-        if (parsedTime) {
-          durationDate = applyTime(durationDate, parsedTime.time);
-        }
+    const durationDate = parsedDuration
+      ? parseDateFromDuration(durationInput, new Date())
+      : null;
+    if (parsedDuration && durationDate) {
+      for (const { date, rank, typedTime } of onDay(durationDate, undefined)) {
         options.push({
-          id: `duration-${query}`,
-          displayText: `${query} (${formatDuration(parsedDuration)} from now)`,
-          secondaryText: formatDateWithContext(
-            durationDate,
-            baseDate,
-            params.showTimeInResults ?? true
-          ),
-          date: durationDate,
+          id: optionId(`duration-${query}`, rank),
+          displayText: `${withTime(dateQuery, typedTime)} (${formatDuration(parsedDuration)} from now)`,
+          secondaryText: contextText(date),
+          date,
           type: 'duration',
-          score: 100,
+          score: 100 - rank,
         });
       }
     }
 
-    // 2. Standalone time with no date part (e.g., "9am", "3:30pm") → today, or tomorrow if past
+    // 2. Standalone time with no date part (e.g., "9am", "5") → today, or tomorrow if past
     if (parsedTime && !dateQuery) {
       const now = new Date();
-      let todayWithTime = applyTime(now, parsedTime.time);
-      if (todayWithTime <= now) {
-        todayWithTime = addDays(todayWithTime, 1);
+      for (const { time, rank } of typedTimes) {
+        const today = applyTime(now, time);
+        const date =
+          today && today > now ? today : applyTime(addDays(now, 1), time);
+        if (!date) continue;
+        options.push({
+          id: optionId(`time-${query}`, rank),
+          displayText: formatParsedTime(time),
+          secondaryText: contextText(date),
+          date,
+          type: 'natural',
+          score: 98 - rank,
+        });
       }
-      options.push({
-        id: `time-${query}`,
-        displayText: query,
-        secondaryText: formatDateWithContext(
-          todayWithTime,
-          baseDate,
-          params.showTimeInResults ?? true
-        ),
-        date: todayWithTime,
-        type: 'natural',
-        score: 98,
-      });
     }
 
     // 3. Try parsing as natural date (feb 17, march 3, thursday, etc.)
-    const naturalQuery = dateQuery || query;
-    let naturalDate = parseNaturalDate(naturalQuery, baseDate);
-    if (naturalDate) {
-      const naturalTime = parsedTime?.time ?? params.defaultTime;
-      if (naturalTime) {
-        naturalDate = applyTime(naturalDate, naturalTime);
+    const naturalDay = dateQuery ? parseNaturalDate(dateQuery, baseDate) : null;
+    if (naturalDay) {
+      for (const { date, rank, typedTime } of onDay(
+        naturalDay,
+        params.defaultTime
+      )) {
+        options.push({
+          id: optionId(`natural-${query}`, rank),
+          displayText: withTime(dateQuery, typedTime),
+          secondaryText: contextText(date),
+          date,
+          type: 'natural',
+          score: 95 - rank,
+        });
       }
-      const displayText = parsedTime
-        ? `${naturalQuery} at ${formatParsedTime(parsedTime.time)}`
-        : query;
-      options.push({
-        id: `natural-${query}`,
-        displayText,
-        secondaryText: formatDateWithContext(
-          naturalDate,
-          baseDate,
-          params.showTimeInResults ?? true
-        ),
-        date: naturalDate,
-        type: 'natural',
-        score: 95,
-      });
     }
 
-    // Search presets using both the full query and the date-only part (time stripped)
-    const presetQuery = parsedTime && dateQuery ? dateQuery : query;
-    const matchingPresets = searchPresets(presetQuery);
-    const effectiveTime = parsedTime?.time ?? params.defaultTime;
-    matchingPresets.forEach((preset) => {
-      let date = preset.getDate(baseDate);
-      if (effectiveTime) {
-        date = applyTime(date, effectiveTime);
-      }
-      const option: DateOption = {
-        id: `preset-${preset.id}`,
-        displayText: parsedTime
-          ? `${preset.label} at ${formatParsedTime(parsedTime.time)}`
-          : preset.label,
-        secondaryText: formatDateWithContext(
+    // Presets match the date part. A query that is only a time ("2") still
+    // finds presets like "In 2 days", which then keep their own time.
+    const presetQuery = dateQuery || query;
+    for (const preset of searchPresets(presetQuery)) {
+      for (const { date, rank, typedTime } of onDay(
+        preset.getDate(baseDate),
+        preset.time ?? params.defaultTime,
+        dateQuery ? typedTimes : []
+      )) {
+        const option: DateOption = {
+          id: optionId(`preset-${preset.id}`, rank),
+          displayText: withTime(preset.label, typedTime),
+          secondaryText: contextText(date),
           date,
-          baseDate,
-          params.showTimeInResults ?? true
-        ),
-        date,
-        type: 'preset',
-        score: 0,
-      };
-
-      option.score = scoreMatch(option, presetQuery, preset.keywords);
-
-      if (option.score > 0) {
-        options.push(option);
+          type: 'preset',
+        };
+        const score = scoreMatch(option, presetQuery, preset.keywords);
+        if (score > 0) options.push({ ...option, score: score - rank });
       }
-    });
+    }
 
     options.sort((a, b) => {
       const scoreDiff = (b.score || 0) - (a.score || 0);
@@ -402,7 +409,17 @@ export function useDateSearch(params: {
       return a.date.getTime() - b.date.getTime();
     });
 
-    return options.slice(0, params.maxItems ?? DEFAULT_MAX_ITEMS);
+    const now = Date.now();
+    const seen = new Set<number>();
+    return options
+      .filter(({ date }) => {
+        const instant = date.getTime();
+        if (params.futureOnly && instant <= now) return false;
+        if (seen.has(instant)) return false;
+        seen.add(instant);
+        return true;
+      })
+      .slice(0, params.maxItems ?? DEFAULT_MAX_ITEMS);
   });
 
   return dateOptions;
