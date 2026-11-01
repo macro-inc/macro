@@ -157,7 +157,9 @@ where
         };
         render::check_limits(&input.name, &input.footer, &input.steps)?;
         if input.link_id.is_some() {
-            self.check_sender(&owner, input.link_id, false).await?;
+            let mut tx = self.repo.begin().await.map_err(internal)?;
+            self.check_sender(&mut tx, &owner, input.link_id, false)
+                .await?;
         }
         self.repo
             .insert_sequence(&owner, &input)
@@ -219,7 +221,8 @@ where
         }
         render::check_limits(&sequence.name, &sequence.footer, &sequence.steps)?;
         if let Some(link_id) = patch.link_id {
-            self.check_sender(&owner, Some(link_id), false).await?;
+            self.check_sender(&mut tx, &owner, Some(link_id), false)
+                .await?;
             sequence.link_id = Some(link_id);
         }
         match (sequence.status, patch.status) {
@@ -227,7 +230,8 @@ where
             (current, Some(target)) if current == target => {}
             (SequenceStatus::Draft | SequenceStatus::Paused, Some(SequenceStatus::Active)) => {
                 render::check_complete(&sequence.name, &sequence.footer, &sequence.steps)?;
-                self.check_sender(&owner, sequence.link_id, true).await?;
+                self.check_sender(&mut tx, &owner, sequence.link_id, true)
+                    .await?;
                 sequence.status = SequenceStatus::Active;
             }
             (SequenceStatus::Active, Some(SequenceStatus::Paused)) => {
@@ -306,15 +310,15 @@ where
     /// The sender must be the owner's own connected Gmail inbox.
     async fn check_sender(
         &self,
+        tx: &mut R::Tx,
         owner: &Owner,
         link_id: Option<Uuid>,
         require_healthy: bool,
     ) -> Result<(), SequenceError> {
         let link_id = link_id.ok_or_else(|| invalid(Problem::SenderRequired))?;
-        let mut tx = self.repo.begin().await.map_err(internal)?;
         let inbox = self
             .steps
-            .sending_inbox(R::conn(&mut tx), link_id)
+            .sending_inbox(R::conn(tx), link_id)
             .await
             .map_err(internal)?;
         let usable = inbox.is_some_and(|inbox| {
