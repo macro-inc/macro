@@ -72,6 +72,7 @@ function RecipientChip(props: {
   icon?: JSX.Element;
   label: string;
   address?: string;
+  showAddress?: boolean;
   onRemove: () => void;
   draggable?: boolean;
   onDragStart?: (e: DragEvent) => void;
@@ -79,15 +80,25 @@ function RecipientChip(props: {
 }) {
   return (
     <div
-      class="flex flex-row shrink-0 py-1 pl-2 gap-1 pr-1 overflow-hidden items-center bg-active rounded-full"
+      class="flex flex-row shrink-0 max-w-full py-1 pl-2 gap-1 pr-1 overflow-hidden items-center bg-active rounded-full"
       draggable={props.draggable}
       onDragStart={props.onDragStart}
       onDragEnd={props.onDragEnd}
     >
       <Show when={props.icon}>{props.icon}</Show>
-      <p class="text-sm whitespace-nowrap">{truncateString(props.label, 20)}</p>
+      <p class="min-w-0 truncate text-sm">{truncateString(props.label, 20)}</p>
       <Show when={props.address}>
-        {(address) => <span class="sr-only">{address()}</span>}
+        {(address) => (
+          <span
+            class={
+              props.showAddress
+                ? 'shrink-0 text-sm whitespace-nowrap text-ink-muted'
+                : 'sr-only'
+            }
+          >
+            {address()}
+          </span>
+        )}
       </Show>
       <XIcon
         class="size-5 hover:bg-hover hover:text-failure p-1 rounded-full"
@@ -415,6 +426,8 @@ export type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   inviteExternalEmails?: boolean;
   /** Messages can target only existing users or channels. Defaults to true. */
   allowCustomRecipients?: boolean;
+  /** Show each person's address beside their name on chips, as email does. */
+  showChipAddresses?: boolean;
 };
 
 export function RecipientSelector<K extends CombinedRecipientKind>(
@@ -714,11 +727,11 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
   let contentEl: HTMLElement | undefined;
 
-  // Committing changes the selection, and Kobalte clears the input when it does.
-  const commitSeparatedEmails = (input: string) => {
-    if (!/[,;]\s*$/.test(input)) return false;
-    const emails = input
-      .split(/[,;]/)
+  // Adds each typed address as the known recipient with that address, or as a
+  // typed one. Committing changes the selection, and Kobalte clears the input
+  // when it does.
+  const commitEmails = (parts: string[]) => {
+    const emails = parts
       .map((part) => part.trim())
       .filter(Boolean)
       .filter(
@@ -762,7 +775,16 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     return true;
   };
 
+  const commitSeparatedEmails = (input: string) =>
+    /[,;]\s*$/.test(input) && commitEmails(input.split(/[,;]/));
+
+  // Contacts and names load after the field opens and reorder the rows, so a
+  // row the pointer rests on can change under it. Enter on a complete address
+  // adds that address unless an arrow key picked another row since the edit.
+  let rowPickedByKey = false;
+
   const onInputChange = (next: string) => {
+    rowPickedByKey = false;
     props.onInputChange?.(next);
     if (commitSeparatedEmails(next)) {
       setInputValue('');
@@ -873,6 +895,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                                           ? undefined
                                           : email
                                       }
+                                      showAddress={props.showChipAddresses}
                                       onRemove={() => state.remove(option)}
                                       draggable={!!props.onChipDragStart}
                                       onDragStart={(e) =>
@@ -1023,6 +1046,26 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                         }
 
                         inputEl?.blur();
+                        return;
+                      }
+
+                      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        rowPickedByKey = true;
+                      }
+
+                      if (
+                        e.key === 'Enter' &&
+                        context.isOpen() &&
+                        !rowPickedByKey &&
+                        !e.isComposing &&
+                        !e.metaKey &&
+                        !e.ctrlKey &&
+                        !e.altKey &&
+                        !e.shiftKey &&
+                        commitEmails([inputValue()])
+                      ) {
+                        e.preventDefault();
+                        context.close();
                         return;
                       }
 
