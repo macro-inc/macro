@@ -34,11 +34,7 @@ function SkillResultRow(props: { result: SkillSearchResult }) {
   return (
     <Show when={entity()}>
       {(skill) => (
-        <button
-          type="button"
-          class="block w-full text-left hover:bg-hover"
-          onClick={openSkill}
-        >
+        <Tool.ListButton onClick={openSkill}>
           <Tool.ListItem icon={<EntityRowIcon entity={skill()} />}>
             <div class="flex min-w-0 items-center gap-2">
               <span class="min-w-0 truncate text-ink">
@@ -46,7 +42,7 @@ function SkillResultRow(props: { result: SkillSearchResult }) {
               </span>
             </div>
           </Tool.ListItem>
-        </button>
+        </Tool.ListButton>
       )}
     </Show>
   );

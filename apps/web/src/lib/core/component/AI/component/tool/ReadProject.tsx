@@ -77,8 +77,11 @@ const ReadProjectToolResponse = (props: { items: ReadProjectItem[] }) => {
         data={props.items}
         bufferSize={itemHeight * 5}
         itemSize={itemHeight}
+        // Sized by its rows, which are taller on touch and shorter among an
+        // agent's grouped tool rows than the estimate.
         style={{
-          height: `${Math.min(props.items.length * itemHeight, maxHeight)}px`,
+          height: 'auto',
+          'max-height': `${maxHeight}px`,
           contain: 'content',
         }}
       >
@@ -86,15 +89,11 @@ const ReadProjectToolResponse = (props: { items: ReadProjectItem[] }) => {
           const clickHandler = getClickHandler(item);
 
           return (
-            <button
-              type="button"
-              class="block w-full text-left hover:bg-hover"
-              onClick={clickHandler}
-            >
+            <Tool.ListButton onClick={clickHandler}>
               <Tool.ListItem icon={getItemIcon(item)}>
                 <div class="truncate text-xs text-ink">{item.name}</div>
               </Tool.ListItem>
-            </button>
+            </Tool.ListButton>
           );
         }}
       </VList>

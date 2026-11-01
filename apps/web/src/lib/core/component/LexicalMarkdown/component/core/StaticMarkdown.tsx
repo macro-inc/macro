@@ -396,7 +396,7 @@ const DocumentMention: TypedRenderableEntity<DocumentMentionNode> = {
     const shouldRenderLazy = options.lazy;
 
     return (
-      <span class={getTextClassName(props.node, props.theme)}>
+      <span class={getTextClassName(props.node, props.theme)} data-mention>
         {shouldRenderLazy ? (
           <LazyDecorator
             placeholder={
@@ -420,7 +420,7 @@ const AgentSessionMention: TypedRenderableEntity<AgentSessionMentionNode> = {
   guard: (node: LexicalNode): node is AgentSessionMentionNode =>
     node.__type === 'agent-session-mention',
   render: (props) => (
-    <span class={getTextClassName(props.node, props.theme)}>
+    <span class={getTextClassName(props.node, props.theme)} data-mention>
       <AgentSessionMentionDecorator
         {...props.node.exportComponentProps()}
         key={props.node.getKey()}
@@ -434,7 +434,7 @@ const PullRequestMention: TypedRenderableEntity<PullRequestMentionNode> = {
   guard: (node: LexicalNode): node is PullRequestMentionNode =>
     node.__type === 'pr-mention',
   render: (props) => (
-    <span class={getTextClassName(props.node, props.theme)}>
+    <span class={getTextClassName(props.node, props.theme)} data-mention>
       <PullRequestMentionDecorator
         {...props.node.exportComponentProps()}
         key={props.node.getKey()}
@@ -530,7 +530,7 @@ const ContactMention: TypedRenderableEntity<ContactMentionNode> = {
   guard: (node: LexicalNode): node is ContactMentionNode =>
     node.__type === 'contact-mention',
   render: (props) => (
-    <span class={getTextClassName(props.node, props.theme)}>
+    <span class={getTextClassName(props.node, props.theme)} data-mention>
       {ContactMentionDecorator({
         ...props.node.exportComponentProps(),
         key: props.node.getKey(),

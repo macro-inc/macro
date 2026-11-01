@@ -1298,14 +1298,14 @@ describe('ToolCallPart result summaries', () => {
     expect(rendered.getByTestId('terminal')).toBeTruthy();
   });
 
-  it('counts completed file reads and keeps a single path available in the body', () => {
+  it('names completed file reads once and keeps the path available in the body', () => {
     const rendered = render(() => (
       <ToolCallPart
         part={toolUse({ kind: 'read', paths: ['docs/launch.md'] })}
         context={context(false)}
       />
     ));
-    expect(rendered.getByTestId('trailing').textContent).toBe('1 file');
+    expect(rendered.getByTestId('trailing').textContent).toBe('');
     expect(rendered.getByTestId('path-list').textContent).toBe(
       'docs/launch.md'
     );

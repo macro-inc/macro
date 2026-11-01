@@ -13,86 +13,43 @@ import { useAgentSessionQuery } from '@queries/agent-session/session';
 import { firstPartyBotName } from '@queries/bots/first-party-bot-name';
 import { useBotProfile } from '@queries/bots/profiles';
 import { queryReadyGate } from '@queries/gate';
-import { parentKey } from '@queries/messages/keys';
 import { getTypingAgents, type TypingAgent } from '@queries/messages/typing';
 import type { MessagePart } from '@service-agent-fold/generated/types';
 import type { MessageParent } from '@service-storage/messages';
 import { Key } from '@solid-primitives/keyed';
 import {
-  createContext,
   createMemo,
   createSignal,
   For,
-  type JSX,
   onCleanup,
-  type ParentProps,
   Show,
   Suspense,
-  useContext,
 } from 'solid-js';
 import { LiveTail } from './components/live-tail';
 import { TypingRow } from './components/typing-row';
-import { openReply, streamingProse, typingLabel } from './core/live-reply';
+import { openReply, openRun, phaseRow } from './core/live-reply';
+import { createCodeActivityRows } from './queries/code-activity';
 import { createLiveSession } from './queries/live-session';
 
 /** One place of a conversation: the timeline, or one thread. */
 type TypingPlace = { parent: MessageParent; threadId: string | null };
 
-const KeptRowsContext = createContext<{
-  shows: (place: TypingPlace) => boolean;
-  rows: JSX.Element;
-}>();
-
 /**
  * Agents typing in one place of a conversation - the timeline, or one
- * thread - each as a typing row. A viewer who can read the session also sees
- * the turn as it runs beneath it: the passage being written, what it is
- * waiting on, and Stop.
+ * thread - each as a typing row that says what the agent is doing: the step
+ * it is on to a viewer who can read the session, otherwise what its turn is
+ * doing. That viewer also gets Stop, and anything the turn is waiting on
+ * beneath the row.
  *
- * Under an {@link AgentTypingProvider} for the same place, these are the
- * provider's rows, moved here.
+ * A list shows it under its newest row, so it mounts again whenever a message
+ * arrives; the live session it reads is shared, so it picks up where it was.
  */
 export function AgentTyping(props: TypingPlace) {
-  const kept = useContext(KeptRowsContext);
+  // A boundary of its own: rows that suspend must not blank the message.
   return (
-    <Show
-      when={kept?.shows(props)}
-      fallback={
-        <AgentTypingRows parent={props.parent} threadId={props.threadId} />
-      }
-    >
-      {kept?.rows}
-    </Show>
-  );
-}
-
-/**
- * Makes one place's typing rows once, for a list that shows them under
- * whichever of its rows is newest: a row that changes when a message
- * arrives, and that a virtualized list unmounts once the reader scrolls
- * away. Rows made inside it would go with it - the turn's live view would
- * load again, and every card beneath it would start over, dropping an
- * answer or a draft the viewer had half written. Made here, the rows outlive
- * the list's rows and only move between them.
- */
-export function AgentTypingProvider(props: ParentProps<TypingPlace>) {
-  // A boundary of their own: rows that suspend must not blank the list.
-  const rows = (
     <Suspense>
       <AgentTypingRows parent={props.parent} threadId={props.threadId} />
     </Suspense>
-  );
-  return (
-    <KeptRowsContext.Provider
-      value={{
-        shows: (place) =>
-          place.threadId === props.threadId &&
-          parentKey(place.parent) === parentKey(props.parent),
-        rows,
-      }}
-    >
-      {props.children}
-    </KeptRowsContext.Provider>
   );
 }
 
@@ -138,26 +95,29 @@ function AgentTypingEntry(props: {
   const botId = () => props.botUserId.replace(/^bot\|/, '');
   const firstParty = () => firstPartyBotName(botId());
   const profile = useBotProfile(() => (firstParty() ? '' : botId()));
-  // Undefined while the profile loads: the row shows only its dots rather
-  // than a placeholder name that changes a moment later.
+  // Empty while the profile loads, rather than a placeholder name that
+  // changes a moment later.
   const name = () => {
     const known = firstParty();
     if (known) return known;
     if (queryReadyGate(profile)) return profile.data?.name ?? 'Agent';
-    return profile.isError ? 'Agent' : undefined;
+    return profile.isError ? 'Agent' : '';
   };
   const avatarUrl = () =>
     queryReadyGate(profile) ? profile.data?.avatarUrl : undefined;
-  const label = () => {
-    const known = name();
-    return known ? typingLabel(known, props.phase) : '';
-  };
 
   const live = createLiveSession(() => props.sessionId);
   const sessionQuery = useAgentSessionQuery(() => props.sessionId);
   const canEdit = () =>
     queryReadyGate(sessionQuery) ? sessionQuery.data?.canEdit : undefined;
   const reply = () => (live.loaded() ? openReply(live.messages()) : undefined);
+  const run = () => openRun(reply());
+  const rows = createCodeActivityRows(
+    () => props.sessionId,
+    reply,
+    () => run()?.index,
+    () => run()?.rows ?? [phaseRow(props.phase)]
+  );
   // A held tool call is answered from the session, not here: a turn the
   // owner prompts, as every DM turn is, is never held for them.
   const pending = () =>
@@ -197,25 +157,21 @@ function AgentTypingEntry(props: {
       avatar={
         <PersonaAvatar
           botId={botId()}
-          name={name() ?? ''}
+          name={name()}
           avatarUrl={avatarUrl()}
-          size="sm"
+          size="md"
         />
       }
-      label={label()}
+      rows={rows()}
+      onStop={
+        canEdit() && reply()
+          ? () => fireAndForget(stop(), 'agent-activity')
+          : undefined
+      }
+      stopping={stopping()}
     >
-      <Show when={reply() || live.failed()}>
-        <LiveTail
-          prose={reply() ? streamingProse(reply()!) : undefined}
-          disconnected={live.failed()}
-          onReconnect={live.retry}
-          onStop={
-            canEdit() && reply()
-              ? () => fireAndForget(stop(), 'agent-activity')
-              : undefined
-          }
-          stopping={stopping()}
-        >
+      <Show when={pending().length > 0 || live.failed()}>
+        <LiveTail disconnected={live.failed()} onReconnect={live.retry}>
           {/* Each metadata event carries every request anew. Keyed by what
               it asks, a card keeps whatever was typed into it. */}
           <Key

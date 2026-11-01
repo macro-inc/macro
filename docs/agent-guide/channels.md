@@ -127,31 +127,49 @@ state, and exclude conversation reservations; genuine
 speculative sessions still expire normally.
 
 Send normally: no `@` mention is needed. Attachments, references, and quoted
-messages use the channel composer. While the agent works, a typing row with its
-avatar sits under the newest message: `<name> is thinking`, `is typing`,
-`is working`, or `is waiting for an answer`. Below that row, the owner sees the
-passage being written as it streams. They also see any live question or
-permission request and **Stop**, which cancels the active turn. Answer those
-controls to continue. If **Stop** fails, a failure toast appears and the control
-becomes available again so you can retry.
+messages use the channel composer. While the agent works, a typing row sits
+under the newest message: the agent's avatar beside the working line, which
+names the step the agent is on, or says what the turn is doing (`Thinking`,
+`Writing`, `Working`, or `Waiting for an answer`) between steps and to anyone
+who cannot read the session. The owner also gets **Stop** on that row, which
+cancels the active turn, and any live question or permission request beneath
+it. Answer those controls to continue. If **Stop** fails, a failure toast
+appears and the control becomes available again so you can retry.
 
 The reply is posted as ordinary messages while the turn runs. Each finished
-passage becomes a message. The steps taken between passages show inside the
-message as compact rows: a status icon (spinner, check, cross, or warning for
-interrupted), a label such as `Ran`, `Read`, `Edited`, or `Searching`, and a
-short detail like the command or file name for readers with session access.
+passage becomes a message, led by the steps the agent took to get to it, so
+nothing is posted until the agent has written something and no message shows
+a step running. Steps a turn ends on, with no passage after them (Stop, a
+failure), are posted with how it ended. The working line is one shimmering
+line, led by the working dots, naming the step in progress by its label alone,
+such as `Ran`, `Read`, `Edited`, or `Searching`; the command, query, or file
+stays in the session. The next step slides in as it starts, and steps running
+at the same time take turns every two seconds. In a DM it is the typing row.
+A channel mention's reply in its thread is one message, so the line sits in
+it, and reads `Thinking` whenever the turn is running with no open run, before
+the first step or while the agent writes after one.
+Once a run closes, it folds to a `Used N tools` summary (with
+`· N failed` when a step failed), with a caret after it on hover, that opens
+to compact rows like the session's tool rows: the label, and **Failed** or
+**Interrupted** when a step did not finish.
+Documents, sessions, pull requests, and contacts an agent's reply mentions are
+set in the accent color.
 Stored activity snapshots keep the status and label but omit commands and tool
-input details, in both shared threads and DMs. A long run shows its latest six
-steps behind an `N earlier steps` control. Rows tick live while the run is
-open, then freeze
-into the snapshot saved in the message. Readers without session access always
-see that snapshot. Only the turn's last message notifies. Previews and search
+input details, in both shared threads and DMs. The line follows the session
+live while the run is open; the summary shows the snapshot saved in the
+message. Readers without session access always see that snapshot. Only the
+turn's last message notifies. Previews and search
 quote the passages, not the steps. Typing refreshes every 3 seconds and clears
 on its own if the agent's replica dies. Follow-up messages queue in order, and
 the bar above the composer counts them (`1 queued`). Editing a sent message
 does not invoke the agent again. A reply inside a thread is not part of the
 conversation: the agent answers it only when mentioned there, in the thread,
 as in any channel.
+
+The local playground at `/app/debug/agent-progress` shows each of these states
+in three tabs: **DM**, **Channel mention** (the reply in its thread), and
+**Agent session**, with theme, viewer, and phone-width toggles and a looping
+replay of one turn.
 
 Each failed, stopped, or interrupted source message has its own **Retry message**
 action in the current context. Retry is explicit because an interrupted attempt

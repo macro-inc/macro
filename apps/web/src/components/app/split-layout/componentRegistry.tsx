@@ -607,6 +607,11 @@ if (LOCAL_ONLY) {
   );
 
   registerComponent(
+    'agent-progress',
+    lazy(() => import('@app/features/agent-activity/debug/ProgressPlayground'))
+  );
+
+  registerComponent(
     'agent-changes-ui',
     lazy(() => import('@app/features/changes/debug/Gallery'))
   );

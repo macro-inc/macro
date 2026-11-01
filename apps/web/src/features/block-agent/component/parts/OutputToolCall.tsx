@@ -3,8 +3,6 @@
  * reported in the body — the chat block's GenericTool analog.
  */
 
-import BrainIcon from '@icon/system/regular/brain.svg';
-import GlobeIcon from '@icon/system/regular/globe.svg';
 import type { ToolDetail } from '@service-agent-fold/generated/types';
 import { Show } from 'solid-js';
 import { FoldedOutput, ToolCard } from '../../ui';
@@ -16,13 +14,6 @@ export function OutputToolCall(props: {
 }) {
   return (
     <ToolCard
-      icon={
-        props.detail.kind === 'fetch' ? (
-          <GlobeIcon class="size-4" />
-        ) : (
-          <BrainIcon class="size-4" />
-        )
-      }
       title={props.common.label}
       status={props.common.status}
       muted={props.common.muted}

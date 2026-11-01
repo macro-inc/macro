@@ -1498,21 +1498,28 @@ chip is a GitHub link instead. The icon and status word follow open /
 merged / closed. Merging happens from the PR entity's top bar or from a channel
 Magic Chip's PR row, not from this header chip.
 
-Tool rows show the tool's own name without an MCP server or workspace prefix.
-Chat MCP rows retain their service icon.
+Agent prose sets the documents, sessions, pull requests, and contacts it
+mentions in the accent color, as people mentions already are.
 
-Individual tools appear as bare rows with an icon, tool name, optional detail,
-and a right-aligned result summary. The caret on the right opens the results;
-it points right when collapsed and down when expanded. Individual results start
-collapsed. Existing rich result views retain their own content and controls;
+Tool rows show the tool's own name without an MCP server or workspace prefix.
+
+Individual tools appear as bare rows with no icon or indent, in the group
+header's tone: the tool name, then any detail and result summary in a dimmer
+tone. A successful call shows no outcome. The caret after them appears on hover
+or keyboard focus, and always on touch, and the whole row opens the results; it
+points right when collapsed and down when expanded. Macro tools such as
+**Search** read the same way: the query in the detail tone, the result count
+right after it, and found items listed flush below in the row's tone, without
+icons. Code search output and read paths open as plain text, not a boxed block.
+Individual results start collapsed. Existing rich result views retain their own content and controls;
 when a result view provides its own disclosure, use that control rather than
 adding a second nested disclosure. Counts come from structured responses,
 edits show additions/deletions, and other tools show their outcome. A Macro
-tool call keeps the same label and icon as its successful row in every state,
+tool call keeps the same label as its successful row in every state,
 never the tool's code name: while it runs its text shimmers; a call cut off when
-its turn ends reads **Stopped**; a failed call is faded with **Failed** on the
-right (for example **Add to calendar · Failed**), and when the tool gave a
-reason, **Failed** carries a caret that opens it. Only a call whose arguments do
+its turn ends reads **Stopped**; a failed call is faded with **Failed** in the failure
+color after its label (for example **Add to calendar Failed**), and when the
+tool gave a reason, the row's caret opens it. Only a call whose arguments do
 not fit the tool (still arriving, or malformed) keeps the summary row with the
 tool's name. Labels stay in the present tense (**Fetch**, **Load tools**) until
 a result arrives.
@@ -1535,8 +1542,8 @@ and tools requiring user input remain outside these groups so they stay visible
 during other tool bursts. Nested agent activity and code-mode SDK operations each
 use the same peek window.
 
-The group caret sits immediately after its label and appears on hover or keyboard
-focus. Expand an edit row to view its diffs. Result bodies load only when their
+The group and thought carets sit immediately after their labels and appear on
+hover or keyboard focus, and always on touch. Expand an edit row to view its diffs. Result bodies load only when their
 row opens; syntax highlighting may appear after the diff text. Opening a session
 or expanding a group should leave the app responsive, even when the session
 contains many file edits.
@@ -1560,7 +1567,9 @@ Its carets should still expand the results, and reduced motion disables animatio
 Check that rich result controls still work and `DisplayResults` stays visible
 between surrounding groups. In **AgentMessage (end-to-end)**, expand the group
 and confirm unknown tools have no individual disclosure or JSON payload. Repeat
-at a narrow viewport width.
+at a narrow viewport width. `/app/debug/agent-progress` renders the same replies
+in a DM, as a channel mention, and in the session, one tab each; **Expand all**
+opens every group and tool result at once.
 
 A thought row reads **Thinking** and shimmers only while it is the last part
 of the turn the session is working on. Earlier thoughts settle to **Thought**
@@ -1573,9 +1582,13 @@ tool title, and working row settles — earlier turns never shimmer, even ones
 the runtime cut off mid-call. Shimmer identifies current activity: an active
 tool and its containing group can shimmer together; completed rows stay still.
 Working and Thinking use the same text shimmer and keep its phase when the
-status changes. Check both labels in light and dark themes at desktop and phone
-widths: one highlight should sweep evenly across the whole label, with no
-highlight returning at the opposite edge. With reduced motion, labels stay still.
+status changes; both lead with the working dots, a small grid whose dots
+brighten one at a time in a scattered order and fade out completely between
+turns, so the label stays put when Working becomes Thinking. Check both
+labels in light and dark themes at desktop and phone widths: each pass should
+lift the whole label quickly from dim, fade it back, and rest dim before the
+next, with no highlight returning at the opposite edge. With reduced motion,
+labels and dots stay still.
 
 ### Sharing a session
 

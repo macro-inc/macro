@@ -1,6 +1,7 @@
 import type {
   ActivityRow,
   FoldedMessage,
+  Segment,
   TurnPhase,
 } from '@service-agent-fold/generated/types';
 
@@ -23,21 +24,10 @@ export function replyToTurn(
   );
 }
 
-/**
- * The passage the agent is writing right now: the reply's last segment while
- * it is unfinished prose. A finished passage is posted as its own message, so
- * only this one streams live.
- */
-export function streamingProse(reply: FoldedMessage): string | undefined {
-  const last = reply.segments.at(-1);
-  if (!last || last.kind !== 'prose' || last.sealed) return undefined;
-  const text = reply.parts
-    .slice(last.start, last.end)
-    .flatMap((part) =>
-      part.kind === 'text' && part.text.trim() ? [part.text.trim()] : []
-    )
-    .join('\n\n');
-  return text || undefined;
+/** The run of steps the agent is in the middle of, when it is in one. */
+export function openRun(reply: FoldedMessage | undefined): Segment | undefined {
+  const last = reply?.segments.at(-1);
+  return last?.kind === 'activity' && !last.sealed ? last : undefined;
 }
 
 /** The live rows of one activity segment, by the index the server posted. */
@@ -49,14 +39,22 @@ export function segmentRows(
   return found?.kind === 'activity' ? found.rows : undefined;
 }
 
-const PHASE_VERBS: Record<TurnPhase, string> = {
-  thinking: 'is thinking',
-  writing: 'is typing',
-  working: 'is working',
-  waiting: 'is waiting for an answer',
+const PHASE_LINES: Record<TurnPhase, string> = {
+  thinking: 'Thinking',
+  writing: 'Writing',
+  working: 'Working',
+  waiting: 'Waiting for an answer',
 };
 
-/** What a typing indicator says an agent is doing. */
-export function typingLabel(name: string, phase: TurnPhase): string {
-  return `${name} ${PHASE_VERBS[phase]}`;
+/**
+ * What a turn is doing, as a step: all its typing tells a viewer who cannot
+ * read the session, and what a typing row says between runs.
+ */
+export function phaseRow(phase: TurnPhase): ActivityRow {
+  return {
+    id: phase,
+    label: PHASE_LINES[phase],
+    detail: null,
+    status: 'running',
+  };
 }
