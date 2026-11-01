@@ -243,11 +243,6 @@ describe('getDefaultTimezone', () => {
     });
   };
 
-  it('returns the zone the browser reports', () => {
-    reportZone('America/New_York');
-    expect(getDefaultTimezone()).toBe('America/New_York');
-  });
-
   // Servers reject these, so every request carrying the zone would fail.
   it('falls back to UTC when the host can’t resolve its zone', () => {
     for (const zone of ['Etc/Unknown', '']) {

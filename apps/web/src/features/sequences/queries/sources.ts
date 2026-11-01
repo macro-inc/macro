@@ -1,5 +1,5 @@
 import { queryReadyGate } from '@queries/gate';
-import { useQuery } from '@tanstack/solid-query';
+import { type UseQueryResult, useQuery } from '@tanstack/solid-query';
 import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
 import type {
@@ -28,6 +28,13 @@ async function outcome<T>(request: Promise<T>) {
   return await ResultAsync.fromPromise(request, toSequenceFailure);
 }
 
+/** Why a query could not load, when nothing is cached (FE-48). */
+function loadFailure<T>(query: UseQueryResult<T>) {
+  return query.isError && !queryReadyGate(query)
+    ? toSequenceFailure(query.error)
+    : undefined;
+}
+
 export function createSequenceList(): SequenceListSource {
   const query = useQuery(() => sequencesQueryOptions());
   const create = useCreateSequenceMutation();
@@ -35,10 +42,7 @@ export function createSequenceList(): SequenceListSource {
     // Gated reads keep cached rows through a failed refetch (FE-48).
     sequences: () => (queryReadyGate(query) ? query.data : []),
     pending: () => query.isPending,
-    failure: () =>
-      query.isError && !queryReadyGate(query)
-        ? toSequenceFailure(query.error)
-        : undefined,
+    failure: () => loadFailure(query),
     refresh: () => query.refetch(),
     create: (input) => outcome(create.mutateAsync(input)),
     creating: () => create.isPending,
@@ -54,8 +58,7 @@ export function createSequence(sequenceId: Accessor<string>): SequenceSource {
     sequence: () => loaded()?.sequence,
     enrollments: () => loaded()?.enrollments ?? [],
     pending: () => query.isPending,
-    failure: () =>
-      query.isError && !loaded() ? toSequenceFailure(query.error) : undefined,
+    failure: () => loadFailure(query),
     refresh: () => query.refetch(),
     update: (request) =>
       outcome(update.mutateAsync({ sequenceId: sequenceId(), request })),
@@ -107,10 +110,7 @@ export function createContactEnrollments(
   return {
     enrollments: () => (queryReadyGate(query) ? query.data : []),
     pending: () => query.isPending,
-    failure: () =>
-      query.isError && !queryReadyGate(query)
-        ? toSequenceFailure(query.error)
-        : undefined,
+    failure: () => loadFailure(query),
     refresh: () => query.refetch(),
   };
 }

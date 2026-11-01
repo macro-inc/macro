@@ -72,6 +72,36 @@ function retrySequenceRead(failureCount: number, error: Error) {
   );
 }
 
+/** Reads the owner's views also refresh whenever the window regains focus. */
+const SEQUENCE_READ_OPTIONS = {
+  retry: retrySequenceRead,
+  refetchOnWindowFocus: 'always',
+} as const;
+
+/** The part of a query a polling policy reads. */
+type Polled<T> = { state: { data?: T } };
+
+/** A draft has no enrollments yet, so it has no progress to follow. */
+export function sequenceRefetchInterval({
+  state,
+}: Polled<SequenceDetailResponse>) {
+  return state.data?.sequence.status === 'draft' ? false : PROGRESS_INTERVAL;
+}
+
+/**
+ * An enrollment moves on its own only while it sends or needs attention, or
+ * while a step it scheduled is still out.
+ */
+export function enrollmentRefetchInterval({ state }: Polled<EnrollmentDetail>) {
+  const enrollment = state.data;
+  const settled =
+    !!enrollment &&
+    enrollment.status !== 'active' &&
+    enrollment.status !== 'needs_attention' &&
+    !enrollment.steps.some((step) => step.status === 'scheduled');
+  return settled ? false : PROGRESS_INTERVAL;
+}
+
 async function fetchSequences() {
   const { sequences } = await throwOnErr(() => emailClient.listSequences());
   return sequences;
@@ -82,8 +112,7 @@ export function sequencesQueryOptions() {
     queryKey: sequenceKeys.list.queryKey,
     queryFn: fetchSequences,
     reconcile: 'id',
-    retry: retrySequenceRead,
-    refetchOnWindowFocus: 'always',
+    ...SEQUENCE_READ_OPTIONS,
   });
 }
 
@@ -93,9 +122,8 @@ export function sequenceQueryOptions(sequenceId: string) {
     queryFn: () => throwOnErr(() => emailClient.getSequence(sequenceId)),
     // It polls under open rows and the editor; keep row identity across refetches.
     reconcile: 'id',
-    retry: retrySequenceRead,
-    refetchInterval: PROGRESS_INTERVAL,
-    refetchOnWindowFocus: 'always',
+    ...SEQUENCE_READ_OPTIONS,
+    refetchInterval: sequenceRefetchInterval,
   });
 }
 
@@ -104,7 +132,7 @@ export function enrollmentQueryOptions(enrollmentId: string) {
     queryKey: sequenceKeys.enrollment(enrollmentId).queryKey,
     queryFn: () => throwOnErr(() => emailClient.getEnrollment(enrollmentId)),
     retry: retrySequenceRead,
-    refetchInterval: PROGRESS_INTERVAL,
+    refetchInterval: enrollmentRefetchInterval,
   });
 }
 
@@ -121,8 +149,7 @@ export function contactEnrollmentsQueryOptions(crmContactId: string) {
     queryFn: () => fetchContactEnrollments(crmContactId),
     // A contact is in a sequence once, so rows keep their identity by it.
     reconcile: 'sequenceId',
-    retry: retrySequenceRead,
-    refetchOnWindowFocus: 'always',
+    ...SEQUENCE_READ_OPTIONS,
   });
 }
 
@@ -147,6 +174,18 @@ function setDetail(
   );
 }
 
+function invalidateList() {
+  return queryClient.invalidateQueries({
+    queryKey: sequenceKeys.list.queryKey,
+  });
+}
+
+function invalidateDetail(sequenceId: string) {
+  return queryClient.invalidateQueries({
+    queryKey: sequenceKeys.detail(sequenceId).queryKey,
+  });
+}
+
 function invalidateContactCards() {
   return queryClient.invalidateQueries({
     queryKey: sequenceKeys.contact._def,
@@ -163,8 +202,7 @@ export function useCreateSequenceMutation() {
       );
       setList((list) => withSummary(list, sequence));
     },
-    onSettled: () =>
-      queryClient.invalidateQueries({ queryKey: sequenceKeys.list.queryKey }),
+    onSettled: invalidateList,
   }));
 }
 
@@ -207,10 +245,8 @@ export function useUpdateSequenceMutation() {
     },
     onSettled: (_data, _error, { sequenceId, request }) =>
       Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: sequenceKeys.detail(sequenceId).queryKey,
-        }),
-        queryClient.invalidateQueries({ queryKey: sequenceKeys.list.queryKey }),
+        invalidateDetail(sequenceId),
+        invalidateList(),
         // Contact cards show whether the sequence is paused.
         request.status ? invalidateContactCards() : undefined,
       ]),
@@ -228,11 +264,7 @@ export function useDeleteSequenceMutation() {
         queryKey: sequenceKeys.detail(sequenceId).queryKey,
       });
     },
-    onSettled: () =>
-      Promise.all([
-        queryClient.invalidateQueries({ queryKey: sequenceKeys.list.queryKey }),
-        invalidateContactCards(),
-      ]),
+    onSettled: () => Promise.all([invalidateList(), invalidateContactCards()]),
   }));
 }
 
@@ -248,10 +280,8 @@ export function useEnrollMutation() {
     },
     onSettled: (_data, _error, { sequenceId, request }) =>
       Promise.all([
-        queryClient.invalidateQueries({
-          queryKey: sequenceKeys.detail(sequenceId).queryKey,
-        }),
-        queryClient.invalidateQueries({ queryKey: sequenceKeys.list.queryKey }),
+        invalidateDetail(sequenceId),
+        invalidateList(),
         ...request.crmContactIds.map((id) =>
           queryClient.invalidateQueries({
             queryKey: sequenceKeys.contact(id).queryKey,
@@ -315,16 +345,15 @@ export function useEnrollmentActionMutation() {
       setEnrollment(sequenceId, enrollment),
     onSettled: (_data, _error, { sequenceId, enrollment, action }) =>
       Promise.all([
-        queryClient.invalidateQueries({
-          queryKey:
-            action === 'unsubscribe'
-              ? sequenceKeys.detail._def
-              : sequenceKeys.detail(sequenceId).queryKey,
-        }),
+        action === 'unsubscribe'
+          ? queryClient.invalidateQueries({
+              queryKey: sequenceKeys.detail._def,
+            })
+          : invalidateDetail(sequenceId),
         queryClient.invalidateQueries({
           queryKey: sequenceKeys.enrollment(enrollment.id).queryKey,
         }),
-        queryClient.invalidateQueries({ queryKey: sequenceKeys.list.queryKey }),
+        invalidateList(),
         action === 'unsubscribe'
           ? invalidateContactCards()
           : enrollment.crmContactId

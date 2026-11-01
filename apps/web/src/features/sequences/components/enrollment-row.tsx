@@ -1,4 +1,4 @@
-import { formatLocale, t } from '@app/lib/i18n';
+import { t } from '@app/lib/i18n';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import type {
   EnrollmentAction,
@@ -7,19 +7,10 @@ import type {
   EnrollmentSummary,
 } from '@service-email/generated/schemas';
 import { Button, cn } from '@ui';
-import { createMemo, createUniqueId, For, type JSX, Show } from 'solid-js';
+import { createUniqueId, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
+import { formatDateTime } from './date-time';
 import { EnrollmentStatusBadge, reasonDetail } from './status-badge';
-
-function createTimeFormat() {
-  return createMemo(
-    () =>
-      new Intl.DateTimeFormat(formatLocale(), {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      })
-  );
-}
 
 function actionLabel(action: EnrollmentAction, retry: boolean) {
   return match(action)
@@ -46,7 +37,6 @@ export function EnrollmentRow(props: {
   onOpenContact?: () => void;
   children?: JSX.Element;
 }) {
-  const time = createTimeFormat();
   const detailsId = createUniqueId();
   // Named by the masked heading, not an attribute session replay would record.
   const nameId = createUniqueId();
@@ -136,7 +126,7 @@ export function EnrollmentRow(props: {
           {(sent) => (
             <span>
               {t('sequences.lastSent', {
-                time: time().format(new Date(sent())),
+                time: formatDateTime(sent()),
               })}
             </span>
           )}
@@ -145,7 +135,7 @@ export function EnrollmentRow(props: {
           {(next) => (
             <span>
               {t('sequences.nextSend', {
-                time: time().format(new Date(next())),
+                time: formatDateTime(next()),
               })}
             </span>
           )}
@@ -168,20 +158,19 @@ export function EnrollmentRow(props: {
   );
 }
 
-function stepState(
-  step: EnrollmentStep,
-  format: (value: string) => string
-): string {
+function stepState(step: EnrollmentStep): string {
   return match(step.status)
     .with('pending', () => t('sequences.stepPending'))
     .with('scheduled', () =>
       step.scheduledAt
-        ? t('sequences.stepScheduled', { time: format(step.scheduledAt) })
+        ? t('sequences.stepScheduled', {
+            time: formatDateTime(step.scheduledAt),
+          })
         : t('sequences.stepPending')
     )
     .with('sent', () =>
       step.sentAt
-        ? t('sequences.stepSent', { time: format(step.sentAt) })
+        ? t('sequences.stepSent', { time: formatDateTime(step.sentAt) })
         : t('sequences.stepSentUndated')
     )
     .with('unknown', () => t('sequences.stepUnknown'))
@@ -190,8 +179,6 @@ function stepState(
 
 /** The emails exactly as this person gets them, and what happened to each. */
 export function EnrollmentSteps(props: { steps: readonly EnrollmentStep[] }) {
-  const time = createTimeFormat();
-  const format = (value: string) => time().format(new Date(value));
   return (
     <ol class="space-y-3">
       <For each={props.steps}>
@@ -201,7 +188,7 @@ export function EnrollmentSteps(props: { steps: readonly EnrollmentStep[] }) {
               <span class="font-medium">
                 {t('sequences.emailNumber', { position: index() + 1 })}
               </span>
-              <span class="text-ink-muted">{stepState(step, format)}</span>
+              <span class="text-ink-muted">{stepState(step)}</span>
             </div>
             <div class="ph-no-capture rounded-lg bg-panel/50 px-3 py-2">
               <p class="truncate font-medium">{step.subject}</p>

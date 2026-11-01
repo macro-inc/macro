@@ -49,7 +49,6 @@ export function EnrollDialog(props: {
   outcome?: EnrollOutcome;
   onEnroll: () => void;
   onClose: () => void;
-  onCloseAutoFocus?: (event: Event) => void;
 }) {
   const isSelected = (person: Person) =>
     props.selected.some((item) => item.id === person.id);
@@ -69,7 +68,6 @@ export function EnrollDialog(props: {
       onEscapeKeyDown={(event) => {
         if (props.busy) event.preventDefault();
       }}
-      onCloseAutoFocus={props.onCloseAutoFocus}
     >
       <ActionDialogShell class="max-h-[88vh]">
         <ActionDialogShell.Body class="space-y-4">

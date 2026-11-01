@@ -2,11 +2,11 @@ import { t } from '@app/lib/i18n';
 import { getDefaultTimezone } from '@core/util/cron';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { Button } from '@ui';
 import { addMinutes, format, isValid, roundToNearestMinutes } from 'date-fns';
-import { createSignal, Match, Show, Switch } from 'solid-js';
+import { createSignal, Match, Switch } from 'solid-js';
 import { EnrollDialog, type EnrollOutcome } from '../components/enroll-dialog';
 import { failureMessage } from '../components/failure-message';
+import { InlineFailure } from '../components/inline-failure';
 import { OptionSelect } from '../components/option-select';
 import { type Person, useSequences } from '../context/sequences-context';
 import { isRetryable } from '../core/errors';
@@ -37,22 +37,11 @@ function SequencePicker(props: {
     <Switch>
       <Match when={list.failure()}>
         {(failure) => (
-          <div
-            class="flex items-center gap-2 text-xs text-failure"
-            role="alert"
-          >
-            {failureMessage(failure())}
-            <Show when={isRetryable(failure())}>
-              <Button
-                type="button"
-                variant="link"
-                size="xs"
-                onClick={() => fireAndForget(list.refresh(), SURFACE)}
-              >
-                {t('sequences.retry')}
-              </Button>
-            </Show>
-          </div>
+          <InlineFailure
+            message={failureMessage(failure())}
+            retryable={isRetryable(failure())}
+            onRetry={() => fireAndForget(list.refresh(), SURFACE)}
+          />
         )}
       </Match>
       <Match when={!list.pending() && !active().length}>
@@ -82,7 +71,6 @@ export function EnrollView(props: {
   sequence?: { id: string; name: string };
   initial?: readonly Person[];
   onClose: () => void;
-  onCloseAutoFocus?: (event: Event) => void;
 }) {
   const context = useSequences();
   const [search, setSearch] = createSignal('');
@@ -186,7 +174,6 @@ export function EnrollView(props: {
       outcome={outcome()}
       onEnroll={() => fireAndForget(enroll(), SURFACE)}
       onClose={props.onClose}
-      onCloseAutoFocus={props.onCloseAutoFocus}
     />
   );
 }

@@ -1,11 +1,13 @@
-import { formatLocale, t } from '@app/lib/i18n';
+import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import type { ContactEnrollment } from '@service-email/generated/schemas';
 import { Button } from '@ui';
-import { createMemo, For, Show } from 'solid-js';
+import { For, Show } from 'solid-js';
 import { isRetryable, type SequenceFailure } from '../core/errors';
 import { shownStatus } from '../core/sequence';
+import { formatDateTime } from './date-time';
 import { failureMessage } from './failure-message';
+import { InlineFailure } from './inline-failure';
 import { EnrollmentStatusBadge } from './status-badge';
 
 /**
@@ -19,14 +21,6 @@ export function ContactSequences(props: {
   onRetry: () => void;
   onOpenSequence: (sequenceId: string) => void;
 }) {
-  const time = createMemo(
-    () =>
-      new Intl.DateTimeFormat(formatLocale(), {
-        dateStyle: 'medium',
-        timeStyle: 'short',
-      })
-  );
-  const format = (value: string) => time().format(new Date(value));
   return (
     <Show when={props.failure || props.enrollments.length}>
       <section
@@ -73,7 +67,7 @@ export function ContactSequences(props: {
                           {(sent) => (
                             <span>
                               {t('sequences.lastSent', {
-                                time: format(sent()),
+                                time: formatDateTime(sent()),
                               })}
                             </span>
                           )}
@@ -89,7 +83,7 @@ export function ContactSequences(props: {
                           {(next) => (
                             <span>
                               {t('sequences.nextSend', {
-                                time: format(next()),
+                                time: formatDateTime(next()),
                               })}
                             </span>
                           )}
@@ -110,22 +104,11 @@ export function ContactSequences(props: {
           }
         >
           {(failure) => (
-            <div
-              class="flex items-center gap-2 text-xs text-failure"
-              role="alert"
-            >
-              {failureMessage(failure())}
-              <Show when={isRetryable(failure())}>
-                <Button
-                  type="button"
-                  variant="link"
-                  size="xs"
-                  onClick={() => props.onRetry()}
-                >
-                  {t('sequences.retry')}
-                </Button>
-              </Show>
-            </div>
+            <InlineFailure
+              message={failureMessage(failure())}
+              retryable={isRetryable(failure())}
+              onRetry={() => props.onRetry()}
+            />
           )}
         </Show>
       </section>

@@ -6,10 +6,11 @@ import type {
   EnrollmentSummary,
   SequenceStatus,
 } from '@service-email/generated/schemas';
-import { Button, ConfirmDialog, EmptyStatePanel } from '@ui';
+import { ConfirmDialog, EmptyStatePanel } from '@ui';
 import { createSignal, For, Match, Show, Switch } from 'solid-js';
 import { EnrollmentRow, EnrollmentSteps } from '../components/enrollment-row';
 import { failureMessage } from '../components/failure-message';
+import { InlineFailure } from '../components/inline-failure';
 import { useSequences } from '../context/sequences-context';
 import { enrollmentActions, isRetry, shownStatus } from '../core/sequence';
 
@@ -24,17 +25,11 @@ function EnrollmentStepsView(props: { enrollmentId: string }) {
         {(detail) => <EnrollmentSteps steps={detail().steps} />}
       </Match>
       <Match when={source.failed()}>
-        <div class="flex items-center gap-2 text-xs text-failure" role="alert">
-          {t('sequences.stepsLoadFailed')}
-          <Button
-            type="button"
-            variant="link"
-            size="xs"
-            onClick={() => fireAndForget(source.refresh(), SURFACE)}
-          >
-            {t('sequences.retry')}
-          </Button>
-        </div>
+        <InlineFailure
+          message={t('sequences.stepsLoadFailed')}
+          retryable
+          onRetry={() => fireAndForget(source.refresh(), SURFACE)}
+        />
       </Match>
       <Match when={source.pending()}>
         <ListSkeleton.Root label={t('sequences.loadingSteps')}>

@@ -9,6 +9,7 @@ import { queryReadyGate } from '@queries/gate';
 import {
   type Accessor,
   type ComponentProps,
+  createMemo,
   type ParentProps,
   Show,
 } from 'solid-js';
@@ -50,13 +51,16 @@ function createSenders(): SendersSource {
 /** CRM's own People search, the one its pickers and mentions use. */
 function createPeople(search: Accessor<string>): PeopleSource {
   const results = useCrmPeopleSearch(search, SEQUENCE_LIMITS.contacts);
+  // Mapped once per result, so the picker's rows keep their identity.
+  const people = createMemo(() =>
+    results.people().map((person) => ({
+      id: person.id,
+      name: person.name,
+      email: person.email,
+    }))
+  );
   return {
-    people: () =>
-      results.people().map((person) => ({
-        id: person.id,
-        name: person.name,
-        email: person.email,
-      })),
+    people,
     pending: results.pending,
     failed: results.failed,
   };
