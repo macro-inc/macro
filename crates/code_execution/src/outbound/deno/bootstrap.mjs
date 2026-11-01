@@ -1,4 +1,4 @@
-import { Macro, observeRequests } from "@macro-inc/sdk";
+import { Macro, gateRequests, observeRequests } from "@macro-inc/sdk";
 
 // Trusted bootstrap: credentials arrive once on stdin, then user code is imported
 // dynamically so module reads are checked against the scratch-only read grant.
@@ -63,7 +63,24 @@ globalThis.console = {
   debug: consoleMethod("debug"), warn: consoleMethod("warn"), error: consoleMethod("error"),
 };
 try {
-  const {maxResultBytes, ...context} = await new Response(Deno.stdin.readable).json();
+  const {maxResultBytes, operations, unattended, ...context} = await new Response(Deno.stdin.readable).json();
+  // An unattended program's writes follow its policy: a dry run answers each
+  // one with an empty result, otherwise only writes to its services run.
+  // Operations missing from the catalog count as writes.
+  const catalog = new Map((operations ?? []).map(operation => [operation.key, operation]));
+  const routes = (operations ?? []).map(operation => ({
+    ...operation,
+    service: operation.key.slice(0, operation.key.indexOf(".")),
+    pattern: new RegExp(`${operation.path.replace(/[.*+?^$()|[\]\\]/g, "\\$&").replace(/\{[^}]+\}/g, "[^/]+")}$`),
+  }));
+  const writable = (service) =>
+    unattended.writes.mode === "services" && unattended.writes.services.includes(service);
+  if (unattended) gateRequests(({service, operation}) => {
+    if (catalog.get(`${service}.${operation}`)?.write === false) return undefined;
+    if (unattended.writes.mode === "dry_run") return {skip: {data: {}}};
+    if (writable(service)) return undefined;
+    return {refuse: `This routine step can't make changes in ${service}: it may only change ${unattended.writes.services.join(", ") || "nothing"}.`};
+  });
   const originalFetch = globalThis.fetch.bind(globalThis);
   const origins = new Set(Object.values(context.hosts).map(host => new URL(host).origin));
   globalThis.fetch = (input, init) => {
@@ -75,31 +92,57 @@ try {
       // Marks the request as a program's, not a person's in the app, so an API
       // can ask it to confirm what a person would have chosen by opening it.
       request.headers.set("x-macro-code-execution", "1");
+      // Backstop for the write policy: an authenticated request that didn't
+      // come through the gate (code holding the SDK client's credential, or
+      // a route outside the catalog) is sent only if a read or an allowed
+      // write matches its route.
+      if (unattended && request.method !== "GET" && request.method !== "HEAD") {
+        const path = new URL(request.url).pathname;
+        const allowed = routes.some(route => route.method === request.method && route.pattern.test(path)
+          && (!route.write || writable(route.service)));
+        if (!allowed) return Promise.reject(new Error(unattended.writes.mode === "dry_run"
+          ? "A dry run doesn't send changes."
+          : "This routine step can't send that request."));
+      }
     }
     return originalFetch(request);
   };
   const activeRequests = new Set();
   let observedRequests = 0;
   observeRequests(value => {
-    if (value.status === "started") {
+    // A gated operation reports once, as skipped or refused, with no start.
+    if (value.status === "started" || value.status === "skipped" || value.status === "refused") {
       if (++observedRequests > 128) {
         if (observedRequests === 129) emit({type: "progress", value: {truncated: true}});
         return;
       }
-      activeRequests.add(value.id);
+      if (value.status === "started") activeRequests.add(value.id);
     } else if (!activeRequests.delete(value.id)) return;
     emit({type: "progress", value});
   });
   const macro = new Macro({token: context.token, hosts: context.hosts});
-  const session = context.sessionId ? macro.agentSessions.byId(context.sessionId) : undefined;
-  const execution = session && context.executionId ? session.codeExecutions.byId(context.executionId) : undefined;
   // A literal dynamic import joins Deno's initial static graph, bypassing read
   // permissions. Compute this specifier so the entire generated graph is loaded
   // at runtime and every local module read requires the scratch permission.
-  const program = new URL("./main.mjs", import.meta.url).href;
+  const program = new URL(unattended ? "./main.ts" : "./main.mjs", import.meta.url).href;
+  if (unattended) {
+    // The write policy lives in fetch; nothing else may reach the network
+    // (raw sockets) or start a realm with its own fetch (workers).
+    for (const name of ["connect", "connectTls", "startTls"]) Object.defineProperty(Deno, name, {value: undefined});
+    globalThis.Worker = undefined;
+  }
   const { main } = await import(program);
-  if (typeof main !== "function") throw new Error("Export an async main({macro, session, execution}) function.");
-  const value = await main({...context, macro, session, execution});
+  let value;
+  if (unattended) {
+    if (typeof main !== "function") throw new Error("Export an async main(context: StepContext) function.");
+    // Never the credential, hosts or trace context: only the SDK and the step's inputs.
+    value = await main({...unattended.arguments, macro});
+  } else {
+    const session = context.sessionId ? macro.agentSessions.byId(context.sessionId) : undefined;
+    const execution = session && context.executionId ? session.codeExecutions.byId(context.executionId) : undefined;
+    if (typeof main !== "function") throw new Error("Export an async main({macro, session, execution}) function.");
+    value = await main({...context, macro, session, execution});
+  }
   emit(resultFrame(value ?? null, maxResultBytes));
   exit(0);
 } catch (error) {

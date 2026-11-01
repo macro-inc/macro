@@ -35,6 +35,7 @@ aws_lambda_events = { version = "0.16", default-features = false, features = ["e
 axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
 axum-extra = { version = "0.10", features = ["cookie", "query", "typed-header"] }
 base64 = { version = "0.22" }
+bitflags = { version = "2", default-features = false, features = ["std"] }
 block-buffer = { version = "0.12", default-features = false, features = ["zeroize"] }
 bstr = { version = "1" }
 bytemuck = { version = "1", default-features = false, features = ["extern_crate_alloc"] }
@@ -194,6 +195,7 @@ aws_lambda_events = { version = "0.16", default-features = false, features = ["e
 axum = { version = "0.8", features = ["macros", "multipart", "ws"] }
 axum-extra = { version = "0.10", features = ["cookie", "query", "typed-header"] }
 base64 = { version = "0.22" }
+bitflags = { version = "2", default-features = false, features = ["std"] }
 block-buffer = { version = "0.12", default-features = false, features = ["zeroize"] }
 bstr = { version = "1" }
 bytemuck = { version = "1", default-features = false, features = ["extern_crate_alloc"] }
@@ -342,7 +344,6 @@ zerocopy = { version = "0.8", default-features = false, features = ["derive", "s
 zeroize = { version = "1", features = ["derive"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
-bitflags = { version = "2", default-features = false, features = ["std"] }
 crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
 futures-lite = { version = "2" }
@@ -366,7 +367,6 @@ tower = { version = "0.5", default-features = false, features = ["retry", "timeo
 tower-http = { version = "0.6", default-features = false, features = ["decompression-gzip", "follow-redirect"] }
 
 [target.x86_64-unknown-linux-gnu.build-dependencies]
-bitflags = { version = "2", default-features = false, features = ["std"] }
 crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
 futures-lite = { version = "2" }
@@ -390,7 +390,6 @@ tower = { version = "0.5", default-features = false, features = ["retry", "timeo
 tower-http = { version = "0.6", default-features = false, features = ["decompression-gzip", "follow-redirect"] }
 
 [target.aarch64-apple-darwin.dependencies]
-bitflags = { version = "2", default-features = false, features = ["std"] }
 crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
 errno = { version = "0.3" }
@@ -413,7 +412,6 @@ tower = { version = "0.5", default-features = false, features = ["retry", "timeo
 tower-http = { version = "0.6", default-features = false, features = ["decompression-gzip", "follow-redirect"] }
 
 [target.aarch64-apple-darwin.build-dependencies]
-bitflags = { version = "2", default-features = false, features = ["std"] }
 crossbeam-epoch = { version = "0.9" }
 data-encoding = { version = "2" }
 errno = { version = "0.3" }

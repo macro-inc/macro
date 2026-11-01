@@ -38,6 +38,37 @@ The result is untrusted program output, not proof that an external write occurre
 Review cards load their separately saved records. Code completion does not wait
 for a user to submit those reviews.
 
+## Unattended programs
+
+A host can run a program with nobody watching (a routine step) by setting
+`RunEnvironment::unattended`. Then:
+
+- the source is TypeScript (`main.ts`); Deno strips its types on load;
+- `main` receives `macro` plus the host's `arguments`, never `token`, `hosts`
+  or trace context;
+- every SDK write passes the `WritePolicy`. `DryRun` answers each write with an
+  empty result and reports it as `skipped`; `Services` lets writes to the named
+  services through and refuses the rest (`refused`). Writes are the catalog's
+  non-read operations (`src/domain/operations.json`, generated with each
+  operation's method, path and `write`), and an operation missing from it counts
+  as one;
+- the same policy checks every authenticated non-GET request at `fetch`, so
+  code that lifts the credential off the SDK client can't send a write the gate
+  would refuse; raw sockets (`Deno.connect`, `connectTls`, `startTls`), workers
+  and Node's networking and process modules are unavailable.
+
+This is enforcement inside the process, not by the APIs: the token still
+carries the owner's permissions.
+
+`DenoChecker` (`src/outbound/deno/check.rs`) type-checks a TypeScript program
+against the SDK's generated declarations (`src/outbound/deno/sdk-types.json`)
+without running it, plus an ambient declaration module the host supplies (the
+type of `main`'s argument). An import map sends every file URL outside the
+check and the declarations to a root that doesn't exist, so a program can't
+make the checker read, or quote, another file. `sdk_fingerprint()` is the
+SDK version plus a hash of those declarations: code that checked under one
+fingerprint stays valid until it changes.
+
 ## Limits and isolation
 
 | Limit | Default |
@@ -52,6 +83,8 @@ for a user to submit those reviews.
 | Additional bounded SDK progress frames | 64 KiB |
 | Regular / advisory progress events | 1024 each |
 | V8 old-space target per child | 128 MiB |
+| CPU time per child (`Limits::max_cpu`, off by default) | kernel stops it (SIGXCPU) |
+| Scheduling (`Limits::background`, off by default) | niceness 10 |
 
 The supervisor clears inherited environment variables and gives each process a
 private scratch directory. Deno permits reads only there and network connections

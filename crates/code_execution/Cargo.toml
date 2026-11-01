@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 url = { workspace = true }
+rustix = { workspace = true }
 async-trait = { workspace = true }
 futures = { workspace = true }
 rootcause = { workspace = true }

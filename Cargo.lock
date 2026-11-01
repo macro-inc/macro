@@ -4501,6 +4501,7 @@ dependencies = [
  "async-trait",
  "futures",
  "rootcause",
+ "rustix 1.1.4",
  "serde",
  "serde_json",
  "tempfile",

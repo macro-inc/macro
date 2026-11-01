@@ -33,6 +33,39 @@ pub struct RunEnvironment {
     pub execution_id: Option<Uuid>,
     /// Explicit Macro SDK service base URLs, also used for Deno's network allowlist.
     pub hosts: std::collections::BTreeMap<String, String>,
+    /// Set for a program that runs with nobody watching (a routine step)
+    /// instead of an agent's or a person's call.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unattended: Option<Unattended>,
+}
+
+/// How an unattended program runs: its source is TypeScript, `main` receives
+/// `macro` and `arguments` but never the credential, and every SDK write
+/// passes through `writes` first.
+#[derive(Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct Unattended {
+    /// Spread into `main`'s argument beside `macro`.
+    pub arguments: serde_json::Map<String, Value>,
+    /// Which writes run.
+    pub writes: WritePolicy,
+}
+
+/// Which SDK write operations an unattended program may perform. Reads always
+/// run. Writes are every catalog operation that isn't a known read, so an
+/// operation missing from the catalog is a write.
+#[derive(Debug, Clone, Serialize)]
+#[serde(tag = "mode", rename_all = "snake_case")]
+pub enum WritePolicy {
+    /// Writes to these services (the catalog's `service` prefix) run; any
+    /// other write is refused and the program sees an error.
+    Services {
+        /// Service names, e.g. `email`.
+        services: std::collections::BTreeSet<String>,
+    },
+    /// No write runs: each one returns an empty result to the program and is
+    /// reported as skipped, so a run shows what it would have done.
+    DryRun,
 }
 
 /// Frame bytes kept beside a full-size result for its `{"type":"result",...}` envelope.
@@ -57,6 +90,12 @@ pub struct Limits {
     pub max_result_bytes: usize,
     /// Maximum regular events, plus a separate equal budget for advisory progress.
     pub max_events: usize,
+    /// CPU time a process may use across its threads before the kernel stops
+    /// it; `None` leaves only the wall-clock deadline.
+    pub max_cpu: Option<Duration>,
+    /// Run processes at a lower scheduling priority than the host, so busy
+    /// background programs yield the CPU to its requests.
+    pub background: bool,
 }
 
 impl Default for Limits {
@@ -70,6 +109,8 @@ impl Default for Limits {
             max_output_bytes: 2 * 1024 * 1024,
             max_result_bytes: 64 * 1024,
             max_events: 1024,
+            max_cpu: None,
+            background: false,
         }
     }
 }
@@ -88,6 +129,9 @@ impl Limits {
             || self.max_result_bytes < 512
             || self.max_result_bytes + RESULT_FRAME_OVERHEAD > self.max_frame_bytes
             || !(2..=65536).contains(&self.max_events)
+            || self
+                .max_cpu
+                .is_some_and(|cpu| cpu < Duration::from_secs(1) || cpu > self.max_duration)
         {
             return Err(AdmissionError::InvalidLimits);
         }
@@ -228,4 +272,26 @@ pub struct ExecutionEvent {
     /// Event payload.
     #[serde(flatten)]
     pub kind: EventKind,
+}
+
+/// One type-checker problem, as the checker reported it. Locations are
+/// `main.ts:<line>:<column>`.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct Diagnostic {
+    /// The problem with its code, the offending line and its location.
+    pub message: String,
+}
+
+/// The checker couldn't decide whether a program checks.
+#[derive(Debug, thiserror::Error)]
+pub enum CheckError {
+    /// Empty or oversized source.
+    #[error("source must be nonempty and within the configured size limit")]
+    InvalidSource,
+    /// Every checker slot is busy.
+    #[error("type checking is busy; try again later")]
+    Busy,
+    /// The checker process failed or ran out of time.
+    #[error("type checking failed to run")]
+    Internal,
 }
