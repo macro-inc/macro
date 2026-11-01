@@ -13,14 +13,17 @@ describe('theme properties preservation', () => {
   test.each([
     '[IdentityProviderValidationException]',
     '\\[IdentityProviderValidationException\\]',
-  ])('replaces %s without changing adjacent properties or CRLF endings', (key) => {
-    const original = `login=Sign in\r\n${key}=Old message\r\nother=Keep this\r\n`;
-    const updated = updateSignInMessage(original);
-    expect(updated.startsWith('login=Sign in\r\n')).toBe(true);
-    expect(updated.endsWith('\r\nother=Keep this\r\n')).toBe(true);
-    expect(updated).not.toContain('Old message');
-    expect(updateSignInMessage(updated)).toBe(updated);
-  });
+  ])(
+    'replaces %s without changing adjacent properties or CRLF endings',
+    (key) => {
+      const original = `login=Sign in\r\n${key}=Old message\r\nother=Keep this\r\n`;
+      const updated = updateSignInMessage(original);
+      expect(updated.startsWith('login=Sign in\r\n')).toBe(true);
+      expect(updated.endsWith('\r\nother=Keep this\r\n')).toBe(true);
+      expect(updated).not.toContain('Old message');
+      expect(updateSignInMessage(updated)).toBe(updated);
+    }
+  );
 
   test.each([
     '[IdentityProviderValidationException]=first\n[IdentityProviderValidationException]=second',
@@ -28,7 +31,10 @@ describe('theme properties preservation', () => {
     'other=continued\\\n[IdentityProviderValidationException]=part of other',
     'other=continued\\',
     'other=continued\\\n',
-  ])('rejects ambiguous properties without producing a replacement', (original) => {
-    expect(() => updateSignInMessage(original)).toThrow();
-  });
+  ])(
+    'rejects ambiguous properties without producing a replacement',
+    (original) => {
+      expect(() => updateSignInMessage(original)).toThrow();
+    }
+  );
 });

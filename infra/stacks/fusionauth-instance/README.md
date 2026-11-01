@@ -75,6 +75,7 @@ sign-in on `/oauth2/authorize` after applying or rolling back; it should remain
 blocked and display the intended message.
 
 Run `bun test theme-message.test.ts` for the properties-preservation checks.
+Use Biome from `nix develop` for formatting to match infrastructure CI.
 
 # TODO
 - [ ] configure idps
