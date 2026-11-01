@@ -38,44 +38,43 @@ export function fileSelector(
     return false;
   };
 
-  const handleFileInputChange = () => {
-    const files = Array.from(input.files || []);
-    const validFiles = files.filter(isFileTypeValid);
-
-    if (validFiles.length > 0) {
-      accessor()?.onSelect(validFiles);
-    }
-  };
-
-  let options = accessor();
-  let input = document.createElement('input');
-  input.type = 'file';
-  if (options?.id) {
-    input.id = options.id;
-  }
-  input.style.display = 'none';
-  const mimeTypes = options?.acceptedMimeTypes?.join(',');
-  const fileExtensions = options?.acceptedFileExtensions?.join(',.');
-  let acceptString = '';
-  if (mimeTypes) {
-    acceptString += `${mimeTypes},`;
-  }
-  if (fileExtensions) {
-    acceptString += `.${fileExtensions}`;
-  }
-  input.accept = acceptString;
-  input.multiple = options?.multiple ?? false;
-
+  // Each click opens a picker on its own input. This setup can run again
+  // while a picker is open (a Button's tooltip re-runs its ref when it opens
+  // or closes), so the input must not be replaced or unhooked by a cleanup.
   const clickInput = (e: MouseEvent) => {
     e.stopPropagation();
+    const options = accessor();
+    const input = document.createElement('input');
+    input.type = 'file';
+    if (options?.id) {
+      input.id = options.id;
+    }
+    input.style.display = 'none';
+    const mimeTypes = options?.acceptedMimeTypes?.join(',');
+    const fileExtensions = options?.acceptedFileExtensions?.join(',.');
+    let acceptString = '';
+    if (mimeTypes) {
+      acceptString += `${mimeTypes},`;
+    }
+    if (fileExtensions) {
+      acceptString += `.${fileExtensions}`;
+    }
+    input.accept = acceptString;
+    input.multiple = options?.multiple ?? false;
+    input.addEventListener('change', () => {
+      // The control was removed while the picker was open.
+      if (!element.isConnected) return;
+      const validFiles = Array.from(input.files || []).filter(isFileTypeValid);
+      if (validFiles.length > 0) {
+        accessor()?.onSelect(validFiles);
+      }
+    });
     input.click();
   };
 
-  input.addEventListener('change', handleFileInputChange);
   element.addEventListener('click', clickInput);
 
   onCleanup(() => {
-    input.removeEventListener('change', handleFileInputChange);
     element.removeEventListener('click', clickInput);
   });
 }

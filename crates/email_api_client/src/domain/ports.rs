@@ -6,12 +6,12 @@ pub use mailbox::*;
 use std::future::Future;
 
 use models_email::email::service::label::Label;
-use models_email::service::contact::{Contact, ContactList};
+use models_email::service::contact::Contact;
 use models_email::service::link::Link;
 use uuid::Uuid;
 
 use super::models::{
-    AccessToken, ApiOperationKind, CalendarPart, ChangeBatch, EmailApiError,
+    AccessToken, ApiOperationKind, CalendarPart, ChangePage, ContactPage, EmailApiError,
     MessageWithCalendarParts, ProviderSubscription, RateLimitRefusal, RequestPermit, SendRequest,
     SentIds, SyncCursor, ThreadListPage, TokenError, TokenFreshness,
 };
@@ -27,12 +27,14 @@ pub trait MailboxSyncClient: Send + Sync + 'static {
         access_token: &AccessToken,
     ) -> impl Future<Output = Result<u64, EmailApiError>> + Send;
 
-    /// Returns mailbox changes that follow `cursor`.
-    fn list_changes(
+    /// Returns one page of the mailbox changes that follow `cursor`. Pass the
+    /// previous page's `next_page_token` to continue.
+    fn list_changes_page(
         &self,
         access_token: &AccessToken,
         cursor: &SyncCursor,
-    ) -> impl Future<Output = Result<ChangeBatch, EmailApiError>> + Send;
+        page_token: Option<&str>,
+    ) -> impl Future<Output = Result<ChangePage, EmailApiError>> + Send;
 }
 
 /// Mailbox push-notification subscription capabilities.
@@ -225,21 +227,24 @@ pub trait MailboxContactsClient: Send + Sync + 'static {
         link_id: Uuid,
     ) -> impl Future<Output = Result<Contact, EmailApiError>> + Send;
 
-    /// Fetches and normalizes primary contacts from an optional synchronization token.
-    fn list_contacts(
+    /// Fetches and normalizes one page of primary contacts from an optional
+    /// synchronization token. Pass the previous page's `next_page_token` to continue.
+    fn list_contacts_page(
         &self,
         access_token: &AccessToken,
         link_id: Uuid,
         sync_token: Option<&str>,
-    ) -> impl Future<Output = Result<ContactList, EmailApiError>> + Send;
+        page_token: Option<&str>,
+    ) -> impl Future<Output = Result<ContactPage, EmailApiError>> + Send;
 
-    /// Fetches and normalizes automatically collected contacts.
-    fn list_other_contacts(
+    /// Fetches and normalizes one page of automatically collected contacts.
+    fn list_other_contacts_page(
         &self,
         access_token: &AccessToken,
         link_id: Uuid,
         sync_token: Option<&str>,
-    ) -> impl Future<Output = Result<ContactList, EmailApiError>> + Send;
+        page_token: Option<&str>,
+    ) -> impl Future<Output = Result<ContactPage, EmailApiError>> + Send;
 }
 
 /// Blocked-sender management capabilities.
@@ -380,11 +385,12 @@ impl MailboxSyncClient for NoOpMailboxClient {
         Err(unavailable())
     }
 
-    async fn list_changes(
+    async fn list_changes_page(
         &self,
         _: &AccessToken,
         _: &SyncCursor,
-    ) -> Result<ChangeBatch, EmailApiError> {
+        _: Option<&str>,
+    ) -> Result<ChangePage, EmailApiError> {
         Err(unavailable())
     }
 }
@@ -545,21 +551,23 @@ impl MailboxContactsClient for NoOpMailboxClient {
         Err(unavailable())
     }
 
-    async fn list_contacts(
+    async fn list_contacts_page(
         &self,
         _: &AccessToken,
         _: Uuid,
         _: Option<&str>,
-    ) -> Result<ContactList, EmailApiError> {
+        _: Option<&str>,
+    ) -> Result<ContactPage, EmailApiError> {
         Err(unavailable())
     }
 
-    async fn list_other_contacts(
+    async fn list_other_contacts_page(
         &self,
         _: &AccessToken,
         _: Uuid,
         _: Option<&str>,
-    ) -> Result<ContactList, EmailApiError> {
+        _: Option<&str>,
+    ) -> Result<ContactPage, EmailApiError> {
         Err(unavailable())
     }
 }

@@ -167,20 +167,23 @@ export function createRunner(options: {
     navigation: Navigation,
     begin: () => void
   ): MaybePromise<NavigationResult> => {
-    const deferred = Promise.withResolvers<NavigationResult>();
+    let resolve!: (value: NavigationResult) => void;
+    const promise = new Promise<NavigationResult>((settle) => {
+      resolve = settle;
+    });
     let result: NavigationResult | undefined;
 
     settlers.set(navigation, {
       settle(value) {
         result = value;
-        deferred.resolve(value);
+        resolve(value);
       },
       callbacks: [],
     });
-    fireAndForget(track(deferred.promise), 'split-router');
+    fireAndForget(track(promise), 'split-router');
     begin();
 
-    return result ?? deferred.promise;
+    return result ?? promise;
   };
 
   const settle = (navigation: Navigation, result: NavigationResult) => {

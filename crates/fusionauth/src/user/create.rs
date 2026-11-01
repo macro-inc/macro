@@ -1,9 +1,6 @@
 use std::{borrow::Cow, net::IpAddr};
 
-use crate::{
-    AuthedClient, Result,
-    error::{FusionAuthClientError, GenericErrorResponse},
-};
+use crate::{AuthedClient, Result, error::FusionAuthClientError};
 
 /// A user to create in FusionAuth.
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
@@ -85,56 +82,40 @@ pub(crate) async fn create_user(
         .json(&request)
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     match res.status() {
         reqwest::StatusCode::OK => {
             tracing::trace!("user created");
-            let body = res.json::<CreateUserResponse>().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let body = res
+                .json::<CreateUserResponse>()
+                .await
+                .map_err(FusionAuthClientError::transport)?;
 
             Ok(body.user.id.into())
         }
         reqwest::StatusCode::BAD_REQUEST => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let status = res.status();
+            let headers = res.headers().clone();
+            let body = res.text().await.map_err(FusionAuthClientError::transport)?;
 
             if body.contains("[duplicate]") {
                 Err(FusionAuthClientError::UserAlreadyExists)
             } else {
-                tracing::error!(body=%body, "unexpected response from fusionauth");
-                Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: body,
-                }))
+                Err(FusionAuthClientError::unexpected(status, &headers, body))
             }
         }
         _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let status = res.status();
+            let headers = res.headers().clone();
+            let body = res.text().await.map_err(FusionAuthClientError::transport)?;
 
             if body.contains("[duplicate]user.email") {
                 tracing::error!("user already exists");
                 return Err(FusionAuthClientError::UserAlreadyExists);
             }
 
-            tracing::error!(body=%body, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
+            Err(FusionAuthClientError::unexpected(status, &headers, body))
         }
     }
 }

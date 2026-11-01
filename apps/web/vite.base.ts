@@ -9,7 +9,7 @@ import solidSvg from 'vite-plugin-solid-svg';
 import wasm from 'vite-plugin-wasm';
 import tsconfigpaths from 'vite-tsconfig-paths';
 // @ts-ignore
-import { version } from './package.json';
+import { browserslist, version } from './package.json';
 import { devCompression } from './scripts/dev-compression';
 import { devHttps } from './scripts/dev-https';
 import { devExternalSourcemaps } from './scripts/dev-sourcemaps';
@@ -249,6 +249,27 @@ function loroAsyncWasm(): Plugin {
   };
 }
 
+const ESBUILD_BROWSERS: Record<string, string> = {
+  safari: 'safari',
+  ios_saf: 'ios',
+  chrome: 'chrome',
+  and_chr: 'chrome',
+  edge: 'edge',
+  firefox: 'firefox',
+};
+
+/** Converts the `browser >= version` floors in package.json `browserslist` to esbuild targets. */
+function esbuildTargets(queries: readonly string[]): string[] {
+  return queries.map((query) => {
+    const match = /^(\w+) >= (\d+(?:\.\d+)?)$/.exec(query);
+    const browser = match ? ESBUILD_BROWSERS[match[1]] : undefined;
+    if (!match || !browser) {
+      throw new Error(`Unsupported browserslist query for esbuild: ${query}`);
+    }
+    return `${browser}${match[2]}`;
+  });
+}
+
 /** Hashed assets the first screen needs; index.html requests them while it parses. */
 const HTML_PRELOADS = [
   // The app waits for Loro to initialize before rendering.
@@ -362,7 +383,7 @@ export const createAppViteConfig = (): UserConfigFn => {
         // target older safari to avoid lightningcss using text-decoration shorthand:
         // https://developer.mozilla.org/en-US/docs/Web/CSS/text-decoration#browser_compatibility
         cssTarget: ['esnext', 'safari15'],
-        target: 'esnext',
+        target: esbuildTargets(browserslist),
         outDir: 'dist',
         emptyOutDir: true,
         minify: !NO_MINIFY,

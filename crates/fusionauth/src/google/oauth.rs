@@ -8,6 +8,10 @@ use base64::{
     Engine,
     engine::general_purpose::{self},
 };
+use upstream_error::UpstreamFailure;
+
+#[cfg(test)]
+mod test;
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 /// Request to refresh a Google OAuth2 access token.
@@ -33,10 +37,31 @@ pub struct GoogleTokenResponse {
     pub id_token: String,
 }
 
+/// Google's name in error messages users see.
+const GOOGLE: &str = "Google";
+const GOOGLE_TOKEN_URL: &str = "https://oauth2.googleapis.com/token";
+
 /// Refreshes a Google OAuth2 access token using a refresh token.
 /// See https://developers.google.com/identity/protocols/oauth2/web-server#offline
 pub(crate) async fn refresh_google_token(
     client: &UnauthedClient,
+    client_id: &str,
+    client_secret: &str,
+    refresh_token: &str,
+) -> Result<GoogleTokenResponse> {
+    refresh_google_token_at(
+        client,
+        GOOGLE_TOKEN_URL,
+        client_id,
+        client_secret,
+        refresh_token,
+    )
+    .await
+}
+
+async fn refresh_google_token_at(
+    client: &UnauthedClient,
+    token_url: &str,
     client_id: &str,
     client_secret: &str,
     refresh_token: &str,
@@ -50,25 +75,18 @@ pub(crate) async fn refresh_google_token(
 
     let res = client
         .client()
-        .post("https://oauth2.googleapis.com/token")
+        .post(token_url)
         .json(&token_request)
         .send()
         .await
-        .map_err(|e| {
-            tracing::error!(error=?e, "failed to send google access token request");
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(|e| FusionAuthClientError::provider_transport(GOOGLE, e))?;
 
     match res.status() {
         reqwest::StatusCode::OK => {
-            let response = res.json::<GoogleTokenResponse>().await.map_err(|e| {
-                tracing::error!(error=?e, "unable to parse token response");
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let response = res
+                .json::<GoogleTokenResponse>()
+                .await
+                .map_err(|e| FusionAuthClientError::provider_transport(GOOGLE, e))?;
 
             tracing::debug!(
                 expires_in=?response.expires_in,
@@ -80,6 +98,7 @@ pub(crate) async fn refresh_google_token(
             Ok(response)
         }
         status => {
+            let headers = res.headers().clone();
             let error_text = res
                 .text()
                 .await
@@ -93,6 +112,13 @@ pub(crate) async fn refresh_google_token(
             // If the user revoked Macro's access to their account, we get an invalid_grant error here
             if error_text.contains("invalid_grant") {
                 return Err(FusionAuthClientError::InvalidGrant);
+            }
+
+            if let Some(failure) = UpstreamFailure::from_status(status, &headers) {
+                return Err(FusionAuthClientError::Upstream {
+                    service: GOOGLE,
+                    failure,
+                });
             }
 
             Err(FusionAuthClientError::Generic(GenericErrorResponse {

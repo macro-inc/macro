@@ -67,6 +67,8 @@ thin binary over `../src-tauri` (`app_lib::run_with`) that selects
   entitlements under the hardened runtime. Calls and dictation need its camera
   and audio-input entitlements, plus the usage descriptions in
   `../src-tauri/icons/macos/Info.plist`; without either, macOS refuses capture.
+  The ast-grep rules `plist-media-entitlements` and `plist-media-usage-strings`
+  check both.
 - Keep the HTTP/WebSocket fork revision and Nix source hash aligned with the
   shared native workspace; native cookies use Application Support as documented
   in `../src-tauri/README.md#native-authentication-cookies`.

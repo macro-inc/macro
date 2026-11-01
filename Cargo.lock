@@ -2245,6 +2245,7 @@ dependencies = [
  "tower-cookies",
  "tower-http",
  "tracing",
+ "upstream_error",
  "url",
  "urlencoding",
  "user_language",
@@ -4901,6 +4902,7 @@ dependencies = [
  "dashmap",
  "doppler-config",
  "ensure_exists",
+ "entity_access",
  "frecency",
  "futures",
  "http-body-util",
@@ -8487,6 +8489,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "upstream_error",
  "urlencoding",
  "uuid",
  "wiremock",
@@ -8942,6 +8945,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "upstream_error",
  "url",
  "urlencoding",
  "utoipa",
@@ -21208,6 +21212,23 @@ dependencies = [
  "sqs_client",
  "tokio",
  "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "upstream_error"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "http 1.4.0",
+ "http-body-util",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "utoipa",
+ "wiremock",
  "workspace-hack",
 ]
 

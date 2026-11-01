@@ -149,8 +149,7 @@ changing the list query. Text search still resolves favorite IDs for the search
 service. An empty favorites list shows `No favorite emails`.
 
 With `enable-email-focus` and `enable-graphql-soup` on, a `Focus` tab leads the
-desktop Inbox tabs (with an `Experimental` badge beside them while it is open)
-and the mobile pills (`Focus · Experimental`). It lists signal
+desktop Inbox tabs and the mobile pills. It lists signal
 threads from the last 30 days that the email focus worker
 (`services/email_focus_worker`) classified as worth attention, including inboxes
 linked to the account, by priority: the importance score halved for every 2 days
@@ -596,6 +595,9 @@ a failed local save keeps the composer and draft options open. The message list
 stays mounted underneath so closing a reply preserves its scroll position.
 On touch, a saved reply shows as a **Draft** row with its opening words under the
 message it answers (which stays expanded); tapping it reopens the draft.
+Opening a thread whose last message has a reply draft opens the composer once;
+after Back → Save Draft it stays closed while the save finishes, until the
+**Draft** row is tapped or the thread is opened again.
 On desktop, a saved reply that reappears with its thread (opening it, stepping
 to it with j/k, the reading pane following the list) stays unfocused, so the
 next j moves on instead of typing into it; `r` or a click continues it.
@@ -758,8 +760,8 @@ local copy rather than recreating the sent message. The REST compose path keeps
 its existing behavior.
 
 Native draft recovery requires a full app update containing queue inspection and
-durable mutation metadata support. An older app receiving an OTA bundle shows
-**Macro update required** and uses the existing uncached fallback. Its old queue
+durable mutation metadata support. An older app receiving an OTA bundle opens
+the update-required dialog once and uses the existing uncached fallback. Its old queue
 must remain intact, with no new claims or queued writes, until the native update.
 When the cache becomes unavailable, draft saves and discards must not bypass its
 preserved queue through GraphQL or REST fallback. Local editing stays durable;

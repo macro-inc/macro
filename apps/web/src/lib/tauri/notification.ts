@@ -51,9 +51,17 @@ export function createTauriNotificationInterface(
         // macOS will not prompt again after denial; permission must be changed
         // in System Settings.
         if (cur === 'denied') return 'denied';
-        return await invoke<NotificationPermission>(
-          'request_macos_notification_permission'
-        );
+        try {
+          return await invoke<NotificationPermission>(
+            'request_macos_notification_permission'
+          );
+        } catch (error) {
+          // UNErrorCodeNotificationsNotAllowed: only System Settings can
+          // allow this app again, for example after it was re-signed.
+          if (typeof error === 'string' && error.includes('(UNErrorDomain 1)'))
+            return 'denied';
+          throw error;
+        }
       }
       return await requestPermission();
     },

@@ -15,19 +15,23 @@ the socket themselves.
   backed by DynamoDB (tracks which entity is on which instance).
 - `src/service/sender.rs` + `src/service/redis.rs`: cross-instance message
   relay (Redis pub/sub) so a send reaches a connection on another instance.
+- `src/service/entity_grants.rs`: which entities a connection may subscribe
+  to (`track_entity`, `stream_events`), checked through `entity_access`.
 - `scripts/stale_connections.rs` (`stale_connections` bin): scans DynamoDB for
   connections past the 60s timeout; `README.md` has usage.
 
 ## Scope
 
 - Owns: WebSocket connection tracking and message delivery to a connected
-  entity, across instances.
+  entity, across instances, and authorizing which entities a connection may
+  subscribe to.
 - Not here: the message/event payloads themselves, or who is authorized to
   send to whom — callers decide that before calling in.
 
 ## Boundaries
 
-- Depends on: `connection_gateway_models`, `macro_authorization`.
+- Depends on: `connection_gateway_models`, `macro_authorization`,
+  `entity_access`.
 - Used by: nearly every other service, through `connection_gateway_client`
   (document_storage_service, document_cognition_service, email_service,
   calendar_service, agent_harness_service, mcp_service, scheduled_action,
@@ -50,6 +54,11 @@ the socket themselves.
 - A send can target a connection on a different instance — it always goes
   through the Redis relay in `src/service/redis.rs`, never a direct in-process
   lookup; don't bypass it when adding a new send path.
+- Every subscription frame is authorized: a `user` entity only for that
+  user, any other type for any permission `EntityAccessService` grants on it.
+  Types it has no check for (`static_file`, `skill`, `channel_message`) are
+  refused, so a new entity type clients track needs an access check first.
+  Grants are cached per connection and rechecked every 5 minutes.
 - Presence (`user_tracking_change`) counts an entity row as active for 60s
   after its last `open` or `ping`, compared across instances' clocks. A `ping`
   for a row that is gone re-creates it, so a lost `open` heals on the next

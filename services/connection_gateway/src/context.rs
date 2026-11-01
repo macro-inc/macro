@@ -1,5 +1,6 @@
 use crate::config::Config;
 use axum::extract::FromRef;
+use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use frecency::{
     domain::services::EventIngestorImpl,
     inbound::polling_aggregator::FrecencyAggregatorWorkerHandle,
@@ -15,9 +16,13 @@ use stream::domain::StreamManager;
 
 pub type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
 
+pub type EntityAccess = EntityAccessServiceImpl<PgAccessRepository>;
+
 #[derive(Clone, FromRef)]
 pub struct ApiContext {
     pub connection_manager: crate::service::connection::ConnectionManager,
+    /// Decides which entities a connection may subscribe to.
+    pub entity_access: Arc<EntityAccess>,
     /// Boot-unique id of this gateway instance, used to tag fanout
     /// messages and name this instance's outbound fanout channel.
     pub fanout_gateway_id: Arc<str>,

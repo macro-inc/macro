@@ -182,6 +182,7 @@ fn biome_check() -> Job {
         .add_step(steps::setup_dev_shell())
         .add_step(run_biome())
         .add_step(run_collaboration_biome())
+        .add_step(check_platform_rules())
         .add_step(steps::teardown_nix())
 }
 
@@ -414,6 +415,14 @@ fn run_biome() -> Step<Run> {
     Step::new("Run Biome")
         .run("biome ci --changed --no-errors-on-unmatched --error-on-warnings")
         .working_directory(xtask_paths::repo_dir!("apps/web"))
+}
+
+/// Runs the browser-floor and native media permission ast-grep rules here
+/// because Conventions, which runs every ast-grep rule, is not a required check.
+fn check_platform_rules() -> Step<Run> {
+    Step::new("Check Browser Floor and Native Permissions").run(
+        "bunx --yes @ast-grep/cli@0.44.1 scan --filter '^(tsx?-browser-floor-apis|plist-media-.+)$'",
+    )
 }
 
 fn run_collaboration_biome() -> Step<Run> {

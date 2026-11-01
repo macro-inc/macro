@@ -8,6 +8,12 @@
 - Run Linux native cache-plugin tests from the repository root with `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin`; the [Tauri platform shell](../../docs/development/running-locally.md) supplies the required desktop libraries.
 - `bun run lint:oxlint` (repository root): type-aware oxlint. `typescript/no-floating-promises` is an error with no suppressions and `ignoreVoid: false` (FE-13), enforced in `just check` and CI; start detached work with `fireAndForget` from `@core/util/fireAndForget`, not `void`. Plain `oxlint` without `--type-aware` skips that rule silently. The ast-grep rule `ts-no-expression-void` covers `() => void p()`, which the lint can't see.
 - Email rendering is isolated in `packages/email-renderer` at the repository root. Run `just test-email-rendering` for its Node and Chromium suites. Add fixtures under `packages/email-renderer/tests/fixtures`, run `just test-email-rendering-update`, and review changed images. These are renderer tests, not inbox e2e.
+- Supported browsers are the `browserslist` in `package.json`. Safari and iOS
+  16.4 is the oldest WebKit the app starts on: startup code, including
+  `@pierre/diffs`, evaluates regex lookbehind. `vite.base.ts` builds to it,
+  and the ast-grep rules `ts-browser-floor-apis` and `tsx-browser-floor-apis`
+  ban APIs that turned out to be newer; add one there when it bites, or raise
+  the floor.
 - The app does not register a service worker. Keep `public/sw.js` as a retirement
   endpoint for existing installations; see the [startup bundle rule](../../.agents/rules/web/startup-bundle.md).
   Loro uses async WASM loading and HTML preloads independently of service workers.
@@ -681,6 +687,20 @@ and keep Pro checkout disabled while eligibility is unknown. Refresh the offer
 on focus/reconnect; route existing subscriptions to billing management. Keep
 known management access through refetch failures, but hide unconfirmed trials.
 Reset rejected checkout offers before refetching eligibility.
+
+## Native commands
+
+Over-the-air bundles reach native apps older than the commands they call.
+`native-commands.json` lists every Tauri command the web code invokes directly,
+through a wrapper such as the cache host's `request`, or by `addPluginListener`.
+`src/lib/tauri/native-commands.test.ts` reads the calls with the TypeScript
+parser and fails when one is missing from that list, is not registered by the
+app (`generate_handler!` or an in-repo plugin's `build.rs`), or names its
+command with a value it cannot read: use a string literal, a constant, or a
+parameter typed as a union of literals. Commands that published plugins' own
+JavaScript packages call are not covered. Before adding a command to the list,
+raise `min-native-build.json` to the first build with it, or handle
+`Command … not found` in the caller (see the src-tauri README).
 
 ## Desktop release builds: generated WASM
 

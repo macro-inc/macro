@@ -60,8 +60,12 @@ async fn revoke_refresh_token_reports_a_server_error() {
         .mount(&server)
         .await;
 
-    client(server.uri())
+    let error = client(server.uri())
         .revoke_refresh_token("refresh-token")
         .await
         .expect_err("a server error must not count as a revocation");
+    assert_eq!(
+        error.upstream().map(|upstream| upstream.failure),
+        Some(upstream_error::UpstreamFailure::Unavailable)
+    );
 }

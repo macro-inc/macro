@@ -22,13 +22,12 @@ import SignalIcon from '@icon/system/regular/wave-sine.svg';
 import NoiseIcon from '@icon/system/regular/waveform.svg';
 import { SidebarTagsSection } from '@property/tags/SidebarTagsSection';
 import type { TagScope } from '@service-properties/generated/schemas/tagScope';
-import { Badge, pressHandlers } from '@ui';
+import { pressHandlers } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { type Component, For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { composeEmail } from '../compose-email';
 import {
-  EMAIL_FOCUS_TAB,
   EMAIL_INBOX_TAB_IDS,
   EMAIL_TAB_IDS,
   EMAIL_TAB_LABELS,
@@ -76,12 +75,7 @@ const TAB_ICONS: Record<EmailTab, Component<{ class?: string }>> = {
   focus: FocusIcon,
 };
 
-function Tab(props: {
-  id: EmailTab;
-  label?: string;
-  badge?: string;
-  onNavigate?: () => void;
-}) {
+function Tab(props: { id: EmailTab; label?: string; onNavigate?: () => void }) {
   const { state, setTab } = useEmailView();
 
   return (
@@ -96,13 +90,6 @@ function Tab(props: {
         <Dynamic component={TAB_ICONS[props.id]} class="size-4" />
       </ViewSidebar.Icon>
       <span class="truncate">{props.label ?? EMAIL_TAB_LABELS[props.id]}</span>
-      <Show when={props.badge}>
-        {(badge) => (
-          <Badge variant="outline" size="xs" class="ml-auto">
-            {badge()}
-          </Badge>
-        )}
-      </Show>
     </ViewSidebar.Item>
   );
 }
@@ -116,11 +103,7 @@ export function EmailNavigation(props: { onNavigate?: () => void }) {
       fallback={
         <ViewSidebar.Nav aria-label="Email tabs">
           <Show when={isVisible('focus')}>
-            <Tab
-              id="focus"
-              badge={EMAIL_FOCUS_TAB.badge}
-              onNavigate={props.onNavigate}
-            />
+            <Tab id="focus" onNavigate={props.onNavigate} />
           </Show>
           <div
             ref={tourTarget(EMAIL_TOUR.signalNoise)}

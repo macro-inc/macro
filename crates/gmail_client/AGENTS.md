@@ -45,6 +45,9 @@ contacts, watch) behind a single public facade; most modules are
 - Requests time out after 60 s (`REQUEST_TIMEOUT`). The email service's
   Gmail request gate holds a permit for each call and sizes its lease above
   this (`PERMIT_MS` in `gmail_gate.rs`); keep the two in step.
+- History and contacts are fetched one page per call (`get_history_page`,
+  `get_contacts_page`, `get_other_contacts_page`) so each page takes its own
+  gate permit. Don't add methods that loop over pages here.
 
 ## Related
 
