@@ -46,7 +46,9 @@ A handle to a task by document id. Details load on first access.
 > **create**(`opts`): `Promise`\<[`Task`](../../task/classes/Task.md)\>
 
 Create a task, with its initiative, assignees and due date in the same
-request. The task starts Not started.
+request. The task starts Not started. Call `findSimilar` first in the
+same program; if a likely duplicate exists, skip this and return the
+matches.
 
 #### Parameters
 
@@ -72,9 +74,22 @@ request. The task starts Not started.
 
 > **findSimilar**(`opts`): `Promise`\<[`SimilarTask`](../../task/interfaces/SimilarTask.md)[]\>
 
-Existing tasks of yours or your team's that look like the same work as a
-task with this title and body, most similar first. Call it before
-`create`; if one is a likely duplicate, ask the user instead of creating.
+Check similar existing tasks in the same program as `create`. Returns yours
+or your team's tasks that look like this title and body, most similar first.
+If one is a likely duplicate, return the matches and do not create; never
+edit, merge or delete them unless the user asks.
+
+```js
+const similar = await macro.tasks.findSimilar({ title, body });
+if (similar.length > 0) {
+  return { data: { created: false, similar: similar.map((item) => ({
+    id: item.task.id, name: item.name, url: item.task.webUrl(),
+    similarity: item.similarity,
+  })) } };
+}
+const task = await macro.tasks.create({ name: title, markdown: body });
+return { data: { created: true, id: task.id, url: task.webUrl() } };
+```
 
 #### Parameters
 

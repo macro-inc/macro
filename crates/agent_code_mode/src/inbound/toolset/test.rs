@@ -184,6 +184,36 @@ fn both_execute_code_descriptions_share_one_runtime_contract() {
     assert!(session.contains("execution.reviews.create"));
     assert!(!user.contains("execution.reviews.create"));
     assert!(user.contains("DescribeCodeTools with task"));
+    for guidance in [
+        "as few ExecuteCode calls as possible, ideally one",
+        "put conditionals, loops and dependent reads in the program",
+        "check findSimilar in that same program",
+    ] {
+        assert!(session.contains(guidance), "{guidance}");
+        assert!(user.contains(guidance), "{guidance}");
+    }
+}
+
+#[tokio::test]
+async fn examples_guide_shows_check_then_create_in_one_program() {
+    let response = describe(
+        DescribeCodeTools {
+            task: None,
+            names: vec![],
+            topics: vec![CodeGuideTopic::Examples],
+        },
+        CodeHost::Session,
+    )
+    .await
+    .unwrap();
+    let examples = &response.guides[0].markdown;
+    assert!(examples.contains("as few ExecuteCode calls as possible, ideally one"));
+    assert!(examples.contains("macro.tasks.findSimilar"));
+    assert!(examples.contains("macro.tasks.create"));
+    assert!(examples.contains("if (similar.length > 0)"));
+    assert!(examples.contains("created: false"));
+    assert!(!examples.contains("setTimeout("));
+    assert!(!examples.contains("sleep("));
 }
 
 #[test]
@@ -207,6 +237,21 @@ fn symbols_from_an_index_read_as_their_own_references() {
     assert!(read.references[0].reference.contains("`opts.name`"));
     assert!(read.references[0].reference.contains("`Task`"));
     assert!(!read.references[0].reference.contains(".md"));
+    let find_similar = ReadCodeDocs {
+        symbols: vec!["TaskNamespace.findSimilar".into()],
+    }
+    .read()
+    .unwrap();
+    assert!(
+        find_similar.references[0]
+            .reference
+            .contains("same program as `create`")
+    );
+    assert!(
+        find_similar.references[0]
+            .reference
+            .contains("if (similar.length > 0)")
+    );
     assert_eq!(read.unknown, ["TaskNamespace.missing"]);
     assert!(
         ReadCodeDocs { symbols: vec![] }.read().is_err()

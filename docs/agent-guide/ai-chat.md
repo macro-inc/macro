@@ -1026,7 +1026,10 @@ for workspace feeds with type, time, task, tag, mailbox, and sorting filters.
 Return plain JSON
 in `{data}`. The optional `reviews` array contains saved review references and
 defaults to `[]` when omitted. Loops, early breaks and bounded parallel
-promises are supported. Preserve the user's source filters, source IDs, errors,
+promises are supported. Encode a workflow in as few `ExecuteCode` calls as
+possible, ideally one: put conditionals and dependent reads in the program
+(for example, `findSimilar` then `create` only when nothing matches) and
+return compact ids, urls and failures. Preserve the user's source filters, source IDs, errors,
 and coverage limits; stopping a paginated iterator does not prove exhaustiveness.
 
 Code execution hides program source and raw returned JSON. Observed SDK operations

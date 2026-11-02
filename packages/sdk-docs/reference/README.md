@@ -120,6 +120,8 @@ too: `await document.owner()` returns a user you can inspect.
 List and search methods that return async iterators fetch pages as you iterate.
 Use `for await` to process results and `break` when you have enough. Independent
 reads can run together with `Promise.all`; await dependencies before using them.
+When a later step depends on an earlier result, keep the branch in the same
+program (check, then create or return) instead of a second round trip.
 
 ```ts
 const document = macro.documents.byId(documentId);

@@ -388,6 +388,24 @@ mod tests {
     }
 
     #[test]
+    fn code_mode_prompts_tell_the_model_to_put_control_flow_in_one_execution() {
+        let session = CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string();
+        for phrase in [
+            "as few `ExecuteCode` calls as possible, ideally one",
+            "same ExecuteCode program",
+            "macro.tasks.findSimilar",
+            "if (similar.length > 0)",
+        ] {
+            assert!(session.contains(phrase), "{phrase}");
+        }
+
+        let routing = tool_usage::CODE_MODE_ROUTING.to_string();
+        assert!(routing.contains("as few ExecuteCode calls as possible, ideally one"));
+        assert!(routing.contains("if no similar task exists, create it and return it"));
+        assert!(routing.contains("Batch independent reads with Promise.all"));
+    }
+
+    #[test]
     fn markdown_surface_scope_names_every_surface_but_the_reply_tone_exception() {
         // The mention rule must name every Markdown-authoring surface and the
         // non-Markdown-document exception, and the tool-use tone rule must not

@@ -1,6 +1,6 @@
 # Macro code mode
 
-Code mode runs plain JavaScript using the actual public Macro SDK. Prefer it for supported Macro work, even a single precise call. Entity indexes list each class, method with its signature, and type by symbol; read the symbols a program needs with ReadCodeDocs, all together, unless their reference is already in context. Use DescribeCodeTools for the index of an entity not in context or for workflow guides. The entity catalog is always available. Jev loads the indexes of likely relevant entities once per turn, with a short deadline and a catalog-only fallback.
+Code mode runs plain JavaScript using the actual public Macro SDK. Prefer it for supported Macro work, even a single precise call. Encode the whole workflow in as few ExecuteCode calls as possible, ideally one: put conditionals, loops and dependent reads in the program rather than one execution to check and another to act. Batch independent reads with Promise.all. Return compact results (ids, urls, failures) so no follow-up call is needed. Entity indexes list each class, method with its signature, and type by symbol; read the symbols a program needs with ReadCodeDocs, all together, unless their reference is already in context. Use DescribeCodeTools for the index of an entity not in context or for workflow guides. The entity catalog is always available. Jev loads the indexes of likely relevant entities once per turn, with a short deadline and a catalog-only fallback.
 
 Copy turn_id from the current prompt’s hidden invocation context into ExecuteCode. A stale call must not obtain a replacement ID from discovery or another turn. Choose acting_as explicitly on ExecuteCode. Prefer requester; choose owner only when the request needs the session owner’s access. One account authenticates every operation in the execution. Missing permissions or connections never switch accounts automatically.
 
@@ -20,6 +20,37 @@ export async function main({macro, session, execution}) {
 
 Return an object with data; reviews is optional and defaults to []. Include review references when you prepare editable drafts.
 
+## One execution per workflow
+
+Put the branch in the program. Do not call findSimilar, read the result in the model, then call create in a second execution.
+
+```javascript
+export async function main({macro}) {
+  const title = "Fix login bug";
+  const body = "Optional details";
+  const similar = await macro.tasks.findSimilar({ title, body });
+  if (similar.length > 0) {
+    return {
+      data: {
+        created: false,
+        similar: similar.map((item) => ({
+          id: item.task.id,
+          name: item.name,
+          url: item.task.webUrl(),
+          similarity: item.similarity,
+        })),
+      },
+    };
+  }
+  const task = await macro.tasks.create({ name: title, markdown: body });
+  return { data: { created: true, id: task.id, url: task.webUrl() } };
+}
+```
+
+If similar tasks exist, tell the user and ask instead of creating. Never edit, merge or delete the matches unless the user asks.
+
+The same pattern applies to other dependent work. Find a thread and reply in one program; search several phrases with Promise.all, read the hits, and return compact summaries in one program. Do not use setTimeout, sleeps or polling loops.
+
 macro, session and execution are real SDK handles. You can instead import {Macro} from '@macro-inc/sdk' and construct it with main's token and hosts. Do not log, return, persist or transmit that credential elsewhere. It is a short-lived normal user credential, with the user's API permissions. SDK operations make real HTTP calls. Messages are attributed to the session's agent, with the selected acting account recorded as the requesting user; do not supply sender identities yourself. No custom sdk.ToolName dispatcher, TypeScript transpilation, runtime help or package installation is involved.
 
 ## Useful workflows
@@ -33,7 +64,7 @@ macro, session and execution are real SDK handles. You can instead import {Macro
 
 ## Correctness and bounds
 
-Use references already in context; read unfamiliar methods, options and enum values together with ReadCodeDocs instead of guessing. Use loops, early breaks, Promise.all, Promise.allSettled and dependencies as appropriate. Await all started work. Use entity-specific searches to preserve the user's scope. SDK searches are async iterators with pagination; do not invent the old tool's response shape. Bound concurrency and return compact evidence, not live handles or full broad search batches. A stopped iterator or failed branch does not prove exhaustive coverage.
+Use references already in context; read unfamiliar methods, options and enum values together with ReadCodeDocs instead of guessing. Use loops, early breaks, Promise.all, Promise.allSettled and dependencies in one execution as appropriate. Await all started work. Use entity-specific searches to preserve the user's scope. SDK searches are async iterators with pagination; do not invent the old tool's response shape. Bound concurrency and return compact evidence, not live handles or full broad search batches. A stopped iterator or failed branch does not prove exhaustive coverage.
 
 Each execution is a fresh Deno process in the agent harness: 30 seconds including queueing, 64 KiB source. A result over 64 KiB comes back as an outline and the start of its data, so return compact data. Imports are prebundled; direct network is restricted to configured Macro service hosts. Filesystem writes, arbitrary imports, subprocesses and environment access are denied. Completed API writes remain after failure or cancellation. Check state before retrying and never blindly replay writes. Source, status and final result are journaled; individual direct HTTP responses are not old tool-call receipts.
 

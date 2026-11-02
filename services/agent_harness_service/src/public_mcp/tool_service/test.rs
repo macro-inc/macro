@@ -553,6 +553,8 @@ mod code_mode {
         assert!(flagged_instructions.contains("Code mode is on"));
         assert!(flagged_instructions.contains("ExecuteCode"));
         assert!(flagged_instructions.contains("DescribeCodeTools"));
+        assert!(flagged_instructions.contains("as few ExecuteCode calls as possible, ideally one"));
+        assert!(flagged_instructions.contains("Batch independent reads with Promise.all"));
         for leaked in [
             "NameSearch",
             "ReadContent",

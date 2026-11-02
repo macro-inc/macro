@@ -741,7 +741,9 @@ A handle to a task by document id. Details load on first access.
 > `static` **create**(`client`, `opts`): `Promise`\<`Task`\>
 
 Create a task, with its initiative, assignees and due date in the same
-request. The task starts Not started.
+request. The task starts Not started. Call `findSimilar` first in the
+same program; if a likely duplicate exists, skip this and return the
+matches.
 
 #### Parameters
 
@@ -826,9 +828,10 @@ any markdown area.
 
 > `static` **findSimilar**(`client`, `opts`): `Promise`\<[`SimilarTask`](../interfaces/SimilarTask.md)[]\>
 
-Existing tasks of the caller or their team that look like the same work
-as a task with this title and body, most similar first. Creates and
-changes nothing; check it before creating a task.
+Check similar existing tasks in the same program as `create`. Returns
+tasks of the caller or their team that look like this title and body,
+most similar first. Creates and changes nothing; if one is a likely
+duplicate, return the matches and do not create.
 
 #### Parameters
 
