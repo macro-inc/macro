@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT (created_at AT TIME ZONE 'UTC')::date - 1 AS \"first_date!\" FROM memory_refresh_job WHERE user_id = $1",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "first_date!",
+        "type_info": "Date"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "3bf0a98f00ea3a79e038aa1090695f162cedcd3059061e8e4c0c17f5b050f95d"
+}

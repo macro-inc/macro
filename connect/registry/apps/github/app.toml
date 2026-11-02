@@ -1,0 +1,10 @@
+id = "github"
+name = "GitHub"
+description = "Read and manage repositories, pull requests, issues, and code."
+access = ["mcp"]
+mcp_url = "https://api.githubcopilot.com/mcp"
+client_registration = "own_app"
+scopes = []
+pipedream_app_slugs = ["github"]
+status = "pending"
+probed = 2026-10-30

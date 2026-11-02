@@ -550,6 +550,10 @@ the shimmer.
   A checkmark identifies the selected model,
   including when it is the agent’s configured default; there is no separate default row.
   Disconnected Cursor offers **Connect Cursor**, opening Settings → Agents → Runtimes.
+  An agent whose paired machine is away is greyed out, carries an **Offline**
+  badge, and offers **Reconnect runtime** instead of a model submenu; the same
+  badge appears in the `@` menu, where offline agents cannot be mentioned at all
+  (clicking or pressing Enter leaves the menu open and inserts nothing).
   The built-in sandbox and paired macrod runtimes are not offered here.
 - With the `enable-agent-updates` flag, the New conversation page shows a stack
   of pending updates from your coding sessions under the composer: one card per
@@ -677,12 +681,23 @@ the shimmer.
   field focused on open, and a default model picker that enables once the key is
   saved. Connected, the same page shows the saved date, **Disconnect**, and
   **Done**. **Manage** on a paired machine opens **Runtimes** (Back returns to
-  Agents): built-in providers, **New runtime**, and the **Paired runtimes** list,
-  which appears once you have a paired runtime.
+  Agents): **Connected runtimes** (shown only once a paired machine is connected;
+  it then lists every paired machine, connected ones first, each with
+  **Connected** or **Offline** and **Remove**), built-in providers, and
+  **New runtime**.
   On the desktop app, **Runtimes** opens with a **This computer** card that sets
   up the bundled macrod daemon in one click: **Set up** detects installed agents,
   then **Start running agents here** configures, pairs (auto-approved, no code),
-  and starts it. The manual flow below remains for pairing other machines.
+  and starts it. Before this computer is paired, a dismissible **Run agents on
+  this computer** invitation appears above the Home input and the Agents
+  new-conversation and active-session inputs. Clicking it opens Runtimes;
+  dismissing it affects only this desktop installation and signed-in user.
+  Runtimes is available on desktop even when the newer Agents view is still
+  rolling out. Each paired computer keeps its own runtime identity and appears
+  separately under Connected runtimes. The manual flow below remains for pairing
+  other machines. In the agent form, a runtime whose machine is away is labelled
+  **· Offline** but stays selectable: binding an agent to a sleeping computer is
+  normal.
   **New runtime** shows three steps: install macrod with the shown `curl … |
   sh` (macOS, Linux) or `irm … | iex` (Windows) command, run `macrod` and
   configure your agent in Quickstart, then enter your pairing
@@ -2404,3 +2419,21 @@ report's error text. The row stays on one line and
 truncates on phones.
 
 The desktop Agents sidebar New menu offers Conversation, Work agent, Coding agent, and Routine, with short descriptions. Conversation opens the existing composer; Work agent and Coding agent open the agent editor with that kind preselected, including when a runtime setup page was previously open. Routine opens its unsaved composer. Canceling creation returns to the existing management flow.
+
+
+## Explicit memory and activity
+
+Ask the agent to remember a nonsensitive preference, such as “remember that I prefer
+concise answers.” It reads private memory, applies a revision-checked edit, and shows
+an expandable **Update memory** row with the saved content. Expand it on desktop
+and mobile to inspect the result. Ask to forget that preference and verify the
+updated content no longer contains it. A rejected or conflicting edit must never
+show Saved; reread memory before retrying a conflict.
+
+Ask what you or a current teammate worked on in a date range to use **Read activity**.
+Expand the result to see each report's granularity, dates, and text. Empty reports
+mean no stored evidence. A user outside your current teams must be refused. Explicit
+preferences are private and cannot be read by targeting another user.
+
+Activity is generated for completed UTC days in the background. Local environments
+require an intentional CLI refresh; ordinary memory reads do not invoke a model.

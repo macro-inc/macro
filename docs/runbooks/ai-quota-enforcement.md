@@ -44,7 +44,8 @@ The classification is exhaustive and server-selected, not request-controlled.
 
 Unlimited (enterprise) entitlements are never blocked by this quota policy.
 Free-plan users are hard-capped at `AI_USAGE_FREE_INCLUDED_ALLOWANCE_CENTS` of
-counted usage per UTC calendar month: past it, admission answers
+counted usage per UTC calendar month, plus any bonus earned from team invites and
+referrals (`ai_free_allowance_bonus`, +$10 each, at most +$50): past it, admission answers
 `ai_free_allowance_exhausted` and nothing is settled, since Free has no credits
 or overage. Model-access and resource permissions remain independent. Counting
 eligibility is not a claim that a particular user owes money; it does not
@@ -253,7 +254,7 @@ errors are not permission grants and must not disclose another user's quota.
 | Result | HTTP status | Stable `code` | Retry semantics |
 | --- | --- | --- | --- |
 | Allowance exhausted | 402 | `ai_allowance_exhausted` | Policy/allowance must change; no automatic tight retry |
-| Free monthly cap reached | 402 | `ai_free_allowance_exhausted` | Only an upgrade (or the next calendar month) lifts it |
+| Free monthly cap reached | 402 | `ai_free_allowance_exhausted` | An upgrade, the next calendar month, or an earned invite/referral bonus lifts it |
 | Spending cap reached | 402 | `ai_overage_limit_reached` | Policy/allowance must change |
 | Overage payment failed | 402 | `ai_overage_payment_failed` | Billing problem must be resolved |
 | Could not validate billing | 503 | `ai_billing_unavailable` | Retry later with bounded backoff; never execute on uncertainty |
@@ -361,7 +362,7 @@ requests settlement). Admission itself never records usage or calls settlement.
 | Repository chooser / AgentRepositoryChoice | [repository choice service](../../crates/agent_harness/src/domain/repository_choice.rs) | Harness main → `CursorContainerManager`, the same settling recorder | [deterministic bypass / typed model refusal](../../crates/agent_harness/src/domain/repository_choice/test.rs) |
 | Scheduled manual/cron/event model work / Automation | [shared executor](../../crates/scheduled_action/src/domain/execution.rs) | [scheduled service](../../services/agent_harness_service/src/scheduling.rs): `pg_settling_recorder` for the condition classifier; agent targets are funded and metered by the harness | [claims, schedules, terminal events](../../crates/scheduled_action/src/domain/execution/test.rs), [manual HTTP](../../crates/scheduled_action/src/inbound/axum_router/test.rs) |
 | Scheduled agent targets / session funding policy | [target runner](../../crates/scheduled_action/src/domain/target_runner.rs) → session/harness admission | Target runtime's recorder, not duplicate scheduler metering | [delegation and typed errors](../../crates/scheduled_action/src/domain/target_runner/test.rs), [routine error transport](../../crates/agent_session/src/inbound/routine_sessions/test.rs) |
-| Memory, projection, call summary, dictation, chat rename / exempt | [shared admission policy](../../crates/ai_billing/src/domain/admission.rs) skips quota; ordinary permissions still apply | DCS/DSS configured recorders; [memory context](../../crates/memory/src/context.rs) uses T; DSS independent call-summary/dictation recorders use R | [all exempt features](../../crates/ai_usage/src/domain/counting/test.rs), [no billing I/O](../../crates/ai_billing/src/domain/admission/test.rs), [configured recording](../../crates/ai_billing/src/composition/test.rs) |
+| Memory, projection, call summary, dictation, chat rename / exempt | [shared admission policy](../../crates/ai_billing/src/domain/admission.rs) skips quota; ordinary permissions still apply | DCS/DSS configured recorders; [memory context](../../crates/ai_tools/src/bin/memory/context.rs) uses T; DSS independent call-summary/dictation recorders use R | [all exempt features](../../crates/ai_usage/src/domain/counting/test.rs), [no billing I/O](../../crates/ai_billing/src/domain/admission/test.rs), [configured recording](../../crates/ai_billing/src/composition/test.rs) |
 | Existing system task duplicate judge / Automation | [system attribution](../../crates/task_dedup/src/outbound/judge.rs), no user quota gate | DSS main, independent R; system events stay uncounted | [system counting](../../crates/ai_usage/src/domain/counting/test.rs), [system recorder behavior](../../crates/ai_billing/src/outbound/settling_recorder/test.rs) |
 | Billing summary (not execution) | [billing service policy](../../crates/ai_billing/src/domain/service.rs) | [authentication main](../../services/authentication_service/src/main.rs) configures the same flag plus `ENABLE_AI_USAGE_BILLING`, no usage producer | [settlement policy/free/unlimited/settlement](../../crates/ai_billing/src/domain/service/test.rs), [authentication configuration](../../services/authentication_service/src/config/test.rs) |
 

@@ -30,6 +30,9 @@ decides who may respond.
   card in the message and sends it. Closing the dialog while it posts sends
   nothing and trashes the poll. With results hidden, respondents answer
   without counts and editors review votes in the Responses tab.
+- Asked for a poll, or for a form for a channel, the Macro agent makes a poll
+  and posts it as its card in one message (its channel reply), the same card
+  `/poll` posts.
 
 ## The form page
 

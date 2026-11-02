@@ -18,6 +18,9 @@ provider cost (plus markup for overage).
 - `src/domain/ledger.rs` + `src/domain/sweep.rs`: the credit/overage ledger
   and the settlement sweep.
 - `src/outbound/stripe_gateway.rs`: the only place Stripe is called.
+- `src/domain/invite_reward.rs`: the invite/referral reward — $10 prepaid
+  credit for a paid user's payer, or +$10 monthly free allowance (capped at
+  +$50, table `ai_free_allowance_bonus`) for a free user.
 
 ## Scope
 

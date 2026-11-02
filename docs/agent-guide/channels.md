@@ -395,6 +395,12 @@ after the first three (five participants shows **+2**).
 Drag the handle, tap the backdrop, or press Escape to dismiss without starting a
 call. Only confirming notifies participants; joining a live call skips the sheet.
 Check both DMs and channels, including long names, in light and dark themes.
+On phones, a collapsed composer with attachments shows a thumbnail of the
+first one between `+` and the draft, with the number of attachments over it
+when there are two or more; a document shows its file icon. It shows with or
+without draft text, and tapping it opens the composer with the attachments
+below the editor. Check one image, several mixed attachments, and a document
+alone, with and without text, in light and dark themes.
 Input action and formatting buttons show the app tooltip without a second
 native browser tooltip.
 On desktop, select draft text to open the floating formatting toolbar. Its
