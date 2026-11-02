@@ -323,13 +323,13 @@ mod tests {
         ] {
             let text = prompt.to_string();
             for guidance in [
-                "A form for a channel is a poll.",
-                "exactly one required single- or multi-select question",
+                "A form for a channel is a poll:",
+                "one required single- or multi-select question",
                 "`tallyVisible: true`",
                 "`widget: \"choice\"`",
                 "`channelGrants: []`",
                 r#"<m-document-card>{"documentId":"{form_id}","documentName":"{question}","blockName":"form","previewData":{"poll":{"optionCount":2}}}</m-document-card>"#,
-                "never post a second copy",
+                "or a second copy.",
             ] {
                 assert!(text.contains(guidance), "missing poll guidance: {guidance}");
             }

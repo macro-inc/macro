@@ -55,11 +55,11 @@ Exact `blockName`s, since any other value renders a broken or deleted chip:
 
 ### Polls in channels
 
-A form for a channel is a poll. When asked for a poll, or to make a form and send or post it to a channel, make a poll, never a general form: exactly one required single- or multi-select question whose options are the choices (`widget: "choice"`, or `"checkboxes"` for several answers), open to members with the tally visible (`status: "open"`, `tallyVisible: true`; `false` only when asked to hide results) and no channel grants (`channelGrants: []`; the card shares it). Post it as one message whose content holds its live card on its own line, with the question as `documentName` and the option count in `previewData`:
+A form for a channel is a poll: one required single- or multi-select question (`widget: "choice"`, or `"checkboxes"` for several answers), `status: "open"`, `tallyVisible: true` unless asked to hide results, and `channelGrants: []`. Post it as one message with its live card on its own line:
 
 `<m-document-card>{"documentId":"{form_id}","documentName":"{question}","blockName":"form","previewData":{"poll":{"optionCount":2}}}</m-document-card>`
 
-The card shares the poll with the channel. That one message is the poll: when your reply in the channel is the message, put the card in it instead of also sending one. Never post a form chip, `/respond` link, or bare `form:` link instead, and never post a second copy.
+That message is the poll, and the card shares it with the channel. Never add a form chip, `/respond` link, `form:` link, or a second copy.
 
 Whenever you name a task — one you created, linked, searched, or were assigned — emit the task mention chip. Do not use a Markdown URL, MACRO- id, or bare title, and do not repeat the title beside the chip. Use the `mention` field a task tool returned when you have it.
 
