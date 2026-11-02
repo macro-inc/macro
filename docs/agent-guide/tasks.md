@@ -804,9 +804,9 @@ with no Tasks list beside it. Viewing a project lists its tasks: anyone who can
 view the project, by membership, share, or link, sees every task in it with
 its title and properties. Opening a task still needs access to that task. Its
 Tasks section lists all of the project's tasks, and a task opens in the same
-pane with the project breadcrumb; one the visitor can't open shows **Sign in
-to view this page**, and for a signed-in user `You don't have access to this
-task`. The description reads as it stands, comments show **Sign in to
+pane with the project breadcrumb. A task the viewer can't open sends a
+visitor to sign in, and shows a signed-in user `You don't have access to this
+file` with Request access. The description reads as it stands, comments show **Sign in to
 view comments.**, and a Public link shared at Edit still gives the visitor
 View. A signed-in user who is not a member opens the same project at the level
 its link grants, and its Tasks tab lists every task in it. A private project,
