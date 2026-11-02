@@ -1,12 +1,12 @@
 ---
 vendor: zoom
 apps: [zoom, zoom_admin]
-state: drafting
+state: deferred
 portal: https://marketplace.zoom.us
 account: connect@macro.com
 submitted:
 last_contact:
-next_action: Human fills the NEEDS-HUMAN items in the Draft (redirect host, company facts, legal and support URLs, security evidence); the agent then creates the General app
+next_action: Deferred by Eric on 2026-11-02
 next_action_owner: human
 due: 2026-11-02
 ---

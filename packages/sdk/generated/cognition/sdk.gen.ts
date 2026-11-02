@@ -432,9 +432,8 @@ export class Sdk extends HeyApiClient {
     /**
      * Get the authenticated user's latest memory.
      *
-     * Returns the current memory if one exists. If the memory is stale or missing,
-     * a background generation is triggered and the endpoint returns the stale
-     * memory (200) or 404 if none exists yet.
+     * Compose stored private preferences, latest activity, and current team profiles.
+     * Enrolls the caller for daily refresh; generation never runs on this request.
      */
     public getMemoryHandler<ThrowOnError extends boolean = false>(options?: Options<GetMemoryHandlerData, ThrowOnError>): RequestResult<GetMemoryHandlerResponses, GetMemoryHandlerErrors, ThrowOnError> {
         return (options?.client ?? this.client).get<GetMemoryHandlerResponses, GetMemoryHandlerErrors, ThrowOnError>({ url: '/memory', ...options });

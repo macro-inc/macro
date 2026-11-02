@@ -29,3 +29,7 @@ The code-paste regression types three backticks to open a code block in the
 production composer and pastes a Macro link, then Markdown. Both land as literal
 code text: the link used to become a mention the code block dropped, and the
 Markdown used to lose its syntax.
+
+The CRM mention regression uses the real menu and contact query with controlled
+pages. It selects a CRM contact whose email also belongs to a Macro user,
+verifies the stored contact link, and pages CRM results on desktop and phone.

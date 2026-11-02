@@ -839,6 +839,10 @@ pub async fn build(
     );
 
     let tool_service_context = ai_tools::ToolServiceContext {
+        memory_tool_context: ai_tools::memory::build_memory_tool_context(
+            db.clone(),
+            recorder.clone(),
+        ),
         cognition_tool_context: ai_tools::build_cognition_tool_context()?,
         connector_tool_context: ai_tools::build_connector_tool_context(db.clone(), None, None),
         search_service_client: search_service_client.clone(),
@@ -933,11 +937,9 @@ pub async fn build(
         Arc::new(all_tools.prompt.to_string());
 
     // Build memory service
-    let memory_repo = memory::outbound::pg_memory_repo::PgMemoryRepo::new(db.clone());
-    let memory_service = Arc::new(memory::domain::service::MemoryServiceImpl::new(
-        memory_repo,
+    let memory_service = Arc::new(ai_tools::memory::build_memory_service(
+        db.clone(),
         tool_service_context.clone(),
-        all_tools,
     ));
 
     tracing::info!("initialized memory service");
@@ -1091,6 +1093,13 @@ pub async fn build(
         cancellation.clone(),
         event_broker_tracker.clone(),
     );
+    if !matches!(config.environment, Environment::Local) {
+        memory::schedule::start(
+            memory_service.clone(),
+            &event_broker_tracker,
+            cancellation.clone(),
+        )?;
+    }
     let router = api::build_router(ApiContext {
         db: db.clone(),
         email_service_client_external,
