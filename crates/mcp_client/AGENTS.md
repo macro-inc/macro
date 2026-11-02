@@ -25,6 +25,11 @@ through `rmcp`, returning the result to the caller's tool-calling loop.
   port the outbound adapters implement.
 - `src/domain/provider_registry.rs` (feature `providers`): pre-registered
   OAuth credentials for known MCP providers, keyed off `macro_env_var`.
+- `src/domain/service/linked_github.rs`: `WithLinkedGithub`, the store
+  decorator that answers GitHub's MCP server with the user's GitHub account
+  link token (same GitHub App), read through the `LinkedGithubTokens` port
+  (`outbound/auth_service_github_tokens.rs`). Hosts read the native store as
+  `outbound::NativeServerStore`.
 - `src/inbound/axum_router.rs`: HTTP routes for server management and the
   OAuth callback.
 - `src/inbound/toolset.rs`: the `ConnectMcpServer` AI tool, wired through
@@ -41,7 +46,8 @@ through `rmcp`, returning the result to the caller's tool-calling loop.
 
 ## Boundaries
 
-- Depends on: `agent`, `ai_toolset`, `macro_authorization` (feature `axum`),
+- Depends on: `agent`, `ai_toolset`, `authentication_service_client`,
+  `macro_authorization` (feature `axum`),
   `macro_user_id`, `rmcp`.
 - Used by: `agent_egress`, `agent_harness`, `ai_tools`, `mcp_select`,
   `onboarding`.
