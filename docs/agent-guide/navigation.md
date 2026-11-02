@@ -1166,8 +1166,8 @@ either watches events or has a next run; paused routines and completed one-offs
 don't count. At the limit, creating, duplicating, or activating a template with
 **Start enabled**, enabling a paused routine, or giving a completed one-off a new
 time fails with **You've reached your plan's limit of N active routines. Pause or
-delete a routine to activate another.** On Free and Pro the **Routine limit
-reached** paywall opens as well. Saving a routine paused always works. An owner
+delete a routine to activate another.** On Free and Pro the **Upgrade your plan**
+paywall opens as well, with that advice. Saving a routine paused always works. An owner
 over the limit after a downgrade keeps their active routines but can't activate
 more until under it.
 
