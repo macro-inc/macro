@@ -5,9 +5,9 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, tag_no_case, take_till1, take_while1},
     character::complete::anychar,
-    combinator::{eof, peek, recognize, verify},
+    combinator::{eof, not, peek, recognize, verify},
     multi::{many_till, many0},
-    sequence::{delimited, preceded},
+    sequence::{delimited, preceded, terminated},
 };
 use serde::Deserialize;
 use std::{
@@ -343,20 +343,29 @@ impl<'de> ParsedXmlText<'de> {
 
     /// Parses text that need not be valid message markup, such as an agent's
     /// Markdown reply, where `Vec<String>` or `a < b` is ordinary prose. A `<`
-    /// that starts no parseable tag stays as plain text instead of failing the
-    /// whole input, so the tags around it are still recognized.
+    /// that does not open an `<m-*>` tag stays as plain text instead of failing
+    /// the whole input, so the tags around it are still recognized.
+    ///
+    /// From the first `<m-*>` tag that does not parse, the rest is kept as
+    /// plain text. Retrying after it would rescan the remaining input for a
+    /// closing tag at every such tag, which is quadratic in a long reply.
     pub fn parse_lenient(s: &'de str) -> Self {
+        let stray_lt = terminated(tag("<"), not(tag_no_case("m-")));
         let parsed = many0(alt((
             parse_segment,
-            tag("<").map(|lt| Some(TextSegment::Plain(lt))),
+            stray_lt.map(|lt| Some(TextSegment::Plain(lt))),
         )))
         .parse(s);
-        match parsed {
-            Ok((_, out)) => ParsedXmlText(out.into_iter().flatten().collect()),
+        let Ok((rest, out)) = parsed else {
             // Every alternative consumes input or fails recoverably, so this is
             // not reached; keep the text rather than lose it if it ever is.
-            Err(_) => ParsedXmlText(vec![TextSegment::Plain(s)]),
+            return ParsedXmlText(vec![TextSegment::Plain(s)]);
+        };
+        let mut segments: Vec<_> = out.into_iter().flatten().collect();
+        if !rest.is_empty() {
+            segments.push(TextSegment::Plain(rest));
         }
+        ParsedXmlText(segments)
     }
 }
 

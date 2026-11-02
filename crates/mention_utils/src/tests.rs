@@ -967,6 +967,13 @@ fn lenient_parse_keeps_a_malformed_mention_as_text() {
 }
 
 #[test]
+fn lenient_parse_keeps_text_after_an_unclosed_tag_as_written() {
+    // One scan per unclosed tag would make this input quadratic to parse.
+    let input = "<m-link>x ".repeat(16 * 1024);
+    assert_eq!(lenient_plain_text(&input), input);
+}
+
+#[test]
 fn lenient_parse_of_valid_markup_matches_strict_parse() {
     let input = r#"<m-user-mention>{"userId":"macro|user@example.com","email":"user@example.com"}</m-user-mention> see <m-link>{"text":"docs","url":"https://example.com"}</m-link>"#;
     let strict = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
