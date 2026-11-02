@@ -38,8 +38,6 @@ export type DialogProps = {
   visibleScrim?: boolean /* if the scrim is visible */;
   /** Desktop opening animation; mobile drawers own their transitions. */
   animate?: boolean;
-  /** Constrain children on mobile so their own scroll regions can resize. */
-  contentOwnsScroll?: boolean;
 };
 
 export function Dialog(props: DialogProps) {
@@ -85,22 +83,13 @@ function DialogDrawer(props: DialogProps) {
             class={cn('mx-auto max-w-[calc(100vw-16px)]', props.class)}
           >
             <MobileDrawer.Handle aria-hidden="true" />
-            <Show
-              when={props.contentOwnsScroll}
-              fallback={
-                <MobileDrawer.ScrollBody>
-                  {/* Give desktop surfaces their natural height so their size-full
+            <MobileDrawer.ScrollBody>
+              {/* Give desktop surfaces their natural height so their size-full
                   and overflow-clip styles cannot clip the drawer's scroll body. */}
-                  <div class="shrink-0 [&>[data-layer]>[data-surface]]:border-0! [&>[data-layer]>[data-surface]]:rounded-none [&>[data-layer]>[data-surface]]:bg-transparent">
-                    {props.children}
-                  </div>
-                </MobileDrawer.ScrollBody>
-              }
-            >
-              <div class="flex min-h-0 flex-auto flex-col">
+              <div class="shrink-0 [&>[data-layer]>[data-surface]]:border-0! [&>[data-layer]>[data-surface]]:rounded-none [&>[data-layer]>[data-surface]]:bg-transparent">
                 {props.children}
               </div>
-            </Show>
+            </MobileDrawer.ScrollBody>
           </MobileDrawer.Content>
         </MobileDrawer.Portal>
       </MobileDrawer>

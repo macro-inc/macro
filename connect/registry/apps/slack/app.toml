@@ -1,0 +1,10 @@
+id = "slack"
+name = "Slack"
+description = "Search conversations, read channels, and post messages."
+access = ["mcp"]
+mcp_url = "https://mcp.slack.com/mcp"
+client_registration = "own_app"
+scopes = ["canvases:read", "canvases:write", "channels:history", "channels:read", "channels:write", "chat:write", "emoji:read", "files:read", "groups:history", "groups:read", "groups:write", "mpim:history", "mpim:write", "mpim:read", "im:history", "im:write", "reactions:write", "search:read.files", "search:read.im", "search:read.mpim", "search:read.private", "search:read.public", "search:read.users", "users:read", "users:read.email"]
+pipedream_app_slugs = ["slack", "slack_v2"]
+status = "pending"
+probed = 2026-10-30

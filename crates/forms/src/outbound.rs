@@ -1,5 +1,6 @@
 //! Driven adapters: the Postgres repository, the system clock, the forms
-//! catalog asked of `entity_access`, and liveness through the gateway.
+//! catalog asked of `entity_access`, liveness through the gateway, and the
+//! static files branding shows.
 
 pub mod collaborative_layout;
 pub mod entity_access_directory;
@@ -7,6 +8,8 @@ pub mod entity_access_directory;
 pub mod gateway_event_publisher;
 #[cfg(feature = "postgres")]
 pub mod pg_forms_repo;
+#[cfg(feature = "static_files")]
+pub mod static_file_images;
 pub mod system_clock;
 
 /// Authoring permission adapter.

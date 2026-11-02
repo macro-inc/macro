@@ -101,6 +101,7 @@ function rsvp(): FormDetail {
       closesAt: null,
       tallyVisible: false,
       confirmationMessage: '',
+      branding: { logoFileId: null, coverFileId: null, accentColor: null },
       submittedColumnId: null,
       respondentColumnId: null,
     },

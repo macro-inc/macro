@@ -70,6 +70,8 @@ pub enum FormErrorCode {
     InvalidSharing,
     /// The form's owner keeps its tallies from respondents.
     TallyHidden,
+    /// A logo or cover image is not an image the caller uploaded.
+    InvalidBranding,
     /// The table changed under the request; try again.
     Conflict,
     /// Something failed on the server.
