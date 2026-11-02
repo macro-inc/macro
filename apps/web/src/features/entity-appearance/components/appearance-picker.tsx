@@ -19,11 +19,6 @@ import SmileyIcon from '@icon/system/regular/smiley.svg';
 import UsersIcon from '@icon/system/regular/users-three.svg';
 import XIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
-import {
-  createVirtualizer,
-  defaultRangeExtractor,
-  type Range,
-} from '@tanstack/solid-virtual';
 import { Button, InputGroup, Tabs } from '@ui';
 import {
   type Component,
@@ -33,9 +28,11 @@ import {
   For,
   type JSX,
   on,
+  onMount,
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
+import { Virtualizer, type VirtualizerHandle } from 'virtua/solid';
 import {
   APPEARANCE_COLORS,
   appearanceColor,
@@ -198,56 +195,29 @@ export function AppearancePicker(props: {
     ];
   });
   const rows = createMemo(() => pickerRows(sections(), columns()));
-  const focusedRow = () =>
+  const rowKeys = createMemo(() => rows().map((row) => row.key));
+  const focusedRow = createMemo(() =>
     rows().findIndex(
       (row) =>
         row.kind === 'options' &&
         row.options.some((option) => option.key === focusedKey())
-    );
-  const virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
-    get count() {
-      return rows().length;
-    },
-    get getItemKey() {
-      const keys = rows().map((row) => row.key);
-      return (index: number) => keys[index];
-    },
-    getScrollElement: () => grid ?? null,
-    estimateSize: (index) =>
-      rows()[index].kind === 'heading' ? 28 : props.mobile ? 44 : 36,
-    initialRect: { width: 344, height: 304 },
-    overscan: 3,
-    get rangeExtractor() {
-      const pinned = focusedRow();
-      return (range: Range) => {
-        const indexes = defaultRangeExtractor(range);
-        return pinned < 0 || indexes.includes(pinned)
-          ? indexes
-          : [...indexes, pinned].sort((a, b) => a - b);
-      };
-    },
-  });
-  createEffect(
-    on(
-      () => props.mobile,
-      () => virtualizer.measure(),
-      { defer: true }
     )
   );
-  createEffect(
-    on([focusRequest, rows, () => virtualizer.getVirtualItems()], () => {
-      const requested = focusRequest();
-      if (!requested) return;
-      const button = Array.from(
-        grid?.querySelectorAll<HTMLButtonElement>('[data-appearance-option]') ??
-          []
-      ).find((button) => button.dataset.appearanceOption === requested);
-      if (button) {
-        button.focus({ preventScroll: true });
-        setFocusRequest(undefined);
-      }
-    })
-  );
+  const keptRows = createMemo(() => (focusedRow() < 0 ? [] : [focusedRow()]));
+  const [virtualizer, setVirtualizer] = createSignal<VirtualizerHandle>();
+  const restoreRequestedFocus = () => {
+    const requested = focusRequest();
+    if (!requested) return;
+    const button = Array.from(
+      grid?.querySelectorAll<HTMLButtonElement>('[data-appearance-option]') ??
+        []
+    ).find((button) => button.dataset.appearanceOption === requested);
+    if (button) {
+      button.focus({ preventScroll: true });
+      setFocusRequest(undefined);
+    }
+  };
+  createEffect(on([focusRequest, rows, virtualizer], restoreRequestedFocus));
   const changeSearch = (value: string) => {
     setFocusedKey(undefined);
     setFocusRequest(undefined);
@@ -256,14 +226,13 @@ export function AppearancePicker(props: {
     setCategory(
       sections().find((section) => section.options.length > 0)?.key ?? 'people'
     );
-    virtualizer.scrollToOffset(0);
+    virtualizer()?.scrollTo(0);
   };
-  const updateCategoryFromScroll = () => {
-    if (!grid || tab() !== 'emoji' || searching()) return;
-    const visible = virtualizer
-      .getVirtualItems()
-      .findLast((item) => item.start <= (grid?.scrollTop ?? 0));
-    if (visible) setCategory(rows()[visible.index].section);
+  const updateCategoryFromScroll = (offset: number) => {
+    if (tab() !== 'emoji' || searching()) return;
+    const index = virtualizer()?.findItemIndex(offset);
+    if (index !== undefined && rows()[index])
+      setCategory(rows()[index].section);
   };
   const pick = (option: PickerOption, button?: HTMLButtonElement) => {
     const preserveFocus = button === document.activeElement;
@@ -279,7 +248,7 @@ export function AppearancePicker(props: {
     setFocusedKey(option.key);
     setFocusRequest(option.key);
     const index = focusedRow();
-    if (index >= 0) virtualizer.scrollToIndex(index, { align: 'auto' });
+    if (index >= 0) virtualizer()?.scrollToIndex(index, { align: 'nearest' });
   };
   function handleKeyDown(event: KeyboardEvent) {
     if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey)
@@ -313,38 +282,44 @@ export function AppearancePicker(props: {
   }
   const selected = (icon: AppearanceIcon) =>
     JSON.stringify(props.appearance.icon) === JSON.stringify(icon);
-  const Option = (optionProps: { option: PickerOption }) => (
-    <Button
-      variant="ghost"
-      appearance="bare"
-      size={props.mobile ? 'icon-lg' : 'icon-md'}
-      class="max-w-full min-w-0 rounded-md aria-pressed:bg-hover aria-pressed:border-edge-muted not-touch:hover:bg-hover touch:min-w-0"
-      data-appearance-option={optionProps.option.key}
-      aria-label={optionProps.option.label}
-      aria-pressed={selected(optionProps.option.icon)}
-      tooltip={optionProps.option.label}
-      onClick={(event) => pick(optionProps.option, event.currentTarget)}
-    >
-      <Show
-        when={optionProps.option.icon.kind === 'macro'}
-        fallback={
-          <span class="emoji text-xl mobile:text-[26px]">
-            {optionProps.option.icon.kind === 'emoji'
-              ? optionProps.option.icon.value
-              : ''}
-          </span>
-        }
+  const Option = (optionProps: { option: PickerOption }) => {
+    onMount(restoreRequestedFocus);
+    return (
+      <Button
+        variant="ghost"
+        appearance="bare"
+        size={props.mobile ? 'icon-lg' : 'icon-md'}
+        class="max-w-full min-w-0 rounded-md aria-pressed:bg-hover aria-pressed:border-edge-muted not-touch:hover:bg-hover touch:min-w-0"
+        data-appearance-option={optionProps.option.key}
+        aria-label={optionProps.option.label}
+        aria-pressed={selected(optionProps.option.icon)}
+        tooltip={optionProps.option.label}
+        onClick={(event) => pick(optionProps.option, event.currentTarget)}
       >
-        <span class="size-4.5 mobile:size-5.5">
-          <EntityIcon
-            targetType={props.defaultIcon}
-            appearance={{ ...props.appearance, icon: optionProps.option.icon }}
-            size="fill"
-          />
-        </span>
-      </Show>
-    </Button>
-  );
+        <Show
+          when={optionProps.option.icon.kind === 'macro'}
+          fallback={
+            <span class="emoji text-xl mobile:text-[26px]">
+              {optionProps.option.icon.kind === 'emoji'
+                ? optionProps.option.icon.value
+                : ''}
+            </span>
+          }
+        >
+          <span class="size-4.5 mobile:size-5.5">
+            <EntityIcon
+              targetType={props.defaultIcon}
+              appearance={{
+                ...props.appearance,
+                icon: optionProps.option.icon,
+              }}
+              size="fill"
+            />
+          </span>
+        </Show>
+      </Button>
+    );
+  };
 
   return (
     <div
@@ -504,56 +479,55 @@ export function AppearancePicker(props: {
       <div
         ref={grid}
         data-appearance-scroll
-        onScroll={updateCategoryFromScroll}
         class="h-76 min-h-0 overflow-y-auto overscroll-contain border-t border-edge-muted px-3 pb-2 mobile:h-auto mobile:flex-1 mobile:px-4"
         data-icon-motion="none"
       >
-        <div
-          class="relative w-full"
-          style={{ height: `${virtualizer.getTotalSize()}px` }}
+        <Virtualizer
+          data={rowKeys()}
+          ref={setVirtualizer}
+          itemSize={props.mobile ? 44 : 36}
+          bufferSize={108}
+          keepMounted={keptRows()}
+          onScroll={updateCategoryFromScroll}
         >
-          <Key each={virtualizer.getVirtualItems()} by="key">
-            {(virtualRow) => {
-              const row = () => rows()[virtualRow().index];
-              const options = () => {
-                const current = row();
-                return current?.kind === 'options' ? current.options : [];
-              };
-              const label = () => {
-                const current = row();
-                return current?.kind === 'heading' ? current.label : '';
-              };
-              return (
-                <div
-                  data-appearance-row={virtualRow().index}
-                  class="absolute left-0 top-0 w-full"
-                  style={{
-                    height: `${virtualRow().size}px`,
-                    transform: `translateY(${virtualRow().start}px)`,
-                  }}
+          {(_, index) => {
+            const row = () => rows()[index()];
+            const options = () => {
+              const current = row();
+              return current?.kind === 'options' ? current.options : [];
+            };
+            const label = () => {
+              const current = row();
+              return current?.kind === 'heading' ? current.label : '';
+            };
+            return (
+              <div
+                data-appearance-row={index()}
+                style={{
+                  height: `${row()?.kind === 'heading' ? 28 : props.mobile ? 44 : 36}px`,
+                }}
+              >
+                <Show
+                  when={row()?.kind === 'heading'}
+                  fallback={
+                    <div
+                      class="grid h-full grid-cols-9 place-items-center mobile:grid-cols-8"
+                      data-appearance-grid
+                    >
+                      <Key each={options()} by="key">
+                        {(option) => <Option option={option()} />}
+                      </Key>
+                    </div>
+                  }
                 >
-                  <Show
-                    when={row()?.kind === 'heading'}
-                    fallback={
-                      <div
-                        class="grid h-full grid-cols-9 place-items-center mobile:grid-cols-8"
-                        data-appearance-grid
-                      >
-                        <Key each={options()} by="key">
-                          {(option) => <Option option={option()} />}
-                        </Key>
-                      </div>
-                    }
-                  >
-                    <h3 class="flex h-full items-center px-1 text-xs text-ink-muted">
-                      {label()}
-                    </h3>
-                  </Show>
-                </div>
-              );
-            }}
-          </Key>
-        </div>
+                  <h3 class="flex h-full items-center px-1 text-xs text-ink-muted">
+                    {label()}
+                  </h3>
+                </Show>
+              </div>
+            );
+          }}
+        </Virtualizer>
         <Show when={searching() && rows().length === 0}>
           <p class="p-4 text-center text-ink-muted">
             {t('appearance.noMatches')}
@@ -596,7 +570,7 @@ export function AppearancePicker(props: {
                     (row) => row.kind === 'heading' && row.section === item.id
                   );
                   if (index >= 0)
-                    virtualizer.scrollToIndex(index, { align: 'start' });
+                    virtualizer()?.scrollToIndex(index, { align: 'start' });
                 }}
               >
                 <Dynamic component={item.icon} class="size-4 mobile:size-5" />

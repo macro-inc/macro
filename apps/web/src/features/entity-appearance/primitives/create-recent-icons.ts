@@ -1,36 +1,41 @@
-import { makePersisted } from '@solid-primitives/storage';
+import { makePersistedState } from '@app/lib/persistence';
+import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import { createSignal } from 'solid-js';
-import {
-  type EntityAppearance,
-  readEntityAppearance,
-} from '../core/appearance';
+import { z } from 'zod';
+import type { EntityAppearance } from '../core/appearance';
 import { PICKER_ICON_NAMES } from '../core/catalog';
 
 type AppearanceIcon = NonNullable<EntityAppearance['icon']>;
-
-function readRecentIcons(raw: string): AppearanceIcon[] {
-  const values: unknown = JSON.parse(raw);
-  if (!Array.isArray(values)) return [];
-  return values
-    .flatMap((icon) => {
-      const value = readEntityAppearance({ icon, color: null })?.icon;
-      if (!value) return [];
-      if (
-        value.kind === 'macro' &&
-        !PICKER_ICON_NAMES.some((name) => name === value.name)
-      )
-        return [];
-      return [value];
+const STORAGE = createUserScopedStorage('entity-icons:recent');
+const recentIconSchema = z.discriminatedUnion('kind', [
+  z.object({ kind: z.literal('macro'), name: z.enum(PICKER_ICON_NAMES) }),
+  z.object({ kind: z.literal('emoji'), value: z.string().min(1) }),
+]);
+const recentIconsSchema = z.array(z.unknown()).transform((entries) =>
+  entries
+    .flatMap((entry) => {
+      const parsed = recentIconSchema.safeParse(entry);
+      return parsed.success ? [parsed.data] : [];
     })
-    .slice(0, 9);
-}
+    .slice(0, 9)
+);
 
 /** Picker preferences belong to the signed-in account, not the entity. */
 export function createRecentIcons(userId: string) {
-  const [icons, setIcons] = makePersisted(createSignal<AppearanceIcon[]>([]), {
-    name: `entity-icons:recent:${userId}`,
-    deserialize: readRecentIcons,
-  });
+  const [icons, setIcons] = makePersistedState(
+    createSignal<AppearanceIcon[]>([]),
+    {
+      storages: {
+        restore: () => {
+          const raw = STORAGE.read(userId);
+          if (!raw) return;
+          const parsed = recentIconsSchema.safeParse(JSON.parse(raw));
+          if (parsed.success) return parsed.data;
+        },
+        write: (value) => STORAGE.write(userId, JSON.stringify(value)),
+      },
+    }
+  );
   function record(icon: AppearanceIcon) {
     setIcons((previous) =>
       [

@@ -16,8 +16,64 @@ const SCROLL_TO = Object.getOwnPropertyDescriptor(
   HTMLElement.prototype,
   'scrollTo'
 );
+const SCROLL_TOP = Object.getOwnPropertyDescriptor(
+  Element.prototype,
+  'scrollTop'
+);
 
 beforeEach(() => {
+  vi.spyOn(HTMLElement.prototype, 'offsetParent', 'get').mockImplementation(
+    function (this: HTMLElement) {
+      return this.parentElement;
+    }
+  );
+  vi.stubGlobal(
+    'ResizeObserver',
+    class implements ResizeObserver {
+      private targets = new Set<Element>();
+      constructor(private callback: ResizeObserverCallback) {}
+      observe(target: Element) {
+        this.targets.add(target);
+        queueMicrotask(() => {
+          if (!this.targets.has(target) || !(target instanceof HTMLElement))
+            return;
+          const child = target.firstElementChild;
+          const height = target.hasAttribute('data-appearance-scroll')
+            ? 304
+            : child instanceof HTMLElement
+              ? Number.parseFloat(child.style.height) || 36
+              : 36;
+          const size = { inlineSize: 344, blockSize: height };
+          this.callback(
+            [
+              {
+                target,
+                contentRect: new DOMRect(0, 0, 344, height),
+                borderBoxSize: [size],
+                contentBoxSize: [size],
+                devicePixelContentBoxSize: [size],
+              },
+            ],
+            this
+          );
+        });
+      }
+      unobserve(target: Element) {
+        this.targets.delete(target);
+      }
+      disconnect() {
+        this.targets.clear();
+      }
+    }
+  );
+  vi.spyOn(HTMLElement.prototype, 'scrollTop', 'set').mockImplementation(
+    function (this: HTMLElement, value: number) {
+      const previous = this.scrollTop;
+      SCROLL_TOP?.set?.call(this, value);
+      if (previous !== value)
+        queueMicrotask(() => this.dispatchEvent(new Event('scroll')));
+    }
+  );
   vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
     function (this: HTMLElement) {
       return this.hasAttribute('data-appearance-scroll') ? 304 : 0;
@@ -46,6 +102,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   if (SCROLL_TO)
     Object.defineProperty(HTMLElement.prototype, 'scrollTo', SCROLL_TO);
   else Reflect.deleteProperty(HTMLElement.prototype, 'scrollTo');
