@@ -6,9 +6,9 @@ portal: https://docs.google.com/forms/d/e/1FAIpQLSeeZyjrPS5sfRXLAOt6Ha-3gv1gRu4z
 account: connect@macro.com
 submitted: 2026-11-02
 last_contact: 2026-11-02
-next_action: Wait; Figma has paused adding MCP clients with no timeline. Send new demand evidence to the MCP team address on its form confirmation page
+next_action: Weekly check of connect@macro.com for a Figma reply; Figma has paused adding MCP clients with no timeline. Send new demand evidence to the MCP team address on its form confirmation page
 next_action_owner: agent
-due: 2026-11-02
+due: 2026-11-09
 ---
 
 ## Requirements
@@ -82,3 +82,4 @@ both advertise only one scope.
   users with Figma connected; timeline November 2026; registration options
   and redirect URIs in the notes. Further evidence goes to
   the MCP team address on its form confirmation page.
+- 2026-11-02: Sweep: no reply in connect@macro.com. Next check 2026-11-09.

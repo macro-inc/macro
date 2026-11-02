@@ -6,9 +6,9 @@ portal: https://forms.gle/FQ3nYPbovoHvbfmz9
 account: connect@macro.com
 submitted: 2026-11-02
 last_contact: 2026-11-02
-next_action: Wait for Vercel review; replies go to eric.hayes@macro.com. On approval, set vercel live and run conformance
+next_action: Check for a Vercel reply (connect@macro.com, and ask Eric about eric.hayes@macro.com); with none by due, follow up on the Vercel community forum. On approval, run conformance, then set vercel live
 next_action_owner: agent
-due: 2026-11-02
+due: 2026-11-09
 ---
 
 ## Requirements
@@ -91,3 +91,5 @@ noted.
   and `https://connect.macro.com/v1/oauth/callback`; test steps through
   `/demo`, with Vercel enabled once allowlisted. Asked which registration
   method and allowlist key Vercel wants.
+- 2026-11-02: Sweep: no reply in connect@macro.com (replies go to
+  eric.hayes@macro.com, which the operator cannot read). Next check 2026-11-09.
