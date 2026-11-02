@@ -1,6 +1,6 @@
 # Status
 
-Last updated 2026-10-31 by Claude. Slice 1 is deployed and proven end to end
+Last updated 2026-11-02 by Claude. Slice 1 is deployed and proven end to end
 on dev: `https://connect-dev.macro.com`, demo at
 `https://connect-dev.macro.com/demo`, dashboard at `/demo/dashboard`. Target: Macro's own users off Pipedream
 for catalog apps by 2026-11-06 ([plan](docs/plan.md#week-one)).
@@ -16,6 +16,12 @@ Eric. Each item is ready for one sitting; agents prepare the rest.
 - [ ] **Review the dashboard PR #9272** (stacked on the demo PR):
       `/v1/connections`, `/v1/users`, `/v1/connections/summary`, and
       `/demo/dashboard`.
+- [ ] **Review the catalog PR #9278** (stacked on #9272): `oauth_client`
+      labels, 28 live DCR/CIMD apps, the per-app acceptance probe, and the
+      conformance table in [catalog.md](docs/catalog.md).
+- [ ] Stripe: finish the `connect@macro.com` Stripe signup (it shows a
+      CAPTCHA) in the browser via noVNC (port 6081), so an agent can complete
+      Stripe's consent and tool check.
 - [ ] **Company facts every vendor form asks for** (unblocks Zoom, Xero,
       Figma, Vercel, Box, Discord): legal company name; contact name, title,
       and email; Connect's production host and OAuth callback (proposed:
@@ -55,12 +61,24 @@ Nothing.
 
 ## Next
 
+Unresolved catalog apps from T021: Netlify (Authorize stalls), Calendly
+(Google signup loops), Coda (Connect's DCR returns `oauth_failed`), and real
+consents for the smaller live apps (Attio, Apollo, Cloudflare, Supabase, Exa,
+Quo, Mailchimp, Webflow, and others). Then
 Token refresh against a live vendor (when a Linear or Sentry access token
 expires, the gateway must refresh it; unit-tested, not yet seen live). Then
 [T010](tasks/T010-macro-adapter.md) Macro integration and reconnect prompts
 (T011). Submissions wait on the company facts above.
 
 ## Done
+
+- 2026-11-02: [T021](tasks/T021-catalog-dcr-apps.md) every used DCR/CIMD app
+  classified ([table](docs/catalog.md)); 28 live, each labelled
+  `managed_oauth_app` or `dcr`, deployed to dev. 29 of 30 reach the vendor's
+  sign-in on dev; real consents and a read tool call for Todoist, ClickUp,
+  Jira, Airtable (now DCR); consent only for Confluence and Granola. Canva and
+  Trello moved back to pending. Atlassian orgs must allow Connect's host
+  under Admin → Connectors.
 
 - 2026-10-31: Dev deployed (`pulumi up`, stack `macro-inc/macro-connect/dev`).
   `integration.sh dev` passes 11/11, including each vendor accepting Connect's
