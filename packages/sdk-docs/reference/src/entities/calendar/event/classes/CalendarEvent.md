@@ -305,6 +305,19 @@ with `copy_choice_required`, listing each copy and the question to ask.
 
 ***
 
+### webUrl()
+
+> **webUrl**(): `string`
+
+The event's URL in the Macro web app. Calendar is a singleton view, so
+this is a deep link that opens it focused on the event.
+
+#### Returns
+
+`string`
+
+***
+
 ### byId()
 
 > `static` **byId**(`client`, `id`): `CalendarEvent`

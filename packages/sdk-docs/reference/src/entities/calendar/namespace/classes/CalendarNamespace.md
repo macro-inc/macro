@@ -100,7 +100,8 @@ The calendars the caller can see, some possibly not theirs, primaries and writab
 
 > **createEvent**(`options`): `Promise`\<[`CalendarEvent`](../../event/classes/CalendarEvent.md)\>
 
-Create a calendar event and return a handle to its synced record.
+Create a calendar event and return a handle to its synced record. Link
+the user to it with [CalendarEvent.webUrl](../../event/classes/CalendarEvent.md#weburl).
 
 #### Parameters
 

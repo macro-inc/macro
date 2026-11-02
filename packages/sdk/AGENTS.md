@@ -99,8 +99,9 @@ the existing gateway prefixes.
 - Async iterators are lazy; `limit` is page size. Preserve filters on every page
   and do not fetch another page after the caller breaks the loop.
 - Handles must serialize identity or loaded detail, never authenticated clients.
-  Entities with a web page also serialize `url` from `webLink()`, which must
-  never fetch (`Meeting` uses its token only once known).
+  Entities with a user-facing page or deep link also serialize `url` from
+  `webLink()`, which must never fetch (`Meeting` uses its token only once
+  known; calendar events use `/app/calendar?eventId=`).
 - Draft writes must select the draft's inbox with `X-Email-Link-Id`; callers
   supply plain HTML and the SDK encodes it for the draft wire contract.
 - Read many task or initiative names with `tasks.summaries` (`/documents/preview`)

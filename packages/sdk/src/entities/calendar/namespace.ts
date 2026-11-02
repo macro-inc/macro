@@ -274,7 +274,10 @@ export class CalendarNamespace {
     return new CalendarReplacement(this.client, operationId);
   }
 
-  /** Create a calendar event and return a handle to its synced record. */
+  /**
+   * Create a calendar event and return a handle to its synced record. Link
+   * the user to it with {@link CalendarEvent.webUrl}.
+   */
   async createEvent(options: CreateEventOptions): Promise<CalendarEvent> {
     const record = unwrap(
       await this.client.calendar.createCalendarEvent({

@@ -193,6 +193,18 @@ export class CalendarEvent extends MacroEntity<CalendarEventRecord> {
     return new CalendarEvent(client, record.id, record);
   }
 
+  /**
+   * The event's URL in the Macro web app. Calendar is a singleton view, so
+   * this is a deep link that opens it focused on the event.
+   */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/calendar?eventId=${this.id}`;
+  }
+
+  protected override webLink(): string {
+    return this.webUrl();
+  }
+
   /** Display title. */
   readonly title = this.field('title');
 
