@@ -100,6 +100,16 @@ function PinchZoomImage(props: { src: string; alt: string }) {
     Array.from(e.touches).every(
       (t) => t.target instanceof Node && containerElement?.contains(t.target)
     );
+  // Zoompinch doesn't listen for touchcancel, which the system sends when it
+  // takes over a gesture. Without a reset, the next touch anywhere, even one
+  // scrolling outside the pane, would go to the engine.
+  const cancelTouch = (e: TouchEvent) => {
+    if (!handlingTouch) return;
+    handlingTouch = false;
+    zoompinchHandle()?.engine.handleTouchend(e);
+  };
+  window.addEventListener('touchcancel', cancelTouch);
+  onCleanup(() => window.removeEventListener('touchcancel', cancelTouch));
   const touch = {
     onStart: (e: TouchEvent, engine: ZoompinchHandle['engine']) => {
       momentum.cancelMomentum();

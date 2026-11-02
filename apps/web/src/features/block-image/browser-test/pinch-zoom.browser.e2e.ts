@@ -4,7 +4,7 @@ type Point = { x: number; y: number };
 
 async function touch(
   cdp: CDPSession,
-  type: 'touchStart' | 'touchMove' | 'touchEnd',
+  type: 'touchStart' | 'touchMove' | 'touchEnd' | 'touchCancel',
   points: Point[]
 ) {
   await cdp.send('Input.dispatchTouchEvent', {
@@ -129,6 +129,33 @@ test('touches outside the image still scroll', async ({ page }) => {
   const list = await page.getByTestId('scroll-list').boundingBox();
   if (!list) throw new Error('Scroll list is not rendered');
   const x = list.x + list.width / 2;
+
+  await drag(cdp, [{ x, y: list.y + 80 }], [{ x, y: list.y + 10 }]);
+
+  await expect
+    .poll(() =>
+      page.getByTestId('scroll-list').evaluate((element) => element.scrollTop)
+    )
+    .toBeGreaterThan(0);
+});
+
+test('a cancelled pinch leaves later touches alone', async ({ page }) => {
+  const cdp = await page.context().newCDPSession(page);
+  const center = await paneCenter(page);
+  const list = await page.getByTestId('scroll-list').boundingBox();
+  if (!list) throw new Error('Scroll list is not rendered');
+  const x = list.x + list.width / 2;
+
+  // The system takes over mid-pinch (an iOS edge gesture, say): no touchend.
+  await touch(cdp, 'touchStart', [
+    { x: center.x - 30, y: center.y },
+    { x: center.x + 30, y: center.y },
+  ]);
+  await touch(cdp, 'touchMove', [
+    { x: center.x - 60, y: center.y },
+    { x: center.x + 60, y: center.y },
+  ]);
+  await touch(cdp, 'touchCancel', []);
 
   await drag(cdp, [{ x, y: list.y + 80 }], [{ x, y: list.y + 10 }]);
 
