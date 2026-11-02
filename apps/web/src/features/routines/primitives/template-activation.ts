@@ -1,5 +1,5 @@
 import type {
-  CreateScheduledAction,
+  ActionConfiguration,
   RoutineTemplate,
   TemplateVariable,
 } from '@service-scheduled-action/generated/schemas';
@@ -71,7 +71,7 @@ export function createTemplateActivation(args: {
   };
 
   /** The routine to create, once every reference that needs one has a decision. */
-  const request = (): CreateScheduledAction | undefined => {
+  const request = (): ActionConfiguration | undefined => {
     const activator = args.activator();
     if (!activator || undecided().length > 0) return undefined;
     const template = args.template();

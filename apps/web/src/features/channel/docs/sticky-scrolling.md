@@ -74,6 +74,12 @@ The sizer's height excludes the adjustment during this period, so its end moves 
 the shifted rows: native scrolling stops at the latest message instead of continuing
 into blank space below it (or stopping short of it), and the distance to the bottom
 compares native positions.
+Because a gesture never moves the native top boundary, rows above that are taller than
+their 96px estimate would only grow the adjustment, and a long fling stops at
+`scrollTop` 0 with history still above it. On WebKit the range extractor
+therefore keeps rows up to twelve viewports above the reading position mounted
+and measured before a gesture reaches them, adding at most six unmeasured rows
+per range pass.
 Scroll boundaries follow the same rule: momentum bounces there, and a finger can hold
 the list against an edge. Explicit message, reply, latest, and pinned viewport/inset
 navigation flush the adjustment before computing targets.
