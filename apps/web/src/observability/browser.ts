@@ -2,6 +2,7 @@ import { DEVELOPMENT_PROXY_PREFIX } from '@core/constant/developmentProxy';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isIgnorableError } from '@core/util/ignorableErrors';
 import { getPlatform, isTauri } from '@core/util/platform';
+import { webviewFetch } from '@core/util/platformFetch';
 import { recordBrowserTursoCacheNavigation } from '@graphql-cache/rollout-observability';
 import { Telemetry, type TelemetryInitConfig } from '@macro-inc/observability';
 import {
@@ -138,6 +139,8 @@ export async function initializeBrowserObservability(
     samplingKey,
     tracesUrl: fallbackTracesUrl,
     logsUrl: fallbackTracesUrl?.replace(/\/v1\/traces\/?$/, '/v1/logs'),
+    exportFetch: (input, init) =>
+      webviewFetch(input, { ...init, credentials: 'omit' }),
     startup: native ? startup : undefined,
     contextManager: new StackContextManager(),
     resourceAttributes: {
