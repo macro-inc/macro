@@ -129,7 +129,7 @@ export function TaskGroupHeader(props: {
               onClick={props.onToggle}
             >
               <Layer depth={3}>
-                <span class="flex size-full items-center justify-center rounded-xs group-hover/header:bg-ink/5">
+                <span class="flex aspect-square w-full items-center justify-center rounded-xs group-hover/header:bg-ink/5">
                   <CaretRightIcon
                     class={cn(
                       'size-4 transition-transform',
