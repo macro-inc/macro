@@ -41,6 +41,7 @@ conditional sign-in recovery guidance. It replaces or adds this one single-line
 entry, preserving the rest of `defaultMessages`. The PATCH sends no templates
 or other theme settings. Authentication and reconciliation are unchanged.
 The updater and Pulumi configuration share the theme IDs in `theme-ids.ts`.
+Before applying, save any existing value of this entry for rollback.
 
 ```sh
 # From this directory; uses the stack's existing Pulumi host and API key.
