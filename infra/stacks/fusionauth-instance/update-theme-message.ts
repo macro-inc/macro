@@ -1,10 +1,5 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
-import {
-  FUSIONAUTH_THEME_IDS,
-  patchSignInMessage,
-  SIGN_IN_ERROR_MESSAGE,
-} from './theme-message';
 
 const [stack, mode, ...extra] = process.argv.slice(2);
 if (
@@ -26,16 +21,47 @@ const config = (key: string) =>
     }
   ).trim();
 
-const result = await patchSignInMessage(
-  config('host'),
-  config('apiKey'),
-  FUSIONAUTH_THEME_IDS[stack],
-  mode === '--apply'
-);
-console.log(`${stack}: ${result} [IdentityProviderValidationException]`);
-console.log(SIGN_IN_ERROR_MESSAGE);
-if (result === 'preview') {
+// These are the existing theme IDs configured in constants.ts.
+const themeId =
+  stack === 'prod'
+    ? 'e486f9ac-e63f-4549-8244-ee8ed641f8a0'
+    : '87cf78dd-03ba-478a-9211-3da0cdba9c3f';
+const entry =
+  "[IdentityProviderValidationException]=We couldn't complete sign-in. If this Gmail address is connected as an additional inbox, sign in with the email you originally used to create your Macro account. Return to Macro and choose Continue with email, or contact support.";
+const url = new URL(`/api/theme/${themeId}`, config('host'));
+const headers = { Authorization: config('apiKey') };
+const response = await fetch(url, { headers, redirect: 'error' });
+if (!response.ok) throw new Error(`Theme read failed: HTTP ${response.status}`);
+
+const messages: string = JSON.parse(await response.text()).theme
+  .defaultMessages;
+const existingEntry = /^\[IdentityProviderValidationException\]=[^\r\n]*/m;
+const updated = existingEntry.test(messages)
+  ? messages.replace(existingEntry, entry)
+  : `${messages}${messages.endsWith('\n') ? '' : '\n'}${entry}\n`;
+
+console.log(`${stack}: ${entry}`);
+if (updated === messages) {
+  console.log('Already up to date.');
+} else if (mode !== '--apply') {
   console.log(
-    'No changes made. Applying requires an explicitly authorized --apply run.'
+    'Preview only. Use --apply after authorization to update the theme.'
   );
+} else {
+  const patch = await fetch(url, {
+    method: 'PATCH',
+    redirect: 'error',
+    headers: { ...headers, 'Content-Type': 'application/json-patch+json' },
+    // Reject a stale read rather than overwrite another message edit.
+    body: JSON.stringify([
+      { op: 'test', path: '/theme/defaultMessages', value: messages },
+      { op: 'replace', path: '/theme/defaultMessages', value: updated },
+    ]),
+  });
+  if (!patch.ok) {
+    throw new Error(
+      `Theme patch failed: HTTP ${patch.status}; preview again before retrying`
+    );
+  }
+  console.log('Theme message updated.');
 }
