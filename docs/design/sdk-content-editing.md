@@ -77,7 +77,7 @@ alternative. It loses on every criterion the goals list:
   scoped document token the worker uses is minted by DSS. Adding both widens the
   sandbox for no gain.
 - **Bundle size and Deno.** loro-crdt WASM is 3.3 MB, IronCalc 2.2 MB, the pptx
-  engine several MB of font data. Inlined into `sdk.mjs`, that is written to
+  and docx engines 11 MB and 8.5 MB (2.3 MB of each is fonts). Inlined into `sdk.mjs`, that is written to
   disk and compiled on every execution, including the many that never edit.
 - **Parity.** Canvas text fitting needs a browser and rendering needs Chromium.
   PowerPoint's read format (`describe.rs`) lives in Rust in `crates/documents`,
