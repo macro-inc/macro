@@ -122,6 +122,7 @@ fn message(content: &str) -> Message {
         imported_author: None,
         bot_profile: None,
         mentions: Vec::new(),
+        triggered_via: None,
         triggered_by: None,
         content: content.into(),
         created_at: at,

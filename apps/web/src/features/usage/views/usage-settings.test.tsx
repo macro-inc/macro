@@ -11,6 +11,16 @@ import { fixtureSnapshot } from '../../billing-lab/queries/fixture-snapshot';
 import { toUsageSummary } from '../queries/usage-summary';
 import { UsageSettingsView } from './usage-settings';
 
+const toastMocks = vi.hoisted(() => ({ success: vi.fn() }));
+vi.mock('@core/component/Toast/Toast', async (importOriginal) => {
+  const actual =
+    await importOriginal<typeof import('@core/component/Toast/Toast')>();
+  return {
+    ...actual,
+    toast: { ...actual.toast, success: toastMocks.success },
+  };
+});
+
 beforeEach(() => vi.spyOn(window, 'scrollTo').mockImplementation(() => {}));
 afterEach(() => {
   cleanup();
@@ -225,7 +235,10 @@ it('sends a payer with no card on file to checkout for the same pack', async () 
         ...lab.usage,
         creditPurchase: {
           ...lab.usage.creditPurchase,
-          buy: async () => 'payment_method_required',
+          buy: async () => ({
+            status: 'payment_method_required',
+            amountCents: 2_500,
+          }),
           checkout,
         },
         navigateToPayment,
@@ -253,7 +266,10 @@ it('asks a team member to have the owner add a card when the team has none', asy
         ...lab.usage,
         creditPurchase: {
           ...lab.usage.creditPurchase,
-          buy: async () => 'payment_method_required',
+          buy: async () => ({
+            status: 'payment_method_required',
+            amountCents: 2_500,
+          }),
           checkout,
         },
       }}
@@ -281,7 +297,10 @@ it('sends a payer whose card needs authentication to checkout', async () => {
         ...lab.usage,
         creditPurchase: {
           ...lab.usage.creditPurchase,
-          buy: async () => 'authentication_required',
+          buy: async () => ({
+            status: 'authentication_required',
+            amountCents: 2_500,
+          }),
           checkout,
         },
         navigateToPayment,
@@ -309,7 +328,10 @@ it('asks a team member to have the owner verify a card that needs authentication
         ...lab.usage,
         creditPurchase: {
           ...lab.usage.creditPurchase,
-          buy: async () => 'authentication_required',
+          buy: async () => ({
+            status: 'authentication_required',
+            amountCents: 2_500,
+          }),
           checkout,
         },
       }}
@@ -325,4 +347,26 @@ it('asks a team member to have the owner verify a card that needs authentication
     )
   ).toBeTruthy();
   expect(checkout).not.toHaveBeenCalled();
+});
+
+it('reports the amount actually charged, not the pack that was picked', async () => {
+  const lab = createBillingLab('pro');
+  render(() => (
+    <UsageSettingsView
+      context={{
+        ...lab.usage,
+        creditPurchase: {
+          ...lab.usage.creditPurchase,
+          buy: async () => ({ status: 'paid', amountCents: 10_000 }),
+        },
+      }}
+    />
+  ));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Add more' }));
+  fireEvent.click(screen.getByRole('button', { name: 'Buy $25 in credits' }));
+
+  await waitFor(() =>
+    expect(toastMocks.success).toHaveBeenCalledWith('Added $100 in credits.')
+  );
 });

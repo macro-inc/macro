@@ -241,6 +241,13 @@ impl CalendarRepository for FakeRepo {
         Ok(None)
     }
 
+    async fn event_copies(
+        &self,
+        _event_ids: &[Uuid],
+    ) -> Result<Vec<crate::domain::labels::EventCopy>, Report> {
+        Ok(Vec::new())
+    }
+
     async fn owned_inboxes(
         &self,
         _requester_id: &str,
@@ -1310,6 +1317,50 @@ impl GoogleCalendarProvider for CancellingCalendarProvider {
     }
 }
 
+/// Team clients clear their out-of-office rows on this hint, and every sync of
+/// a meeting's attendees carries it, so a removed meeting must not raise it.
+#[tokio::test]
+async fn retiring_a_regular_meeting_leaves_team_ooo_rows_alone() {
+    for sync_retirements in [
+        vec![RetiredCalendarEvent {
+            event_id: Uuid::now_v7(),
+            owner_id: "macro|owner".to_string(),
+            deleted: true,
+            team_ooo_changed: false,
+        }],
+        // A tombstone for something Macro never stored changes nothing.
+        Vec::new(),
+    ] {
+        let coordinator = GoogleCalendarBackfillCoordinator::new(
+            FakeRepo {
+                sync_retirements,
+                ..FakeRepo::default()
+            },
+            CancellingCalendarProvider,
+            FakeLifecycle::claimed(),
+            NoopMacroEventBroker,
+            None,
+        );
+        let mut report = GoogleBackfillRunReport::default();
+        coordinator
+            .run(
+                CalendarBackfillJobKey {
+                    job_id: Uuid::now_v7(),
+                    email_link_id: Uuid::now_v7(),
+                },
+                "macro|calendar@example.com",
+                "secret",
+                OccurrenceRange::historical_sync(Utc::now()),
+                &mut report,
+            )
+            .await
+            .unwrap();
+
+        assert!(report.changed());
+        assert!(!report.team_ooo_changed);
+    }
+}
+
 /// A provider-side deletion reaches search only through the topic: the row is
 /// gone once the snapshot commit lands, so the search backfill — which
 /// enumerates existing rows — can never rediscover it.
@@ -1323,12 +1374,14 @@ async fn a_cancelled_provider_event_publishes_a_deletion() {
                 event_id: removed,
                 owner_id: "macro|owner".to_string(),
                 deleted: true,
+                team_ooo_changed: true,
             },
             // Another source still backs this one, so its row was rewritten.
             RetiredCalendarEvent {
                 event_id: survivor,
                 owner_id: "macro|owner".to_string(),
                 deleted: false,
+                team_ooo_changed: false,
             },
         ],
         ..FakeRepo::default()

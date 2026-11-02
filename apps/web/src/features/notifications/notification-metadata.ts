@@ -125,11 +125,18 @@ export function getNotificationTargetName(
         { tag: P.union(...GITHUB_EVENT_TYPES) },
         (m) => `${m.content.owner}/${m.content.repo}#${m.content.number}`
       )
-      .with({ tag: 'channel_mention' }, () => undefined)
-      .with({ tag: 'channel_message_send' }, () => undefined)
-      .with({ tag: 'channel_message_reaction' }, () => undefined)
+      .with(
+        {
+          tag: P.union(
+            'channel_mention',
+            'channel_message_send',
+            'channel_message_reaction',
+            'channel_message_reply'
+          ),
+        },
+        (m) => m.content.channelName || undefined
+      )
       .with({ tag: 'ai_response' }, () => undefined)
-      .with({ tag: 'channel_message_reply' }, () => undefined)
       .with({ tag: 'call_started' }, (m) => m.content.channel_name ?? undefined)
       .with({ tag: 'new_email' }, () => undefined)
       .with({ tag: 'external_chat_message' }, (m) => m.content.chatName)

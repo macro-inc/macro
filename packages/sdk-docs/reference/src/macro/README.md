@@ -376,6 +376,24 @@ Re-exports [FormSubmissionOutcome](../entities/forms/form/type-aliases/FormSubmi
 
 ***
 
+### GeneratedImage
+
+Re-exports [GeneratedImage](../entities/images/image/classes/GeneratedImage.md)
+
+***
+
+### GenerateImageAspectRatio
+
+Re-exports [GenerateImageAspectRatio](../../generated/cognition/types.gen/type-aliases/GenerateImageAspectRatio.md)
+
+***
+
+### GenerateImageOptions
+
+Re-exports [GenerateImageOptions](../entities/images/namespace/interfaces/GenerateImageOptions.md)
+
+***
+
 ### GithubPullRequest
 
 Re-exports [GithubPullRequest](../entities/github-pull-requests/pull-request/classes/GithubPullRequest.md)
@@ -619,6 +637,12 @@ Re-exports [SimpleMention](../../generated/storage/types.gen/type-aliases/Simple
 ### SingleRoutineTrigger
 
 Re-exports [SingleRoutineTrigger](../entities/routines/routine/type-aliases/SingleRoutineTrigger.md)
+
+***
+
+### StaticImage
+
+Re-exports [StaticImage](../entities/images/image/classes/StaticImage.md)
 
 ***
 

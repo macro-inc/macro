@@ -33,8 +33,28 @@ existing app session and restores the saved layout, including its query and hash
 Verify each enabled provider, including reconnects with email-only and calendar
 permissions. Check that opening consent alone does not report an account
 connected, that returning from consent shows the second account, and that
-canceling leaves the app usable. iOS and Android continue to use their native
-authentication sessions.
+canceling leaves the app usable and says nothing was connected. iOS and Android
+continue to use their native authentication sessions.
+
+Every callback outcome is announced on web, desktop, and native. Init also
+succeeds when the provider's account chooser returns an account that is already
+connected (for example a Google Workspace user who signs in under a secondary
+domain): `Connect another account` then reports `<address> is already connected`
+with a hint to pick a different account, instead of `Account connected`. Only a
+plain add (mailbox consent, no reconnect target or login hint) checks this;
+reconnects and calendar upgrades of an existing inbox still report
+`Account connected`. To check, connect an account that is already in the inbox
+list and confirm the alert names it and no new row appears.
+
+A consent that ends without a usable grant returns to the callback with
+`email_link_error` instead of a provisionable `link_id`: `cancelled` returns
+quietly, `admin_consent_required` shows the Microsoft approval dialog,
+`gmail_not_granted` (the email permissions were left unchecked on Google's
+screen, so nothing was connected and the auth service tried, best effort, to
+revoke the partial grant at Google unless an inbox for that address still
+works on it) shows a persistent `Email access required`
+prompt whose `Try again` reopens `Connect email`, and anything else shows a
+failure toast.
 
 ## Temporary open signup in Develop
 
@@ -52,9 +72,11 @@ draft queue runner, or live-update subscriptions. Signing in activates them in
 the same tab, including after a session expiry. Queued draft writes wait for
 authenticated user info; unrelated mutations can continue draining.
 
-Verify expiry followed by signing into a different account without reloading:
-the new account's lists must load and receive live updates, and the previous
-account's cached data must be absent. Logout wipes local caches before retiring
+A confirmed expiry loads `/welcome` as a new page, as logout does, so email
+drafts work after the next sign-in. Verify expiry followed by signing into a
+different account: the new account's lists must load and receive live updates,
+email composers must accept input, and the previous account's cached data must
+be absent. Logout wipes local caches before retiring
 their clients. Mounted query observers must receive the next account's data
 after the wipe. Previous account data must not return through initial data,
 placeholder data, or a later query reset.

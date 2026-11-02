@@ -1,4 +1,5 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import { toastMovedToFolder } from '@app/features/entity/bulk-edit/moved-to-folder-toast';
 import {
   makeCopyAction,
   makeCopyEntityIdAction,
@@ -55,12 +56,10 @@ export function DriveFolderActions(props: { folder: DriveFolderMetadata }) {
 
       onFinish: () => {
         fireAndForget(invalidateProjects(), 'drive-view');
-        toast.success(
-          view === 'rename'
-            ? t('entityActions.toastRenamed')
-            : t('entityActions.toastMovedToFolder')
-        );
+        if (view === 'rename') toast.success(t('entityActions.toastRenamed'));
       },
+
+      onMoved: (folder) => toastMovedToFolder(1, folder.id),
 
       onError: () => toast.failure(t('entityActions.toastFolderUpdateFailed')),
     });

@@ -36,6 +36,14 @@ must load through the webview, not native HTTP. A `vite:preloadError` with
 `scheme tauri not supported` indicates an asset-routing failure; reloading the
 same bundle does not resolve it.
 
+A `vite:preloadError` (a lazy chunk or its CSS failed, usually after a deploy)
+reloads the tab right away, once per build per tab session, when it is online,
+holds no call or upload, and has no text being typed. Otherwise, and on a second
+failure in the same build, the rail's update button (a toast on touch layouts)
+offers the reload; the offer reloads a hidden tab by itself only if that build's
+one automatic reload is unspent. A failed route chunk can still end on the
+root error screen, which hides the offer.
+
 ## External links in the native app
 
 Desktop external links open in the system browser, whether activated by a normal
@@ -313,9 +321,12 @@ trail so the project remains a return destination. The standard side-panel
 toggle shows project properties. Their URLs preserve the selected section on reload;
 discussion links append `~<message-uuid>` to the project's `overview` route.
 Existing `activity` routes open Overview, preserving a target message when present.
-Cmd+K includes a Projects category, authorized project search results, and
-`New project`. Selecting a project opens its overview; Shift-selection opens a
-new split. The global Create menu also offers `Project` (C, then P), including
+Cmd+K includes a Projects category, projects matching a typed All query, and
+`New project`. Projects come from Quick Access like documents and channels:
+the GraphQL cache backfills them in its `initiatives` lane and indexes them for
+local search, so typing never waits on a request and rows stay in place. Cmd+K
+finds only projects the cache or the Quick Access feed has loaded. Selecting a
+project opens its overview; Shift-selection opens a new split. The global Create menu also offers `Project` (C, then P), including
 the full mobile Create sheet. Project opens the same popover host as task creation: a dialog
 on desktop and a bottom drawer on touch. It keeps focus in the project-name
 input, and `Continue editing in split` transfers the current draft. Existing
@@ -376,8 +387,12 @@ A desktop view's name opens the view switcher: clicking it shows the rail's apps
 in rail order, then the More apps, with a check on the current one. Choosing one
 replaces the view in that split, not the active split; Shift opens it in a new
 split. The navigation panel's title shows the name with a caret, sharing one
-hover background. Short names stay whole; long names ellipsize. Main headers show the name alone, with the same hover:
-`ViewSidebar.Title caret={false}` for plain titles, and the first breadcrumb
+hover background. Short names stay whole; long names ellipsize without shrinking
+the caret. Saved-view icons stay beside their labels on one line. List headers
+reserve the title's natural width and scroll the controls beside it when space
+runs out; the switcher trigger stays inside the header's clipping boundary.
+Main headers show the name alone, with the same hover: `ViewSidebar.Title caret={false}` for
+plain titles, and the first breadcrumb
 (Drive, Email, Tasks, Reviews) while it is the current page; deeper, that crumb
 returns to the list. Titles that name content rather than the view (Calendar's
 date, a channel, an agent session, a CRM record) do not switch views. Touch
@@ -501,6 +516,15 @@ leave the saved snapshot unchanged. Direct links and explicit Shift/open-in-spli
 actions keep their requested destination. Closing a detail before switching apps
 remembers the list, not the closed detail. Views unmount normally; this is not a
 keep-alive cache for editors or other transient UI.
+On desktop, if the remembered detail is already open in another split or
+its inline preview, switching apps opens the requested app's list in the target
+split instead of moving focus to the existing detail. For example, with Home on
+the left and a Chat conversation on the right, select the left split and press
+Chat: the left split shows the chat list and the right conversation stays open.
+This applies in either direction across apps: with a task open on the left and
+Home on the right, choosing Tasks from the right view switcher opens the task
+list there and preserves the left task, its state, and its history.
+See the [redacted desktop example](media/navigation/chat-list-left-split.png).
 Verify Chat → open channel → Calendar → Chat restores the same channel, then
 repeat with a filtered list and a nested Drive item. Check mobile dock switching,
 split Back/Forward, refused leave guards, explicit links, and account changes.
@@ -596,10 +620,10 @@ when the sidebar is an overlay in a narrow split. Verify with three splits:
 open **Show navigation**, then use the sidebar's **Close** button without first
 hiding navigation; only its owning split closes. The last logical split has no
 sidebar close button; mobile chrome is unchanged.
-A lone non-list content split still shows a header X labeled **Return to list**,
-which returns that split to the most recent list in its history, preserving
-that list’s state. If there is no prior list, it replaces the current entry with
-Home. Excluded background panels do not count toward close eligibility.
+A lone desktop split shows no X, in its header or its frame corner. On a
+non-list content split, `Cmd+Esc` (or `Opt+Esc`) returns it to the most recent
+list in its history, preserving that list’s state; if there is no prior list, it
+opens Home. Excluded background panels do not count toward close eligibility.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
@@ -785,7 +809,7 @@ Verify first-press dragging after navigation as well as ordinary row clicks and
 right-click menus. A completed drop can move or copy real data; use a disposable
 test item when verifying drop actions.
 
-Split-header, file-upload, and conversation drop targets use plain color
+Split-header, folder, file-upload, and conversation drop targets use plain color
 overlays with small sans-serif hints in fully rounded pills. Invalid file drops
 use the failure background color. Cancel the drag to inspect these hints without
 uploading or moving anything.
@@ -797,6 +821,13 @@ agent sessions, projects, email threads, channels, calls, CRM companies, CRM con
 databases, and forms support toggling; database and form favorites appear in Drive's
 sidebar. Individual channel messages and pull requests are not favoritable. A
 favorited agent session disappears from the list once the session is deleted.
+
+Channel favorites show the same channel picture as regular channel rows, with
+the channel icon as a fallback when no picture is available. Direct-message
+favorites use the participant's avatar when available and the entity icon
+otherwise. Cached pictures remain visible when a background picture query
+rejects with an error; an omitted or unavailable channel preview uses the
+fallback icon.
 
 With the GraphQL local cache enabled, cached favorites remain visible when offline
 or when a background refresh fails. Toggle and reorder success while offline means
@@ -866,6 +897,11 @@ many fixed-size app buttons as possible, reserving room for More. Search stays
 in its own island at the right edge and opens the persistent Search… input and
 entity category pills (see [Search](search.md)). Once every view fits, the
 navigation island stops growing.
+
+The current view's button is full ink while the rest of the island dims; views
+with a filled glyph also swap to it. More carries that selected state while the
+open view is one of the destinations it hides, so the island always shows where
+you are. Search, on its own island, stays an action at full ink.
 
 Notifications, Email, and Channels use the same reactive unread-presence checks
 as the desktop sidebar, via `useNavigationUnread`. Their accent dots clear when
@@ -962,7 +998,8 @@ the person's name and email above Copy email, Copy name, Open contact (CRM teams
 only), DM, and Assign task. An agent's or bot's card offers Settings instead of
 DM when the viewer can configure it: Macro opens Settings → Agents, an agent the
 viewer manages opens straight into its Edit agent form, and a plain bot opens
-its page under Settings → Bots. Touch devices have no hover, so tapping the mention
+its page under Settings → Bots. An agent's avatar beside its channel messages
+opens the same card. Touch devices have no hover, so tapping the mention
 or the picture opens that same card as a bottom sheet; any action there runs and
 dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touch
 drops in favour of the card's DM action.
@@ -1047,6 +1084,7 @@ The event menu groups Macro activity triggers by surface:
 - **Tasks:** **Task created**, **Status changed**, **Priority changed**, and **Any property changed**.
 - **Email:** **New email received** in the routine owner's inbox, excluding spam, trash, drafts, and historical imports.
 - **Calls:** **Call started**, for calls the routine owner starts (receives the call and who has joined so far); and **Call ended**, for channel calls and meetings the owner joined (receives participants and transcript, cut short for long calls).
+- **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
 
 For messages, mentions, deletion, and task changes, choose specific accessible
 channels/documents/tasks or any accessible item in the same panel. Creation
@@ -1055,9 +1093,23 @@ triggers cover newly created accessible items; email covers the owner's inbox;
 join** — neither has an item picker. Calls the owner did not start never trigger
 **Call started**; calls they did not join never trigger **Call ended**. Mentions match only @ mentions of the routine owner. **Any property changed**
 also includes status and priority; overlapping selectors start only one run for
-the same event. These are Macro events, not incoming HTTP webhooks. Bot-authored
-or delegated changes do not retrigger routines. Saved legacy selectors remain
+the same event. Bot-authored or delegated Macro changes do not retrigger
+routines. Saved legacy selectors remain
 editable but are no longer offered in the new-trigger menu.
+
+A GitHub trigger panel edits the preset's **GitHub events** and **Actions**
+(comma-separated names GitHub sends, such as `workflow_run` and `completed`;
+empty means any), checks **Repositories** from the owner's reachable list
+(none checked means all), and **Also run for bots and apps** (off by default, so
+an agent acting through Macro's app can't retrigger itself). Deliveries only
+reach owners whose currently linked GitHub account installed the delivering
+installation, or whose team did. While GitHub is disconnected the panel shows
+**Connect GitHub** instead, and an enabled GitHub routine can't be saved. The
+panel also has **Only when the payload…** rows: a dotted field (`*` checks every list
+item, e.g. `pull_request.labels.*.name`), a comparison (**is**, **is one of**,
+**is not one of**, **matches** glob, **is set**, **is not set**) and a value.
+Every row must pass before the run is queued. The chip shows the repository
+after the trigger's label.
 
 When `enable-routine-conditions` is on, every activity trigger panel has an
 **Only run if** box for an optional yes/no question about each event, such as
@@ -1111,27 +1163,42 @@ their history and do not repeat.
 An `m-document-mention` with `blockName: "routine"`, the returned routine ID,
 and the saved name renders as a clickable mention in an agent reply. Once the
 routine is deleted the mention reads `Deleted` and clicking it shows a card
-instead of opening the routine. Routines do not appear in the mention menu.
+instead of opening the routine. Owners can mention their routines in channels
+(see Routine templates).
 Only the owner sees a routine's editor and can edit, enable, run, duplicate,
 delete, or view run history. Anyone else who opens a routine link sees its
-template when the owner shared one, and otherwise "isn't shared as a template".
+template when the owner shared one and routine sharing is enabled, and otherwise
+an unavailable message.
 Run conversations keep their own permissions.
 
 ### Routine templates
 
+Templates require the per-user PostHog flag `enable-routine-sharing`, which is
+off unless explicitly enabled, including in development. Configure it for both
+client and server evaluation. While off, sharing actions, message cards, and
+**Created from template** links are hidden; someone else's routine link shows
+**Routine sharing is unavailable.** after flags finish loading. Template queries
+and activation dialogs do not mount. The API also rejects publishing, reading,
+and activation with 404 when the flag is off, missing, or cannot be evaluated.
+Owners can still stop sharing through the API; their existing routines and
+already activated copies keep working. `VITE_ENABLE_ROUTINE_SHARING` overrides
+only the web gate; exercising templates needs the backend flag enabled too.
+
 A routine runs as its owner, so it is shared as a template, never directly.
-The three-dot menu's **Share as template** opens **Share: name**. It explains
-what people get, takes a **Description**, and lists **What changes for each
-person**: every mention in the instructions plus the schedules' time zone, each
-with tabs. People can be **The person activating** (the owner's own mention
-starts here), **Same for everyone**, or **They choose**; items are **Same for
-everyone** or **They choose**; the time zone is **Their time zone** or **Keep** the owner's
-zone. **Share template** publishes a snapshot of the saved routine;
-**Update template** re-snapshots it. Once shared, the dialog shows how many
-routines were activated from it, a channel-or-people picker with **Send** that
-posts the routine mention, **Copy template link** (the routine's own URL), and
-**Stop sharing**, which hides the template while activated routines keep
-running.
+The three-dot menu's **Share** opens the standard Share dialog, **Share:
+name**: a channel-or-people picker, an optional message, and **Share**, which
+posts the routine mention; below it, **Anyone with the link** shows **Just me**
+or **Shared** with the activation count, **Copy Link** (the routine's own URL),
+and, once shared, **Stop sharing**, which hides the template while activated
+routines keep running. Every Share and Copy Link first publishes a snapshot of
+the saved routine. The owner's own mention and the schedules' time zone fill in
+as whoever activates it; other references stay the same for everyone, and
+re-sharing keeps the fills an earlier template set.
+
+In a channel composer (including thread replies), the owner's routines appear
+under **Routines** in the `@` menu. Picking one publishes its template the same
+way, then inserts the mention, so everyone in the channel gets a card they can
+activate from. If publishing fails, the mention is not inserted.
 
 Opening a shared routine someone else owns shows the template laid out like a
 routine's Overview: **Activate for me** at the right of the top bar, then the
@@ -1204,19 +1271,22 @@ search cached entities without waiting for a server search. Background hydration
 updates an already-open menu only when a bucket it uses changes. Email/body/tag-only
 hydration must not reread History or the cached channel list; a newly hydrated note
 refreshes History and matching menus, and a channel/DM refreshes channel consumers.
-Ordinary query responses use the same bucket scoping. A project-search response
-that only caches another viewer Soup page must not refresh History, channel lists,
-or unrelated active query pages. Renames, ownership/recency changes, and moves
+Ordinary query responses use the same bucket scoping. A Projects list response
+changes only the `initiative` bucket, so it refreshes menus searching projects but
+not History, channel lists, or unrelated active query pages. Renames, ownership/recency changes, and moves
 between buckets must still appear without retyping in every affected view.
 Older cache runtimes without bucket metadata, mutations, and identity resets
 refresh conservatively. For an empty search, scroll toward the end (or use
 Down); mentions offer **View all** for a category and then load more local pages.
 The @ menu ranks loaded projects and cached document/task matches together
 before choosing preview rows, with the same ranking on desktop and phone.
-Exact and prefix name matches get boosts, task projects get a type boost, and
-viewed recency and shorter names contribute. Empty-query browsing remains
-recency-led; existing People preview slots and phone pinning remain. Tuning lives
-in `MENTION_RANKING_CONFIG` in the mention menu's `utils/mention-ranking.ts`.
+Names equal to the query rank first and names starting with it next; within
+those groups task projects get a type boost, and viewed recency and shorter
+names contribute. Empty-query browsing remains
+recency-led; existing People preview slots and phone pinning remain. Name-match
+tuning is shared with Cmd+K in `NAME_MATCH_RANKING` (`@core/util/freshSort`);
+recency weights and type boosts live in `MENTION_RANKING_CONFIG` in the mention
+menu's `utils/mention-ranking.ts`.
 Broader cache/server matches remain reachable even when the local fuzzy matcher
 would omit them. To verify, type `@task` with a project named `Task planning`
 and many recent tasks containing “task”: the project should appear in the first
@@ -1301,8 +1371,14 @@ An empty query prefers when an item was last viewed, falling back to its update
 time; equal timestamps have a stable entity-type and ID order. Typed searches give
 channels (including DMs) the same 3x boost as the main search view, with the menu's
 additional 1.8x DM boost; relevance and viewed recency still order those results.
-This shared ranking also applies to mobile name search. Verify an older matching
-channel stays above recent CRM contacts and agent sessions in All, and remains
+Relevance uses the same name-match ranking as the @ menu: names equal to the
+query come first, then names starting with it, then other matches, and matches
+that are spread out or start late in the name score lower. The channel and DM
+boosts and recency order rows within each group. Verify that typing a project's
+full name puts it above recently viewed documents, tasks, and channels that
+only contain or start with those words. This shared ranking also applies to mobile name search.
+Verify an older matching channel stays above recent CRM contacts and agent
+sessions in All, and remains
 findable in Channels while its cache entry is absent. Refreshing the cache or
 reopening the menu with unchanged data must not reorder results or duplicate a
 channel when its cache entry arrives. Hydration must also refresh ownership,
@@ -1467,8 +1543,8 @@ right-click **Mark Done** moves the preview to the next item, like the `e` key. 
 
 ## Entity action dialogs
 
-Rename, Delete, and Move to folder use compact centered dialogs on desktop and
-the shared drawer on mobile, with actions in a separated footer. One selected
+Rename and Delete use compact centered dialogs on desktop and the shared drawer
+on mobile, with actions in a separated footer. One selected
 item shows a compact name chip; multiple items show two chips and
 `+N`, which expands single-line names for review.
 Selected-item chips in action command menus and dialogs use the shared Badge,
@@ -1488,14 +1564,26 @@ Email snoozing uses a command menu with quick or typed times, **If no reply** /
 **Regardless**, and **Remove reminder**. Saving waits for confirmation and shows
 retry errors inline. See [Email reminders](reminders.md).
 
-Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, move, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
+Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
 
-The Move to folder picker uses the Drive sidebar’s folder rows: neutral icons, trailing expand/collapse buttons, and indented branch guides. Click a folder to select it; use the chevron to expand it. Search and arrow-key navigation remain available.
+The Move to folder picker is a command menu, like Snooze, over the same folder list as the Drive sidebar. Folders are a flat list with their parent path: **Open in split** (Drive folders and folder splits, in split order, first row selected), **Created by you**, then **Shared with you**, each newest first. It leaves out folders that already hold every item and, for a moved folder, the folder itself and everything under it. Enter or a click moves at once. Typing ranks by name like Cmd+K and adds **New folder “name”** unless a folder has that name; choosing it creates the folder and moves the items into it. Phones show the same list in the drawer with the path under the name.
+
+### Dragging rows into a folder
+
+On desktop, a split showing a folder (Drive's folder route or a folder split) accepts rows dragged from another split and moves them with the same mutation as the picker. Dragging a selected row carries the whole selection, the drag card counts it, and a successful move clears that selection; a failed one keeps it for a retry. Dragging an unselected row carries only that row. The pane shows **Move N items to this folder** only when the drop would work: every row passes Move to folder's owner and type rules, at least one row isn't already there, no folder would land inside itself, the row didn't start in that split, and Alt isn't held, since that marks the drag as a copy. The header still offers **Open in this split**. Other drop targets (composers, documents, canvases) still take only the grabbed row.
+
+Folders in Drive's sidebar take the same drops, outlined while hovered, including rows from the list beside them in the same split. So do folder rows in Drive's lists and in a folder's own list; a row takes the drop ahead of the pane around it, so a drop lands in the row's folder, not the one the pane shows. Held at the sidebar's edge, a drag scrolls a long folder tree. The drag card sits beside the pointer so a narrow target stays visible. Drive's root row is not a drop target.
+
+Every move, from the picker or a drop, ends in a **Moved to folder** or **Moved N items** toast with **Open** and, on desktop with room for another split, **Open in new split**. Either action dismisses the toast and shows the folder on Drive's route; if a split already lists that folder, it focuses that split instead of opening a second copy. A split with an item open inside the folder doesn't count, because the folder's list isn't visible there. Touch devices have no splits, so they show only **Open**.
 
 ### Native update-required dialog
 
 When newer frontend JS requires a newer native app, the mobile shell offers
-**Update app** and **OK**. Update app uses the native opener; Android targets the
+**Update app** and **OK**. It opens once per launch, either when the bundle
+updater reports a native floor, or when the OTA bundle finds the app lacks a
+GraphQL cache command (`graphql_cache_init_with_schema` or
+`graphql_cache_inspect_mutations`); the cache case explains what needs the
+update and the app runs uncached until then. Update app uses the native opener; Android targets the
 HTTPS Play listing for `com.macro.workspace.mobile`, allowing a browser when the Store app
 is absent. An opener failure displays an inline error and the dialog stays
 dismissible. A missing listing is handled in the external store/browser: return

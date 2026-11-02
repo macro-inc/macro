@@ -6,7 +6,7 @@ use crate::api::user::stripe::PaidPlan;
 
 use ai_billing::BillingService;
 use ai_billing::outbound::stripe_gateway::{
-    PURPOSE_AI_CREDIT_RELOAD, PURPOSE_AI_OVERAGE, PURPOSE_METADATA_KEY,
+    PURPOSE_AI_CREDIT_RELOAD, PURPOSE_AI_OVERAGE, PURPOSE_METADATA_KEY, RELOAD_METADATA_KEY,
 };
 use analytics_client::{AnalyticsClient, MetaActionSource, MetaUserData};
 use anyhow::Context;
@@ -261,8 +261,15 @@ async fn handle_payment_event(
                         paid,
                         "processing ai credit reload invoice event"
                     );
+                    // The reload id finds a paid invoice whose id never
+                    // reached its row.
+                    let reload_id = invoice
+                        .metadata
+                        .as_ref()
+                        .and_then(|m| m.get(RELOAD_METADATA_KEY))
+                        .and_then(|id| macro_uuid::string_to_uuid(id).ok());
                     ctx.ai_billing_service
-                        .mark_credit_reload_invoice(invoice_id.as_str(), paid)
+                        .mark_credit_reload_invoice(invoice_id.as_str(), reload_id, paid)
                         .await
                         .context("failed to record ai credit reload invoice outcome")?;
                     return Ok(());

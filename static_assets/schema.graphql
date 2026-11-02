@@ -3633,6 +3633,24 @@ input GraphqlDatabaseRowLiteral @oneOf {
 }
 
 """
+One named half-open UTC interval.
+"""
+input GraphqlDateBucketRange {
+	"""
+	Unique group key.
+	"""
+	key: String!
+	"""
+	Inclusive RFC 3339 UTC start; null means negative infinity.
+	"""
+	start: String
+	"""
+	Exclusive RFC 3339 UTC end; null means positive infinity.
+	"""
+	end: String
+}
+
+"""
 GraphQL input representing the date literal.
 """
 input GraphqlDateLiteral @oneOf {
@@ -3791,8 +3809,8 @@ input GraphqlDocumentLiteral @oneOf {
 	emailAttachmentParticipant: GraphqlEmailValue
 	"""
 	Associated with a CRM record through its Companies or Contacts
-	property or a reference to the record. Requires an expanded,
-	timestamp-sorted query.
+	property or a reference to the record. Requires an expanded query
+	sorted by a timestamp or task due date.
 	"""
 	crmAssociated: GraphqlCrmAssociation
 	"""
@@ -3925,6 +3943,44 @@ input GraphqlEmailFilterAst {
 	The crm scope.
 	"""
 	crmScope: GraphqlCrmScope
+}
+
+"""
+Why a thread is in or out of Focus.
+"""
+enum GraphqlEmailFocusCategory {
+	"""
+	A customer, client or user asking for help or giving feedback.
+	"""
+	CUSTOMER
+	"""
+	Mail from someone at the owner's own company.
+	"""
+	TEAM
+	"""
+	Mail from someone the owner corresponds with.
+	"""
+	KNOWN
+	"""
+	Relevant mail that fits no narrower category.
+	"""
+	OTHER
+	"""
+	A calendar invite, update or RSVP.
+	"""
+	CALENDAR
+	"""
+	Unsolicited outreach: a pitch, recruiting or a job application.
+	"""
+	OUTREACH
+	"""
+	Automated, bulk or templated mail.
+	"""
+	AUTOMATED
+	"""
+	Nothing marks the thread as relevant.
+	"""
+	LOW_RELEVANCE
 }
 
 """
@@ -4142,6 +4198,36 @@ enum GraphqlEmailSyncStatus {
 }
 
 """
+The Focus classification of one email thread.
+"""
+type GraphqlEmailThreadFocus {
+	"""
+	Whether the thread belongs in Focus.
+	"""
+	isFocus: Boolean!
+	"""
+	The Focus category, or why the thread was left out.
+	"""
+	category: GraphqlEmailFocusCategory!
+	"""
+	Sort key for the Focus list, 0 to 100.
+	"""
+	importance: Int!
+	"""
+	The latest message waits on the owner's answer.
+	"""
+	needsReply: Boolean!
+	"""
+	An open loop the owner should come back to.
+	"""
+	needsFollowUp: Boolean!
+	"""
+	When the classification was made, in RFC 3339 format.
+	"""
+	classifiedAt: String!
+}
+
+"""
 GraphQL input representing the email value.
 """
 input GraphqlEmailValue @oneOf {
@@ -4292,7 +4378,7 @@ input GraphqlEntityFilterAst {
 	"""
 	Restrict every entity type to items associated with this CRM record,
 	or to activity across visible CRM-enabled teams.
-	Requires an expanded, timestamp-sorted query.
+	Requires an expanded query sorted by a timestamp or selected property.
 	"""
 	crmAssociation: GraphqlCrmAssociation
 	"""
@@ -4710,6 +4796,10 @@ input GraphqlFilterPropertyMatchValue @oneOf {
 	Entity reference id to match.
 	"""
 	entityRef: ID
+	"""
+	Match a DATE property in a UTC range.
+	"""
+	dateRange: GraphqlPropertyDateRange
 }
 
 """
@@ -5446,6 +5536,10 @@ input GraphqlGroupByInput {
 	Optional property entity type restriction.
 	"""
 	entityType: GraphqlPropertyEntityType
+	"""
+	Optional caller-defined date ranges; requires PROPERTY grouping.
+	"""
+	bucketing: GraphqlPropertyBucketing
 }
 
 """
@@ -5592,6 +5686,10 @@ input GraphqlInitiativeLiteral @oneOf {
 	Match projects due after this RFC 3339 timestamp.
 	"""
 	dueAfter: String
+	"""
+	Exact notification state for the requester; also opts in.
+	"""
+	notificationState: NotificationState
 }
 
 """
@@ -6156,6 +6254,35 @@ type GraphqlProperty {
 }
 
 """
+Transform the selected DATE property into caller-defined ranges.
+Non-DATE values use the missing-value bucket.
+"""
+input GraphqlPropertyBucketing {
+	"""
+	Bucketing transformation.
+	"""
+	type: GraphqlPropertyBucketingType!
+	"""
+	Ordered, contiguous UTC ranges covering every present date.
+	"""
+	ranges: [GraphqlDateBucketRange!]!
+	"""
+	Key for entities whose selected property is absent or cleared.
+	"""
+	missingValueBucketKey: String!
+}
+
+"""
+Supported property-value transformations.
+"""
+enum GraphqlPropertyBucketingType {
+	"""
+	Caller-defined half-open UTC date ranges.
+	"""
+	DATE_RANGES
+}
+
+"""
 A property definition's supported value type.
 """
 enum GraphqlPropertyDataType {
@@ -6199,6 +6326,20 @@ enum GraphqlPropertyDataType {
 	URL values.
 	"""
 	LINK
+}
+
+"""
+Explicit UTC bounds for a DATE property.
+"""
+input GraphqlPropertyDateRange {
+	"""
+	Inclusive UTC start, or no lower bound.
+	"""
+	start: String
+	"""
+	Exclusive UTC end, or no upper bound.
+	"""
+	end: String
 }
 
 """
@@ -6772,6 +6913,14 @@ type GraphqlScheduledActionEventFilter {
 	"""
 	entityIds: [ID!]
 	"""
+	Which GitHub App deliveries satisfy a `GITHUB` filter.
+	"""
+	github: GraphqlScheduledActionGithubSelector
+	"""
+	Exact payload tests a GitHub delivery must pass, as a reader would state them.
+	"""
+	payloadMatch: [String!]!
+	"""
 	Yes/no question the triggering content must answer with yes before the routine runs.
 	"""
 	condition: String
@@ -6841,6 +6990,10 @@ enum GraphqlScheduledActionEventName {
 	A call the routine's owner joined ended.
 	"""
 	CALL_ENDED
+	"""
+	Macro's GitHub App received a delivery.
+	"""
+	GITHUB
 }
 
 """
@@ -6851,6 +7004,28 @@ type GraphqlScheduledActionEventsTrigger {
 	Event filters. A run starts when any filter matches.
 	"""
 	filters: [GraphqlScheduledActionEventFilter!]!
+}
+
+"""
+GitHub deliveries a filter watches. Empty lists match everything.
+"""
+type GraphqlScheduledActionGithubSelector {
+	"""
+	GitHub event names, such as `workflow_run`.
+	"""
+	events: [String!]!
+	"""
+	Payload actions, such as `completed`.
+	"""
+	actions: [String!]!
+	"""
+	Repositories, as `owner/name`.
+	"""
+	repositories: [String!]!
+	"""
+	Whether deliveries caused by bots also match.
+	"""
+	includeBots: Boolean!
 }
 
 """
@@ -7009,7 +7184,7 @@ enum GraphqlSharedEmailFilter {
 }
 
 """
-GraphQL representation of supported Soup sorts.
+GraphQL representation of Soup timestamp, notification, and selected-property sorts.
 """
 enum GraphqlSimpleSortMethod {
 	"""
@@ -7033,6 +7208,12 @@ enum GraphqlSimpleSortMethod {
 	notified first. Descending `soup` only; not supported by `groupSoup`.
 	"""
 	NOTIFIED_AT
+	"""
+	Sort by the selected property key, missing last, then newest update and ID.
+	Missing definitions and unsupported types use update-time ordering.
+	Email, channels, calls, companies, and agent sessions never appear.
+	"""
+	PROPERTY
 }
 
 """
@@ -7225,9 +7406,19 @@ type GraphqlSoupBin {
 	"""
 	key: String!
 	"""
+	Display text for a group whose key alone does not identify it client
+	side, limited to what the viewer can read. Null when the client labels
+	the key itself or the viewer cannot read the entity behind it.
+	"""
+	label: String
+	"""
 	Total number of items in this group across all pages.
 	"""
 	totalCount: Int!
+	"""
+	Stored option order or calendar bucket order, when available.
+	"""
+	displayOrder: Int
 	"""
 	Opaque cursor for the next page in this bin, if one exists.
 	"""
@@ -8796,9 +8987,20 @@ type GraphqlSoupEmailThread implements GraphqlSoupEntity {
 	"""
 	latestInboundMessageTs: String
 	"""
+	Whether any message was received rather than drafted or sent. Only
+	threads with received mail can return to the inbox.
+	"""
+	hasReceivedMail: Boolean!
+	"""
 	Most recent explicit return from an email reminder.
 	"""
 	reminderReturnedAt: String
+	"""
+	The thread's Focus classification: whether it belongs in Focus, why,
+	and how important it is. `null` until the thread is classified, and
+	for threads in inboxes the viewer does not own.
+	"""
+	focus: GraphqlEmailThreadFocus
 	"""
 	Timestamp of the latest outbound message, in RFC 3339 format: the SENT
 	view's sort key.
@@ -9535,6 +9737,13 @@ type GraphqlUser {
 	"""
 	emailThread(input: EmailThreadInput!): GraphqlSoupEmailThread
 	"""
+	The viewer's Focus: signal threads in their own inboxes worth their
+	attention, highest priority first (importance, halved for every 2 days
+	since the latest inbound mail), with mail in the last `days` days
+	(default 30, at most 90). Each thread's `focus` field explains why.
+	"""
+	emailFocus(days: Int): [GraphqlSoupEmailThread!]!
+	"""
 	Fetch one accessible agent session by id, with its protocol log
 	reachable through `log`.
 	"""
@@ -9612,8 +9821,17 @@ input GroupedSoupInitialInput {
 	limit: Int
 	"""
 	Sort order within each bin. Defaults to `VIEWED_UPDATED`.
+	Grouped PROPERTY reads retain calendar events; flat PROPERTY reads do not.
 	"""
 	sortMethod: GraphqlSimpleSortMethod
+	"""
+	Property definition selected for numeric property sorting.
+	"""
+	sortPropertyDefinitionId: ID
+	"""
+	Direction of property values. Defaults to DESC.
+	"""
+	sortDirection: GraphqlSortDirection
 	"""
 	AST-shaped filters applied to each Soup entity type.
 	"""
@@ -10447,10 +10665,15 @@ input SoupInitialInput {
 	"""
 	expand: Boolean
 	"""
-	Simple timestamp sort. Defaults to VIEWED_AT. Frecency is intentionally
-	not supported by this initial GraphQL adapter.
+	Timestamp or selected numeric property sort. Defaults to VIEWED_AT.
+	Frecency is not supported by this GraphQL adapter.
+	Flat PROPERTY reads omit calendar events, email, channels, calls, companies, and agent sessions.
 	"""
 	sortMethod: GraphqlSimpleSortMethod
+	"""
+	Property definition selected for numeric property sorting.
+	"""
+	sortPropertyDefinitionId: ID
 	"""
 	Email preview view used when hydrating email Soup items.
 	"""
@@ -10934,9 +11157,13 @@ enum WorkFeedItemType {
 	"""
 	CHAT
 	"""
-	Projects.
+	Projects (folders).
 	"""
 	PROJECT
+	"""
+	Task projects (initiatives).
+	"""
+	INITIATIVE
 	"""
 	Email threads.
 	"""

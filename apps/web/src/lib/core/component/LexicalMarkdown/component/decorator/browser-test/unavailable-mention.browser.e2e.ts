@@ -23,6 +23,7 @@ const cases = [
   ['Deleted skill', 'Deleted', "This skill was deleted or doesn't exist."],
   ['Deleted routine', 'Deleted', "This routine was deleted or doesn't exist."],
   ['Hidden routine', 'No Access', "You don't have access to this routine"],
+  ['Hidden channel', 'No Access', "You don't have access to this channel"],
   [
     'Deleted agent session',
     'Deleted agent session',
@@ -87,6 +88,26 @@ test('Enter on a deleted chip selected in a composer keeps its card open', async
   ).toBeVisible();
   // The chip took the Enter; the editor did not break the line.
   await expect(composer.locator('p')).toHaveCount(1);
+});
+
+test('a hidden channel chip in a composer converts to its link as plain text', async ({
+  page,
+}) => {
+  await page.goto(fixture);
+  const composer = page.getByRole('textbox', { name: 'Composer' });
+  await composer.getByText('No Access', { exact: true }).click();
+  await expect(
+    page.getByText("You don't have access to this channel", { exact: true })
+  ).toBeVisible();
+
+  await page.getByRole('button', { name: 'Reference actions' }).click();
+  await page.getByRole('menuitem', { name: 'Convert to Plain Text' }).click();
+
+  const origin = new URL(page.url()).origin;
+  await expect(composer).toContainText(
+    `after ${origin}/app/channel/01a16d55-0000-7000-8000-00000000000f end`
+  );
+  await expect(composer.getByText('No Access', { exact: true })).toBeHidden();
 });
 
 test.describe('on a phone', () => {

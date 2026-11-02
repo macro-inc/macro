@@ -136,6 +136,7 @@ impl BillingService for FakeBilling {
     async fn mark_credit_reload_invoice(
         &self,
         _stripe_invoice_id: &str,
+        _reload_id: Option<macro_uuid::Uuid>,
         _paid: bool,
     ) -> Result<()> {
         unreachable!()

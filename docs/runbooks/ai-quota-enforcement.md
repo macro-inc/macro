@@ -179,8 +179,18 @@ charge the payer's card on file through the same invoice path and are
 buyer. Any paid, metered seat may buy. The payer's purchases are capped by their
 monthly limit when set; a team member's always are, falling back to the plan
 default when the owner set none. A declined purchase is marked failed with its
-invoice kept open; buying again pays that invoice instead of charging twice, and
-it never suspends automatic reloads. Automatic reloads and the settlement sweep
+invoice kept open; buying the same pack again pays that invoice instead of
+charging twice, while picking a different pack voids it first so the buyer is
+never charged an amount they did not choose. A retried invoice found void or
+uncollectible in Stripe is retired the same way and a fresh purchase reserved.
+Purchases never suspend automatic reloads. Provider and storage errors are
+returned as errors (the app asks the buyer to try again), never reported as a
+declined card; the row keeps any invoice it opened, so the next attempt retries
+it. If the collector dies after Stripe finalized an invoice but before the row
+recorded it, the `invoice.paid` webhook matches the row by the
+`macro_reload_id` stamped on the invoice and books the credits; such a stale
+pending purchase stops counting toward the monthly limit after 10 minutes.
+Purchase credits are labelled `Credit purchase` in `ai_credit_ledger`. Automatic reloads and the settlement sweep
 only consider `kind = 'automatic'` rows. Before reserving, a purchase checks
 that Stripe has a card to charge (the subscription's or customer's default
 payment method, or a legacy default source); without one it reserves nothing

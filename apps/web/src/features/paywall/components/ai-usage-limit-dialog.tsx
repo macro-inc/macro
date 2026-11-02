@@ -291,7 +291,7 @@ export function AiUsageLimitDialogView(props: AiUsageLimitDialogProps) {
                 Dismiss
               </Button>
               <Button
-                variant="neutral"
+                variant="primary"
                 disabled={
                   props.offer?.pending || (limitReached() && !fixCard())
                 }

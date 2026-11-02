@@ -811,7 +811,7 @@ async fn reserve_credit_reload_subtracts_usage_the_settlement_will_consume(pool:
         .await
         .unwrap();
     assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 500);
-    repo.record_credit_reload(&payer(), 9_500, "in_1")
+    repo.record_credit_reload(&payer(), 9_500, "in_1", CreditReloadKind::Automatic)
         .await
         .unwrap();
     assert!(
@@ -1042,7 +1042,7 @@ async fn reserve_credit_reload_retries_a_failed_reload_on_its_open_invoice(pool:
 async fn credit_reloads_are_idempotent_on_the_invoice(pool: PgPool) {
     let repo = PgBillingRepo::new(pool, AiPricing::testing());
     assert!(
-        repo.record_credit_reload(&payer(), 9_500, "in_1")
+        repo.record_credit_reload(&payer(), 9_500, "in_1", CreditReloadKind::Automatic)
             .await
             .unwrap()
     );
@@ -1050,7 +1050,7 @@ async fn credit_reloads_are_idempotent_on_the_invoice(pool: PgPool) {
     // The collector and the webhook may both report the same invoice.
     assert!(
         !repo
-            .record_credit_reload(&payer(), 9_500, "in_1")
+            .record_credit_reload(&payer(), 9_500, "in_1", CreditReloadKind::Automatic)
             .await
             .unwrap()
     );
@@ -1081,28 +1081,28 @@ async fn reload_invoice_webhooks_resolve_once_and_never_unpay(pool: PgPool) {
         .unwrap();
 
     assert!(
-        repo.resolve_credit_reload_invoice("in_unknown", CreditReloadStatus::Paid)
+        repo.resolve_credit_reload_invoice("in_unknown", None, CreditReloadStatus::Paid)
             .await
             .unwrap()
             .is_none()
     );
     // Declined first; re-reporting it is a no-op.
     let failed = repo
-        .resolve_credit_reload_invoice("in_1", CreditReloadStatus::Failed)
+        .resolve_credit_reload_invoice("in_1", None, CreditReloadStatus::Failed)
         .await
         .unwrap()
         .expect("status changed");
     assert_eq!(failed.payer.as_ref(), payer().as_ref());
     assert_eq!(failed.amount_cents, 10_000);
     assert!(
-        repo.resolve_credit_reload_invoice("in_1", CreditReloadStatus::Failed)
+        repo.resolve_credit_reload_invoice("in_1", None, CreditReloadStatus::Failed)
             .await
             .unwrap()
             .is_none()
     );
     // Stripe's retry collected it: reported exactly once.
     let paid = repo
-        .resolve_credit_reload_invoice("in_1", CreditReloadStatus::Paid)
+        .resolve_credit_reload_invoice("in_1", None, CreditReloadStatus::Paid)
         .await
         .unwrap()
         .expect("status changed");
@@ -1110,14 +1110,14 @@ async fn reload_invoice_webhooks_resolve_once_and_never_unpay(pool: PgPool) {
     assert_eq!(paid.amount_cents, 10_000);
     assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 10_000);
     assert!(
-        repo.resolve_credit_reload_invoice("in_1", CreditReloadStatus::Paid)
+        repo.resolve_credit_reload_invoice("in_1", None, CreditReloadStatus::Paid)
             .await
             .unwrap()
             .is_none()
     );
     // A late or duplicate failure cannot un-pay it.
     assert!(
-        repo.resolve_credit_reload_invoice("in_1", CreditReloadStatus::Failed)
+        repo.resolve_credit_reload_invoice("in_1", None, CreditReloadStatus::Failed)
             .await
             .unwrap()
             .is_none()
@@ -1148,7 +1148,7 @@ async fn reload_invoice_credit_write_failure_leaves_paid_webhook_retryable(pool:
     .await
     .unwrap();
     assert!(
-        repo.resolve_credit_reload_invoice("in_retry", CreditReloadStatus::Paid)
+        repo.resolve_credit_reload_invoice("in_retry", None, CreditReloadStatus::Paid)
             .await
             .is_err()
     );
@@ -1167,7 +1167,7 @@ async fn reload_invoice_credit_write_failure_leaves_paid_webhook_retryable(pool:
         .await
         .unwrap();
     assert!(
-        repo.resolve_credit_reload_invoice("in_retry", CreditReloadStatus::Paid)
+        repo.resolve_credit_reload_invoice("in_retry", None, CreditReloadStatus::Paid)
             .await
             .unwrap()
             .is_some()
@@ -1175,7 +1175,7 @@ async fn reload_invoice_credit_write_failure_leaves_paid_webhook_retryable(pool:
     assert_eq!(repo.credit_balance_cents(&payer()).await.unwrap(), 10_000);
     // Re-delivery cannot issue the purchased credits twice.
     assert!(
-        repo.resolve_credit_reload_invoice("in_retry", CreditReloadStatus::Paid)
+        repo.resolve_credit_reload_invoice("in_retry", None, CreditReloadStatus::Paid)
             .await
             .unwrap()
             .is_none()
@@ -1200,12 +1200,17 @@ async fn reload_invoice_webhook_deduplicates_credits_booked_by_collector(pool: P
     )
     .await
     .unwrap();
-    repo.record_credit_reload(&payer(), reserved.amount_cents, "in_collector")
-        .await
-        .unwrap();
+    repo.record_credit_reload(
+        &payer(),
+        reserved.amount_cents,
+        "in_collector",
+        CreditReloadKind::Automatic,
+    )
+    .await
+    .unwrap();
 
     assert!(
-        repo.resolve_credit_reload_invoice("in_collector", CreditReloadStatus::Paid)
+        repo.resolve_credit_reload_invoice("in_collector", None, CreditReloadStatus::Paid)
             .await
             .unwrap()
             .is_some()
@@ -1743,9 +1748,198 @@ async fn automatic_reloads_ignore_open_purchases(pool: PgPool) {
 
     // A failed purchase invoice resolves as a purchase.
     let resolved = repo
-        .resolve_credit_reload_invoice("in_purchase", CreditReloadStatus::Paid)
+        .resolve_credit_reload_invoice("in_purchase", None, CreditReloadStatus::Paid)
         .await
         .unwrap()
         .unwrap();
     assert_eq!(resolved.kind, CreditReloadKind::Purchase);
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn voided_purchases_are_neither_retried_nor_counted(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
+    let now = Utc::now();
+    let member = MacroUserIdStr::try_from("macro|member@example.com".to_string()).unwrap();
+
+    let PurchaseReservation::New(declined) = repo
+        .reserve_credit_purchase(&payer(), &member, 2_500, Some(5_000), now)
+        .await
+        .unwrap()
+    else {
+        panic!("purchase reserved");
+    };
+    repo.finish_credit_reload(declined.id, Some("in_declined"), CreditReloadStatus::Failed)
+        .await
+        .unwrap();
+    // An automatic reload's open invoice is never treated as a purchase.
+    enable_auto_reload(&repo, &thresholds(None)).await;
+    let auto = repo
+        .reserve_credit_reload(&payer(), now - chrono::Duration::days(10), 0, now)
+        .await
+        .unwrap()
+        .expect("automatic reload reserved");
+    repo.finish_credit_reload(auto.id, Some("in_auto"), CreditReloadStatus::Failed)
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.declined_credit_purchases(&payer()).await.unwrap(),
+        vec![PendingReload {
+            id: declined.id,
+            amount_cents: 2_500,
+            stripe_invoice_id: Some("in_declined".into()),
+        }]
+    );
+    let period = BillingPeriod::calendar_month(now);
+    let before = repo
+        .credit_reload_committed_cents(&payer(), period)
+        .await
+        .unwrap();
+
+    repo.void_credit_purchase(declined.id).await.unwrap();
+    // Voiding never touches an automatic reload.
+    repo.void_credit_purchase(auto.id).await.unwrap();
+
+    assert!(
+        repo.declined_credit_purchases(&payer())
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        repo.credit_reload_committed_cents(&payer(), period)
+            .await
+            .unwrap(),
+        before - 2_500
+    );
+    // Buying again reserves a fresh purchase instead of retrying the void.
+    assert!(matches!(
+        repo.reserve_credit_purchase(&payer(), &member, 2_500, None, now)
+            .await
+            .unwrap(),
+        PurchaseReservation::New(_)
+    ));
+    let auto_invoice = sqlx::query_scalar!(
+        "SELECT stripe_invoice_id FROM ai_credit_reload WHERE id = $1",
+        auto.id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(auto_invoice.as_deref(), Some("in_auto"));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_paid_purchase_cannot_be_voided(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
+    let now = Utc::now();
+    let PurchaseReservation::New(paid) = repo
+        .reserve_credit_purchase(&payer(), &payer(), 2_500, None, now)
+        .await
+        .unwrap()
+    else {
+        panic!("purchase reserved");
+    };
+    repo.finish_credit_reload(paid.id, Some("in_paid"), CreditReloadStatus::Paid)
+        .await
+        .unwrap();
+
+    repo.void_credit_purchase(paid.id).await.unwrap();
+
+    let row = sqlx::query!(
+        r#"SELECT status::text AS "status!", stripe_invoice_id FROM ai_credit_reload WHERE id = $1"#,
+        paid.id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.status, "paid");
+    assert_eq!(row.stripe_invoice_id.as_deref(), Some("in_paid"));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_paid_invoice_is_matched_to_its_orphaned_row_by_reload_id(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
+    let now = Utc::now();
+    let PurchaseReservation::New(orphan) = repo
+        .reserve_credit_purchase(&payer(), &payer(), 2_500, None, now)
+        .await
+        .unwrap()
+    else {
+        panic!("purchase reserved");
+    };
+
+    // A failure never adopts the row.
+    assert_eq!(
+        repo.resolve_credit_reload_invoice("in_lost", Some(orphan.id), CreditReloadStatus::Failed)
+            .await
+            .unwrap(),
+        None
+    );
+    let resolved = repo
+        .resolve_credit_reload_invoice("in_lost", Some(orphan.id), CreditReloadStatus::Paid)
+        .await
+        .unwrap()
+        .expect("orphan adopted");
+    assert_eq!(resolved.kind, CreditReloadKind::Purchase);
+    assert_eq!(resolved.amount_cents, 2_500);
+
+    let row = sqlx::query!(
+        r#"SELECT status::text AS "status!", stripe_invoice_id FROM ai_credit_reload WHERE id = $1"#,
+        orphan.id
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    assert_eq!(row.status, "paid");
+    assert_eq!(row.stripe_invoice_id.as_deref(), Some("in_lost"));
+    let note =
+        sqlx::query_scalar!("SELECT note FROM ai_credit_ledger WHERE stripe_reference = 'in_lost'")
+            .fetch_one(&pool)
+            .await
+            .unwrap();
+    assert_eq!(note.as_deref(), Some("Credit purchase"));
+
+    // A row that already has another invoice is never adopted.
+    assert_eq!(
+        repo.resolve_credit_reload_invoice("in_other", Some(orphan.id), CreditReloadStatus::Paid)
+            .await
+            .unwrap(),
+        None
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_stale_orphaned_purchase_stops_counting_against_the_limit(pool: PgPool) {
+    let repo = PgBillingRepo::new(pool.clone(), AiPricing::testing());
+    let now = Utc::now();
+    let PurchaseReservation::New(orphan) = repo
+        .reserve_credit_purchase(&payer(), &payer(), 2_500, None, now)
+        .await
+        .unwrap()
+    else {
+        panic!("purchase reserved");
+    };
+    let period = BillingPeriod::calendar_month(now);
+    assert_eq!(
+        repo.credit_reload_committed_cents(&payer(), period)
+            .await
+            .unwrap(),
+        2_500
+    );
+
+    sqlx::query!(
+        "UPDATE ai_credit_reload SET updated_at = NOW() - INTERVAL '11 minutes' WHERE id = $1",
+        orphan.id
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+
+    assert_eq!(
+        repo.credit_reload_committed_cents(&payer(), period)
+            .await
+            .unwrap(),
+        0
+    );
 }

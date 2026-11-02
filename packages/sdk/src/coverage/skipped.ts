@@ -197,6 +197,8 @@ export const cognitionExcluded = [
   // Sidebar setup and import cards remember dismissals per user (web app only).
   'dismissedPromptsHandler',
   'dismissPromptHandler',
+  // Proposes SQL for the web app's in-browser engine to execute.
+  'generateDatabaseQuery',
   'setPricingHandler',
   'startMcpAuth',
   'updateMcpServer',
@@ -233,6 +235,7 @@ export const emailExcluded = [
   'getBackfillGmail',
   'getBackfillGmailActive',
   'getMessagesBatch',
+  'getReadReceiptPixel',
   'healthCheckLinks',
   'healthHandler',
   'initUser',
@@ -400,8 +403,13 @@ export const storageExcluded = [
   'whatsappCancelPairing',
   'whatsappConnect',
   'whatsappDisconnect',
+  // History imports and phone-number lookups need the owner's own session:
+  // each wakes their phone, and WhatsApp bans bulk checks.
+  'whatsappImportHistory',
+  'whatsappLookup',
   'whatsappPairing',
   'whatsappPasskey',
+  'whatsappStartLookup',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog =

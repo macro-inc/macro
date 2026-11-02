@@ -28,7 +28,8 @@ Components, styling, and interaction conventions.
   component utilities and layer/inversion rules keep their own responsibilities.
   Do not append separate border, Button, glass, or avatar theme blocks elsewhere.
 - **FE-26** Prefer composition over configurability; keep reusable components
-  small and free of queries/complex state.
+  small and free of queries/complex state. Prefer children or JSX slots over
+  render props when the parent provides no data to the child.
 - **FE-27** Don't add `cursor-pointer` to clickable elements. Enforced by
   ast-grep `tsx-no-cursor-pointer`, warning.
 - **FE-28** Dialogs rely on Kobalte's default autofocus: make the intended

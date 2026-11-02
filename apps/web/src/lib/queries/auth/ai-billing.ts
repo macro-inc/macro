@@ -157,10 +157,15 @@ export function usePurchaseAiCreditsMutation() {
         async () => await authServiceClient.purchaseAiCredits(args)
       ),
     onSuccess: (result) => {
-      queryClient.setQueryData(
-        authKeys.aiBillingSummary.queryKey,
-        result.snapshot
-      );
+      if (result.snapshot) {
+        queryClient.setQueryData(
+          authKeys.aiBillingSummary.queryKey,
+          result.snapshot
+        );
+        return;
+      }
+      // The purchase happened but its summary could not be read.
+      fireAndForget(invalidateAiBillingSummary(), 'ai-billing');
     },
   }));
 }

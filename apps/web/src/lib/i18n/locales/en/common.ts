@@ -1,4 +1,12 @@
 export default {
+  add: 'Add',
+  addProperty: 'Add property',
+  addTags: 'Add tags',
+  emptyCollection: 'No items added yet',
+  emptyTags: 'No tags added yet',
+  dropToAdd: 'Drop to add',
+  addingItem: 'Adding item…',
+  cannotAddDraggedItem: 'Can’t add this item',
   addPhotos: 'Add photos',
   addFiles: 'Add files',
   photosFromDevice: 'Images from your device',

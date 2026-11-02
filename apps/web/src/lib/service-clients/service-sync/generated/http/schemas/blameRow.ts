@@ -5,9 +5,12 @@
  * Document sync service JSON control plane
  * OpenAPI spec version: 0.1.0
  */
+import type { BlameRowActor } from './blameRowActor';
 import type { BlameRowUserId } from './blameRowUserId';
 
 export interface BlameRow {
+  /** Signed agent actor (`bot|<uuid>`) the peer edited as; null for humans. */
+  actor?: BlameRowActor;
   peer_id: string;
   timestamp_ms: number;
   user_id?: BlameRowUserId;

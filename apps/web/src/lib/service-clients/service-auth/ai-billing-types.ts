@@ -77,7 +77,8 @@ export interface AiUsageSnapshot {
 export interface AiCreditPurchaseResult {
   status: CreditPurchaseStatus;
   amountCents: number;
-  snapshot: AiUsageSnapshot;
+  /** Absent when the server could not read it after the purchase. */
+  snapshot?: AiUsageSnapshot;
 }
 
 export interface AiPlanCatalogEntry {

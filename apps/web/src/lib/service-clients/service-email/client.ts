@@ -38,6 +38,7 @@ import type {
   GetAttachmentResponse,
   GetScheduledResponse,
   GetThreadResponse,
+  InitResponse,
   ListBackfillJobsResponse,
   ListContactsResponse,
   ListEmailFiltersResponse,
@@ -52,6 +53,7 @@ import type {
   SendMessageRequest,
   SendMessageResponse,
   SharedInboxConflictResponse,
+  ThreadReadReceipts,
   TransferDraftRequest,
   TransferDraftResponse,
   TransferRecoveryResponse,
@@ -226,6 +228,11 @@ export const emailClient = {
       errorResponseHandler: forwardCalendarEventErrorHandler,
     });
   },
+  async getThreadReadReceipts(threadId: string) {
+    return emailFetch<ThreadReadReceipts>(
+      `/email/threads/${threadId}/read-receipts`
+    );
+  },
   async init(args?: { linkId?: string; forceShare?: boolean }) {
     const params = new URLSearchParams();
     if (args?.linkId) params.set('link_id', args.linkId);
@@ -233,7 +240,7 @@ export const emailClient = {
     const query = params.toString();
     const path = query ? `/email/init?${query}` : '/email/init';
 
-    return fetchWithToken<EmptyResponse, InitErrorCode>(`${emailHost}${path}`, {
+    return fetchWithToken<InitResponse, InitErrorCode>(`${emailHost}${path}`, {
       method: 'POST',
       // A custom handler replaces safeFetch's default status mapping. 409 carries
       // the shared-inbox conflict fields and 400 a machine-readable code; other
@@ -298,6 +305,13 @@ export const emailClient = {
         method: 'GET',
       })
     ).map((result) => result);
+  },
+  /** The message's original source as `.eml` bytes. */
+  async getMessageEml(args: { message_id: string }) {
+    return fetchWithToken<Uint8Array<ArrayBuffer>>(
+      `${emailHost}/email/messages/${args.message_id}/eml`,
+      { method: 'GET' }
+    );
   },
   async getUserLabels() {
     return (

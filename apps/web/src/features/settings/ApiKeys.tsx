@@ -59,7 +59,7 @@ export function ApiKeys() {
           disabled={!atLimit()}
         >
           <Button
-            variant="neutral"
+            variant="primary"
             size="sm"
             disabled={createDisabled()}
             onClick={openCreate}
@@ -107,7 +107,7 @@ export function ApiKeys() {
                     </div>
                     <Button
                       class="mt-4"
-                      variant="neutral"
+                      variant="primary"
                       size="sm"
                       onClick={openCreate}
                     >

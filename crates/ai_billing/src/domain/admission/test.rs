@@ -98,7 +98,12 @@ impl BillingService for FakeBilling {
     async fn mark_overage_invoice(&self, _: &str, _: bool) -> BillingResult<()> {
         panic!("admission must not handle invoices")
     }
-    async fn mark_credit_reload_invoice(&self, _: &str, _: bool) -> BillingResult<()> {
+    async fn mark_credit_reload_invoice(
+        &self,
+        _: &str,
+        _: Option<macro_uuid::Uuid>,
+        _: bool,
+    ) -> BillingResult<()> {
         panic!("admission must not handle invoices")
     }
 }

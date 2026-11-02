@@ -380,7 +380,8 @@ export function IntegrationRow(props: {
           {props.icon}
         </div>
       </Show>
-      <div class="flex-1 min-w-0 flex flex-col gap-0.5">
+      {/* The basis wraps actions below the text on narrow screens. */}
+      <div class="flex-1 basis-48 min-w-0 flex flex-col gap-0.5">
         <div class="flex items-center gap-2 min-w-0">
           <div
             class={cn(

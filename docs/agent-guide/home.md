@@ -66,6 +66,9 @@ one type without closing. Press **f** to open the menu.
 Entity type checkboxes start checked. Unchecking **Email** hides received
 and sent mail. **Channels** controls
 both channels and reply threads; **Chats** and **Agents** have separate toggles.
+**Folders** is the Drive folder filter and **Projects** the task project
+filter: a project with a pending access request or a discussion notification
+is its own feed row, carried by the work feed as its own item kind.
 Unchecking every type shows an empty feed. **Reset filters** shows every type and
 both read states again. A badge counts hidden types plus an active status filter.
 Read status and type selections persist.
@@ -109,8 +112,8 @@ Items in the 256px desktop rail use single-line pills with 16px icons: profile p
 DMs and model logos for AI chats (Claude sunburst or ChatGPT knot). Other items
 use the same glyphs as entity rows elsewhere: document file-type and
 task/snippet/skill variants, hashes for channels, read/unread envelopes or
-calendar invites for email, sparkles for agents, folders for projects, and alarms
-for reminders. Pull requests retain open, merged, and closed status glyphs and
+calendar invites for email, sparkles for agents, folders for folders, the
+project stack for task projects, and alarms for reminders. Pull requests retain open, merged, and closed status glyphs and
 colors; unknown foreign sources use the generic file icon.
 New agent-session rows always use a sparkle in the left slot, including while
 working. A coding session adds a second line with repository, captured working

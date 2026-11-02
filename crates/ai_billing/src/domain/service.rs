@@ -33,6 +33,9 @@ use teams::domain::open_seat_release::OpenSeatRelease;
 /// would read the provider again. One minute bounds that to one read per
 /// payer per process while Stripe rolls a period or a provider recovers.
 const PERIOD_MISS_BACKOFF: chrono::Duration = chrono::Duration::minutes(1);
+/// Reservations one purchase may make while retiring stale invoices (a void
+/// one, or a declined pack the buyer did not pick) before giving up.
+const MAX_PURCHASE_ATTEMPTS: usize = 3;
 
 /// How many closed periods behind the open one a settlement reconciles.
 ///
@@ -680,7 +683,7 @@ where
         {
             Ok(InvoicePayment::Paid) => {
                 self.repo
-                    .record_credit_reload(payer, reload.amount_cents, &invoice_id)
+                    .record_credit_reload(payer, reload.amount_cents, &invoice_id, kind)
                     .await?;
                 self.repo
                     .finish_credit_reload(reload.id, Some(&invoice_id), CreditReloadStatus::Paid)
@@ -699,6 +702,11 @@ where
                     invoice = %invoice_id,
                     "ai credit purchase needs card authentication; voiding for checkout"
                 );
+                // Failed with its invoice first: if voiding fails, buying
+                // again retries this invoice instead of waiting on it.
+                self.repo
+                    .finish_credit_reload(reload.id, Some(&invoice_id), CreditReloadStatus::Failed)
+                    .await?;
                 if self
                     .abandon_credit_purchase(payer, reload.id, reload.amount_cents, &invoice_id)
                     .await?
@@ -728,6 +736,27 @@ where
                     "ai credit charge declined; invoice awaiting payment"
                 );
                 Ok(InvoicePayment::Declined)
+            }
+            Ok(InvoicePayment::Uncollectible) => {
+                tracing::warn!(
+                    cents = reload.amount_cents,
+                    invoice = %invoice_id,
+                    %kind,
+                    "ai credit charge invoice is void or uncollectible"
+                );
+                match kind {
+                    // Nothing can be charged; buying again starts over.
+                    CreditReloadKind::Purchase => {
+                        self.repo.void_credit_purchase(reload.id).await?;
+                        Ok(InvoicePayment::Uncollectible)
+                    }
+                    CreditReloadKind::Automatic => {
+                        self.fail_credit_charge(payer, reload.id, kind).await?;
+                        Err(BillingError::Payment(anyhow::anyhow!(
+                            "credit reload invoice {invoice_id} is void or uncollectible"
+                        )))
+                    }
+                }
             }
             Err(e) => {
                 tracing::error!(
@@ -759,13 +788,26 @@ where
             }
             InvoiceVoid::Paid => {
                 self.repo
-                    .record_credit_reload(payer, amount_cents, invoice_id)
+                    .record_credit_reload(
+                        payer,
+                        amount_cents,
+                        invoice_id,
+                        CreditReloadKind::Purchase,
+                    )
                     .await?;
                 self.repo
                     .finish_credit_reload(reload_id, Some(invoice_id), CreditReloadStatus::Paid)
                     .await?;
                 Ok(true)
             }
+        }
+    }
+
+    /// Apply freshly booked purchase credits to usage waiting on them.
+    async fn settle_after_purchase(&self, user: &MacroUserIdStr<'_>) {
+        if let Err(e) = self.settle(user).await {
+            // The credits are booked; the next settlement applies them.
+            tracing::warn!(error = ?e, "settlement after credit purchase failed");
         }
     }
 
@@ -1060,21 +1102,32 @@ where
         {
             // A purchase declined before the card was removed keeps an open
             // invoice; void it so a card added later can't collect it on top
-            // of the checkout payment.
+            // of the checkout payment. One Stripe collected first is booked.
+            let mut booked_cents = 0;
             for declined in self
                 .repo
                 .declined_credit_purchases(&entitlement.payer)
                 .await?
             {
-                if let Some(invoice_id) = declined.stripe_invoice_id.as_deref() {
-                    self.abandon_credit_purchase(
-                        &entitlement.payer,
-                        declined.id,
-                        declined.amount_cents,
-                        invoice_id,
-                    )
-                    .await?;
+                if let Some(invoice_id) = declined.stripe_invoice_id.as_deref()
+                    && self
+                        .abandon_credit_purchase(
+                            &entitlement.payer,
+                            declined.id,
+                            declined.amount_cents,
+                            invoice_id,
+                        )
+                        .await?
+                {
+                    booked_cents += declined.amount_cents;
                 }
+            }
+            if booked_cents > 0 {
+                self.settle_after_purchase(user).await;
+                return Ok(CreditPurchase {
+                    amount_cents: booked_cents,
+                    status: CreditPurchaseStatus::Paid,
+                });
             }
             return Ok(CreditPurchase {
                 amount_cents,
@@ -1082,41 +1135,75 @@ where
             });
         }
         let limit = Self::purchase_limit_cents(&entitlement, &settings, user);
-        let reload = match self
-            .repo
-            .reserve_credit_purchase(&entitlement.payer, user, amount_cents, limit, now)
-            .await?
-        {
-            PurchaseReservation::New(reload) | PurchaseReservation::Retry(reload) => reload,
-            PurchaseReservation::OverLimit { remaining_cents } => {
-                return Err(BillingError::CreditLimitExceeded { remaining_cents });
+        // Each pass that does not end the purchase retires one stale invoice
+        // (a void one, or a declined pack the buyer did not pick), so this is
+        // bounded by the purchases that can be open at once.
+        for _ in 0..MAX_PURCHASE_ATTEMPTS {
+            let reload = match self
+                .repo
+                .reserve_credit_purchase(&entitlement.payer, user, amount_cents, limit, now)
+                .await?
+            {
+                PurchaseReservation::New(reload) => reload,
+                PurchaseReservation::Retry(reload) if reload.amount_cents == amount_cents => reload,
+                PurchaseReservation::Retry(declined) => {
+                    // The buyer picked a different pack than the declined one:
+                    // void it rather than charge an amount they did not choose.
+                    let collected = match declined.stripe_invoice_id.as_deref() {
+                        Some(invoice_id) => {
+                            self.abandon_credit_purchase(
+                                &entitlement.payer,
+                                declined.id,
+                                declined.amount_cents,
+                                invoice_id,
+                            )
+                            .await?
+                        }
+                        None => {
+                            self.repo.void_credit_purchase(declined.id).await?;
+                            false
+                        }
+                    };
+                    if collected {
+                        self.settle_after_purchase(user).await;
+                        return Ok(CreditPurchase {
+                            amount_cents: declined.amount_cents,
+                            status: CreditPurchaseStatus::Paid,
+                        });
+                    }
+                    continue;
+                }
+                PurchaseReservation::OverLimit { remaining_cents } => {
+                    return Err(BillingError::CreditLimitExceeded { remaining_cents });
+                }
+                PurchaseReservation::InProgress => return Err(BillingError::PurchaseInProgress),
+            };
+            let charged_cents = reload.amount_cents;
+            // Provider and storage errors surface as errors, never as a
+            // decline that would send the buyer to update a working card.
+            let status = match self
+                .collect_credit_charge(&entitlement, reload, CreditReloadKind::Purchase)
+                .await?
+            {
+                InvoicePayment::Paid => CreditPurchaseStatus::Paid,
+                InvoicePayment::Declined => CreditPurchaseStatus::Declined,
+                InvoicePayment::AuthenticationRequired => {
+                    CreditPurchaseStatus::AuthenticationRequired
+                }
+                // A retried invoice that was voided in Stripe: reserve afresh.
+                InvoicePayment::Uncollectible => continue,
+            };
+            if status == CreditPurchaseStatus::Paid {
+                self.settle_after_purchase(user).await;
             }
-            PurchaseReservation::InProgress => return Err(BillingError::PurchaseInProgress),
-        };
-        let amount_cents = reload.amount_cents;
-        let status = match self
-            .collect_credit_charge(&entitlement, reload, CreditReloadKind::Purchase)
-            .await
-        {
-            Ok(InvoicePayment::Paid) => CreditPurchaseStatus::Paid,
-            Ok(InvoicePayment::AuthenticationRequired) => {
-                CreditPurchaseStatus::AuthenticationRequired
-            }
-            Ok(InvoicePayment::Declined) | Err(BillingError::Payment(_)) => {
-                CreditPurchaseStatus::Declined
-            }
-            Err(e) => return Err(e),
-        };
-        if status == CreditPurchaseStatus::Paid
-            && let Err(e) = self.settle(user).await
-        {
-            // The credits are booked; the next settlement applies them.
-            tracing::warn!(error = ?e, "settlement after credit purchase failed");
+            return Ok(CreditPurchase {
+                amount_cents: charged_cents,
+                status,
+            });
         }
-        Ok(CreditPurchase {
-            amount_cents,
-            status,
-        })
+        Err(BillingError::Payment(anyhow::anyhow!(
+            "credit purchase found no collectable invoice after {MAX_PURCHASE_ATTEMPTS} attempts"
+        )))
     }
 
     #[tracing::instrument(skip(self, success_url, cancel_url), err)]
@@ -1226,7 +1313,12 @@ where
     }
 
     #[tracing::instrument(skip(self), err)]
-    async fn mark_credit_reload_invoice(&self, stripe_invoice_id: &str, paid: bool) -> Result<()> {
+    async fn mark_credit_reload_invoice(
+        &self,
+        stripe_invoice_id: &str,
+        reload_id: Option<Uuid>,
+        paid: bool,
+    ) -> Result<()> {
         let status = if paid {
             CreditReloadStatus::Paid
         } else {
@@ -1234,7 +1326,7 @@ where
         };
         let Some(resolved) = self
             .repo
-            .resolve_credit_reload_invoice(stripe_invoice_id, status)
+            .resolve_credit_reload_invoice(stripe_invoice_id, reload_id, status)
             .await?
         else {
             // Not ours, already paid, or already in this state.

@@ -10,7 +10,7 @@ fn short_config_keeps_selected_settings_and_consent_warnings_visible() {
     let directory = tempfile::tempdir().unwrap();
     let path = directory.path().join("macrod.toml");
     std::fs::write(&path, include_str!("../../../../../default.macrod.toml")).unwrap();
-    let mut app = App::load(&path, LogBuffer::default()).unwrap();
+    let mut app = App::load(&path, LogBuffer::default(), None).unwrap();
     app.tab = Tab::Config;
     app.config.harness.args = vec!["herdr-acp".to_owned()];
     app.config.identity.scope = IdentityScope::Team;

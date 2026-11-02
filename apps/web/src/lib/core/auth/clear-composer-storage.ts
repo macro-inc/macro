@@ -9,6 +9,8 @@ export function clearComposerStorage(): void {
     if (
       key?.startsWith('input-value-') ||
       key?.startsWith('task-composer-submission:') ||
+      key?.startsWith('task-composer-draft') ||
+      key === 'routine-composer-draft' ||
       key?.startsWith('attachment-tracker-')
     ) {
       localStorage.removeItem(key);

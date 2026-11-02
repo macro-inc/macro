@@ -78,6 +78,14 @@ fn tasks_put_their_reference_in_any_pull_request() {
 }
 
 #[test]
+fn tasks_are_stated_as_a_mention_chip() {
+    assert!(CREATE_TASKS_INSTRUCTIONS.contains("mention"));
+    assert!(CREATE_TASKS_INSTRUCTIONS.contains(r#""blockName":"task""#));
+    assert!(CREATE_TASKS_INSTRUCTIONS.contains("<m-document-mention>"));
+    assert!(CREATE_TASKS_INSTRUCTIONS.contains("Whenever you name a task"));
+}
+
+#[test]
 fn pull_requests_are_registered_with_the_session() {
     assert!(OPEN_PULL_REQUESTS_INSTRUCTIONS.contains("macro_internal.set_pull_request"));
 }

@@ -425,6 +425,11 @@ export type ApiThread = {
     access_level: AccessLevel;
     created_at: string;
     db_id: string;
+    /**
+     * Whether any message was received rather than drafted or sent. Only
+     * threads with received mail can return to the inbox.
+     */
+    has_received_mail: boolean;
     inbox_visible: boolean;
     is_read: boolean;
     latest_inbound_message_ts?: string | null;
@@ -1048,6 +1053,8 @@ export type CreateLabelResponse = {
     label: Label;
 };
 
+export type EmlFile = Blob | File;
+
 /**
  * Empty response is required due to custom fetch forcing `response.json()`
  */
@@ -1652,6 +1659,28 @@ export type MessageOperationResponse = {
     operation?: null | ApiMessageOperation;
 };
 
+/**
+ * Open state of one tracked, sent message.
+ */
+export type MessageReadReceipt = {
+    /**
+     * First counted fetch.
+     */
+    first_opened_at?: string | null;
+    /**
+     * Latest counted fetch.
+     */
+    last_opened_at?: string | null;
+    /**
+     * The tracked message.
+     */
+    message_id: string;
+    /**
+     * Counted pixel fetches.
+     */
+    open_count: number;
+};
+
 export type ParsedMessage = {
     bcc: Array<ContactInfo>;
     body_parsed?: string | null;
@@ -1768,6 +1797,10 @@ export type SendMessageResponse = {
 
 export type Settings = {
     /**
+     * Whether messages sent from this inbox carry an open-tracking pixel.
+     */
+    read_receipts_enabled?: boolean | null;
+    /**
      * The user's email signature content (HTML). On a patch, omit or send
      * `null` to leave unchanged (both deserialize to `None`); pass an empty
      * string to clear it. The column cannot be set to SQL NULL via patch.
@@ -1844,6 +1877,13 @@ export type ThreadPreviewCursor = {
     sortTs: string;
     updatedAt: string;
     viewedAt?: string | null;
+};
+
+/**
+ * Open state of the caller's tracked, sent messages in one thread.
+ */
+export type ThreadReadReceipts = {
+    receipts: Array<MessageReadReceipt>;
 };
 
 /**
@@ -3102,6 +3142,35 @@ export type GetMessageResponses = {
 
 export type GetMessageResponse = GetMessageResponses[keyof GetMessageResponses];
 
+export type GetMessageEmlData = {
+    body?: never;
+    path: {
+        /**
+         * Message ID.
+         */
+        id: string;
+    };
+    query?: never;
+    url: '/email/messages/{id}/eml';
+};
+
+export type GetMessageEmlErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    429: ErrorResponse;
+    503: ErrorResponse;
+};
+
+export type GetMessageEmlError = GetMessageEmlErrors[keyof GetMessageEmlErrors];
+
+export type GetMessageEmlResponses = {
+    200: EmlFile;
+};
+
+export type GetMessageEmlResponse = GetMessageEmlResponses[keyof GetMessageEmlResponses];
+
 export type PatchSettingsData = {
     body: PatchSettingsRequest;
     path?: never;
@@ -3550,6 +3619,29 @@ export type UpdateThreadProjectResponses = {
 
 export type UpdateThreadProjectResponse2 = UpdateThreadProjectResponses[keyof UpdateThreadProjectResponses];
 
+export type GetThreadReadReceiptsData = {
+    body?: never;
+    path: {
+        /**
+         * Authorized email thread
+         */
+        thread_id: string;
+    };
+    query?: never;
+    url: '/email/threads/{thread_id}/read-receipts';
+};
+
+export type GetThreadReadReceiptsErrors = {
+    401: unknown;
+    403: unknown;
+};
+
+export type GetThreadReadReceiptsResponses = {
+    200: ThreadReadReceipts;
+};
+
+export type GetThreadReadReceiptsResponse = GetThreadReadReceiptsResponses[keyof GetThreadReadReceiptsResponses];
+
 export type HealthHandlerData = {
     body?: never;
     path?: never;
@@ -3565,3 +3657,22 @@ export type HealthHandlerResponses = {
 };
 
 export type HealthHandlerResponse = HealthHandlerResponses[keyof HealthHandlerResponses];
+
+export type GetReadReceiptPixelData = {
+    body?: never;
+    path: {
+        /**
+         * Opaque pixel token
+         */
+        token: string;
+    };
+    query?: never;
+    url: '/opens/{token}';
+};
+
+export type GetReadReceiptPixelResponses = {
+    /**
+     * Transparent pixel, for any token
+     */
+    200: unknown;
+};

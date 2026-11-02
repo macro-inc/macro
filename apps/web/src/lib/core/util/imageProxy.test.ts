@@ -48,6 +48,18 @@ describe('displayImageUrl', () => {
     );
   });
 
+  it('loads a static file directly instead of through the proxy', () => {
+    const src = `${SERVER_HOSTS['static-file']}/file/299c189c-df42-4a9a-b42b-7220264b607b`;
+    expect(displayImageUrl(src)).toBe(src);
+  });
+
+  it('proxies a host that only begins like the static file host', () => {
+    const src = `${SERVER_HOSTS['static-file']}.example.com/shot.png`;
+    expect(displayImageUrl(src)).toBe(
+      `${SERVER_HOSTS['image-proxy-service']}/proxy?url=${encodeURIComponent(src)}`
+    );
+  });
+
   it('leaves data URLs unchanged', () => {
     expect(proxyImageUrl('data:image/png;base64,AAAA')).toBe(
       'data:image/png;base64,AAAA'

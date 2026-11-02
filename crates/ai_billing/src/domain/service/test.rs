@@ -747,6 +747,7 @@ impl BillingRepo for FakeRepo {
         payer: &MacroUserIdStr<'_>,
         amount_cents: i64,
         stripe_invoice_id: &str,
+        _kind: CreditReloadKind,
     ) -> Result<bool> {
         self.record_credit_purchase(payer, amount_cents, stripe_invoice_id)
             .await
@@ -754,16 +755,20 @@ impl BillingRepo for FakeRepo {
     async fn resolve_credit_reload_invoice(
         &self,
         stripe_invoice_id: &str,
+        reload_id: Option<Uuid>,
         status: CreditReloadStatus,
     ) -> Result<Option<ResolvedReload>> {
         let mut s = self.state.lock().unwrap();
+        let adopt = status == CreditReloadStatus::Paid;
         let found = s.reloads.iter_mut().find(|r| {
-            r.invoice.as_deref() == Some(stripe_invoice_id)
+            (r.invoice.as_deref() == Some(stripe_invoice_id)
+                || (adopt && Some(r.id) == reload_id && r.invoice.is_none()))
                 && r.status != CreditReloadStatus::Paid
                 && r.status != status
         });
         let resolved = found.map(|r| {
             r.status = status;
+            r.invoice = Some(stripe_invoice_id.to_string());
             ResolvedReload {
                 payer: user("payer@x.com"),
                 amount_cents: r.amount_cents,
@@ -794,6 +799,8 @@ enum PayOutcome {
     Declined,
     /// The card needs 3-D Secure: the invoice stays open.
     AuthenticationRequired,
+    /// The invoice was voided in Stripe.
+    Uncollectible,
     /// The provider could not be reached.
     Error,
 }
@@ -818,9 +825,32 @@ struct FakePayments {
     period_requests: Arc<Mutex<Vec<(String, SubscriptionScope)>>>,
     no_card: Arc<Mutex<bool>>,
     voided: Arc<Mutex<Vec<String>>>,
+    /// Outcomes for the next payment attempts, before `pay_outcome` applies.
+    pay_queue: Arc<Mutex<std::collections::VecDeque<PayOutcome>>>,
+    void_outcome: Arc<Mutex<VoidOutcome>>,
+}
+
+/// How the fake provider answers a request to void an invoice.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+enum VoidOutcome {
+    #[default]
+    Voided,
+    /// Stripe collected the invoice before it could be voided.
+    AlreadyPaid,
+    /// The provider could not be reached.
+    Error,
 }
 
 impl FakePayments {
+    fn queue_pay(&self, outcomes: &[PayOutcome]) {
+        self.pay_queue.lock().unwrap().extend(outcomes);
+    }
+    fn set_void(&self, outcome: VoidOutcome) {
+        *self.void_outcome.lock().unwrap() = outcome;
+    }
+    fn restore_card(&self) {
+        *self.no_card.lock().unwrap() = false;
+    }
     fn voided(&self) -> Vec<String> {
         self.voided.lock().unwrap().clone()
     }
@@ -878,16 +908,24 @@ impl PaymentGateway for FakePayments {
             .lock()
             .unwrap()
             .push((charge_id, invoice_id.to_string()));
-        match *self.pay_outcome.lock().unwrap() {
+        let queued = self.pay_queue.lock().unwrap().pop_front();
+        match queued.unwrap_or(*self.pay_outcome.lock().unwrap()) {
             PayOutcome::Paid => Ok(InvoicePayment::Paid),
             PayOutcome::Declined => Ok(InvoicePayment::Declined),
             PayOutcome::AuthenticationRequired => Ok(InvoicePayment::AuthenticationRequired),
+            PayOutcome::Uncollectible => Ok(InvoicePayment::Uncollectible),
             PayOutcome::Error => Err(BillingError::Payment(anyhow::anyhow!("card declined"))),
         }
     }
     async fn void_credit_invoice(&self, invoice_id: &str) -> Result<InvoiceVoid> {
-        self.voided.lock().unwrap().push(invoice_id.to_string());
-        Ok(InvoiceVoid::Voided)
+        match *self.void_outcome.lock().unwrap() {
+            VoidOutcome::Voided => {
+                self.voided.lock().unwrap().push(invoice_id.to_string());
+                Ok(InvoiceVoid::Voided)
+            }
+            VoidOutcome::AlreadyPaid => Ok(InvoiceVoid::Paid),
+            VoidOutcome::Error => Err(BillingError::Payment(anyhow::anyhow!("stripe unavailable"))),
+        }
     }
     async fn has_payment_method(
         &self,
@@ -2063,7 +2101,7 @@ async fn reload_invoice_webhooks_book_credits_once() {
         .unwrap();
     let invoice = repo.reloads()[0].invoice.clone().unwrap();
     assert_eq!(repo.state.lock().unwrap().balance, 10_000);
-    svc.mark_credit_reload_invoice(&invoice, true)
+    svc.mark_credit_reload_invoice(&invoice, None, true)
         .await
         .unwrap();
     assert_eq!(repo.state.lock().unwrap().balance, 10_000);
@@ -2077,17 +2115,17 @@ async fn reload_invoice_webhooks_book_credits_once() {
         .unwrap();
     let invoice = repo.reloads()[0].invoice.clone().unwrap();
     assert_eq!(repo.state.lock().unwrap().balance, 500);
-    svc.mark_credit_reload_invoice(&invoice, true)
+    svc.mark_credit_reload_invoice(&invoice, None, true)
         .await
         .unwrap();
     assert_eq!(repo.reloads()[0].status, CreditReloadStatus::Paid);
     assert_eq!(repo.state.lock().unwrap().balance, 10_000);
 
     // Paid is terminal: a duplicate or a late failure changes nothing.
-    svc.mark_credit_reload_invoice(&invoice, true)
+    svc.mark_credit_reload_invoice(&invoice, None, true)
         .await
         .unwrap();
-    svc.mark_credit_reload_invoice(&invoice, false)
+    svc.mark_credit_reload_invoice(&invoice, None, false)
         .await
         .unwrap();
     assert_eq!(repo.state.lock().unwrap().balance, 10_000);
@@ -2095,7 +2133,7 @@ async fn reload_invoice_webhooks_book_credits_once() {
     assert!(!svc.snapshot(&payer).await.unwrap().auto_reload.suspended);
 
     // Unknown invoices are ignored.
-    svc.mark_credit_reload_invoice("in_unknown", false)
+    svc.mark_credit_reload_invoice("in_unknown", None, false)
         .await
         .unwrap();
     assert!(!svc.snapshot(&payer).await.unwrap().auto_reload.suspended);
@@ -2112,7 +2150,7 @@ async fn a_failed_reload_invoice_webhook_pauses_reloads_only() {
         .unwrap();
     let invoice = repo.reloads()[0].invoice.clone().unwrap();
 
-    svc.mark_credit_reload_invoice(&invoice, false)
+    svc.mark_credit_reload_invoice(&invoice, None, false)
         .await
         .unwrap();
     assert_eq!(repo.reloads()[0].status, CreditReloadStatus::Failed);
@@ -3734,6 +3772,172 @@ async fn removing_the_card_after_a_decline_voids_the_open_invoice_before_checkou
 }
 
 #[tokio::test]
+async fn a_different_pack_voids_the_declined_invoice_instead_of_charging_it() {
+    let (svc, repo, payments, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    payments.set_pay(PayOutcome::Declined);
+    svc.purchase_credits(&payer, 2_500).await.unwrap();
+    let declined_invoice = repo.reloads()[0].invoice.clone().unwrap();
+
+    payments.set_pay(PayOutcome::Paid);
+    let purchase = svc.purchase_credits(&payer, 5_000).await.unwrap();
+
+    assert_eq!(
+        purchase,
+        CreditPurchase {
+            amount_cents: 5_000,
+            status: CreditPurchaseStatus::Paid,
+        }
+    );
+    assert_eq!(payments.voided(), vec![declined_invoice]);
+    assert_eq!(repo.state.lock().unwrap().balance, 5_000);
+    let reloads = repo.reloads();
+    assert_eq!(reloads.len(), 2);
+    assert_eq!(reloads[0].invoice, None);
+    assert_eq!(reloads[1].status, CreditReloadStatus::Paid);
+}
+
+#[tokio::test]
+async fn the_same_pack_retries_the_declined_invoice() {
+    let (svc, repo, payments, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    payments.set_pay(PayOutcome::Declined);
+    svc.purchase_credits(&payer, 2_500).await.unwrap();
+
+    payments.set_pay(PayOutcome::Paid);
+    let purchase = svc.purchase_credits(&payer, 2_500).await.unwrap();
+
+    assert_eq!(purchase.status, CreditPurchaseStatus::Paid);
+    assert!(payments.voided().is_empty());
+    assert_eq!(repo.reloads().len(), 1);
+    assert_eq!(payments.opened_reloads().len(), 1);
+    assert_eq!(repo.state.lock().unwrap().balance, 2_500);
+}
+
+#[tokio::test]
+async fn a_declined_invoice_voided_in_stripe_is_replaced_by_a_fresh_purchase() {
+    let (svc, repo, payments, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    payments.set_pay(PayOutcome::Declined);
+    svc.purchase_credits(&payer, 2_500).await.unwrap();
+
+    // The retried invoice is void; the next reservation is new and paid.
+    payments.set_pay(PayOutcome::Paid);
+    payments.queue_pay(&[PayOutcome::Uncollectible]);
+    let purchase = svc.purchase_credits(&payer, 2_500).await.unwrap();
+
+    assert_eq!(purchase.status, CreditPurchaseStatus::Paid);
+    let reloads = repo.reloads();
+    assert_eq!(reloads.len(), 2);
+    assert_eq!(reloads[0].status, CreditReloadStatus::Failed);
+    assert_eq!(reloads[0].invoice, None);
+    assert_eq!(reloads[1].status, CreditReloadStatus::Paid);
+    assert_eq!(repo.state.lock().unwrap().balance, 2_500);
+}
+
+#[tokio::test]
+async fn a_provider_error_is_an_error_not_a_decline() {
+    let (svc, repo, payments, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    payments.set_pay(PayOutcome::Error);
+
+    assert!(matches!(
+        svc.purchase_credits(&payer, 2_500).await,
+        Err(BillingError::Payment(_))
+    ));
+    // The invoice stays on the row, so buying again retries it.
+    let reloads = repo.reloads();
+    assert_eq!(reloads[0].status, CreditReloadStatus::Failed);
+    assert!(reloads[0].invoice.is_some());
+
+    payments.set_pay(PayOutcome::Paid);
+    let purchase = svc.purchase_credits(&payer, 2_500).await.unwrap();
+    assert_eq!(purchase.status, CreditPurchaseStatus::Paid);
+    assert_eq!(repo.reloads().len(), 1);
+}
+
+#[tokio::test]
+async fn a_failed_void_after_3d_secure_leaves_the_invoice_retryable() {
+    let (svc, repo, payments, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    payments.set_pay(PayOutcome::AuthenticationRequired);
+    payments.set_void(VoidOutcome::Error);
+
+    assert!(svc.purchase_credits(&payer, 2_500).await.is_err());
+    let reloads = repo.reloads();
+    assert_eq!(reloads[0].status, CreditReloadStatus::Failed);
+    assert!(reloads[0].invoice.is_some());
+
+    // The next attempt retries the same invoice and voids it this time.
+    payments.set_void(VoidOutcome::Voided);
+    let purchase = svc.purchase_credits(&payer, 2_500).await.unwrap();
+    assert_eq!(
+        purchase.status,
+        CreditPurchaseStatus::AuthenticationRequired
+    );
+    assert_eq!(repo.reloads().len(), 1);
+    assert_eq!(repo.reloads()[0].invoice, None);
+}
+
+#[tokio::test]
+async fn no_card_but_stripe_already_collected_the_declined_invoice_reports_paid() {
+    let (svc, repo, payments, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    payments.set_pay(PayOutcome::Declined);
+    svc.purchase_credits(&payer, 2_500).await.unwrap();
+
+    payments.remove_card();
+    payments.set_void(VoidOutcome::AlreadyPaid);
+    let purchase = svc.purchase_credits(&payer, 5_000).await.unwrap();
+
+    assert_eq!(
+        purchase,
+        CreditPurchase {
+            amount_cents: 2_500,
+            status: CreditPurchaseStatus::Paid,
+        }
+    );
+    assert_eq!(repo.state.lock().unwrap().balance, 2_500);
+    assert_eq!(repo.reloads()[0].status, CreditReloadStatus::Paid);
+    payments.restore_card();
+}
+
+#[tokio::test]
+async fn a_paid_invoice_that_never_reached_its_row_is_booked_by_reload_id() {
+    let (svc, repo, _, _) = premium_service(0);
+    let payer = user("payer@x.com");
+    // The collector died after Stripe finalized the invoice but before the
+    // row recorded it.
+    let PurchaseReservation::New(orphan) = repo
+        .reserve_credit_purchase(&payer, &payer, 2_500, None, Utc::now())
+        .await
+        .unwrap()
+    else {
+        panic!("purchase reserved");
+    };
+
+    // A failure event never adopts the orphan.
+    svc.mark_credit_reload_invoice("in_lost", Some(orphan.id), false)
+        .await
+        .unwrap();
+    assert_eq!(repo.reloads()[0].invoice, None);
+
+    svc.mark_credit_reload_invoice("in_lost", Some(orphan.id), true)
+        .await
+        .unwrap();
+    let reloads = repo.reloads();
+    assert_eq!(reloads[0].status, CreditReloadStatus::Paid);
+    assert_eq!(reloads[0].invoice.as_deref(), Some("in_lost"));
+    assert_eq!(repo.state.lock().unwrap().balance, 2_500);
+
+    // A duplicate event books nothing twice.
+    svc.mark_credit_reload_invoice("in_lost", Some(orphan.id), true)
+        .await
+        .unwrap();
+    assert_eq!(repo.state.lock().unwrap().balance, 2_500);
+}
+
+#[tokio::test]
 async fn a_team_member_without_a_team_card_on_file_reserves_nothing() {
     let (svc, repo, payments) = purchase_team(Some(5_000));
     payments.remove_card();
@@ -3856,14 +4060,15 @@ async fn a_declined_purchase_retries_its_invoice_and_never_pauses_auto_reload() 
     let invoice = repo.reloads()[0].invoice.clone().unwrap();
 
     // Stripe reports the failure too: still no effect on Auto-Reload.
-    svc.mark_credit_reload_invoice(&invoice, false)
+    svc.mark_credit_reload_invoice(&invoice, None, false)
         .await
         .unwrap();
     assert!(!repo.state.lock().unwrap().auto_reload_suspended);
 
-    // Buying again pays the open invoice instead of charging a second time.
+    // Buying the same pack again pays the open invoice instead of charging a
+    // second time.
     payments.set_pay(PayOutcome::Paid);
-    let retried = svc.purchase_credits(&payer, 5_000).await.unwrap();
+    let retried = svc.purchase_credits(&payer, 2_500).await.unwrap();
     assert_eq!(
         retried,
         CreditPurchase {

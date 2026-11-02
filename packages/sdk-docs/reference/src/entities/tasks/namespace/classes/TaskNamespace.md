@@ -68,6 +68,28 @@ request. The task starts Not started.
 
 ***
 
+### findSimilar()
+
+> **findSimilar**(`opts`): `Promise`\<[`SimilarTask`](../../task/interfaces/SimilarTask.md)[]\>
+
+Existing tasks of yours or your team's that look like the same work as a
+task with this title and body, most similar first. Call it before
+`create`; if one is a likely duplicate, ask the user instead of creating.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `opts` | \{ `body?`: `string`; `title`: `string`; \} |
+| `opts.body?` | `string` |
+| `opts.title` | `string` |
+
+#### Returns
+
+`Promise`\<[`SimilarTask`](../../task/interfaces/SimilarTask.md)[]\>
+
+***
+
 ### forPullRequest()
 
 > **forPullRequest**(`url`): `Promise`\<[`Task`](../../task/classes/Task.md)[]\>

@@ -81,7 +81,7 @@ export function SignatureForm(props: {
           </Button>
           <Show when={!props.mobile}>
             <Button
-              variant="neutral"
+              variant="primary"
               size="md"
               disabled={!props.dirty || props.pending || props.importing}
               onClick={props.onSave}

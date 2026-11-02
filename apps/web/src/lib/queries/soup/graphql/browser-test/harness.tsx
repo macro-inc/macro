@@ -74,7 +74,12 @@ function MailList(props: { tab: MailTab }) {
     return 'pending';
   };
   return (
-    <section id="mail-list" data-tab={props.tab} data-source={phase()}>
+    <section
+      id="mail-list"
+      data-tab={props.tab}
+      data-source={phase()}
+      aria-busy={source.isLoading()}
+    >
       <p role="status">{source.error()?.message ?? phase()}</p>
       <ol>
         <For each={source.data()}>
@@ -86,7 +91,11 @@ function MailList(props: { tab: MailTab }) {
 }
 
 function App() {
-  const [tab, setTab] = createSignal<MailTab>('noise');
+  const [tab, setTab] = createSignal<MailTab>(
+    new URLSearchParams(location.search).get('tab') === 'signal'
+      ? 'signal'
+      : 'noise'
+  );
   const navigate = (next: MailTab) => {
     if (next === 'noise') holdLocalReads();
     else releaseLocalReads();

@@ -822,6 +822,29 @@ any markdown area.
 
 ***
 
+### findSimilar()
+
+> `static` **findSimilar**(`client`, `opts`): `Promise`\<[`SimilarTask`](../interfaces/SimilarTask.md)[]\>
+
+Existing tasks of the caller or their team that look like the same work
+as a task with this title and body, most similar first. Creates and
+changes nothing; check it before creating a task.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `client` | `MacroClient` |
+| `opts` | \{ `body?`: `string`; `title`: `string`; \} |
+| `opts.body?` | `string` |
+| `opts.title` | `string` |
+
+#### Returns
+
+`Promise`\<[`SimilarTask`](../interfaces/SimilarTask.md)[]\>
+
+***
+
 ### forPullRequest()
 
 > `static` **forPullRequest**(`client`, `url`): `Promise`\<`Task`[]\>

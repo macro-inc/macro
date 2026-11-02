@@ -132,7 +132,12 @@ impl ai_billing::domain::BillingService for UnavailableBilling {
         panic!("admission must not handle invoices")
     }
 
-    async fn mark_credit_reload_invoice(&self, _: &str, _: bool) -> ai_billing::domain::Result<()> {
+    async fn mark_credit_reload_invoice(
+        &self,
+        _: &str,
+        _: Option<macro_uuid::Uuid>,
+        _: bool,
+    ) -> ai_billing::domain::Result<()> {
         panic!("admission must not handle invoices")
     }
 }

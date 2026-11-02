@@ -94,7 +94,7 @@ export function Usage() {
         )
           throw new Error('Credit purchase unavailable');
         const result = await purchase.mutateAsync({ amountCents });
-        return result.status;
+        return { status: result.status, amountCents: result.amountCents };
       },
       checkout: async (amountCents) => {
         if (

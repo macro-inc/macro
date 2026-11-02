@@ -48,7 +48,9 @@ updates over WebSocket.
   `src/inbound/durable_object/surface_migration.rs` if it changes stored shape.
 
 Active-peer queries with `include_ai=false` exclude signed agent actors and the
-legacy reserved AI peer range; Canvas workers use random full-width peer IDs.
+reserved AI peer blocks (`ai_peer.rs`); Canvas workers use random full-width
+peer IDs. `peer_user_map` records each peer's user and agent actor; history and
+blame attribute edits from it, so never reuse an AI peer id.
 
 Document read/write/debug handlers declare their minimum session grant through
 Axum extractors; atomic reads/updates require a signed document grant even when
@@ -78,8 +80,10 @@ to the requested surface. These are scoped sync JWTs, not app-session tokens.
   makes the front worker fail connects, which clients see as close 1006.
 - Document history names each Loro peer from D1 `peer_user_map`, so every
   path that writes operations maps the peers it writes with: WebSocket and
-  HTTP `/update` writes to their user, `/initialize` snapshots to the system
-  author (`SYSTEM_AUTHOR_ID`), and `/copy` copies the source's mappings first.
+  HTTP `/update` writes to their user and signed agent actor, `/initialize`
+  snapshots to the system author (`SYSTEM_AUTHOR_ID`), and `/copy` copies the
+  source's mappings first. A peer's first owner keeps it; registration only
+  claims peers the system author holds.
   A new write path does the same (`tests/peer_authors.test.ts`).
 - `migration-test-hooks` is test-only fault injection — never enable it in a
   deployed worker (see the feature's doc comment in `Cargo.toml`).

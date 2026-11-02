@@ -84,7 +84,8 @@ export function CreditPurchaseView(props: {
       return;
     setError(undefined);
     try {
-      const status = await props.context.creditPurchase.buy(amount);
+      const { status, amountCents: charged } =
+        await props.context.creditPurchase.buy(amount);
       if (
         status === 'payment_method_required' ||
         status === 'authentication_required'
@@ -101,7 +102,7 @@ export function CreditPurchaseView(props: {
         return;
       }
       props.onClose();
-      toast.success(`Added ${formatCreditBalance(amount)} in credits.`);
+      toast.success(`Added ${formatCreditBalance(charged)} in credits.`);
     } catch (error) {
       const needsPlan = thrownResultErrorHasCode(error, 'PAID_PLAN_REQUIRED');
       setSubscriptionRequired(needsPlan);

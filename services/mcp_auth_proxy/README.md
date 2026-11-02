@@ -13,7 +13,8 @@ Two different values get checked during sign-in, by two different parties:
   header or, on a navigation, the `Referer`. FusionAuth checks it against the
   application's authorized origins (`infra/stacks/fusionauth-instance/origins.ts`)
   and fails with `invalid_request: Invalid origin uri` when it is not listed.
-  That list is for Macro's own apps that talk to FusionAuth directly.
+  That list is for Macro's own apps that talk to FusionAuth directly, plus
+  Google's sign-in pages, which send the browser back to FusionAuth.
 - The **redirect URI** is where the authorization code is delivered. The broker
   checks it, as described in the next two sections. FusionAuth only ever
   redirects to the broker's own `/oauth/callback`.
@@ -85,6 +86,19 @@ never holds a token that could be replayed if read. The binding rotates on every
 refresh: the new token is bound before the superseded one is dropped, so a
 replay of a token the broker has already rotated past finds no binding and is
 refused.
+
+Access tokens are recorded the same way, so the `/mcp` route can tell which
+client a request comes from: both grants bind the access token they hand out to
+the same client and grant, through the same `RefreshTokenBindingStore`, under a
+SHA-256 digest taken with a fixed prefix so it can never match a refresh token's
+binding (`domain/access_token_clients.rs`). The bearer middleware reads the
+binding and the client's registered `client_name` and attaches the request's
+caller (`ai_toolset::ToolCaller`) for the tools, which label what the client
+writes "via <client_name>". The name is self-reported at `/register`: a display
+label, never an identity or permission. A token issued before its binding was
+recorded carries no name; the client's next refresh records one. Reading the
+records only through the existing ports keeps them working on any store
+backend.
 
 Refresh tokens issued before this scheme existed have no binding, so the clients
 holding them authorize once more. Rate limiting of `/register` belongs at the

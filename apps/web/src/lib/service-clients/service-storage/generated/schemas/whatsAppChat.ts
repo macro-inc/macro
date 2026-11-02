@@ -10,6 +10,7 @@ import type { WhatsAppChatAdded } from './whatsAppChatAdded';
 import type { WhatsAppChatCannotAddReason } from './whatsAppChatCannotAddReason';
 import type { WhatsAppChatCommunity } from './whatsAppChatCommunity';
 import type { WhatsAppChatLastActivityAt } from './whatsAppChatLastActivityAt';
+import type { WhatsAppChatPhoneNumber } from './whatsAppChatPhoneNumber';
 import type { WhatsAppChatShared } from './whatsAppChatShared';
 
 /**
@@ -29,11 +30,15 @@ export interface WhatsAppChat {
   /** Group or direct chat. */
   kind: ExternalChatKind;
   /** Newest activity WhatsApp reported (message or history sync); `null`
-when unknown. The list is sorted by it, newest first, unknown last. */
+when unknown, as for saved contacts never messaged. The list is
+sorted by it, newest first, unknown last. */
   lastActivityAt?: WhatsAppChatLastActivityAt;
   /** Group: the subject, or member names for an unnamed group. Direct: the
 contact or WhatsApp name, else `+<phone>`. Always non-empty. */
   name: string;
+  /** The other person's phone number (`+<digits>`) of a direct chat, when
+WhatsApp told us it. */
+  phoneNumber?: WhatsAppChatPhoneNumber;
   /** Pinned in WhatsApp. */
   pinned: boolean;
   shared?: WhatsAppChatShared;

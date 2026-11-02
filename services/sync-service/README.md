@@ -197,7 +197,12 @@ Deploy DSS before Sync to enable Activity hints immediately. If an older DSS
 rejects the optional `editors` field, Sync retries once without it so search
 continues working. Old Sync requests and old Kafka events remain supported.
 
+Each registered peer is recorded in D1 `peer_user_map` with the token's user and
+signed agent actor (NULL for humans); the metadata and blame endpoints return
+both, and the web labels agent edits with the agent's name and other AI-peer
+edits as `<user> (AI)`.
+
 Active peer queries (`include_ai=false`) exclude both signed agent actors and
-legacy reserved AI peer IDs. Canvas workers use independent full-width random
+reserved AI peer IDs. Canvas workers use independent full-width random
 Loro peer identities across worker isolates; signed actor claims still supply
 durable provenance. Cursor names remain untrusted ephemeral presentation.

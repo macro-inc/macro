@@ -346,7 +346,7 @@ export function Agents(props: {
                   </p>
                 </div>
                 <Button
-                  variant="neutral"
+                  variant="primary"
                   size="sm"
                   onClick={() => setCreating(true)}
                 >

@@ -165,7 +165,7 @@ export function createBillingLab(initial: ScenarioId) {
         await perform('Credit purchase', () =>
           openPayment({ kind: 'credits', amountCents })
         );
-        return 'paid';
+        return { status: 'paid', amountCents };
       },
       // The lab has no Stripe; checkout opens its simulated payment flow.
       checkout: async (amountCents) => {

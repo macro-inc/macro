@@ -504,11 +504,13 @@ pub struct CreditPurchaseRequestBody {
 pub struct CreditPurchaseResponse {
     /// Whether the card on file paid.
     pub status: CreditPurchaseStatus,
-    /// Amount charged, cents. A retry of an earlier declined purchase charges
-    /// that purchase's amount.
+    /// Amount charged, cents: the requested pack, unless an earlier declined
+    /// purchase that Stripe collected in the meantime was booked instead.
     pub amount_cents: i64,
-    /// The caller's position after the purchase.
-    pub snapshot: UsageSnapshot,
+    /// The caller's position after the purchase. Absent when it could not be
+    /// read; the purchase still happened, so refetch the summary instead.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub snapshot: Option<UsageSnapshot>,
 }
 
 /// Buy a credit pack now, charged to the payer's card on file. Any paid team
@@ -539,15 +541,19 @@ pub async fn purchase_credits_handler<B: BillingService, Auth: MacroAuthorizatio
         Ok(purchase) => purchase,
         Err(e) => return error_response(e),
     };
-    match service.snapshot(user_id).await {
-        Ok(snapshot) => Json(CreditPurchaseResponse {
-            status: purchase.status,
-            amount_cents: purchase.amount_cents,
-            snapshot,
-        })
-        .into_response(),
-        Err(e) => error_response(e),
-    }
+    // A failed read must not hide a completed purchase: reporting an error
+    // here would invite the buyer to pay again.
+    let snapshot = service
+        .snapshot(user_id)
+        .await
+        .inspect_err(|e| tracing::warn!(error = ?e, "snapshot after credit purchase failed"))
+        .ok();
+    Json(CreditPurchaseResponse {
+        status: purchase.status,
+        amount_cents: purchase.amount_cents,
+        snapshot,
+    })
+    .into_response()
 }
 
 /// Start a Stripe Checkout for a credit pack. Payer only.

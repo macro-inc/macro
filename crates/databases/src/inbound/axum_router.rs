@@ -26,6 +26,7 @@ use crate::domain::transfer::DatabaseTransferService;
 use casts::{column_casts_handler, column_conversion_handler};
 use models_databases::{DatabaseId, TableId};
 use std::sync::Arc;
+use tracing::Level;
 
 use axum::{
     Json, Router,
@@ -298,7 +299,7 @@ where
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err(level = Level::INFO), skip_all)]
 pub async fn get_database_handler<Service, EntityAccess, Authorization>(
     access: DatabaseAccessLevelExtractor<ViewAccessLevel, EntityAccess, Authorization>,
     State(state): State<DatabasesRouterState<Service, EntityAccess, Authorization>>,

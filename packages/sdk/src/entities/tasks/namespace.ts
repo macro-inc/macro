@@ -4,7 +4,7 @@ import type { Project } from '../projects/project';
 import type { SearchOpts } from '../search';
 import type { Team } from '../teams/team';
 import type { User } from '../users/user';
-import { Task, type TaskSummary } from './task';
+import { type SimilarTask, Task, type TaskSummary } from './task';
 
 /**
  * Tasks: one `create` call sets initiative, assignees and due date; one
@@ -48,6 +48,15 @@ export class TaskNamespace {
    */
   summaries(tasks: Task[]): Promise<TaskSummary[]> {
     return Task.summaries(this.client, tasks);
+  }
+
+  /**
+   * Existing tasks of yours or your team's that look like the same work as a
+   * task with this title and body, most similar first. Call it before
+   * `create`; if one is a likely duplicate, ask the user instead of creating.
+   */
+  findSimilar(opts: { title: string; body?: string }): Promise<SimilarTask[]> {
+    return Task.findSimilar(this.client, opts);
   }
 
   /**

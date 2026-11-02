@@ -65,6 +65,12 @@ async fn reload_committed_cents(
             FROM ai_credit_reload
             WHERE user_id = $1
               AND (status <> 'failed' OR stripe_invoice_id IS NOT NULL)
+              -- A purchase whose collector died before Stripe saw it charged
+              -- nothing; a paid webhook still books it by reload id.
+              AND NOT (kind = 'purchase'
+                       AND status = 'pending'
+                       AND stripe_invoice_id IS NULL
+                       AND updated_at < NOW() - INTERVAL '10 minutes')
               AND created_at >= $2
               AND created_at < $3
             "#,
@@ -82,18 +88,24 @@ async fn book_credit_reload(
     payer: &MacroUserIdStr<'_>,
     amount_cents: i64,
     stripe_invoice_id: &str,
+    kind: CreditReloadKind,
 ) -> Result<bool> {
     let id = macro_uuid::generate_uuid_v7();
+    let note = match kind {
+        CreditReloadKind::Automatic => "Automatic reload",
+        CreditReloadKind::Purchase => "Credit purchase",
+    };
     let result = sqlx::query!(
         r#"
         INSERT INTO ai_credit_ledger (id, user_id, kind, delta_cents, stripe_reference, note)
-        VALUES ($1, $2, 'purchase', $3, $4, 'Automatic reload')
+        VALUES ($1, $2, 'purchase', $3, $4, $5)
         ON CONFLICT (stripe_reference) WHERE stripe_reference IS NOT NULL DO NOTHING
         "#,
         id,
         payer.as_ref(),
         amount_cents,
         stripe_invoice_id,
+        note,
     )
     .execute(conn)
     .await
@@ -1208,12 +1220,14 @@ impl BillingRepo for PgBillingRepo {
         payer: &MacroUserIdStr<'_>,
         amount_cents: i64,
         stripe_invoice_id: &str,
+        kind: CreditReloadKind,
     ) -> Result<bool> {
         let mut tx = self.pool.begin().await.map_err(storage)?;
         lock_payer(&mut tx, payer.as_ref())
             .await
             .map_err(funding_storage)?;
-        let booked = book_credit_reload(&mut tx, payer, amount_cents, stripe_invoice_id).await?;
+        let booked =
+            book_credit_reload(&mut tx, payer, amount_cents, stripe_invoice_id, kind).await?;
         tx.commit().await.map_err(storage)?;
         Ok(booked)
     }
@@ -1221,12 +1235,25 @@ impl BillingRepo for PgBillingRepo {
     async fn resolve_credit_reload_invoice(
         &self,
         stripe_invoice_id: &str,
+        reload_id: Option<Uuid>,
         status: CreditReloadStatus,
     ) -> Result<Option<ResolvedReload>> {
+        // A paid invoice whose id never reached its row (the collector died
+        // between Stripe finalizing it and recording it) is matched by the
+        // reload id stamped on the invoice, so the charge is still booked.
+        let adopt = status == CreditReloadStatus::Paid;
         let mut tx = self.pool.begin().await.map_err(storage)?;
         let Some(payer) = sqlx::query_scalar!(
-            "SELECT user_id FROM ai_credit_reload WHERE stripe_invoice_id = $1",
+            r#"
+            SELECT user_id FROM ai_credit_reload
+            WHERE stripe_invoice_id = $1
+               OR ($3 AND id = $2 AND stripe_invoice_id IS NULL)
+            ORDER BY (stripe_invoice_id = $1) DESC NULLS LAST
+            LIMIT 1
+            "#,
             stripe_invoice_id,
+            reload_id,
+            adopt,
         )
         .fetch_optional(&mut *tx)
         .await
@@ -1245,14 +1272,19 @@ impl BillingRepo for PgBillingRepo {
         let Some(row) = sqlx::query!(
             r#"
             UPDATE ai_credit_reload
-            SET status = ($2::text)::ai_credit_reload_status, updated_at = NOW()
-            WHERE stripe_invoice_id = $1
+            SET status = ($2::text)::ai_credit_reload_status,
+                stripe_invoice_id = $1,
+                updated_at = NOW()
+            WHERE (stripe_invoice_id = $1
+                   OR ($4 AND id = $3 AND stripe_invoice_id IS NULL))
               AND status <> 'paid'
               AND status <> ($2::text)::ai_credit_reload_status
             RETURNING user_id, amount_cents, kind::text AS "kind!"
             "#,
             stripe_invoice_id,
             status.to_string(),
+            reload_id,
+            adopt,
         )
         .fetch_optional(&mut *tx)
         .await
@@ -1276,6 +1308,7 @@ impl BillingRepo for PgBillingRepo {
                 &resolved.payer,
                 resolved.amount_cents,
                 stripe_invoice_id,
+                resolved.kind,
             )
             .await?;
         }

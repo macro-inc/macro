@@ -2,6 +2,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { PipedreamConnectorIcon } from '@core/pipedream/ConnectorIcon';
 import { createPipedreamCatalogConnect } from '@core/pipedream/catalog';
 import { fireAndForget } from '@core/util/fireAndForget';
+import PlugIcon from '@icon/system/regular/plug.svg';
 import {
   useDeletePipedreamConnectionMutation,
   useUpdatePipedreamConnectionMutation,
@@ -14,7 +15,6 @@ import {
   readMcpAuthAttempted,
   writeMcpAuthAttempted,
 } from '../mcp-auth-attempt';
-import { IntegrationRow } from '../primitives';
 import {
   type ConnectionMenuItem,
   ConnectionRowActions,
@@ -23,8 +23,22 @@ import {
   type DisconnectConfirm,
   DisconnectConfirmDialog,
 } from './disconnect-confirm';
+import {
+  IntegrationListRow,
+  type IntegrationStatus,
+} from './integrations-list';
 import type { Leftover } from './model';
 import { useNativeMcpActions } from './native-actions';
+
+/** Overlaid catalog apps read as agent tools; other native servers are custom. */
+export function leftoverCategories(
+  leftover: Leftover,
+  overlaidAppSlug: string | undefined
+): string[] {
+  return leftover.kind === 'native-mcp' && !overlaidAppSlug
+    ? ['Custom MCP']
+    : ['Agent tools'];
+}
 
 function leftoverDisabled(leftover: Leftover): boolean {
   return match(leftover)
@@ -33,7 +47,11 @@ function leftoverDisabled(leftover: Leftover): boolean {
     .exhaustive();
 }
 
-export function LeftoverRow(props: { leftover: Leftover }) {
+export function LeftoverRow(props: {
+  leftover: Leftover;
+  /** The catalog app a native server stands in for, when it is overlaid. */
+  overlaidAppSlug?: string;
+}) {
   const [disconnect, setDisconnect] = createSignal<DisconnectConfirm | null>(
     null
   );
@@ -281,42 +299,57 @@ export function LeftoverRow(props: { leftover: Leftover }) {
       ))
       .exhaustive();
 
-  const row = (): JSX.Element => {
+  const status = (): IntegrationStatus => {
     const leftover = props.leftover;
-    const muted = leftoverDisabled(leftover);
-    return match(leftover)
+    if (leftover.kind === 'native-mcp' && !leftover.authenticated)
+      return 'attention';
+    return leftoverDisabled(leftover) ? 'disconnected' : 'connected';
+  };
+
+  const row = (): JSX.Element =>
+    match(props.leftover)
       .with({ kind: 'native-mcp' }, (item) => (
-        <IntegrationRow
-          class="gap-3 px-4 py-3"
-          title={item.title}
-          description={
-            <>
-              <span class="block truncate">{item.subtitle}</span>
-              <Show when={connectionFailed()}>
-                <span class="block text-failure">Last attempt failed</span>
-              </Show>
-            </>
+        <IntegrationListRow
+          icon={
+            <Show when={props.overlaidAppSlug} fallback={<PlugIcon />}>
+              {(appSlug) => (
+                <PipedreamConnectorIcon appSlug={appSlug()} class="size-5" />
+              )}
+            </Show>
           }
-          muted={muted}
+          name={item.title}
+          kind="mcp"
+          description={
+            connectionFailed()
+              ? `Last attempt failed · ${item.subtitle}`
+              : props.overlaidAppSlug
+                ? 'Agents can use this app when you ask them to. Nothing is copied into Macro.'
+                : item.subtitle
+          }
+          categories={leftoverCategories(item, props.overlaidAppSlug)}
+          status={status()}
+          statusLabel={item.authenticated ? undefined : 'Not connected'}
+          muted={status() === 'disconnected'}
         >
           {actions()}
-        </IntegrationRow>
+        </IntegrationListRow>
       ))
       .with({ kind: 'pipedream' }, (item) => (
-        <IntegrationRow
-          class="gap-3 px-4 py-3"
+        <IntegrationListRow
           icon={
-            <PipedreamConnectorIcon appSlug={item.appSlug} class="size-8" />
+            <PipedreamConnectorIcon appSlug={item.appSlug} class="size-5" />
           }
-          title={item.title}
-          description={item.subtitle}
-          muted={muted}
+          name={item.title}
+          kind="mcp"
+          description="Agents can use this app when you ask them to. Nothing is copied into Macro."
+          categories={['Agent tools']}
+          status={status()}
+          muted={status() === 'disconnected'}
         >
           {actions()}
-        </IntegrationRow>
+        </IntegrationListRow>
       ))
       .exhaustive();
-  };
 
   return (
     <>

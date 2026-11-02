@@ -6,4 +6,5 @@
 
 ## Interfaces
 
+- [SimilarTask](interfaces/SimilarTask.md)
 - [TaskSummary](interfaces/TaskSummary.md)

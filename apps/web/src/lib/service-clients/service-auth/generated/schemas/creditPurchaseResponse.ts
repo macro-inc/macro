@@ -4,19 +4,17 @@
  * authentication_service
  * OpenAPI spec version: 0.1.0
  */
-
+import type { CreditPurchaseResponseSnapshot } from './creditPurchaseResponseSnapshot';
 import type { CreditPurchaseStatus } from './creditPurchaseStatus';
-import type { UsageSnapshot } from './usageSnapshot';
 
 /**
  * Response for [`purchase_credits_handler`].
  */
 export interface CreditPurchaseResponse {
-  /** Amount charged, cents. A retry of an earlier declined purchase charges
-that purchase's amount. */
+  /** Amount charged, cents: the requested pack, unless an earlier declined
+purchase that Stripe collected in the meantime was booked instead. */
   amountCents: number;
-  /** The caller's position after the purchase. */
-  snapshot: UsageSnapshot;
+  snapshot?: CreditPurchaseResponseSnapshot;
   /** Whether the card on file paid. */
   status: CreditPurchaseStatus;
 }

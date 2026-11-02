@@ -49,10 +49,12 @@ pub(super) async fn previews_for_view_cursor(
             .await?
         }
         (
-            view @ PreviewView::StandardLabel(PreviewViewStandardLabel::Sent),
+            view @ PreviewView::StandardLabel(
+                PreviewViewStandardLabel::Sent | PreviewViewStandardLabel::All,
+            ),
             Either::Left(query),
         ) => {
-            // Sent always uses the dynamic builder, even with no filter;
+            // Use the same per-inbox ordered scan for filtered and unfiltered mail;
             // CalendarOnly(false) is the documented no-op literal.
             let query =
                 query.map_filter(|()| Arc::new(Expr::Literal(EmailLiteral::CalendarOnly(false))));
@@ -73,10 +75,6 @@ pub(super) async fn previews_for_view_cursor(
         }
         (PreviewView::StandardLabel(PreviewViewStandardLabel::Starred), Either::Left(query)) => {
             super::preview_views::starred::starred_preview_cursor(pool, &link_ids, limit, &query)
-                .await?
-        }
-        (PreviewView::StandardLabel(PreviewViewStandardLabel::All), Either::Left(query)) => {
-            super::preview_views::all_mail::all_mail_preview_cursor(pool, &link_ids, limit, &query)
                 .await?
         }
         (PreviewView::StandardLabel(PreviewViewStandardLabel::Important), Either::Left(query)) => {

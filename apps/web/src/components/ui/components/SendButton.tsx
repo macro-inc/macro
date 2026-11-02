@@ -38,7 +38,7 @@ export function SendButton(props: SendButtonProps) {
 
   return (
     <Button
-      variant="neutral"
+      variant="primary"
       size="icon-md"
       draggable={false}
       aria-label={

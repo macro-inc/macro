@@ -511,8 +511,12 @@ impl PaymentGateway for StripePaymentGateway {
         {
             return Err(BillingError::DirectUsageBillingDisabled);
         }
-        if invoice.status == Some(InvoiceStatus::Paid) {
-            return Ok(InvoicePayment::Paid);
+        match invoice.status {
+            Some(InvoiceStatus::Paid) => return Ok(InvoicePayment::Paid),
+            Some(InvoiceStatus::Void | InvoiceStatus::Uncollectible) => {
+                return Ok(InvoicePayment::Uncollectible);
+            }
+            _ => {}
         }
         let invoice_scope = stamped_scope(&invoice)?;
         let scope = invoice_scope.unwrap_or(scope);
@@ -584,6 +588,9 @@ impl PaymentGateway for StripePaymentGateway {
                             "overage invoice payment did not succeed; left open for stripe retries"
                         );
                         Ok(InvoicePayment::Declined)
+                    }
+                    Some(InvoiceStatus::Void | InvoiceStatus::Uncollectible) => {
+                        Ok(InvoicePayment::Uncollectible)
                     }
                     other => Err(BillingError::Payment(anyhow::anyhow!(
                         "overage invoice is {other:?} after a failed payment attempt: {e}"

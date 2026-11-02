@@ -125,6 +125,8 @@ pub enum InvoicePayment {
     /// The card needs the cardholder to authenticate (3-D Secure), which an
     /// off-session charge can't do; the invoice stays open.
     AuthenticationRequired,
+    /// The invoice is void or uncollectible and can never be paid.
+    Uncollectible,
 }
 
 /// The state of an invoice after asking the provider to void it.
@@ -442,6 +444,7 @@ pub trait BillingRepo: Send + Sync + 'static {
         payer: &MacroUserIdStr<'_>,
         amount_cents: i64,
         stripe_invoice_id: &str,
+        kind: CreditReloadKind,
     ) -> impl Future<Output = Result<bool>> + Send;
 
     /// Update a reload by its Stripe invoice (webhook). Returns the payer and
@@ -450,9 +453,13 @@ pub trait BillingRepo: Send + Sync + 'static {
     /// reload, and re-reporting the current status is a no-op.
     /// A transition to `Paid` atomically books the purchased credits, deduplicated
     /// by invoice, so a failed credit write leaves the status retryable.
+    /// A `Paid` invoice no row records yet is matched by `reload_id` (the id
+    /// stamped on the invoice) when that row has no invoice, so a charge whose
+    /// collector died before recording it is still booked.
     fn resolve_credit_reload_invoice(
         &self,
         stripe_invoice_id: &str,
+        reload_id: Option<Uuid>,
         status: CreditReloadStatus,
     ) -> impl Future<Output = Result<Option<ResolvedReload>>> + Send;
 
@@ -739,9 +746,12 @@ pub trait BillingService: Send + Sync + 'static {
     /// invoices are ignored. A paid invoice books its credits once, even when
     /// the collector already did, and settles; a failed automatic reload
     /// pauses automatic reloads, while a failed purchase changes nothing else.
+    /// `reload_id` is the reload id stamped on the invoice, used to find a
+    /// paid invoice that never reached its row.
     fn mark_credit_reload_invoice(
         &self,
         stripe_invoice_id: &str,
+        reload_id: Option<Uuid>,
         paid: bool,
     ) -> impl Future<Output = Result<()>> + Send;
 }

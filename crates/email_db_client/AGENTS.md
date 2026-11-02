@@ -45,6 +45,10 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 
 ## Gotchas
 
+- Undated provider drafts use creation time for All Mail eligibility; spam/junk
+  and trash remain excluded, including the timestamp override for synced Macro
+  drafts. Keep ingestion, recomputation, and cached projections aligned.
+
 - Message deletion may return `Deferred` while an accepted send owns the row; reconcile retained deletions under the message lock and compare both provider identity and draft generation.
 - Resolve provider deletions with `get_simple_message_by_provider_and_link_for_update` inside the deletion transaction; retain the message lock through cleanup and deletion so Send completion or Undo cannot invalidate the snapshot.
 
@@ -68,6 +72,10 @@ Parsed message responses expose the draft generation captured in the same SQL sn
   `lock_thread_label_writes` for its threads first.
 - Quote and alias camelCase columns to Rust field names; check
   `crates/macro_db_client/migrations/` for real column spelling, don't guess.
+- A Macro draft (no provider id, or a live `email_mailbox_drafts` row) puts its
+  thread in the inbox only when `email_threads.has_received_mail` is true.
+  `recompute_thread_metadata` and the email crate's
+  `thread_mail_projections_by_ids` restate this rule; change both together.
 
 ## Related
 

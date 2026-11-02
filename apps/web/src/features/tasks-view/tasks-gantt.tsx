@@ -12,6 +12,7 @@ import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getTaskStatusOptionId, type TaskEntityWithProperties } from '@entity';
 import { PropertyValueIcon } from '@property/component/propertyValue';
+import { usePropertyEntityDisplay } from '@property/hooks/usePropertyEntityDisplay';
 import { usePropertyUserDisplay } from '@property/hooks/usePropertyUserDisplay';
 import { PROPERTY_OPTION_IDS } from '@property/identifiers';
 import type { Accessor, JSX } from 'solid-js';
@@ -152,6 +153,9 @@ export function TasksGantt(props: { ref?: (element: HTMLDivElement) => void }) {
         },
       }}
       createAssigneeName={(id) => usePropertyUserDisplay(id).name}
+      createProjectName={(id) =>
+        usePropertyEntityDisplay(id, () => 'INITIATIVE').name
+      }
       isGroupExpanded={(id) => !state.collapsedGroupIds.includes(id)}
       onToggleGroup={(id) =>
         setState('collapsedGroupIds', (ids) =>

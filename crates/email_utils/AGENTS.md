@@ -12,7 +12,8 @@ sender/generic-address checks.
   `sanitize_html_fragment` — every HTML body that reaches
   `body_html_sanitized` must pass through one of these.
 - `src/body_replyless.rs` + `src/body_replyless/`: strips quoted reply chains
-  from HTML and plaintext bodies.
+  from HTML and plaintext bodies; `reply_snippet` is the Outlook snippet that
+  ingest and `backfill_outlook_snippets` both derive from them.
 - `src/body_parsed.rs`: the parsed-body representation used across callers.
 
 ## Scope
@@ -46,6 +47,10 @@ sender/generic-address checks.
 - Outlook mobile and Outlook on the web start the quoted thread at `<hr>` plus
   `div#divRplyFwdMsg` (plaintext: a line of underscores, then `From:`). Cut
   there. A later `border-top` "From:" block is a nested quote.
+- "On [date] [sender] wrote:" can share an element, or a text node, with the
+  reply in some clients. Cut at the text node, never the shared element, and
+  never return an empty reply: an empty cut falls through to the next
+  splitter. Gmail writes a narrow no-break space before AM/PM.
 - Sanitization is security-sensitive (XSS via email HTML): any allowlist
   change needs a test proving the previously-dangerous input is now stripped,
   not just that benign input survives.

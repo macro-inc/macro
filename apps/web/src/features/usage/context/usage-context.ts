@@ -20,14 +20,16 @@ export type UsageContext = {
   creditPurchase: {
     pending: Accessor<boolean>;
     supportedAmounts: Accessor<readonly number[]>;
-    buy: (
-      amountCents: number
-    ) => Promise<
-      | 'paid'
-      | 'declined'
-      | 'payment_method_required'
-      | 'authentication_required'
-    >;
+    /** Resolves to how the charge ended and the amount it was for (a retry
+     * of a declined purchase charges that purchase's amount). */
+    buy: (amountCents: number) => Promise<{
+      status:
+        | 'paid'
+        | 'declined'
+        | 'payment_method_required'
+        | 'authentication_required';
+      amountCents: number;
+    }>;
     /** Stripe Checkout for the same pack; resolves to its URL. Payer only. */
     checkout: (amountCents: number) => Promise<string>;
   };

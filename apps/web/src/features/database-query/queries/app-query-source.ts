@@ -2,6 +2,7 @@ import { handleAiUsageLimitError } from '@app/features/paywall/ai-usage-limit-ha
 import type { TModel } from '@core/component/AI/constant';
 import { databaseSqlAnswer } from '@core/database-sql/answer';
 import { databaseSqlSchema } from '@core/database-sql/catalog';
+import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import {
   checkDatabaseSql,
@@ -21,7 +22,6 @@ import { useEntitySubscription } from '@service-connection/client';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import { ResultAsync } from 'neverthrow';
 import type { Accessor } from 'solid-js';
-import { match } from 'ts-pattern';
 import type { QueryCapabilities } from '../context/query-context';
 import {
   generationFailure,
@@ -60,19 +60,43 @@ function generateDatabaseQuery(
       )
   )
     .andThen((cognition) =>
-      cognition.generateDatabaseQuery(input, model).mapErr((failure) =>
-        generationFailure(
-          match(failure)
-            .with({ kind: 'service' }, ({ errors }) => {
-              handleAiUsageLimitError(errors);
-              return serviceError(errors).message;
-            })
-            .with({ kind: 'interrupted' }, ({ reason }) => reason)
-            .exhaustive(() => 'The query couldn’t be generated.')
-        )
-      )
+      cognition.generateDatabaseQuery(input, model).mapErr((failure) => {
+        handleAiUsageLimitError(failure.errors);
+        return generationFailure(serviceError(failure.errors).message);
+      })
     )
     .andThen(parseQueryProposal);
+}
+
+/** Phase summaries remain visible in DevTools even when browser export is disabled. */
+function traceQueryPhase<T>(
+  phase: 'generate' | 'read' | 'catalog',
+  work: () => ResultAsync<T, QueryFailure>,
+  attributes: Record<string, string | number | boolean> = {}
+): ResultAsync<T, QueryFailure> {
+  const span = Telemetry.span(`database.query.${phase}`);
+  for (const [key, value] of Object.entries(attributes))
+    span.setAttr(key, value);
+  const started = performance.now();
+  const settle = async () => {
+    let outcome = 'error';
+    try {
+      const result = await span.run(work);
+      outcome = result.isOk() ? 'success' : result.error.kind;
+      span.setAttr('database.outcome', outcome);
+      if (result.isErr()) span.error(result.error.kind);
+      return result;
+    } finally {
+      const milliseconds = Math.round(performance.now() - started);
+      console.info(
+        `[database-query] ${phase} · ${outcome} · ${milliseconds}ms`,
+        attributes
+      );
+      span.setAttr('database.duration_ms', milliseconds);
+      span.end();
+    }
+  };
+  return new ResultAsync(settle());
 }
 
 /** Production transport adapters; the composer only receives these narrow capabilities. */
@@ -80,16 +104,35 @@ export function createQueryCapabilities(
   model: Accessor<TModel>
 ): QueryCapabilities {
   return createQuestionCapabilities({
-    generate: (input) => generateDatabaseQuery(input, model()),
+    generate: (input) => {
+      const selectedModel = model();
+      return traceQueryPhase(
+        'generate',
+        () => generateDatabaseQuery(input, selectedModel),
+        {
+          'database.model': selectedModel,
+          'database.source_mode': input.schema.databaseId
+            ? 'selected'
+            : 'automatic',
+          'database.table_count': input.schema.tables.length,
+          'database.repair': !!input.error,
+          ...(input.schema.databaseId
+            ? { 'database.id': input.schema.databaseId }
+            : {}),
+        }
+      );
+    },
     // A draft question may read any database the viewer can reach.
     read: (sql, context) =>
-      viewerDatabases().andThen((databases) =>
-        readDatabaseSql({
-          schema: databaseSqlSchema(databases),
-          sql,
-          scope: context?.databaseId,
-        }).map(({ catalog, outcome }) =>
-          databaseSqlAnswer(outcome, catalog, databases)
+      traceQueryPhase('read', () =>
+        traceQueryPhase('catalog', viewerDatabases).andThen((databases) =>
+          readDatabaseSql({
+            schema: databaseSqlSchema(databases),
+            sql,
+            scope: context?.databaseId,
+          }).map(({ catalog, outcome }) =>
+            databaseSqlAnswer(outcome, catalog, databases)
+          )
         )
       ),
     describe: (databaseId) =>
