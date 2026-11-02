@@ -706,6 +706,9 @@ Very long flings or slow responses can still exhaust the available scroll range.
 In the iOS app, fling repeatedly through a long channel, starting each fling before
 the previous one's momentum ends, then let it settle. The messages must not jump when
 scrolling comes to rest, nor when it bounces or is held against the top of loaded history.
+In a channel opened for the first time, fling up through unmeasured history and
+straight back down: scrolling must stop at the latest message, never in blank space
+below it.
 
 Inline document mentions should show their stored title before entering the viewport
 and while preview requests are pending. With a slow preview response, check that a
