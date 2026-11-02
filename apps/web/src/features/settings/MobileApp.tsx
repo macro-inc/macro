@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { storeListingUrl } from '@core/mobile/native-update-link';
@@ -16,13 +17,17 @@ const STORES = {
   ios: {
     device: 'iPhone',
     name: 'App Store',
-    prompt: 'Download Macro on the',
+    get prompt() {
+      return t('settingsMobileApp.appStorePrompt');
+    },
     qr: AppStoreQr,
   },
   android: {
     device: 'Android',
     name: 'Google Play',
-    prompt: 'Get Macro on',
+    get prompt() {
+      return t('settingsMobileApp.googlePlayPrompt');
+    },
     qr: PlayStoreQr,
   },
 };
@@ -49,11 +54,11 @@ export function MobileApp() {
 
   return (
     <SettingsPage
-      title="Mobile app"
+      title={t('settingsMobileApp.title')}
       description={
         isMobile()
-          ? 'Download Macro from your app store.'
-          : 'Scan the code to get Macro on your phone.'
+          ? t('settingsMobileApp.storeLinksDescription')
+          : t('settingsMobileApp.scanDescription')
       }
     >
       <SettingsCard>
@@ -98,26 +103,26 @@ function StoreQrCode() {
   return (
     <div class="flex flex-col items-center gap-6 px-6 pt-10 pb-12">
       <Tabs
-        aria-label="Phone"
+        aria-label={t('settingsMobileApp.phone')}
         options={PLATFORM_TABS}
         value={platform()}
         onChange={setPlatform}
       />
       <Dynamic component={store().qr} class="block w-60" />
-      <p class="text-sm text-ink text-center">
+      <p class="min-h-10 max-w-44 text-sm text-ink text-center">
         {store().prompt}
-        <br />
-        {store().name}
       </p>
       <CopyButton
-        aria-label={`Copy ${store().name} link`}
+        aria-label={t('settingsMobileApp.copyStoreLink', {
+          store: store().name,
+        })}
         variant="ghost"
         size="sm"
-        tooltip={`Copy ${store().name} link`}
+        tooltip={t('settingsMobileApp.copyStoreLink', { store: store().name })}
         onClick={() => copy(storeListingUrl(platform()))}
       >
         <LinkIcon class="size-3.5" />
-        Copy link
+        {t('settingsMobileApp.copyLink')}
       </CopyButton>
     </div>
   );
