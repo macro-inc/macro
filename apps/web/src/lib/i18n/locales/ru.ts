@@ -865,7 +865,6 @@ export default {
     goForward: 'Вперёд',
     createNewSplit: 'Создать панель',
     close: 'Закрыть',
-    returnToList: 'Вернуться к списку',
     previousItem: 'Предыдущий элемент',
     nextItem: 'Следующий элемент',
     itemNavigation: 'Навигация по элементам',
