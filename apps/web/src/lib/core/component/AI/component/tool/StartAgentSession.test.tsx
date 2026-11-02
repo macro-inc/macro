@@ -4,7 +4,7 @@ import { cleanup, render } from '@solidjs/testing-library';
 import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { startAgentSessionHandler } from './StartAgentSession';
-import { ToolErrorContext } from './ToolRenderer';
+import { type ToolEnding, ToolErrorContext } from './ToolRenderer';
 
 vi.mock('../../../LexicalMarkdown/component/decorator/MagicChip', () => ({
   MagicChip: (props: MagicChipData) => (
@@ -66,7 +66,7 @@ describe('agent session launch', () => {
   });
 
   it('shows a dispatch error without leaving a starting indicator or session card', () => {
-    const [error, setError] = createSignal<string>();
+    const [error, setError] = createSignal<ToolEnding>();
     const view = render(() => (
       <ToolErrorContext.Provider value={error}>
         <startAgentSessionHandler.render
@@ -86,7 +86,7 @@ describe('agent session launch', () => {
         />
       </ToolErrorContext.Provider>
     ));
-    setError('failed');
+    setError({ kind: 'failed', reason: 'failed' });
     expect(view.getByRole('status').textContent).toContain(
       'Could not confirm agent session start'
     );
