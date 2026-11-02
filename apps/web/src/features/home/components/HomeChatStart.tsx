@@ -3,6 +3,7 @@ import {
   ViewShell,
   ViewSidebar,
 } from '@app/components/view-shell';
+import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { DragDropWrapper } from '@core/component/AI/component/DragDrop';
 import { ChatInputProvider } from '@core/component/AI/context';
@@ -62,11 +63,16 @@ export function HomeChatStart() {
                 </div>
               </Show>
             </div>
-            <HomeChatInput
-              variant="default"
-              placeholder="Type @ to reference / for skills"
-              autoFocusOnMount={false}
-            />
+            <div class="min-w-0">
+              <Show when={!agents().enabled}>
+                <LocalRuntimePrompt />
+              </Show>
+              <HomeChatInput
+                variant="default"
+                placeholder="Type @ to reference / for skills"
+                autoFocusOnMount={false}
+              />
+            </div>
             <div class="min-h-0 min-w-0 pb-8">
               <HomeRecommendedActions />
             </div>

@@ -15,6 +15,7 @@ const lunch: FormDetail = {
     closesAt: null,
     tallyVisible: true,
     confirmationMessage: '',
+    branding: { logoFileId: null, coverFileId: null, accentColor: null },
     submittedColumnId: null,
     respondentColumnId: null,
   },

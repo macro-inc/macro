@@ -54,13 +54,30 @@ tools/HTTP/GraphQL surfaces over them.
 - `cargo test -p crm` (`SQLX_OFFLINE` unset; needs a local MacroDB — see
   `.agents/rules/rust/guardrails.md`). After query/migration changes, run
   `nix develop --command just prepare_db` from the repository root.
+- After tool input or description changes, regenerate frontend tool types and
+  public MCP reference pages using the
+  [entity creation guide](../../docs/guides/add-entity.md#13-ai-and-mcp-tools);
+  CI checks both outputs.
 
 ## Gotchas
 
+- `src/domain/generic_email_domains.rs` filters both manual company creation
+  and email-driven contact population. Cover legitimate company-domain
+  exceptions with regression tests when correcting the blocklist.
 - `resolve_association` also accepts `CrmAssociation::Activity`: all records in
   CRM-enabled teams within the viewer/verified-bot scope, excluding hidden rows
   even for admins. Preserve distinct contact IDs that share an email; returned
   domains and addresses constrain the viewer's mailbox, not team email access.
+
+- Manual companies require a name and accept an optional domain; explicit
+  contact creation accepts any valid email, including personal providers.
+  Email population still infers companies by domain. Do not apply manual
+  creation rules to capture/consent; see `docs/design/crm-contact-creation.md`.
+- Keep CRM write locks ordered: domain advisory locks, parent team `KEY SHARE`,
+  settings `SHARE`, then company/contact rows. Hold them through commit so
+  disable/purge and team deletion cannot race creation.
+- Keep ambiguous CSV contact lookups unresolved without creating records for
+  them; continue valid rows, but propagate lookup storage and authorization failures.
 
 - Company names/logos live in the global `crm_domain_directory`. Only the
   email pubsub workers carry a real `CompanyMetadataResolver`; every other

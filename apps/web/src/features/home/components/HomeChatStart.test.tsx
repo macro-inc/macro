@@ -31,6 +31,9 @@ vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: mocks.agentsEnabled }),
 }));
 vi.mock('@core/constant/featureFlags', () => ({ enableChatV3Agents: {} }));
+vi.mock('@app/features/settings/components/local-runtime-prompt', () => ({
+  LocalRuntimePrompt: () => null,
+}));
 vi.mock('@core/component/AI/component/DragDrop', () => ({
   DragDropWrapper: (props: ChildrenProps & { class?: string }) => (
     <div data-testid="home-composer-frame" class={props.class}>

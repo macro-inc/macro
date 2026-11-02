@@ -26,6 +26,8 @@ pub async fn build_tool_service_context(
         config.enable_ai_usage_enforcement,
         config.ai_pricing,
         recorder,
+        // No authentication service here: a linked GitHub account is not read.
+        None,
     )
     .await
 }
