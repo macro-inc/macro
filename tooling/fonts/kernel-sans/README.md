@@ -6,8 +6,9 @@ A neo-grotesque sans close to Inter and SF Pro, with a technical edge:
 - **45° chamfers** on free stem ends; curve terminals are cut clean.
 - **Square dots** with two opposing chamfers on i, j and punctuation.
 
-Open `specimen/index.html` in a browser for a live specimen: weight slider, type
-tester, the full glyph set and outline views of each detail.
+Open `specimen/index.html` in a browser for a live specimen: weight slider, a
+playground to type in (size, weight, spacing, features), the full glyph set and
+outline views of each detail.
 
 ## Files
 

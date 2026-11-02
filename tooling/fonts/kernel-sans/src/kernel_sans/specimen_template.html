@@ -189,8 +189,11 @@ output { min-width: 9ch; text-align: right; color: var(--muted); }
 .waterfall .meta { display: grid; gap: 2px; }
 .waterfall .meta b { font-family: var(--font-display); font-size: var(--step-0); font-weight: 600; }
 
-/* Tester */
-.tester-controls { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)) auto; gap: 20px 28px; align-items: end; margin-bottom: 20px; }
+/* Playground: an editing sheet with the font editor's readout along its top */
+.play { display: grid; gap: 24px; }
+.play-controls { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 20px 28px; }
+.play-options { display: flex; flex-wrap: wrap; gap: 16px 32px; align-items: end; }
+.option { display: grid; gap: 8px; min-width: 0; }
 .toggles { display: flex; flex-wrap: wrap; gap: 8px; }
 .toggle {
   font: inherit;
@@ -203,18 +206,43 @@ output { min-width: 9ch; text-align: right; color: var(--muted); }
   border-radius: var(--radius);
   cursor: pointer;
 }
+.toggle:hover { border-color: var(--muted); }
 .toggle[aria-pressed="true"] { border-color: var(--metric); background: var(--sel); color: var(--metric); }
-.tester {
-  background: var(--panel);
-  border: 1px solid var(--rule);
-  border-radius: var(--radius);
-  padding: 24px;
+.seg { display: inline-flex; }
+.seg .toggle { border-radius: 0; margin-left: -1px; }
+.seg .toggle:first-child { border-radius: var(--radius) 0 0 var(--radius); margin-left: 0; }
+.seg .toggle:last-child { border-radius: 0 var(--radius) var(--radius) 0; }
+.seg .toggle[aria-pressed="true"] { position: relative; }
+.sheet { background: var(--panel); border: 1px solid var(--rule); border-radius: var(--radius); min-width: 0; }
+.sheet:focus-within { border-color: var(--metric); }
+.sheet-meta {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 16px;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--rule);
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+.sheet-meta b { color: var(--metric); font-weight: 500; }
+#play {
+  display: block;
+  width: 100%;
   min-height: 12rem;
-  line-height: 1.15;
+  margin: 0;
+  padding: clamp(16px, 3vw, 32px);
+  border: 0;
+  resize: vertical;
+  background: transparent;
+  color: var(--ink);
+  font-family: var(--font-display);
   outline: none;
+  caret-color: var(--advance);
   overflow-wrap: anywhere;
 }
-.tester:focus { border-color: var(--metric); }
+#play::placeholder { color: var(--muted); opacity: 0.6; }
+#play::selection { background: var(--sel); }
 
 /* Compare */
 .compare { display: grid; }
@@ -301,7 +329,8 @@ tr:last-child td { border-bottom: 0; }
 footer { border-top: 1px solid var(--rule); padding-block: 28px 40px; color: var(--muted); }
 
 @media (max-width: 860px) {
-  .hero-row, .tester-controls, .install, .glyph-layout { grid-template-columns: minmax(0, 1fr); }
+  .hero-row, .install, .glyph-layout { grid-template-columns: minmax(0, 1fr); }
+  .play-controls { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .details { grid-template-columns: minmax(0, 1fr); }
   .inspector { position: static; }
   .stats { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -310,6 +339,9 @@ footer { border-top: 1px solid var(--rule); padding-block: 28px 40px; color: var
 }
 @media (max-width: 560px) {
   .waterfall li, .compare .row { grid-template-columns: minmax(0, 1fr); gap: 4px; }
+  .play-controls { grid-template-columns: minmax(0, 1fr); }
+  /* On a phone the text comes first; the controls follow it. */
+  .play .sheet { order: -1; }
 }
 </style>
 
@@ -340,6 +372,71 @@ footer { border-top: 1px solid var(--rule); padding-block: 28px 40px; color: var
     </div>
   </section>
 
+  <section id="playground" aria-labelledby="playTitle">
+    <div class="section-head">
+      <span class="label">Playground</span>
+      <h2 id="playTitle">Type anything</h2>
+    </div>
+    <div class="play">
+      <div class="play-controls">
+        <div class="control">
+          <label class="label" for="pSize">Size</label>
+          <div class="control-row"><input type="range" id="pSize" min="12" max="240" step="1" value="72"><output id="pSizeOut" for="pSize">72 px</output></div>
+        </div>
+        <div class="control">
+          <label class="label" for="pWeight">Weight</label>
+          <div class="control-row"><input type="range" id="pWeight" min="300" max="800" step="1" value="400"><output id="pWeightOut" for="pWeight">400 Regular</output></div>
+        </div>
+        <div class="control">
+          <label class="label" for="pTrack">Letter spacing</label>
+          <div class="control-row"><input type="range" id="pTrack" min="-80" max="200" step="5" value="0"><output id="pTrackOut" for="pTrack">0</output></div>
+        </div>
+        <div class="control">
+          <label class="label" for="pLead">Line height</label>
+          <div class="control-row"><input type="range" id="pLead" min="0.85" max="1.8" step="0.05" value="1.15"><output id="pLeadOut" for="pLead">1.15</output></div>
+        </div>
+      </div>
+      <div class="play-options">
+        <div class="option">
+          <span class="label" id="alignLabel">Align</span>
+          <div class="seg" role="group" aria-labelledby="alignLabel">
+            <button class="toggle" type="button" id="alignLeft" data-align="left" aria-pressed="true">Left</button>
+            <button class="toggle" type="button" id="alignCenter" data-align="center" aria-pressed="false">Centre</button>
+            <button class="toggle" type="button" id="alignRight" data-align="right" aria-pressed="false">Right</button>
+          </div>
+        </div>
+        <div class="option">
+          <span class="label" id="featLabel">OpenType features</span>
+          <div class="toggles" role="group" aria-labelledby="featLabel">
+            <button class="toggle" type="button" id="fSs01" data-feat="ss01" aria-pressed="false">ss01 single-storey a</button>
+            <button class="toggle" type="button" id="fSs02" data-feat="ss02" aria-pressed="false">ss02 distinct I l</button>
+            <button class="toggle" type="button" id="fZero" data-feat="zero" aria-pressed="false">zero slashed</button>
+            <button class="toggle" type="button" id="fCase" data-feat="case" aria-pressed="false">case forms</button>
+            <button class="toggle" type="button" id="fTnum" data-feat="tnum" aria-pressed="false">tnum tabular</button>
+          </div>
+        </div>
+        <div class="option">
+          <span class="label" id="sampleLabel">Samples</span>
+          <div class="toggles" role="group" aria-labelledby="sampleLabel">
+            <button class="toggle" type="button" id="sPangram" data-sample="pangram">Pangram</button>
+            <button class="toggle" type="button" id="sUi" data-sample="ui">Interface</button>
+            <button class="toggle" type="button" id="sFigures" data-sample="figures">Figures</button>
+            <button class="toggle" type="button" id="sAccents" data-sample="accents">Accents</button>
+            <button class="toggle" type="button" id="pClear">Clear</button>
+            <button class="toggle" type="button" id="pReset">Reset</button>
+          </div>
+        </div>
+      </div>
+      <div class="sheet">
+        <div class="sheet-meta mono" aria-live="polite">
+          <span id="pMetaFace">Kernel Sans <b>400</b> Regular</span>
+          <span id="pMetaMetrics">cap 51.8 px · x-height 38.9 px · 1 unit = 0.072 px</span>
+        </div>
+        <textarea id="play" spellcheck="false" autocomplete="off" placeholder="Type anything…" aria-label="Playground text"></textarea>
+      </div>
+    </div>
+  </section>
+
   <section id="details">
     <div class="section-head">
       <span class="label">Construction · ExtraBold outlines</span>
@@ -358,31 +455,6 @@ footer { border-top: 1px solid var(--rule); padding-block: 28px 40px; color: var
       <p>Every outline is computed from the stem width, so the static weights and the variable font come from the same drawing.</p>
     </div>
     <ol class="waterfall" id="waterfall"></ol>
-  </section>
-
-  <section id="tester-section">
-    <div class="section-head">
-      <span class="label">Type tester</span>
-      <h2>Try it</h2>
-    </div>
-    <div class="tester-controls">
-      <div class="control">
-        <label class="label" for="tSize">Size</label>
-        <div class="control-row"><input type="range" id="tSize" min="14" max="160" value="56"><output id="tSizeOut" for="tSize">56 px</output></div>
-      </div>
-      <div class="control">
-        <label class="label" for="tWeight">Weight</label>
-        <div class="control-row"><input type="range" id="tWeight" min="300" max="800" value="400"><output id="tWeightOut" for="tWeight">400</output></div>
-      </div>
-      <div class="toggles" role="group" aria-label="OpenType features">
-        <button class="toggle" type="button" data-feat="ss01" aria-pressed="false">ss01 single-storey a</button>
-        <button class="toggle" type="button" data-feat="ss02" aria-pressed="false">ss02 distinct I l</button>
-        <button class="toggle" type="button" data-feat="zero" aria-pressed="false">zero slashed</button>
-        <button class="toggle" type="button" data-feat="case" aria-pressed="false">case forms</button>
-        <button class="toggle" type="button" data-feat="tnum" aria-pressed="false">tnum tabular</button>
-      </div>
-    </div>
-    <div class="tester" id="tester" contenteditable="true" spellcheck="false" role="textbox" aria-multiline="true" aria-label="Type tester">Quarterly sync: 1,024 nodes online — latency 0.42 ms (−18%). Ship build Il1 at 09:30?</div>
   </section>
 
   <section id="compare">
@@ -556,31 +628,87 @@ body {
     wf.appendChild(li);
   });
 
-  /* Tester */
-  var tester = document.getElementById("tester");
-  var tSize = document.getElementById("tSize"), tSizeOut = document.getElementById("tSizeOut");
-  var tWeight = document.getElementById("tWeight"), tWeightOut = document.getElementById("tWeightOut");
-  var feats = {};
-  function applyTester() {
-    tester.style.fontSize = tSize.value + "px";
-    tSizeOut.textContent = tSize.value + " px";
-    tester.style.fontWeight = tWeight.value;
-    var n = weightName(Number(tWeight.value));
-    tWeightOut.textContent = tWeight.value + (n ? " " + n : "");
-    var on = Object.keys(feats).filter(function (k) { return feats[k]; });
-    tester.style.fontFeatureSettings = on.length ? on.map(function (k) { return '"' + k + '" 1'; }).join(", ") : "normal";
+  /* Playground */
+  var SAMPLES = {
+    pangram: "The quick brown fox jumps over the lazy dog.\nPACK MY BOX WITH FIVE DOZEN LIQUOR JUGS",
+    ui: "Settings  ·  Notifications  ·  3 unread\nSync complete. Last backup 09:30, 2.4 GB.\nShip build Il1? Cancel · Confirm",
+    figures: "0123456789  ½ ¼ ¾  ¹²³\n09:30 · 2026-10-30 · 1,024 nodes\n−18% · €49.99 · £12 · $1,200 · 3 × 4 = 12",
+    accents: "Façade, naïve café, Ålesund, Zürich, Œuvre, crème brûlée, São Paulo, ¿Qué tal? ¡Olé!",
+  };
+  var DEFAULTS = {
+    text: "Kernel Sans\nPackets drift through quiet fiber at 02:47.",
+    size: window.innerWidth < 600 ? 40 : 72, weight: 400, track: 0, lead: 1.15, align: "left", feats: {},
+  };
+  var play = document.getElementById("play");
+  var pSize = document.getElementById("pSize"), pWeight = document.getElementById("pWeight");
+  var pTrack = document.getElementById("pTrack"), pLead = document.getElementById("pLead");
+  var featButtons = document.querySelectorAll(".toggle[data-feat]");
+  var alignButtons = document.querySelectorAll(".toggle[data-align]");
+  var state = JSON.parse(JSON.stringify(DEFAULTS));
+  try {
+    var saved = JSON.parse(localStorage.getItem("kernel-sans-playground") || "null");
+    if (saved && typeof saved === "object") Object.keys(DEFAULTS).forEach(function (k) { if (k in saved) state[k] = saved[k]; });
+  } catch (e) { /* storage unavailable: start from the defaults */ }
+  function save() {
+    try { localStorage.setItem("kernel-sans-playground", JSON.stringify(state)); } catch (e) { /* not saved */ }
   }
-  tSize.addEventListener("input", applyTester);
-  tWeight.addEventListener("input", applyTester);
-  document.querySelectorAll(".toggle[data-feat]").forEach(function (b) {
-    b.addEventListener("click", function () {
-      var on = b.getAttribute("aria-pressed") !== "true";
-      b.setAttribute("aria-pressed", on ? "true" : "false");
-      feats[b.dataset.feat] = on;
-      applyTester();
+  function fit() {
+    play.style.height = "auto";
+    play.style.height = play.scrollHeight + 2 + "px";
+  }
+  function render() {
+    var size = Number(state.size), w = Number(state.weight);
+    pSize.value = size; pWeight.value = w; pTrack.value = state.track; pLead.value = state.lead;
+    play.style.fontSize = size + "px";
+    play.style.fontWeight = w;
+    play.style.letterSpacing = (state.track / 1000) + "em";
+    play.style.lineHeight = state.lead;
+    play.style.textAlign = state.align;
+    var on = Object.keys(state.feats).filter(function (k) { return state.feats[k]; });
+    play.style.fontFeatureSettings = on.length ? on.map(function (k) { return '"' + k + '" 1'; }).join(", ") : "normal";
+    var n = weightName(w);
+    document.getElementById("pSizeOut").textContent = size + " px";
+    document.getElementById("pWeightOut").textContent = w + (n ? " " + n : "");
+    document.getElementById("pTrackOut").textContent = (state.track > 0 ? "+" : "") + state.track;
+    document.getElementById("pLeadOut").textContent = Number(state.lead).toFixed(2);
+    var face = document.getElementById("pMetaFace");
+    face.textContent = "Kernel Sans ";
+    var b = document.createElement("b"); b.textContent = w; face.appendChild(b);
+    face.appendChild(document.createTextNode(n ? " " + n : ""));
+    document.getElementById("pMetaMetrics").textContent =
+      "cap " + (size * 0.72).toFixed(1) + " px · x-height " + (size * 0.54).toFixed(1) +
+      " px · 1 unit = " + (size / 1000).toFixed(3) + " px";
+    featButtons.forEach(function (btn) { btn.setAttribute("aria-pressed", state.feats[btn.dataset.feat] ? "true" : "false"); });
+    alignButtons.forEach(function (btn) { btn.setAttribute("aria-pressed", btn.dataset.align === state.align ? "true" : "false"); });
+    fit();
+  }
+  play.value = state.text;
+  play.addEventListener("input", function () { state.text = play.value; fit(); save(); });
+  [[pSize, "size"], [pWeight, "weight"], [pTrack, "track"], [pLead, "lead"]].forEach(function (pair) {
+    pair[0].addEventListener("input", function () { state[pair[1]] = Number(pair[0].value); render(); save(); });
+  });
+  featButtons.forEach(function (btn) {
+    btn.addEventListener("click", function () { state.feats[btn.dataset.feat] = !state.feats[btn.dataset.feat]; render(); save(); });
+  });
+  alignButtons.forEach(function (btn) {
+    btn.addEventListener("click", function () { state.align = btn.dataset.align; render(); save(); });
+  });
+  document.querySelectorAll(".toggle[data-sample]").forEach(function (btn) {
+    btn.addEventListener("click", function () {
+      play.value = state.text = SAMPLES[btn.dataset.sample];
+      render(); save(); play.focus();
     });
   });
-  applyTester();
+  document.getElementById("pClear").addEventListener("click", function () {
+    play.value = state.text = ""; render(); save(); play.focus();
+  });
+  document.getElementById("pReset").addEventListener("click", function () {
+    state = JSON.parse(JSON.stringify(DEFAULTS));
+    play.value = state.text; render(); save();
+  });
+  window.addEventListener("resize", fit);
+  if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit);
+  render();
 
   /* Glyph set */
   var groups = [
