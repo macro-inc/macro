@@ -1,6 +1,8 @@
 //! Owner-bound Microsoft linking and serialized refresh-token rotation.
 
 use chrono::{DateTime, Duration, Utc};
+use feature_flags::FeatureFlags;
+use macro_user_id::user_id::MacroUserIdStr;
 use std::{
     collections::HashMap,
     sync::{Arc, Mutex},
@@ -13,6 +15,28 @@ use token::{EncryptedMicrosoftToken, MicrosoftRefreshToken, MicrosoftTokenCipher
 
 #[cfg(test)]
 mod test;
+
+/// PostHog flag that admits a user to new Outlook connections when the
+/// deployment switch is on. Reconnecting an existing inbox never reads it.
+pub const OUTLOOK_FLAG: &str = "enable-outlook";
+
+/// The [`OUTLOOK_FLAG`] decision for one user, recorded as `outlook.flag`.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::IntoStaticStr)]
+#[strum(serialize_all = "snake_case")]
+pub enum OutlookFlag {
+    On,
+    Off,
+    /// The flags could not be loaded; new connections stay closed.
+    Error,
+    /// No flag provider is configured (local and tests); the switch decides.
+    Unconfigured,
+}
+
+impl OutlookFlag {
+    fn admits(self) -> bool {
+        matches!(self, Self::On | Self::Unconfigured)
+    }
+}
 
 #[derive(Debug, thiserror::Error, PartialEq, Eq)]
 pub enum MicrosoftAuthError {
@@ -213,7 +237,10 @@ pub trait MicrosoftIdentityProvider: Send + Sync {
 
 #[async_trait::async_trait]
 pub trait MicrosoftAuth: Send + Sync {
-    fn new_connections_enabled(&self) -> bool;
+    /// Whether `user` may start a new Outlook connection: the deployment
+    /// switch, then their [`OUTLOOK_FLAG`]. Records `outlook.flag` on the
+    /// current span when the flag is read.
+    async fn new_connections_enabled(&self, user: &MacroUserIdStr<'_>) -> bool;
     /// Where an administrator grants Macro's delegated permissions for their
     /// whole directory, for users whose consent attempt needs admin approval.
     fn admin_consent_url(
@@ -233,9 +260,12 @@ pub trait MicrosoftAuth: Send + Sync {
         attempt: Uuid,
         owner: Uuid,
     ) -> Result<CompletedMicrosoftGrant, MicrosoftAuthError>;
+    /// A new connection needs [`Self::new_connections_enabled`] for `user`;
+    /// reconnecting an inbox `owner` can already access does not.
     async fn start_link(
         &self,
         owner: Uuid,
+        user: &MacroUserIdStr<'_>,
         redirect_uri: String,
         return_uri: Option<String>,
         calendar_requested: bool,
@@ -279,17 +309,23 @@ struct CachedToken {
     expires_at: DateTime<Utc>,
 }
 
-pub struct MicrosoftAuthService<R, P> {
+pub struct MicrosoftAuthService<R, P, F> {
     connections_enabled: bool,
+    /// `None` when no flag provider is configured; see [`OutlookFlag::Unconfigured`].
+    feature_flags: Option<F>,
     repo: R,
     provider: P,
     cipher: Arc<dyn MicrosoftTokenCipher>,
     cache: Mutex<HashMap<(Uuid, i64), CachedToken>>,
 }
 
-impl<R, P> MicrosoftAuthService<R, P> {
+impl<R, P, F> MicrosoftAuthService<R, P, F> {
     pub fn with_connections_enabled(mut self, enabled: bool) -> Self {
         self.connections_enabled = enabled;
+        self
+    }
+    pub fn with_feature_flags(mut self, feature_flags: Option<F>) -> Self {
+        self.feature_flags = feature_flags;
         self
     }
     pub fn new(repo: R, provider: P, cipher: Arc<dyn MicrosoftTokenCipher>) -> Self {
@@ -299,7 +335,34 @@ impl<R, P> MicrosoftAuthService<R, P> {
             cipher,
             cache: Mutex::new(HashMap::new()),
             connections_enabled: true,
+            feature_flags: None,
         }
+    }
+}
+
+impl<R, P, F: FeatureFlags> MicrosoftAuthService<R, P, F> {
+    async fn outlook_flag(&self, user: &MacroUserIdStr<'_>) -> OutlookFlag {
+        let flag = match &self.feature_flags {
+            None => OutlookFlag::Unconfigured,
+            Some(feature_flags) => match feature_flags.load(user).await {
+                Ok(flags) if flags.is_enabled(OUTLOOK_FLAG) => OutlookFlag::On,
+                Ok(_) => OutlookFlag::Off,
+                Err(error) => {
+                    tracing::warn!(
+                        error = ?error,
+                        flag = OUTLOOK_FLAG,
+                        "feature flags unavailable; new Outlook connections stay closed"
+                    );
+                    OutlookFlag::Error
+                }
+            },
+        };
+        tracing::Span::current().record("outlook.flag", <&str>::from(flag));
+        flag
+    }
+
+    async fn admits_new_connection(&self, user: &MacroUserIdStr<'_>) -> bool {
+        self.connections_enabled && self.outlook_flag(user).await.admits()
     }
 }
 
@@ -346,11 +409,11 @@ fn has_required_scopes(scopes: &[String]) -> bool {
 }
 
 #[async_trait::async_trait]
-impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider> MicrosoftAuth
-    for MicrosoftAuthService<R, P>
+impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider, F: FeatureFlags> MicrosoftAuth
+    for MicrosoftAuthService<R, P, F>
 {
-    fn new_connections_enabled(&self) -> bool {
-        self.connections_enabled
+    async fn new_connections_enabled(&self, user: &MacroUserIdStr<'_>) -> bool {
+        self.admits_new_connection(user).await
     }
     fn admin_consent_url(
         &self,
@@ -393,13 +456,14 @@ impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider> MicrosoftAuth
     async fn start_link(
         &self,
         owner: Uuid,
+        user: &MacroUserIdStr<'_>,
         redirect_uri: String,
         return_uri: Option<String>,
         calendar_requested: bool,
         reconnect: Option<Uuid>,
     ) -> Result<LinkStart, MicrosoftAuthError> {
         let facts = self.repo.connection_facts(owner, reconnect).await?;
-        if !self.connections_enabled && !facts.reconnecting {
+        if !facts.reconnecting && !self.admits_new_connection(user).await {
             return Err(MicrosoftAuthError::NotConfigured);
         }
         if !facts.permits_connection() {
@@ -508,7 +572,7 @@ impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider> MicrosoftAuth
     }
 }
 
-impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider> MicrosoftAuthService<R, P> {
+impl<R: MicrosoftGrantRepository, P: MicrosoftIdentityProvider, F> MicrosoftAuthService<R, P, F> {
     async fn token_for_grant(
         &self,
         grant: StoredGrant,

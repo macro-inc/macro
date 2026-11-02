@@ -18,7 +18,7 @@ export function InlineBooleanEditor() {
     <button
       type="button"
       onClick={() => !isReadOnly() && !isSaving() && toggle()}
-      disabled={isSaving() || isReadOnly()}
+      disabled={isReadOnly()}
       class="flex items-center justify-end p-1"
       classList={{
         'cursor-default': isReadOnly() || isSaving(),
