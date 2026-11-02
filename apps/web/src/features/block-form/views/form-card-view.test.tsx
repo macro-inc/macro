@@ -5,6 +5,7 @@ import {
   screen,
   within,
 } from '@solidjs/testing-library';
+import { createSignal } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import type { FormContext, QuestionTally } from '../context/form-context';
 import { FormProvider } from '../context/form-context';
@@ -161,6 +162,30 @@ describe('FormCardView poll', () => {
     );
     expect(onOpenResponses).toHaveBeenCalledTimes(1);
     expect(onOpen).not.toHaveBeenCalled();
+  });
+
+  it('expands Results in place when the voters arrive after the card first renders', () => {
+    const [loaded, setLoaded] = createSignal(false);
+    const named = tallyOf(namedVoters)(
+      () => 'poll-1',
+      () => true
+    );
+    const late: FormContext['responses']['createTally'] = () => ({
+      value: () => (loaded() ? named.value() : undefined),
+      failure: () => undefined,
+    });
+    const { onOpenResponses } = mount(
+      'view',
+      (detail) => {
+        detail.form.responsesVisible = true;
+      },
+      late
+    );
+    expect(screen.getByRole('button', { name: 'Responses' })).toBeTruthy();
+    setLoaded(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Results' }));
+    expect(screen.getByRole('region', { name: 'Poll results' })).toBeTruthy();
+    expect(onOpenResponses).not.toHaveBeenCalled();
   });
 
   it('sends anyone to the Responses tab when shared responses name nobody', () => {

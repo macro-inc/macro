@@ -154,7 +154,7 @@ export function PollBars(props: {
               type="button"
               aria-expanded={results().expanded}
               class="ml-auto shrink-0 rounded text-link outline-none hover:underline focus-visible:ring-2 focus-visible:ring-edge-focus"
-              onClick={results().onOpen}
+              onClick={() => results().onOpen()}
             >
               {results().label}
             </button>
