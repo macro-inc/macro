@@ -33,7 +33,7 @@ its references already filled in for them.
 
 | Parameter | Type |
 | ------ | ------ |
-| `options` | [`RoutineOptions`](../interfaces/RoutineOptions.md) |
+| `options` | [`RoutineOptions`](../type-aliases/RoutineOptions.md) |
 
 #### Returns
 
@@ -169,7 +169,7 @@ Replace the routine's task and trigger configuration.
 
 | Parameter | Type |
 | ------ | ------ |
-| `options` | [`RoutineOptions`](../interfaces/RoutineOptions.md) |
+| `options` | [`RoutineOptions`](../type-aliases/RoutineOptions.md) |
 
 #### Returns
 

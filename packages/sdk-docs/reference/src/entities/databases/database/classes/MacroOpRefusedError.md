@@ -33,6 +33,7 @@ op at fault and, when the batch minted an id that already names something
 
 | Property | Modifier | Type | Description | Inherited from |
 | ------ | ------ | ------ | ------ | ------ |
+| <a id="property-body"></a> `body` | `readonly` | `unknown` | Parsed response body: a string, JSON object, or the raw client error. | [`MacroApiError`](../../../../utils/unwrap/classes/MacroApiError.md).[`body`](../../../../utils/unwrap/classes/MacroApiError.md#property-body) |
 | <a id="property-column"></a> `column` | `readonly` | `string` \| `null` | The column placement at fault, when one is. | - |
 | <a id="property-data"></a> `data` | `readonly` | `unknown` | - | [`MacroApiError`](../../../../utils/unwrap/classes/MacroApiError.md).[`data`](../../../../utils/unwrap/classes/MacroApiError.md#property-data) |
 | <a id="property-op"></a> `op` | `readonly` | `number` | The refused op's index in the batch. | - |

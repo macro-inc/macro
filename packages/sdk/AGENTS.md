@@ -61,6 +61,11 @@ the existing gateway prefixes.
   it calls for the methods a program uses and rarely for a class. Open a
   method's doc with the rule an agent must follow, and put the detail on that
   method, not only on the namespace class.
+- `MacroApiError` message includes the parsed 4xx body (and field, when the
+  server names one). Code mode returns `String(error)`, so the body must live
+  in `message`, not only on `body` / `data`.
+- `routines.create` requires `model` or `agent`. Cron `schedule` is five-field
+  crontab or six-field (`sec min hour day month weekday`); `timezone` is IANA.
 - Calendar occurrences carry each copy's `inbox` and `role`; one meeting on
   several of the user's inboxes is one event per inbox. `update`,
   `inviteGuests` and `delete` take the copy's `inbox`, and an agent run that

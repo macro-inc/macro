@@ -161,6 +161,7 @@ test('routine options carry run visibility and updates that omit it keep it', as
     trigger: { type: 'cron', schedule: '0 9 * * *', timezone: 'UTC' },
     prompt: 'Summarize',
     userPrompt: 'Daily summary',
+    model: 'claude-sonnet-4-6',
   } as const;
   const routine = await macro.routines.create({
     ...options,
@@ -170,4 +171,80 @@ test('routine options carry run visibility and updates that omit it keep it', as
   await routine.update(options);
   expect(bodies[0]).toMatchObject({ run_visibility: 'listed' });
   expect(bodies[1]).not.toHaveProperty('run_visibility');
+});
+
+test('routine creation accepts a five-field cron trigger and a model', async () => {
+  const requests: Request[] = [];
+  globalThis.fetch = Object.assign(
+    async (input: RequestInfo | URL) => {
+      const request = input instanceof Request ? input : new Request(input);
+      requests.push(request);
+      return Response.json(record, { status: 201 });
+    },
+    { preconnect: originalFetch.preconnect },
+  );
+  const routine = await new Macro({
+    token: 'user',
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  }).routines.create({
+    name: 'Recurring check',
+    prompt: 'See whether the investigation finished.',
+    userPrompt: 'Follow up on the investigation.',
+    model: 'claude-sonnet-4-6',
+    trigger: {
+      type: 'cron',
+      schedule: '0 9 * * *',
+      timezone: 'America/New_York',
+    },
+  });
+  expect(await routine.name()).toBe('Daily report');
+  expect(await requests[0].json()).toEqual({
+    name: 'Recurring check',
+    kind: 'Agent',
+    enabled: true,
+    trigger: {
+      type: 'cron',
+      schedule: '0 9 * * *',
+      timezone: 'America/New_York',
+    },
+    task: {
+      prompt: 'See whether the investigation finished.',
+      user_prompt: 'Follow up on the investigation.',
+      model: 'claude-sonnet-4-6',
+    },
+  });
+});
+
+test('a 400 from routine create surfaces the server validation message', async () => {
+  globalThis.fetch = Object.assign(
+    async () =>
+      new Response('trigger.schedule: invalid cron schedule "not a cron"', {
+        status: 400,
+        headers: { 'content-type': 'text/plain' },
+      }),
+    { preconnect: originalFetch.preconnect },
+  );
+  const error = await new Macro({
+    token: 'user',
+    hosts: { 'scheduled-action': 'https://routines.test' },
+  }).routines
+    .create({
+      name: 'Recurring check',
+      prompt: 'See whether the investigation finished.',
+      userPrompt: 'Follow up on the investigation.',
+      model: 'claude-sonnet-4-6',
+      trigger: {
+        type: 'cron',
+        schedule: 'not a cron',
+        timezone: 'UTC',
+      },
+    })
+    .catch((caught: unknown) => caught);
+  expect(error).toBeInstanceOf(MacroApiError);
+  const api = error as MacroApiError;
+  expect(api.status).toBe(400);
+  expect(api.body).toBe('trigger.schedule: invalid cron schedule "not a cron"');
+  expect(api.message).toContain('400');
+  expect(api.message).toContain('trigger.schedule');
+  expect(api.message).toContain('cron');
 });

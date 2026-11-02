@@ -1232,7 +1232,7 @@ MCP and Macro agent tools expose **CreateRoutine**, **ListRoutines**,
 **ReadRoutine**, and **UpdateRoutine**. Select `target.type: "agent"` with the
 `bot.botId` from **ListAgents** as `agentId`, or `target.type: "model"` with a runtime
 model ID. `schedule.type: "once"` accepts a future RFC3339 `at` timestamp;
-`"cron"` accepts a six-field `expression` and IANA `timezone`. Routine ownership
+`"cron"` accepts a five-field crontab or six-field `expression` and IANA `timezone`. Routine ownership
 comes from the authenticated caller, never a model-supplied user ID.
 
 ## Command menu (Ctrl+K)

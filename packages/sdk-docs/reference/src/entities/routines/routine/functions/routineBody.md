@@ -8,7 +8,7 @@ Translate typed routine options into the generated wire contract.
 
 | Parameter | Type |
 | ------ | ------ |
-| `options` | [`RoutineOptions`](../interfaces/RoutineOptions.md) |
+| `options` | [`RoutineOptions`](../type-aliases/RoutineOptions.md) |
 
 ## Returns
 

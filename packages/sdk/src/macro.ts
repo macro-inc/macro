@@ -316,14 +316,12 @@ export { type MessageParent, MessageThread } from './entities/messages/thread';
 export type { EntityReference } from './entities/reference';
 export type {
   RoutineEventFilter,
+  RoutineOptions,
+  RoutineTargetOptions,
   RoutineTriggerOptions,
   SingleRoutineTrigger,
 } from './entities/routines/routine';
-export {
-  Routine,
-  RoutineExecution,
-  type RoutineOptions,
-} from './entities/routines/routine';
+export { Routine, RoutineExecution } from './entities/routines/routine';
 export { AccessRequest, EntityAccess } from './entities/sharing/access';
 export type { SharePermissionOptions } from './entities/sharing/permissions';
 export type { TaskSummary } from './entities/tasks/task';

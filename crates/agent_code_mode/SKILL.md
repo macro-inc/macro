@@ -30,6 +30,20 @@ macro, session and execution are real SDK handles. You can instead import {Macro
 - Generate structured extraction with macro.ai.structuredCompletion and toolset:{type:'none'}, using source text already fetched; check the returned outcome rather than assuming success.
 - Use Handlebars to personalize many drafts, persist a single email review stack, and return its reference. The templates guide shows the full module. Chat continues while the user edits and sends later.
 - Persist calendar drafts with the same review entity, and let the user finish in the reused component. Reviews survive the Deno process and page reload. Creating one immediately presents a completed PresentReview tool call in the shared session stream; it does not wait for approval. The card can appear while main is still running. "Presented to the user" never means sent or approved. Submissions queue a separate outcome into the original session. The direct PresentReview tool offers the same UI outside code mode. After presenting, end by asking "Should I kick it off?"; when the person whose account the review uses says yes, submit it with the direct DecideReview tool, which approves it as the card would. It refuses in a turn someone else prompted or a system event started, and while the review is not ready. An approved import reports its end later as a review.settled system event with the final report.
+- Schedule a recurring follow-up with `macro.routines.create`. Pass `model` or `agent` (one is required). Cron `schedule` is five-field crontab (`min hour day month weekday`) or six-field (`sec min hour day month weekday`); `timezone` is IANA. A run-once trigger is not available here yet.
+
+```javascript
+export async function main({macro}) {
+  const routine = await macro.routines.create({
+    name: 'Recurring check',
+    prompt: 'See whether the investigation finished and comment on the task.',
+    userPrompt: 'Follow up on the investigation.',
+    model: 'claude-sonnet-4-6',
+    trigger: {type: 'cron', schedule: '0 9 * * *', timezone: 'America/New_York'},
+  });
+  return {data: {id: routine.id, name: await routine.name()}};
+}
+```
 
 ## Correctness and bounds
 

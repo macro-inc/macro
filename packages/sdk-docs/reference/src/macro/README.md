@@ -606,7 +606,13 @@ Re-exports [RoutineExecution](../entities/routines/routine/classes/RoutineExecut
 
 ### RoutineOptions
 
-Re-exports [RoutineOptions](../entities/routines/routine/interfaces/RoutineOptions.md)
+Re-exports [RoutineOptions](../entities/routines/routine/type-aliases/RoutineOptions.md)
+
+***
+
+### RoutineTargetOptions
+
+Re-exports [RoutineTargetOptions](../entities/routines/routine/type-aliases/RoutineTargetOptions.md)
 
 ***
 

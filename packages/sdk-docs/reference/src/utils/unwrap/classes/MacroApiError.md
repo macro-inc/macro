@@ -33,7 +33,8 @@ A non-2xx HTTP response (Macro API, or a raw fetch like presigned downloads).
 
 ## Properties
 
-| Property | Modifier | Type |
-| ------ | ------ | ------ |
-| <a id="property-data"></a> `data` | `readonly` | `unknown` |
-| <a id="property-status"></a> `status` | `readonly` | `number` |
+| Property | Modifier | Type | Description |
+| ------ | ------ | ------ | ------ |
+| <a id="property-body"></a> `body` | `readonly` | `unknown` | Parsed response body: a string, JSON object, or the raw client error. |
+| <a id="property-data"></a> `data` | `readonly` | `unknown` | - |
+| <a id="property-status"></a> `status` | `readonly` | `number` | - |

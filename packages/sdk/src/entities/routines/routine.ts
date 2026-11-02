@@ -61,20 +61,24 @@ function triggerBody(trigger: RoutineTriggerOptions): ActionTrigger {
     .exhaustive();
 }
 
+/** Execution target: the server requires a model or an agent, not neither. */
+export type RoutineTargetOptions =
+  | { model: RoutineModelId; agent?: Agent }
+  | { agent: Agent; model?: RoutineModelId };
+
 /** Configuration of an agent routine. */
-export interface RoutineOptions {
+export type RoutineOptions = {
   /** Display name. */
   name: string;
-  /** Schedules or Macro events that start the routine. */
+  /**
+   * Schedules or Macro events that start the routine. Cron uses five- or
+   * six-field `schedule` and an IANA `timezone`.
+   */
   trigger: RoutineTriggerOptions;
   /** Instructions delivered to the agent. */
   prompt: string;
   /** Original user instructions. */
   userPrompt: string;
-  /** Model override. */
-  model?: RoutineModelId;
-  /** Agent to run the task. */
-  agent?: Agent;
   /** Whether triggers can start executions. Defaults to true on creation. */
   enabled?: boolean;
   /**
@@ -82,7 +86,7 @@ export interface RoutineOptions {
    * creation; an update that omits it keeps the stored value.
    */
   runVisibility?: RunVisibility;
-}
+} & RoutineTargetOptions;
 
 /** A scheduled or event-triggered agent task. */
 export class Routine extends MacroEntity<ScheduledActionResponse> {

@@ -386,6 +386,7 @@ const routine = await macro.routines.create({
   name: 'Daily summary',
   prompt: 'Summarize my open tasks.',
   userPrompt: 'A daily task summary',
+  model: 'claude-sonnet-4-6',
   trigger: { type: 'cron', schedule: '0 9 * * *', timezone: 'America/New_York' },
 });
 await routine.setEnabled(false);
@@ -393,6 +394,10 @@ const transcript = await routine.execute(); // Chat or AgentSession, if availabl
 const executions = await routine.history(); // Each retains its parent routine
 ```
 
+Cron `schedule` is five-field crontab (`min hour day month weekday`) or
+six-field (`sec min hour day month weekday`); `timezone` is IANA.
+Pass `model` or `agent` — the server requires one. Use cron for recurring
+checks; a run-once trigger is not available here yet.
 Event triggers use `{ type: 'events', filters: [{ events, entities, condition }] }`;
 `entities` takes typed references such as `{ type: 'document', entity: doc }`.
 Use `{ type: 'multiple', triggers: [...] }` to combine schedules and events.

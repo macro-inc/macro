@@ -41,7 +41,7 @@ already filled in for them.
 
 | Parameter | Type |
 | ------ | ------ |
-| `options` | [`RoutineOptions`](../interfaces/RoutineOptions.md) |
+| `options` | [`RoutineOptions`](../type-aliases/RoutineOptions.md) |
 
 #### Returns
 
