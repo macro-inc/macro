@@ -1,14 +1,22 @@
 /** @vitest-environment jsdom */
-import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import {
+  cleanup,
+  fireEvent,
+  render,
+  screen,
+  waitFor,
+} from '@solidjs/testing-library';
 import {
   $createParagraphNode,
   $createTextNode,
   $getRoot,
   $getSelection,
   $isRangeSelection,
+  $setSelection,
 } from 'lexical';
+import { err, ok, type Result } from 'neverthrow';
 import { createSignal, onCleanup, onMount } from 'solid-js';
-import { afterEach, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import {
   createLexicalWrapper,
   LexicalWrapperContext,
@@ -18,6 +26,13 @@ import { FocusClickTarget } from '../core/FocusClickTarget';
 import { FloatingGifMenu } from './FloatingGifMenu';
 
 const insertGif = vi.hoisted(() => vi.fn());
+const uploadGif = vi.hoisted(() => vi.fn());
+const discardUpload = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('../../plugins/gif/uploadGif', () => ({ uploadGif }));
+vi.mock('@core/util/uploadFile', async (original) => ({
+  ...(await original<typeof import('@core/util/uploadFile')>()),
+  discardStaticUpload: discardUpload,
+}));
 const touchDevice = vi.hoisted(() => vi.fn(() => false));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: touchDevice,
@@ -75,9 +90,15 @@ vi.mock('@service-storage/websocket', () => ({
   createWebSocketJob() {},
 }));
 
+beforeEach(() => {
+  uploadGif.mockResolvedValue(ok('static-gif-id'));
+});
+
 afterEach(() => {
   cleanup();
   insertGif.mockClear();
+  uploadGif.mockReset();
+  discardUpload.mockClear();
   touchDevice.mockReturnValue(false);
   vi.useRealTimers();
 });
@@ -86,7 +107,7 @@ function mountPicker() {
   const [canEdit, setCanEdit] = createSignal(true);
   const leaveComposer = vi.fn();
   let wrapper: ReturnType<typeof createLexicalWrapper>;
-  render(() => {
+  const view = render(() => {
     wrapper = createLexicalWrapper({
       type: 'markdown',
       namespace: 'gif-lock-test',
@@ -127,7 +148,7 @@ function mountPicker() {
       { discrete: true }
     );
   };
-  return { editor, open, setCanEdit, leaveComposer };
+  return { editor, open, setCanEdit, leaveComposer, unmount: view.unmount };
 }
 
 it('opens the picker when the editor has no selection', async () => {
@@ -163,7 +184,7 @@ it.each([false, true])(
     expect(input).toHaveProperty('value', 'hello');
 
     fireEvent.click(await screen.findByRole('button', { name: 'Audit GIF' }));
-    expect(insertGif).toHaveBeenCalledOnce();
+    await waitFor(() => expect(insertGif).toHaveBeenCalledOnce());
     expect(screen.queryByRole('searchbox')).toBeNull();
   }
 );
@@ -205,14 +226,14 @@ it('inserts a GIF when the editor has no saved caret', async () => {
     { discrete: true }
   );
   fireEvent.click(await screen.findByRole('button', { name: 'Audit GIF' }));
-  expect(insertGif).toHaveBeenCalledOnce();
+  await waitFor(() => expect(insertGif).toHaveBeenCalledOnce());
 });
 
 it('inserts a selected GIF while editing remains allowed', async () => {
   const { open } = mountPicker();
   open();
   fireEvent.click(await screen.findByRole('button', { name: 'Audit GIF' }));
-  expect(insertGif).toHaveBeenCalledOnce();
+  await waitFor(() => expect(insertGif).toHaveBeenCalledOnce());
   expect(screen.queryByRole('searchbox')).toBeNull();
 });
 it('restores the insertion caret after searching outside the editor', async () => {
@@ -235,7 +256,8 @@ it('restores the insertion caret after searching outside the editor', async () =
     if ($isRangeSelection(selection)) offset = selection.anchor.offset;
   });
   fireEvent.click(await screen.findByRole('button', { name: 'Audit GIF' }));
-  expect(insertGif).toHaveBeenCalledOnce();
+  editor.update(() => $setSelection(null), { discrete: true });
+  await waitFor(() => expect(insertGif).toHaveBeenCalledOnce());
   expect(offset).toBe(2);
 });
 
@@ -269,8 +291,11 @@ it('steps through grid rows, scrolls only on keyboard movement, and inserts the 
   // Scrolling can move another result under the pointer during a key press.
   fireEvent.pointerEnter(first);
   fireEvent.keyDown(input, { key: 'Enter' });
-  expect(insertGif).toHaveBeenCalledWith(
-    expect.objectContaining({ id: 'third-gif' })
+  await waitFor(() =>
+    expect(insertGif).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'third-gif' }),
+      'static-gif-id'
+    )
   );
 });
 
@@ -300,4 +325,103 @@ it('closes the picker when send locking removes edit permission immediately afte
   setCanEdit(false);
   vi.runOnlyPendingTimers();
   expect(screen.queryByRole('searchbox')).toBeNull();
+});
+
+it('uploads once before inserting, even when Enter repeats during the upload', async () => {
+  let resolveUpload!: (id: string) => void;
+  const pending = new Promise<Result<string, never>>((resolve) => {
+    resolveUpload = (id) => resolve(ok(id));
+  });
+  uploadGif.mockReturnValueOnce(pending);
+  const { open } = mountPicker();
+  open();
+  const button = await screen.findByRole('button', { name: 'Audit GIF' });
+  fireEvent.click(button);
+  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Enter' });
+  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Enter' });
+  expect(uploadGif).toHaveBeenCalledOnce();
+  expect(button).toHaveProperty('disabled', true);
+  expect(insertGif).not.toHaveBeenCalled();
+  resolveUpload('uploaded-gif');
+  await waitFor(() =>
+    expect(insertGif).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'audit-gif' }),
+      'uploaded-gif'
+    )
+  );
+  expect(discardUpload).not.toHaveBeenCalled();
+});
+
+it('keeps the picker and caret for retry after upload failure', async () => {
+  uploadGif.mockResolvedValueOnce(err({ kind: 'failed' }));
+  const { open } = mountPicker();
+  open();
+  fireEvent.click(await screen.findByRole('button', { name: 'Audit GIF' }));
+  await screen.findByRole('alert');
+  expect(insertGif).not.toHaveBeenCalled();
+  expect(screen.getByRole('searchbox')).toBeTruthy();
+  const button = screen.getByRole('button', { name: 'Audit GIF' });
+  expect(button).toHaveProperty('disabled', false);
+  fireEvent.click(button);
+  await waitFor(() => expect(insertGif).toHaveBeenCalledOnce());
+  expect(uploadGif).toHaveBeenCalledTimes(2);
+});
+
+it.each([
+  'dismissed',
+  'readonly',
+  'permission lost',
+  'disposed',
+  'draft changed',
+])(
+  'does not insert a completed upload after the picker is %s',
+  async (reason) => {
+    let resolveUpload!: (id: string) => void;
+    const pending = new Promise<Result<string, never>>((resolve) => {
+      resolveUpload = (id) => resolve(ok(id));
+    });
+    uploadGif.mockReturnValueOnce(pending);
+    const { editor, open, setCanEdit, unmount } = mountPicker();
+    open();
+    fireEvent.click(await screen.findByRole('button', { name: 'Audit GIF' }));
+    if (reason === 'dismissed') {
+      fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Escape' });
+    } else if (reason === 'readonly') {
+      editor.setEditable(false);
+    } else if (reason === 'permission lost') {
+      setCanEdit(false);
+    } else if (reason === 'disposed') {
+      unmount();
+    } else {
+      editor.update(() => $getRoot().clear(), { discrete: true });
+    }
+    resolveUpload('uploaded-gif');
+    await pending;
+    expect(insertGif).not.toHaveBeenCalled();
+    expect(discardUpload).toHaveBeenCalledWith('uploaded-gif');
+  }
+);
+
+it('ignores a dismissed upload after the picker reopens', async () => {
+  let resolveUpload!: (id: string) => void;
+  const pending = new Promise<Result<string, never>>((resolve) => {
+    resolveUpload = (id) => resolve(ok(id));
+  });
+  uploadGif.mockReturnValueOnce(pending);
+  const { open } = mountPicker();
+  open();
+  fireEvent.click(await screen.findByRole('button', { name: 'Audit GIF' }));
+  fireEvent.keyDown(screen.getByRole('searchbox'), { key: 'Escape' });
+  open();
+  fireEvent.click(await screen.findByRole('button', { name: 'Second GIF' }));
+  await waitFor(() =>
+    expect(insertGif).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'second-gif' }),
+      'static-gif-id'
+    )
+  );
+  resolveUpload('old-upload');
+  await pending;
+  expect(insertGif).toHaveBeenCalledOnce();
+  expect(discardUpload).toHaveBeenCalledWith('old-upload');
 });

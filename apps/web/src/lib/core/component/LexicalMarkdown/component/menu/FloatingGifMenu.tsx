@@ -1,6 +1,8 @@
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { useCanEdit } from '@core/signal/permissions';
+import { fireAndForget } from '@core/util/fireAndForget';
+import { discardStaticUpload } from '@core/util/uploadFile';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { createCallback } from '@solid-primitives/rootless';
@@ -8,8 +10,10 @@ import { debounce } from '@solid-primitives/scheduled';
 import { cn, InputGroup, Surface } from '@ui';
 import {
   $addUpdateTag,
+  $getNodeByKey,
   $getRoot,
   $getSelection,
+  $isRangeSelection,
   $setSelection,
   type BaseSelection,
   SKIP_DOM_SELECTION_TAG,
@@ -41,6 +45,7 @@ import {
   searchGifs,
 } from '../../plugins/gif';
 import PoweredByKlipy from '../../plugins/gif/powered-by-klipy.svg';
+import { uploadGif } from '../../plugins/gif/uploadGif';
 import { registerRootEventListener } from '../../plugins/shared/utils';
 import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
 
@@ -77,6 +82,9 @@ export function FloatingGifMenu(
   const [searchTerm, setSearchTerm] = createSignal('');
   const [debouncedSearchTerm, setDebouncedSearchTerm] = createSignal('');
   const [selectedIndex, setSelectedIndex] = createSignal(0);
+  const [uploading, setUploading] = createSignal(false);
+  const [uploadError, setUploadError] = createSignal(false);
+  let uploadController: AbortController | undefined;
   const [menuAvailableHeight, setMenuAvailableHeight] = createSignal<
     number | undefined
   >(undefined);
@@ -107,7 +115,15 @@ export function FloatingGifMenu(
   );
   const gifList = () => (gifs.state === 'ready' ? gifs() : []);
 
+  const cancelUpload = () => {
+    uploadController?.abort();
+    uploadController = undefined;
+    setUploading(false);
+  };
+
   const resetMenu = () => {
+    cancelUpload();
+    setUploadError(false);
     setMenuOpen(false);
     debouncedSetSearch.clear();
     setSearchTerm('');
@@ -133,20 +149,73 @@ export function FloatingGifMenu(
     setMenuOpen(true);
   });
 
-  const insertGif = (gif: Gif) => {
+  const insertGif = async (gif: Gif) => {
+    if (uploading()) return;
     const currentEditor = editor();
     if (!canEdit() || !currentEditor?.isEditable()) {
       resetMenu();
       return;
     }
-    const selection = insertAt;
-    currentEditor.update(() => {
-      if (!canEdit() || !currentEditor.isEditable()) return;
-      if (selection) $setSelection(selection.clone());
-      else if (!$getSelection()) $getRoot().selectEnd();
-      $insertGifNode(gif);
-    });
-    closeToEditor();
+    const selection = insertAt?.clone();
+    const root = currentEditor.getRootElement();
+    const request = new AbortController();
+    uploadController = request;
+    setUploading(true);
+    let uploadedId: string | undefined;
+    let inserted = false;
+    setUploadError(false);
+    const unregisterUpdate = currentEditor.registerUpdateListener(
+      ({ dirtyElements, dirtyLeaves }) => {
+        if (dirtyElements.size || dirtyLeaves.size) resetMenu();
+      }
+    );
+    request.signal.addEventListener('abort', unregisterUpdate, { once: true });
+    try {
+      const result = await uploadGif(gif, request.signal);
+      if (result.isErr()) {
+        if (!request.signal.aborted && result.error.kind === 'failed') {
+          setUploadError(true);
+        }
+        return;
+      }
+      uploadedId = result.value;
+      if (
+        request.signal.aborted ||
+        !menuOpen() ||
+        !canEdit() ||
+        !currentEditor.isEditable() ||
+        currentEditor !== editor() ||
+        root !== currentEditor.getRootElement()
+      )
+        return;
+
+      currentEditor.update(
+        () => {
+          // A cleared draft must not receive the old request's image.
+          if (
+            selection &&
+            $isRangeSelection(selection) &&
+            (!$getNodeByKey(selection.anchor.key)?.isAttached() ||
+              !$getNodeByKey(selection.focus.key)?.isAttached())
+          )
+            return;
+          if (selection) $setSelection(selection);
+          else if (!$getSelection()) $getRoot().selectEnd();
+          $insertGifNode(gif, result.value);
+          inserted = true;
+        },
+        { discrete: true }
+      );
+      closeToEditor();
+    } finally {
+      request.signal.removeEventListener('abort', unregisterUpdate);
+      unregisterUpdate();
+      if (uploadController === request) {
+        uploadController = undefined;
+        setUploading(false);
+      }
+      if (uploadedId && !inserted) await discardStaticUpload(uploadedId);
+    }
   };
 
   createEffect(() => {
@@ -184,7 +253,7 @@ export function FloatingGifMenu(
     onRight: () => moveSelection(1),
     onSelect: () => {
       const gif = gifList()[selectedIndex()];
-      if (gif) insertGif(gif);
+      if (gif) fireAndForget(insertGif(gif), 'gif-picker');
     },
     onClose: closeToEditor,
   });
@@ -196,6 +265,7 @@ export function FloatingGifMenu(
           ref={(panel) => {
             const currentEditor = editor();
             if (!currentEditor) return;
+            onCleanup(cancelUpload);
             // Search belongs to this composer even though its DOM is portalled.
             onCleanup(
               registerRootEventListener(currentEditor, 'focusout', (event) => {
@@ -245,6 +315,7 @@ export function FloatingGifMenu(
                   });
                 }}
                 type="search"
+                readOnly={uploading()}
                 value={searchTerm()}
                 onInput={(event) => updateSearch(event.currentTarget.value)}
                 placeholder="Search KLIPY"
@@ -291,11 +362,14 @@ export function FloatingGifMenu(
                       {(gif, index) => (
                         <button
                           type="button"
+                          disabled={uploading()}
                           aria-label={gif.title}
-                          onClick={() => insertGif(gif)}
+                          onClick={() =>
+                            fireAndForget(insertGif(gif), 'gif-picker')
+                          }
                           onPointerEnter={() => selectFromPointer(index())}
                           class={cn(
-                            'size-full overflow-hidden rounded-lg bg-ink/5 outline-none',
+                            'size-full overflow-hidden rounded-lg bg-ink/5 outline-none disabled:opacity-50',
                             selectedIndex() === index() && 'ring-2 ring-accent'
                           )}
                         >
@@ -314,7 +388,13 @@ export function FloatingGifMenu(
               </Switch>
             </div>
 
-            <div class="flex justify-end px-1">
+            <div class="flex items-center justify-between gap-2 px-1">
+              <div class="text-xs text-ink-muted" aria-live="polite">
+                <Show when={uploading()}>Uploading GIF…</Show>
+                <Show when={uploadError()}>
+                  <span role="alert">Couldn't insert GIF. Try again.</span>
+                </Show>
+              </div>
               <PoweredByKlipy
                 class="h-2.5 w-auto text-ink-extra-muted"
                 aria-label="Powered by KLIPY"
