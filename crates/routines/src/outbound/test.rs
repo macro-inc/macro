@@ -212,3 +212,60 @@ async fn run_now_explains_an_exhausted_ai_allowance() {
     assert!(error.to_string().contains("allowance"), "{error}");
     server.await.unwrap();
 }
+
+#[tokio::test]
+async fn activating_past_the_plan_limit_explains_the_limit_not_the_allowance() {
+    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
+    let url = format!("http://{}/scheduled-action", listener.local_addr().unwrap());
+    let refusal = serde_json::json!({
+        "error": "You've reached your plan's limit of 10 active routines. Pause or delete a routine to activate another.",
+        "code": "routine_limit_reached",
+        "limit": 10,
+        "plan": "free",
+    })
+    .to_string();
+    let allowance = serde_json::json!({
+        "error": "AI usage limit reached.",
+        "code": "ai_free_allowance_exhausted",
+    })
+    .to_string();
+    let server = serve_responses(
+        listener,
+        vec![
+            ("402 Payment Required", refusal.clone()),
+            ("402 Payment Required", refusal),
+            ("402 Payment Required", allowance),
+        ],
+    );
+    let client = RoutineClient::new(&url, "test-internal-key").unwrap();
+    let user = MacroUserIdStr::parse_from_str("macro|routine@example.com").unwrap();
+    let config = RoutineConfiguration {
+        name: "Check in".into(),
+        instructions: "Prepare a brief".into(),
+        target: RoutineTarget::Agent {
+            agent_id: Uuid::from_u128(1),
+        },
+        schedule: RoutineSchedule::Cron {
+            expression: "0 0 9 * * *".into(),
+            timezone: "UTC".into(),
+        },
+        required_apps: Vec::new(),
+    };
+
+    let created = client.create(&user, &config).await.unwrap_err().to_string();
+    assert!(created.contains("limit of 10 active routines"), "{created}");
+    assert!(!created.contains("allowance"), "{created}");
+    let enabled = client
+        .set_enabled(&user, Uuid::from_u128(1), true)
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(enabled.contains("limit of 10 active routines"), "{enabled}");
+    let ran = client
+        .run_now(&user, Uuid::from_u128(1))
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(ran.contains("allowance"), "{ran}");
+    server.await.unwrap();
+}
