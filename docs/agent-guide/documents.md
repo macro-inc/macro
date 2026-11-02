@@ -2426,7 +2426,8 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 `evaluate_script` over `[contenteditable] strong` etc.
 
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
-Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
+Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote,
+`6.` or `6. ` for an ordered list that starts at 6).
 Pasting multiple paragraphs inside a quote keeps those paragraphs quoted;
 see [block formatting](channels.md#block-formatting) for verification.
 Imported Markdown recognizes bare URLs with the same shared matcher as messages;
