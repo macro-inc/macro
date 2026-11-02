@@ -135,6 +135,7 @@ fn emits_required_keys() {
         "ANTHROPIC_API_KEY",
         "SLACK_MCP_CLIENT_ID",
         "SLACK_MCP_CLIENT_SECRET",
+        "OPENAI_DOMAIN_VERIFICATION_TOKEN",
         "GITHUB_SYNC_APP_URL",
         "GITHUB_SYNC_APP_CLIENT_ID",
         "GITHUB_SYNC_APP_CLIENT_SECRET",
