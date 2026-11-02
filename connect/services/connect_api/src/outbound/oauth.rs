@@ -45,8 +45,8 @@ impl TokenBody {
         let expires_at = self
             .expires_in
             .map(|seconds| {
-                Utc::now()
-                    .checked_add_signed(Duration::seconds(seconds))
+                Duration::try_seconds(seconds)
+                    .and_then(|ttl| Utc::now().checked_add_signed(ttl))
                     .ok_or(Error::OAuth)
             })
             .transpose()?;
