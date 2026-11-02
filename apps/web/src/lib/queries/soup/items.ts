@@ -186,6 +186,8 @@ async function fetchRestSoupAstItemsPage(
             group_by: serializeGroupByField(groupBy),
             per_group_limit: params.limit,
             sort_method,
+            sort_property_definition_id: params.sort_property_definition_id,
+            sort_direction: params.sort_direction,
           },
           body,
           signal,
@@ -447,7 +449,11 @@ export function useSoupAstItemsQuery(
           options?.().onBeforeGraphqlRefresh?.();
         await activeGraphqlQuery().refresh();
       },
-      body: () => args().body,
+      body: () => ({
+        ...args().body,
+        params: args().params,
+        groupBy: args().groupBy,
+      }),
       // Grouped lists don't report it yet, so writes still read them again.
       cacheMaintained: () => activeGraphqlQuery().cacheMaintained?.() ?? false,
     })

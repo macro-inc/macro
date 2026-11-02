@@ -446,10 +446,14 @@ export type CursorModelsResponse = {
 export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
 
 /**
- * Actual deployment availability for the provider selector.
+ * What the provider selector offers the requesting user.
  */
 export type EmailConnectionProviders = {
     gmail: boolean;
+    /**
+     * Whether this user may start a new Outlook connection: the deployment
+     * switch and their `enable-outlook` flag.
+     */
     outlook: boolean;
     /**
      * Where a Microsoft 365 administrator approves Macro for their whole
@@ -3032,6 +3036,7 @@ export type EmailConnectionProvidersData = {
 
 export type EmailConnectionProvidersErrors = {
     400: ErrorResponse;
+    401: ErrorResponse;
 };
 
 export type EmailConnectionProvidersError = EmailConnectionProvidersErrors[keyof EmailConnectionProvidersErrors];

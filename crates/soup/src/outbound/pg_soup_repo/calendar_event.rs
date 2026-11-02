@@ -57,7 +57,9 @@ pub(super) async fn cursor_soup(
     db: &PgPool,
     req: SimpleSortRequest<'_>,
 ) -> Result<Vec<SoupItem<()>>, sqlx::Error> {
-    let parts = cursor_parts(req.cursor);
+    let Some(parts) = cursor_parts(req.cursor) else {
+        return Ok(Vec::new());
+    };
     if parts.property_filter.as_ref().is_some_and(|filter| {
         !properties_filter_can_apply_to(filter, &[PropertyEntityType::CalendarEvent])
     }) {
@@ -176,8 +178,9 @@ fn notified_event_ids_sql(predicate: NotificationPredicate) -> String {
     )
 }
 
-fn cursor_parts(cursor: SimpleSortQuery) -> CursorParts {
-    match cursor {
+fn cursor_parts(cursor: SimpleSortQuery) -> Option<CursorParts> {
+    Some(match cursor {
+        SimpleSortQuery::Property(_) => return None,
         SimpleSortQuery::NoFilter(query) => parts_from_query(&query, None, None),
         // CalendarEvent is not emitted by the primary frecency query yet, so
         // it must remain in the timestamp fallback even if an aggregate exists.
@@ -198,7 +201,7 @@ fn cursor_parts(cursor: SimpleSortQuery) -> CursorParts {
                 ast.properties_filter.as_deref().cloned(),
             )
         }
-    }
+    })
 }
 
 fn parts_from_query<F>(
