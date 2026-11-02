@@ -1116,7 +1116,8 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       });
     }
 
-    return transformed;
+    if (search.isSearching()) return transformed;
+    return soup.positions.apply(transformed);
   };
 
   const entities = () => {
@@ -1327,6 +1328,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       for (const entity of all) {
         const ts =
           (bucketOnNotification ? entity.notifiedAt : undefined) ??
+          soup.positions.sortTs(entity.id) ??
           entity.sortTs ??
           entity.updatedAt ??
           entity.createdAt;

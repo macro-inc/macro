@@ -37,6 +37,8 @@ export type EntityActionListState = {
     SoupState['collapseEntity'],
     'callback' | 'shouldCollapse'
   >;
+  /** Lists that can keep rows in place while an action changes their sort. */
+  positions?: Pick<SoupState['positions'], 'hold'>;
 };
 
 export type EntityActionListFocusTarget = {
@@ -55,6 +57,7 @@ export type ToEntityActionListStateOptions<TItem, TMetadata> = {
     enabled: () => boolean;
     run: (entityId: string) => Promise<void>;
   };
+  positions?: EntityActionListState['positions'];
 };
 
 type AdaptedRow = {
@@ -262,6 +265,7 @@ export function toEntityActionListState<TItem, TMetadata>(
       callback: collapseCallback,
       shouldCollapse: () => options.collapse?.enabled() ?? false,
     },
+    positions: options.positions,
   };
 }
 

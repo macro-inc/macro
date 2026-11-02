@@ -8,6 +8,7 @@ import {
   createPredicatesStore,
   type PredicateConfig,
 } from '@app/features/next-soup/filters/filter-store/predicates-store';
+import { createPositionHolds } from '@app/features/next-soup/position-holds';
 import { createSelectionState } from '@app/features/next-soup/selection-state';
 import { SORT_CONFIGS } from '@app/features/next-soup/soup-view/sort-options';
 import { isModality } from '@core/mobile/inputModality';
@@ -114,6 +115,14 @@ export const createSoupState = (options: SoupContextOptions = {}) => {
   });
 
   const sort = createSortState(SORT_CONFIGS, ['updated_at']);
+
+  const positions = createPositionHolds({
+    scope: () =>
+      JSON.stringify([
+        predicates.activeIds(),
+        sort.active().map(({ id, reversed }) => [id, reversed === true]),
+      ]),
+  });
 
   // Tracked by index (not id) so a row id duplicated across groups highlights
   // only one occurrence. The identity key follows that row across setRows.
@@ -417,6 +426,19 @@ export const createSoupState = (options: SoupContextOptions = {}) => {
       get: getRow,
       at: getRowAt,
       indexOf,
+    },
+
+    positions: {
+      /** Keep these entities' rows where they are; see createPositionHolds. */
+      hold: (entityIds: readonly string[]) =>
+        positions.hold(
+          rows()
+            .filter((row) => !row.getIsGrouped() && !row.getIsLoadMore())
+            .map((row) => row.original),
+          entityIds
+        ),
+      apply: positions.apply,
+      sortTs: positions.sortTs,
     },
 
     collapseEntity: {
