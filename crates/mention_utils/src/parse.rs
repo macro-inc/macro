@@ -5,9 +5,9 @@ use nom::{
     branch::alt,
     bytes::complete::{tag, tag_no_case, take_till1, take_while1},
     character::complete::anychar,
-    combinator::{eof, peek, recognize, verify},
+    combinator::{eof, not, peek, recognize, verify},
     multi::{many_till, many0},
-    sequence::{delimited, preceded},
+    sequence::{delimited, preceded, terminated},
 };
 use serde::Deserialize;
 use std::{
@@ -320,18 +320,52 @@ pub struct ParsedXmlText<'de>(pub Vec<TextSegment<'de>>);
 #[error(transparent)]
 pub struct ParseErr(#[from] nom::error::Error<String>);
 
+/// One piece of message markup: a recognized tag, a run of text up to the next
+/// `<`, or an unrecognized `<m-*>` tag, which is dropped.
+fn parse_segment(s: &str) -> IResult<&str, Option<TextSegment<'_>>> {
+    alt((
+        parse_xml_tag.map(|xml| Some(TextSegment::Xml(xml))),
+        take_till1(|c| c == '<').map(|text| Some(TextSegment::Plain(text))),
+        parse_unknown_xml_tag.map(|()| None),
+    ))
+    .parse(s)
+}
+
 impl<'de> ParsedXmlText<'de> {
     pub fn parse(s: &'de str) -> Result<Self, ParseErr> {
-        let (_, (out, _)) = many0(alt((
-            parse_xml_tag.map(|xml| Some(TextSegment::Xml(xml))),
-            take_till1(|c| c == '<').map(|text| Some(TextSegment::Plain(text))),
-            parse_unknown_xml_tag.map(|()| None),
-        )))
-        .and(eof)
-        .parse(s)
-        .finish()
-        .map_err(|e| e.cloned())?;
+        let (_, (out, _)) = many0(parse_segment)
+            .and(eof)
+            .parse(s)
+            .finish()
+            .map_err(|e| e.cloned())?;
         Ok(ParsedXmlText(out.into_iter().flatten().collect()))
+    }
+
+    /// Parses text that need not be valid message markup, such as an agent's
+    /// Markdown reply, where `Vec<String>` or `a < b` is ordinary prose. A `<`
+    /// that does not open an `<m-*>` tag stays as plain text instead of failing
+    /// the whole input, so the tags around it are still recognized.
+    ///
+    /// From the first `<m-*>` tag that does not parse, the rest is kept as
+    /// plain text. Retrying after it would rescan the remaining input for a
+    /// closing tag at every such tag, which is quadratic in a long reply.
+    pub fn parse_lenient(s: &'de str) -> Self {
+        let stray_lt = terminated(tag("<"), not(tag_no_case("m-")));
+        let parsed = many0(alt((
+            parse_segment,
+            stray_lt.map(|lt| Some(TextSegment::Plain(lt))),
+        )))
+        .parse(s);
+        let Ok((rest, out)) = parsed else {
+            // Every alternative consumes input or fails recoverably, so this is
+            // not reached; keep the text rather than lose it if it ever is.
+            return ParsedXmlText(vec![TextSegment::Plain(s)]);
+        };
+        let mut segments: Vec<_> = out.into_iter().flatten().collect();
+        if !rest.is_empty() {
+            segments.push(TextSegment::Plain(rest));
+        }
+        ParsedXmlText(segments)
     }
 }
 

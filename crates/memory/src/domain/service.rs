@@ -1,350 +1,307 @@
-use super::ports::*;
-use agent::types::{ChatMessage, ChatMessageContent, Role};
-use agent::{AgentLoop, PredefinedModel, StreamPart};
-use ai_tools::{ToolServiceContext, ToolSetWithPrompt};
-use chrono::Utc;
-use futures::stream::StreamExt;
-use macro_env::Environment;
-use serde::Deserialize;
+//! Compose persisted context; only explicit edits and scheduled jobs can write it.
+use super::{models::*, ports::*};
+use chrono::{Duration, NaiveDate, Utc};
+use macro_user_id::user_id::MacroUserIdStr;
 use std::sync::Arc;
+use tracing::Instrument;
 
-static GENERATION_MODEL: PredefinedModel = PredefinedModel::Smart;
-static JUDGE_MODEL: PredefinedModel = PredefinedModel::Sonnet4_6;
-
-static GENERATE_MEMORY_PROMPT: &str = "\
-Use tool calls to research who I am, what I care about, what I'm working on, \
-and anything else that would be useful as permanent knowledge. Look at my \
-documents, projects, emails, channels, and search for content I've created.
-
-Then generate a ~1000-3000 word memory about me that will be prepended to \
-future prompts to provide personalized answers. Focus on:
-- My role, team, and responsibilities
-- Technologies, tools, and languages I use
-- Current projects and priorities
-- Domain knowledge and expertise
-- Communication style and preferences
-
-If a previous memory is provided in the system prompt, use it as the baseline \
-for the new memory. Preserve still-accurate durable facts, verify and update it \
-with fresh tool research, add important new context, and remove obsolete or \
-unsupported details.
-
-Don't include things that would make sense to find via tool search at runtime. \
-Focus on context that is useful as permanent background knowledge.
-
-Only state a corporate title or founder status when content written by people \
-(documents, emails, bios, announcements) states it explicitly; otherwise \
-describe what the person works on and skip the title. This applies to titles \
-inherited from the previous memory too — a title you can't re-confirm from \
-content gets dropped, not preserved.
-
-Output format: wrap the finished memory in <memory></memory> tags. Everything \
-outside the tags is discarded, and a response without the tags is rejected \
-entirely. Inside the tags, write only the memory itself — no preamble, no \
-postscript, no commentary, no narration of your research process (\"I have \
-enough context\", \"Let me write the memory\", \"Now I have a comprehensive \
-picture\"), and no text addressed to the user.";
-
-static JUDGE_PROMPT: &str = "\
-You are a strict quality judge for AI-generated user memory profiles.
-
-A \"memory\" is a ~1000-3000 word summary of a user prepended to future AI prompts \
-for personalization. A good memory is built from rich data: documents the user wrote, \
-projects they manage, emails they sent, channels they participate in, and search results \
-showing their work.
-
-REJECT if ANY of the following are true:
-- The memory is based on insufficient data (e.g. only a handful of chat titles, \
-  no documents, no projects, no emails). A memory built from nearly empty workspace \
-  data is useless speculation.
-- It is mostly guesswork or hedged inferences (\"likely\", \"suggests\", \"may\") \
-  rather than concrete facts derived from actual content.
-- It is under ~500 words of substantive content.
-- It lacks specific details about the user's actual work, codebase, projects, or role.
-- It reads like a personality quiz rather than a professional profile grounded in \
-  real workspace activity.
-- It contains the generator's narration or self-talk anywhere in the text \
-  (\"I have enough context\", \"Let me write the memory\", \"I need to research\", \
-  \"Now I have a comprehensive picture\", \"I found...\", \"The workspace has...\").
-
-ACCEPT only if the memory contains concrete, specific, actionable context derived \
-from substantial workspace data (documents, code, projects, emails, messages) that \
-would meaningfully improve future AI interactions.";
-
-#[derive(Debug, Deserialize)]
-struct MemoryJudgement {
-    accepted: bool,
-    reason: String,
+pub struct MemoryServiceImpl<R> {
+    repo: R,
+    generator: Arc<dyn MemoryGenerator>,
+    teams: Arc<dyn MemoryTeams>,
 }
 
-pub struct MemoryServiceImpl<Rpo> {
-    memory_repo: Rpo,
-    tool_context: ToolServiceContext,
-    tools: ToolSetWithPrompt,
-}
-
-impl<Rpo> MemoryServiceImpl<Rpo> {
-    pub fn new(
-        memory_repo: Rpo,
-        tool_context: ToolServiceContext,
-        tools: ToolSetWithPrompt,
-    ) -> Self {
+impl<R> MemoryServiceImpl<R> {
+    pub fn new(repo: R, generator: Arc<dyn MemoryGenerator>, teams: Arc<dyn MemoryTeams>) -> Self {
         Self {
-            memory_repo,
-            tool_context,
-            tools,
+            repo,
+            generator,
+            teams,
         }
     }
 }
 
-/// Default max age for memory freshness (1 day).
-const MAX_AGE: std::time::Duration = std::time::Duration::from_hours(24);
-
-impl<Rpo> MemoryService for MemoryServiceImpl<Rpo>
-where
-    Rpo: MemoryRepo + Clone,
-{
-    #[tracing::instrument(skip(self), err)]
-    async fn get_or_generate_memory(
-        &self,
-        user: macro_user_id::user_id::MacroUserIdStr<'static>,
-    ) -> super::Result<Option<Memory>> {
-        let record = self.memory_repo.get_latest_memory(user.clone()).await?;
-
-        let needs_generation = match &record {
-            Some(r) => {
-                let age = Utc::now() - r.updated_at;
-                age > chrono::Duration::from_std(MAX_AGE).unwrap_or(chrono::TimeDelta::MAX)
-            }
-            None => true,
-        };
-
-        let env = Environment::new_or_prod();
-        if needs_generation && !matches!(env, Environment::Local) {
-            let previous_memory = record.as_ref().map(|r| r.memory.clone());
-            let repo = self.memory_repo.clone();
-            let tool_context = self.tool_context.clone();
-            let toolset = self.tools.toolset.clone();
-            let deferred = self.tools.deferred.clone();
-            let prompt: Box<dyn std::fmt::Display + Send + Sync> =
-                Box::new(self.tools.prompt.to_string());
-            tokio::spawn(async move {
-                let tools = ToolSetWithPrompt {
-                    toolset,
-                    prompt,
-                    deferred,
-                };
-                let svc = MemoryServiceImpl::new(repo, tool_context, tools);
-                match svc.generate_memory(user.clone(), previous_memory).await {
-                    Ok(_) => tracing::info!(%user, "memory generated"),
-                    Err(MemoryError::Rejected(reason)) => {
-                        tracing::warn!(%user, %reason, "memory rejected by judge")
-                    }
-                    Err(e) => tracing::error!(%user, error = ?e, "memory generation failed"),
-                }
-            });
+impl<R: ComposedMemoryRepo> MemoryService for MemoryServiceImpl<R> {
+    #[tracing::instrument(skip_all, err)]
+    async fn get_memory(&self, user: MacroUserIdStr<'static>) -> Result<Option<Memory>> {
+        // Retain the deployed method contract, but reads no longer spawn generation.
+        self.repo.enroll(&user).await?;
+        let selected = self.repo.latest_activity(&user).await?;
+        let explicit = self.repo.explicit(&user).await?;
+        let teams = self.teams.members(&user).await?;
+        let mut users: Vec<_> = teams.into_iter().flat_map(|(_, members)| members).collect();
+        users.push(user.as_ref().to_owned());
+        users.sort();
+        users.dedup();
+        let profiles = self.repo.profiles(&users).await?;
+        if explicit.content.is_empty() && selected.is_empty() && profiles.is_empty() {
+            return Ok(None);
         }
-
-        Ok(record.map(|r| r.memory))
+        let activity = render_activity(&selected);
+        let explicit = format!(
+            "# Private explicit memory (revision {}; user corrections take precedence over generated context)\n{}",
+            explicit.revision,
+            numbered(&explicit.content)
+        );
+        let profiles: Vec<_> = profiles
+            .iter()
+            .map(|(user, profile)| format!("## {user}\n{profile}"))
+            .collect();
+        let team = format!("# Current team profiles\n{}", profiles.join("\n"));
+        Ok(Some(prompt::compose(&[&activity, &explicit, &team])))
     }
 }
 
-impl<Rpo> MemoryServiceImpl<Rpo>
-where
-    Rpo: MemoryRepo,
-{
-    // `previous_memory` carries the user's full personal-memory profile; it
-    // must never be captured as a span field or it ends up verbatim in logs.
-    #[tracing::instrument(skip(self, previous_memory), err)]
-    async fn generate_memory(
+impl<R: ComposedMemoryRepo> MemoryServiceImpl<R> {
+    /// Private memory is always read as the authenticated caller.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn explicit(&self, user: &MacroUserIdStr<'_>) -> Result<ExplicitMemory> {
+        self.repo.enroll(user).await?;
+        self.repo.explicit(user).await
+    }
+
+    /// Only this user-invoked operation writes explicit memory. Generation never does.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn update_memory(
         &self,
-        user: macro_user_id::user_id::MacroUserIdStr<'static>,
-        previous_memory: Option<Memory>,
-    ) -> super::Result<Memory> {
-        // append user data + datetime to prompt
-        let system_prompt = build_generation_system_prompt(
-            &self.tools.prompt,
-            &user,
-            &Utc::now().to_rfc2822(),
-            previous_memory.as_deref(),
-        );
+        user: MacroUserIdStr<'static>,
+        revision: i64,
+        edit: &MemoryEdit,
+    ) -> Result<ExplicitMemory> {
+        let current = self.repo.explicit(&user).await?;
+        if current.revision != revision {
+            return Err(MemoryError::Conflict);
+        }
+        let content = edit.apply(&current.content)?;
+        // Deletion must remain possible even if older content fails today's judge.
+        if !matches!(edit, MemoryEdit::Delete { .. }) {
+            self.generator.judge(user.clone(), &content).await?;
+        }
+        self.repo.save_explicit(&user, revision, &content).await
+    }
 
-        let agent_loop =
-            AgentLoop::new(self.tool_context.recorder.clone()).with_model(GENERATION_MODEL);
-        let toolset: Arc<dyn ai_toolset::ToolSet<_> + Send + Sync> = Arc::new(
-            ai_tools::DeferredToolSet::new(self.tools.toolset.clone(), self.tools.deferred.clone()),
-        );
-        let usage_ctx = ai_usage::UsageContext::new(ai_usage::AiFeature::Memory, user.clone());
-        // Carry the feature on the context so tool-spawned subagents attribute to it.
-        let mut tool_context = self.tool_context.clone();
-        tool_context.usage_context = usage_ctx.clone();
-        let mut session = agent_loop
-            .session(toolset, Arc::new(tool_context), &system_prompt, usage_ctx)
-            .await;
-
-        let user_msg = ChatMessage {
-            content: ChatMessageContent::Text(GENERATE_MEMORY_PROMPT.to_string()),
-            role: Role::User,
-            attachments: None,
-        };
-        let rig_messages = agent::to_rig_messages(&[user_msg]);
-
-        let mut content = String::new();
+    /// Professional activity is visible only to its owner and current teammates.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn get_user_activity(
+        &self,
+        caller: MacroUserIdStr<'static>,
+        user: MacroUserIdStr<'static>,
+        start: NaiveDate,
+        end: NaiveDate,
+    ) -> Result<Vec<Activity>> {
+        if end < start || end - start > Duration::days(366) {
+            return Err(MemoryError::InvalidDate);
+        }
+        if caller != user
+            && !self
+                .teams
+                .members(&caller)
+                .await?
+                .iter()
+                .any(|(_, members)| members.iter().any(|id| id == user.as_ref()))
         {
-            let mut stream = session.send_message(rig_messages).await?;
-
-            while let Some(next) = stream.next().await {
-                let part = next?;
-                if let StreamPart::Content(text) = part {
-                    content.push_str(&text);
-                }
-            }
+            return Err(MemoryError::Forbidden);
         }
+        self.repo.activity(&user, start, end).await
+    }
 
-        let Some(memory) = extract_memory_body(&content).map(str::to_string) else {
-            tracing::warn!(
-                content_len = content.len(),
-                "generation output missing <memory> tags"
-            );
-            return Err(MemoryError::NoGeneration);
+    /// Await the complete daily generation and its atomic commit. Retries of a
+    /// completed day are no-ops; concurrent jobs cannot overwrite newer output.
+    #[tracing::instrument(skip_all, fields(date = %date), err)]
+    pub async fn refresh(&self, user: MacroUserIdStr<'static>, date: NaiveDate) -> Result<()> {
+        if date >= Utc::now().date_naive() {
+            return Err(MemoryError::InvalidDate);
+        }
+        let week = period_start(date, Granularity::Week);
+        let month = period_start(date, Granularity::Month);
+        let snapshot = self.repo.snapshot(&user, week.min(month)).await?;
+        if snapshot.through_date.is_some_and(|last| last >= date) {
+            return Ok(());
+        }
+        let expected_date = snapshot
+            .through_date
+            .and_then(|last| last.succ_opt())
+            .or(snapshot.first_date);
+        if expected_date.is_some_and(|next| next != date) {
+            return Err(MemoryError::InvalidDate);
+        }
+        let research = format!(include_str!("service/prompts/daily.md"), date = date);
+        let daily = self.generator.research(user.clone(), &research).await?;
+        self.generator.judge(user.clone(), &daily).await?;
+        let daily = Activity {
+            granularity: Granularity::Day,
+            period_start: date,
+            period_end: date,
+            content: daily,
         };
-        if memory.is_empty() {
-            return Err(MemoryError::NoGeneration);
+        let mut sources = snapshot.activity.clone();
+        sources.push(daily.clone());
+        let week_sources: Vec<_> = sources
+            .iter()
+            .filter(|r| {
+                r.granularity == Granularity::Day && r.period_start >= week && r.period_end <= date
+            })
+            .cloned()
+            .collect();
+        let weekly = self
+            .report(user.clone(), Granularity::Week, week, date, &week_sources)
+            .await?;
+        sources.retain(|r| !(r.granularity == Granularity::Week && r.period_start == week));
+        sources.push(weekly.clone());
+        let monthly = self
+            .report(
+                user.clone(),
+                Granularity::Month,
+                month,
+                date,
+                &monthly_sources(&sources, date),
+            )
+            .await?;
+        let previous = snapshot
+            .activity
+            .iter()
+            .find(|r| r.granularity == Granularity::Summary);
+        let mut summary_sources = previous.cloned().into_iter().collect::<Vec<_>>();
+        summary_sources.push(daily.clone());
+        let summary = self
+            .report(
+                user.clone(),
+                Granularity::Summary,
+                previous.map_or(date, |r| r.period_start),
+                date,
+                &summary_sources,
+            )
+            .await?;
+        let profile_prompt = include_str!("service/prompts/profile.md");
+        let profile = self
+            .generator
+            .research(user.clone(), profile_prompt)
+            .await?;
+        self.generator.judge(user.clone(), &profile).await?;
+        let teams: Vec<_> = self
+            .teams
+            .members(&user)
+            .await?
+            .into_iter()
+            .map(|(id, _)| id)
+            .collect();
+        self.repo
+            .save_generation(
+                &user,
+                snapshot.revision,
+                date,
+                &profile,
+                &[daily, weekly, monthly, summary],
+                &teams,
+            )
+            .await
+    }
+
+    /// Await sequential catch-up for one user through the requested completed day.
+    #[tracing::instrument(skip_all, fields(through = %through), err)]
+    pub async fn refresh_through(
+        &self,
+        user: MacroUserIdStr<'static>,
+        through: NaiveDate,
+    ) -> Result<()> {
+        self.repo.enroll(&user).await?;
+        let snapshot = self.repo.snapshot(&user, through).await?;
+        let mut next = snapshot
+            .through_date
+            .and_then(|date| date.succ_opt())
+            .or(snapshot.first_date)
+            .unwrap_or(through);
+        while next <= through {
+            self.refresh(user.clone(), next).await?;
+            next = next.succ_opt().ok_or(MemoryError::InvalidDate)?;
         }
+        Ok(())
+    }
 
-        // 2nd pass: judge the memory quality
-        judge_memory(&memory, user.clone(), self.tool_context.recorder.as_ref()).await?;
+    /// Process a bounded batch. A failed user retains its expiring lease while
+    /// other users continue; cancellation never marks an unfinished day complete.
+    #[tracing::instrument(skip_all, err)]
+    pub async fn refresh_pending(&self) -> Result<()> {
+        let yesterday = Utc::now().date_naive() - Duration::days(1);
+        for _ in 0..25 {
+            let Some(claim) = self.repo.claim_refresh(yesterday).await? else {
+                break;
+            };
+            let span = tracing::info_span!("memory.refresh_claim", lease_token = %claim.token, date = %claim.date);
+            async {
+                match tokio::time::timeout(
+                    std::time::Duration::from_secs(1200),
+                    self.refresh(claim.user.clone(), claim.date),
+                )
+                .await
+                {
+                    Ok(Ok(())) => self.repo.release_refresh(&claim).await?,
+                    Ok(Err(error)) => {
+                        tracing::warn!(error = ?error, "memory refresh failed; lease will expire")
+                    }
+                    Err(_) => tracing::warn!("memory refresh timed out; lease will expire"),
+                }
+                Ok::<(), MemoryError>(())
+            }
+            .instrument(span)
+            .await?;
+        }
+        Ok(())
+    }
 
-        self.memory_repo.save_memory(&memory, user).await?;
-        Ok(memory)
+    async fn report(
+        &self,
+        user: MacroUserIdStr<'static>,
+        granularity: Granularity,
+        start: NaiveDate,
+        end: NaiveDate,
+        sources: &[Activity],
+    ) -> Result<Activity> {
+        let instructions = format!(
+            include_str!("service/prompts/rollup.md"),
+            granularity = granularity,
+            start = start,
+            end = end
+        );
+        let content = self
+            .generator
+            .summarize(user.clone(), &instructions, &render_activity(sources))
+            .await?;
+        self.generator.judge(user, &content).await?;
+        Ok(Activity {
+            granularity,
+            period_start: start,
+            period_end: end,
+            content,
+        })
     }
 }
 
-/// Extract the memory body from the agent's final message.
-///
-/// The generation prompt requires the memory to be wrapped in <memory> tags so
-/// that any narration the model emits around it is discarded deterministically
-/// rather than trusting the model to suppress it.
-fn extract_memory_body(content: &str) -> Option<&str> {
-    let start = content.find("<memory>")? + "<memory>".len();
-    let end = content.rfind("</memory>")?;
-    content.get(start..end).map(str::trim)
+fn numbered(content: &str) -> String {
+    content
+        .lines()
+        .enumerate()
+        .map(|(i, line)| format!("{}: {line}", i + 1))
+        .collect::<Vec<_>>()
+        .join("\n")
 }
 
-fn build_generation_system_prompt(
-    base_prompt: impl std::fmt::Display,
-    user: &macro_user_id::user_id::MacroUserIdStr<'_>,
-    datetime: &str,
-    previous_memory: Option<&str>,
-) -> String {
-    let mut prompt =
-        format!("{base_prompt}\n<user_id>{user:?}</user_id>\n<datetime>{datetime}</datetime>");
-
-    if let Some(memory) = previous_memory {
-        prompt.push_str("\n<previous_memory>\n");
-        prompt.push_str(memory);
-        prompt.push_str("\n</previous_memory>");
-    }
-
-    prompt
-}
-
-#[tracing::instrument(skip(memory, user, recorder), err)]
-async fn judge_memory(
-    memory: &str,
-    user: macro_user_id::user_id::MacroUserIdStr<'static>,
-    recorder: &dyn ai_usage::UsageRecorder,
-) -> super::Result<()> {
-    let user_message = format!(
-        "Evaluate this memory and respond with ONLY a JSON object \
-         (no markdown, no code fences):\n\
-         {{\"accepted\": true/false, \"reason\": \"one sentence explanation\"}}\n\n\
-         ---\n\n{memory}"
-    );
-
-    let response = agent::complete(
-        JUDGE_MODEL,
-        JUDGE_PROMPT,
-        &user_message,
-        recorder,
-        ai_usage::UsageContext::new(ai_usage::AiFeature::Memory, user),
-    )
-    .await
-    .map_err(|e| anyhow::anyhow!(e))?;
-
-    let judgement: MemoryJudgement = serde_json::from_str(response.trim())
-        .map_err(|e| anyhow::anyhow!("failed to parse judge response: {e}\nraw: {response}"))?;
-
-    tracing::info!(accepted = judgement.accepted, reason = %judgement.reason, "Memory judgement");
-
-    if !judgement.accepted {
-        return Err(MemoryError::Rejected(judgement.reason));
-    }
-
-    Ok(())
+fn render_activity(rows: &[Activity]) -> String {
+    let sections: Vec<_> = rows
+        .iter()
+        .map(|r| {
+            format!(
+                "## {} ({} — {})\n{}",
+                r.granularity, r.period_start, r.period_end, r.content
+            )
+        })
+        .collect();
+    let refs: Vec<&dyn std::fmt::Display> = sections
+        .iter()
+        .map(|s| s as &dyn std::fmt::Display)
+        .collect();
+    prompt::compose(&refs)
 }
 
 #[cfg(test)]
-mod tests {
-    use super::*;
-    use macro_user_id::user_id::MacroUserIdStr;
-
-    fn user_id(value: &str) -> MacroUserIdStr<'static> {
-        MacroUserIdStr::try_from(value.to_string()).expect("valid macro user id")
-    }
-
-    #[test]
-    fn generation_system_prompt_includes_previous_memory_when_present() {
-        let user = user_id("macro|memory-test@example.com");
-        let prompt = build_generation_system_prompt(
-            "base tools prompt",
-            &user,
-            "Mon, 08 Jun 2026 12:00:00 +0000",
-            Some("previous durable facts"),
-        );
-
-        assert!(prompt.contains("base tools prompt"));
-        assert!(prompt.contains("<user_id>macro|memory-test@example.com</user_id>"));
-        assert!(prompt.contains("<datetime>Mon, 08 Jun 2026 12:00:00 +0000</datetime>"));
-        assert!(prompt.contains("<previous_memory>\nprevious durable facts\n</previous_memory>"));
-    }
-
-    #[test]
-    fn extract_memory_body_strips_surrounding_narration() {
-        let content = "I have enough context. Let me write the memory.\n\
-            <memory>\nEric is an engineer at Macro.\n</memory>\nDone!";
-        assert_eq!(
-            extract_memory_body(content),
-            Some("Eric is an engineer at Macro.")
-        );
-    }
-
-    #[test]
-    fn extract_memory_body_rejects_missing_tags() {
-        assert_eq!(extract_memory_body("Eric is an engineer at Macro."), None);
-        assert_eq!(extract_memory_body("<memory>unterminated"), None);
-        assert_eq!(extract_memory_body("</memory>backwards<memory>"), None);
-    }
-
-    #[test]
-    fn extract_memory_body_uses_last_closing_tag() {
-        let content = "<memory>uses </memory> in prose</memory>";
-        assert_eq!(
-            extract_memory_body(content),
-            Some("uses </memory> in prose")
-        );
-    }
-
-    #[test]
-    fn generation_system_prompt_omits_previous_memory_when_absent() {
-        let user = user_id("macro|memory-test@example.com");
-        let prompt = build_generation_system_prompt(
-            "base tools prompt",
-            &user,
-            "Mon, 08 Jun 2026 12:00:00 +0000",
-            None,
-        );
-
-        assert!(!prompt.contains("<previous_memory>"));
-    }
-}
+mod test;

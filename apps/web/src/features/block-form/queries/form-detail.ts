@@ -33,6 +33,11 @@ export function toFormMetadata(form: Form): FormMetadata {
     closesAt: form.closesAt ?? null,
     tallyVisible: form.tallyVisible,
     confirmationMessage: form.confirmationMessage,
+    branding: {
+      logoFileId: form.branding.logoFileId ?? null,
+      coverFileId: form.branding.coverFileId ?? null,
+      accentColor: form.branding.accentColor ?? null,
+    },
     submittedColumnId: form.submittedColumnId ?? null,
     respondentColumnId: form.respondentColumnId ?? null,
   };
