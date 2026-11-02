@@ -10,7 +10,6 @@ import { SplitPanel } from '@components/app/split-panel';
 import { Resize } from '@core/component/Resize';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import { createElementSize } from '@core/util/createElementSize';
 import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
 import CloseIcon from '@icon/system/regular/x.svg';
 import { createWritableMemo } from '@solid-primitives/memo';
