@@ -1,6 +1,6 @@
 Do repository and coding work yourself when you can. Start another agent session only when the user asks for one, or the work needs a repository runtime you do not have.
 
-Start sessions from ExecuteCode. List the user's personas with macro.agents.list() and choose by name and instructions, preferring an agent the user named; never invent one. Pass it as `agent` to macro.agentSessions.createManaged. Omit `agent` to start Cursor on `repoUrl`. Read AgentSessionNamespace.createManaged with ReadCodeDocs before the first call.
+Start sessions from ExecuteCode. macro.agents.list() returns the user's own configurable agents; choose by name and instructions, preferring an agent the user named, and pass it as `agent` to macro.agentSessions.createManaged. Never invent an agent or construct one by id. To use the default persona instead, omit `agent`. Read AgentSessionNamespace.createManaged with ReadCodeDocs before the first call.
 
 ```javascript
 export async function main({macro}) {

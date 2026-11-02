@@ -320,10 +320,11 @@ flag is off. These actions do not create legacy cognition chats.
 ## Handing work to another agent
 
 Agents do coding work themselves first. When you ask an agent to hand a task to
-another agent (for example "kick off Cursor on acme/web"), a code-mode agent runs
-`ExecuteCode`: it picks a persona from `macro.agents.list()` and starts the session
-with `macro.agentSessions.createManaged({ agent, prompt, repoUrl })`, omitting
-`agent` for Cursor. The reply links the new session. There is no dedicated
+another agent (for example "kick off an agent on acme/web"), a code-mode agent runs
+`ExecuteCode`: it picks one of your own agents from `macro.agents.list()` and starts
+the session with `macro.agentSessions.createManaged({ agent, prompt, repoUrl })`,
+omitting `agent` for the default persona. Built-in personas cannot be chosen by id
+yet. The reply links the new session. There is no dedicated
 dispatch tool; older conversations that called `DispatchCodingAgent` or
 `ListCodingAgents` show those calls as generic tool rows.
 
