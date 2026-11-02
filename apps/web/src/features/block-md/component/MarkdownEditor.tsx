@@ -1,7 +1,9 @@
+import { activeElement } from '@app/signal/focus';
 import { MessageCommentsProvider } from '@block-md/comments/MessageCommentsProvider';
 import { URL_PARAMS } from '@block-md/constants';
 import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
 import { SplitBottomPanel } from '@components/app/split-layout/components/SplitBottomPanel';
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import { FocusClickTarget } from '@core/component/LexicalMarkdown/component/core/FocusClickTarget';
 import {
   HighlightLayer,
@@ -107,7 +109,6 @@ import {
   onCleanup,
   Show,
   Suspense,
-  untrack,
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import { createSaveMarkdownDocumentMutation } from '../queries/markdown-document-operations';
@@ -115,6 +116,7 @@ import { EditorSystemMessage } from './EditorSystemMessage';
 import { MarkdownCollabProvider } from './MarkdownCollabProvider';
 import { MarkdownPopup } from './MarkdownPopup';
 import { isMarkdownEditorLoading } from './markdownEditorLoadingState';
+import { shouldAutofocusDocument } from './should-autofocus-document';
 
 false && fileFolderDrop;
 
@@ -143,12 +145,14 @@ export function MarkdownEditor(props: {
 }) {
   const {
     documentId,
+    element: blockElement,
     kind,
     documentSource,
     persistedName: mdDocumentName,
     permissions,
     state: documentState,
   } = useMarkdownDocument();
+  const panel = useSplitPanel();
   const authenticated = useIsAuthenticated();
   const { canEdit } = permissions;
   const blockId = documentId();
@@ -630,13 +634,24 @@ export function MarkdownEditor(props: {
     setEditorReady(true);
   });
 
-  // Auto-focus on mount if enabled and editor is ready and document name is not empty.
+  // Focus a named document once both its editor and metadata are ready.
+  let didAutoFocus = false;
   createEffect(() => {
+    activeElement();
     if (
+      !didAutoFocus &&
       props.autoFocusOnMount &&
       editorReady() &&
-      untrack(mdDocumentName) !== ''
+      mdDocumentName()
     ) {
+      if (
+        !shouldAutofocusDocument(
+          blockElement() ?? null,
+          panel?.panelRef() ?? null
+        )
+      )
+        return;
+      didAutoFocus = true;
       editor.focus(undefined, { defaultSelection: 'rootStart' });
     }
   });

@@ -1,0 +1,17 @@
+---
+title: UpdateMemory
+description: >-
+  Change your private explicit memory only when you explicitly ask to remember,
+  correct, or forget something.
+---
+
+# UpdateMemory
+
+Change your private explicit memory only when you explicitly ask to remember, correct, or forget something. ReadMemory first. Never save inferred preferences automatically. Private/sensitive information is rejected. A stale revision makes no change: reread and reconcile before another edit.
+
+## Parameters
+
+| Parameter | Type | Required | Description |
+| --- | --- | --- | --- |
+| `revision` | integer | Yes | The exact revision returned by ReadMemory or the last successful edit. |
+| `edit` | MemoryEdit | Yes | An edit to one one-based line. A revision is required to prevent replay or concurrent edits from inserting twice or deleting a different line. |

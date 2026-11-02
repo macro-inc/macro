@@ -11,6 +11,11 @@ There are no built-in company views or Board/List layout. Companies and People
 are plain soup lists with the shared pagination. Existing personal/team saved
 views stay in the toolbar's Views menu.
 
+Opening a company or contact row in Companies or People clears its blue unread
+dot, including desktop preview activation, keyboard opening, and phone navigation.
+The read is saved in the background; a failed request restores the dot so opening
+it again can retry. Marking read does not mark the notification done.
+
 **Rollout:** Tasks, Email, Notes, Calls and Databases require PostHog `enable-crm-activity`
 (off by default; local override: `VITE_ENABLE_CRM_ACTIVITY=true`). CRM also uses
 this flag to decide whether to supply its task-composer preset; the shared
@@ -123,11 +128,17 @@ email on the server after a short typing pause, so results include contacts not
 yet scrolled into view. The desktop header has the title, shared **New** menu,
 and expandable Search; choose **Contact** from New. On touch, **New contact**
 is unchanged. The contact dialog asks for a company through a **Choose a company** pill (searchable by name
-or domain, from the up to 500 most relevant companies with a domain) and fixes
-the email to that company's primary domain; **Add contact** on a company's Team
-tab skips the company pill. The company, contact and pipeline dialogs share the
+or domain, from the up to 500 most relevant companies, including name-only
+companies). Enter a full email address; personal addresses and different domains
+are accepted. **Add contact** on a company's Team tab skips the company pill.
+**New company** requires a name; its domain is optional. If supplied, it must be
+a company domain, not a personal email provider. The company, contact and pipeline dialogs share the
 task/project composer layout: name on the first row beside **Close**, details
 below, and a **Create …** button that also submits on Command-Enter.
+
+Verify company domain validation by creating a company with an allowed business
+domain, then adding a contact whose email matches it. Personal email provider
+domains must still be rejected as company domains.
 
 Desktop `Search companies` and `Search people` start as outlined icon buttons
 and expand into the shared Email/Tasks search bar. Command-F expands and focuses
@@ -216,8 +227,9 @@ fills the row beside the filter button, or the whole row without filters.
 Email importance and inbox choices open in the shared filter drawer.
 Section creation actions appear at the bottom right above the navigation dock,
 replacing the default app-wide action: Add contact, New email, New note, New task,
-New call, or New database. Existing contact-domain requirements, email-sync and
-database gates, recipients, and task associations still apply. With company email
+New call, or New database. Add contact is available once the company is loaded,
+including companies without a domain; contact emails may use any valid domain.
+Email-sync and database gates, recipients, and task associations still apply. With company email
 sync off, New email stays visible but disabled; New company must not replace it.
 Keyboard focus and
 higher-priority composers suppress the floating action; leaving the section
@@ -393,7 +405,12 @@ the table's own cell editors (unset ones read **Empty**). The body scrolls while
 the footer stays pinned with **Cancel** (Esc) and **Add deal**. Select
 fields can create a new option. Choosing **Add company “…”** creates the company
 with the row: a searched domain fills the domain and the name. **Add contact “…”**
-works the same way, and a new contact's email must use a company's domain.
+works the same way. A new company may omit its domain. A new contact accepts a
+full email address and an explicit company choice, including a name-only company.
+An email-domain match offers **Use suggested company**; accept it or select a
+different company before submitting. Editing the email keeps that explicit choice.
+Focusing the suggestion reveals its full name; Enter accepts it without submitting
+the form, and closes the tooltip without a browser error.
 **Add deal** stays disabled until a record is chosen, and Command-Enter submits.
 The form makes one row with every value set. A board lane's **New record** opens
 the same dialog with the lane's stage filled in. The table's blank row at the
@@ -418,6 +435,11 @@ the pipeline already had is not added again, so retrying an interrupted import
 adds only what is missing; several rows for one new record add separate entries
 (deals), as an export of such a pipeline lists them. Relation and non-person entity columns are skipped,
 and a value that does not fit its column is left empty.
+
+Agent CSV imports report ambiguous contact emails as unresolved records with an
+actionable reason and continue the valid rows. They never create another contact
+for an ambiguous email; select the intended contact by ID when adding it to the
+pipeline. Storage and authorization failures during lookup still fail the import.
 
 CRM lists are currently disabled by `enableCrmLists` (default `false`). The sidebar
 Lists section, list editor, and company membership controls only mount when enabled.
