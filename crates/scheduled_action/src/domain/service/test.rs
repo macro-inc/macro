@@ -329,7 +329,7 @@ async fn validates_before_persistence_and_rejects_cross_owner_selection() {
         base.dispatcher_tx.clone(),
         grants(&base.repo),
     )
-    .with_target_validation(TargetValidation::new(sessions.clone(), true));
+    .with_target_validation(TargetValidation::new(sessions.clone()));
     let mut config = configuration(false);
     config.task = agent_task();
     let foreign = MacroUserIdStr::parse_from_str(FOREIGN_USER).unwrap();
@@ -390,7 +390,7 @@ async fn gated_acceptance_allows_models_and_explicit_switch_but_rejects_old_clie
         base.dispatcher_tx.clone(),
         grants(&base.repo),
     )
-    .with_target_validation(TargetValidation::new(Arc::new(Sessions::default()), true));
+    .with_target_validation(TargetValidation::new(Arc::new(Sessions::default())));
     let mut config = configuration(false);
     config.task = agent_task();
     let error = base
@@ -457,7 +457,7 @@ async fn unavailable_agents_can_be_paused_deleted_and_have_history_read_without_
             base.dispatcher_tx.clone(),
             grants(&base.repo),
         )
-        .with_target_validation(TargetValidation::new(sessions.clone(), true));
+        .with_target_validation(TargetValidation::new(sessions.clone()));
         let mut config = configuration(false);
         config.task = agent_task();
         let created = svc
@@ -516,7 +516,7 @@ async fn preparation_reauthorizes_previously_saved_selection_after_deletion_or_r
             base.dispatcher_tx.clone(),
             grants(&base.repo),
         )
-        .with_target_validation(TargetValidation::new(sessions.clone(), true));
+        .with_target_validation(TargetValidation::new(sessions.clone()));
         let mut config = configuration(false);
         config.task = agent_task();
         let created = svc
@@ -1221,7 +1221,7 @@ async fn resuming_revalidates_the_stored_agent_but_pausing_does_not() {
         base.dispatcher_tx.clone(),
         grants(&base.repo),
     )
-    .with_target_validation(TargetValidation::new(sessions.clone(), true));
+    .with_target_validation(TargetValidation::new(sessions.clone()));
     let mut config = configuration(false);
     config.task = agent_task();
     let created = svc

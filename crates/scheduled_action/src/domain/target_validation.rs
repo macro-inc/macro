@@ -30,32 +30,32 @@ pub struct ModelOnlyTargets;
 
 impl TaskTargetValidator for ModelOnlyTargets {
     async fn validate_task(&self, task: &Value, _owner: &MacroUserIdStr<'static>) -> Result<()> {
-        // Required apps need the session domain to check the owner's connections.
-        if !parse_task(task, false)?.mcp_servers.is_empty() {
+        let task = parse_task(task)?;
+        // Agents and required apps need the session domain to authorize them.
+        if matches!(task.resolve_target()?, ResolvedTaskTarget::Agent { .. })
+            || !task.mcp_servers.is_empty()
+        {
             return Err(TargetValidationError::AgentsDisabled.into());
         }
         Ok(())
     }
 }
 
-/// Authorizes the selection without opening a session or checking runtime connectivity.
+/// Authorizes the selection without opening a session or checking runtime
+/// connectivity, so a self-hosted agent can be saved while its runtime is offline.
 pub struct TargetValidation<Sessions> {
     sessions: Arc<Sessions>,
-    agents_enabled: bool,
 }
 
 impl<Sessions> TargetValidation<Sessions> {
-    pub fn new(sessions: Arc<Sessions>, agents_enabled: bool) -> Self {
-        Self {
-            sessions,
-            agents_enabled,
-        }
+    pub fn new(sessions: Arc<Sessions>) -> Self {
+        Self { sessions }
     }
 }
 
 impl<Sessions: RoutineSessions> TaskTargetValidator for TargetValidation<Sessions> {
     async fn validate_task(&self, task: &Value, owner: &MacroUserIdStr<'static>) -> Result<()> {
-        let task = parse_task(task, self.agents_enabled)?;
+        let task = parse_task(task)?;
         let (bot_id, model) = task.resolve_target()?.session_target();
         self.sessions
             .validate(ValidateRoutineSession {
@@ -69,15 +69,11 @@ impl<Sessions: RoutineSessions> TaskTargetValidator for TargetValidation<Session
     }
 }
 
-fn parse_task(task: &Value, agents_enabled: bool) -> Result<AgentTask, TargetValidationError> {
+fn parse_task(task: &Value) -> Result<AgentTask, TargetValidationError> {
     let task: AgentTask =
         serde_json::from_value(task.clone()).map_err(|_| TargetValidationError::InvalidTask)?;
-    let target = task
-        .resolve_target()
+    task.resolve_target()
         .map_err(|_| TargetValidationError::InvalidTask)?;
-    if matches!(target, ResolvedTaskTarget::Agent { .. }) && !agents_enabled {
-        return Err(TargetValidationError::AgentsDisabled);
-    }
     Ok(task)
 }
 
