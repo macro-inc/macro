@@ -55,8 +55,15 @@ describe('startScreenShare', () => {
     native.list.mockReturnValue(errAsync({ kind: 'unsupported' }));
     const { room, localParticipant } = fakeRoom();
 
-    await expect(startScreenShare(room, span)).resolves.toBe('shared');
-    expect(localParticipant.setScreenShareEnabled).toHaveBeenCalledWith(true);
+    const options = { audio: false };
+
+    await expect(startScreenShare(room, span, options)).resolves.toBe(
+      'shared'
+    );
+    expect(localParticipant.setScreenShareEnabled).toHaveBeenCalledWith(
+      true,
+      options
+    );
     expect(native.pick).not.toHaveBeenCalled();
   });
 
