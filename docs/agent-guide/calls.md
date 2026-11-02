@@ -200,6 +200,9 @@ call without gaining access to the channel.
 
 The join screen, in-call participant tiles, and incoming direct-call badges use
 profile pictures; initials are the fallback when no photo is available.
+In-call participant tiles fill their grid cell but are never wider than 16:9,
+so a wide window centers them instead of cropping cameras; check a single remote
+participant in a wide window and at phone width.
 The join screen has microphone, camera, and background effects buttons over the
 preview, with pill selectors below for microphone, speaker, camera, and
 backgrounds. The background button over the preview toggles the selected effect
@@ -220,9 +223,23 @@ toggles the device (pressed while on), and the caret opens a settings menu above
 the toolbar on click only; hovering opens nothing. **Audio settings** lists
 microphones, speakers (when the browser can choose one), and noise suppression.
 **Video settings** lists cameras and the background effects as tiles: None,
-Light blur, Strong blur, a selected custom image, and Upload. Screen share and
-Leave call are separate buttons. Click outside or press Escape to close a menu.
+Light blur, Strong blur, a selected custom image, and Upload. Screen share is
+the same kind of split button: the left half starts or stops sharing (pressed
+while sharing), and **Screen share settings** holds **Share audio**, off by
+default, saved per device, and locked while sharing. With it on, the browser
+picker offers tab audio (and system audio where Chromium supports it), and other
+participants hear it alongside microphones, even away from the Call tab. Leave
+call is a separate button. Click outside or press Escape to close a menu.
 The controls also work by keyboard and touch.
+
+In the macOS desktop app, Screen share opens Macro's own **Share your screen**
+picker (screens first, the main display preselected, then open windows), since
+its Chromium has no system picker. Share publishes the chosen source; Cancel
+leaves sharing off. Without macOS Screen Recording access the picker says so
+and macOS shows its prompt; the user reopens Macro after allowing it. A refused
+or failed capture shows its reason under the call controls. Browsers
+and older desktop builds keep the browser's own picker. Verify on a Mac by
+sharing a display and a window, stopping, and cancelling the picker.
 
 ### Browser call diagnostics
 
@@ -252,7 +269,10 @@ guest names, and bearer URLs/tokens are not attributes.
 `call.connect` and background `call.media.setup` are children of the join flow.
 `call.media.publish_prejoin`, `enable`, and `toggle` expose publishing/capture
 failures after admission; `enumerate` and `background` cover waiting-room
-device lists and effects. A completed join/setup does not imply every device
+device lists and effects. `call.media.screen_share` records which picker ran
+(`native` or `browser`), Screen Recording access, the source count and kind,
+and whether the user cancelled; failures add the underlying
+`call.media.screen_share.error_type`. A completed join/setup does not imply every device
 worked: inspect its media children. Later toggles and connection-state samples
 are searchable by `call.id`. `call.connection.disconnected` records the SDK's
 numeric reason when available. These spans cover the browser LiveKit path,

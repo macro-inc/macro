@@ -1,4 +1,5 @@
 import type { ListDataSource } from '@app/components/list';
+import { createPositionHolds } from '@app/features/next-soup/position-holds';
 import type { EmailRowReminder } from '@app/features/reminders/core/email-row-reminder';
 import {
   buildFlatSoupRows,
@@ -47,6 +48,8 @@ export type EmailDataSourceItem = SoupRow<WithNotification<EntityData>>;
 
 export type EmailDataSource = ListDataSource<EmailDataSourceItem> & {
   reminderForThread?: (threadId: string) => EmailRowReminder | undefined;
+  /** Keeps rows in place while an action changes their sort. */
+  positions?: { hold: (entityIds: readonly string[]) => void };
 };
 
 export type EmailDataSourceInput = Pick<
@@ -494,11 +497,15 @@ export function useEmailDataSource(
     ];
   };
 
-  const listEntities = createMemo((): WithNotification<EntityData>[] =>
-    entities().map((email) =>
+  // Discarding a draft moves a thread back to its last received message;
+  // the row stays where it was until the list's scope changes.
+  const positions = createPositionHolds({ scope });
+  const listEntities = createMemo((): WithNotification<EntityData>[] => {
+    const rows = entities().map((email) =>
       withEntityNotifications(email, notificationSource)
-    )
-  );
+    );
+    return search.isSearching() ? rows : positions.apply(rows);
+  });
 
   const usesServiceSearch = search.usesServiceSearch;
   const [refreshing, setRefreshing] = createSignal(false);
@@ -542,7 +549,7 @@ export function useEmailDataSource(
     // bucketed by date.
     const result: EmailDataSourceItem[] = search.isSearching()
       ? buildFlatSoupRows(listEntities())
-      : buildEmailDateRows(listEntities());
+      : buildEmailDateRows(listEntities(), new Date(), positions.sortTs);
 
     if (hasMore()) {
       result.push(
@@ -575,6 +582,9 @@ export function useEmailDataSource(
   };
 
   return {
+    positions: {
+      hold: (entityIds) => positions.hold(listEntities(), entityIds),
+    },
     reminderForThread: (threadId) =>
       showsReminders() ? reminders.reminderForThread?.(threadId) : undefined,
     items: () =>

@@ -62,7 +62,9 @@ DMs, and the shared message store other domains discuss things on.
   person (`triggered_by`) shares, as that person, only the linked items the
   sending bot created for them while answering: `created` rows in
   `activity_events` by that bot on the person's behalf since the person's
-  latest message in the thread before the reply (`PgAgentCreations`). The same
+  latest message in the thread before the reply, falling back to their
+  latest message in the channel only when the bot message starts its own
+  thread; a reply never falls back (`PgAgentCreations`). The same
   bound covers classic `@Macro` and agent session turns. Activity lands asynchronously, so misses are
   re-checked after 5 s and 30 s in a spawned task. Creations recorded under
   another bot (`MACRO_AI_BOT_ID` for Claude/Codex/Cursor MCP tools) or the

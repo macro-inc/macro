@@ -40,6 +40,9 @@ pub struct ScheduledDeliveryAdapter {
     pub s3_client: s3_client::S3,
     pub attachment_bucket: String,
     pub macro_event_broker: MacroEventBrokerService<KafkaEventPublisher, TaskTracker>,
+    pub read_receipts: email::domain::read_receipts::ReadReceiptService<
+        email::outbound::read_receipts_pg::ReadReceiptPgRepository,
+    >,
 }
 
 /// Context obtained only by winning an atomic database claim.
@@ -371,10 +374,20 @@ impl ScheduledDeliveryAdapter {
             duration_ms = started.elapsed().as_millis() as u64,
             "approved email attachments prepared"
         );
+        // Only the provider copy carries the pixel; sync brings it back later.
+        let mut outgoing = message.clone();
+        outgoing.body_html = self
+            .read_receipts
+            .tracked_html(
+                claim.link.id,
+                data.message_id,
+                outgoing.body_html.as_deref(),
+            )
+            .await;
         tracing::Span::current().record("phase", "mime_and_credentials");
         let started = Instant::now();
         let request = SendRequest {
-            message: message.clone(),
+            message: outgoing,
             from: sender_contact,
             parent_message_id,
             references,

@@ -1316,6 +1316,23 @@ async fn a_stranger_cannot_start_someone_elses_macrod_agent() {
 }
 
 #[tokio::test]
+async fn an_unknown_managed_persona_is_a_404() {
+    let opener = Arc::new(RecordingOpener::default());
+    let request = as_user(
+        OWNER,
+        serde_json::json!({ "botId": BotId::TEST_B.as_uuid(), "prompt": "fix it" }).to_string(),
+    );
+
+    let response = router_for(opener.clone(), OneBotDirectory::managed_agent())
+        .oneshot(request)
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::NOT_FOUND);
+    assert!(opener.managed.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn a_stranger_cannot_select_someone_elses_managed_persona() {
     let opener = Arc::new(RecordingOpener::default());
     let request = as_user(

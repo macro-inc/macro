@@ -2,6 +2,7 @@ import { useCrmContactMentionSource } from '@app/features/crm/record-adapter';
 import { externalChatApi } from '@app/features/external-chat/queries/production-api';
 import { useRoutineMentionSource } from '@app/features/routines/routine-mentions';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { t } from '@app/lib/i18n';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import type { BlockName } from '@core/block';
 import { useMaybeBlockId, useMaybeBlockName } from '@core/block';
@@ -17,6 +18,7 @@ import {
   type EntityItem,
   useQuickAccess,
 } from '@core/context/quickAccess';
+import { deduplicateContactItems } from '@core/context/quickAccess/crm-contacts';
 import { useUserId } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
@@ -72,9 +74,9 @@ import {
 import { useUsersMention } from './hooks/useUsersMention';
 import type { BucketConfig, MentionBucketId } from './MentionsMenuController';
 import { useMentionsMenuController } from './MentionsMenuController';
+import { rankMentions } from './utils/mention-ranking';
 import { createItemHandler } from './utils/mentionHandlers';
 import { sortMobileMentions } from './utils/mobileSort';
-import { mergePeopleMentions } from './utils/people-mentions';
 
 const TARGET_ITEMS = 8;
 const VIRTUAL_ITEM_HEIGHT = 36;
@@ -170,7 +172,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const legacyBlockId = useMaybeBlockId();
   const blockId = props.sourceDocumentId ?? legacyBlockId;
 
-  const { usersAndGroups, groups, availableUsers } = useUsersMention({
+  const { usersAndGroups, groups } = useUsersMention({
     users: props.users,
     searchTerm,
     isChannelBlock: props.block === 'channel',
@@ -226,10 +228,10 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         searchTerm: activeSearchTerm,
       }))
     : undefined;
-  const companies = () => companyMention?.entities() ?? [];
+  const sourceEnabled = (source: MentionBucketId) =>
+    !props.sources || props.sources.includes(source);
   const contactsEnabled = () =>
-    props.includeContacts ??
-    !(props.sources?.length === 1 && props.sources[0] === 'users');
+    props.includeContacts !== false && sourceEnabled('crm');
   const contactMention = isFeatureEnabled(enableCrm)
     ? props.entities
       ? useEntityMentionFromList({
@@ -239,12 +241,36 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         })
       : useCrmContactMentionSource(
           activeSearchTerm,
-          () =>
-            props.menu.isOpen() &&
-            contactsEnabled() &&
-            (!props.sources || props.sources.includes('users'))
+          () => props.menu.isOpen() && contactsEnabled()
         )
     : undefined;
+
+  const crmItems = createLazyMemo(() =>
+    rankMentions(
+      deduplicateContactItems([
+        ...(companyMention?.entities() ?? []),
+        ...(contactsEnabled() ? (contactMention?.entities() ?? []) : []),
+      ]),
+      searchTerm(),
+      true
+    )
+  );
+  const crmMention = {
+    entities: crmItems,
+    totalCount: () => crmItems().length,
+    hasMore: () =>
+      (companyMention?.hasMore() ?? false) ||
+      (contactsEnabled() && (contactMention?.hasMore() ?? false)),
+    isLoadingMore: () =>
+      (companyMention?.isLoadingMore() ?? false) ||
+      (contactsEnabled() && (contactMention?.isLoadingMore() ?? false)),
+    loadMore: async () => {
+      await Promise.all([
+        companyMention?.loadMore(),
+        contactsEnabled() && contactMention?.loadMore(),
+      ]);
+    },
+  };
 
   const {
     emails,
@@ -376,15 +402,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const [mountSelection, setMountSelection] = createSignal<Selection | null>();
 
   const mentionUsers = () =>
-    mergePeopleMentions(
-      (usersAndGroups() ?? []).filter(
-        (item) => props.includeGroups !== false || item.kind !== 'group'
-      ),
-      contactsEnabled() ? (contactMention?.entities() ?? []) : [],
-      availableUsers()
+    (usersAndGroups() ?? []).filter(
+      (item) => props.includeGroups !== false || item.kind !== 'group'
     );
-  const sourceEnabled = (source: MentionBucketId) =>
-    !props.sources || props.sources.includes(source);
   const mobileAllItems = createLazyMemo((): MentionItem[] => {
     const users = sourceEnabled('users') ? mentionUsers() : [];
     const combined: MentionItem[] = [
@@ -395,7 +415,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       ...externalChats(),
       ...routines(),
       ...(sourceEnabled('agentSessions') ? agentSessions() : []),
-      ...(sourceEnabled('companies') ? (companies() ?? []) : []),
+      ...(sourceEnabled('crm') ? crmMention.entities() : []),
       ...(sourceEnabled('emails') ? (emails() ?? []) : []),
       ...(sourceEnabled('calendarEvents') ? calendarEvents() : []),
       ...(sourceEnabled('dates') ? (dates() ?? []) : []),
@@ -422,38 +442,25 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             (sourceEnabled('channels') ? channelsMention.totalCount() : 0) +
             externalChats().length +
             routines().length +
-            (sourceEnabled('companies')
-              ? (companyMention?.totalCount() ?? 0)
-              : 0) +
+            (sourceEnabled('crm') ? crmMention.totalCount() : 0) +
             (sourceEnabled('emails') ? totalEmailCount() : 0) +
             (sourceEnabled('calendarEvents') ? calendarEvents().length : 0) +
             (sourceEnabled('dates') ? (dates()?.length ?? 0) : 0),
           hasMore: () =>
-            (sourceEnabled('users') &&
-              contactsEnabled() &&
-              (contactMention?.hasMore() ?? false)) ||
             (sourceEnabled('documents') && docsMention.hasMore()) ||
             (sourceEnabled('channels') && channelsMention.hasMore()) ||
-            (sourceEnabled('companies') &&
-              (companyMention?.hasMore() ?? false)) ||
+            (sourceEnabled('crm') && crmMention.hasMore()) ||
             (sourceEnabled('emails') && hasMoreEmails()),
           isLoadingMore: () =>
-            (sourceEnabled('users') &&
-              contactsEnabled() &&
-              (contactMention?.isLoadingMore() ?? false)) ||
             (sourceEnabled('documents') && docsMention.isLoadingMore()) ||
             (sourceEnabled('channels') && channelsMention.isLoadingMore()) ||
-            (sourceEnabled('companies') &&
-              (companyMention?.isLoadingMore() ?? false)) ||
+            (sourceEnabled('crm') && crmMention.isLoadingMore()) ||
             (sourceEnabled('emails') && isLoadingMoreEmails()),
           loadMore: async () => {
             await Promise.all([
-              sourceEnabled('users') &&
-                contactsEnabled() &&
-                contactMention?.loadMore(),
               sourceEnabled('documents') && docsMention.loadMore(),
               sourceEnabled('channels') && channelsMention.loadMore(),
-              sourceEnabled('companies') && companyMention?.loadMore(),
+              sourceEnabled('crm') && crmMention.loadMore(),
               sourceEnabled('emails') && loadMoreEmails(),
             ]);
           },
@@ -476,13 +483,6 @@ function MentionsMenuInner(props: MentionsMenuProps) {
             : 'People',
         getData: mentionUsers,
         getFullCount: () => mentionUsers().length,
-        hasMore: () =>
-          contactsEnabled() && (contactMention?.hasMore() ?? false),
-        isLoadingMore: () =>
-          contactsEnabled() && (contactMention?.isLoadingMore() ?? false),
-        loadMore: async () => {
-          if (contactsEnabled()) await contactMention?.loadMore();
-        },
       },
       {
         id: 'documents',
@@ -521,13 +521,13 @@ function MentionsMenuInner(props: MentionsMenuProps) {
         getFullCount: () => agentSessions().length,
       },
       {
-        id: 'companies',
-        label: 'Companies',
-        getData: () => companies() ?? [],
-        getFullCount: () => companyMention?.totalCount() ?? 0,
-        hasMore: () => companyMention?.hasMore() ?? false,
-        isLoadingMore: () => companyMention?.isLoadingMore() ?? false,
-        loadMore: async () => companyMention?.loadMore(),
+        id: 'crm',
+        label: t('common.contactsAndCompanies'),
+        getData: crmMention.entities,
+        getFullCount: crmMention.totalCount,
+        hasMore: crmMention.hasMore,
+        isLoadingMore: crmMention.isLoadingMore,
+        loadMore: crmMention.loadMore,
       },
       {
         id: 'emails',
@@ -597,7 +597,17 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       })
     : undefined;
 
+  /**
+   * Agents whose runtime is away are listed but not pickable: a mention
+   * inserted here would sit in the message unanswered until the machine comes
+   * back, which reads as the agent ignoring you. The flag rides on the user
+   * entry so this menu needs no view of runtimes.
+   */
+  const isOffline = (item: MentionItem) =>
+    item.kind === 'user' && item.data.offline === true;
+
   const itemAction = async (item: MentionItem) => {
+    if (isOffline(item)) return;
     analytics.track('mentions_menu_use', { itemType: item.kind });
     if (props.onPick) props.onPick(item);
     else await itemActionHandler?.(item);
@@ -653,6 +663,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     },
     onSelect: () => {
       const selectedItem = controller.selectedItem();
+      // Keep the menu open on an offline agent so Enter reads as "not that
+      // one" rather than silently dismissing with nothing inserted.
+      if (selectedItem && isOffline(selectedItem)) return;
       if (selectedItem) {
         itemAction(selectedItem).catch((error) =>
           Telemetry.error(error, {
@@ -855,6 +868,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                             binType={bucket().config.id}
                             totalCount={bucket().config.getFullCount()}
                             showingCount={bucket().bucketItems.length}
+                            isNextPage={bucket().config.hasMore}
                             onViewAll={handleViewAll}
                             isSelected={
                               controller.selectedCategory() ===
@@ -873,6 +887,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                                   itemAction={itemAction}
                                   setIndex={setSelectedIndexFromMouse}
                                   setOpen={setMenuOpen}
+                                  offline={isOffline(item())}
                                 />
                               )}
                             </Key>
@@ -918,6 +933,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 items={controller.combinedItems()}
                 selectedIndex={controller.selectedIndex()}
                 itemAction={itemAction}
+                offline={isOffline}
                 setIndex={setSelectedIndexFromMouse}
                 setOpen={setMenuOpen}
                 maxHeight={contentMaxHeight()}
@@ -944,6 +960,8 @@ function VirtualizedItemList(props: {
   items: MentionItem[];
   selectedIndex: number;
   itemAction: (item: MentionItem) => void;
+  /** Whether an item's agent runtime is away; such rows are not pickable. */
+  offline: (item: MentionItem) => boolean;
   setIndex: (index: number) => void;
   setOpen: (open: boolean) => void;
   maxHeight?: number;
@@ -1018,6 +1036,7 @@ function VirtualizedItemList(props: {
                       itemAction={props.itemAction}
                       setIndex={props.setIndex}
                       setOpen={props.setOpen}
+                      offline={props.offline(currentItem())}
                       disableScrollIntoView
                     />
                   </div>

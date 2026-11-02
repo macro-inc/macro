@@ -1,3 +1,4 @@
+import { AgentOfflineBadge } from '@core/component/AgentOfflineBadge';
 import { EntityIcon } from '@core/component/EntityIcon';
 import { TaskStatusIcon } from '@core/component/TaskStatusIcon';
 import { UserIcon } from '@core/component/UserIcon';
@@ -26,6 +27,8 @@ export function MentionsMenuItem(props: {
   setOpen: (open: boolean) => void;
   /** When true, disables the internal scrollIntoView behavior (used when list is virtualized) */
   disableScrollIntoView?: boolean;
+  /** The agent's runtime is not connected, so mentioning it would go nowhere. */
+  offline?: boolean;
   actions?: JSX.Element;
 }) {
   let itemRef: HTMLDivElement | undefined;
@@ -144,11 +147,15 @@ export function MentionsMenuItem(props: {
         e.stopPropagation();
       }}
       on:click={(e) => {
+        e.stopPropagation();
+        // An offline agent stays visible so its absence is explained, but
+        // picking it would insert a mention nothing will answer.
+        if (props.offline) return;
         props.itemAction(props.item);
         props.setOpen(false);
-        e.stopPropagation();
       }}
       on:mousemove={() => props.setIndex(props.index)}
+      aria-disabled={props.offline ? 'true' : undefined}
       class={cn('group flex items-center p-1.5 mx-1.5 rounded-md', {
         'bg-ink/5': props.selected,
       })}
@@ -156,8 +163,11 @@ export function MentionsMenuItem(props: {
       <div class="mr-2 flex items-center">{icon()}</div>
       <div class="flex min-w-0 grow items-center gap-2">
         <span
-          class="ph-no-capture min-w-0 max-w-full overflow-hidden text-nowrap text-ink text-xs sm:text-sm font-medium"
-          title={name()}
+          class={cn(
+            'ph-no-capture min-w-0 max-w-full overflow-hidden text-nowrap text-xs sm:text-sm font-medium',
+            props.offline ? 'text-ink-muted' : 'text-ink'
+          )}
+          title={props.offline ? `${name()} — offline` : name()}
           style={{ 'text-overflow': 'ellipsis' }}
         >
           {labelParts().name}
@@ -169,6 +179,9 @@ export function MentionsMenuItem(props: {
           <span class="inline-flex shrink-0 items-center rounded-sm bg-hover px-1.5 py-0.5 text-[10px] font-medium leading-none text-ink-muted">
             Agent
           </span>
+        </Show>
+        <Show when={props.offline}>
+          <AgentOfflineBadge />
         </Show>
       </div>
       {props.actions}

@@ -843,7 +843,6 @@ export default {
     goForward: 'Suivant',
     createNewSplit: 'Créer un volet',
     close: 'Fermer',
-    returnToList: 'Retour à la liste',
     previousItem: 'Élément précédent',
     nextItem: 'Élément suivant',
     itemNavigation: 'Navigation entre les éléments',

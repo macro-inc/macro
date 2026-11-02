@@ -27,20 +27,15 @@ import {
   XLSX_MAX_EXPANDED_BYTES,
   XLSX_MAX_SHEETS,
 } from './workbook-file-types';
+import type { CellChartValue, ChartValues } from './xlsx-chart-values';
+import { CHARTEX_CONTENT_TYPE, isChartEx } from './xlsx-chartex';
 import {
   CHECKBOX_BAGS,
   CHECKBOX_CONTENT_TYPE,
   CHECKBOX_PART,
   CHECKBOX_RELATIONSHIP,
 } from './xlsx-checkboxes';
-import {
-  type CellChartValue,
-  type ChartValues,
-  chartPart,
-  drawingPart,
-  imageFile,
-  themePart,
-} from './xlsx-drawings';
+import { chartPart, drawingPart, imageFile, themePart } from './xlsx-drawings';
 import {
   addFunctionPrefixes,
   exportImplicitIntersections,
@@ -268,6 +263,7 @@ export function writeXlsxWorkbook(
   // Drawing parts by number, chart parts, and images written once each.
   let drawingCount = 0;
   let chartCount = 0;
+  let chartExCount = 0;
   const media = new Map<string, string | undefined>();
   const imageExtensions = new Set<string>();
   // Pivot tables, each with its own cache, numbered from 1, the caches that
@@ -530,7 +526,10 @@ export function writeXlsxWorkbook(
           drawings: metadata.drawings,
           image: writeImage,
           chart: (chart) => {
-            const path = `xl/charts/chart${++chartCount}.xml`;
+            // Excel 2016's charts are chartEx parts, numbered on their own.
+            const path = isChartEx(chart)
+              ? `xl/charts/chartEx${++chartExCount}.xml`
+              : `xl/charts/chart${++chartCount}.xml`;
             files[path] = strToU8(chartPart(chart, readValues, pivotExists));
             return path;
           },
@@ -713,6 +712,10 @@ export function writeXlsxWorkbook(
       { length: chartCount },
       (_, index) =>
         `<Override PartName="/xl/charts/chart${index + 1}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`
+    ).join('')}${Array.from(
+      { length: chartExCount },
+      (_, index) =>
+        `<Override PartName="/xl/charts/chartEx${index + 1}.xml" ContentType="${CHARTEX_CONTENT_TYPE}"/>`
     ).join('')}${Array.from(
       { length: pivotCount },
       (_, index) =>

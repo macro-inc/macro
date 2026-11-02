@@ -299,6 +299,7 @@ impl TeamService for FakeTeamService {
         _user_id: &MacroUserIdStr<'_>,
         _team_name: &str,
         _subscription_id: Option<&stripe::SubscriptionId>,
+        _allow_domain_join: bool,
     ) -> Result<Team, CreateTeamError> {
         panic!("unexpected create_team call")
     }

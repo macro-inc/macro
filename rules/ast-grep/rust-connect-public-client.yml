@@ -1,0 +1,17 @@
+id: rust-connect-public-client
+language: rust
+severity: error
+message: Macro reaches Macro Connect only through `connect_client`, as any customer would.
+note: |-
+  Macro Connect (connect/) is a separate product built as if it lived in its
+  own repository. Call its public client crate `connect_client`; if it lacks
+  what you need, add it there. See connect/AGENTS.md#boundary.
+files:
+  - crates/**
+  - services/**
+  - tooling/**
+rule:
+  kind: use_declaration
+  regex: ^(pub(\([^)]*\))? )?use (::)?connect_
+  not:
+    regex: ^(pub(\([^)]*\))? )?use (::)?connect_client\b

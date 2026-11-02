@@ -1299,6 +1299,46 @@ fn agent_excerpt_flattens_whitespace_and_truncates() {
 }
 
 #[test]
+fn agent_session_alerts_show_mentions_by_name() {
+    let settled = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        actor: None,
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some(
+            r#"The most recent one was <m-user-mention>{"userId":"macro|user@example.com","email":"user@example.com"}</m-user-mention>, posted in <m-document-mention>{"documentId":"0195c94f-3b0c-79f0-8558-e5e509ac9dd8","documentName":"the request","blockName":"channel","blockParams":{}}</m-document-mention>; it returns Option<String>."#
+                .to_string(),
+        ),
+    };
+    assert_eq!(
+        settled.format_body(None).unwrap(),
+        "The most recent one was user@example.com, posted in the request; it returns Option<String>."
+    );
+
+    let waiting = AgentSessionWaitingForInputMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        question: r#"Should I ask <m-user-mention>{"userId":"macro|user@example.com","email":"user@example.com"}</m-user-mention>?"#.to_string(),
+    };
+    assert_eq!(
+        waiting.format_body(None).unwrap(),
+        "Should I ask user@example.com?"
+    );
+}
+
+#[test]
+fn agent_session_settled_with_only_hidden_tags_falls_back_to_the_session_name() {
+    let metadata = AgentSessionSettledMetadata {
+        session: agent_session_ref(),
+        turn: 0,
+        actor: None,
+        stop_reason: "end_turn".to_string(),
+        excerpt: Some(r#"<m-await>{"text":"thinking"}</m-await>"#.to_string()),
+    };
+    assert_eq!(metadata.format_body(None).unwrap(), "Fix the flaky test");
+}
+
+#[test]
 fn calendar_email_reminder_escapes_content_and_limits_each_distinct_alarm() {
     use notification::domain::models::NotificationExtEmail;
     let metadata = CalendarEventReminderMetadata {
