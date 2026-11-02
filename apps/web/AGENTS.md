@@ -35,7 +35,7 @@ sheet that must still press its own controls:
 `bunx playwright test --config src/components/app/mobile/browser-test/playwright.config.ts`.
 
 CRM creation has backend-free desktop/phone coverage for name-only companies,
-personal-email contacts and explicit company selection:
+personal-email contacts, contacts added by name alone, and explicit company selection:
 `bunx playwright test --config src/features/crm/browser-test/creation/playwright.config.ts`.
 Nested picker selection must keep its containing drawer open when the option
 unmounts during the tap; drawer dismissal checks the original event path.

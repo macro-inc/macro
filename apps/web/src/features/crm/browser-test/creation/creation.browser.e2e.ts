@@ -45,6 +45,17 @@ for (const company of ['Acme', 'Community group']) {
   });
 }
 
+test('creates a contact by name alone, without a company or email', async ({
+  page,
+}, testInfo) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: 'New contact', exact: true }).click();
+  await page.getByRole('textbox', { name: 'Contact name' }).fill('Jane Doe');
+  await page.screenshot({ path: testInfo.outputPath('name-only-contact.png') });
+  await page.getByRole('button', { name: /^Create Contact/ }).click();
+  await expect(page.getByTestId('created')).toHaveText('{"name":"Jane Doe"}');
+});
+
 test('creates a name-only company while adding a deal', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: 'New deal', exact: true }).click();
