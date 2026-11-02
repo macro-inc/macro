@@ -31,6 +31,14 @@ impl CodingAgentService for Service {
             })
         })
     }
+    fn create(
+        &self,
+        command: DispatchCodingAgentRequest,
+    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
+    {
+        self.dispatch(command)
+    }
+
     fn list(
         &self,
         user_id: MacroUserIdStr<'static>,
