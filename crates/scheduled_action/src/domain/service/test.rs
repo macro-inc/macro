@@ -1,5 +1,6 @@
 mod admission;
 mod owned_purge;
+mod routine_limit;
 mod user_cleanup;
 
 use super::*;
@@ -40,10 +41,36 @@ pub(crate) struct FakeRepo {
     actions: Mutex<Vec<ScheduledAction>>,
 }
 
+/// Refuse like the Postgres repository: other active routines by the same
+/// owner at or over the limit.
+fn check_active_limit(
+    actions: &[ScheduledAction],
+    action: &ScheduledAction,
+    activation: Option<RoutineLimit>,
+) -> Result<()> {
+    let Some(limit) = activation else {
+        return Ok(());
+    };
+    let active = actions
+        .iter()
+        .filter(|other| other.owner == action.owner && other.id != action.id && other.is_active())
+        .count();
+    if active >= limit.max_active() as usize {
+        return Err(ActionPolicyError::RoutineLimitReached(limit).into());
+    }
+    Ok(())
+}
+
 impl ScheduledActionRepo for FakeRepo {
-    async fn create_action(&self, mut action: ScheduledAction) -> Result<ScheduledAction> {
+    async fn create_action(
+        &self,
+        mut action: ScheduledAction,
+        activation: Option<RoutineLimit>,
+    ) -> Result<ScheduledAction> {
+        let mut actions = self.actions.lock().unwrap();
+        check_active_limit(&actions, &action, activation)?;
         action.id = Some(generate_uuid_v7());
-        self.actions.lock().unwrap().push(action.clone());
+        actions.push(action.clone());
         Ok(action)
     }
 
@@ -76,8 +103,13 @@ impl ScheduledActionRepo for FakeRepo {
             .cloned())
     }
 
-    async fn update_action(&self, action: ScheduledAction) -> Result<ScheduledAction> {
+    async fn update_action(
+        &self,
+        action: ScheduledAction,
+        activation: Option<RoutineLimit>,
+    ) -> Result<ScheduledAction> {
         let mut actions = self.actions.lock().unwrap();
+        check_active_limit(&actions, &action, activation)?;
         let stored = actions.iter_mut().find(|a| a.id == action.id).unwrap();
         if stored.configuration_revision.next()? != action.configuration_revision {
             return Err(ActionPolicyError::UpdateConflict.into());

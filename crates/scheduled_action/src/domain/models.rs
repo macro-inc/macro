@@ -16,6 +16,7 @@ use agent_session::domain::model::SessionVisibility;
 
 use super::event_runs::ConfigurationRevision;
 use super::event_trigger::ActionTrigger;
+use super::routine_limit::RoutineLimit;
 
 #[cfg(test)]
 mod test;
@@ -317,6 +318,11 @@ pub enum ActionPolicyError {
     GithubNotLinked,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
+    #[error(
+        "You've reached your plan's limit of {} active routines. Pause or delete a routine to activate another.",
+        .0.max_active()
+    )]
+    RoutineLimitReached(RoutineLimit),
 }
 
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]

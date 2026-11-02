@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::routine_limit::RoutineLimit;
 use agent_session::domain::model::SessionVisibility;
 use agent_session::domain::routines::{
     PreparedRoutineSession, RoutineFailureReason, RoutinePendingReason, RoutinePromptAccepted,
@@ -621,7 +622,11 @@ async fn all_terminal_failures_and_authorization_errors_fail_without_retry() {
 // Event execution never writes to the cron repository: the worker owns finalization.
 struct UnusedRepo;
 impl ScheduledActionRepo for UnusedRepo {
-    async fn create_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
+    async fn create_action(
+        &self,
+        _: ScheduledAction,
+        _: Option<RoutineLimit>,
+    ) -> Result<ScheduledAction> {
         unimplemented!()
     }
     async fn get_owned_actions(&self, _: &MacroUserIdStr<'static>) -> Result<Vec<ScheduledAction>> {
@@ -636,7 +641,11 @@ impl ScheduledActionRepo for UnusedRepo {
     async fn get_next_unclaimed_actions(&self, _: i64) -> Result<Vec<ScheduledAction>> {
         unimplemented!()
     }
-    async fn update_action(&self, _: ScheduledAction) -> Result<ScheduledAction> {
+    async fn update_action(
+        &self,
+        _: ScheduledAction,
+        _: Option<RoutineLimit>,
+    ) -> Result<ScheduledAction> {
         unimplemented!()
     }
     async fn delete_action(&self, _: &Uuid) -> Result<()> {

@@ -5,7 +5,9 @@ use super::models::{
     ActionExecutionRecord, CreateScheduledAction, DispatchEvent, InProgressExecution,
     ScheduledAction, ScheduledActionUpdate, UpdateScheduledAction,
 };
+use super::routine_limit::RoutineLimit;
 use super::templates::{RoutineTemplate, ShareRoutineTemplate, TemplateSnapshot};
+use ai_billing::PlanTier;
 use anyhow::Result;
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{
@@ -28,10 +30,25 @@ pub trait TaskTargetValidator: Send + Sync + 'static {
     ) -> impl Future<Output = Result<()>> + Send;
 }
 
+/// The plan whose [`RoutineLimit`] applies to a routine owner.
+pub trait RoutinePlans: Send + Sync + 'static {
+    /// `owner`'s plan. Enterprise teams count as Max.
+    fn plan(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+    ) -> impl Future<Output = Result<PlanTier>> + Send;
+}
+
 pub trait ScheduledActionRepo: Send + Sync + 'static {
+    /// Insert `action`. `activation` is set when the new routine is active
+    /// ([`ScheduledAction::is_active`]): the insert is then refused with
+    /// `RoutineLimitReached` when its owner already has the limit's number of
+    /// active routines, counted under a per-owner lock so concurrent
+    /// activations can't both take the last slot.
     fn create_action(
         &self,
         action: ScheduledAction,
+        activation: Option<RoutineLimit>,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Account cleanup only: `WHERE owner = $1`. Never the HTTP list.
@@ -62,10 +79,12 @@ pub trait ScheduledActionRepo: Send + Sync + 'static {
     /// predecessor, plus the claim fence. No owner predicate. While claimed,
     /// only disabling with otherwise identical configuration is allowed.
     /// `UpdateConflict` on a stale revision or a concurrent claim; never
-    /// overwrite execution state.
+    /// overwrite execution state. `activation` is set when the update makes
+    /// an inactive routine active, and is checked as in `create_action`.
     fn update_action(
         &self,
         action: ScheduledAction,
+        activation: Option<RoutineLimit>,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Deletes the action row, its `entity_access` rows (`entity_type =

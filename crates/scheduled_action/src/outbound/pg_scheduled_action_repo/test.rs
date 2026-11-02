@@ -1,3 +1,4 @@
+mod routine_limit;
 mod user_cleanup;
 
 use chrono::Utc;
@@ -146,7 +147,7 @@ async fn create_action_returns_id_and_is_listable_by_owner(pool: PgPool) {
     let repo = test_repo(pool);
 
     let created = repo
-        .create_action(sample_action(user_owner(USER_A), "standup"))
+        .create_action(sample_action(user_owner(USER_A), "standup"), None)
         .await
         .expect("create should succeed");
     assert_eq!(created.id.unwrap().get_version_num(), 7);
@@ -168,7 +169,7 @@ async fn get_owned_actions_excludes_other_principals(pool: PgPool) {
     insert_user(&pool, USER_B).await;
     let repo = test_repo(pool);
 
-    repo.create_action(sample_action(user_owner(USER_A), "standup"))
+    repo.create_action(sample_action(user_owner(USER_A), "standup"), None)
         .await
         .expect("create should succeed");
 
@@ -191,7 +192,7 @@ async fn update_action_changes_name_schedule_and_enabled(pool: PgPool) {
     let repo = test_repo(pool);
 
     let created = repo
-        .create_action(sample_action(user_owner(USER_A), "standup"))
+        .create_action(sample_action(user_owner(USER_A), "standup"), None)
         .await
         .expect("create should succeed");
 
@@ -200,17 +201,20 @@ async fn update_action_changes_name_schedule_and_enabled(pool: PgPool) {
         .next_run_after_now(chrono_tz::UTC)
         .expect("schedule has a future firing");
     let updated = repo
-        .update_action(ScheduledAction {
-            configuration_revision: created.configuration_revision.next().unwrap(),
-            name: "evening standup".to_string(),
-            trigger: ActionTrigger::Cron {
-                schedule,
-                timezone: chrono_tz::UTC,
+        .update_action(
+            ScheduledAction {
+                configuration_revision: created.configuration_revision.next().unwrap(),
+                name: "evening standup".to_string(),
+                trigger: ActionTrigger::Cron {
+                    schedule,
+                    timezone: chrono_tz::UTC,
+                },
+                enabled: false,
+                next_run_at: Some(next_run_at),
+                ..created
             },
-            enabled: false,
-            next_run_at: Some(next_run_at),
-            ..created
-        })
+            None,
+        )
         .await
         .expect("update should succeed");
 
@@ -226,7 +230,7 @@ async fn update_action_changes_name_schedule_and_enabled(pool: PgPool) {
 async fn replacement_is_fenced_against_claims_and_stale_revisions(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool);
-    let action = repo.create_action(event_action()).await.unwrap();
+    let action = repo.create_action(event_action(), None).await.unwrap();
     let id = action.id.unwrap();
     let mut replacement = action.clone();
     replacement.configuration_revision = action.configuration_revision.next().unwrap();
@@ -237,24 +241,30 @@ async fn replacement_is_fenced_against_claims_and_stale_revisions(pool: PgPool) 
         .claim_action(&id, action.configuration_revision, action.next_run_at)
         .await
         .unwrap();
-    let error = repo.update_action(replacement.clone()).await.unwrap_err();
+    let error = repo
+        .update_action(replacement.clone(), None)
+        .await
+        .unwrap_err();
     assert!(matches!(
         error.downcast_ref(),
         Some(ActionPolicyError::UpdateConflict)
     ));
     let disabled = repo
-        .update_action(ScheduledAction {
-            enabled: false,
-            configuration_revision: replacement.configuration_revision,
-            ..action
-        })
+        .update_action(
+            ScheduledAction {
+                enabled: false,
+                configuration_revision: replacement.configuration_revision,
+                ..action
+            },
+            None,
+        )
         .await
         .unwrap();
     assert!(disabled.claimed.is_some());
     repo.release_action(&id, token).await.unwrap();
 
     // The earlier replacement is stale even after execution has finished.
-    let error = repo.update_action(replacement).await.unwrap_err();
+    let error = repo.update_action(replacement, None).await.unwrap_err();
     assert!(matches!(
         error.downcast_ref(),
         Some(ActionPolicyError::UpdateConflict)
@@ -273,7 +283,7 @@ async fn second_claim_returns_already_running(pool: PgPool) {
     let repo = test_repo(pool);
 
     let created = repo
-        .create_action(sample_action(user_owner(USER_A), "standup"))
+        .create_action(sample_action(user_owner(USER_A), "standup"), None)
         .await
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
@@ -293,16 +303,19 @@ async fn claims_from_snapshots_older_than_a_pause_or_update_fail(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool);
     let polled = repo
-        .create_action(sample_action(user_owner(USER_A), "standup"))
+        .create_action(sample_action(user_owner(USER_A), "standup"), None)
         .await
         .unwrap();
     let id = polled.id.unwrap();
     let paused = repo
-        .update_action(ScheduledAction {
-            enabled: false,
-            configuration_revision: polled.configuration_revision.next().unwrap(),
-            ..polled.clone()
-        })
+        .update_action(
+            ScheduledAction {
+                enabled: false,
+                configuration_revision: polled.configuration_revision.next().unwrap(),
+                ..polled.clone()
+            },
+            None,
+        )
         .await
         .unwrap();
     let error = repo
@@ -317,12 +330,15 @@ async fn claims_from_snapshots_older_than_a_pause_or_update_fail(pool: PgPool) {
     repo.release_action(&id, manual).await.unwrap();
 
     let renamed = repo
-        .update_action(ScheduledAction {
-            name: "renamed".into(),
-            enabled: true,
-            configuration_revision: paused.configuration_revision.next().unwrap(),
-            ..paused.clone()
-        })
+        .update_action(
+            ScheduledAction {
+                name: "renamed".into(),
+                enabled: true,
+                configuration_revision: paused.configuration_revision.next().unwrap(),
+                ..paused.clone()
+            },
+            None,
+        )
         .await
         .unwrap();
     assert!(
@@ -340,7 +356,7 @@ async fn release_is_fenced_to_its_own_execution(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool);
     let action = repo
-        .create_action(sample_action(user_owner(USER_A), "fenced"))
+        .create_action(sample_action(user_owner(USER_A), "fenced"), None)
         .await
         .unwrap();
     let id = action.id.unwrap();
@@ -383,7 +399,7 @@ async fn delete_action_removes_row_from_owner_list(pool: PgPool) {
     let repo = test_repo(pool.clone());
 
     let created = repo
-        .create_action(sample_action(user_owner(USER_A), "standup"))
+        .create_action(sample_action(user_owner(USER_A), "standup"), None)
         .await
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
@@ -405,7 +421,7 @@ async fn create_action_registers_entity_row(pool: PgPool) {
     let repo = test_repo(pool.clone());
 
     let created = repo
-        .create_action(sample_action(user_owner(USER_A), "standup"))
+        .create_action(sample_action(user_owner(USER_A), "standup"), None)
         .await
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
@@ -441,7 +457,7 @@ async fn delete_action_removes_entity_row(pool: PgPool) {
     let repo = test_repo(pool.clone());
 
     let created = repo
-        .create_action(sample_action(user_owner(USER_A), "standup"))
+        .create_action(sample_action(user_owner(USER_A), "standup"), None)
         .await
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
@@ -464,7 +480,7 @@ async fn delete_action_succeeds_when_entity_row_is_missing(pool: PgPool) {
     let repo = test_repo(pool.clone());
 
     let created = repo
-        .create_action(sample_action(user_owner(USER_A), "standup"))
+        .create_action(sample_action(user_owner(USER_A), "standup"), None)
         .await
         .expect("create should succeed");
     let id = created.id.expect("create returns Some(id)");
@@ -499,7 +515,7 @@ fn event_action() -> ScheduledAction {
 async fn event_round_trip_and_bookkeeping_does_not_advance_configuration(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool);
-    let created = repo.create_action(event_action()).await.unwrap();
+    let created = repo.create_action(event_action(), None).await.unwrap();
     let id = created.id.unwrap();
     assert_eq!(id.get_version_num(), 7);
     let before = repo.get_action(&id).await.unwrap().unwrap();
@@ -533,14 +549,17 @@ async fn event_round_trip_and_bookkeeping_does_not_advance_configuration(pool: P
     ])
     .unwrap();
     let updated = repo
-        .update_action(ScheduledAction {
-            trigger: ActionTrigger::Events {
-                filters: filters.clone(),
+        .update_action(
+            ScheduledAction {
+                trigger: ActionTrigger::Events {
+                    filters: filters.clone(),
+                },
+                enabled: false,
+                configuration_revision: after.configuration_revision.next().unwrap(),
+                ..after
             },
-            enabled: false,
-            configuration_revision: after.configuration_revision.next().unwrap(),
-            ..after
-        })
+            None,
+        )
         .await
         .unwrap();
     let ActionTrigger::Events {
@@ -561,29 +580,35 @@ async fn lookup_update_and_delete_are_id_scoped(pool: PgPool) {
     insert_user(&pool, USER_B).await;
     let repo = test_repo(pool.clone());
     for action in [sample_action(user_owner(USER_A), "cron"), event_action()] {
-        let created = repo.create_action(action).await.unwrap();
+        let created = repo.create_action(action, None).await.unwrap();
         let id = created.id.unwrap();
         let loaded = repo.get_action(&id).await.unwrap().unwrap();
         assert_eq!(loaded.owner, user_owner(USER_A));
 
         let updated = repo
-            .update_action(ScheduledAction {
-                owner: user_owner(USER_B),
-                name: "renamed".into(),
-                configuration_revision: loaded.configuration_revision.next().unwrap(),
-                ..loaded
-            })
+            .update_action(
+                ScheduledAction {
+                    owner: user_owner(USER_B),
+                    name: "renamed".into(),
+                    configuration_revision: loaded.configuration_revision.next().unwrap(),
+                    ..loaded
+                },
+                None,
+            )
             .await
             .unwrap();
         assert_eq!(updated.owner, user_owner(USER_A));
         assert_eq!(updated.name, "renamed");
 
         let stale = repo
-            .update_action(ScheduledAction {
-                name: "stale".into(),
-                configuration_revision: loaded.configuration_revision.next().unwrap(),
-                ..updated.clone()
-            })
+            .update_action(
+                ScheduledAction {
+                    name: "stale".into(),
+                    configuration_revision: loaded.configuration_revision.next().unwrap(),
+                    ..updated.clone()
+                },
+                None,
+            )
             .await
             .unwrap_err();
         assert!(matches!(
@@ -614,18 +639,21 @@ async fn trigger_transitions_replace_all_trigger_columns(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool);
     let cron = repo
-        .create_action(sample_action(user_owner(USER_A), "cron"))
+        .create_action(sample_action(user_owner(USER_A), "cron"), None)
         .await
         .unwrap();
     let events = event_action();
     let event = repo
-        .update_action(ScheduledAction {
-            trigger: events.trigger,
-            next_run_at: None,
-            event_activated_at: events.event_activated_at,
-            configuration_revision: cron.configuration_revision.next().unwrap(),
-            ..cron
-        })
+        .update_action(
+            ScheduledAction {
+                trigger: events.trigger,
+                next_run_at: None,
+                event_activated_at: events.event_activated_at,
+                configuration_revision: cron.configuration_revision.next().unwrap(),
+                ..cron
+            },
+            None,
+        )
         .await
         .unwrap();
     assert!(matches!(event.trigger, ActionTrigger::Events { .. }));
@@ -638,13 +666,16 @@ async fn trigger_transitions_replace_all_trigger_columns(pool: PgPool) {
     );
     let cron_config = sample_action(user_owner(USER_A), "cron again");
     let cron = repo
-        .update_action(ScheduledAction {
-            trigger: cron_config.trigger,
-            next_run_at: cron_config.next_run_at,
-            event_activated_at: None,
-            configuration_revision: event.configuration_revision.next().unwrap(),
-            ..event
-        })
+        .update_action(
+            ScheduledAction {
+                trigger: cron_config.trigger,
+                next_run_at: cron_config.next_run_at,
+                event_activated_at: None,
+                configuration_revision: event.configuration_revision.next().unwrap(),
+                ..event
+            },
+            None,
+        )
         .await
         .unwrap();
     assert!(matches!(cron.trigger, ActionTrigger::Cron { .. }));
@@ -658,14 +689,14 @@ async fn trigger_transitions_replace_all_trigger_columns(pool: PgPool) {
 async fn polling_returns_only_enabled_unclaimed_cron_rows(pool: PgPool) {
     insert_user(&pool, USER_A).await;
     let repo = test_repo(pool);
-    repo.create_action(event_action()).await.unwrap();
+    repo.create_action(event_action(), None).await.unwrap();
     let disabled = ScheduledAction {
         enabled: false,
         ..sample_action(user_owner(USER_A), "disabled")
     };
-    repo.create_action(disabled).await.unwrap();
+    repo.create_action(disabled, None).await.unwrap();
     let claimed = repo
-        .create_action(sample_action(user_owner(USER_A), "claimed"))
+        .create_action(sample_action(user_owner(USER_A), "claimed"), None)
         .await
         .unwrap();
     repo.claim_action(
@@ -676,7 +707,7 @@ async fn polling_returns_only_enabled_unclaimed_cron_rows(pool: PgPool) {
     .await
     .unwrap();
     let cron = repo
-        .create_action(sample_action(user_owner(USER_A), "cron"))
+        .create_action(sample_action(user_owner(USER_A), "cron"), None)
         .await
         .unwrap();
     let candidates = repo.get_next_unclaimed_actions(1).await.unwrap();
@@ -908,7 +939,7 @@ async fn exhausted_one_off_clears_firing_and_is_not_dispatched_again(pool: PgPoo
         timezone: chrono_tz::UTC,
     };
     action.next_run_at = Some(Utc::now() - chrono::Duration::hours(1));
-    let created = repo.create_action(action).await.unwrap();
+    let created = repo.create_action(action, None).await.unwrap();
     let id = created.id.unwrap();
     let token = repo
         .claim_action(&id, created.configuration_revision, created.next_run_at)
@@ -952,13 +983,13 @@ async fn multiple_triggers_survive_grant_listing_and_configuration_updates(pool:
     }))
     .unwrap();
     action.event_activated_at = Some(Utc::now());
-    let mut created = repo.create_action(action).await.unwrap();
+    let mut created = repo.create_action(action, None).await.unwrap();
     let id = created.id.unwrap();
     let listed = repo.get_actions_by_ids(&[id]).await.unwrap();
     assert_eq!(listed[0].trigger, created.trigger);
     created.name = "renamed mixed triggers".into();
     created.configuration_revision = created.configuration_revision.next().unwrap();
-    let updated = repo.update_action(created).await.unwrap();
+    let updated = repo.update_action(created, None).await.unwrap();
     assert_eq!(updated.trigger, listed[0].trigger);
     assert_eq!(updated.name, "renamed mixed triggers");
 }
@@ -969,11 +1000,11 @@ async fn get_actions_by_ids_returns_another_owners_row(pool: PgPool) {
     insert_user(&pool, USER_B).await;
     let repo = test_repo(pool);
     let own = repo
-        .create_action(sample_action(user_owner(USER_A), "own"))
+        .create_action(sample_action(user_owner(USER_A), "own"), None)
         .await
         .unwrap();
     let other = repo
-        .create_action(sample_action(user_owner(USER_B), "other"))
+        .create_action(sample_action(user_owner(USER_B), "other"), None)
         .await
         .unwrap();
 
@@ -997,10 +1028,10 @@ async fn bot_owner_create_writes_bot_and_sponsor_grants(pool: PgPool) {
         OwnedEntityRegistrar::new(OwnerGrantPolicy::new(SponsoredBy(sponsor))),
     );
     let created = repo
-        .create_action(sample_action(
-            Owner::Bot(bot_id::BotId::TEST_A),
-            "bot routine",
-        ))
+        .create_action(
+            sample_action(Owner::Bot(bot_id::BotId::TEST_A), "bot routine"),
+            None,
+        )
         .await
         .unwrap();
     let bot_source = bot_id::BotId::TEST_A.into_storage_id().to_string();

@@ -134,6 +134,16 @@
               }
             }
           },
+          "402": {
+            "description": "The owner's plan allows no more active routines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineLimitErrorBody"
+                }
+              }
+            }
+          },
           "403": {
             "description": "",
             "content": {
@@ -266,6 +276,16 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "The owner's plan allows no more active routines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineLimitErrorBody"
                 }
               }
             }
@@ -405,6 +425,16 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "The owner's plan allows no more active routines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineLimitErrorBody"
                 }
               }
             }
@@ -841,6 +871,16 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          },
+          "402": {
+            "description": "The activator's plan allows no more active routines",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/RoutineLimitErrorBody"
                 }
               }
             }
@@ -1439,6 +1479,40 @@
           }
         ],
         "description": "A JSON text, number, boolean or null that payload values are compared with."
+      },
+      "PlanTier": {
+        "type": "string",
+        "description": "The plans a user can be on, cheapest first.",
+        "enum": ["free", "premium", "max"]
+      },
+      "RoutineLimitCode": {
+        "type": "string",
+        "description": "Stable code clients match on, distinct from AI allowance codes.",
+        "enum": ["routine_limit_reached"]
+      },
+      "RoutineLimitErrorBody": {
+        "type": "object",
+        "description": "A write that would activate more routines than the owner's plan allows.",
+        "required": ["error", "code", "limit", "plan"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/RoutineLimitCode"
+          },
+          "error": {
+            "type": "string",
+            "description": "Human-readable explanation."
+          },
+          "limit": {
+            "type": "integer",
+            "format": "int32",
+            "description": "How many routines the plan allows to be active at once.",
+            "minimum": 0
+          },
+          "plan": {
+            "$ref": "#/components/schemas/PlanTier",
+            "description": "The plan the limit comes from."
+          }
+        }
       },
       "RoutineModelId": {
         "type": "string",

@@ -17,7 +17,9 @@ use macro_uuid::Uuid;
 use crate::domain::models::CreateScheduledAction;
 use crate::domain::ports::RoutineTemplateService;
 use crate::domain::templates::{RoutineTemplate, ShareRoutineTemplate};
-use crate::inbound::axum_router::{ScheduledActionApiError, ScheduledActionResponse};
+use crate::inbound::axum_router::{
+    RoutineLimitErrorBody, ScheduledActionApiError, ScheduledActionResponse,
+};
 
 pub struct RoutineTemplateRouterState<T, Svc, Auth> {
     pub service: Arc<T>,
@@ -188,6 +190,7 @@ where
     responses(
         (status = 201, body = ScheduledActionResponse),
         (status = 400, body = String),
+        (status = 402, body = RoutineLimitErrorBody, description = "The activator's plan allows no more active routines"),
         (status = 401, body = String),
         (status = 403, body = String),
         (status = 404, body = String, description = "The routine is not shared"),
