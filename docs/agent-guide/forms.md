@@ -202,9 +202,12 @@ is disabled.
 
 In a message or document, a form card fills in place; a poll card shows one
 bar per option, your vote marked, and "N votes · one vote each". Click an
-option to vote; click another to change it. **Responses** opens the Responses
-tab for editors and, when responses are shared, for everyone who can vote;
-other respondents get **Results**, the counts as a table in the card. In a draft, the card menu's **Convert to Inline Mention** minimizes it;
+option to vote; click another to change it. Editors, and everyone who can vote
+when responses are shared, get **Results**: each option with the people who
+chose it (avatar and name, yours marked "(you)") and a **Responses table** link
+to the Responses tab. An anonymous poll never names voters, so its editors (and
+its voters, when shared) get **Responses** instead; other respondents get
+neither, since the bars already show the counts. In a draft, the card menu's **Convert to Inline Mention** minimizes it;
 in a sent message, **Collapse / Expand** hides the body for you only. Arrow
 keys move between poll options; Space or Enter votes. Polls can also be voted
 on directly in mobile channels. In New poll, Add option focuses the new
