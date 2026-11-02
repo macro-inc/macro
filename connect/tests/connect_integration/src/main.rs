@@ -1,5 +1,8 @@
 //! Run opt-in checks against a live Connect API.
 
+#[cfg(test)]
+mod test;
+
 use std::{collections::BTreeSet, process::ExitCode, time::Duration};
 
 use clap::Parser;
@@ -19,11 +22,17 @@ struct Args {
     #[arg(long)]
     base_url: Url,
     #[arg(long)]
+    public_url: Option<Url>,
+    #[arg(long)]
     customer_key: String,
     #[arg(long)]
     redirect_origin: Url,
     #[arg(long)]
     follow_vendor: bool,
+    #[arg(long)]
+    acceptance: bool,
+    #[arg(long, requires = "acceptance")]
+    dcr_only: bool,
 }
 
 type Check = Result<(), String>;
@@ -52,20 +61,25 @@ async fn main() -> ExitCode {
     let args = Args::parse();
     let customer_key = Zeroizing::new(args.customer_key);
     let base = args.base_url;
+    let public_url = args.public_url.unwrap_or_else(|| base.clone());
     let redirect_origin = args.redirect_origin;
     if !matches!(base.scheme(), "http" | "https")
         || base.path() != "/"
         || base.query().is_some()
         || base.fragment().is_some()
+        || !matches!(public_url.scheme(), "http" | "https")
+        || public_url.path() != "/"
+        || public_url.query().is_some()
+        || public_url.fragment().is_some()
         || !matches!(redirect_origin.scheme(), "http" | "https")
         || redirect_origin.path() != "/"
         || redirect_origin.query().is_some()
         || redirect_origin.fragment().is_some()
     {
-        eprintln!("base URL and redirect origin must be HTTP(S) origins");
+        eprintln!("base URL, public URL, and redirect origin must be HTTP(S) origins");
         return ExitCode::FAILURE;
     }
-    if args.follow_vendor && base.scheme() != "https" {
+    if args.follow_vendor && !args.acceptance && base.scheme() != "https" {
         eprintln!("--follow-vendor requires a public HTTPS base URL");
         return ExitCode::FAILURE;
     }
@@ -118,6 +132,23 @@ async fn main() -> ExitCode {
         .iter()
         .filter(|app| app.status == Status::Live)
         .collect();
+    if args.acceptance {
+        let selected: Vec<_> = live
+            .iter()
+            .copied()
+            .filter(|app| !args.dcr_only || app.client_registration == ClientRegistration::Dcr)
+            .collect();
+        return run_acceptance(
+            &client,
+            &http,
+            &base,
+            &public_url,
+            &user_id,
+            &redirect_url,
+            &selected,
+        )
+        .await;
+    }
     record(
         &mut failures,
         "catalog",
@@ -371,7 +402,9 @@ async fn main() -> ExitCode {
         .await,
     );
 
-    for app in &live {
+    for app in live.iter().filter(|app| {
+        base.scheme() == "https" || app.client_registration == ClientRegistration::Cimd
+    }) {
         let name = format!("authorize_{}", app.id);
         record(
             &mut failures,
@@ -446,11 +479,9 @@ async fn main() -> ExitCode {
                             return Err("CIMD client_id does not match Connect metadata URL".into());
                         }
                     }
-                    _ => {
-                        return Err(
-                            "client_id assertion requires an expected ID for this registration"
-                                .into(),
-                        );
+                    ClientRegistration::Dcr | ClientRegistration::OwnApp => {}
+                    ClientRegistration::ApiKey => {
+                        return Err("API-key app has no OAuth client".into());
                     }
                 }
                 if args.follow_vendor {
@@ -518,4 +549,172 @@ async fn main() -> ExitCode {
     } else {
         ExitCode::FAILURE
     }
+}
+
+async fn run_acceptance(
+    client: &ConnectClient,
+    http: &Client,
+    base: &Url,
+    public_url: &Url,
+    user_id: &str,
+    redirect_url: &str,
+    apps: &[&connect_registry::App],
+) -> ExitCode {
+    let mut failures = 0;
+    let mut rows = Vec::with_capacity(apps.len());
+    for app in apps {
+        let result = async {
+            let session = client
+                .create_connect_session(user_id, app.id.as_str(), redirect_url)
+                .await
+                .map_err(|error| format!("connect session: {error}"))?;
+            let connect_url =
+                Url::parse(&session.connect_url).map_err(|error| error.to_string())?;
+            if connect_url.origin() != public_url.origin()
+                || !connect_url.path().starts_with("/v1/connect/")
+            {
+                return Err("connect session returned an unexpected URL".to_owned());
+            }
+            let local_connect_url = base
+                .join(connect_url.path())
+                .map_err(|error| error.to_string())?;
+            let connect_response = http
+                .get(local_connect_url)
+                .send()
+                .await
+                .map_err(|error| error.to_string())?;
+            if connect_response.status() != StatusCode::SEE_OTHER {
+                let status = connect_response.status();
+                let body = response_body(connect_response).await?;
+                return Err(format!(
+                    "Connect returned {status}: {}",
+                    response_excerpt(&body)
+                ));
+            }
+            let location = connect_response
+                .headers()
+                .get(header::LOCATION)
+                .ok_or("Connect response has no Location")?
+                .to_str()
+                .map_err(|error| error.to_string())?;
+            let authorization = Url::parse(location).map_err(|error| error.to_string())?;
+            if query_value(&authorization, "error").is_some() {
+                return Err("vendor authorization URL contains OAuth error".to_owned());
+            }
+            let mut next = authorization;
+            for _ in 0..5 {
+                let vendor_response = http
+                    .get(next)
+                    .send()
+                    .await
+                    .map_err(|error| error.to_string())?;
+                let status = vendor_response.status();
+                if status.is_redirection() {
+                    let location = vendor_response
+                        .headers()
+                        .get(header::LOCATION)
+                        .ok_or("vendor redirect has no Location")?
+                        .to_str()
+                        .map_err(|error| error.to_string())?;
+                    let target = vendor_response
+                        .url()
+                        .join(location)
+                        .map_err(|error| error.to_string())?;
+                    if query_value(&target, "error").is_some() {
+                        return Err(format!(
+                            "vendor redirected with OAuth error to {}",
+                            target.path()
+                        ));
+                    }
+                    if is_login_redirect(&target) {
+                        return Ok(format!(
+                            "{status} login redirect to {}",
+                            target.host_str().unwrap_or_default()
+                        ));
+                    }
+                    next = target;
+                    continue;
+                }
+                let is_html = vendor_response
+                    .headers()
+                    .get(header::CONTENT_TYPE)
+                    .is_some_and(|value| {
+                        value
+                            .to_str()
+                            .is_ok_and(|value| value.starts_with("text/html"))
+                    });
+                let body = response_body(vendor_response).await?;
+                if !status.is_success() || oauth_error_in_body(&body) {
+                    return Err(format!(
+                        "vendor returned {status}: {}",
+                        response_excerpt(&body)
+                    ));
+                }
+                if !is_html {
+                    return Err(format!(
+                        "vendor returned {status} without an HTML sign-in page: {}",
+                        response_excerpt(&body)
+                    ));
+                }
+                return Ok(format!("{status} sign-in or consent page"));
+            }
+            Err("vendor redirected more than five times without a sign-in page".to_owned())
+        }
+        .await;
+        match result {
+            Ok(note) => rows.push((app.id.as_str(), "PASS", note)),
+            Err(note) => {
+                failures += 1;
+                rows.push((app.id.as_str(), "FAIL", note));
+            }
+        }
+    }
+    println!("app | result | response");
+    println!("--- | --- | ---");
+    for (app, result, note) in rows {
+        println!("{app} | {result} | {}", note.replace('|', "\\|"));
+    }
+    if failures == 0 {
+        ExitCode::SUCCESS
+    } else {
+        ExitCode::FAILURE
+    }
+}
+
+fn is_login_redirect(target: &Url) -> bool {
+    let path = target.path().to_ascii_lowercase();
+    if ["error", "invalid", "denied"]
+        .iter()
+        .any(|part| path.contains(part))
+    {
+        return false;
+    }
+    [
+        "login",
+        "signin",
+        "sign-in",
+        "sign_in",
+        "consent",
+        "chooselocation",
+    ]
+    .iter()
+    .any(|part| path.contains(part))
+}
+
+fn oauth_error_in_body(body: &str) -> bool {
+    let lower = body.to_ascii_lowercase();
+    lower.contains("invalid_client") || lower.contains("invalid_redirect_uri")
+}
+
+async fn response_body(response: reqwest::Response) -> Result<String, String> {
+    response.text().await.map_err(|error| error.to_string())
+}
+
+fn response_excerpt(body: &str) -> String {
+    body.split_whitespace()
+        .collect::<Vec<_>>()
+        .join(" ")
+        .chars()
+        .take(240)
+        .collect()
 }
