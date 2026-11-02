@@ -1,4 +1,4 @@
 #![deny(missing_docs)]
-//! Composition for fenced Slack archive persistence and one best-effort colleague join email.
+//! Composition for fenced Slack archive persistence.
 
 pub mod composition;

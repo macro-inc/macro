@@ -771,11 +771,37 @@ for (const mobile of [false, true]) {
       const crit = state.chats.find((chat) => chat.added?.id === CHAT_ID);
       if (!crit?.added) throw new Error('missing the added group');
       crit.added.backfill = { state: 'waiting_for_phone', imported: 0 };
+      state.backfill = { state: 'waiting_for_phone', imported: 0 };
       const unexpected = await mount(page, state);
 
       const prompt = page.getByRole('status', {
         name: 'Import WhatsApp history',
       });
+      if (mobile) {
+        // On phones the prompt region covers the composer, so there is none;
+        // the chat itself offers Import above its earliest message.
+        await expect(page.getByText('Launch War Room')).toBeVisible();
+        await expect(prompt).toHaveCount(0);
+        await page.goto(
+          `${test.info().project.use.baseURL}/tests/functional/whatsapp-linked/index.html?chat=${CHAT_ID}`
+        );
+        const importHere = page.getByRole('button', {
+          name: 'Import earlier messages',
+        });
+        await expect(importHere).toBeVisible();
+        await page.screenshot({
+          path: process.env.WHATSAPP_SCREENSHOT_DIR
+            ? join(
+                process.env.WHATSAPP_SCREENSHOT_DIR,
+                'whatsapp-history-import-chat-mobile.png'
+              )
+            : test.info().outputPath('whatsapp-history-import-chat.png'),
+        });
+        await importHere.click();
+        await expect.poll(() => state.historyImports).toBe(1);
+        expect(unexpected).toEqual([]);
+        return;
+      }
       await expect(prompt).toBeVisible();
       await expect(
         prompt.getByText(
@@ -1433,9 +1459,7 @@ test('history imported after adding shows up older, with the import state', asyn
   state.backfill = { state: 'waiting_for_phone', imported: 0 };
   const unexpected = await mount(page, state, `?chat=${CHAT_ID}`);
   await expect(
-    page.getByText(
-      'WhatsApp · Earlier messages not imported. Open WhatsApp on your phone, then import them.'
-    )
+    page.getByRole('button', { name: 'Import earlier messages' })
   ).toBeVisible();
   // The phone answers; the next read (push or fallback re-fetch) shows it.
   state.backfill = { state: 'done', imported: 1 };

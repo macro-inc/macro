@@ -392,6 +392,12 @@ after the first three (five participants shows **+2**).
 Drag the handle, tap the backdrop, or press Escape to dismiss without starting a
 call. Only confirming notifies participants; joining a live call skips the sheet.
 Check both DMs and channels, including long names, in light and dark themes.
+On phones, a collapsed composer with attachments shows a thumbnail of the
+first one between `+` and the draft, with the number of attachments over it
+when there are two or more; a document shows its file icon. It shows with or
+without draft text, and tapping it opens the composer with the attachments
+below the editor. Check one image, several mixed attachments, and a document
+alone, with and without text, in light and dark themes.
 Input action and formatting buttons show the app tooltip without a second
 native browser tooltip.
 On desktop, select draft text to open the floating formatting toolbar. Its
@@ -604,11 +610,14 @@ Coding agents use `macro_internal.set_pull_request` to register an existing or
 new GitHub PR with their session. Macro Internal MCP is hosted by the harness
 service at `/mcp/internal` on its egress listener, separately from workspace MCP.
 Cursor, sandbox, and macrod sessions receive session-scoped credentials; the
-model supplies only the URL. The tool records the link, not the GitHub PR itself.
+model supplies only the URL. The tool records the link, not the GitHub PR itself,
+and returns the session's `/app/agent/<id>` URL.
 Macro Internal MCP's server instructions ask coding agents to register PRs with
-it, to open them ready for review rather than as drafts, and to get CI passing
-before handing off. External MCP clients get the ready-for-review rule in
-Macro's MCP instructions, and in-app agents tell coding agents they dispatch. It is not prepended
+it, to link the returned session URL in the PR description (the PR block reads
+that link as the PR's origin), to open them ready for review rather than as
+drafts, and to get CI passing before handing off. External MCP clients get the
+ready-for-review rule in Macro's MCP instructions, and in-app agents tell coding
+agents they dispatch. It is not prepended
 to individual user messages. Cursor
 enables automatic PR creation when a repository is selected. Its returned URL
 is also recorded because

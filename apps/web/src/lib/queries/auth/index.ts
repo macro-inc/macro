@@ -20,6 +20,7 @@ export {
 export {
   type GithubLink,
   type GithubLinkStatus,
+  githubLinkAuthorizationUrl,
   invalidateGithubLinkStatus,
   useDeleteGithubLinkMutation,
   useGithubLinkStatusQuery,

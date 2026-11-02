@@ -18,6 +18,7 @@ type SimpleNotificationEntityType =
   | 'channel'
   | 'chat'
   | 'crm_company'
+  | 'crm_contact'
   | 'document'
   | 'email'
   | 'email_thread'
@@ -56,6 +57,7 @@ export function toNotificationEntityRef(
     case 'channel':
     case 'chat':
     case 'crm_company':
+    case 'crm_contact':
     case 'document':
     case 'email':
     case 'email_thread':
@@ -87,6 +89,7 @@ const ENTITY_TYPE_TO_GRAPHQL = {
   channel: 'CHANNEL',
   chat: 'CHAT',
   crm_company: 'CRM_COMPANY',
+  crm_contact: 'CRM_CONTACT',
   document: 'DOCUMENT',
   email: 'EMAIL_THREAD',
   email_thread: 'EMAIL_THREAD',

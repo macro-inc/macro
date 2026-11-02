@@ -664,15 +664,6 @@ export const enableCalendarUi = defineFlag({
   default: onInDev,
 });
 
-// Calendar meeting notes and document-side meeting-link management. On in dev;
-// production uses PostHog's internal-user rollout. This is a UI rollout, not
-// an authorization check: saved meeting grants remain enforced by the service.
-export const enableCalendarMeetingNotes = defineFlag({
-  key: 'enable-calendar-meeting-notes',
-  env: 'ENABLE_CALENDAR_MEETING_NOTES',
-  default: onInDev,
-});
-
 // Calendar event search UI: the Search view's Calendar type (and calendar
 // rows) plus the in-calendar keyword search. A sub-feature of the calendar UI
 // — opening a hit needs the calendar block — so it only takes effect where
@@ -838,6 +829,15 @@ export const enableActivityFeed = defineFlag({
 export const enableUnifiedNotifications = defineFlag({
   key: 'enable-unified-notifications',
   env: 'ENABLE_UNIFIED_NOTIFICATIONS',
+  default: onInDev,
+});
+
+// Agents home: pending updates from coding agents shown as a stack under the
+// new-chat composer, and the Open PRs section in the Agents sidebar.
+// Override with VITE_ENABLE_AGENT_UPDATES.
+export const enableAgentUpdates = defineFlag({
+  key: 'enable-agent-updates',
+  env: 'ENABLE_AGENT_UPDATES',
   default: onInDev,
 });
 
