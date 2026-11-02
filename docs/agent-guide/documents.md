@@ -28,9 +28,7 @@ screenshots: [desktop](media/share-images/desktop.png) and
 
 With `enable-calendar-meeting-notes` enabled, owned markdown documents' Share
 panel also lists **Meeting links** (under the **Link** tab on mobile).
-Each shows its occurrence and optional team view grant. Toggle **Also share with
-<team>** here to update that link’s team access; changes save immediately.
-Calendar notes’ **Options → Share** opens this same dialog.
+Each shows its occurrence and optional team view grant.
 Use **Unlink** and confirm to remove that grant without deleting the document.
 This remains available when the meeting is cancelled or no longer shared with
 you; unavailable meeting details are hidden. See [Calendar meeting notes](calendar.md#meeting-notes).

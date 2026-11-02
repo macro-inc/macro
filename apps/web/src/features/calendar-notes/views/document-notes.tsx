@@ -8,14 +8,10 @@ export function DocumentNotesView(props: { source: DocumentNotesSource }) {
   return (
     <DocumentNotesSection
       state={props.source.links()}
-      team={props.source.team()}
       selected={controller.selected()}
       saving={controller.saving()}
       error={controller.error()}
       onSelect={controller.select}
-      onTeam={(link, teamId) =>
-        fireAndForget(controller.setTeam(link, teamId), 'calendar.notes.team')
-      }
       onRemove={() =>
         fireAndForget(controller.remove(), 'calendar.notes.revoke')
       }

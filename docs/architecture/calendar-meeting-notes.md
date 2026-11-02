@@ -73,9 +73,7 @@ data source, query adapter, controller, and presentational view. It mounts withi
 desktop and mobile event details. Its shared dialog becomes a phone sheet with
 `Dialog.contentOwnsScroll`: only document results scroll, while context, sharing,
 and actions stay visible. Choices survive failures. Note options use labeled menu
-actions; **Share** opens the existing document Share dialog, whose Meeting links
-section owns optional team access. The host dialog guard follows the menu and
-Share dialog, and clears
+actions; the host dialog guard follows both the menu and access dialog, and clears
 when a note disappears during a live refresh.
 **Create** and **Link** stay beside the section title so additional notes can be
 added without leaving the meeting. **Create** uses the standard Markdown creation
@@ -84,8 +82,8 @@ captures the account and occurrence before creation starts, suppresses duplicate
 clicks, and retains the created document for retry if linking fails. A disposed
 view never navigates on a late result. There is no separate calendar-owned content
 store or create endpoint.
-The document Share panel also lists owner-only durable links, immediate optional
-team access controls, and inline unlink confirmation. That list does not require current meeting access. It uses
+The document Share panel also lists owner-only durable links and offers inline
+unlink confirmation. That list does not require current meeting access. It uses
 generic labels for inaccessible or indirectly shared meetings, so it cannot reveal
 a richer canonical event title through a restricted provider projection.
 

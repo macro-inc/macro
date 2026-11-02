@@ -3,7 +3,8 @@
 ## Meeting notes
 
 Meeting notes require `enable-calendar-meeting-notes`. It is on automatically in
-dev; production uses PostHog, enabled for `@macro.com` users. `VITE_ENABLE_CALENDAR_MEETING_NOTES=true` or `false` overrides it locally.
+dev; production uses PostHog, with an initial rollout intended for `@macro.com`
+users. `VITE_ENABLE_CALENDAR_MEETING_NOTES=true` or `false` overrides it locally.
 With the flag off, event notes and document Share meeting-link controls do not
 mount or request note data, on desktop or phone. The flag does not revoke saved
 meeting/team grants or change API permissions.
@@ -14,7 +15,7 @@ viewer access, and opens it immediately. Team access starts off. A meeting can
 have multiple notes; **Create** and **Link** remain on the section title row
 so you can keep creating notes or linking existing documents.
 
-Choose **Link** to search the titles of Markdown documents you own, select one, review
+Choose **Link** to search your markdown documents, select one, review
 the sharing explanation, and optionally include your existing team before
 **Link note**. Team access starts off for each note. Recurring meetings link only
 the displayed occurrence. Notes on a
@@ -27,19 +28,14 @@ Open the linked title to read the original document. On desktop it opens in a
 new split; on mobile it replaces the calendar pane and closes event details.
 Opening a note leaves focus available to the document as it mounts; dismissing
 desktop details normally returns focus to the calendar event.
-Meeting access and occurrence scope are explained in the linking dialog;
-each note shows any additional team audience. **Options → Share** opens the same
-document Share dialog as the note toolbar. Its **Meeting links** section lets the
-owner change each link’s optional team access. **Options → Unlink from meeting**
-removes this meeting’s grants without deleting the document. Keep the labeled
-Options button visible beside long titles; truncate the title without widening
-the event details. Labeled note controls do not need extra hover tooltips.
-The linking dialog uses a wider desktop layout and a phone sheet. Only the
-document results scroll. The picker uses the calendar notes endpoint’s title
-search (up to 30 recently updated owned Markdown documents), not full-text search. The meeting context,
+Meeting access and occurrence scope are explained in the linking/access dialog;
+each note shows any additional team audience. Document owners use **Options →
+Manage access** to change that team, or **Options → Unlink from meeting** to remove
+this meeting's grants without deleting the document. Keep access explanations as
+plain text and actions labeled.
+In the linking dialog, only the document results scroll. The meeting context,
 sharing controls, and action buttons stay visible, including in a short viewport.
-A former team’s grant can be removed in Share while the meeting is still visible;
-unlinking remains available even if the meeting is no longer accessible.
+If the owner has since left the selected team, **Remove team access** still works.
 Failed saves retain the selection and audience for retry; dismissing starts fresh.
 If creation succeeds but linking fails, **Retry linking** reuses the saved document;
 **Open saved note** lets you continue editing before the link is confirmed. Closing
@@ -63,12 +59,10 @@ viewer leaves that team; it does not make the calendar event visible to that tea
 
 Verify on desktop and phone: create and open notes, add a second note, retry a failed
 link without duplicating the new document, link an existing note with team unchecked,
-add/remove a team in Share, and unlink while keeping the document. Link a long
-title and verify its Options menu opens without horizontal scrolling. The
+add/remove a team, and unlink while keeping the document. On desktop, hover a note
+title and select a neighboring note while its tooltip is visible. The
 backend-free browser suite mounts the real event popover and mobile drawer with
-sample data and preview service adapters. It previews the real meeting-access
-controls inside a sample Share shell; verify the full Share dialog in the app
-as well. It is
+sample data and preview service adapters. It is
 `apps/web/src/features/calendar-notes/browser-test/playwright.config.ts`.
 API permission cases are covered in `crates/calendar_events/src/outbound/pg/test/notes.rs`.
 The fixture accepts `?notes=off` to check the event details without notes.

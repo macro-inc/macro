@@ -99,13 +99,6 @@ function Fixture() {
           <DocumentNotesView
             source={{
               links: () => ({ data: links(), pending: false }),
-              team: () => ({ data: null, pending: false }),
-              setTeam: async () => {
-                setLinks((current) =>
-                  current.map((link) => ({ ...link, team: undefined }))
-                );
-                return ok(undefined);
-              },
               retry: async () => {},
               unlink: async () => {
                 setLinks([]);

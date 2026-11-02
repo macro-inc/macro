@@ -22,7 +22,10 @@ export function createNotesController(
     disposed = true;
     onDialogChange(false);
   });
-  const picker = source.picker(query, () => dialog()?.kind === 'link');
+  const picker = source.picker(
+    query,
+    () => !!dialog() && dialog()?.kind !== 'unlink'
+  );
 
   function reportOpen() {
     if (disposed) return;
@@ -48,7 +51,7 @@ export function createNotesController(
   async function save() {
     const active = dialog();
     const document = selected();
-    if (!active || active.kind === 'sharing' || !document || saving()) return;
+    if (!active || !document || saving()) return;
     setSaving(true);
     setError(undefined);
     const result =

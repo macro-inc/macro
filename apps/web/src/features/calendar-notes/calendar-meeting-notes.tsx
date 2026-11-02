@@ -1,5 +1,3 @@
-import { Permissions } from '@core/component/SharePermissions';
-import { ShareModal } from '@core/component/TopBar/ShareButton';
 import { useUserId } from '@core/context/user';
 import { Show, Suspense } from 'solid-js';
 import type { CalendarEvent } from '../calendar/types';
@@ -34,22 +32,6 @@ export function CalendarMeetingNotes(props: {
             recurring={props.event.recurrenceLines.length > 0}
             guestListHidden={!props.event.guestPolicy.canSeeOtherGuests}
             onOpen={(note) => props.onOpenDocument(note.documentId)}
-            shareDialog={(note, onClose) => (
-              <Suspense>
-                <ShareModal
-                  open
-                  onOpenChange={(open) => {
-                    if (!open) onClose();
-                  }}
-                  id={note.documentId}
-                  itemType="document"
-                  blockAlias="md"
-                  name={note.name}
-                  owner={userId()}
-                  userPermissions={Permissions.OWNER}
-                />
-              </Suspense>
-            )}
             onDialogChange={props.onDialogChange}
           />
         )}

@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import { type JSX, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import { NoteDialog } from '../components/note-dialog';
 import { NotesSection } from '../components/notes-section';
 import type { NotesSource } from '../context/notes-source';
@@ -13,7 +13,6 @@ export function MeetingNotesView(props: {
   recurring: boolean;
   guestListHidden?: boolean;
   onOpen: (note: MeetingNote) => void;
-  shareDialog: (note: MeetingNote, onClose: () => void) => JSX.Element;
   onDialogChange: (open: boolean) => void;
 }) {
   const controller = createNotesController(props.source, props.onDialogChange);
@@ -41,22 +40,10 @@ export function MeetingNotesView(props: {
           fireAndForget(props.source.retry(), 'calendar.notes.retry')
         }
       />
-      <Show
-        when={controller.dialog()?.kind === 'sharing' && controller.dialog()}
-      >
-        {(dialog) => {
-          const active = dialog();
-          return active.kind === 'sharing'
-            ? props.shareDialog(active.note, controller.close)
-            : undefined;
-        }}
-      </Show>
-      <Show
-        when={controller.dialog()?.kind !== 'sharing' && controller.dialog()}
-      >
+      <Show when={controller.dialog()}>
         {(dialog) => (
           <NoteDialog
-            kind={dialog().kind === 'unlink' ? 'unlink' : 'link'}
+            kind={dialog().kind}
             eventTitle={props.eventTitle}
             recurring={props.recurring}
             guestListHidden={props.guestListHidden}
@@ -69,6 +56,10 @@ export function MeetingNotesView(props: {
               props.source.notes().data?.map((note) => note.documentId) ?? []
             }
             teamId={controller.teamId()}
+            currentTeam={(() => {
+              const active = dialog();
+              return active.kind === 'link' ? undefined : active.note.team;
+            })()}
             onTeam={controller.setTeamId}
             saving={controller.saving()}
             error={controller.error()}

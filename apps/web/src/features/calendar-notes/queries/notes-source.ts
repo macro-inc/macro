@@ -3,7 +3,6 @@ import { catchToResult, throwOnErr } from '@core/util/result';
 import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import { queryReadyGate } from '@queries/gate';
-import { useCurrentTeamQuery } from '@queries/team/teams';
 import { calendarNotesClient } from '@service-calendar/notes';
 import { createDebouncedMemo } from '@solid-primitives/memo';
 import { useMutation, useQuery } from '@tanstack/solid-query';
@@ -218,11 +217,6 @@ export function createDocumentNotesSource(
   documentId: Accessor<string>
 ): DocumentNotesSource {
   const links = useQuery(() => documentLinksOptions(userId(), documentId()));
-  const team = useCurrentTeamQuery();
-  const link = useMutation(() => ({
-    mutationFn: linkNote,
-    onSuccess: refreshNotes,
-  }));
   const unlink = useMutation(() => ({
     mutationFn: unlinkNote,
     onSuccess: refreshNotes,
@@ -233,22 +227,7 @@ export function createDocumentNotesSource(
       pending: links.isPending,
       error: links.isError ? 'Couldn’t load meeting access.' : undefined,
     }),
-    team: () => ({
-      data: queryReadyGate(team) ? (team.data?.team ?? null) : undefined,
-      pending: team.isPending,
-      error: team.isError ? 'Couldn’t load your team.' : undefined,
-    }),
-    retry: () => Promise.all([links.refetch(), team.refetch()]),
-    async setTeam(target, teamId) {
-      const input = { ...target, documentId: documentId(), teamId };
-      return (await catchToResult(() => link.mutateAsync(input))).mapErr(
-        (): NoteFailure => ({
-          kind: 'link_failed',
-          message:
-            'Couldn’t update team access. Check that you can still view the meeting, then try again.',
-        })
-      );
-    },
+    retry: () => links.refetch(),
     async unlink(target) {
       return (
         await catchToResult(() =>
