@@ -24,19 +24,31 @@ pub fn search_paths() -> Vec<PathBuf> {
 /// The first `command` in `paths`, trying the Windows launcher extensions.
 pub fn find(paths: &[PathBuf], command: &str) -> Option<PathBuf> {
     #[cfg(windows)]
-    let names = [
-        command.to_owned(),
-        format!("{command}.exe"),
-        format!("{command}.cmd"),
-        format!("{command}.bat"),
-    ];
+    let names = windows_launcher_names(command);
     #[cfg(not(windows))]
     let names = [command.to_owned()];
+    find_named(paths, &names)
+}
 
+fn find_named(paths: &[PathBuf], names: &[String]) -> Option<PathBuf> {
     paths
         .iter()
         .flat_map(|directory| names.iter().map(move |name| directory.join(name)))
         .find(|candidate| is_executable(candidate))
+}
+
+/// The file names Windows can launch for `command`. A bare name never matches
+/// as it is: npm puts an extensionless shell script beside every `.cmd` shim,
+/// and Windows cannot run it.
+#[cfg(any(windows, test))]
+fn windows_launcher_names(command: &str) -> Vec<String> {
+    if Path::new(command).extension().is_some() {
+        return vec![command.to_owned()];
+    }
+    ["exe", "cmd", "bat", "com"]
+        .iter()
+        .map(|extension| format!("{command}.{extension}"))
+        .collect()
 }
 
 /// The program to hand `Command::new` for `command`: on Windows a bare name is
@@ -67,3 +79,35 @@ fn is_executable(path: &Path) -> bool {
 fn is_executable(path: &Path) -> bool {
     path.is_file()
 }
+
+/// The program an npm `.cmd` shim runs, for a caller that cannot launch
+/// `.cmd` files: Node's `child_process.spawn` refuses them without a shell.
+/// Any other path comes back unchanged.
+pub fn npm_shim_target_or_self(path: &Path) -> PathBuf {
+    if path
+        .extension()
+        .is_some_and(|extension| extension.eq_ignore_ascii_case("cmd"))
+        && let Ok(script) = std::fs::read_to_string(path)
+        && let Some(target) = npm_shim_target(path, &script)
+    {
+        return target;
+    }
+    path.to_owned()
+}
+
+/// The path npm's `cmd-shim` runs, written relative to the shim's directory as
+/// `"%dp0%\…"`. A shim for a Node script first names `%dp0%\node.exe`, so the
+/// last such path is the target.
+fn npm_shim_target(shim: &Path, script: &str) -> Option<PathBuf> {
+    const SHIM_DIRECTORY: &str = "\"%dp0%\\";
+    let start = script.rfind(SHIM_DIRECTORY)? + SHIM_DIRECTORY.len();
+    let relative = script[start..].split('"').next()?;
+    Some(
+        relative
+            .split('\\')
+            .fold(shim.parent()?.to_owned(), |path, part| path.join(part)),
+    )
+}
+
+#[cfg(all(test, unix))]
+mod test;
