@@ -43,7 +43,7 @@ import { useCompanyQuery, useContactQuery } from './use-crm';
 
 const recordKey = (record: CrmRecordRef) => `${record.type}:${record.id}`;
 
-function createRecordName(record: CrmRecordRef): () => string {
+export function createRecordName(record: CrmRecordRef): () => string {
   const fallback =
     record.name || (record.type === 'company' ? 'Company' : 'Contact');
   if (record.type === 'company') {

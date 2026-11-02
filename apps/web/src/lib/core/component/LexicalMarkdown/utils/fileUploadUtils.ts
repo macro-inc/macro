@@ -83,7 +83,12 @@ export const getDragDropPosition = (
   e: DragEvent | { clientX: number; clientY: number },
   setSelection = false
 ) => {
-  const { key, position } = calculateInsertPoint(editor, e, DRAG_EVENT_PADDING);
+  const { key, position } = calculateInsertPoint(
+    editor,
+    e,
+    DRAG_EVENT_PADDING,
+    true
+  );
   if (setSelection && key !== null && position !== null) {
     editor.dispatchCommand(SET_SELECTION_AT_INSERTION, [key, position]);
   }

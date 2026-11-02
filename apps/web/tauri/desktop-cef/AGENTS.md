@@ -53,7 +53,8 @@ thin binary over `../src-tauri` (`app_lib::run_with`) that selects
   `CEF_PATH` to an extracted codec distribution (below) to test media.
 - Releases embed CEF built with proprietary codecs, pinned in `cef-codecs.json`
   and laid out by `nix/tauri-desktop.nix`; Nix evaluation fails if that pin
-  doesn't match the `cef` crate in `Cargo.lock`. To bump the `cef` crate, put
+  doesn't match the `cef` crate in `Cargo.lock`. While `sha256` is empty, Nix
+  warns and builds with the codec-less CDN CEF. To bump the `cef` crate, put
   the new CDN version (`cefVersion`, its `g<hash>` as `cefCommit`, the Chromium
   branch) and a new `releaseTag`/`asset` in the manifest with an empty `sha256`
   on a PR. The `Build CEF with codecs` workflow then builds and publishes it

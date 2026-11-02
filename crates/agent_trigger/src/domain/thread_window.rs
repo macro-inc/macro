@@ -87,15 +87,15 @@ pub fn thread_window<'a>(
     entries
 }
 
-/// Renders a transcript for a judge reading the thread, labelling `agent`'s own
-/// messages so it can tell which participant it is deciding about.
+/// Renders a transcript for a judge reading the thread, labelling each of
+/// `agents`' own messages `agent N` (1-based, in `agents` order) so it can tell
+/// which participants it is deciding about.
 ///
-/// Other bots keep their raw ids: a second bot in the thread is a participant
-/// like any other, and mislabelling it as the agent would invite the judge to
-/// answer about the wrong one.
+/// Other bots keep their raw ids: a bot that is not a candidate is a
+/// participant like any other, and labelling it as an agent would invite the
+/// judge to route to the wrong one.
 #[must_use]
-pub fn render_transcript(entries: &[TranscriptEntry<'_>], agent: BotId) -> String {
-    let agent = agent.into_storage_id();
+pub fn render_transcript(entries: &[TranscriptEntry<'_>], agents: &[BotId]) -> String {
     let mut rendered = String::new();
     for entry in entries {
         match entry {
@@ -105,8 +105,12 @@ pub fn render_transcript(entries: &[TranscriptEntry<'_>], agent: BotId) -> Strin
             }
             TranscriptEntry::Message(message) => {
                 let speaker = match (message.sender.as_bot(), message.sender.as_user()) {
-                    (Some(bot), _) if bot.as_ref() == agent.as_ref() => "agent".to_owned(),
-                    (Some(bot), _) => format!("bot {bot}"),
+                    (Some(bot), _) => {
+                        match agents.iter().position(|agent| *agent == bot.bot_id()) {
+                            Some(index) => format!("agent {}", index + 1),
+                            None => format!("bot {bot}"),
+                        }
+                    }
                     (None, Some(user)) => format!("user {user}"),
                     // A sender is one or the other; a future third kind should
                     // still appear in the transcript rather than vanish.

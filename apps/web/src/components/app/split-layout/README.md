@@ -91,3 +91,10 @@ TODO AFTER:
 - [ ] useBeforeLeave won't work as expected going forward, since we use the split layout as the source of truth.
       Lots of places use `isLeavingCurrentBlock` to run some side effects, we need to abstract this under the split
       Might need something like `useBeforeSplitClose` or `useBeforeBlockClose`
+
+## Priority collapse
+
+Split headers and toolbars create their own controllers from
+`src/components/priority-collapse/`. `layoutUtils.ts` keeps only the
+split-specific header and toolbar registration wrappers; other rows register
+with the shared controller directly.
