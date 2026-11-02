@@ -21,6 +21,7 @@ const device = (deviceId: string, label: string) =>
 
 function setup() {
   const [audioMuted, setAudioMuted] = createSignal(false);
+  const [shareAudio, setShareAudio] = createSignal(false);
   const [background, setBackground] = createSignal<BackgroundEffect>({
     type: 'none',
   });
@@ -34,6 +35,8 @@ function setup() {
     }),
     toggleVideo: vi.fn(async () => {}),
     toggleScreenShare: vi.fn(async () => {}),
+    shareScreenAudio: shareAudio,
+    setShareScreenAudio: vi.fn(setShareAudio),
     audioInputDevices: () => [device('mic-1', 'Desk microphone')],
     audioOutputDevices: () => [],
     videoInputDevices: () => [device('cam-1', 'Desk camera')],
@@ -107,6 +110,23 @@ describe('call controls', () => {
         intensity: 'heavy',
       })
     );
+  });
+
+  it('shares the screen without opening its settings', () => {
+    const { media } = setup();
+    fireEvent.click(screen.getByRole('button', { name: 'Share screen' }));
+    expect(media.toggleScreenShare).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('menu')).toBeNull();
+  });
+
+  it('chooses whether a screen share includes audio', async () => {
+    const { media } = setup();
+    await openMenu('Screen share settings');
+    const item = screen.getByRole('menuitemcheckbox', { name: 'Share audio' });
+    expect(item.getAttribute('aria-checked')).toBe('false');
+    await choose('menuitemcheckbox', 'Share audio');
+    expect(media.setShareScreenAudio).toHaveBeenCalledWith(true);
+    await waitFor(() => expect(item.getAttribute('aria-checked')).toBe('true'));
   });
 
   it('leaves the call', () => {
