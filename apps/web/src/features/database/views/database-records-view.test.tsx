@@ -955,6 +955,60 @@ describe('database table view', () => {
     }
   );
 
+  it('clears a Shift+Arrow range in one write, so one undo restores it', async () => {
+    const fixture = createFakeRowsSource({
+      columns,
+      table: {
+        version: 1,
+        rows: [
+          { rowId: 'plan', cells: { title: 'Plan launch', status: 'todo' } },
+          { rowId: 'ship', cells: { title: 'Ship it', status: 'done' } },
+        ],
+      },
+      view: allRecords,
+    });
+    fixture.persistWrites();
+    render(() => (
+      <DatabaseRecordsView
+        name="Projects"
+        source={fixture.source}
+        canEdit
+        view={allRecords}
+        stored={false}
+        addColumn={() => null}
+        boardPositions={unplacedCards}
+      />
+    ));
+    await screen.findByRole('button', { name: 'Open Ship it' });
+    document
+      .querySelector<HTMLElement>(
+        '[data-grid-row-id="plan"] [data-grid-column="1"]'
+      )!
+      .focus();
+
+    fireEvent.keyDown(document.activeElement!, {
+      key: 'ArrowRight',
+      shiftKey: true,
+    });
+    fireEvent.keyDown(document.activeElement!, {
+      key: 'ArrowDown',
+      shiftKey: true,
+    });
+    fireEvent.keyDown(document.activeElement!, { key: 'Delete' });
+
+    await waitFor(() =>
+      expect(fixture.source.write).toHaveBeenCalledExactlyOnceWith(
+        {
+          kind: 'clear',
+          rowIds: ['plan', 'ship'],
+          columnIds: ['title', 'status'],
+        },
+        1,
+        false
+      )
+    );
+  });
+
   it('focuses a new column header and edits its cells in a row created from the blank draft', async () => {
     const fixture = createFakeRowsSource({
       columns,

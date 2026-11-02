@@ -297,7 +297,14 @@ export function DatabaseTable(props: DatabaseTableProps) {
         ? { rowId: cell.rowId, columnId: cell.columnId }
         : undefined;
     },
+    canSelectRow: (rowId) => !props.isUnsavedRow?.(rowId),
     focus: () => gridElement.focus({ preventScroll: true }),
+    focusCell: (cell) =>
+      gridElement
+        .querySelector<HTMLElement>(
+          `[data-grid-row="${selection.rowIndex().get(cell.rowId)}"][data-grid-column="${selection.columnIndex().get(cell.columnId)! + 1}"]`
+        )
+        ?.focus(),
     onChange: (range) =>
       announceCell(
         range
