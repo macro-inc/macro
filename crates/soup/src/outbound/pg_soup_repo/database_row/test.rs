@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::models::sort::DynamicSortValue;
 use crate::outbound::pg_soup_repo::expanded::dynamic::{
     ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, expanded_dynamic_cursor_soup,
     expanded_dynamic_cursor_soup_grouped,
@@ -344,11 +345,11 @@ async fn detail_joins_accept_mixed_soup_ids(pool: PgPool) {
     ] {
         // Exercise the production fragments; SQLx cannot expand include_str! inside SQL.
         let query = format!(
-            "WITH TopItems(item_type, id, sort_ts, group_key, group_total_count, row_in_group) AS (
+            "WITH TopItems(item_type, id, sort_ts, sort_key, group_key, group_order, group_total_count, row_in_group) AS (
                 VALUES
-                    ('chat', 'legacy-chat-id', now(), 'group', 3::bigint, 1::bigint),
-                    ('project', '70000000-0000-0000-0000-000000000001', now(), 'group', 3, 2),
-                    ('database_row', '70000000-0000-0000-0000-000000000003', now(), 'group', 3, 3)
+                    ('chat', 'legacy-chat-id', now(), 0::double precision, 'group', NULL::text, 3::bigint, 1::bigint),
+                    ('project', '70000000-0000-0000-0000-000000000001', now(), 0, 'group', NULL, 3, 2),
+                    ('database_row', '70000000-0000-0000-0000-000000000003', now(), 0, 'group', NULL, 3, 3)
             ), GroupedItems AS (SELECT * FROM TopItems), details AS ({detail})
             SELECT id FROM details"
         );
@@ -372,7 +373,7 @@ async fn created_cursor_pages_equal_timestamps_without_skipping_rows(pool: PgPoo
         ExpandedDynamicCursorArgs {
             user_id: viewer(),
             limit: 2,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filter.clone()),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filter.clone()),
             exclude_frecency: false,
         },
     )
@@ -392,8 +393,8 @@ async fn created_cursor_pages_equal_timestamps_without_skipping_rows(pool: PgPoo
                 id: DEAL_2,
                 limit: 2,
                 val: CursorVal {
-                    sort_type: SimpleSortMethod::CreatedAt,
-                    last_val: "2026-01-03T00:00:00Z".parse().unwrap(),
+                    sort_type: SimpleSortMethod::CreatedAt.into(),
+                    last_val: DynamicSortValue::Timestamp("2026-01-03T00:00:00Z".parse().unwrap()),
                 },
                 filter,
             }),
