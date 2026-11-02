@@ -377,6 +377,7 @@ mod tests {
 
         let coding = coding_agents::PROMPT.to_string();
         assert!(coding.contains("ready for review, not a draft"));
+        assert!(coding.contains("macro.agentSessions.createManaged"));
         assert!(coding.contains("CI passing"));
     }
 

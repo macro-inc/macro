@@ -1,10 +1,10 @@
-//! Delegating repository work to the user's available coding personas.
+//! Starting another agent's session from code mode.
 
 use crate::types::StaticPrompt;
 
-/// Selection and handoff guidance, included only where the tools are available.
+/// Persona selection and handoff guidance, included only where ExecuteCode is available.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(
-    "Coding agents",
+    "Starting agent sessions",
     include_str!("coding_agents.txt"),
-    "Select an available coding persona and start a session for repository work. Pull-request tasks require a ready, CI-passing pull request rather than a draft.",
+    "Work natively first; start another agent's session from ExecuteCode with macro.agents.list and macro.agentSessions.createManaged. Pull-request tasks require a ready, CI-passing pull request rather than a draft.",
 );

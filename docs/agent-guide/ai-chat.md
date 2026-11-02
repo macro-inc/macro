@@ -317,21 +317,15 @@ instructions or a fixed model (database chat, booking-link setup, connector impo
 still open a bare session directly, as does every action while the Agents workspace
 flag is off. These actions do not create legacy cognition chats.
 
-## Dispatching coding agents from chat
+## Handing work to another agent
 
-Ask a chat agent to delegate a coding task, including the repository and branch
-when relevant. The agent uses `ListCodingAgents` to discover your available coding
-agents, chooses one using its description and runtime defaults, and calls
-`DispatchCodingAgent` with that agent's ID and a self-contained task prompt.
-The available-agents tool row expands to show the returned names and descriptions.
-
-A successful dispatch starts a separate coding session and displays its live
-Magic Chip directly in the reply, outside collapsed tool groups. The chip follows
-the dispatched turn, including progress, output, permission requests, and a linked
-pull request. **Open session** opens the coding conversation in another split so
-you can follow up there. Reloading the chat restores the same session card.
-Failed dispatches do not show a successful session card. If no coding agents are
-available, configure one in Agents before retrying.
+Agents do coding work themselves first. When you ask an agent to hand a task to
+another agent (for example "kick off Cursor on acme/web"), a code-mode agent runs
+`ExecuteCode`: it picks a persona from `macro.agents.list()` and starts the session
+with `macro.agentSessions.createManaged({ agent, prompt, repoUrl })`, omitting
+`agent` for Cursor. The reply links the new session. There is no dedicated
+dispatch tool; older conversations that called `DispatchCodingAgent` or
+`ListCodingAgents` show those calls as generic tool rows.
 
 ## Where chats live
 
