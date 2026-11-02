@@ -361,7 +361,7 @@ export function IntegrationRow(props: {
   description?: JSX.Element;
   /** Proven facts under the description (e.g. connected accounts). Wraps. */
   facts?: JSX.Element;
-  /** Optional indicator shown right after the title (e.g. a connection dot). */
+  /** Optional indicator right after the title (a connection dot, a Beta badge). */
   status?: JSX.Element;
   /** Soften title and icon when the row is paused / disabled. */
   muted?: boolean;
