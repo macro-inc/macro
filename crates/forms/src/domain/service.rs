@@ -166,6 +166,7 @@ where
     Images: FormImageFiles,
 {
     /// Create a forms service from its ports.
+    #[expect(clippy::too_many_arguments, reason = "one adapter per port")]
     pub fn new(
         repository: Repository,
         databases: Arc<Databases>,
