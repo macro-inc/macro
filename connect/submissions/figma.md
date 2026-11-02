@@ -1,14 +1,14 @@
 ---
 vendor: figma
 apps: [figma]
-state: drafting
-portal: https://form.asana.com/?k=kBG-ejRQTdY8x_H6a4vM3Q&d=10497086658021
+state: submitted
+portal: https://docs.google.com/forms/d/e/1FAIpQLSeeZyjrPS5sfRXLAOt6Ha-3gv1gRu4zhuWPYKh6ZsOkS9X2Kg/viewform
 account: connect@macro.com
-submitted:
-last_contact:
-next_action: Human fills the NEEDS-HUMAN items (redirect URI, contact, company facts, logo); the agent then submits Figma's MCP client waitlist form
-next_action_owner: human
-due: 2026-11-02
+submitted: 2026-11-02
+last_contact: 2026-11-02
+next_action: Weekly check of connect@macro.com for a Figma reply; Figma has paused adding MCP clients with no timeline. Send new demand evidence to the MCP team address on its form confirmation page
+next_action_owner: agent
+due: 2026-11-09
 ---
 
 ## Requirements
@@ -73,3 +73,13 @@ both advertise only one scope.
   remote server docs; catalog page also points to the account team), confirmed
   `mcp:connect` as the only scope from live metadata, drafted offline. Nothing
   submitted.
+- 2026-11-02: The Asana waitlist form is deprecated; it points to a Google
+  Form, "Figma Remote MCP Server Access Request". Figma says it has paused
+  adding public MCP clients, with no timeline, and uses requests to
+  prioritize. Submitted it (recorded): Eric Hayes, Engineer, Macro Connect;
+  Coparse, Inc. dba Macro; client Macro Connect, part of our product, link
+  `https://connect-dev.macro.com/demo`; Read Only tools; demand: 38 Macro
+  users with Figma connected; timeline November 2026; registration options
+  and redirect URIs in the notes. Further evidence goes to
+  the MCP team address on its form confirmation page.
+- 2026-11-02: Sweep: no reply in connect@macro.com. Next check 2026-11-09.
