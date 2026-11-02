@@ -1,9 +1,8 @@
 /**
- * Wrap the fuzzy library in some addition utils for ranking by fuzzy match score
- * alongside freshness.
+ * Deterministic per-row name matching blended with freshness and surface boosts.
  */
 
-import uFuzzy from '@leeoniya/ufuzzy';
+import { nameMatchQuality, normalizeNameText } from './name-match-score';
 import { differenceInMilliseconds } from 'date-fns';
 import type { Accessor } from 'solid-js';
 import type { DateValue } from './date';
@@ -13,7 +12,6 @@ import {
 } from './dateSearch/dateParser';
 import { fuzzyScoreCommaSpaceSeparated } from './fuzzy';
 
-const uf = new uFuzzy({});
 
 interface FuzzyFilterResult<T> {
   original: T;
@@ -113,9 +111,10 @@ function calculateTimeScore(
   config: FreshSortConfigWithDefaults,
   now: Date
 ): number {
-  if (!timestamp) return 0;
+  if (timestamp == null) return 0;
 
   const ageMs = Math.max(0, differenceInMilliseconds(now, timestamp));
+  if (!Number.isFinite(ageMs)) return 0;
   const maxAgeMs = parsedDurationToMilliseconds(config.maxAge);
 
   if (ageMs >= maxAgeMs) {
@@ -203,27 +202,6 @@ function calculateNameMatchRank(
   return 0;
 }
 
-type MatchPosition = { start: number; ranges: number[] | undefined };
-
-/** Where the query matches each label, for rows whose search text adds more than the label. */
-function labelMatchPositions(
-  labels: string[],
-  query: string,
-  idxs: number[]
-): Map<number, MatchPosition> {
-  const positions = new Map<number, MatchPosition>();
-  const labelIdxs = uf.filter(labels, query, idxs);
-  if (!labelIdxs || labelIdxs.length === 0) return positions;
-  const info = uf.info(labelIdxs, labels, query);
-  info.idx.forEach((labelIdx, infoIdx) => {
-    positions.set(labelIdx, {
-      start: info.start[infoIdx] ?? 0,
-      ranges: info.ranges[infoIdx],
-    });
-  });
-  return positions;
-}
-
 function calculateBrevityScore(text: string): number {
   if (!text || text.length === 0) return 0;
   const maxLength = 100;
@@ -231,7 +209,7 @@ function calculateBrevityScore(text: string): number {
   return Math.exp(-2 * normalizedLength);
 }
 
-function ufuzzyFilter<T>(
+function filterNameMatches<T>(
   items: T[],
   getName: NameFn<T>,
   getDisplayName: NameFn<T>,
@@ -239,47 +217,11 @@ function ufuzzyFilter<T>(
   gapPenaltyWeight: number,
   startBonusDecay: number
 ): FuzzyFilterResult<T>[] {
-  const haystack = items.map(getName);
-  const idxs = uf.filter(haystack, query);
-
-  if (!idxs || idxs.length === 0) return [];
-
-  const info = uf.info(idxs, haystack, query);
-  const order = uf.sort(info, haystack, query);
-
-  if (!order || order.length === 0) return [];
-
-  // Score where the query falls in the label when it matches there, so
-  // aliases or keywords placed before the label don't count as a late start.
-  const labelPositions =
-    getDisplayName === getName
-      ? undefined
-      : labelMatchPositions(items.map(getDisplayName), query, idxs);
-
-  const queryLen = query.length;
-  return order.map((orderIdx) => {
-    const haystackIdx = info.idx[orderIdx];
-    const labelPosition = labelPositions?.get(haystackIdx);
-    const ranges = labelPosition ? labelPosition.ranges : info.ranges[orderIdx];
-    const start = labelPosition ? labelPosition.start : info.start[orderIdx];
-
-    let matchSpan = queryLen;
-    if (ranges && ranges.length >= 2) {
-      matchSpan = ranges[ranges.length - 1] - ranges[0];
-    }
-
-    const clampedGapWeight = Math.max(0, Math.min(1, gapPenaltyWeight));
-    const clampedStartDecay = Math.max(0, startBonusDecay);
-    const rawGapPenalty = matchSpan > 0 ? queryLen / matchSpan : 1;
-    const gapPenalty = 1 - (1 - rawGapPenalty) * clampedGapWeight;
-    const startBonus = 1 / (1 + (start ?? 0) * clampedStartDecay);
-    const score = gapPenalty * startBonus * 100;
-
-    return {
-      original: items[haystackIdx],
-      string: haystack[haystackIdx],
-      score,
-    };
+  return items.flatMap((item) => {
+    const text = getName(item);
+    const label = getDisplayName === getName ? text : getDisplayName(item);
+    const quality = nameMatchQuality(label, text, query, gapPenaltyWeight, startBonusDecay);
+    return quality === undefined ? [] : [{ original: item, string: text, score: quality * 100 }];
   });
 }
 
@@ -324,18 +266,14 @@ function freshSort<T>(
   const normalizedTimeWeight = finalConfig.timeWeight / totalWeight;
   const normalizedBrevityWeight = finalConfig.brevityWeight / totalWeight;
 
-  const filterNoInfResults = filterResults.filter((r) => r.score !== Infinity);
-  const maxFuzzyScore =
-    filterNoInfResults.length > 0
-      ? Math.max(...filterNoInfResults.map((r) => r.score))
-      : 1;
+  // A row keeps the same score in every window and corpus.
+  const maxFuzzyScore = 100;
 
   const now = new Date();
   const scoredResults: FreshSortResult<T>[] = filterResults.map((result) => {
     const timestampInfo = getTimestamp(result.original);
     const rawScore = result.score === Infinity ? maxFuzzyScore : result.score;
-    const fuzzyScore =
-      maxFuzzyScore === 0 ? 0 : normalizeFuzzyScore(rawScore, maxFuzzyScore);
+    const fuzzyScore = normalizeFuzzyScore(rawScore, maxFuzzyScore);
     const timeScore = calculateTimeScore(
       extractTimestamp(timestampInfo, finalConfig.useViewedAt),
       finalConfig,
@@ -408,10 +346,10 @@ export function createFreshSearch<T>({
 }: CreateFreshSearchArgs<T>) {
   return (items: T[], query: string): FreshSortResult<T>[] => {
     const finalConfig = { ...DEFAULT_CONFIG, ...config };
-    const trimmedQuery = query.trim();
-    const term = trimmedQuery.toLocaleLowerCase();
+    const trimmedQuery = normalizeNameText(query);
+    const term = trimmedQuery;
     const getNameMatchRank = (item: T) => {
-      const name = getDisplayName(item).trim().toLocaleLowerCase();
+      const name = normalizeNameText(getDisplayName(item));
       const nameRank = finalConfig.rankNameMatchesFirst
         ? calculateNameMatchRank(name, term, isPersonItem(item))
         : 0;
@@ -435,7 +373,7 @@ export function createFreshSearch<T>({
       const allResults: FuzzyFilterResult<T>[] = items.map((item) => ({
         original: item,
         string: getName(item),
-        score: 1,
+        score: 100,
       }));
       return freshSort(
         allResults,
@@ -447,7 +385,7 @@ export function createFreshSearch<T>({
       );
     }
 
-    const fuzzyResults = ufuzzyFilter(
+    const fuzzyResults = filterNameMatches(
       items,
       getName,
       getDisplayName,

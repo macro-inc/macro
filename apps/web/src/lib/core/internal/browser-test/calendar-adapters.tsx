@@ -1,4 +1,15 @@
+import type { IUser } from '@core/user/types';
 import { Avatar } from '@ui';
+import type { JSX } from 'solid-js';
+
+export { recipientEntityMapper } from '@core/user/combinedRecipient';
+export const emailToId = (email: string) => `macro|${email}`;
+export const useUserId = () => () => 'macro|viewer@example.com';
+export const useEmail = () => () => 'viewer@example.com';
+export const useAugmentUserWithDmActivity = () => (user: IUser) => user;
+export const UserTooltip = (props: { children?: JSX.Element }) =>
+  props.children;
+export const toast = { failure: (_message: string) => {} };
 
 /** Only profile/navigation services are replaced; menu controls and contact
  * query/lookup state are the production implementations. */

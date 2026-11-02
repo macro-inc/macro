@@ -2,7 +2,8 @@
 
 The scan and borrowed-row comparisons use 100,000 synthetic short contact-like titles, a result
 limit of 50, release builds, and one local machine. They are not production
-latency guarantees. Fuzzy subsequence matching and ranking stay unchanged.
+latency guarantees. Those comparisons preserved their original matching/ranking;
+the subsequent deterministic person policy is measured separately below.
 
 ## SQL scan comparison
 
@@ -90,6 +91,19 @@ are migrated; these cache-engine results do not establish whole-app memory bound
 
 Projection 5 adds contact membership and advertises `projectionVersion` on search
 responses. It rebuilds only derived rows, without another storage-schema cutover.
+
+## Context-aware person-policy prototype
+
+`cargo test --release -p cache-turso --test people people_policy_100k -- --ignored --nocapture`
+measures the new core-only API against 100k normalized synthetic people, with
+50 winners and an empty published context. A local release sample took roughly
+345 ms for the first broad query, 340 ms warm, 43 ms selective, 39 ms absent, and
+308 ms empty-query ranking. These are single samples, not medians or UI timings.
+The existing joined-record path decodes one matching record at a time; it does
+not retain the directory but is slower than the covering-only generic search.
+Scope publication, secondary-inbox/explicit exclusions, late DM winners and
+conversation deduplication are checked separately over native and OPFS storage.
+Host transport/context-producer/Quick Access wiring is not yet enabled.
 
 ## What ships
 

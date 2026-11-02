@@ -99,6 +99,14 @@ pub trait Storage: MaybeSend {
         visit: impl FnMut(SearchDocumentRef<'_>) + MaybeSend,
     ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
 
+    /// Streams normalized contact records after the existing text prefilter.
+    /// Extra ranking/exclusion facts are evaluated before any result limit.
+    fn visit_contact_records(
+        &self,
+        query: &SearchQuery,
+        visit: impl FnMut(&EntityKey<'_>, &Record) + MaybeSend,
+    ) -> impl Future<Output = Result<(), Self::Error>> + MaybeSend;
+
     /// Reads one bucket in indexed recent order. `after` is exclusive.
     fn browse_search_documents(
         &self,
@@ -467,6 +475,23 @@ impl Storage for InMemoryStorage {
         }) {
             self.search_rows_visited.fetch_add(1, Ordering::Relaxed);
             visit(document.as_borrowed());
+        }
+        Ok(())
+    }
+
+    async fn visit_contact_records(
+        &self,
+        query: &SearchQuery,
+        mut visit: impl FnMut(&EntityKey<'_>, &Record) + MaybeSend,
+    ) -> Result<(), Self::Error> {
+        for document in self.search_documents.values().filter(|document| {
+            document.profile == SearchProfile::QuickAccessV1
+                && document.bucket == "person"
+                && query.matches(&document.search_text)
+        }) {
+            if let Some(record) = self.records.get(&document.record_key) {
+                visit(&document.record_key, record);
+            }
         }
         Ok(())
     }

@@ -89,6 +89,14 @@ struct OwnerOnlyStorage(InMemoryStorage);
 impl Storage for OwnerOnlyStorage {
     type Error = std::convert::Infallible;
 
+    async fn visit_contact_records(
+        &self,
+        query: &cache_core::search::SearchQuery,
+        visit: impl FnMut(&EntityKey<'_>, &Record) + maybe_send::MaybeSend,
+    ) -> Result<(), Self::Error> {
+        self.0.visit_contact_records(query, visit).await
+    }
+
     async fn visit_search_documents(
         &self,
         profile: cache_core::search::SearchProfile,

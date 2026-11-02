@@ -1225,9 +1225,26 @@ owner/team semantics have not been changed.
 Other picker migrations, before-limit DM ranking/exclusions, and authoritative
 removal reconciliation remain in [the contacts checklist](../../../docs/design/disk-backed-contacts.md).
 
+### Deterministic person-policy foundation
+
+`subsequence_match::ranking` and the browser name scorer use corpus-independent
+quality and the same recipient tiers, rather than scaling a row against the
+strongest result currently loaded. Surface weights and boosts remain explicit;
+command keywords retain their dedicated eligibility matcher.
+
+The core's new person-policy API stores local DM recency/command-target and
+secondary-inbox facts as private fields on existing normalized record keys. Only
+server-supplied complete contact records can rank. Context snapshots use scoped,
+compare-and-set begin/patch/commit epochs; patches cap at 500 and incomplete
+snapshots report pending, not an empty directory. Search streams matching records
+into at most `limit + 1` unique winners, applying exclusions and DM deduplication
+before that limit. This joined-record path costs more than ordinary covering-only
+search; it does not change storage schema 12. Native/browser host transport and
+Quick Access/recipient source cutover remain pending.
+
 ## Cached email Quick Access
 
-The disposable Quick Access projection is version 5; version 4 added task
+The disposable Quick Access projection is version 6; version 6 includes the local-part contact label fallback in matching. Version 4 added task
 projects (`GraphqlSoupInitiative`, bucket `initiative`), searched on their display
 name with viewed-first recency read from their embedded `metadata`. Email rows index the thread
 subject, latest sender name/address, and embedded `senders` names/addresses, so an

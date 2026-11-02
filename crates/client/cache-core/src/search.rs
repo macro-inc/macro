@@ -182,7 +182,7 @@ pub enum SearchError {
 
 /// Revision of the derived Quick Access rows. Storage adapters rebuild existing
 /// rows when this changes; normalized records and pending writes remain valid.
-pub const QUICK_ACCESS_PROJECTION_VERSION: u32 = 5;
+pub const QUICK_ACCESS_PROJECTION_VERSION: u32 = 6;
 
 /// Normalized entity types used by the Quick Access projection. Storage rebuilds
 /// restrict decoding to this set so unrelated payloads do not delay readiness.
@@ -274,15 +274,22 @@ fn quick_access_fields<'a>(
 
 fn project_quick_access(key: &EntityKey<'static>, record: &Record) -> Option<SearchDocument> {
     let (typename, bucket, text_fields) = quick_access_fields(key, record)?;
-    let search_text = normalize_search_text(
-        text_fields
-            .iter()
-            .filter_map(|field| record.fields.get(*field))
-            .flat_map(search_value_text)
-            .collect::<Vec<_>>()
-            .join(" | ")
-            .as_str(),
-    );
+    let search_text = if typename == "GraphqlContact" {
+        let email = string_field(record, "email").unwrap_or("");
+        let name = string_field(record, "name")
+            .unwrap_or_else(|| email.split('@').next().unwrap_or(email));
+        normalize_search_text(&format!("{name} | {email}"))
+    } else {
+        normalize_search_text(
+            text_fields
+                .iter()
+                .filter_map(|field| record.fields.get(*field))
+                .flat_map(search_value_text)
+                .collect::<Vec<_>>()
+                .join(" | ")
+                .as_str(),
+        )
+    };
     Some(SearchDocument {
         profile: SearchProfile::QuickAccessV1,
         record_key: key.clone(),

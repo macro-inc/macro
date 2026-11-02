@@ -28,7 +28,11 @@ impl ContactSearch {
     pub fn matches(&self, contact: &Contact) -> bool {
         let text = match &contact.name {
             Some(name) => format!("{name} | {}", contact.user_id.email_str()),
-            None => contact.user_id.email_str().to_owned(),
+            None => {
+                let email = contact.user_id.email_str();
+                let label = email.split('@').next().unwrap_or(email);
+                format!("{label} | {email}")
+            }
         };
         let text = normalize_text(&text);
         self.0

@@ -291,7 +291,8 @@ measured costs, memory boundaries, and the schema-12 reset behavior.
 
 ### Contact projection and page retention
 
-Projection version 5 indexes viewer-scoped `GraphqlContact` names/emails into
+Projection version 6 indexes viewer-scoped `GraphqlContact` names/emails (including
+the visible local-part fallback) into
 `person`, not public profiles. Search responses expose `projectionVersion` so
 contact consumers can detect older native engines. The derived-index rebuild
 preserves normalized data, mutations, and storage generation.
@@ -305,6 +306,18 @@ runner now shares Soup's leadership and commits pages through `HydrationScope`:
 expected/response identity and durable generation must still match under the
 engine lock. Legacy unscoped foreground behavior is unchanged. UI migration and
 removal reconciliation remain in the [contacts plan](../../docs/design/disk-backed-contacts.md).
+
+### Context-aware person ranking
+
+`cache-core::people` defines scoped local context updates and a separate person
+search policy. Begin compares the previous epoch, patches cap at 500 and never
+write public contact identity/name fields, and commit publishes readiness. Full
+snapshot epochs expire omitted old facts without deleting membership records.
+Search joins the existing person projection to normalized records one row at a
+time, applying secondary-inbox/explicit exclusions, per-surface scores and DM
+deduplication before a bounded heap. Generic title search remains covering-only.
+This uses schema 12 without adding a database or physical table; native/browser
+host commands and Quick Access/recipient source migration are still pending.
 
 ## Browser OPFS writes
 

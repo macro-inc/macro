@@ -36,6 +36,11 @@ allowed. A query naming exactly its participants ranks it right after exact
 names, above a larger group holding the same people. In Command K and mobile
 name search, a person's first name alone also counts as exact for their DM or
 person row.
+Name relevance uses a fixed per-item score: adding an unrelated result must not
+rescale existing scores. Search-menu exact names precede prefixes, then other
+subsequence matches; recency and surface boosts still apply within those tiers.
+Recipient menus use their own tiers: exact addresses, address prefixes, word
+prefixes, then other matches.
 On phones, name-result icons and avatars are scaled to 150% (16px artwork
 becomes 24px), preserving row height and text alignment.
 

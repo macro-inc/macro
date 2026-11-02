@@ -88,6 +88,18 @@ impl ClaimFailingStorage {
 impl Storage for ClaimFailingStorage {
     type Error = std::io::Error;
 
+    async fn visit_contact_records(
+        &self,
+        query: &cache_core::search::SearchQuery,
+        visit: impl FnMut(&EntityKey<'_>, &Record) + maybe_send::MaybeSend,
+    ) -> Result<(), Self::Error> {
+        self.inner
+            .visit_contact_records(query, visit)
+            .await
+            .unwrap();
+        Ok(())
+    }
+
     async fn visit_search_documents(
         &self,
         profile: cache_core::search::SearchProfile,

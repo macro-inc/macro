@@ -7,8 +7,8 @@ contact search and the client cache. Keep matching behavior consistent across th
 
 ## Scope
 
-- Owns: normalization and per-token match scores.
-- Not here: authorization, pagination, database reads, freshness or type boosts.
+- Owns: normalization, token eligibility, corpus-independent match quality, recipient tiers, and blend arithmetic (`src/ranking.rs`). Shared TSV fixtures verify Rust/browser parity.
+- Not here: authorization, pagination, database reads, or each surface's chosen weights/boosts.
 - Used by: `contacts`, `cache-core` (native and WASM).
 
 ## Checks

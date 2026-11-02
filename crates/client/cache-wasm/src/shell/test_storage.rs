@@ -105,6 +105,14 @@ impl Storage for BrowserStorage {
             .await
     }
 
+    async fn visit_contact_records(
+        &self,
+        query: &SearchQuery,
+        visit: impl FnMut(&EntityKey<'_>, &Record),
+    ) -> Result<(), Self::Error> {
+        self.inner.visit_contact_records(query, visit).await
+    }
+
     async fn browse_search_documents(
         &self,
         profile: SearchProfile,

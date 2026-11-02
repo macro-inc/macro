@@ -3738,6 +3738,7 @@ dependencies = [
  "apollo-parser",
  "chrono",
  "lru 0.16.4",
+ "macro_user_id",
  "maybe_send",
  "miniz_oxide",
  "pollster",

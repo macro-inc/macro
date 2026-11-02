@@ -15,6 +15,31 @@ wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
 #[path = "common/contacts.rs"]
 mod contacts;
+#[path = "common/people.rs"]
+mod people;
+
+#[wasm_bindgen_test(async)]
+async fn people_policy_filters_and_ranks_before_limiting_over_opfs() {
+    let owner = OpfsOwner::acquire("cache-people-policy.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("fresh storage")
+    };
+    let mut storage =
+        TursoStorage::from_opfs_session(session.connect().unwrap(), "people-policy").unwrap();
+    people::seed(&mut storage, 2_000).await;
+    let storage = people::assert_policy(storage).await;
+    healthy_close(storage.try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
 #[path = "common/search.rs"]
 mod search_streaming;
 

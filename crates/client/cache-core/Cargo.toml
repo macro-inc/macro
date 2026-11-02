@@ -9,6 +9,7 @@ apollo-compiler = { workspace = true }
 apollo-parser = { workspace = true }
 chrono = { workspace = true }
 lru = { workspace = true }
+macro_user_id = { workspace = true }
 maybe_send = { path = "../../maybe_send" }
 miniz_oxide = { workspace = true }
 postcard = { workspace = true }

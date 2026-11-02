@@ -208,6 +208,7 @@ with more people than the query names stays below it.
 Commas separate query terms like spaces in the cache search
 (`cache-core/search.rs`, mirrored by `matchesTokenSubsequences`) and in the
 server's channel name search; keep the three together.
+Name scores are per-row (a fixed 0–100 scale), not normalized against the current result corpus. Rust/browser fixtures in `crates/subsequence_match/src/ranking` keep match quality and recipient tiers aligned; surface weights and boosts remain caller-owned. Command-keyword eligibility keeps its dedicated matcher.
 Name groups and match position use the row's label (`getDisplayName`), so search
 text can add emails, aliases, or command keywords before or after it. Mention
 menus rank loaded entity sources together with `MENTION_RANKING_CONFIG` in

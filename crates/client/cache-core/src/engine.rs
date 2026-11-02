@@ -4,6 +4,7 @@
 
 mod calendar;
 mod hydration;
+mod people;
 pub use hydration::HydrationScope;
 #[cfg(test)]
 mod test;
@@ -88,6 +89,9 @@ pub enum EngineError<S: std::error::Error + 'static> {
     RecordSelection(#[from] RecordSelectionError),
     #[error(transparent)]
     Search(#[from] SearchError),
+    /// Context-aware person lookup input or publication error.
+    #[error(transparent)]
+    People(#[from] crate::people::PeopleError),
     #[error(transparent)]
     Calendar(#[from] CalendarError),
     #[error("unknown or already-settled optimistic transaction {0}")]

@@ -18,6 +18,7 @@ import { useAugmentUserWithDmActivity } from '@core/user/dmActivity';
 import { createFreshSearch, FreshSearchPresets } from '@core/util/freshSort';
 import { isEditableInput } from '@core/util/isEditableInput';
 import { matches } from '@core/util/match';
+import { recipientMatchRank } from '@core/util/recipient-match-rank';
 import { truncateString } from '@core/util/string';
 import CheckIcon from '@icon/system/regular/check.svg';
 import HashIcon from '@icon/system/regular/hash.svg';
@@ -220,33 +221,6 @@ function getRecipientOptionTextValue(option: CombinedRecipientItem) {
   }
 }
 
-const RECIPIENT_MATCH_ORDER = [
-  'address',
-  'address-start',
-  'word-start',
-  'other',
-] as const;
-type RecipientMatch = (typeof RECIPIENT_MATCH_ORDER)[number];
-
-const WORD_BREAK = /[^\p{L}\p{N}]+/u;
-
-function recipientMatch(
-  option: CombinedRecipientItem,
-  query: string,
-  queryWords: string[]
-): RecipientMatch {
-  const email = getRecipientOptionEmail(option)?.toLowerCase();
-  if (email === query) return 'address';
-  if (email && query.includes('@') && email.startsWith(query))
-    return 'address-start';
-  const words = getRecipientOptionTextValue(option)
-    .toLowerCase()
-    .split(WORD_BREAK);
-  if (queryWords.every((part) => words.some((word) => word.startsWith(part))))
-    return 'word-start';
-  return 'other';
-}
-
 // Fuzzy search scores every hit alike, leaving recency and length to decide
 // what Enter commits. Stronger matches go first; the search order breaks ties.
 function rankRecipientMatches<T extends CombinedRecipientItem>(
@@ -255,15 +229,16 @@ function rankRecipientMatches<T extends CombinedRecipientItem>(
 ): T[] {
   const normalized = query.trim().toLowerCase();
   if (!normalized) return found;
-  const queryWords = normalized.split(WORD_BREAK).filter(Boolean);
   return found
     .map((option) => ({
       option,
-      rank: RECIPIENT_MATCH_ORDER.indexOf(
-        recipientMatch(option, normalized, queryWords)
+      rank: recipientMatchRank(
+        getRecipientOptionTextValue(option),
+        getRecipientOptionEmail(option),
+        normalized
       ),
     }))
-    .sort((a, b) => a.rank - b.rank)
+    .sort((a, b) => b.rank - a.rank)
     .map(({ option }) => option);
 }
 

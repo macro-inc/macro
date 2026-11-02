@@ -9,9 +9,10 @@ The contact debug inspector, Calendar search's organizer/attendee pickers,
 Drive creator filters and CRM Notes creator filters now use bounded windows. Explicit selected ID/email lookup reads viewer-scoped
 keys offline and authoritative bounded batches online; selected values remain
 independent of suggestions. Other product menus still retain legacy arrays.
-**Next step:** migrate Soup and CRM owner filters; handle Tasks' AI-filter people
-catalog before migrating its people controls. Quick Access/shared recipients
-still need before-limit DM ranking/exclusions.
+**Next step:** expose the new core person-policy API through native/browser hosts,
+publish channel/inbox context in bounded batches, and cut Quick Access/shared
+recipients over to it. Their old full-list source remains until that wiring lands.
+Soup/CRM owner filters and Tasks' AI-filter catalog also remain.
 
 ## Goal and scope
 
@@ -123,6 +124,23 @@ and token eligibility identical on the server and in the native/WASM cache;
 ranking policy remains in the owning consumer. Exact lookup uses indexed,
 bounded point reads before resolving names.
 
+### Approved deterministic ranking change
+
+Menu scores now use a fixed per-row scale rather than normalizing against the
+whole loaded result set. Surface match tiers, recency weights and boosts remain
+explicit; order within tiers may change. Command keyword eligibility retains its
+existing matcher. Shared Rust/browser fixtures cover name quality and recipient
+tiers. This is the approved prerequisite for correct bounded ranking.
+
+The new core person-policy API stores only local DM/inbox facts on existing
+normalized keys. It fences context publication by account, storage generation
+and compare-and-set epochs; incomplete snapshots report pending. Context-only
+stubs cannot become contacts. SQL-filtered records stream into at most `limit + 1`
+unique winners, with exclusions and DM deduplication applied before the limit.
+This core API is **not yet exposed through host transports or used by Quick Access**.
+Its joined-record scan is slower than ordinary covering-only title search; do not
+claim the UI cutover or whole-app memory goal complete from these engine tests.
+
 ## Phase 2 — cache ingestion and query-driven search
 
 - [x] Hydrate one 500-row page at a time, persist it, then release its payload.
@@ -135,15 +153,16 @@ bounded point reads before resolving names.
   with Soup. `ContactDirectoryBackfill` marks nodes `@cacheOnly` and generates
   its cursor-only result. The background runner uses scoped cache admission.
 - [x] Project `GraphqlContact` names/emails into `person` through the existing
-  covering index and borrowed-row ranker (projection version 5). Public `User` /
+  covering index and borrowed-row ranker (projection version 6, including the visible email-label fallback). Public `User` /
   `GraphqlUser` profiles no longer imply contact membership. No timestamps are
   invented from relationship metadata.
 - [x] Materialize bounded `IUser` windows with target `userId` as `IUser.id`;
   the viewer-scoped `GraphqlContact.id` is a cache key, not a DM/navigation target.
   `directory.ts` maps returned names directly without populating the global name store.
-- [ ] Preserve DM recency, deduplication, and secondary-inbox exclusions. Ranking
-  facts needed to choose the top results must apply before the result limit;
-  relationship `updated_at` is not automatically equivalent to DM activity.
+- [ ] Wire DM recency, deduplication, and secondary-inbox exclusions end to end.
+  The core policy, scoped context lifecycle and before-limit tests are implemented;
+  the channel/inbox context producer and host/consumer wiring are pending.
+  Relationship `updated_at` is not equivalent to DM activity.
 - [x] Add bounded search/browse under `apps/web/src/lib/queries/contacts`, with
   pending/error, snapshot/partial/cold, and offline/source status. Cursors bind to
   source, account, query and (for cache) generation; pagination never switches sources.

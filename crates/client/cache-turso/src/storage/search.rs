@@ -50,7 +50,16 @@ pub(super) fn statement(
     bucket: &str,
     query: &SearchQuery,
 ) -> (String, driver::Values) {
-    let mut sql = SEARCH_LOAD.to_owned();
+    statement_with_base(SEARCH_LOAD, profile, bucket, query)
+}
+
+pub(super) fn statement_with_base(
+    base: &str,
+    profile: SearchProfile,
+    bucket: &str,
+    query: &SearchQuery,
+) -> (String, driver::Values) {
+    let mut sql = base.to_owned();
     let mut values = vec![text(profile.as_str()), text(bucket)];
     let mut tokens = query.tokens().peekable();
     if tokens.peek().is_some() {

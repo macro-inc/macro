@@ -1051,6 +1051,35 @@ impl Storage for TursoStorage {
         self.latch_result(result)
     }
 
+    async fn visit_contact_records(
+        &self,
+        query: &SearchQuery,
+        mut visit: impl FnMut(&EntityKey<'_>, &Record) + maybe_send::MaybeSend,
+    ) -> Result<(), Self::Error> {
+        self.require_healthy()?;
+        let (sql, values) = search::statement_with_base(
+            include_str!("storage/contact_search.sql"),
+            SearchProfile::QuickAccessV1,
+            "person",
+            query,
+        );
+        let mut key_buffer = String::new();
+        let result = driver::query_each(&self.connection(), &sql, values, |row| {
+            let mut values = row.get_values();
+            let (Some(Value::Text(typename)), Some(Value::Text(id)), Some(Value::Blob(blob)), None) =
+                (values.next(), values.next(), values.next(), values.next())
+            else {
+                return Err(TursoStorageError::reset(PhysicalResetReason::Corruption));
+            };
+            let key = RecordKey::borrow_entity(typename.as_str(), id.as_str(), &mut key_buffer)?;
+            let record = decode_record(blob)
+                .map_err(|_| TursoStorageError::reset(PhysicalResetReason::Codec))?;
+            visit(&key, &record);
+            Ok(())
+        });
+        self.latch_result(result)
+    }
+
     async fn browse_search_documents(
         &self,
         profile: SearchProfile,
