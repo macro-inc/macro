@@ -39,25 +39,6 @@ checked, the share status uses **Restricted** instead of claiming **Just me**;
 known public, team, or shared access still appears.
 This status follows the current document and account when navigating with Share open.
 
-When meeting notes are enabled, the document side panel’s **References** section
-also lists linked calendar events, including when there are no document or message
-references. Each row uses the same single-line style, with the meeting title and
-date inline. Open a row to jump to
-your calendar copy; meetings shared through a channel or team without a personal
-copy use a read-only event preview. The preview also works when the Calendar
-view is disabled. Readers see only
-meetings they can view in detail. Owners retain safe
-unavailable-meeting entries, which can be removed through Share. Linking or
-unlinking updates the References count.
-
-Verify a note linked to two meetings, a note with both message and calendar
-references, a rescheduled one-time event, and a recurring occurrence. A cancelled
-instance must never open a later instance. Check full-detail team sharing, a
-reader who can see both entities, a reader with document-only access, and the
-feature flag off. On phone, open References from the document side panel and
-follow a meeting without leaving a sheet over the calendar. Closing a read-only
-meeting preview must return to the document details sheet.
-
 Verify **Public → View** links in a fresh signed-out browser context. The
 `/app/drive/md/<id>` route (including folder/tab document links and legacy
 `/app/md/<id>` redirects) must show the document without private Drive lists or

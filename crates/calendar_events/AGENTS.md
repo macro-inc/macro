@@ -59,9 +59,7 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 
 - Keep note links separate from sync-owned occurrence rows; require a live
   occurrence and corroborated inbox copies for inherited view access. A document
-  owner can unlink after losing meeting access. Document readers can discover
-  only links whose meeting details they can currently see; owners also retain
-  unavailable links for revocation. See
+  owner can unlink after losing meeting access. See
   [meeting-note access](../../docs/architecture/calendar-meeting-notes.md).
 - `CalendarEvent` is the stable Macro entity; external calendars and email
   invitations are sources feeding it, and recurrence instances are queryable

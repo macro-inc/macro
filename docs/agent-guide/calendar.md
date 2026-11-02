@@ -23,10 +23,6 @@ Existing document editors and other sharing keep their access.
 Notes use the event details' existing row layout and controls. Team choices come
 from current Macro team memberships; they do not introduce departments or subteams.
 
-Linked meetings also appear in the note’s side-panel **References** section.
-Only readers with meeting-detail access see those references; owners retain safe
-unavailable-meeting entries.
-
 Open the linked title to read the original document. On desktop it opens in a
 new split; on mobile it replaces the calendar pane and closes event details.
 Opening a note leaves focus available to the document as it mounts; dismissing

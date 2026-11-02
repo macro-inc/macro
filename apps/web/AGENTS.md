@@ -114,9 +114,6 @@ sample data; keep notes aligned with those existing surfaces and preserve their
 dialog open guards. Open the existing document Share dialog for note access,
 keep labeled Options controls visible beside truncated titles without redundant
 hover tooltips, and use existing team memberships for optional note sharing.
-Include linked meetings in Markdown side-panel References, behind the same flag;
-reuse the shared single-line ReferenceRow with the title and date inline, and
-resolve meeting details and opening targets through authorized calendar previews.
 Gate event notes and document Share meeting-link controls with
 `enable-calendar-meeting-notes` before mounting their query sources; it defaults
 on in dev and uses PostHog in production.

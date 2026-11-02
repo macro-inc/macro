@@ -84,27 +84,8 @@ captures the account and occurrence before creation starts, suppresses duplicate
 clicks, and retains the created document for retry if linking fails. A disposed
 view never navigates on a late result. There is no separate calendar-owned content
 store or create endpoint.
-
-The document References section lists meeting links alongside document and
-message references. Readers need document view access and current full-detail
-meeting access to discover a link. Owners also retain unavailable links; their
-labels stay safe. Calendar previews resolve titles and times through the viewer’s
-projection. Opening a reference uses the viewer’s own copy when available, or
-the existing read-only event preview otherwise. The note flag gates this query
-before it mounts.
-
-The links response includes `canViewMeeting` and an optional exact `event`
-preview, so References never performs a separate, more permissive mention read.
-It also includes an optional `teamEvent` projection, resolved through
-the same source entitlement reader and sanitizer as the team calendar. It never
-borrows canonical details, includes busy-only content, or substitutes a nearby
-occurrence. References previews expose no channel-share actions. A `single` link
-can follow a moved one-time event, but cannot become a link to a new recurring
-series.
-
 The document Share panel also lists owner-only durable links, immediate optional
-team access controls, and inline unlink confirmation. That list does not require
-current meeting access. It uses
+team access controls, and inline unlink confirmation. That list does not require current meeting access. It uses
 generic labels for inaccessible or indirectly shared meetings, so it cannot reveal
 a richer canonical event title through a restricted provider projection.
 
@@ -114,7 +95,7 @@ disabled. Every response is private and non-cacheable:
 | Method | Path | Purpose |
 | --- | --- | --- |
 | GET | `/meeting-notes/documents?query=` | Up to 30 owned markdown suggestions and current teams |
-| GET | `/meeting-notes/documents/{document_id}/links` | Visible links for document readers; owners also receive unavailable grants |
+| GET | `/meeting-notes/documents/{document_id}/links` | Owner-only durable grants, including unavailable meetings |
 | GET | `/events/{event_id}/notes?occurrenceKey=` | Notes visible through this occurrence |
 | PUT | `/events/{event_id}/notes/{document_id}?occurrenceKey=` | Link/update with `{ "teamId": null }` or a team UUID |
 | DELETE | `/events/{event_id}/notes/{document_id}?occurrenceKey=` | Idempotently unlink the owned document |

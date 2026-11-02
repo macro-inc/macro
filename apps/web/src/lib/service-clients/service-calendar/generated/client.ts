@@ -1128,7 +1128,7 @@ export const noteDocuments = async (
 };
 
 /**
- * @summary List a document's visible meeting links; owners also see unavailable grants.
+ * @summary List an owned document's meeting grants, including unavailable meetings.
  */
 export type documentNoteLinksResponse200 = {
   data: DocumentNoteLink[];
