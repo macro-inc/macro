@@ -55,16 +55,21 @@ function ParticipantTileWrapper(props: {
   isConnecting?: boolean;
   class?: string;
 }) {
+  // Fills its cell, but never wider than 16:9: on a wide panel a full-width
+  // tile crops a 16:9 camera to a zoomed-in strip. Taller cells (phones,
+  // grids) still fill, so portrait video keeps the space.
   return (
-    <div
-      class={cn(
-        'relative flex items-center justify-center rounded-lg overflow-hidden bg-panel min-h-30 border border-edge-muted',
-        props.isSpeaking && 'ring-inset ring-2 ring-accent',
-        props.isConnecting && 'animate-pulse',
-        props.class
-      )}
-    >
-      {props.children}
+    <div class="flex size-full items-center justify-center [container-type:size]">
+      <div
+        class={cn(
+          'relative flex h-full w-[min(100cqw,calc(100cqh*16/9))] items-center justify-center rounded-lg overflow-hidden bg-panel min-h-30 border border-edge-muted',
+          props.isSpeaking && 'ring-inset ring-2 ring-accent',
+          props.isConnecting && 'animate-pulse',
+          props.class
+        )}
+      >
+        {props.children}
+      </div>
     </div>
   );
 }
@@ -345,7 +350,6 @@ export function CallOverlay(props: {
               when={participants().length > 0}
               fallback={
                 <LocalParticipantTile
-                  class="size-full"
                   isSpeaking={isLocalSpeaking()}
                   isConnecting={isConnecting()}
                   isAudioMuted={callCtx.isAudioMuted()}
@@ -374,7 +378,7 @@ export function CallOverlay(props: {
               {/* Local participant PIP (Google Meet style: small, bottom-right) */}
               <div class="absolute bottom-4 right-4 w-40 aspect-video shadow-lg z-10 sm:w-48">
                 <LocalParticipantTile
-                  class="size-full min-h-0"
+                  class="min-h-0"
                   isSpeaking={isLocalSpeaking()}
                   isConnecting={isConnecting()}
                   isAudioMuted={callCtx.isAudioMuted()}

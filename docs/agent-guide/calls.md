@@ -200,6 +200,9 @@ call without gaining access to the channel.
 
 The join screen, in-call participant tiles, and incoming direct-call badges use
 profile pictures; initials are the fallback when no photo is available.
+In-call participant tiles fill their grid cell but are never wider than 16:9,
+so a wide window centers them instead of cropping cameras; check a single remote
+participant in a wide window and at phone width.
 The join screen has microphone, camera, and background effects buttons over the
 preview, with pill selectors below for microphone, speaker, camera, and
 backgrounds. The background button over the preview toggles the selected effect
