@@ -112,6 +112,17 @@ it('hands Enter back after a click on the control keyboard focus is on', () => {
   expect(ownsEnter(button)).toBe(false);
 });
 
+it('leaves Enter to the focused control after a press that moves no focus', () => {
+  const ownsEnter = track();
+  const button = add('<button>Project</button>');
+  const scrollbar = add('<div></div>');
+
+  button.focus();
+  press(scrollbar);
+
+  expect(ownsEnter(button)).toBe(true);
+});
+
 it('forgets a control once focus moves on', () => {
   const ownsEnter = track();
   const button = add('<button>Open</button>');

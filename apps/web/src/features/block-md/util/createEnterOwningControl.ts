@@ -22,8 +22,8 @@ export function createEnterOwningControl() {
   };
   // Clicking the focused control fires no focusin, so a press has to clear it.
   const press = ({ target }: Event) => {
-    control = undefined;
     pressed = target instanceof Node ? target : null;
+    if (control?.contains(pressed)) control = undefined;
   };
   document.addEventListener('focusin', track);
   document.addEventListener('pointerdown', press, true);
