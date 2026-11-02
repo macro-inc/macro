@@ -1504,10 +1504,7 @@ export function getConfigureBotResponseSchema() {
 }
 
 function _create_ConnectMcpServer() {
-  return z.object({
-    url: z.string(),
-    serverName: z.string(),
-  });
+  return z.object({ url: z.string(), serverName: z.string() });
 }
 let _cached_ConnectMcpServer:
   | ReturnType<typeof _create_ConnectMcpServer>
@@ -2853,7 +2850,10 @@ export function getCreateChannelResponseSchema() {
 }
 
 function _create_CreateCompany() {
-  return z.object({ name: z.string(), domain: z.string() });
+  return z.object({
+    name: z.string(),
+    domain: z.union([z.string(), z.null()]).optional(),
+  });
 }
 let _cached_CreateCompany: ReturnType<typeof _create_CreateCompany> | undefined;
 export function getCreateCompanySchema() {
@@ -3053,9 +3053,7 @@ export function getCreateDocumentSchema() {
 }
 
 function _create_CreateDocumentResponse() {
-  return z.object({
-    documentId: z.string().uuid(),
-  });
+  return z.object({ documentId: z.string().uuid() });
 }
 let _cached_CreateDocumentResponse:
   | ReturnType<typeof _create_CreateDocumentResponse>
@@ -4877,10 +4875,7 @@ export function getCreateProjectSchema() {
 }
 
 function _create_CreateProjectResponse() {
-  return z.object({
-    projectId: z.string().uuid(),
-    projectName: z.string(),
-  });
+  return z.object({ projectId: z.string().uuid(), projectName: z.string() });
 }
 let _cached_CreateProjectResponse:
   | ReturnType<typeof _create_CreateProjectResponse>
@@ -5103,9 +5098,7 @@ export function getDecideSchema() {
 }
 
 function _create_DecisionResponse() {
-  return z.object({
-    probabilities: z.record(z.number()),
-  });
+  return z.object({ probabilities: z.record(z.number()) });
 }
 let _cached_DecisionResponse:
   | ReturnType<typeof _create_DecisionResponse>
@@ -5177,10 +5170,7 @@ export function getDeleteCalendarEventSchema() {
 }
 
 function _create_DeleteCalendarEventResponse() {
-  return z.object({
-    eventId: z.string().uuid(),
-    summary: z.string(),
-  });
+  return z.object({ eventId: z.string().uuid(), summary: z.string() });
 }
 let _cached_DeleteCalendarEventResponse:
   | ReturnType<typeof _create_DeleteCalendarEventResponse>
@@ -5285,10 +5275,7 @@ export function getDeleteCommentResponseSchema() {
 }
 
 function _create_DeleteDatabaseView() {
-  return z.object({
-    databaseId: z.string().uuid(),
-    viewId: z.string().uuid(),
-  });
+  return z.object({ databaseId: z.string().uuid(), viewId: z.string().uuid() });
 }
 let _cached_DeleteDatabaseView:
   | ReturnType<typeof _create_DeleteDatabaseView>
@@ -5323,10 +5310,7 @@ export function getDeleteImportEntitySchema() {
 }
 
 function _create_DeleteImportEntityResponse() {
-  return z.object({
-    discarded: z.boolean(),
-    message: z.string(),
-  });
+  return z.object({ discarded: z.boolean(), message: z.string() });
 }
 let _cached_DeleteImportEntityResponse:
   | ReturnType<typeof _create_DeleteImportEntityResponse>
@@ -5387,10 +5371,7 @@ export function getDeleteTagSchema() {
 }
 
 function _create_DeleteTagResponse() {
-  return z.object({
-    success: z.boolean(),
-    message: z.string(),
-  });
+  return z.object({ success: z.boolean(), message: z.string() });
 }
 let _cached_DeleteTagResponse:
   | ReturnType<typeof _create_DeleteTagResponse>
@@ -5788,10 +5769,7 @@ export function getEditBookingLinkSchema() {
 }
 
 function _create_EditCanvas() {
-  return z.object({
-    document_id: z.string(),
-    instructions: z.string(),
-  });
+  return z.object({ document_id: z.string(), instructions: z.string() });
 }
 let _cached_EditCanvas: ReturnType<typeof _create_EditCanvas> | undefined;
 export function getEditCanvasSchema() {
@@ -5828,10 +5806,7 @@ export function getEditChannelMessageResponseSchema() {
 }
 
 function _create_EditComment() {
-  return z.object({
-    commentId: z.string().uuid(),
-    content: z.string(),
-  });
+  return z.object({ commentId: z.string().uuid(), content: z.string() });
 }
 let _cached_EditComment: ReturnType<typeof _create_EditComment> | undefined;
 export function getEditCommentSchema() {
@@ -13346,10 +13321,7 @@ export function getMarkNotificationsDoneSchema() {
 }
 
 function _create_MarkNotificationsResponse() {
-  return z.object({
-    success: z.boolean(),
-    count: z.number().int().gte(0),
-  });
+  return z.object({ success: z.boolean(), count: z.number().int().gte(0) });
 }
 let _cached_MarkNotificationsResponse:
   | ReturnType<typeof _create_MarkNotificationsResponse>
@@ -13360,9 +13332,7 @@ export function getMarkNotificationsResponseSchema() {
 }
 
 function _create_MarkNotificationsSeen() {
-  return z.object({
-    notificationIds: z.array(z.string().uuid()),
-  });
+  return z.object({ notificationIds: z.array(z.string().uuid()) });
 }
 let _cached_MarkNotificationsSeen:
   | ReturnType<typeof _create_MarkNotificationsSeen>
@@ -13406,10 +13376,7 @@ export function getMoveToProjectSchema() {
 }
 
 function _create_MoveToProjectResponse() {
-  return z.object({
-    success: z.boolean(),
-    message: z.string(),
-  });
+  return z.object({ success: z.boolean(), message: z.string() });
 }
 let _cached_MoveToProjectResponse:
   | ReturnType<typeof _create_MoveToProjectResponse>
@@ -13684,9 +13651,7 @@ export function getNameSearchSchema() {
 }
 
 function _create_OpenDirectMessage() {
-  return z.object({
-    participants: z.array(z.string()),
-  });
+  return z.object({ participants: z.array(z.string()) });
 }
 let _cached_OpenDirectMessage:
   | ReturnType<typeof _create_OpenDirectMessage>
@@ -17012,9 +16977,7 @@ export function getReadIllustratorDocumentSchema() {
 }
 
 function _create_ReadIllustratorDocumentResponse() {
-  return z.object({
-    content: z.string(),
-  });
+  return z.object({ content: z.string() });
 }
 let _cached_ReadIllustratorDocumentResponse:
   | ReturnType<typeof _create_ReadIllustratorDocumentResponse>
@@ -17487,10 +17450,7 @@ export function getRemoveFromPipelineResponseSchema() {
 }
 
 function _create_RenameChannel() {
-  return z.object({
-    channelId: z.string().uuid(),
-    name: z.string(),
-  });
+  return z.object({ channelId: z.string().uuid(), name: z.string() });
 }
 let _cached_RenameChannel: ReturnType<typeof _create_RenameChannel> | undefined;
 export function getRenameChannelSchema() {
@@ -17513,10 +17473,7 @@ export function getRenameChannelResponseSchema() {
 }
 
 function _create_RenameDocument() {
-  return z.object({
-    documentId: z.string().uuid(),
-    documentName: z.string(),
-  });
+  return z.object({ documentId: z.string().uuid(), documentName: z.string() });
 }
 let _cached_RenameDocument:
   | ReturnType<typeof _create_RenameDocument>
@@ -17794,10 +17751,7 @@ export function getSaveDatabaseQuerySchema() {
 }
 
 function _create_SaveDatabaseQueryResponse() {
-  return z.object({
-    queryId: z.string().uuid(),
-    markdown: z.string(),
-  });
+  return z.object({ queryId: z.string().uuid(), markdown: z.string() });
 }
 let _cached_SaveDatabaseQueryResponse:
   | ReturnType<typeof _create_SaveDatabaseQueryResponse>
@@ -18178,10 +18132,7 @@ export function getSaveDatabaseViewSchema() {
 }
 
 function _create_SavedDatabaseView() {
-  return z.object({
-    view: z.any(),
-    created: z.boolean(),
-  });
+  return z.object({ view: z.any(), created: z.boolean() });
 }
 let _cached_SavedDatabaseView:
   | ReturnType<typeof _create_SavedDatabaseView>
@@ -18329,10 +18280,7 @@ export function getSendChannelMessageSchema() {
 }
 
 function _create_SendChannelMessageResponse() {
-  return z.object({
-    channel_id: z.string().uuid(),
-    message_id: z.string(),
-  });
+  return z.object({ channel_id: z.string().uuid(), message_id: z.string() });
 }
 let _cached_SendChannelMessageResponse:
   | ReturnType<typeof _create_SendChannelMessageResponse>
@@ -18624,10 +18572,7 @@ export function getSetEntityPropertySchema() {
 }
 
 function _create_SetEntityPropertyResponse() {
-  return z.object({
-    success: z.boolean(),
-    message: z.string(),
-  });
+  return z.object({ success: z.boolean(), message: z.string() });
 }
 let _cached_SetEntityPropertyResponse:
   | ReturnType<typeof _create_SetEntityPropertyResponse>
@@ -19575,10 +19520,7 @@ export function getUpdateCallRecordSchema() {
 }
 
 function _create_UpdateCallRecordResponse() {
-  return z.object({
-    callId: z.string().uuid(),
-    summary: z.string(),
-  });
+  return z.object({ callId: z.string().uuid(), summary: z.string() });
 }
 let _cached_UpdateCallRecordResponse:
   | ReturnType<typeof _create_UpdateCallRecordResponse>

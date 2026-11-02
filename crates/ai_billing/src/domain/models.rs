@@ -54,10 +54,10 @@ pub const OVERAGE_LIMIT_MIN_CENTS: i64 = 500;
 pub const OVERAGE_LIMIT_MAX_CENTS: i64 = 500_000;
 /// Credit balance below which an automatic reload fires, unless the payer
 /// has set their own minimum.
-pub const AUTO_RELOAD_DEFAULT_MINIMUM_CENTS: i64 = 1_000;
+pub const AUTO_RELOAD_DEFAULT_MINIMUM_CENTS: i64 = 500;
 /// Credit balance an automatic reload tops up to, unless the payer has set
 /// their own target.
-pub const AUTO_RELOAD_DEFAULT_TARGET_CENTS: i64 = 10_000;
+pub const AUTO_RELOAD_DEFAULT_TARGET_CENTS: i64 = 2_500;
 /// Largest automatic reload target a payer may set.
 pub const AUTO_RELOAD_TARGET_MAX_CENTS: i64 = 500_000;
 /// Accrued overage is charged once it reaches this much (or when the period
@@ -103,6 +103,16 @@ impl PlanTier {
             PlanTier::Free => 0,
             PlanTier::Premium => 4_000,
             PlanTier::Max => 20_000,
+        }
+    }
+
+    /// Monthly automatic reload limit a payer on this tier starts from, in
+    /// customer cents. `None` for tiers that cannot reload.
+    pub const fn default_auto_reload_monthly_limit_cents(self) -> Option<i64> {
+        match self {
+            PlanTier::Free => None,
+            PlanTier::Premium => Some(20_000),
+            PlanTier::Max => Some(100_000),
         }
     }
 
@@ -551,6 +561,58 @@ pub enum OverageChargeStatus {
     Failed,
 }
 
+/// What a card-on-file credit charge is for. Both kinds count against the
+/// payer's monthly credit limit.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, strum::Display, strum::EnumString)]
+#[strum(serialize_all = "snake_case")]
+pub enum CreditReloadKind {
+    /// Bought by Auto-Reload when the balance fell under the minimum.
+    Automatic,
+    /// Bought once by the payer or a team member.
+    Purchase,
+}
+
+/// How a one-time credit purchase charged to the card on file ended.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum CreditPurchaseStatus {
+    /// Collected and booked as credits.
+    Paid,
+    /// The card was declined. The invoice stays open for the provider's
+    /// retries; buying again retries it instead of charging twice.
+    Declined,
+    /// The payer has no card on file. Nothing was reserved or charged; the
+    /// payer can buy the same pack through checkout instead.
+    PaymentMethodRequired,
+    /// The card needs the cardholder to authenticate (3-D Secure), which an
+    /// off-session charge can't do. The invoice was voided, so nothing was
+    /// charged; the payer can buy the same pack through checkout instead.
+    AuthenticationRequired,
+}
+
+/// A one-time credit purchase charged to the payer's card on file.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct CreditPurchase {
+    /// Amount charged, customer cents. A retry of an earlier declined
+    /// purchase charges that purchase's amount.
+    pub amount_cents: i64,
+    /// How the charge ended.
+    pub status: CreditPurchaseStatus,
+}
+
+/// The monthly credit limit that applies to this user's one-time purchases.
+#[derive(Debug, Clone, Serialize, ToSchema)]
+pub struct CreditPurchaseSnapshot {
+    /// Most credits charged to the card on file per UTC calendar month, from
+    /// automatic reloads and one-time purchases together, in customer cents.
+    /// `null` when the payer set no limit; team members always have one.
+    pub monthly_limit_cents: Option<i64>,
+    /// Charged this month so far, including charges that may still collect.
+    pub committed_cents: i64,
+    /// Start of the next UTC calendar month.
+    pub resets_at: DateTime<Utc>,
+}
+
 /// Lifecycle of an automatic credit reload pushed to Stripe.
 #[derive(
     Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, strum::Display, strum::EnumString,
@@ -624,8 +686,9 @@ pub enum AllowanceDecision {
 /// Calendar-month commitments that consume the payer's automatic reload cap.
 #[derive(Debug, Clone, Serialize, ToSchema)]
 pub struct AutoReloadMonthlyBudget {
-    /// Reloads paid, pending, or failed with an invoice that can still collect.
-    /// Customer cents; manual credit purchases do not count.
+    /// Reloads and one-time card purchases paid, pending, or failed with an
+    /// invoice that can still collect. Customer cents; Checkout purchases do
+    /// not count.
     pub committed_cents: i64,
     /// Start of the next UTC calendar month, independently of subscription renewal.
     pub resets_at: DateTime<Utc>,
@@ -702,6 +765,10 @@ pub struct UsageSnapshot {
     /// Why requests are refused right now, if they are.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub blocked_reason: Option<DenyReason>,
+    /// The monthly credit limit for one-time purchases charged to the card on
+    /// file. Present for paid, metered users, payer and team members alike.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub credit_purchase: Option<CreditPurchaseSnapshot>,
 }
 
 /// Errors raised by the billing domain.
@@ -726,6 +793,16 @@ pub enum BillingError {
     /// offered range ([`AutoReloadThresholds::validate`]).
     #[error("invalid automatic reload settings: {0}")]
     InvalidAutoReload(&'static str),
+    /// The purchase would take this month's card charges past the monthly
+    /// credit limit.
+    #[error("this purchase would exceed the monthly credit limit")]
+    CreditLimitExceeded {
+        /// What can still be charged this month, customer cents.
+        remaining_cents: i64,
+    },
+    /// An earlier purchase is still with the payment provider.
+    #[error("an earlier credit purchase is still being processed")]
+    PurchaseInProgress,
     /// The payer has no Stripe customer to bill.
     #[error("no payment account on file")]
     NoStripeCustomer,
