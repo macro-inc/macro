@@ -24,7 +24,7 @@ phone-only contacts or one contact linked to several companies.
 `POST /crm/companies` accepts `{"name":"Acme"}` or
 `{"name":"Acme","domain":"acme.com"}`. A contact created with
 `POST /crm/companies/{id}/contacts` may use
-`{"name":"Jane","email":"jane@gmail.com"}` with either company.
+`{"name":"Jane","email":"jane@example.com"}` with either company.
 The create API remains an insert, not an idempotent import/upsert API; callers
 must retain a successful response instead of retrying a confirmed create.
 

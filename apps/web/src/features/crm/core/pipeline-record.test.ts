@@ -133,7 +133,7 @@ it('accepts name-only companies and explicit cross-domain contact links', () => 
       {
         kind: 'new-contact',
         name: 'Jane',
-        email: 'jane@gmail.com',
+        email: 'jane@example.com',
         companyId: 'acme',
       },
       [{ id: 'acme' }]
@@ -144,7 +144,7 @@ it('accepts name-only companies and explicit cross-domain contact links', () => 
       {
         kind: 'new-contact',
         name: 'Jane',
-        email: 'jane@gmail.com',
+        email: 'jane@example.com',
         companyId: 'missing',
       },
       [{ id: 'acme' }]

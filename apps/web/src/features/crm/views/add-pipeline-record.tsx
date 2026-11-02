@@ -307,7 +307,7 @@ export function AddPipelineRecordDialog(
               />
               <input
                 aria-label="Email"
-                placeholder="Email, like jane@acme.com"
+                placeholder="Email, like jane@example.com"
                 type="email"
                 autocomplete="off"
                 spellcheck={false}
