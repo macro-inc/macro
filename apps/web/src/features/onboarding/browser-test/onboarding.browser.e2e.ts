@@ -84,7 +84,8 @@ test('a deep link survives the inbox OAuth round-trip', async ({ page }) => {
   await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('button', { name: 'Skip for now' }).click();
   await page.getByRole('button', { name: 'Continue' }).click();
-  await page.getByRole('button', { name: 'Skip for now' }).click();
+  // A work domain must create its team; there is no Skip on this step.
+  await page.getByRole('button', { name: 'Create team & invite 2' }).click();
   await page.getByRole('button', { name: 'Continue with Free' }).last().click();
 
   await expectLanded(page, 'Entered Macro at /channel/launch');

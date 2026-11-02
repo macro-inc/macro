@@ -47,6 +47,11 @@ wrapping property pills, description, and discussion for Overview; toolbar and
 rows for Tasks. The mobile skeleton uses the same compact insets as the content.
 The description has its own subtle three-line skeleton while its collaborative
 editor initializes; the project title, properties, and discussion stay visible.
+
+Priority groups appear in **Urgent → High → Medium → Low** order, followed by
+the unset-priority group, in desktop and mobile lists. Verify this order with
+REST and GraphQL Soup before and after refresh; item sorting is independent.
+
 Task lists, including project and CRM task lists, load a group's next page when
 the end of that group scrolls into view, with a spinner row instead of a
 `Load More` button. A failed

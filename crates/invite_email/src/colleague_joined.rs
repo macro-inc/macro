@@ -2,7 +2,9 @@ use super::*;
 
 const DISPLAY_NAME_MAX_CHARS: usize = 64;
 
-/// Tells someone whose address matches a team's auto-join domain that a colleague joined Macro.
+/// Tells someone whose address matches a team's auto-join domain that a team now exists for their
+/// organization and that signing up with their work email joins it. It is an informational,
+/// one-time notice that names who set the team up rather than announcing a sign-up.
 #[derive(Debug, Clone, Serialize, Deserialize, Template)]
 #[template(path = "colleague_joined_macro.html")]
 pub struct ColleagueJoinedMacro {
@@ -34,11 +36,6 @@ impl ColleagueJoinedMacro {
         (!name.is_empty()).then(|| name.to_owned())
     }
 
-    fn joined_display(&self) -> String {
-        self.display_name()
-            .unwrap_or_else(|| self.joined_email().to_owned())
-    }
-
     fn joined_email(&self) -> &str {
         self.joined_by.email_str()
     }
@@ -50,6 +47,11 @@ impl ColleagueJoinedMacro {
     fn signup_url(&self) -> Url {
         signup_url(Environment::new_or_prod())
     }
+
+    /// The notification service signs this into a link that stops these notices.
+    fn unsubscribe_href(&self) -> String {
+        notification::domain::models::signing::unsubscribe_placeholder(Self::TYPE_NAME)
+    }
 }
 
 impl Notification for ColleagueJoinedMacro {
@@ -59,7 +61,7 @@ impl Notification for ColleagueJoinedMacro {
 impl NotificationExtEmail for ColleagueJoinedMacro {
     fn format_email(&self) -> EmailContent {
         EmailContent {
-            subject: format!("{} joined Macro", self.joined_display()),
+            subject: "A team has been created for your organization".to_string(),
             body: self
                 .render()
                 .expect("ColleagueJoinedMacro template render failed in format_email"),
