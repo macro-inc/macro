@@ -1,0 +1,23 @@
+/* A form's accent color on its respond page. `brandingStyle` sets the two
+   inputs; every accent-derived token is declared again here because a
+   custom property resolves its var() references where it is declared. */
+.form-branded {
+  --color-accent: var(--form-accent);
+  --color-accent-contrast: var(--form-accent-contrast);
+  --color-accent-ink: var(--form-accent);
+  --color-accent-bg: color-mix(in oklch, var(--form-accent) 8%, transparent);
+  --color-accent-hover: color-mix(in oklch, var(--form-accent) 20%, transparent);
+  --color-selected: color-mix(in oklch, var(--form-accent) 8%, transparent);
+  --color-edge-focus: var(--form-accent);
+  --color-link: var(--form-accent);
+  --color-link-hover: var(--form-accent);
+  --button-primary-bg: var(--form-accent);
+  --button-primary-ink: var(--form-accent-contrast);
+  --button-primary-hover: color-mix(in srgb, var(--form-accent) 82%, var(--form-accent-contrast));
+  --button-primary-pressed: color-mix(in srgb, var(--form-accent) 72%, var(--form-accent-contrast));
+  --button-accent-bg: var(--form-accent);
+  --button-accent-ink: var(--form-accent-contrast);
+  --button-accent-hover: color-mix(in srgb, var(--form-accent) 82%, var(--form-accent-contrast));
+  --button-accent-pressed: color-mix(in srgb, var(--form-accent) 72%, var(--form-accent-contrast));
+  --button-focus: var(--form-accent);
+}
