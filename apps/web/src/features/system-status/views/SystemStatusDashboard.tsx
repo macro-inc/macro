@@ -8,13 +8,7 @@ import {
   useSetSystemStatusMutation,
   useSystemStatusHistoryQuery,
 } from '@queries/system-status/status';
-import {
-  Button,
-  ConfirmDialog,
-  CopyButton,
-  SegmentedControl,
-  TextField,
-} from '@ui';
+import { Button, ConfirmDialog, CopyButton, Tabs, TextField } from '@ui';
 import { createSignal, For, type JSX, Match, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { StatusBanner } from '../components/StatusBanner';
@@ -156,7 +150,7 @@ function SetStatusForm() {
           if (canSubmit()) setConfirming(true);
         }}
       >
-        <SegmentedControl
+        <Tabs
           aria-label="Status"
           value={level()}
           onChange={setLevel}
@@ -189,7 +183,12 @@ function SetStatusForm() {
           </Show>
         </Show>
         <div class="flex justify-end">
-          <Button variant="cta" size="lg" type="submit" disabled={!canSubmit()}>
+          <Button
+            variant="primary"
+            size="lg"
+            type="submit"
+            disabled={!canSubmit()}
+          >
             {setStatus.isPending ? 'Publishing…' : 'Publish'}
           </Button>
         </div>
