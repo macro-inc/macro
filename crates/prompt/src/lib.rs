@@ -238,11 +238,21 @@ mod tests {
     #[test]
     fn code_mode_presents_views_unasked_and_mentions_leave_what_they_show_unmentioned() {
         let code_mode = CODE_MODE_SESSION_TOOL_USE_PROMPT.to_string();
-        assert!(code_mode.contains("present them with `execution.views.present` without being asked"));
-        assert!(!SESSION_TOOL_USE_PROMPT.to_string().contains("execution.views.present` without"));
+        assert!(
+            code_mode.contains("present them with `execution.views.present` without being asked")
+        );
+        assert!(
+            !SESSION_TOOL_USE_PROMPT
+                .to_string()
+                .contains("execution.views.present` without")
+        );
         // The mention rule is the base prompt's; a view's items are its one
         // exception, or the agent names them again under the view.
-        assert!(BASE_PROMPT.to_string().contains("the view already opens them"));
+        assert!(
+            BASE_PROMPT
+                .to_string()
+                .contains("the view already opens them")
+        );
     }
 
     #[test]
