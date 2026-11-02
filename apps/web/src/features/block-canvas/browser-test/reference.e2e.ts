@@ -5,7 +5,7 @@ test('loads a saved canvas and opens its reference', async ({ page }) => {
   const reference = page.getByTestId('canvas-reference');
   await expect(reference).toBeVisible();
   await reference.click();
-  expect(await page.evaluate(() => window.canvasFixture.opens)).toBe(1);
+  expect(await page.evaluate(() => window.referenceFixture.opens)).toBe(1);
 });
 
 test('editable canvas mounts and opens its reference', async ({ page }) => {
@@ -13,5 +13,5 @@ test('editable canvas mounts and opens its reference', async ({ page }) => {
   const reference = page.getByTestId('canvas-reference');
   await expect(reference).toBeVisible();
   await reference.click();
-  expect(await page.evaluate(() => window.canvasFixture.opens)).toBe(1);
+  expect(await page.evaluate(() => window.referenceFixture.opens)).toBe(1);
 });

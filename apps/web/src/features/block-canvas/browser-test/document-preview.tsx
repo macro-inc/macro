@@ -4,7 +4,7 @@ export function DocumentPreviewContent() {
       type="button"
       data-testid="canvas-reference"
       onClick={() => {
-        window.canvasFixture.opens++;
+        window.referenceFixture.opens++;
       }}
     >
       Referenced document

@@ -8,11 +8,11 @@ import { CanvasDocument } from '../component/CanvasDocument';
 
 declare global {
   interface Window {
-    canvasFixture: { opens: number };
+    referenceFixture: { opens: number };
   }
 }
 
-window.canvasFixture = { opens: 0 };
+window.referenceFixture = { opens: 0 };
 const reference: ShapeItem<'document'> = {
   id: 'reference',
   type: 'document',
