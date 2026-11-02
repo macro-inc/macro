@@ -6,7 +6,7 @@ use std::{collections::HashSet, sync::LazyLock};
 
 use sha2::{Digest, Sha256};
 
-use crate::model::{RoutineProgram, RoutineTool, SdkFingerprint, Step, StepId};
+use crate::model::{RoutineProgram, SdkFingerprint, Step, StepId};
 
 #[cfg(test)]
 mod test;
@@ -32,7 +32,7 @@ declare global {
     routine: { id: string; name: string };
     /** What started the run. */
     trigger: RoutineStart;
-    /** What the steps that always run before this one returned, by id. */
+    /** What the code steps before this one returned, by id. */
     steps: Steps;
   }
 
@@ -85,15 +85,6 @@ declare global {
             : T extends object
               ? { [K in keyof T]: StepOutput<T[K]> }
               : unknown;
-
-  /** What a tool step's output is known to look like. */
-  interface RoutineToolOutputs {
-    CreateDocument: { documentId: string; [field: string]: unknown };
-  }
-
-  type RoutineToolOutput<Tool extends string> = Tool extends keyof RoutineToolOutputs
-    ? RoutineToolOutputs[Tool]
-    : unknown;
 }
 "#;
 
@@ -130,17 +121,9 @@ pub struct CheckFile {
     pub source: String,
 }
 
-/// An output a later step can read.
-enum Output {
-    /// A code step's, by its file.
-    Code(String),
-    /// A tool step's.
-    Tool(RoutineTool),
-}
-
 impl RoutineProgram {
-    /// Give every code and tool step without an id one, from its title (code)
-    /// or its tool's name, unique in the routine, so its output reaches later
+    /// Give every code step without an id one, from its title, unique in the
+    /// routine, so its output reaches later
     /// steps. Existing ids stay.
     pub fn assign_step_ids(&mut self) {
         let mut taken: HashSet<String> = HashSet::new();
@@ -161,7 +144,6 @@ fn collect_ids(steps: &[Step], taken: &mut HashSet<String>) {
     for step in steps {
         let id = match step {
             Step::Code(code) => code.id.as_ref(),
-            Step::Tool(tool) => tool.id.as_ref(),
             Step::Agent(_) => None,
         };
         if let Some(id) = id {
@@ -174,10 +156,7 @@ fn assign(steps: &mut [Step], taken: &mut HashSet<String>) {
     for step in steps {
         match step {
             Step::Code(code) if code.id.is_none() => code.id = Some(unique(&code.title, taken)),
-            Step::Tool(tool) if tool.id.is_none() => {
-                tool.id = Some(unique(tool.tool.name(), taken));
-            }
-            Step::Code(_) | Step::Tool(_) | Step::Agent(_) => {}
+            Step::Code(_) | Step::Agent(_) => {}
         }
     }
 }
@@ -237,8 +216,9 @@ fn unique(name: &str, taken: &mut HashSet<String>) -> StepId {
 #[derive(Default)]
 struct Walk {
     files: Vec<CheckFile>,
-    /// Outputs a step at the current position can read, in order.
-    visible: Vec<(StepId, Output)>,
+    /// The code steps a step at the current position can read, by id and
+    /// file, in order.
+    visible: Vec<(StepId, String)>,
 }
 
 impl Walk {
@@ -263,12 +243,7 @@ impl Walk {
                         source,
                     });
                     if let Some(id) = &code.id {
-                        self.visible.push((id.clone(), Output::Code(name)));
-                    }
-                }
-                Step::Tool(tool) => {
-                    if let Some(id) = &tool.id {
-                        self.visible.push((id.clone(), Output::Tool(tool.tool)));
+                        self.visible.push((id.clone(), name));
                     }
                 }
                 Step::Agent(_) => {}
@@ -281,11 +256,8 @@ impl Walk {
         let fields: Vec<String> = self
             .visible
             .iter()
-            .map(|(id, output)| match output {
-                Output::Code(file) => format!(
-                    "{id}: StepOutput<Awaited<ReturnType<typeof import('./{file}')['main']>>>"
-                ),
-                Output::Tool(tool) => format!("{id}: RoutineToolOutput<'{}'>", tool.name()),
+            .map(|(id, file)| {
+                format!("{id}: StepOutput<Awaited<ReturnType<typeof import('./{file}')['main']>>>")
             })
             .collect();
         format!("{{ {} }}", fields.join("; "))

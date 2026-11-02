@@ -399,36 +399,6 @@ pub trait RoutineAgents: Send + Sync + 'static {
     ) -> impl Future<Output = Result<()>> + Send;
 }
 
-/// Runs a routine's tool steps: one allowlisted catalog tool at a time, as
-/// the routine's owner, outside any agent session. Implemented in the process
-/// that holds the tool catalog; never replay a call after an ambiguous
-/// failure, since tools are not idempotent.
-pub trait RoutineTools: Send + Sync + 'static {
-    /// Call `tool` with `arguments` as `owner`. A tool that refuses or fails
-    /// answers [`RoutineToolOutcome::Failed`] with its reason for the owner.
-    fn call(
-        &self,
-        owner: &MacroUserIdStr<'static>,
-        tool: routine_program::RoutineTool,
-        arguments: serde_json::Map<String, serde_json::Value>,
-    ) -> impl Future<Output = RoutineToolOutcome> + Send;
-}
-
-/// What a routine's tool call did.
-#[derive(Debug, Clone, PartialEq)]
-pub enum RoutineToolOutcome {
-    /// The tool ran; its output, or null when too large to keep.
-    Completed {
-        /// The tool's JSON output, available to later steps' templates.
-        output: serde_json::Value,
-    },
-    /// The tool refused or failed, in words written for the routine's owner.
-    Failed {
-        /// Why, kept in the run's history.
-        message: String,
-    },
-}
-
 /// Checks and runs a routine's code steps as its owner, in the process that
 /// holds the SDK executor. Never replay a run after an ambiguous failure:
 /// its writes may have happened.
@@ -715,7 +685,7 @@ pub enum RunTarget {
     Model,
     /// One of the owner's agents.
     Agent,
-    /// Only actions and decisions: no step reaches a model or agent.
+    /// Only code: no step reaches a model or agent.
     Steps,
     /// The task could not be read.
     Unknown,

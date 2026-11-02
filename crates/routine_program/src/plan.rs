@@ -4,8 +4,6 @@ use std::fmt;
 
 use serde::{Deserialize, Serialize};
 
-use crate::model::RoutineTool;
-
 #[cfg(test)]
 mod test;
 
@@ -47,17 +45,6 @@ pub struct StepRecord {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "kind", rename_all = "snake_case")]
 pub enum StepResult {
-    /// A tool was called.
-    Tool {
-        /// The tool.
-        tool: RoutineTool,
-        /// What it returned.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        output: Option<serde_json::Value>,
-        /// Why it failed.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
-        error: Option<String>,
-    },
     /// A model or agent ran.
     Agent {
         /// Why it failed.

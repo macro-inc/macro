@@ -134,14 +134,13 @@ async fn event_refusals_return_terminal_bookkeeping_without_replaying_or_releasi
 }
 
 #[tokio::test]
-async fn actions_alone_need_no_admission() {
+async fn code_alone_needs_no_admission() {
     let admission = admission(Err(AiAdmissionError::Unavailable));
     let executor = executor(Repo::default(), Runner::default()).with_admission(admission.clone());
     executor.runner.finish.cancel();
     let mut action = action();
     action.task = json!({ "steps": [{
-        "type": "tool", "tool": "SendChannelMessage",
-        "arguments": { "channel_id": "c", "content": "Standup in 5" },
+        "type": "code", "title": "Post standup", "source": "export async function main() {}",
     }] });
     executor.execute_action(action).await.unwrap();
     drain(&executor).await;
@@ -376,8 +375,9 @@ impl ScheduledAgentRunner for Runner {
         self.contexts.lock().unwrap().push(firing.event().cloned());
         handle.steps.push(routine_program::StepRecord {
             path: serde_json::from_value(json!("0")).unwrap(),
-            result: routine_program::StepResult::Tool {
-                tool: routine_program::RoutineTool::UpdateThreadLabels,
+            result: routine_program::StepResult::Code {
+                calls: Vec::new(),
+                calls_truncated: false,
                 output: None,
                 error: None,
             },
@@ -1034,13 +1034,12 @@ async fn runs_that_never_claim_are_not_reported() {
 }
 
 #[tokio::test]
-async fn runs_of_only_actions_and_decisions_report_no_model_or_agent() {
+async fn runs_of_only_code_report_no_model_or_agent() {
     let (executor, observer) = observed(executor(Repo::default(), Runner::default()));
     executor.runner.finish.cancel();
     let mut action = action();
     action.task = json!({ "steps": [{
-        "type": "tool", "tool": "SendChannelMessage",
-        "arguments": { "channel_id": "c", "content": "Standup in 5" },
+        "type": "code", "title": "Post standup", "source": "export async function main() {}",
     }] });
     executor.execute_action(action).await.unwrap();
     drain(&executor).await;
@@ -1079,7 +1078,7 @@ async fn runs_without_a_transcript_still_announce_start_and_stop_and_keep_their_
     assert!(records[0].resource_id.is_none());
     assert_eq!(
         records[0].result["steps"],
-        json!([{ "path": "0", "kind": "tool", "tool": "UpdateThreadLabels" }])
+        json!([{ "path": "0", "kind": "code" }])
     );
     // Its step paths are read against the configuration that ran.
     assert_eq!(

@@ -6,16 +6,14 @@ use super::*;
 fn records_serialize_flat_with_their_kind() {
     let record = StepRecord {
         path: StepPath::root(1),
-        result: StepResult::Tool {
-            tool: crate::RoutineTool::CreateDocument,
+        result: StepResult::Agent {
             error: Some("boom".into()),
-            output: None,
         },
     };
     let value = serde_json::to_value(&record).unwrap();
     assert_eq!(
         value,
-        json!({ "path": "1", "kind": "tool", "tool": "CreateDocument", "error": "boom" })
+        json!({ "path": "1", "kind": "agent", "error": "boom" })
     );
     assert_eq!(serde_json::from_value::<StepRecord>(value).unwrap(), record);
 

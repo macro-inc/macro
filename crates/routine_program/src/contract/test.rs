@@ -21,7 +21,6 @@ fn ids(program: &RoutineProgram) -> Vec<String> {
         .iter()
         .filter_map(|step| match step {
             Step::Code(step) => Some(step.id.as_ref()),
-            Step::Tool(step) => Some(step.id.as_ref()),
             Step::Agent(_) => None,
         })
         .map(|id| id.map(ToString::to_string).unwrap_or_default())
@@ -33,9 +32,9 @@ fn steps_get_ids_from_their_titles_unique_in_the_routine() {
     let mut routine = program(json!([
         code("Filter Important Notifications!", None),
         code("filter important notifications", None),
-        { "type": "tool", "tool": "CreateDocument", "arguments": {} },
+        code("Create Document", None),
         code("2nd pass", Some("kept")),
-        { "type": "tool", "tool": "SendChannelMessage", "arguments": {} },
+        code("sendChannelMessage", None),
     ]));
     routine.assign_step_ids();
     assert_eq!(
@@ -58,7 +57,7 @@ fn steps_get_ids_from_their_titles_unique_in_the_routine() {
 fn each_code_step_sees_the_outputs_of_the_steps_before_it() {
     let mut routine = program(json!([
         code("Read", Some("read")),
-        { "type": "tool", "id": "task", "tool": "CreateDocument", "arguments": {} },
+        { "type": "agent", "model": "m", "instructions": "Summarize" },
         code("Last", None),
     ]));
     routine.assign_step_ids();
@@ -72,7 +71,7 @@ fn each_code_step_sees_the_outputs_of_the_steps_before_it() {
     );
     assert_eq!(
         context(&files[1]),
-        "type StepContext = RoutineStepContext<{ read: StepOutput<Awaited<ReturnType<typeof import('./step_0.ts')['main']>>>; task: RoutineToolOutput<'CreateDocument'> }>;"
+        "type StepContext = RoutineStepContext<{ read: StepOutput<Awaited<ReturnType<typeof import('./step_0.ts')['main']>>> }>;"
     );
     assert_eq!(files[1].title, "Last");
     // The source's own lines come first, unchanged.

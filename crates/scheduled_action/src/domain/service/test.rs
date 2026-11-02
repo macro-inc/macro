@@ -1508,78 +1508,28 @@ fn github_configuration(enabled: bool) -> ActionConfiguration {
 }
 
 #[tokio::test]
-async fn programs_that_read_their_trigger_need_activity_triggers() {
-    let cron = json!({"type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC"});
-    let email = json!({"type": "events", "filters": [{"events": ["email.message_received"]}]});
-    let mixed = json!({"type": "multiple", "triggers": [cron.clone(), email.clone()]});
-    let archive = json!([{ "type": "tool", "tool": "UpdateThreadLabels", "arguments": {
-        "thread_id": "{{trigger.entity_id}}", "label_id": "inbox", "add": false
-    } }]);
-    let digest = json!([{ "type": "tool", "tool": "SendChannelMessage", "arguments": {
-        "channel_id": "c", "content": "Daily reminder"
-    } }]);
-
-    let without = service(true);
-    for trigger in [cron.clone(), mixed] {
-        assert_policy(
-            without
-                .create_action(
-                    &user_principal(),
-                    CreateScheduledAction::Canonical(program_configuration(
-                        trigger,
-                        archive.clone(),
-                    )),
-                )
-                .await,
-            ActionPolicyError::ProgramNeedsEvent,
-        );
-    }
-    // Steps that don't read a trigger run on any schedule.
-    without
-        .create_action(
-            &user_principal(),
-            CreateScheduledAction::Canonical(program_configuration(cron.clone(), digest)),
-        )
-        .await
-        .unwrap();
-    let archived = without
-        .create_action(
-            &user_principal(),
-            CreateScheduledAction::Canonical(program_configuration(email, archive.clone())),
-        )
-        .await
-        .unwrap();
-    // Saving names the tool step, so its output can reach later steps.
-    let mut named = archive.clone();
-    named[0]["id"] = json!("update_thread_labels");
-    assert_eq!(archived.task, json!({ "steps": named }));
-    // Updates are held to the same rule.
-    assert_policy(
-        without
-            .update_action(
-                edit_receipt(archived.id.unwrap()),
-                update(program_configuration(cron, archive)),
-            )
-            .await,
-        ActionPolicyError::ProgramNeedsEvent,
+async fn saving_names_code_steps_and_resaving_without_the_names_changes_nothing() {
+    let repo = Arc::new(FakeRepo::default());
+    let (tx, mut rx) = tokio::sync::mpsc::channel(32);
+    tokio::spawn(async move { while rx.recv().await.is_some() {} });
+    let svc = TestService::new(
+        Arc::clone(&repo),
+        Arc::new(FakeExecutor::default()),
+        tx,
+        grants(&repo),
+    )
+    .with_event_management_enabled(true)
+    .with_code(
+        Arc::new(crate::domain::code_check::test::Checker::default()),
+        Arc::new(crate::domain::code_upgrade::NoCodeUpgrades),
     );
-}
-
-#[tokio::test]
-async fn placeholders_can_use_the_ids_saving_gives_and_resaving_them_changes_nothing() {
-    let svc = service(true);
+    // Code runs on any trigger: it reads what started it.
     let daily = json!({ "type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC" });
     let steps = json!([
-        { "type": "tool", "tool": "CreateDocument", "arguments": {
-            "documentName": "Follow up", "fileContent": "", "fileExtension": "md", "isTask": true
-        } },
-        { "type": "tool", "tool": "Comment", "arguments": {
-            "entityType": "document",
-            "entityId": "{{steps.create_document.documentId}}",
-            "content": "Created by a routine",
-        } },
+        { "type": "code", "title": "Create a task", "source": "export async function main() {}" },
+        { "type": "code", "title": "Comment on it", "source": "export async function main() {}" },
     ]);
-    let config = program_configuration(daily, steps.clone());
+    let config = program_configuration(daily, steps);
     let created = svc
         .create_action(
             &user_principal(),
@@ -1587,8 +1537,8 @@ async fn placeholders_can_use_the_ids_saving_gives_and_resaving_them_changes_not
         )
         .await
         .unwrap();
-    assert_eq!(created.task["steps"][0]["id"], "create_document");
-    assert_eq!(created.task["steps"][1]["id"], "comment");
+    assert_eq!(created.task["steps"][0]["id"], "create_a_task");
+    assert_eq!(created.task["steps"][1]["id"], "comment_on_it");
     // A client that doesn't echo the ids sends the same routine.
     let id = created.id.unwrap();
     let updated = svc

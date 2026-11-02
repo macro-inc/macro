@@ -62,30 +62,24 @@ fn a_legacy_system_prompt_is_kept_ahead_of_the_task() {
 fn programs_round_trip() {
     let task = json!({
         "steps": [
-            {
-                "type": "tool",
-                "tool": "UpdateThreadLabels",
-                "arguments": { "thread_id": "{{trigger.entity_id}}", "label_id": "x", "add": true }
-            },
-            { "type": "tool", "id": "task", "tool": "CreateDocument", "arguments": {} },
+            { "type": "code", "id": "read", "title": "Read", "source": "export async function main() {}", "writes": ["email"] },
             { "type": "agent", "model": "m", "instructions": "Triage it" }
         ]
     });
     let program = RoutineProgram::from_task(&task).unwrap();
     assert_eq!(serde_json::to_value(&program).unwrap(), task);
     assert_eq!(program.agent_steps().len(), 1);
+    assert_eq!(program.code_steps().len(), 1);
     assert!(program.leading_agent().is_none());
 }
 
 #[test]
-fn unknown_fields_tools_and_step_ids_are_rejected() {
+fn unknown_fields_steps_and_step_ids_are_rejected() {
     for task in [
         json!({ "steps": [], "extra": true }),
-        json!({ "steps": [{ "type": "tool", "tool": "DeleteDocument", "arguments": {} }] }),
-        json!({ "steps": [{ "type": "tool", "tool": "CreateDocument", "arguments": {}, "oops": 1 }] }),
-        json!({ "steps": [{ "type": "tool", "id": "Task", "tool": "CreateDocument", "arguments": {} }] }),
-        json!({ "steps": [{ "type": "if", "condition": "Urgent?", "then": [] }] }),
-        json!({ "steps": [{ "type": "choose", "options": [] }] }),
+        json!({ "steps": [{ "type": "code", "title": "x", "source": "y", "oops": 1 }] }),
+        json!({ "steps": [{ "type": "code", "id": "Task", "title": "x", "source": "y" }] }),
+        json!({ "steps": [{ "type": "tool", "tool": "CreateDocument", "arguments": {} }] }),
         json!({ "steps": [{ "type": "wait" }] }),
         json!({ "user_prompt": "missing prompt" }),
     ] {
@@ -106,13 +100,6 @@ fn step_ids_are_lowercase_identifiers() {
         "a2345678901234567890123456789012x",
     ] {
         assert!(StepId::try_from(invalid.to_owned()).is_err(), "{invalid}");
-    }
-}
-
-#[test]
-fn tool_names_match_their_serialized_form() {
-    for tool in RoutineTool::ALL {
-        assert_eq!(serde_json::to_value(tool).unwrap(), json!(tool.name()));
     }
 }
 

@@ -11,7 +11,7 @@ use utoipa::ToSchema;
 use super::ports::{RoutineCode, StepProblems};
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 /// Problems reported per failing step, so the author gets the first ones
 /// rather than a wall of cascading errors.

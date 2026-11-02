@@ -2,7 +2,7 @@ use serde_json::json;
 
 use super::*;
 
-fn validate(steps: serde_json::Value) -> Result<ProgramSummary, ProgramError> {
+fn validate(steps: serde_json::Value) -> Result<(), ProgramError> {
     RoutineProgram::from_task(&json!({ "steps": steps }))
         .unwrap()
         .validate()
@@ -12,52 +12,25 @@ fn agent() -> serde_json::Value {
     json!({ "type": "agent", "model": "m", "instructions": "Do it" })
 }
 
-fn tool(arguments: serde_json::Value) -> serde_json::Value {
-    json!({ "type": "tool", "tool": "SendChannelMessage", "arguments": arguments })
-}
-
-#[test]
-fn a_plain_agent_needs_no_event() {
-    let summary = validate(json!([agent()])).unwrap();
-    assert!(!summary.needs_event());
-}
-
-#[test]
-fn trigger_placeholders_need_an_event() {
-    let summary = validate(json!([tool(
-        json!({ "content": "{{trigger.email.subject}}" })
-    )]))
-    .unwrap();
-    assert!(summary.reads_trigger && summary.needs_event());
+fn code(extra: serde_json::Value) -> serde_json::Value {
+    let mut step = json!({
+        "type": "code",
+        "title": "Label invoices",
+        "source": "export async function main({ macro }: StepContext) { return 1; }",
+    });
+    step.as_object_mut()
+        .unwrap()
+        .extend(extra.as_object().unwrap().clone());
+    step
 }
 
 #[test]
 fn a_routine_hands_off_to_at_most_one_agent() {
-    validate(json!([tool(json!({})), agent()])).unwrap();
+    validate(json!([code(json!({})), agent()])).unwrap();
     assert_eq!(
         validate(json!([agent(), agent()])),
         Err(ProgramError::TooManyAgents)
     );
-}
-
-#[test]
-fn step_references_must_name_an_earlier_tool_step() {
-    let create = json!({ "type": "tool", "id": "task", "tool": "CreateDocument", "arguments": {} });
-    let read = tool(json!({ "content": "{{steps.task.documentId}}" }));
-    validate(json!([create.clone(), read.clone()])).unwrap();
-    assert!(matches!(
-        validate(json!([read, create.clone()])),
-        Err(ProgramError::UnknownStep(_))
-    ));
-    assert!(matches!(
-        validate(json!([create.clone(), create])),
-        Err(ProgramError::DuplicateStepId(_))
-    ));
-    let own = json!({ "type": "tool", "id": "me", "tool": "CreateDocument", "arguments": { "x": "{{steps.me.id}}" } });
-    assert!(matches!(
-        validate(json!([own])),
-        Err(ProgramError::UnknownStep(_))
-    ));
 }
 
 #[test]
@@ -75,14 +48,8 @@ fn structural_limits_are_enforced() {
         validate(json!([{ "type": "agent", "model": "m", "instructions": " " }])),
         Err(ProgramError::BlankInstructions)
     );
-    let many: Vec<_> = (0..=limits::MAX_STEPS).map(|_| tool(json!({}))).collect();
+    let many: Vec<_> = (0..=limits::MAX_STEPS).map(|_| code(json!({}))).collect();
     assert_eq!(validate(json!(many)), Err(ProgramError::TooManySteps));
-    let big = tool(json!({ "content": "x".repeat(limits::MAX_ARGUMENT_BYTES) }));
-    assert_eq!(validate(json!([big])), Err(ProgramError::ArgumentsTooLarge));
-    assert!(matches!(
-        validate(json!([tool(json!({ "content": "{{nope}}" }))])),
-        Err(ProgramError::Template(_))
-    ));
 }
 
 #[test]
@@ -93,7 +60,7 @@ fn required_apps_need_an_agent_to_hand_them_to() {
     };
     program(json!([agent()])).validate().unwrap();
     assert_eq!(
-        program(json!([tool(json!({ "content": "Hi" }))])).validate(),
+        program(json!([code(json!({}))])).validate(),
         Err(ProgramError::AppsWithoutAgent)
     );
 }
@@ -122,23 +89,9 @@ fn old_single_agent_tasks_keep_the_rules_they_were_saved_under() {
     );
 }
 
-fn code(extra: serde_json::Value) -> serde_json::Value {
-    let mut step = json!({
-        "type": "code",
-        "title": "Label invoices",
-        "source": "export async function main({ macro }: StepContext) { return 1; }",
-    });
-    step.as_object_mut()
-        .unwrap()
-        .extend(extra.as_object().unwrap().clone());
-    step
-}
-
 #[test]
 fn code_steps_need_a_title_and_bounded_source() {
-    let summary = validate(json!([code(json!({ "writes": ["email", "workspace"] }))])).unwrap();
-    // Code reads its trigger when it has one; a scheduled run gets null.
-    assert!(!summary.needs_event());
+    validate(json!([code(json!({ "writes": ["email", "workspace"] }))])).unwrap();
     assert_eq!(
         validate(json!([code(json!({ "title": "  " }))])),
         Err(ProgramError::CodeTitle)
@@ -160,16 +113,11 @@ fn code_steps_need_a_title_and_bounded_source() {
 }
 
 #[test]
-fn later_steps_can_read_a_code_steps_output_by_id() {
-    validate(json!([
-        code(json!({ "id": "invoice" })),
-        tool(json!({ "content": "{{steps.invoice.total}}" })),
-    ]))
-    .unwrap();
+fn step_ids_are_unique() {
     assert_eq!(
         validate(json!([
             code(json!({ "id": "invoice" })),
-            tool(json!({ "content": "x" })),
+            agent(),
             code(json!({ "id": "invoice" })),
         ])),
         Err(ProgramError::DuplicateStepId(
@@ -179,9 +127,13 @@ fn later_steps_can_read_a_code_steps_output_by_id() {
 }
 
 #[test]
-fn unknown_write_scopes_do_not_parse() {
-    assert!(
-        RoutineProgram::from_task(&json!({ "steps": [code(json!({ "writes": ["auth"] }))] }))
-            .is_err()
-    );
+fn removed_step_types_do_not_parse() {
+    for step in [
+        json!({ "type": "tool", "tool": "CreateDocument", "arguments": {} }),
+        json!({ "type": "if", "condition": "Urgent?", "then": [] }),
+        json!({ "type": "choose", "options": [] }),
+        code(json!({ "writes": ["auth"] })),
+    ] {
+        assert!(RoutineProgram::from_task(&json!({ "steps": [step] })).is_err());
+    }
 }

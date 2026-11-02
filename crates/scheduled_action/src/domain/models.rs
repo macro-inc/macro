@@ -290,10 +290,6 @@ pub enum ActionPolicyError {
     DescriptionTooLong,
     #[error("scheduled action changed or is running; reload before updating")]
     UpdateConflict,
-    #[error(
-        "steps that decide about or read the item that triggered the routine need activity triggers only; remove its schedules or those steps"
-    )]
-    ProgramNeedsEvent,
 }
 
 /// A routine's finished runs, as code reads them: its last run and its last

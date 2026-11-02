@@ -4,7 +4,7 @@ use std::fmt;
 
 use bots::domain::models::AgentMcpServer;
 use serde::{Deserialize, Serialize};
-use serde_json::{Map, Value};
+use serde_json::Value;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -38,8 +38,6 @@ pub struct RoutineProgram {
 pub enum Step {
     /// Run TypeScript against Macro's SDK, as the routine owner.
     Code(CodeStep),
-    /// Call one Macro tool with fixed arguments, as the routine owner.
-    Tool(ToolStep),
     /// Hand the run to a model or agent with instructions.
     Agent(AgentStep),
 }
@@ -50,9 +48,9 @@ pub enum Step {
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
 pub struct CodeStep {
-    /// Names this step's output for later steps: `steps.<id>` in later code
-    /// and `{{steps.<id>.…}}` in tool step arguments. Saving gives a step
-    /// without one an id from its title, e.g. `label_invoices`.
+    /// Names this step's output for later steps: `steps.<id>` in later code.
+    /// Saving gives a step without one an id from its title, e.g.
+    /// `label_invoices`.
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub id: Option<StepId>,
     /// What the step does, in a few words, e.g. "Label invoices".
@@ -171,90 +169,6 @@ impl fmt::Display for SdkFingerprint {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, thiserror::Error)]
 #[error("an SDK fingerprint must not be blank")]
 pub struct BlankFingerprint;
-
-/// A deterministic call to one tool from Macro's catalog.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ToolStep {
-    /// Names this step's output for later steps, e.g. `task` makes a created
-    /// task's id available as `{{steps.task.documentId}}`. Saving gives a step
-    /// without one an id from its tool, e.g. `create_document`.
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub id: Option<StepId>,
-    /// The tool to call.
-    pub tool: RoutineTool,
-    /// The tool's arguments, exactly as the tool documents them. String values
-    /// may embed `{{trigger.<path>}}` (the triggering item, e.g.
-    /// `{{trigger.entity_id}}` or `{{trigger.email.subject}}`) and
-    /// `{{steps.<id>.<path>}}` (an earlier tool or code step's output). A string that
-    /// is exactly one placeholder takes the referenced JSON value as is.
-    pub arguments: Map<String, Value>,
-}
-
-/// Tools a routine may call unattended. Each one is a write whose effect the
-/// owner chose when building the routine; reads and tools that need a person
-/// to confirm them are not steps.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash, PartialOrd, Ord, Serialize, Deserialize)]
-pub enum RoutineTool {
-    /// Add or remove one label on a thread: archive (remove INBOX), mark read
-    /// (remove UNREAD), star (add STARRED), or apply a custom label. In Outlook
-    /// inboxes the system labels set the matching mailbox state.
-    /// Arguments: `thread_id`, `label` (by name, so it works in every inbox;
-    /// or `label_id` from ListLabels, not both), `add`.
-    UpdateThreadLabels,
-    /// Treat a sender's future mail as signal, noise, or blocked.
-    /// Arguments: `sender_email`, `policy` (`signal`, `noise` or `block`), and
-    /// `thread_id` (`{{trigger.entity_id}}`) so it applies to the inbox that
-    /// received the email.
-    SetSenderPolicy,
-    /// Set a property on a task, document, email thread, channel or company:
-    /// status, priority, assignees, due date, tags or any custom property.
-    /// Arguments: `entity_id`, `entity_type`, `property_definition_id` and one value field.
-    SetEntityProperty,
-    /// Create a document or task. Arguments: `documentName`, `fileContent`,
-    /// `fileExtension` (`md`), `isTask`, optional `projectId`. Output: `documentId`.
-    CreateDocument,
-    /// Comment on a document or task. Arguments: `entityType` (`document`),
-    /// `entityId`, `content`.
-    Comment,
-    /// Post a message in a channel, or reply in a thread.
-    /// Arguments: `channel_id`, `content`, optional `thread_id`.
-    SendChannelMessage,
-    /// Move an item into a folder. Arguments: `entityType`, `entityId`, `projectId`.
-    MoveToProject,
-}
-
-impl RoutineTool {
-    /// Every tool a routine may call.
-    pub const ALL: [Self; 7] = [
-        Self::UpdateThreadLabels,
-        Self::SetSenderPolicy,
-        Self::SetEntityProperty,
-        Self::CreateDocument,
-        Self::Comment,
-        Self::SendChannelMessage,
-        Self::MoveToProject,
-    ];
-
-    /// The catalog name the tool is registered under.
-    pub const fn name(self) -> &'static str {
-        match self {
-            Self::UpdateThreadLabels => "UpdateThreadLabels",
-            Self::SetSenderPolicy => "SetSenderPolicy",
-            Self::SetEntityProperty => "SetEntityProperty",
-            Self::CreateDocument => "CreateDocument",
-            Self::Comment => "Comment",
-            Self::SendChannelMessage => "SendChannelMessage",
-            Self::MoveToProject => "MoveToProject",
-        }
-    }
-}
-
-impl fmt::Display for RoutineTool {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.write_str(self.name())
-    }
-}
 
 /// Names a step's output: a lowercase letter, then up to 31 lowercase
 /// letters, digits or underscores.
@@ -421,7 +335,7 @@ impl RoutineProgram {
             .iter_mut()
             .filter_map(|step| match step {
                 Step::Code(step) => Some(step),
-                Step::Tool(_) | Step::Agent(_) => None,
+                Step::Agent(_) => None,
             })
             .collect()
     }
@@ -432,7 +346,7 @@ impl RoutineProgram {
             .iter()
             .filter_map(|step| match step {
                 Step::Code(step) => Some(step),
-                Step::Tool(_) | Step::Agent(_) => None,
+                Step::Agent(_) => None,
             })
             .collect()
     }
@@ -443,7 +357,7 @@ impl RoutineProgram {
             .iter()
             .filter_map(|step| match step {
                 Step::Agent(agent) => Some(agent),
-                Step::Code(_) | Step::Tool(_) => None,
+                Step::Code(_) => None,
             })
             .collect()
     }

@@ -655,7 +655,6 @@ impl IntoResponse for ScheduledActionApiError {
                 ActionPolicyError::NoFutureFirings
                 | ActionPolicyError::EventManagementDisabled
                 | ActionPolicyError::ConditionsDisabled
-                | ActionPolicyError::ProgramNeedsEvent
                 | ActionPolicyError::GithubNotLinked
                 | ActionPolicyError::DescriptionTooLong => StatusCode::BAD_REQUEST,
             };

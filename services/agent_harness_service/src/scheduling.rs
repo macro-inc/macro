@@ -91,7 +91,6 @@ pub async fn build(
     config: Config,
     db: sqlx::PgPool,
     harness_address: std::net::SocketAddr,
-    tools: crate::routine_tools::CatalogRoutineTools,
     code: Option<crate::routine_code::SdkRoutineCode>,
     ready: tokio::sync::watch::Receiver<bool>,
 ) -> Result<SchedulingRuntime> {
@@ -187,7 +186,6 @@ pub async fn build(
     let runner = Arc::new(
         ProgramRunner::new(
             Arc::new(TargetRunner::new(Arc::clone(&sessions))),
-            Arc::new(tools),
             Arc::clone(&event_content),
         )
         .with_code(Arc::clone(&code), Arc::clone(&upgrades)),
@@ -354,9 +352,9 @@ fn mount_router(routes: Router) -> Router {
 }
 
 /// Read-only views of the domains whose events can trigger a routine, for
-/// conditions, decisions, templates and the agent's account of the event.
-/// None of these reads notify, publish or enqueue; routine writes go through
-/// the harness's tools instead.
+/// trigger conditions, code and the agent's account of the event. None of
+/// these reads notify, publish or enqueue; routine writes go through code
+/// steps' SDK calls or the agent.
 fn event_content(
     db: &sqlx::PgPool,
     registrar: &OwnedEntityRegistrar<PgBotsRepo>,

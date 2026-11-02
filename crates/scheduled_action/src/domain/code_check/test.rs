@@ -11,9 +11,9 @@ const VERSION: &str = "0.3.0+current+ctx.0000";
 /// Reports a problem for every code step whose source contains `bad`, and
 /// records the programs it checked, as their steps' sources.
 #[derive(Default)]
-struct Checker {
-    checked: Mutex<Vec<Vec<String>>>,
-    unavailable: bool,
+pub(crate) struct Checker {
+    pub checked: Mutex<Vec<Vec<String>>>,
+    pub unavailable: bool,
 }
 
 impl RoutineCode for Checker {
@@ -181,13 +181,13 @@ async fn code_needs_a_checker_but_other_programs_only_get_ids() {
         checked_task(&NoRoutineCode, &task(&["one"], None), None).await,
         Err(CodeCheckError::Unavailable(_))
     ));
-    let tool = json!({
-        "steps": [{ "type": "tool", "tool": "CreateDocument", "arguments": {} }],
+    let agent = json!({
+        "steps": [{ "type": "agent", "model": "m", "instructions": "Go" }],
         "sdk": "stale",
     });
     assert_eq!(
-        checked_task(&NoRoutineCode, &tool, None).await.unwrap(),
-        json!({ "steps": [{ "type": "tool", "id": "create_document", "tool": "CreateDocument", "arguments": {} }] })
+        checked_task(&NoRoutineCode, &agent, None).await.unwrap(),
+        json!({ "steps": [{ "type": "agent", "model": "m", "instructions": "Go" }] })
     );
     // A task from before steps keeps its shape.
     let legacy = json!({ "model": "m", "prompt": "", "user_prompt": "Go" });

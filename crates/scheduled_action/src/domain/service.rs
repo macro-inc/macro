@@ -31,7 +31,6 @@ use super::ports::{
     ScheduledActionService, TaskTargetValidator,
 };
 use super::target_validation::{ModelOnlyTargets, require_explicit_selection};
-use routine_program::RoutineProgram;
 
 #[cfg(test)]
 pub(crate) mod test;
@@ -207,19 +206,6 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         Ok(())
     }
 
-    /// A program's trigger reads need an event to be about. Call after target
-    /// validation, which reports malformed programs.
-    fn check_program(&self, trigger: &ActionTrigger, task: &serde_json::Value) -> Result<()> {
-        let Ok(Ok(summary)) = RoutineProgram::from_task(task).map(|program| program.validate())
-        else {
-            return Ok(());
-        };
-        if summary.needs_event() && (trigger.has_schedule() || trigger.event_filters().is_none()) {
-            return Err(ActionPolicyError::ProgramNeedsEvent.into());
-        }
-        Ok(())
-    }
-
     async fn create(
         &self,
         principal: &CreationPrincipal,
@@ -241,7 +227,6 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         self.check_event_management(&input.trigger)?;
         self.check_conditions(&input.trigger)?;
         self.targets.validate_task(&input.task, owner_user).await?;
-        self.check_program(&input.trigger, &input.task)?;
         let task = checked_task(self.code.as_ref(), &input.task, None).await?;
         if input.enabled {
             self.check_github(&input.trigger, owner_user).await?;
@@ -331,7 +316,6 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
             self.targets
                 .validate_task(&input.task, action.owner_user()?)
                 .await?;
-            self.check_program(&input.trigger, &input.task)?;
             input.task = checked_task(self.code.as_ref(), &input.task, Some(&action.task)).await?;
             if input.enabled {
                 self.check_github(&input.trigger, action.owner_user()?)

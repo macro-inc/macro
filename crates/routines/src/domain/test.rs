@@ -91,8 +91,7 @@ fn saved_program() -> (Value, Value) {
     ] });
     let task = serde_json::json!({
         "steps": [
-            { "type": "tool", "tool": "SendChannelMessage",
-              "arguments": { "channel_id": "c", "content": "New mail" } },
+            { "type": "code", "id": "post_it", "title": "Post it", "source": "export async function main() {}" },
             { "type": "agent", "model": "m", "instructions": "Summarize" }
         ],
         "mcp_servers": [{ "app_slug": "linear", "server_name": "Linear" }],

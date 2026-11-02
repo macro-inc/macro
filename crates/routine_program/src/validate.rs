@@ -3,7 +3,6 @@
 use std::collections::HashSet;
 
 use crate::model::{AgentStep, CodeStep, RoutineProgram, Step, StepId};
-use crate::template::{self, Reference, TemplateError};
 
 #[cfg(test)]
 mod test;
@@ -12,8 +11,6 @@ mod test;
 pub mod limits {
     /// Steps in the program.
     pub const MAX_STEPS: usize = 40;
-    /// Serialized bytes of one tool step's arguments.
-    pub const MAX_ARGUMENT_BYTES: usize = 16 * 1024;
     /// Characters in an agent step's instructions.
     pub const MAX_INSTRUCTION_CHARS: usize = 20_000;
     /// Characters in a code step's title.
@@ -54,18 +51,9 @@ pub enum ProgramError {
     /// Required apps with no agent to hand them to.
     #[error("apps a routine requires are for its agent; add an agent step or remove the apps")]
     AppsWithoutAgent,
-    /// Oversized tool arguments.
-    #[error("tool arguments can be at most {MAX_ARGUMENT_BYTES} bytes")]
-    ArgumentsTooLarge,
     /// Two steps with the same id.
     #[error("step id `{0}` is used twice")]
     DuplicateStepId(StepId),
-    /// A placeholder naming no step before it.
-    #[error("`{{{{steps.{0}…}}}}` must name a tool or code step before it")]
-    UnknownStep(StepId),
-    /// A placeholder that cannot be read.
-    #[error(transparent)]
-    Template(#[from] TemplateError),
     /// A code step without a title, or with a long one.
     #[error("code steps need a title of 1 to {MAX_TITLE_CHARS} characters")]
     CodeTitle,
@@ -80,23 +68,9 @@ pub enum ProgramError {
     DuplicateWriteScope(String),
 }
 
-/// Facts about a valid program that its routine's triggers must support.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
-pub struct ProgramSummary {
-    /// Whether a tool argument reads the triggering item.
-    pub reads_trigger: bool,
-}
-
-impl ProgramSummary {
-    /// Whether the program only makes sense when an event triggered the run.
-    pub fn needs_event(self) -> bool {
-        self.reads_trigger
-    }
-}
-
 impl RoutineProgram {
-    /// Check every structural rule and summarize what the program needs.
-    pub fn validate(&self) -> Result<ProgramSummary, ProgramError> {
+    /// Check every structural rule.
+    pub fn validate(&self) -> Result<(), ProgramError> {
         if self.steps.is_empty() {
             return Err(ProgramError::Empty);
         }
@@ -116,18 +90,14 @@ impl RoutineProgram {
         if !self.mcp_servers.is_empty() && self.agent_steps().is_empty() {
             return Err(ProgramError::AppsWithoutAgent);
         }
-        Ok(ProgramSummary {
-            reads_trigger: check.reads_trigger,
-        })
+        Ok(())
     }
 }
 
 #[derive(Default)]
 struct Check {
-    /// Ids of the steps so far, which must be unique; `{{steps.<id>…}}` can
-    /// read only these.
+    /// Ids of the steps so far, which must be unique.
     ids: HashSet<StepId>,
-    reads_trigger: bool,
     single_agent_task: bool,
 }
 
@@ -139,27 +109,10 @@ impl Check {
                 code_step(code)?;
                 self.name(code.id.as_ref())
             }
-            Step::Tool(tool) => {
-                let arguments = serde_json::Value::Object(tool.arguments.clone());
-                if arguments.to_string().len() > MAX_ARGUMENT_BYTES {
-                    return Err(ProgramError::ArgumentsTooLarge);
-                }
-                for reference in template::references(&arguments)? {
-                    match reference {
-                        Reference::Trigger(_) => self.reads_trigger = true,
-                        Reference::Step { id, .. } if !self.ids.contains(&id) => {
-                            return Err(ProgramError::UnknownStep(id));
-                        }
-                        Reference::Step { .. } => {}
-                    }
-                }
-                // Registered after its own arguments: a step cannot read itself.
-                self.name(tool.id.as_ref())
-            }
         }
     }
 
-    /// A step's id becomes readable by the steps after it.
+    /// A step's id, unique in the routine.
     fn name(&mut self, id: Option<&StepId>) -> Result<(), ProgramError> {
         if let Some(id) = id
             && !self.ids.insert(id.clone())

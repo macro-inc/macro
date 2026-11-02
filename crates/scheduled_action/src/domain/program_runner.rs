@@ -1,5 +1,5 @@
-//! Run a routine's program: its steps in order, running code, calling tools
-//! and handing off to its agent.
+//! Run a routine's program: its steps in order, running code and handing
+//! off to its agent.
 //!
 //! A failed step stops the run. Each step's result is recorded on the run's
 //! handle as it happens, so history survives a failure or a deadline.
@@ -11,7 +11,6 @@ use chrono_tz::Tz;
 use macro_user_id::user_id::MacroUserIdStr;
 use routine_program::{
     AgentStep, AgentTask, CodeStep, RoutineProgram, Step, StepPath, StepRecord, StepResult,
-    ToolStep, template,
 };
 use serde_json::{Map, Value, json};
 use trigger_context::{
@@ -29,7 +28,7 @@ use super::{
     models::{RunInfo, RunStart, Schedule, ScheduledAction},
     ports::{
         CodeOutcome, CodeRun, CodeUpgrades, NoRoutineCode, RoutineAgents, RoutineCode,
-        RoutineEventReader, RoutineRun, RoutineToolOutcome, RoutineTools, ScheduledAgentRunner,
+        RoutineEventReader, RoutineRun, ScheduledAgentRunner,
     },
 };
 
@@ -39,22 +38,19 @@ pub(crate) mod test;
 const SCHEDULED_GUIDANCE: &str = "You are executing a user routine that has already been triggered. Do not schedule it again or wait for its requested time or event. Follow your configured persona instructions while carrying out this routine.";
 
 /// Interprets every routine's program. `content` reads the triggering item,
-/// as data for code and templates and as the agent's account of it. Code
-/// steps fail unless a [`RoutineCode`] is added with
-/// [`ProgramRunner::with_code`].
-pub struct ProgramRunner<Agents, Tools, Content, Code = NoRoutineCode, Upgrades = NoCodeUpgrades> {
+/// as data for code and as the agent's account of it. Code steps fail unless
+/// a [`RoutineCode`] is added with [`ProgramRunner::with_code`].
+pub struct ProgramRunner<Agents, Content, Code = NoRoutineCode, Upgrades = NoCodeUpgrades> {
     agents: Arc<Agents>,
-    tools: Arc<Tools>,
     content: Arc<Content>,
     code: Arc<Code>,
     upgrades: Arc<Upgrades>,
 }
 
-impl<Agents, Tools, Content> ProgramRunner<Agents, Tools, Content> {
-    pub fn new(agents: Arc<Agents>, tools: Arc<Tools>, content: Arc<Content>) -> Self {
+impl<Agents, Content> ProgramRunner<Agents, Content> {
+    pub fn new(agents: Arc<Agents>, content: Arc<Content>) -> Self {
         Self {
             agents,
-            tools,
             content,
             code: Arc::new(NoRoutineCode),
             upgrades: Arc::new(NoCodeUpgrades),
@@ -62,17 +58,16 @@ impl<Agents, Tools, Content> ProgramRunner<Agents, Tools, Content> {
     }
 }
 
-impl<Agents, Tools, Content, Code, Upgrades> ProgramRunner<Agents, Tools, Content, Code, Upgrades> {
+impl<Agents, Content, Code, Upgrades> ProgramRunner<Agents, Content, Code, Upgrades> {
     /// Run code steps with `code`, bringing them to its SDK first and
     /// recording that in `upgrades`.
     pub fn with_code<NextCode, NextUpgrades>(
         self,
         code: Arc<NextCode>,
         upgrades: Arc<NextUpgrades>,
-    ) -> ProgramRunner<Agents, Tools, Content, NextCode, NextUpgrades> {
+    ) -> ProgramRunner<Agents, Content, NextCode, NextUpgrades> {
         ProgramRunner {
             agents: self.agents,
-            tools: self.tools,
             content: self.content,
             code,
             upgrades,
@@ -80,11 +75,10 @@ impl<Agents, Tools, Content, Code, Upgrades> ProgramRunner<Agents, Tools, Conten
     }
 }
 
-impl<Agents, Tools, Content, Code, Upgrades> ScheduledAgentRunner
-    for ProgramRunner<Agents, Tools, Content, Code, Upgrades>
+impl<Agents, Content, Code, Upgrades> ScheduledAgentRunner
+    for ProgramRunner<Agents, Content, Code, Upgrades>
 where
     Agents: RoutineAgents,
-    Tools: RoutineTools,
     Content: EventContentReader + RoutineEventReader,
     Code: RoutineCode,
     Upgrades: CodeUpgrades,
@@ -115,15 +109,13 @@ where
     ) -> Result<()> {
         let owner = action.owner_user()?;
         let program = program(action)?;
-        let summary = program.validate()?;
+        program.validate()?;
+        let has_code = !program.code_steps().is_empty();
         // Code gets the triggering item whenever there is one.
         let trigger = match firing {
-            RoutineRun::Event(run) if summary.needs_event() || !program.code_steps().is_empty() => {
-                Some(self.trigger(owner, run).await?)
-            }
+            RoutineRun::Event(run) if has_code => Some(self.trigger(owner, run).await?),
             _ => None,
         };
-        let has_code = !program.code_steps().is_empty();
         let (info, code_context) = self
             .run_context(action, handle, firing, trigger.as_ref(), has_code)
             .await?;
@@ -137,34 +129,13 @@ where
             &code_context,
         )
         .await?;
-        if summary.needs_event() && trigger.is_none() {
-            bail!(
-                "This routine reads the item that triggered it, so it only runs when an activity event triggers it."
-            );
-        }
         tracing::Span::current().record("steps", program.steps.len());
-        let mut context = json!({ "trigger": trigger, "steps": {} });
+        let mut outputs = json!({});
         for (index, step) in program.steps.iter().enumerate() {
             let path = StepPath::root(index);
             match step {
-                Step::Tool(step) => {
-                    let result = self.tool(owner, step, &mut context).await;
-                    handle.steps.push(StepRecord {
-                        path,
-                        result: StepResult::Tool {
-                            tool: step.tool,
-                            output: result
-                                .as_ref()
-                                .ok()
-                                .filter(|output| !output.is_null())
-                                .cloned(),
-                            error: result.as_ref().err().map(ToString::to_string),
-                        },
-                    });
-                    result.with_context(|| format!("{} failed", step.tool))?;
-                }
                 Step::Code(step) => {
-                    let outcome = self.code(owner, step, &code_context, &mut context).await;
+                    let outcome = self.code(owner, step, &code_context, &mut outputs).await;
                     let (output, error) = match outcome.result {
                         Ok(output) => (Some(output), None),
                         Err(error) => (None, Some(error)),
@@ -184,7 +155,7 @@ where
                 }
                 Step::Agent(step) => {
                     let result = self
-                        .agent(action, &program, step, firing, handle, &context["steps"])
+                        .agent(action, &program, step, firing, handle, &outputs)
                         .await;
                     handle.steps.push(StepRecord {
                         path,
@@ -204,15 +175,14 @@ where
     }
 }
 
-impl<Agents, Tools, Content, Code, Upgrades> ProgramRunner<Agents, Tools, Content, Code, Upgrades>
+impl<Agents, Content, Code, Upgrades> ProgramRunner<Agents, Content, Code, Upgrades>
 where
     Agents: RoutineAgents,
-    Tools: RoutineTools,
     Content: EventContentReader + RoutineEventReader,
     Code: RoutineCode,
 {
-    /// The triggering item as code and templates see it: its content, plus
-    /// the ids tools need to act on it.
+    /// The triggering item as code sees it: its content, plus the ids code
+    /// needs to act on it.
     async fn trigger(
         &self,
         owner: &MacroUserIdStr<'static>,
@@ -233,33 +203,6 @@ where
         Ok(content)
     }
 
-    #[tracing::instrument(name = "routine.step", skip_all, fields(tool = %step.tool.name()))]
-    async fn tool(
-        &self,
-        owner: &MacroUserIdStr<'static>,
-        step: &ToolStep,
-        context: &mut Value,
-    ) -> Result<Value> {
-        if let Some(missing) = template::unresolved(&step.arguments, context).first() {
-            bail!("This step needs {missing}, which this run doesn't have.");
-        }
-        let arguments = template::render(&step.arguments, context);
-        match self.tools.call(owner, step.tool, arguments).await {
-            RoutineToolOutcome::Completed { output } => {
-                if let (Some(id), Some(Value::Object(outputs))) =
-                    (&step.id, context.get_mut("steps"))
-                {
-                    outputs.insert(id.to_string(), output.clone());
-                }
-                Ok(output)
-            }
-            RoutineToolOutcome::Failed { message } => {
-                tracing::warn!("routine tool step failed");
-                Err(anyhow!(message))
-            }
-        }
-    }
-
     /// Run one code step; its output becomes `steps.<id>` for later steps.
     #[tracing::instrument(name = "routine.code_step", skip_all, fields(
         calls = tracing::field::Empty,
@@ -271,7 +214,7 @@ where
         owner: &MacroUserIdStr<'static>,
         step: &CodeStep,
         code_context: &Value,
-        context: &mut Value,
+        outputs: &mut Value,
     ) -> CodeOutcome {
         let outcome = self
             .code
@@ -280,7 +223,7 @@ where
                 CodeRun {
                     step,
                     context: code_context,
-                    steps: &context["steps"],
+                    steps: outputs,
                     dry_run: false,
                 },
             )
@@ -294,9 +237,7 @@ where
         span.record("failed", outcome.result.is_err());
         match &outcome.result {
             Ok(output) => {
-                if let (Some(id), Some(Value::Object(outputs))) =
-                    (&step.id, context.get_mut("steps"))
-                {
+                if let (Some(id), Value::Object(outputs)) = (&step.id, outputs) {
                     outputs.insert(id.to_string(), output.clone());
                 }
             }

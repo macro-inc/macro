@@ -72,9 +72,6 @@ fn schedules_and_activity_combine_into_one_scheduler_trigger() {
 
 #[test]
 fn invalid_steps_and_trigger_mismatches_explain_themselves_before_any_request() {
-    let triage = serde_json::json!([{ "type": "tool", "tool": "Comment", "arguments": {
-        "entityType": "document", "entityId": "{{trigger.entity_id}}", "content": "Seen"
-    } }]);
     for (triggers, steps, expected) in [
         (
             serde_json::json!([]),
@@ -85,11 +82,6 @@ fn invalid_steps_and_trigger_mismatches_explain_themselves_before_any_request() 
             serde_json::json!([{ "type": "event", "events": ["email.message_received"] }]),
             serde_json::json!([]),
             "Invalid steps: add at least one step.",
-        ),
-        (
-            serde_json::json!([{ "type": "cron", "expression": "0 0 9 * * *", "timezone": "UTC" }]),
-            triage,
-            "need activity triggers only",
         ),
     ] {
         let config: RoutineConfiguration = serde_json::from_value(serde_json::json!({
@@ -310,7 +302,7 @@ fn the_documented_example_is_a_valid_event_routine() {
     }))
     .unwrap();
     let body = configuration_body(&config, Utc::now(), None).unwrap();
-    assert_eq!(body["task"]["steps"][0]["type"], "tool");
+    assert_eq!(body["task"]["steps"][0]["type"], "code");
 }
 
 #[test]
@@ -338,8 +330,7 @@ fn required_apps_need_an_agent_step_to_use_them() {
     let config: RoutineConfiguration = serde_json::from_value(serde_json::json!({
         "name": "Post standup",
         "triggers": [{ "type": "cron", "expression": "0 0 9 * * *", "timezone": "UTC" }],
-        "steps": [{ "type": "tool", "tool": "SendChannelMessage",
-                    "arguments": { "channel_id": "c", "content": "Standup" } }],
+        "steps": [{ "type": "code", "title": "Post it", "source": "export async function main() {}" }],
         "requiredApps": [{ "appSlug": "linear", "name": "Linear" }],
     }))
     .unwrap();

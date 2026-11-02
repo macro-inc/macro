@@ -160,8 +160,7 @@ pub struct RoutineConfiguration {
     /// When it runs: one or more schedules and activity triggers.
     pub triggers: Vec<RoutineTrigger>,
     /// What it does each run, in order: a JSON array of steps, encoded as a
-    /// string (see the tool description for the step format). Steps that
-    /// read the triggering item (`{{trigger.…}}`) need activity triggers only.
+    /// string (see the tool description for the step format).
     #[serde(with = "steps_json")]
     #[schemars(with = "String")]
     pub steps: Vec<Step>,
@@ -288,18 +287,10 @@ impl RoutineConfiguration {
             .map(|app| serde_json::json!({ "app_slug": app.app_slug, "server_name": app.name }))
             .collect();
         let program = serde_json::json!({ "steps": self.steps, "mcp_servers": apps });
-        let summary = RoutineProgram::from_task(&program)
+        RoutineProgram::from_task(&program)
             .map_err(|error| anyhow::anyhow!("Invalid steps: {error}."))?
             .validate()
             .map_err(|error| anyhow::anyhow!("Invalid steps: {error}."))?;
-        ensure!(
-            !summary.needs_event()
-                || self
-                    .triggers
-                    .iter()
-                    .all(|trigger| matches!(trigger, RoutineTrigger::Event { .. })),
-            "Steps that read the triggering item need activity triggers only."
-        );
         Ok(())
     }
 

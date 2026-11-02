@@ -263,7 +263,7 @@ async fn every_agent_step_is_authorized_and_structural_errors_name_the_rule() {
     let sessions = Arc::new(Sessions::default());
     let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();
     let program = json!({ "steps": [
-        { "type": "tool", "tool": "UpdateThreadLabels", "arguments": {} },
+        { "type": "code", "title": "Label it", "source": "export async function main() {}" },
         { "type": "agent", "agent": { "bot_id": BOT }, "instructions": "Escalate" }
     ] });
     TargetValidation::new(sessions.clone(), true)
@@ -318,7 +318,7 @@ fn programs_never_trip_the_old_client_agent_guard() {
 
 #[test]
 fn an_update_from_before_steps_cannot_replace_them() {
-    let program = json!({ "steps": [{ "type": "tool", "tool": "Comment", "arguments": {} }] });
+    let program = json!({ "steps": [{ "type": "code", "title": "Comment", "source": "export async function main() {}" }] });
     let error = require_explicit_selection(
         &program,
         &json!({ "model": "m", "prompt": "", "user_prompt": "x" }),
