@@ -346,6 +346,7 @@ export function AddPipelineRecordDialog(
                   variant="ghost"
                   size="sm"
                   class="max-w-full self-start"
+                  tooltip={suggestion().name}
                   disabled={pending()}
                   onClick={() =>
                     changeChoice({ ...draft(), companyId: suggestion().id })
