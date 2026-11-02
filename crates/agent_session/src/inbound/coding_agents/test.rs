@@ -46,27 +46,6 @@ impl CodingAgentService for ServiceSpy {
         command: DispatchCodingAgentRequest,
     ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
     {
-        self.dispatch(command)
-    }
-
-    fn list(
-        &self,
-        user_id: MacroUserIdStr<'static>,
-    ) -> Pin<Box<dyn Future<Output = Result<Vec<CodingAgent>, CodingAgentError>> + Send + '_>> {
-        Box::pin(async move {
-            self.seen.lock().unwrap().push(json!({"user_id":user_id}));
-            if let Some(error) = &self.error {
-                return Err(error.clone());
-            }
-            Ok(Vec::new())
-        })
-    }
-
-    fn dispatch(
-        &self,
-        command: DispatchCodingAgentRequest,
-    ) -> Pin<Box<dyn Future<Output = Result<DispatchedCodingAgent, CodingAgentError>> + Send + '_>>
-    {
         Box::pin(async move {
             self.seen.lock().unwrap().push(json!(command));
             if let Some(error) = &self.error {
@@ -96,17 +75,14 @@ fn app(service: Arc<ServiceSpy>) -> Router {
     ))
 }
 
-fn command(operation: &str) -> Value {
-    match operation {
-        "list" => json!({"user_id": USER}),
-        _ => json!({"user_id": USER,"agent_id":Uuid::now_v7(),"prompt":"Fix the regression"}),
-    }
+fn command() -> Value {
+    json!({"user_id": USER,"agent_id":Uuid::now_v7(),"prompt":"Fix the regression"})
 }
 
-fn request(operation: &str, command: Value, header: Option<(&str, &str)>) -> Request {
+fn request(command: Value, header: Option<(&str, &str)>) -> Request {
     let mut request = Request::builder()
         .method("POST")
-        .uri(format!("/internal/coding-agents/{operation}"))
+        .uri("/internal/coding-agents/create-session")
         .header("content-type", "application/json");
     if let Some((name, value)) = header {
         request = request.header(name, value);
@@ -119,26 +95,24 @@ async fn body(response: Response) -> Value {
 }
 
 #[tokio::test]
-async fn internal_credentials_are_required_before_discovery_or_dispatch() {
+async fn internal_credentials_are_required_before_creation() {
     let service = Arc::new(ServiceSpy::default());
-    for operation in ["list", "dispatch", "create-session"] {
-        for (header, expected) in [
-            (None, StatusCode::UNAUTHORIZED),
-            (
-                Some((INTERNAL_API_KEY_HEADER, "wrong")),
-                StatusCode::UNAUTHORIZED,
-            ),
-            (
-                Some(("authorization", "Bearer user")),
-                StatusCode::FORBIDDEN,
-            ),
-        ] {
-            let response = app(service.clone())
-                .oneshot(request(operation, command(operation), header))
-                .await
-                .unwrap();
-            assert_eq!(response.status(), expected);
-        }
+    for (header, expected) in [
+        (None, StatusCode::UNAUTHORIZED),
+        (
+            Some((INTERNAL_API_KEY_HEADER, "wrong")),
+            StatusCode::UNAUTHORIZED,
+        ),
+        (
+            Some(("authorization", "Bearer user")),
+            StatusCode::FORBIDDEN,
+        ),
+    ] {
+        let response = app(service.clone())
+            .oneshot(request(command(), header))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), expected);
     }
     assert!(service.seen.lock().unwrap().is_empty());
 }
@@ -146,58 +120,41 @@ async fn internal_credentials_are_required_before_discovery_or_dispatch() {
 #[tokio::test]
 async fn authenticated_commands_preserve_user_and_task_identity() {
     let service = Arc::new(ServiceSpy::default());
-    for operation in ["list", "dispatch", "create-session"] {
-        let command = command(operation);
-        let response = app(service.clone())
-            .oneshot(request(
-                operation,
-                command.clone(),
-                Some((INTERNAL_API_KEY_HEADER, KEY)),
-            ))
-            .await
-            .unwrap();
-        assert_eq!(response.status(), StatusCode::OK);
-        assert_eq!(service.seen.lock().unwrap().last(), Some(&command));
-        if operation == "list" {
-            assert_eq!(body(response).await, json!({"agents":[]}));
-        } else {
-            let output = body(response).await;
-            assert_eq!(output["agent_id"], command["agent_id"]);
-            assert!(output["agent_session_id"].is_string());
-        }
-    }
+    let command = command();
+    let response = app(service.clone())
+        .oneshot(request(
+            command.clone(),
+            Some((INTERNAL_API_KEY_HEADER, KEY)),
+        ))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(service.seen.lock().unwrap().last(), Some(&command));
+    let output = body(response).await;
+    assert_eq!(output["agent_id"], command["agent_id"]);
+    assert!(output["agent_session_id"].is_string());
 }
 
 #[tokio::test]
 async fn malformed_identity_and_oversized_tasks_never_reach_the_domain() {
     let service = Arc::new(ServiceSpy::default());
-    for operation in ["list", "dispatch", "create-session"] {
-        for invalid in [None, Some(json!("invalid-user")), Some(Value::Null)] {
-            let mut command = command(operation);
-            command.as_object_mut().unwrap().remove("user_id");
-            if let Some(invalid) = invalid {
-                command["user_id"] = invalid;
-            }
-            let response = app(service.clone())
-                .oneshot(request(
-                    operation,
-                    command,
-                    Some((INTERNAL_API_KEY_HEADER, KEY)),
-                ))
-                .await
-                .unwrap();
-            assert_eq!(response.status(), StatusCode::BAD_REQUEST);
-            assert_eq!(body(response).await, json!({"code":"invalid_command"}));
+    for invalid in [None, Some(json!("invalid-user")), Some(Value::Null)] {
+        let mut command = command();
+        command.as_object_mut().unwrap().remove("user_id");
+        if let Some(invalid) = invalid {
+            command["user_id"] = invalid;
         }
+        let response = app(service.clone())
+            .oneshot(request(command, Some((INTERNAL_API_KEY_HEADER, KEY))))
+            .await
+            .unwrap();
+        assert_eq!(response.status(), StatusCode::BAD_REQUEST);
+        assert_eq!(body(response).await, json!({"code":"invalid_command"}));
     }
-    let mut command = command("dispatch");
+    let mut command = command();
     command["prompt"] = json!("x".repeat(MAX_COMMAND_BYTES));
     let response = app(service.clone())
-        .oneshot(request(
-            "dispatch",
-            command,
-            Some((INTERNAL_API_KEY_HEADER, KEY)),
-        ))
+        .oneshot(request(command, Some((INTERNAL_API_KEY_HEADER, KEY))))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::BAD_REQUEST);
@@ -215,11 +172,7 @@ async fn domain_failure_preserves_session_identity_and_sanitized_reason() {
         ..Default::default()
     });
     let response = app(service)
-        .oneshot(request(
-            "dispatch",
-            command("dispatch"),
-            Some((INTERNAL_API_KEY_HEADER, KEY)),
-        ))
+        .oneshot(request(command(), Some((INTERNAL_API_KEY_HEADER, KEY))))
         .await
         .unwrap();
     assert_eq!(response.status(), StatusCode::BAD_GATEWAY);
@@ -227,8 +180,8 @@ async fn domain_failure_preserves_session_identity_and_sanitized_reason() {
 }
 
 #[tokio::test]
-async fn dispatch_timeout_does_not_invite_automatic_retry() {
-    let response = bounded_response(true, Duration::ZERO, std::future::pending()).await;
+async fn creation_timeout_does_not_invite_automatic_retry() {
+    let response = bounded_response(Duration::ZERO, std::future::pending()).await;
     assert_eq!(response.status(), StatusCode::GATEWAY_TIMEOUT);
     assert_eq!(
         body(response).await,

@@ -1,4 +1,4 @@
-//! Compose coding-agent discovery and dispatch from the owning domain services.
+//! Compose agent session creation from the owning domain services.
 
 use std::{collections::HashMap, sync::Arc};
 
@@ -92,14 +92,7 @@ impl<Bots: BotService, Harnesses: HarnessRepo> CodingAgentDirectory
             agent: CodingAgent {
                 id: bot_id::CURSOR_BOT_ID.as_uuid(),
                 name: bot_id::CURSOR_NAME.into(),
-                description: Some("Cursor cloud agents, run with your Cursor account.".into()),
-                instructions: String::new(),
-                harness: "cursor".into(),
-                model: cursor
-                    .as_ref()
-                    .and_then(|config| config.default_model_id.clone()),
             },
-            is_coding: true,
             available: cursor.is_some(),
         }];
         let connections = RuntimeConnections {
@@ -113,12 +106,7 @@ impl<Bots: BotService, Harnesses: HarnessRepo> CodingAgentDirectory
                 agent: CodingAgent {
                     id: agent.bot.id.as_uuid(),
                     name: agent.bot.name,
-                    description: agent.bot.description,
-                    instructions: agent.instructions,
-                    harness: agent.harness,
-                    model: Some(agent.default_model).filter(|model| !model.trim().is_empty()),
                 },
-                is_coding: agent.is_coding,
                 available,
             }
         }));

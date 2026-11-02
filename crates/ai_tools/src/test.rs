@@ -92,23 +92,35 @@ fn every_host_toolset_passes_schema_validation() {
 }
 
 #[test]
-fn coding_dispatch_is_available_to_every_host_but_not_internal_subagents() {
-    for host in [
+fn agents_start_other_sessions_only_through_code_mode() {
+    let hosts = [
         AiHost::Chat,
         AiHost::AgentSession,
         AiHost::ChannelBot,
         AiHost::Mcp,
-    ] {
-        let tools = tools_for(host);
+    ];
+    for tools in hosts
+        .into_iter()
+        .map(tools_for)
+        .chain([tools_for_agent_code_mode()])
+    {
         for name in ["ListCodingAgents", "DispatchCodingAgent"] {
-            assert!(tools.toolset.tools.contains_key(name), "{host:?}: {name}");
-            assert!(tools.prompt.to_string().contains(name), "{host:?}: {name}");
+            assert!(!tools.toolset.tools.contains_key(name), "{name}");
+            assert!(!tools.prompt.to_string().contains(name), "{name}");
         }
     }
-    let subagent = subagent_toolset();
-    for name in ["ListCodingAgents", "DispatchCodingAgent"] {
-        assert!(!subagent.tools.contains_key(name));
+    for host in hosts {
+        assert!(
+            !tools_for(host)
+                .prompt
+                .to_string()
+                .contains("agentSessions.createManaged"),
+            "{host:?}"
+        );
     }
+    let code_mode = tools_for_agent_code_mode().prompt.to_string();
+    assert!(code_mode.contains("macro.agents.list()"));
+    assert!(code_mode.contains("macro.agentSessions.createManaged"));
 }
 
 #[test]
@@ -623,7 +635,6 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
         "EditPresentation",
         "EditDocument",
         "Subagent",
-        "DispatchCodingAgent",
         "SearchTools",
         "LoadTools",
         "DiscoverConnectors",

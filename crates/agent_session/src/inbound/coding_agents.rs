@@ -1,4 +1,4 @@
-//! Internal coding agent endpoints; discovery and dispatch policy live in the domain.
+//! Internal agent session creation endpoint; creation policy lives in the domain.
 
 use std::{sync::Arc, time::Duration};
 
@@ -13,19 +13,15 @@ use axum::{
 use macro_authorization::{
     InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
 };
-use macro_user_id::user_id::MacroUserIdStr;
-use serde::{Deserialize, Serialize};
 
 use crate::domain::coding_agents::{
-    CodingAgent, CodingAgentError, CodingAgentService, DispatchCodingAgentRequest,
-    DispatchedCodingAgent,
+    CodingAgentError, CodingAgentService, DispatchCodingAgentRequest, DispatchedCodingAgent,
 };
 
-const DISPATCH_TIMEOUT: Duration = Duration::from_secs(120);
-const LIST_TIMEOUT: Duration = Duration::from_secs(10);
+const CREATE_TIMEOUT: Duration = Duration::from_secs(120);
 const MAX_COMMAND_BYTES: usize = 1024 * 1024;
 
-/// Independent state for the internal coding agent capability.
+/// Independent state for the internal session creation capability.
 pub struct CodingAgentsState<Service, Auth> {
     service: Arc<Service>,
     authorization: MacroAuthorizationState<Auth>,
@@ -63,23 +59,11 @@ pub fn coding_agents_router<Service: CodingAgentService, Auth: MacroAuthorizatio
     Router::new().nest(
         "/internal/coding-agents",
         Router::new()
-            .route("/list", post(list::<Service, Auth>))
-            .route("/dispatch", post(dispatch::<Service, Auth>))
             .route("/create-session", post(create::<Service, Auth>))
             .layer(DefaultBodyLimit::max(MAX_COMMAND_BYTES))
             .layer(middleware::from_fn(bound_request))
             .with_state(state),
     )
-}
-
-#[derive(Deserialize)]
-struct ListRequest {
-    user_id: MacroUserIdStr<'static>,
-}
-
-#[derive(Serialize)]
-struct ListResponse {
-    agents: Vec<CodingAgent>,
 }
 
 struct ApiError(CodingAgentError);
@@ -114,50 +98,19 @@ impl IntoResponse for ApiError {
 }
 
 async fn bound_request(request: Request, next: Next) -> Response {
-    let is_dispatch = !request.uri().path().ends_with("/list");
-    let timeout = if is_dispatch {
-        DISPATCH_TIMEOUT
-    } else {
-        LIST_TIMEOUT
-    };
-    bounded_response(is_dispatch, timeout, next.run(request)).await
+    bounded_response(CREATE_TIMEOUT, next.run(request)).await
 }
 
-async fn bounded_response(
-    is_dispatch: bool,
-    timeout: Duration,
-    response: impl Future<Output = Response>,
-) -> Response {
+async fn bounded_response(timeout: Duration, response: impl Future<Output = Response>) -> Response {
     match tokio::time::timeout(timeout, response).await {
         Ok(response) => response,
-        Err(_) => {
-            // A timeout cannot undo session creation or an accepted prompt.
-            let code = if is_dispatch {
-                CodingAgentError::DispatchDeliveryUnknown
-            } else {
-                CodingAgentError::OperationFailed
-            };
-            (StatusCode::GATEWAY_TIMEOUT, Json(code)).into_response()
-        }
+        // A timeout cannot undo session creation or an accepted prompt.
+        Err(_) => (
+            StatusCode::GATEWAY_TIMEOUT,
+            Json(CodingAgentError::DispatchDeliveryUnknown),
+        )
+            .into_response(),
     }
-}
-
-async fn list<Service: CodingAgentService, Auth: MacroAuthorizationService>(
-    State(state): State<CodingAgentsState<Service, Auth>>,
-    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
-    command: Result<Json<ListRequest>, JsonRejection>,
-) -> Result<Json<ListResponse>, ApiError> {
-    Ok(Json(ListResponse {
-        agents: state.service.list(command?.0.user_id).await?,
-    }))
-}
-
-async fn dispatch<Service: CodingAgentService, Auth: MacroAuthorizationService>(
-    State(state): State<CodingAgentsState<Service, Auth>>,
-    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
-    command: Result<Json<DispatchCodingAgentRequest>, JsonRejection>,
-) -> Result<Json<DispatchedCodingAgent>, ApiError> {
-    Ok(Json(state.service.dispatch(command?.0).await?))
 }
 
 #[cfg(test)]
