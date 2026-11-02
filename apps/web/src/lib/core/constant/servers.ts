@@ -217,6 +217,28 @@ function selectSyncServiceHost():
 
 export const SYNC_SERVICE_HOSTS = selectSyncServiceHost();
 
+// Desktop HTTP services share the native session cookie jar. Navigation-only
+// destinations and WebSocket endpoints do not define HTTP transport prefixes.
+const nativeSessionServices = {
+  'auth-service': SERVER_HOSTS['auth-service'],
+  'auth-logout': undefined,
+  'pdf-service': SERVER_HOSTS['pdf-service'],
+  'document-storage-service': SERVER_HOSTS['document-storage-service'],
+  'websocket-service': undefined,
+  'cognition-service': SERVER_HOSTS['cognition-service'],
+  'connection-gateway': undefined,
+  'notification-service': SERVER_HOSTS['notification-service'],
+  'static-file': SERVER_HOSTS['static-file'],
+  'unfurl-service': SERVER_HOSTS['unfurl-service'],
+  contacts: SERVER_HOSTS['contacts'],
+  'email-service': SERVER_HOSTS['email-service'],
+  'calendar-service': SERVER_HOSTS['calendar-service'],
+  'image-proxy-service': SERVER_HOSTS['image-proxy-service'],
+  'scheduled-action': SERVER_HOSTS['scheduled-action'],
+  'agent-harness': SERVER_HOSTS['agent-harness'],
+  preview: SERVER_HOSTS['preview'],
+} satisfies Record<keyof Servers, string | undefined>;
+
 /**
  * The DSS host to use for sync-service permission tokens.
  * When the sync service is remote, permission tokens must come from the remote DSS
@@ -226,6 +248,12 @@ export const SYNC_PERMISSION_TOKEN_DSS_HOST =
   SYNC_SERVICE_HOSTS === syncServiceHostRemote
     ? serverHostRemote['document-storage-service']
     : SERVER_HOSTS['document-storage-service'];
+
+export const NATIVE_SESSION_SERVICE_URLS = [
+  ...Object.values(nativeSessionServices).filter((url) => url !== undefined),
+  SYNC_SERVICE_HOSTS.worker,
+  SYNC_PERMISSION_TOKEN_DSS_HOST,
+];
 
 /** Creates endpoint URL for accessing a static file by its ID */
 export function staticFileIdEndpoint(id: string): string {
