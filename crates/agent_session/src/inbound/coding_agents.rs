@@ -8,17 +8,20 @@ use axum::{
     http::StatusCode,
     middleware::{self, Next},
     response::{IntoResponse, Response},
-    routing::post,
+    routing::{get, post},
 };
 use macro_authorization::{
     InternalOnly, MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    UserOrInternal,
 };
 
 use crate::domain::coding_agents::{
     CodingAgentError, CodingAgentService, DispatchCodingAgentRequest, DispatchedCodingAgent,
 };
+use crate::domain::updates::AgentUpdates;
 
 const CREATE_TIMEOUT: Duration = Duration::from_secs(120);
+const UPDATES_TIMEOUT: Duration = Duration::from_secs(30);
 const MAX_COMMAND_BYTES: usize = 1024 * 1024;
 
 /// Independent state for the internal session creation capability.
@@ -59,6 +62,7 @@ pub fn coding_agents_router<Service: CodingAgentService, Auth: MacroAuthorizatio
     Router::new().nest(
         "/internal/coding-agents",
         Router::new()
+            .route("/updates", get(updates::<Service, Auth>))
             .route("/create-session", post(create::<Service, Auth>))
             .layer(DefaultBodyLimit::max(MAX_COMMAND_BYTES))
             .layer(middleware::from_fn(bound_request))
@@ -98,19 +102,45 @@ impl IntoResponse for ApiError {
 }
 
 async fn bound_request(request: Request, next: Next) -> Response {
-    bounded_response(CREATE_TIMEOUT, next.run(request)).await
+    let is_create = !request.uri().path().ends_with("/updates");
+    let timeout = if is_create {
+        CREATE_TIMEOUT
+    } else {
+        UPDATES_TIMEOUT
+    };
+    bounded_response(is_create, timeout, next.run(request)).await
 }
 
-async fn bounded_response(timeout: Duration, response: impl Future<Output = Response>) -> Response {
+async fn bounded_response(
+    is_create: bool,
+    timeout: Duration,
+    response: impl Future<Output = Response>,
+) -> Response {
     match tokio::time::timeout(timeout, response).await {
         Ok(response) => response,
-        // A timeout cannot undo session creation or an accepted prompt.
-        Err(_) => (
-            StatusCode::GATEWAY_TIMEOUT,
-            Json(CodingAgentError::DispatchDeliveryUnknown),
-        )
-            .into_response(),
+        Err(_) => {
+            // A timeout cannot undo session creation or an accepted prompt.
+            let code = if is_create {
+                CodingAgentError::DispatchDeliveryUnknown
+            } else {
+                CodingAgentError::OperationFailed
+            };
+            (StatusCode::GATEWAY_TIMEOUT, Json(code)).into_response()
+        }
     }
+}
+
+async fn updates<Service: CodingAgentService, Auth: MacroAuthorizationService>(
+    State(state): State<CodingAgentsState<Service, Auth>>,
+    _internal: MacroAuthorizationExtractor<Auth, InternalOnly>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+) -> Result<Json<AgentUpdates>, ApiError> {
+    Ok(Json(
+        state
+            .service
+            .list_updates(user.authorization.user.macro_user_id)
+            .await?,
+    ))
 }
 
 #[cfg(test)]

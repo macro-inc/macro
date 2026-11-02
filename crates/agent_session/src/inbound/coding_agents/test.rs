@@ -1,9 +1,11 @@
 use super::*;
 use axum::body::{Body, to_bytes};
 use macro_authorization::{
-    INTERNAL_API_KEY_HEADER, InternalAuthConfig, JwtValidator, MacroAuthorizationError,
-    MacroAuthorizationServiceImpl, NoBotAuthorizer, NoUserApiKeyAuthorizer, ValidatedIdentity,
+    INTERNAL_API_KEY_HEADER, INTERNAL_MACRO_USER_ID_HEADER, InternalAuthConfig, JwtValidator,
+    MacroAuthorizationError, MacroAuthorizationServiceImpl, NoBotAuthorizer,
+    NoUserApiKeyAuthorizer, ValidatedIdentity,
 };
+use macro_user_id::user_id::MacroUserIdStr;
 use rootcause::Report;
 use serde_json::{Value, json};
 use std::{future::Future, pin::Pin, sync::Mutex};
@@ -34,6 +36,46 @@ impl JwtValidator for UserCredentials {
     }
 }
 
+#[tokio::test]
+async fn updates_use_the_authenticated_internal_acting_user() {
+    let service = Arc::new(ServiceSpy::default());
+    let response = app(service.clone())
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/internal/coding-agents/updates")
+                .header(INTERNAL_API_KEY_HEADER, KEY)
+                .header(INTERNAL_MACRO_USER_ID_HEADER, USER)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    assert_eq!(
+        body(response).await,
+        json!({"items":[],"truncated":false,"truncationNotice":null})
+    );
+    assert_eq!(
+        service.seen.lock().unwrap().as_slice(),
+        &[json!({"updates_user_id":USER})]
+    );
+
+    let denied = app(service.clone())
+        .oneshot(
+            Request::builder()
+                .method("GET")
+                .uri("/internal/coding-agents/updates")
+                .header(INTERNAL_API_KEY_HEADER, KEY)
+                .body(Body::empty())
+                .unwrap(),
+        )
+        .await
+        .unwrap();
+    assert_ne!(denied.status(), StatusCode::OK);
+    assert_eq!(service.seen.lock().unwrap().len(), 1);
+}
+
 #[derive(Default)]
 struct ServiceSpy {
     seen: Mutex<Vec<Value>>,
@@ -41,6 +83,28 @@ struct ServiceSpy {
 }
 
 impl CodingAgentService for ServiceSpy {
+    fn list_updates(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<crate::domain::updates::AgentUpdates, CodingAgentError>>
+                + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async move {
+            self.seen
+                .lock()
+                .unwrap()
+                .push(json!({"updates_user_id": user_id}));
+            Ok(crate::domain::updates::AgentUpdates {
+                items: Vec::new(),
+                truncated: false,
+                truncation_notice: None,
+            })
+        })
+    }
     fn create(
         &self,
         command: DispatchCodingAgentRequest,
@@ -181,7 +245,7 @@ async fn domain_failure_preserves_session_identity_and_sanitized_reason() {
 
 #[tokio::test]
 async fn creation_timeout_does_not_invite_automatic_retry() {
-    let response = bounded_response(Duration::ZERO, std::future::pending()).await;
+    let response = bounded_response(true, Duration::ZERO, std::future::pending()).await;
     assert_eq!(response.status(), StatusCode::GATEWAY_TIMEOUT);
     assert_eq!(
         body(response).await,

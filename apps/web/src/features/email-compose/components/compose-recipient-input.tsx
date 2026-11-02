@@ -15,6 +15,7 @@ export function ComposeRecipientInput(
       noPadding
       openOnFocus={props.openOnFocus ?? false}
       hideMenuOnEscape
+      showChipAddresses
       class={cn('bg-transparent [&_input]:ml-0!', props.class)}
     />
   );

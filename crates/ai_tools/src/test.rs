@@ -108,7 +108,9 @@ fn agents_start_other_sessions_only_through_code_mode() {
             assert!(!tools.toolset.tools.contains_key(name), "{name}");
             assert!(!tools.prompt.to_string().contains(name), "{name}");
         }
+        assert!(tools.toolset.tools.contains_key("ListAgentUpdates"));
     }
+    assert!(!subagent_toolset().tools.contains_key("ListAgentUpdates"));
     for host in hosts {
         assert!(
             !tools_for(host)

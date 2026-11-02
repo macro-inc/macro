@@ -177,6 +177,7 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
                 cognition: None,
                 reviews: Arc::new(OnceLock::new()),
                 gate: Arc::new(agent_inmem::domain::tool_gate::UngatedNativeTools),
+                app_url: "https://macro.com".into(),
             },
         );
         assert_eq!(
@@ -339,6 +340,15 @@ async fn each_harness_gets_only_internal_tools_and_writes_only_its_session() {
         })).await;
         assert!(called.get("error").is_none(), "{called}");
         assert_ne!(called["result"]["isError"], true, "{called}");
+        let output: serde_json::Value =
+            serde_json::from_str(called["result"]["content"][0]["text"].as_str().unwrap()).unwrap();
+        assert_eq!(
+            output,
+            serde_json::json!({
+                "pull_request_url": "https://github.com/org/repo/pull/1",
+                "session_url": format!("https://macro.com/app/agent/{}", session.id),
+            })
+        );
         assert_eq!(
             repo.get(session.id)
                 .await

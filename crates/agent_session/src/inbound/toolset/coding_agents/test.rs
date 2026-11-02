@@ -7,10 +7,30 @@ use super::*;
 
 #[derive(Default)]
 struct Service {
+    list_callers: Mutex<Vec<MacroUserIdStr<'static>>>,
     created: Mutex<Vec<DispatchCodingAgentRequest>>,
 }
 
 impl CodingAgentService for Service {
+    fn list_updates(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<crate::domain::updates::AgentUpdates, CodingAgentError>>
+                + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async move {
+            self.list_callers.lock().unwrap().push(user_id);
+            Ok(crate::domain::updates::AgentUpdates {
+                items: Vec::new(),
+                truncated: false,
+                truncation_notice: None,
+            })
+        })
+    }
     fn create(
         &self,
         command: DispatchCodingAgentRequest,
@@ -37,6 +57,13 @@ async fn tools_always_use_the_authenticated_request_identity() {
     });
     let caller = MacroUserIdStr::try_from("macro|requester@example.com".to_owned()).unwrap();
     let request = RequestContext::new(caller.clone());
+    let updates = ListAgentUpdates {}
+        .call(context.clone(), request.clone())
+        .await
+        .unwrap();
+    assert!(updates.items.is_empty());
+    assert_eq!(*service.list_callers.lock().unwrap(), vec![caller.clone()]);
+
     let tool = CreateAgentSession {
         agent_id: macro_uuid::generate_uuid_v7(),
         prompt: "Implement repository issue 123".into(),
@@ -52,6 +79,12 @@ async fn tools_always_use_the_authenticated_request_identity() {
 
 #[test]
 fn tools_reject_an_ai_supplied_user_identity() {
+    assert!(
+        serde_json::from_value::<ListAgentUpdates>(
+            serde_json::json!({"user_id": "macro|another@example.com"})
+        )
+        .is_err()
+    );
     assert!(
         serde_json::from_value::<CreateAgentSession>(serde_json::json!({
             "agentId": macro_uuid::generate_uuid_v7(),

@@ -15,6 +15,7 @@ import { makePersisted } from '@solid-primitives/storage';
 import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import type {
+  AiCreditPurchaseResult,
   AiPlanCatalog,
   AiUsageSnapshot,
   PaidPlan,
@@ -74,6 +75,7 @@ import type { ProfilePictures } from './generated/schemas/profilePictures';
 import type { PublicGtmInviteLink } from './generated/schemas/publicGtmInviteLink';
 import type { PutProfilePictureParams } from './generated/schemas/putProfilePictureParams';
 import type { PutUserNameQueryParams } from './generated/schemas/putUserNameQueryParams';
+import type { SendDomainNoticeResponse } from './generated/schemas/sendDomainNoticeResponse';
 import type { StatusUpdate } from './generated/schemas/statusUpdate';
 import type { SystemStatus } from './generated/schemas/systemStatus';
 import type { SystemStatusHistory } from './generated/schemas/systemStatusHistory';
@@ -933,6 +935,42 @@ export const authServiceClient = {
     );
   },
 
+  /** Buy a credit pack now on the payer's card on file. */
+  async purchaseAiCredits(args: { amountCents: number }) {
+    return await fetchWithAuth<
+      AiCreditPurchaseResult,
+      'PAID_PLAN_REQUIRED' | 'CREDIT_PURCHASE_REJECTED'
+    >(`${authHost}/ai-billing/credits/purchase`, {
+      method: 'POST',
+      body: JSON.stringify({ amountCents: args.amountCents }),
+      errorResponseHandler: async (response) => {
+        if (response.status === 402) {
+          return {
+            code: 'PAID_PLAN_REQUIRED',
+            message: 'A paid plan is required',
+          };
+        }
+        // Over the monthly credit limit, or an earlier purchase is still
+        // processing; the body says which.
+        if (response.status === 409) {
+          const body: unknown = await response.json().catch(() => undefined);
+          return {
+            code: 'CREDIT_PURCHASE_REJECTED',
+            message:
+              typeof body === 'object' &&
+              body !== null &&
+              'error' in body &&
+              typeof body.error === 'string'
+                ? body.error
+                : 'Credit purchase rejected',
+          };
+        }
+        return statusError(response.status);
+      },
+    });
+  },
+
+  /** Stripe Checkout for a credit pack, for a payer with no card on file. */
   async createAiCreditCheckout(args: {
     amountCents: number;
     successUrl: string;
@@ -1360,6 +1398,20 @@ export const authServiceClient = {
         body: JSON.stringify(args),
       })
     ).map(() => undefined);
+  },
+
+  /**
+   * Emails the caller's same-domain contacts who aren't on Macro yet that
+   * the caller's team exists. Call it after inviting, so invitees are
+   * skipped. Admin/Owner only; the server caps a team at 25 recipients.
+   */
+  async sendTeamDomainNotice() {
+    return (
+      await fetchWithAuth<SendDomainNoticeResponse>(
+        `${authHost}/team/domain-notice`,
+        { method: 'POST' }
+      )
+    ).map((result) => result);
   },
 
   async inviteToTeam(args: InviteToTeamRequest) {

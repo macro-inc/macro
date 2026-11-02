@@ -14,6 +14,7 @@ use uuid::Uuid;
 use crate::domain::coding_agents::{
     CodingAgentError, CodingAgentService, DispatchCodingAgentRequest, DispatchedCodingAgent,
 };
+use crate::domain::updates::AgentUpdates;
 
 #[cfg(test)]
 mod test;
@@ -25,6 +26,36 @@ pub struct CodingAgentToolContext {
     pub service: Arc<dyn CodingAgentService>,
     /// Existing-session actions through the owning harness service.
     pub sessions: Arc<dyn crate::domain::tool_actions::SessionActions>,
+}
+
+/// Read the current user's coding sessions that need attention.
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(
+    title = "ListAgentUpdates",
+    description = "List the current user's coding-agent sessions waiting for an answer or stalled for over 20 minutes. The user answers permissions and questions through the cards Macro renders from this tool's result. To send a coding agent instructions, use ManageAgentSession with a prompt. To recall the user's earlier decisions about these agents, search earlier agent conversations with ContentSearch (entity_types agent_sessions) and read them with ReadAgentSession."
+)]
+pub struct ListAgentUpdates {}
+
+impl ToolAnnotated for ListAgentUpdates {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read agent updates");
+}
+
+#[async_trait]
+impl AsyncTool<CodingAgentToolContext> for ListAgentUpdates {
+    type Output = AgentUpdates;
+
+    async fn call(
+        &self,
+        context: ServiceContext<CodingAgentToolContext>,
+        request: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        context
+            .service
+            .list_updates(request.user_id)
+            .await
+            .map_err(tool_error)
+    }
 }
 
 fn tool_error(error: CodingAgentError) -> ToolCallError {
@@ -39,6 +70,7 @@ pub fn coding_agent_toolset() -> AsyncToolCollection<CodingAgentToolContext> {
     AsyncToolCollection::new()
         .add_tool::<super::manage_agent_session::ManageAgentSession, CodingAgentToolContext>()
         .add_tool::<CreateAgentSession, CodingAgentToolContext>()
+        .add_tool::<ListAgentUpdates, CodingAgentToolContext>()
 }
 
 /// Start a new conversation with an existing agent persona.

@@ -99,6 +99,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   ListBots: (whose) => `list ${whose} bots`,
   ListCalendarEvents: (whose) => `read ${whose} calendar`,
   ListCalendars: (whose) => `read ${whose} calendar`,
+  ListAgentUpdates: (whose) => `read ${whose} coding agent updates`,
   ListCompanies: (whose) => `look up companies in ${whose} workspace`,
   ListDatabases: (whose) => `list ${whose} databases`,
   ListEntities: (whose) => `list ${whose} files and tasks`,

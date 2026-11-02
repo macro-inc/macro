@@ -13,6 +13,7 @@ use super::routines::{
     PrepareRoutineSession, PromptRoutineSession, RoutineSessionAction, RoutineSessionError,
     RoutineSessions, ValidateRoutineSession,
 };
+use super::updates::{AgentUpdates, CodingAgentUpdatesRepo, list_updates};
 
 #[cfg(test)]
 mod test;
@@ -103,6 +104,12 @@ pub enum CodingAgentError {
 
 /// Owner-authorized session creation shared by tool and transport adapters.
 pub trait CodingAgentService: Send + Sync + 'static {
+    /// List the caller's pending coding-session updates.
+    fn list_updates(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Pin<Box<dyn Future<Output = Result<AgentUpdates, CodingAgentError>> + Send + '_>>;
+
     /// Reauthorize any available coding or chat persona the caller may use,
     /// create a session, and admit its initial prompt once.
     fn create(
@@ -112,26 +119,39 @@ pub trait CodingAgentService: Send + Sync + 'static {
 }
 
 /// Delegation policy over the existing persona directory and session lifecycle.
-pub struct CodingAgentServiceImpl<Directory, Sessions> {
+pub struct CodingAgentServiceImpl<Directory, Sessions, Updates> {
     directory: Directory,
     sessions: Sessions,
+    updates: Updates,
 }
 
-impl<Directory, Sessions> CodingAgentServiceImpl<Directory, Sessions> {
+impl<Directory, Sessions, Updates: CodingAgentUpdatesRepo>
+    CodingAgentServiceImpl<Directory, Sessions, Updates>
+{
     /// Compose persona visibility with the normal session preparation and control path.
-    pub fn new(directory: Directory, sessions: Sessions) -> Self {
+    pub fn new(directory: Directory, sessions: Sessions, updates: Updates) -> Self {
         Self {
             directory,
             sessions,
+            updates,
         }
     }
 }
 
-impl<Directory, Sessions> CodingAgentService for CodingAgentServiceImpl<Directory, Sessions>
+impl<Directory, Sessions, Updates> CodingAgentService
+    for CodingAgentServiceImpl<Directory, Sessions, Updates>
 where
     Directory: CodingAgentDirectory,
     Sessions: RoutineSessions,
+    Updates: CodingAgentUpdatesRepo,
 {
+    fn list_updates(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Pin<Box<dyn Future<Output = Result<AgentUpdates, CodingAgentError>> + Send + '_>> {
+        Box::pin(list_updates(&self.updates, user_id))
+    }
+
     fn create(
         &self,
         command: DispatchCodingAgentRequest,

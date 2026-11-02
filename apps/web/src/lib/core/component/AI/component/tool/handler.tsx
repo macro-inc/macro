@@ -130,6 +130,7 @@ import {
 } from './ImportTools';
 import { initiativeToolHandlers } from './Initiatives';
 import { LegacyGeneratedImage } from './LegacyGeneratedImage';
+import { listAgentUpdatesHandler } from './ListAgentUpdates';
 import { listEntitiesHandler } from './ListEntities';
 import { listInboxesHandler } from './ListInboxes';
 import { listLabelsHandler } from './ListLabels';
@@ -214,6 +215,7 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ExecuteCode: executeCodeHandler,
   DescribeCodeTools: describeCodeToolsHandler,
   ReadCodeDocs: readCodeDocsHandler,
+  ListAgentUpdates: listAgentUpdatesHandler,
   ReadSpreadsheet: readSpreadsheetHandler,
   CalculateSpreadsheet: calculateSpreadsheetHandler,
   EditSpreadsheet: editSpreadsheetHandler,
