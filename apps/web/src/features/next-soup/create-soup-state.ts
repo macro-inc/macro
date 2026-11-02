@@ -15,7 +15,14 @@ import { isModality } from '@core/mobile/inputModality';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { EntityData, WithNotification, WithSearch } from '@entity';
 import type { SoupRowFamily } from '@entity/composed/list-entity/row-geometry';
-import { batch, createMemo, createSignal, type JSX } from 'solid-js';
+import {
+  type Accessor,
+  batch,
+  createMemo,
+  createSignal,
+  type JSX,
+  onCleanup,
+} from 'solid-js';
 import { createStore, reconcile } from 'solid-js/store';
 
 /**
@@ -116,11 +123,14 @@ export const createSoupState = (options: SoupContextOptions = {}) => {
 
   const sort = createSortState(SORT_CONFIGS, ['updated_at']);
 
+  // The view adds what the client can't see, such as its server filters.
+  const [viewScope, setViewScope] = createSignal<Accessor<unknown>>(() => null);
   const positions = createPositionHolds({
     scope: () =>
       JSON.stringify([
         predicates.activeIds(),
         sort.active().map(({ id, reversed }) => [id, reversed === true]),
+        viewScope()(),
       ]),
   });
 
@@ -439,6 +449,13 @@ export const createSoupState = (options: SoupContextOptions = {}) => {
         ),
       apply: positions.apply,
       sortTs: positions.sortTs,
+      /** Release holds when this view state changes too, until cleanup. */
+      scopeTo: (scope: Accessor<unknown>) => {
+        setViewScope(() => scope);
+        onCleanup(() => {
+          if (viewScope() === scope) setViewScope(() => () => null);
+        });
+      },
     },
 
     collapseEntity: {

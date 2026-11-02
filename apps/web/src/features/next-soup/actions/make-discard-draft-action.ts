@@ -43,9 +43,9 @@ export const makeDiscardDraftAction = () => {
     isEmailEntity(entity) && entity.isDraft;
 
   const deleteDraft = async (
-    threadId: string,
     draft: ThreadDraftHandle
   ): Promise<Result<void, DiscardFailure>> => {
+    const { threadId } = draft;
     if (draftQueueActive()) {
       const outcome = await ResultAsync.fromPromise(
         deleteEmailDraftQueued({
@@ -88,7 +88,7 @@ export const makeDiscardDraftAction = () => {
       }
       span.setAttr('email.draft_discard.count', drafts.value.length);
       for (const draft of drafts.value) {
-        const deleted = await deleteDraft(thread.id, draft);
+        const deleted = await deleteDraft(draft);
         if (deleted.isErr()) {
           span.error(`Draft discard ${deleted.error.kind}`);
           return err(deleted.error);

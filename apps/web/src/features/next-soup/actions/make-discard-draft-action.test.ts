@@ -64,6 +64,7 @@ const email = (overrides: Record<string, unknown> = {}) =>
 const draft = {
   draftId: 'draft-1',
   draftGeneration: 3,
+  threadId: 'thread-1',
   inboxId: 'primary',
 };
 

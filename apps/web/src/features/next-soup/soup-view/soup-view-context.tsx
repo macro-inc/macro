@@ -790,6 +790,9 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   const soupBody = createMemo(() =>
     compileToAst(applyViewFilters(queryFilters.state))
   );
+  // Server-side filters change the result set without touching the client
+  // predicates or sort, so they release held row positions too.
+  soup.positions.scopeTo(soupBody);
 
   const [searchText, setSearchText] = useEntryState<string>('search.text', {
     default: props.initialSearchText ?? '',
