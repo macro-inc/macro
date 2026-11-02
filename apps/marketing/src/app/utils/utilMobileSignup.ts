@@ -1,5 +1,5 @@
-import { analytics } from './utilAnalytic';
-import { buildAuthServiceUrl } from './utilBaseUrl';
+import { analytics } from "./utilAnalytic";
+import { buildAuthServiceUrl, capturedAttribution } from "./utilBaseUrl";
 
 /**
  * Mobile-web email capture, served by the site itself.
@@ -13,10 +13,10 @@ import { buildAuthServiceUrl } from './utilBaseUrl';
  */
 
 /** Email-capture page, used by mobile CTAs across the site. */
-export const MOBILE_SIGNUP_PATH = '/mobile-signup';
+export const MOBILE_SIGNUP_PATH = "/mobile-signup";
 
 /** "We emailed you a desktop link" confirmation page. */
-export const MOBILE_SIGNUP_SENT_PATH = '/mobile-signup-sent';
+export const MOBILE_SIGNUP_SENT_PATH = "/mobile-signup-sent";
 
 /**
  * USD value attached to the Meta `Lead` / Google Ads conversion for a captured
@@ -31,34 +31,34 @@ export const MOBILE_WEB_SIGNUP_LEAD_VALUE = 5;
  * Safari reports itself as a Mac, so a touch-capable "Macintosh" counts too.
  */
 export const isIOS = (userAgent: string, maxTouchPoints: number): boolean =>
-  /iPhone|iPad|iPod/.test(userAgent) ||
-  (/Macintosh/.test(userAgent) && maxTouchPoints > 1);
+	/iPhone|iPad|iPod/.test(userAgent) ||
+	(/Macintosh/.test(userAgent) && maxTouchPoints > 1);
 
 // Survives the navigation from the capture step to the confirmation step (and a
 // refresh of it), which is where the conversions fire.
-const SUBMITTED_EMAIL_KEY = 'macro_mobile_signup_email';
-const CONVERSION_FIRED_KEY = 'macro_mobile_signup_conversion_fired';
+const SUBMITTED_EMAIL_KEY = "macro_mobile_signup_email";
+const CONVERSION_FIRED_KEY = "macro_mobile_signup_conversion_fired";
 
 const readSession = (key: string): string | null => {
-  try {
-    return sessionStorage.getItem(key);
-  } catch {
-    return null;
-  }
+	try {
+		return sessionStorage.getItem(key);
+	} catch {
+		return null;
+	}
 };
 
 const writeSession = (key: string, value: string): void => {
-  try {
-    sessionStorage.setItem(key, value);
-  } catch {
-    // Private-mode Safari and blocked storage: the flow still works, the
-    // confirmation page just falls back to its generic copy.
-  }
+	try {
+		sessionStorage.setItem(key, value);
+	} catch {
+		// Private-mode Safari and blocked storage: the flow still works, the
+		// confirmation page just falls back to its generic copy.
+	}
 };
 
 /** The email submitted this session, if the visitor came from the capture step. */
 export const submittedEmail = (): string | null =>
-  readSession(SUBMITTED_EMAIL_KEY);
+	readSession(SUBMITTED_EMAIL_KEY);
 
 /**
  * True once the ad-platform conversions have been fired for `email` this
@@ -66,10 +66,10 @@ export const submittedEmail = (): string | null =>
  * second visit would double-count the Meta Lead.
  */
 export const conversionAlreadyFired = (email: string | null): boolean =>
-  readSession(CONVERSION_FIRED_KEY) === (email ?? '');
+	readSession(CONVERSION_FIRED_KEY) === (email ?? "");
 
 export const markConversionFired = (email: string | null): void =>
-  writeSession(CONVERSION_FIRED_KEY, email ?? '');
+	writeSession(CONVERSION_FIRED_KEY, email ?? "");
 
 /**
  * Cheap client-side check before we spend a request: the endpoint is rate
@@ -77,10 +77,10 @@ export const markConversionFired = (email: string | null): void =>
  * The auth service remains the authority on what it accepts.
  */
 export const isLikelyEmail = (value: string): boolean =>
-  /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
+	/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(value);
 
 /** Must match `SendMobileWelcomeEmailError::PersonalEmail` in the auth service. */
-const WORK_EMAIL_REQUIRED = 'Please use your work email or Gmail';
+const WORK_EMAIL_REQUIRED = "Please use your work email or Gmail";
 
 export type MobileSignupResult = { ok: true } | { ok: false; message: string };
 
@@ -93,47 +93,52 @@ export type MobileSignupResult = { ok: true } | { ok: false; message: string };
  * mode here is something the person can act on (fix the address, wait, retry).
  */
 export const submitMobileSignup = async (
-  email: string
+	email: string,
 ): Promise<MobileSignupResult> => {
-  const trimmed = email.trim();
-  if (!isLikelyEmail(trimmed)) {
-    return { ok: false, message: 'Enter a valid email address.' };
-  }
+	const trimmed = email.trim();
+	if (!isLikelyEmail(trimmed)) {
+		return { ok: false, message: "Enter a valid email address." };
+	}
 
-  analytics.identifyEmail(trimmed);
+	analytics.identifyEmail(trimmed);
 
-  let response: Response;
-  try {
-    response = await fetch(buildAuthServiceUrl('/mobile-welcome-email'), {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email: trimmed }),
-    });
-  } catch {
-    return { ok: false, message: 'Network error. Please try again.' };
-  }
+	let response: Response;
+	try {
+		const attribution = capturedAttribution();
+		response = await fetch(buildAuthServiceUrl("/mobile-welcome-email"), {
+			method: "POST",
+			headers: { "Content-Type": "application/json" },
+			body: JSON.stringify(
+				Object.keys(attribution).length > 0
+					? { email: trimmed, attribution }
+					: { email: trimmed },
+			),
+		});
+	} catch {
+		return { ok: false, message: "Network error. Please try again." };
+	}
 
-  // 200 covers both "sent" and `sent: false` (we already emailed this address).
-  // The confirmation page is accurate either way, so both advance.
-  if (response.ok) {
-    writeSession(SUBMITTED_EMAIL_KEY, trimmed);
-    return { ok: true };
-  }
+	// 200 covers both "sent" and `sent: false` (we already emailed this address).
+	// The confirmation page is accurate either way, so both advance.
+	if (response.ok) {
+		writeSession(SUBMITTED_EMAIL_KEY, trimmed);
+		return { ok: true };
+	}
 
-  if (response.status === 400) {
-    const body = (await response.json().catch(() => null)) as {
-      message?: string;
-    } | null;
-    return {
-      ok: false,
-      message:
-        body?.message === WORK_EMAIL_REQUIRED
-          ? `${WORK_EMAIL_REQUIRED}.`
-          : 'That email address was not accepted.',
-    };
-  }
-  if (response.status === 429) {
-    return { ok: false, message: 'Too many attempts. Please try again later.' };
-  }
-  return { ok: false, message: 'Something went wrong. Please try again.' };
+	if (response.status === 400) {
+		const body = (await response.json().catch(() => null)) as {
+			message?: string;
+		} | null;
+		return {
+			ok: false,
+			message:
+				body?.message === WORK_EMAIL_REQUIRED
+					? `${WORK_EMAIL_REQUIRED}.`
+					: "That email address was not accepted.",
+		};
+	}
+	if (response.status === 429) {
+		return { ok: false, message: "Too many attempts. Please try again later." };
+	}
+	return { ok: false, message: "Something went wrong. Please try again." };
 };
