@@ -60,6 +60,11 @@ backend-free phone and tablet regression:
 Keep the zoomed image laid out at its zoomed size, translating only: WebKit
 rasterizes an `<img>` at its layout size, so a `scale()` transform blurs it.
 
+The emoji reaction picker renders only the rows in view (about 1,900 emojis
+otherwise); its backend-free regression opens it, scrolls to the last group,
+searches, and picks by keyboard:
+`bunx playwright test --config src/lib/core/component/Emoji/browser-test/playwright.config.ts`.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
