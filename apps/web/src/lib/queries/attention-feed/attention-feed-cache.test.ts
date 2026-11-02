@@ -122,12 +122,7 @@ describe('placeAttentionFeedPatches', () => {
     ]);
     expect(
       ids(
-        placeAttentionFeedPatches(
-          shape,
-          pages,
-          [upserted(at('old', 10))],
-          null
-        )
+        placeAttentionFeedPatches(shape, pages, [upserted(at('old', 10))], null)
       )
     ).toEqual([
       ['p1-a', 'p1-b'],

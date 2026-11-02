@@ -394,7 +394,7 @@ export function NotificationsView(props: NotificationsViewProps) {
         <ListStatus>
           <span>Notifications couldn’t be loaded.</span>
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             onClick={() =>
               fireAndForget(inbox.refresh(), 'notifications-inbox')
@@ -407,7 +407,7 @@ export function NotificationsView(props: NotificationsViewProps) {
       <Match when={filters.showsNothing()}>
         <ListStatus>
           <span>Every kind of notification is hidden.</span>
-          <Button variant="outline" size="sm" onClick={filters.reset}>
+          <Button variant="secondary" size="sm" onClick={filters.reset}>
             Reset filters
           </Button>
         </ListStatus>
@@ -415,7 +415,7 @@ export function NotificationsView(props: NotificationsViewProps) {
       <Match when={view().t === 'empty' && filters.activeCount() > 0}>
         <ListStatus>
           <span>No notifications match these filters.</span>
-          <Button variant="outline" size="sm" onClick={filters.reset}>
+          <Button variant="secondary" size="sm" onClick={filters.reset}>
             Reset filters
           </Button>
         </ListStatus>
@@ -582,10 +582,12 @@ export function NotificationsView(props: NotificationsViewProps) {
                       </div>
                       <Button
                         size="icon-md"
-                        label="Notification settings"
+                        variant="ghost"
+                        aria-label="Notification settings"
+                        tooltip="Notification settings"
                         onClick={() => props.onOpenSettings()}
                       >
-                        <GearSixIcon />
+                        <GearSixIcon class="size-4" />
                       </Button>
                     </>
                   }

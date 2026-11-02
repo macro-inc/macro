@@ -103,13 +103,15 @@ export function NotificationRow(props: NotificationRowProps) {
       <div class="absolute top-1.5 right-2 hidden not-touch:group-hover/notification:block">
         <Button
           size="icon-sm"
-          label="Mark done"
+          variant="ghost"
+          aria-label="Mark done"
+          tooltip="Mark done"
           onClick={(event) => {
             event.stopPropagation();
             props.onDone();
           }}
         >
-          <CheckIcon />
+          <CheckIcon class="size-4" />
         </Button>
       </div>
     </div>

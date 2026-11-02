@@ -29,7 +29,7 @@ export function RowActionButtons(props: {
       {(action, index) => (
         <Button
           size="sm"
-          variant={index() === 0 ? 'cta' : 'outline'}
+          variant={index() === 0 ? 'primary' : 'secondary'}
           disabled={props.pending !== undefined}
           aria-busy={props.pending === action.kind}
           onClick={(event) => {
