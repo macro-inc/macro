@@ -126,6 +126,7 @@ export function TaskListHeader(props: {
       <SortableHeader
         label="Assignees"
         area="assignees"
+        class="@max-[840px]/u-list:justify-start @max-[840px]/u-list:pl-1.5"
         narrowIcon={<UsersIcon class="size-4" />}
       />
       <SortableHeader

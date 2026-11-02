@@ -56,6 +56,7 @@ export const ListPropertyValue: Component<ListPropertyValueProps> = (props) => {
 
   return (
     <Property.Root
+      class="min-w-0 max-w-full @max-[840px]/u-list:w-full"
       property={props.property}
       canEdit={ctx.canEdit}
       onSave={ctx.saveHandler.saveProperty}
@@ -85,10 +86,9 @@ function ListPropertyPill(props: { property: Accessor<PropertyT> }) {
           <Property.Pill
             class={cn(
               'list-property-cell w-full min-w-0 overflow-hidden',
-              '@max-[840px]/u-list:justify-center',
-              userCount() > 1
-                ? '@max-[840px]/u-list:px-1'
-                : '@max-[840px]/u-list:w-6 @max-[840px]/u-list:p-0'
+              isUserEntity()
+                ? '@max-[840px]/u-list:justify-start @max-[840px]/u-list:px-1'
+                : '@max-[840px]/u-list:justify-center @max-[840px]/u-list:w-6 @max-[840px]/u-list:p-0'
             )}
           >
             <Show
@@ -118,7 +118,7 @@ function ListPropertyPill(props: { property: Accessor<PropertyT> }) {
                 }
               >
                 <Match when={userCount() > 1}>
-                  {/* Wide: 2 avatars; narrow: collapse to 1 to fit the cell. */}
+                  {/* Compact pairs retain both avatars; larger groups keep the count. */}
                   <div class="@max-[840px]/u-list:hidden">
                     <Property.UserStack
                       property={props.property()}
@@ -128,7 +128,7 @@ function ListPropertyPill(props: { property: Accessor<PropertyT> }) {
                   <div class="hidden @max-[840px]/u-list:flex">
                     <Property.UserStack
                       property={props.property()}
-                      maxUsers={1}
+                      maxUsers={userCount() === 2 ? 2 : 1}
                       avatarClass="@max-[840px]/u-list:size-4"
                     />
                   </div>

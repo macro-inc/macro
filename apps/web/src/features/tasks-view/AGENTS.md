@@ -17,7 +17,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Group task lists by the Project property, matching the Project column and Board. The server labels project groups with the initiative name the viewer can read, and the cache's local grouping projection carries that label; a header resolves the name through the authorized project identity query only while its group is still labeled by its key. Projects sort by name with No Project last in every layout.
 - Keep project navigation in a separate Projects section above Saved views, with assigned-to-me, all-accessible, and created-by-me views; replace individual-project shortcuts and use one mobile Projects picker.
 - Preserve project scope through detail navigation, history, pagination, and editable-filter clearing; keep project views out of task queries and saved-task-view capture.
-- Align wide desktop group-header glyphs with the first row control; preserve each task header's caret-to-content gap and value-icon slot across container widths, including phones, without changing padding, the 44px touch target, or the layout-neutral border.
+- Align wide desktop group-header glyphs with the first row control; keep caret containers square and preserve each header's caret-to-content gap and value-icon slot across widths without changing padding, the 44px touch target, or the layout-neutral border.
 - Keep `soup-list` on list roots for shared row geometry; truncate long group labels instead of wrapping.
 - Pin the current list group header within its scroller until the next header replaces it; retain the real virtual row, mobile chrome clearance, collapse controls, and unobscured keyboard targets.
 - Keep desktop and tablet task rows on the shared column grid at every pane width with the column header mounted; use the headerless narrow row layout only on phones.
@@ -26,8 +26,8 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Keep leading task status icons at 18px and priority icons at 16px desktop/20px phone without flex shrinking; use the shared 12px property default elsewhere unless a surface overrides it, and preserve 16px group-header carets and existing hit targets.
 - Use the matching `task-status-*` theme token for each status icon and group-header tint; default Completed to accent while preserving explicit theme overrides and independent global colors.
 - Edit priority then status through leading `TaskPropertyControl` icons on desktop and mobile; place status directly beside the title, and keep separate Status/Priority columns and duplicate trailing mobile pills removed.
-- Place Project before Assignees in wide and narrow task rows, including phones; keep one assignee avatar plus the remaining count in narrow rows.
-- At container widths up to 840px, use tooltip-labeled icons for Project, Assignees, and Updated headers; keep Project at 32px and Assignees at 40px, retaining one assignee avatar and its overflow count.
+- Place Project before Assignees in wide and narrow task rows, including phones; show both avatars for exactly two compact assignees, otherwise one avatar plus the remaining count, anchored left in a fixed-width slot so overflow grows right.
+- At container widths up to 840px, use tooltip-labeled icons for Project, Assignees, and Updated headers; keep Project at 32px and Assignees at 44px, with the assignee header aligned to the first avatar.
 - Size Updated from its measured, untruncated header with a 56px content minimum for single-line timestamps; share the width across rows, retain existing Created by spacing, and fade/collapse Updated over 160ms at 600px, disabling motion for reduced-motion preferences.
 - Keep Created by visible above 600px alongside Updated, with a 16px user-plus header icon aligned to creator avatars and a keyboard-focusable “Created by” tooltip; show the title's shared badge only while the creator column is hidden, with a 4px layout gap after the title.
 - Scope task-only column widths with `.task-grid-row.task-grid-icon-creator` so shared Soup `.task-grid-row` rules cannot override them when stylesheets load in a different order.
@@ -35,8 +35,8 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Include each visible task cell's 8px leading inset inside its track and keep the grid's column gap at zero so hidden metadata columns reserve no space.
 - Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers: 30%-opacity wide priority bars, a dashed user circle, and a corner-dashed project cube; use the regular cube for set projects.
 - Use shared ghost-button interaction styling for editable list properties; dim empty icons and labels without applying opacity twice to No priority.
-- Show at most three individual tag chips; on measured row overflow, collapse the folder path to a navigable icon first, then more tags one at a time, and truncate the title last, preserving open tag editors through resizing.
-- Keep the collapsed tag-overflow chip after the title on phone rows instead of dropping tags with the desktop columns.
+- Show at most three individual tag chips; keep a sole tag as its named chip even in collapsed layouts, otherwise collapse the folder path first, then more tags on measured overflow, and truncate the title last while preserving open tag editors.
+- Keep the tag chip or collapsed multi-tag overflow after the title on phone rows instead of dropping tags with the desktop columns.
 
 - Save filters, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.
 - Preserve stable tag/property bindings when labels disappear; skip unsupported or malformed conditions without discarding supported filters.

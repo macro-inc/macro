@@ -2,7 +2,7 @@ import { Property } from '@property';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
 import type { Property as PropertyType } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
-import { Layer } from '@ui';
+import { cn, Layer } from '@ui';
 import { type Accessor, Match, Show, Switch } from 'solid-js';
 import { SYSTEM_PROPERTY_IDS } from '../constants';
 import { PropertyEmptyIcon } from '../extractors/PropertyEmpty';
@@ -46,7 +46,7 @@ export function ListPropertyValue(props: {
 
   return (
     <Property.Root
-      class="min-w-0 max-w-full"
+      class="min-w-0 max-w-full @max-[840px]/u-list:w-full"
       property={props.property}
       canEdit={context.canEdit}
       onSave={context.saveHandler.saveProperty}
@@ -76,7 +76,12 @@ function ListPropertyCell(props: {
     <>
       <Property.Tooltip property={props.property()}>
         <Layer depth={2}>
-          <Property.Pill class="list-property-cell inline-flex h-auto w-full max-w-full min-w-0 shrink items-center gap-1 overflow-hidden rounded-full border-0 px-2 py-1.5 text-left font-normal leading-tight touch:min-h-0 touch:min-w-0 @max-[840px]/u-list:px-1">
+          <Property.Pill
+            class={cn(
+              'list-property-cell inline-flex h-auto w-full max-w-full min-w-0 shrink items-center gap-1 overflow-hidden rounded-full border-0 px-2 py-1.5 text-left font-normal leading-tight touch:min-h-0 touch:min-w-0 @max-[840px]/u-list:px-1',
+              isUserEntity() && '@max-[840px]/u-list:justify-start'
+            )}
+          >
             <Show
               when={!isEmpty()}
               fallback={
@@ -114,7 +119,7 @@ function ListPropertyCell(props: {
                   <div class="hidden @max-[840px]/u-list:flex">
                     <Property.UserStack
                       property={props.property()}
-                      maxUsers={1}
+                      maxUsers={userCount() === 2 ? 2 : 1}
                       avatarClass="@max-[840px]/u-list:size-5"
                     />
                   </div>

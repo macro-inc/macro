@@ -26,10 +26,12 @@ Phone task rows reserve an 8px unread-dot rail without a checkbox column and pla
 status and priority controls edge-to-edge while preserving their 36px touch targets
 and row selection. Other trailing property icons use 20px phone glyphs.
 Other entity rows keep their existing indicator layout.
-Narrow task rows keep Project before Assignees and show one assignee avatar plus
-the remaining count; do not replace the first assignee with a generic people icon.
-Keep the collapsed tag-overflow chip after the title in narrow task rows,
-including phones, with the existing picker and hover actions.
+Narrow task rows keep Project before Assignees. Show both avatars for exactly
+two assignees; larger groups show the first avatar and the remaining count.
+Reserve a fixed-width slot and anchor its first avatar left so overflow grows
+right without shifting other properties. Keep the single tag or collapsed
+multi-tag chip after the title, including phones, with the existing picker and
+hover actions.
 
 `ProjectBreadCrumb.collapsed` keeps a keyboard-accessible, borderless ghost folder
 button with its link color and a circular icon-only target. Its hover card shows

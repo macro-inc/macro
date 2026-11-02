@@ -45,7 +45,7 @@
   }
 
   .task-grid-row.task-grid-icon-creator {
-    --task-col-assignees: 3rem;
+    --task-col-assignees: 3.25rem;
     --task-col-initiative: 2.5rem;
   }
 }

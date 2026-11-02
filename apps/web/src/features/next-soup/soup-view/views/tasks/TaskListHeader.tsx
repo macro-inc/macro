@@ -96,8 +96,7 @@ function TaskListHeader(props: { class?: string }) {
               reversed={activeSort()?.reversed ?? false}
               onSort={setSort}
               narrowIcon={COLUMN_ICONS[col.id]}
-              // Match the row pill's px-2 content inset so titles left-align
-              // with the pill icons (wide only — narrow collapses to centered icons).
+              // Match the wide pill inset; compact assignees keep their leading anchor.
               class="@min-[841px]/u-list:pl-2"
             />
           );
@@ -135,10 +134,13 @@ function HeaderCell(props: {
 }) {
   const justify = () =>
     props.align === 'end' ? 'justify-end' : 'justify-start';
-  // Property columns collapse to a single centered icon on narrow containers,
-  // matching the row pills (which center via `@max-[840px]/u-list:justify-center`).
-  const narrowJustify = () =>
-    props.narrowIcon ? '@max-[840px]/u-list:justify-center' : '';
+  // Assignee stacks grow right from the same anchor as the first avatar.
+  const narrowJustify = () => {
+    if (!props.narrowIcon) return '';
+    return props.gridArea === 'assignees'
+      ? '@max-[840px]/u-list:justify-start'
+      : '@max-[840px]/u-list:justify-center';
+  };
 
   return (
     <div

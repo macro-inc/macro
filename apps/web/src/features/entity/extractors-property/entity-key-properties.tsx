@@ -190,8 +190,14 @@ function KeyPropertiesRow(props: {
                 shown().valueType === 'ENTITY' &&
                 shown().specificEntityType === 'USER';
 
-              const isMultiUserEntity = () =>
-                isUserEntity() && getEntityValues(shown()).length > 1;
+              const userCount = () =>
+                isUserEntity() ? getEntityValues(shown()).length : 0;
+              const compactUserStack = () =>
+                isUserEntity() && props.maxUserStackUsers === 1;
+              const maxUsers = () =>
+                compactUserStack() && userCount() === 2
+                  ? 2
+                  : (props.maxUserStackUsers ?? 2);
 
               return (
                 <>
@@ -201,7 +207,9 @@ function KeyPropertiesRow(props: {
                         class={cn(
                           'flex h-auto items-center gap-1 min-w-0 border-0 font-normal touch:min-h-0 touch:min-w-0',
                           'px-1.5 py-1 leading-tight text-left rounded-full',
-                          '@max-2xl/u-list:gap-0 @max-2xl/u-list:px-1 @max-2xl/u-list:justify-center'
+                          '@max-2xl/u-list:gap-0 @max-2xl/u-list:px-1 @max-2xl/u-list:justify-center',
+                          compactUserStack() &&
+                            '@max-2xl/u-list:w-11 @max-2xl/u-list:shrink-0 @max-2xl/u-list:justify-start'
                         )}
                       >
                         <div class="h-4" />
@@ -228,7 +236,7 @@ function KeyPropertiesRow(props: {
                               )}
                             />
                           </Match>
-                          <Match when={isMultiUserEntity()}>
+                          <Match when={userCount() > 1}>
                             <div class="flex items-center gap-1">
                               <Show when={props.maxUserStackUsers === 0}>
                                 <UsersIcon
@@ -238,7 +246,7 @@ function KeyPropertiesRow(props: {
                               </Show>
                               <Property.UserStack
                                 property={shown()}
-                                maxUsers={props.maxUserStackUsers ?? 2}
+                                maxUsers={maxUsers()}
                                 avatarClass="@max-2xl/u-list:size-5"
                               />
                             </div>

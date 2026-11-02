@@ -99,23 +99,28 @@ Folder pills keep their link color and become circular when icon-only. When the
 title area runs out of room, the folder path collapses to a clickable icon with
 a full-path hover card first. Show at most three individual tag chips and keep the
 rest in the existing overflow chip. As space shrinks, move more chips into
-overflow one at a time before truncating the title.
+overflow one at a time before truncating the title. A task with only one tag
+keeps that named chip, including on phones, rather than showing “1 tag”.
 Open the overflow to edit all tags; hover it for hidden-tag names and filter/edit actions.
 The overflow chip reads “N tags” when it represents all tags, or “+N tags” when
 individual tag chips remain visible.
 An open picker or nested tag editor stays mounted while resizing. The share
 indicator remains immediately beside the title whenever it is shown.
 Compact desktop rows keep tags after the title and before the trailing properties;
-phone rows retain the collapsed tag-overflow chip instead of dropping tags.
+phone rows retain the single tag or collapsed multi-tag chip instead of dropping tags.
 Tag pills keep their compact height on touch.
-Task rows place Project before Assignees on desktop and phones. Narrow rows keep
-one assignee avatar plus the remaining count instead of a generic people icon.
+Task rows place Project before Assignees on desktop and phones. Compact rows
+show both avatars for exactly two assignees; larger groups show the first avatar
+and the remaining count. Compact assignee slots reserve their width and keep the
+first avatar anchored left, so a second avatar or count grows only to the right
+without shifting Project or other properties.
 Desktop and tablet rows keep the compact column grid and its header at every
 pane width; only phones use the headerless narrow row layout. At list-container
 widths up to 840px, Project, Assignees, and Updated headers
 become icons with hover/focus tooltips and accessible names. Project occupies 32px
-and Assignees 40px. Updated fits its full header and sort arrow, with a 56px content
-minimum for single-line timestamps. At 600px, Updated fades and collapses over
+and Assignees 44px. The assignee header aligns with the first avatar. Updated
+fits its full header and sort arrow, with a 56px content minimum for single-line
+timestamps. At 600px, Updated fades and collapses over
 160ms to leave more room for the title. Hidden Updated and Created by
 columns reserve no width or spacing; visible cells own their 8px leading inset.
 Reduced-motion preferences disable the transition. Visible timestamps stay on one line, and
@@ -147,9 +152,9 @@ Task group headers retain their wide-layout caret-to-content gap at every list
 width, including phones: 8px in the Tasks header and 10px in the next-soup header.
 Their padding and the spacing between the value icon, label, and count stay
 unchanged; the value-icon slot keeps its width when the pane narrows. Long labels
-truncate on one line. Group-header carets are 16px, with 16px status and priority
-icons. Desktop list insets follow the list container:
-8px below 640px and 12px from 640px; phone insets remain 4px.
+truncate on one line. Group-header caret containers stay square around their
+16px glyphs, with 16px status and priority icons. Desktop list insets follow the
+list container: 8px below 640px and 12px from 640px; phone insets remain 4px.
 In grouped task and project lists, the current group header stays pinned at the top
 of the scrolling pane until the next group pushes it away. The pinned header still
 collapses or expands its group; keyboard navigation keeps rows below it visible.
