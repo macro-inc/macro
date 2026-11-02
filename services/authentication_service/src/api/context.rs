@@ -55,6 +55,13 @@ use roles_and_permissions::{
     domain::service::UserRolesAndPermissionsServiceImpl, outbound::pgpool::MacroDB,
 };
 use sqlx::PgPool;
+use system_status::{
+    domain::service::SystemStatusServiceImpl,
+    outbound::{
+        connection_gateway_broadcaster::ConnectionGatewayStatusBroadcaster,
+        pg_system_status_repo::PgSystemStatusRepo,
+    },
+};
 use tokio_util::task::TaskTracker;
 use user_language::{
     domain::service::UserLanguageServiceImpl, outbound::pg_user_language_repo::PgUserLanguageRepo,
@@ -137,6 +144,8 @@ pub(crate) type ReferralServiceType = ReferralServiceImpl<
 pub(crate) type GtmInviteServiceType = GtmInviteServiceImpl<PgGtmInviteRepo>;
 
 pub(crate) type UserLanguageServiceType = UserLanguageServiceImpl<PgUserLanguageRepo>;
+pub(crate) type SystemStatusServiceType =
+    SystemStatusServiceImpl<PgSystemStatusRepo, ConnectionGatewayStatusBroadcaster>;
 
 pub(crate) type GithubLinkServiceType = GithubLinkServiceImpl<
     PgGithubRepo,
@@ -235,6 +244,7 @@ pub(crate) struct ApiContext {
     pub referral_service: Arc<ReferralServiceType>,
     pub gtm_invite_service: Arc<GtmInviteServiceType>,
     pub user_language_service: Arc<UserLanguageServiceType>,
+    pub system_status_service: Arc<SystemStatusServiceType>,
     pub rate_limit_service: RateLimiter,
     /// The stripe price ids for each paid plan's seat
     pub stripe_prices: crate::api::user::stripe::StripePrices,

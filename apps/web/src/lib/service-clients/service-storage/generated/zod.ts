@@ -3932,6 +3932,24 @@ export function getIngestTranscriptBodySchema() {
 /**
  * @summary List the caller's shared or private labels.
  */
+function _create_listChannelLabelsQueryParams() {
+  return zod.object({
+    scope: zod
+      .enum(['personal', 'team'])
+      .optional()
+      .describe(
+        '`personal` selects private labels; `team` requires team membership.'
+      ),
+  });
+}
+let _cached_listChannelLabelsQueryParams:
+  | ReturnType<typeof _create_listChannelLabelsQueryParams>
+  | undefined;
+export function getListChannelLabelsQueryParamsSchema() {
+  return (_cached_listChannelLabelsQueryParams ??=
+    _create_listChannelLabelsQueryParams());
+}
+
 function _create_listChannelLabelsResponse() {
   return zod
     .object({
@@ -3998,6 +4016,11 @@ function _create_listChannelLabelsResponse() {
         .describe(
           'Every label of the scope, whether or not the caller sees channels in it.'
         ),
+      scope: zod
+        .enum(['personal', 'team'])
+        .describe(
+          'Requested label namespace. Omission retains the deployed automatic selection.'
+        ),
       teamId: zod
         .uuid()
         .nullish()
@@ -4016,6 +4039,24 @@ export function getListChannelLabelsResponseSchema() {
 /**
  * @summary Create a label for the caller's authorized scope.
  */
+function _create_createChannelLabelQueryParams() {
+  return zod.object({
+    scope: zod
+      .enum(['personal', 'team'])
+      .optional()
+      .describe(
+        '`personal` selects private labels; `team` requires team membership.'
+      ),
+  });
+}
+let _cached_createChannelLabelQueryParams:
+  | ReturnType<typeof _create_createChannelLabelQueryParams>
+  | undefined;
+export function getCreateChannelLabelQueryParamsSchema() {
+  return (_cached_createChannelLabelQueryParams ??=
+    _create_createChannelLabelQueryParams());
+}
+
 function _create_createChannelLabelBody() {
   return zod
     .object({
@@ -4128,6 +4169,24 @@ export function getSetChannelLabelParamsSchema() {
   return (_cached_setChannelLabelParams ??= _create_setChannelLabelParams());
 }
 
+function _create_setChannelLabelQueryParams() {
+  return zod.object({
+    scope: zod
+      .enum(['personal', 'team'])
+      .optional()
+      .describe(
+        '`personal` selects private labels; `team` requires team membership.'
+      ),
+  });
+}
+let _cached_setChannelLabelQueryParams:
+  | ReturnType<typeof _create_setChannelLabelQueryParams>
+  | undefined;
+export function getSetChannelLabelQueryParamsSchema() {
+  return (_cached_setChannelLabelQueryParams ??=
+    _create_setChannelLabelQueryParams());
+}
+
 function _create_setChannelLabelBody() {
   return zod
     .object({
@@ -4150,6 +4209,24 @@ export function getSetChannelLabelBodySchema() {
 /**
  * @summary Preview visible channels matched by a smart tag, without creating it.
  */
+function _create_previewSmartTagQueryParams() {
+  return zod.object({
+    scope: zod
+      .enum(['personal', 'team'])
+      .optional()
+      .describe(
+        '`personal` selects private labels; `team` requires team membership.'
+      ),
+  });
+}
+let _cached_previewSmartTagQueryParams:
+  | ReturnType<typeof _create_previewSmartTagQueryParams>
+  | undefined;
+export function getPreviewSmartTagQueryParamsSchema() {
+  return (_cached_previewSmartTagQueryParams ??=
+    _create_previewSmartTagQueryParams());
+}
+
 function _create_previewSmartTagBody() {
   return zod
     .object({
@@ -4219,6 +4296,24 @@ export function getDeleteChannelLabelParamsSchema() {
     _create_deleteChannelLabelParams());
 }
 
+function _create_deleteChannelLabelQueryParams() {
+  return zod.object({
+    scope: zod
+      .enum(['personal', 'team'])
+      .optional()
+      .describe(
+        '`personal` selects private labels; `team` requires team membership.'
+      ),
+  });
+}
+let _cached_deleteChannelLabelQueryParams:
+  | ReturnType<typeof _create_deleteChannelLabelQueryParams>
+  | undefined;
+export function getDeleteChannelLabelQueryParamsSchema() {
+  return (_cached_deleteChannelLabelQueryParams ??=
+    _create_deleteChannelLabelQueryParams());
+}
+
 /**
  * @summary Rename a label of the caller's authorized scope.
  */
@@ -4233,6 +4328,24 @@ let _cached_renameChannelLabelParams:
 export function getRenameChannelLabelParamsSchema() {
   return (_cached_renameChannelLabelParams ??=
     _create_renameChannelLabelParams());
+}
+
+function _create_renameChannelLabelQueryParams() {
+  return zod.object({
+    scope: zod
+      .enum(['personal', 'team'])
+      .optional()
+      .describe(
+        '`personal` selects private labels; `team` requires team membership.'
+      ),
+  });
+}
+let _cached_renameChannelLabelQueryParams:
+  | ReturnType<typeof _create_renameChannelLabelQueryParams>
+  | undefined;
+export function getRenameChannelLabelQueryParamsSchema() {
+  return (_cached_renameChannelLabelQueryParams ??=
+    _create_renameChannelLabelQueryParams());
 }
 
 function _create_renameChannelLabelBody() {

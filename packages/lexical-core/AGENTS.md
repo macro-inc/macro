@@ -32,6 +32,11 @@ Keep URLs protected from inline formatting during import; matching rendered
 text is too late. Preserve code, mention payloads, existing links, and escaped
 literal URLs. Keep unlink state through both Markdown and Lexical JSON saves.
 
+An image under a list item is a child of that `ListItemNode`. Lexical runs
+element transformers only on top-level nodes, so `listItemImage` exports it as
+an indented line, and the image importers attach an indented image line after a
+list to its last item. Add it to any new transformer set that has image
+transformers.
 
 `isSerializedDraftCommentNode` shares the persistence type guard with incremental
 web serialization. Draft marks lift their content while posted marks remain;

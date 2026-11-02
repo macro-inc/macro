@@ -1,10 +1,11 @@
-import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import { Property } from '@property';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
 import type { Property as PropertyType } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { cn, Layer } from '@ui';
 import { type Accessor, Match, Show, Switch } from 'solid-js';
+import { SYSTEM_PROPERTY_IDS } from '../constants';
+import { PropertyEmptyIcon } from '../extractors/PropertyEmpty';
 import { formatDate } from '../utils/formatting';
 
 /** Shared property cell for unified task and native project lists. */
@@ -33,7 +34,7 @@ export function ListPropertyValue(props: {
             <Layer depth={2}>
               <div
                 role="presentation"
-                class="list-property-cell w-full max-w-full min-w-0 overflow-hidden rounded-full text-left hover:bg-surface/50 @max-[840px]/u-list:hidden"
+                class="list-property-cell w-full max-w-full min-w-0 overflow-hidden rounded-full text-left hover:bg-button-tertiary-hover hover:text-ink @max-[840px]/u-list:hidden"
                 onClick={(event) => event.stopPropagation()}
               >
                 <Property.InlineEditor />
@@ -47,7 +48,7 @@ export function ListPropertyValue(props: {
 
   return (
     <Property.Root
-      class="min-w-0 max-w-full"
+      class="min-w-0 max-w-full @max-[840px]/u-list:w-full"
       property={props.property}
       canEdit={context.canEdit}
       onSave={context.saveHandler.saveProperty}
@@ -89,10 +90,11 @@ function ListPropertyCell(props: {
     <>
       <Property.Tooltip property={props.property()}>
         <Layer depth={2}>
-          <Property.EditTrigger
+          <Property.Pill
             aria-label={label()}
             class={cn(
-              'list-property-cell inline-flex min-h-7 w-full max-w-full min-w-0 items-center gap-1 overflow-hidden rounded-full px-2 py-1.5 text-left leading-tight hover:bg-surface/50 @max-[840px]/u-list:px-1',
+              'list-property-cell inline-flex h-auto w-full max-w-full min-w-0 shrink items-center gap-1 overflow-hidden rounded-full border-0 px-2 py-1.5 text-left font-normal leading-tight touch:min-h-0 touch:min-w-0 @max-[840px]/u-list:p-1',
+              isUserEntity() && '@max-[840px]/u-list:justify-start',
               props.class
             )}
           >
@@ -104,8 +106,27 @@ function ListPropertyCell(props: {
               when={!isEmpty()}
               fallback={
                 <>
-                  <Show when={props.property().valueType !== 'DATE'}>
-                    <CircleDashedEmpty class="size-3 shrink-0 opacity-50 @max-[840px]/u-list:size-4" />
+                  <Show
+                    when={
+                      props.property().valueType !== 'DATE' ||
+                      props.property().propertyDefinitionId ===
+                        SYSTEM_PROPERTY_IDS.DUE_DATE
+                    }
+                  >
+                    <PropertyEmptyIcon
+                      muted
+                      propertyDefinitionId={
+                        props.property().propertyDefinitionId
+                      }
+                      class={
+                        props.property().propertyDefinitionId ===
+                          SYSTEM_PROPERTY_IDS.PRIORITY ||
+                        props.property().propertyDefinitionId ===
+                          SYSTEM_PROPERTY_IDS.DUE_DATE
+                          ? 'text-ink-extra-muted @max-[840px]/u-list:size-4'
+                          : 'size-3.5 text-ink-extra-muted @max-[840px]/u-list:size-4'
+                      }
+                    />
                   </Show>
                   <span
                     aria-hidden="true"
@@ -120,7 +141,7 @@ function ListPropertyCell(props: {
                 fallback={
                   <Property.Icon
                     property={props.property()}
-                    class="size-3 shrink-0 @max-[840px]/u-list:size-4"
+                    class="shrink-0 @max-[840px]/u-list:size-4"
                   />
                 }
               >
@@ -134,7 +155,7 @@ function ListPropertyCell(props: {
                   <div class="hidden @max-[840px]/u-list:flex">
                     <Property.UserStack
                       property={props.property()}
-                      maxUsers={1}
+                      maxUsers={userCount() === 2 ? 2 : 1}
                       avatarClass="@max-[840px]/u-list:size-5"
                     />
                   </div>
@@ -148,6 +169,7 @@ function ListPropertyCell(props: {
               </Switch>
               <Property.Text
                 property={props.property()}
+                hideIcon={props.property().specificEntityType === 'INITIATIVE'}
                 resolveSingleEntity={
                   props.property().specificEntityType === 'INITIATIVE'
                 }
@@ -155,7 +177,7 @@ function ListPropertyCell(props: {
               />
             </Show>
             <Property.Caret class="@max-[840px]/u-list:hidden" />
-          </Property.EditTrigger>
+          </Property.Pill>
         </Layer>
       </Property.Tooltip>
       <Property.PopoverEditor

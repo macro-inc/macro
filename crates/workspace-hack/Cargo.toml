@@ -172,6 +172,7 @@ uuid = { version = "1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3", "xxh32"] }
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
 zeroize = { version = "1", features = ["derive"] }
+zip = { version = "9", default-features = false, features = ["aes-crypto", "bzip2", "deflate", "deflate64", "lzma", "time", "xz", "zstd"] }
 
 [build-dependencies]
 aes = { version = "0.9", default-features = false, features = ["zeroize"] }
@@ -340,6 +341,7 @@ uuid = { version = "1", features = ["fast-rng", "serde", "v4", "v5", "v7"] }
 xxhash-rust = { version = "0.8", default-features = false, features = ["xxh3", "xxh32"] }
 zerocopy = { version = "0.8", default-features = false, features = ["derive", "simd"] }
 zeroize = { version = "1", features = ["derive"] }
+zip = { version = "9", default-features = false, features = ["aes-crypto", "bzip2", "deflate", "deflate64", "lzma", "time", "xz", "zstd"] }
 
 [target.x86_64-unknown-linux-gnu.dependencies]
 bitflags = { version = "2", default-features = false, features = ["std"] }
