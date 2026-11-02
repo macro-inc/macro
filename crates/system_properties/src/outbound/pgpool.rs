@@ -10,7 +10,7 @@ use uuid::Uuid;
 use crate::{
     StatusOption,
     domain::{
-        model::{PropertyRow, SystemPropertyError, SystemPropertyKey},
+        model::{ProjectTask, PropertyRow, SystemPropertyError, SystemPropertyKey},
         port::SystemPropertiesRepository,
     },
 };
@@ -305,6 +305,45 @@ impl SystemPropertiesRepository for PgSystemPropertiesRepository {
         .fetch_all(&self.pool)
         .await?;
         Ok(rows)
+    }
+
+    async fn live_project_tasks(
+        &self,
+        project_id: Uuid,
+    ) -> Result<Vec<ProjectTask>, SystemPropertyError> {
+        // The definition ids are literals so a generic plan can prove the
+        // partial predicate of idx_ep_project_value_gin; they must stay equal
+        // to SystemPropertyKey::PROJECT_UUID and STATUS_UUID. A Project value
+        // holds exactly one reference; anything else names no project.
+        let rows = sqlx::query!(
+            r#"
+            SELECT ep.entity_id AS "id!", status.values->'value'->>0 AS "status?"
+            FROM entity_properties ep
+            JOIN "Document" task ON task.id = ep.entity_id AND task."deletedAt" IS NULL
+            LEFT JOIN entity_properties status
+              ON status.entity_id = ep.entity_id
+             AND status.entity_type = 'TASK'
+             AND status.property_definition_id = '00000001-0000-0000-0000-000000000002'
+            WHERE ep.property_definition_id = '00000001-0000-0000-0000-000000000014'
+              AND ep.entity_type = 'TASK'
+              AND ep.values -> 'value' @> jsonb_build_array(jsonb_build_object(
+                  'entity_id', $1::text, 'entity_type', 'INITIATIVE'
+              ))
+              AND CASE WHEN jsonb_typeof(ep.values -> 'value') = 'array'
+                       THEN jsonb_array_length(ep.values -> 'value') END = 1
+            ORDER BY ep.entity_id
+            "#,
+            project_id.to_string(),
+        )
+        .fetch_all(&self.pool)
+        .await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| ProjectTask {
+                id: row.id,
+                status: row.status.and_then(|status| status.parse().ok()),
+            })
+            .collect())
     }
 
     async fn task_projects(
