@@ -189,12 +189,13 @@ it('reserves a poll’s height across suspended metadata loading', async () => {
   const placeholder = await screen.findByRole('status');
   expect(
     placeholder.closest<HTMLElement>('[data-slot="card"]')?.style.height
-  ).toBe('21.5rem');
+  ).toBe('20.25rem');
   release?.();
   const content = await screen.findByText('form-1');
-  expect(content.closest<HTMLElement>('.rounded-xl')?.style.height).toBe(
-    '21.5rem'
-  );
+  // The loaded card keeps the reservation as a floor and grows to its content.
+  const card = content.closest<HTMLElement>('.rounded-xl');
+  expect(card?.style.minHeight).toBe('20.25rem');
+  expect(card?.style.height).toBe('auto');
   expect(screen.queryByRole('status')).toBeNull();
 });
 

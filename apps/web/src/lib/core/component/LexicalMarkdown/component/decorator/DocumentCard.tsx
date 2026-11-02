@@ -431,9 +431,9 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   // A form fits its content (a poll is a few rows); other previews keep a
   // resizable box.
   const resizable = () => isPreviewable() && props.blockName !== 'form';
-  const pollHeight = () =>
+  // A poll reserves its space before its form loads, then grows to fit.
+  const pollMinHeight = () =>
     props.blockName === 'form' ? pollCardHeight(props.previewData) : undefined;
-  const boundedPreview = () => resizable() || Boolean(pollHeight());
 
   const [previewBoxHeight, setPreviewBoxHeight] = createSignal(
     stringifyPreviewBox(props.previewBox || DEFAULT_PREVIEW_BOX)[1]
@@ -620,7 +620,8 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
         resizable() && 'resize-y shrink-0 min-h-80'
       )}
       style={{
-        height: pollHeight() ?? (resizable() ? previewBoxHeight() : 'auto'),
+        height: resizable() ? previewBoxHeight() : 'auto',
+        'min-height': pollMinHeight(),
       }}
       onClick={(e) => {
         if (channelMessageId()) return;
@@ -672,7 +673,7 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                   data-lexical-interactive
                   class={cn(
                     'mx-3 mt-2 mb-3 p-0',
-                    boundedPreview() && 'flex min-h-0 flex-1'
+                    resizable() && 'flex min-h-0 flex-1'
                   )}
                   data-document-card-controls
                 >
@@ -681,13 +682,13 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                     offset={1}
                     class={cn(
                       'w-full overflow-hidden rounded-lg',
-                      boundedPreview() && 'min-h-0 flex-1'
+                      resizable() && 'min-h-0 flex-1'
                     )}
                   >
                     <div
                       class={cn(
                         'relative min-w-0',
-                        boundedPreview() && 'min-h-0 flex-1 overflow-y-auto'
+                        resizable() && 'min-h-0 flex-1 overflow-y-auto'
                       )}
                     >
                       <Dynamic component={previewComponent()} {...props} />
