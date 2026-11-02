@@ -8,7 +8,11 @@ import type {
 } from '@core/database-sql/generated/types';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { queryClient } from '@queries/client';
-import type { DatabaseSqlQueryCapabilities } from '@queries/database-sql/create-database-sql-query';
+import {
+  createDatabaseSqlQuery,
+  type DatabaseSqlQueryCapabilities,
+  type DatabaseSqlStatement,
+} from '@queries/database-sql/create-database-sql-query';
 import {
   applyDatabaseOps,
   applyDatabaseTableVersions,
@@ -298,6 +302,8 @@ function setup(
     addOption?: DatabaseRowsSource['addOption'];
     onSource?: (source: DatabaseRowsSource) => void;
     view?: Accessor<DatabaseView>;
+    table?: Accessor<DatabaseDetail['tables'][number]>;
+    viewQuery?: Parameters<typeof createDatabaseRowsSource>[0]['viewQuery'];
     onTableChanged?: (listener: (version: number) => void) => void;
     changes?: Parameters<typeof createDatabaseRowsSource>[0]['changes'];
   } = {}
@@ -314,10 +320,14 @@ function setup(
     source = createDatabaseRowsSource({
       databaseId: 'db',
       // Deliberately retain old props: retries must use the refreshed cache.
-      table: () => initialDetail.tables[0],
+      table: options.table ?? (() => initialDetail.tables[0]),
       view: options.view ?? (() => allGuests),
       applyOps,
       read: options.read ?? engine().read,
+      viewQuery:
+        options.viewQuery ??
+        ((statement) =>
+          createDatabaseSqlQuery(statement, options.read ?? engine().read)),
       changes: options.changes,
       onTableChanged:
         options.onTableChanged ??
@@ -361,6 +371,96 @@ afterEach(() => {
 });
 
 describe('database view reads', () => {
+  it('reads formula tables through server pages, their values stored like any cell', async () => {
+    const schema = detail();
+    const column = schema.tables[0].columns[0];
+    const input = structuredClone(column);
+    input.column.id = 'amount';
+    input.column.property_definition_id = 'amount-definition';
+    input.sql_name = '"Amount"';
+    input.definition.definition.id = 'amount-definition';
+    input.definition.definition.display_name = 'Amount';
+    input.definition.definition.data_type = 'NUMBER';
+    schema.tables[0].columns.push(input);
+    column.column.config = {
+      kind: 'derived',
+      formula: { kind: 'column', column: 'amount' },
+    };
+    column.definition.definition.data_type = 'NUMBER';
+    column.writable = false;
+    const reader = engine(() => ({
+      ...guests(),
+      columns: [
+        { name: 'Name', column: 'definition', kind: 'number' },
+        { name: 'Amount', column: 'amount-definition', kind: 'number' },
+      ],
+      rows: [
+        [
+          { type: 'number', value: 42 },
+          { type: 'number', value: 42 },
+        ],
+      ],
+    }));
+    let pagedStatement: Accessor<DatabaseSqlStatement | undefined> | undefined;
+    const { source } = setup(schema, () => okAsync([]), {
+      read: reader.read,
+      view: () => ({
+        ...allGuests,
+        query: {
+          filter: null,
+          sort: [{ column: 'name', direction: 'descending' }],
+        },
+      }),
+      viewQuery: (statement) => {
+        pagedStatement = statement;
+        return createDatabaseSqlQuery(statement, reader.read);
+      },
+    });
+    await waitFor(() =>
+      expect(source.snapshot()?.rows).toEqual([
+        { rowId: 'record', cells: { name: 42, amount: 42 } },
+      ])
+    );
+    expect(pagedStatement?.()?.view?.query).toEqual({
+      filter: null,
+      sort: [{ column: 'name', direction: 'descending' }],
+    });
+  });
+
+  it('keeps every board row available for manual lane ordering beyond page one', async () => {
+    const complete = {
+      ...guests(),
+      rowIds: Array.from({ length: 501 }, (_, index) => `row-${index}`),
+      rows: Array.from({ length: 501 }, (_, index) => [
+        { type: 'text' as const, value: `Guest ${index}` },
+      ]),
+    };
+    const reader = engine(() => complete);
+    let pagedStatement: Accessor<DatabaseSqlStatement | undefined> | undefined;
+    const { source } = setup(detail(), () => okAsync([]), {
+      read: reader.read,
+      view: () => ({
+        ...allGuests,
+        layout: {
+          kind: 'board',
+          groupBy: 'status',
+          lanes: [],
+          cardFields: [],
+          title: 'name',
+          hideEmptyLanes: false,
+        },
+      }),
+      viewQuery: (statement) => {
+        pagedStatement = statement;
+        return createDatabaseSqlQuery(statement, reader.read);
+      },
+    });
+    await waitFor(() => expect(source.snapshot()?.rows).toHaveLength(501));
+    expect(source.snapshot()?.rows.at(-1)?.rowId).toBe('row-500');
+    expect(pagedStatement?.()).toBeUndefined();
+    expect(source.pagination?.hasMore() ?? false).toBe(false);
+  });
+
   it('runs the view in the engine and keeps the previous rows while a changed one loads', async () => {
     const [view, setView] = createSignal(allGuests);
     let finishSearch!: (outcome: Outcome) => void;
@@ -713,39 +813,40 @@ describe('a column type change', () => {
         table,
         view: () => allGuests,
         applyOps: vi.fn<ApplyOps>(),
-        read: {
-          client: () => client,
-          cacheHost: () => undefined,
-          people: async () => [],
-          catalog: async (schema) => ({
-            tables: [
-              {
-                id: 'guests-table',
-                databaseId: 'db',
-                database: 'Personal',
-                name: 'Guests',
-                source: 'database',
-                columns: schema.databases[0].tables[0].columns.map(
-                  (column) => ({
-                    id: column.definition,
-                    placement: column.id,
-                    name: column.name,
-                    kind:
-                      column.definition === 'number-definition'
-                        ? { kind: 'number' }
-                        : { kind: 'text' },
-                  })
-                ),
-              },
-            ],
+        viewQuery: (statement) =>
+          createDatabaseSqlQuery(statement, {
+            client: () => client,
+            cacheHost: () => undefined,
+            people: async () => [],
+            catalog: async (schema) => ({
+              tables: [
+                {
+                  id: 'guests-table',
+                  databaseId: 'db',
+                  database: 'Personal',
+                  name: 'Guests',
+                  source: 'database',
+                  columns: schema.databases[0].tables[0].columns.map(
+                    (column) => ({
+                      id: column.definition,
+                      placement: column.id,
+                      name: column.name,
+                      kind:
+                        column.definition === 'number-definition'
+                          ? { kind: 'number' }
+                          : { kind: 'text' },
+                    })
+                  ),
+                },
+              ],
+            }),
+            openView: async (catalog) =>
+              answering(
+                catalog.tables[0].columns[0].id === 'number-definition'
+                  ? await numbers
+                  : guests()
+              ),
           }),
-          openView: async (catalog) =>
-            answering(
-              catalog.tables[0].columns[0].id === 'number-definition'
-                ? await numbers
-                : guests()
-            ),
-        },
         onTableChanged: () => {},
         onCommitted: () => {},
         applyVersions: () => {},

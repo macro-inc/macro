@@ -12,6 +12,8 @@ export function toProjectDetail(
     memberIds: project.memberIds,
     taskIds: project.taskIds,
     access: project.userAccessLevel,
+    taskCount: project.taskCount,
+    completedTaskCount: project.completedTaskCount,
     createdAt: project.createdAt,
   };
 }

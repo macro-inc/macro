@@ -12,5 +12,5 @@ pub mod inbound;
 #[cfg(feature = "outbound")]
 pub mod outbound;
 
-#[cfg(feature = "postgres")]
+#[cfg(all(feature = "postgres", feature = "static_files"))]
 pub mod wiring;
