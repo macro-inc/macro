@@ -356,6 +356,10 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   as it.
 - Preserve the conservative OOO refresh hint on write outcomes and sync reports;
   its contract is in [team sharing](../../docs/design/calendar-team-sharing.md).
+  Retirements carry it per event (`RetiredCalendarEvent::team_ooo_changed`): only
+  removing a source whose typed `event_type` is out of office raises it, since
+  every sync of a removed meeting's attendees reaches their teammates' calendars
+  and the hint blanks their overlay.
 - A routine sync of a `ready`, already synced account stays `ready`, on Google as
   on Outlook; only a first import, a retry or a reconnect marks it `syncing`. The
   web's `Syncing your calendar…` banner and its 5 second poll read that state.

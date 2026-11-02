@@ -2566,6 +2566,88 @@ async fn only_a_first_google_import_reports_syncing(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn retiring_sources_raises_the_team_hint_only_for_out_of_office_ones(pool: PgPool) {
+    let owner_id = "macro|calendar-retired-hint@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let (account_id, calendar_id) = provider_ids(&repo, link_id).await;
+    let provider = (account_id, calendar_id);
+    let starts_at = (Utc::now() + Duration::hours(3)).trunc_subsecs(0);
+    let out_of_office = repo
+        .upsert_event_fixture(member_primary_upsert(
+            owner_id,
+            link_id,
+            provider,
+            "retired-ooo@example.com",
+            starts_at,
+        ))
+        .await
+        .unwrap();
+    let meeting = repo
+        .upsert_event_fixture(timed_upsert(
+            owner_id,
+            link_id,
+            provider,
+            "retired-meeting@example.com",
+            "Weekly sync",
+            1,
+        ))
+        .await
+        .unwrap();
+    let google_job = enabled
+        .jobs
+        .into_iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: google_job.id,
+        email_link_id: link_id,
+    };
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("Google job should be claimable");
+    };
+
+    let retired = repo
+        .commit_google_calendar_sync(
+            key,
+            lease_token,
+            account_id,
+            GoogleCalendarSyncSnapshot {
+                calendar_id,
+                next_sync_token: "next".to_string(),
+                observed_provider_event_ids: None,
+                materialized_range: None,
+                cancelled_provider_event_ids: vec![
+                    "provider-retired-ooo@example.com".to_string(),
+                    "provider-retired-meeting@example.com".to_string(),
+                ],
+            },
+            0,
+        )
+        .await
+        .unwrap();
+
+    let hint_of = |event_id: Uuid| {
+        retired
+            .iter()
+            .find(|outcome| outcome.event_id == event_id)
+            .map(|outcome| outcome.team_ooo_changed)
+    };
+    assert_eq!(hint_of(out_of_office), Some(true));
+    assert_eq!(hint_of(meeting), Some(false));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn unchanged_google_projection_skips_the_write_path(pool: PgPool) {
     let owner_id = "macro|calendar-idempotent@example.com";
     let link_id = insert_link(&pool, owner_id).await;
@@ -6216,6 +6298,7 @@ async fn retiring_the_primary_copy_promotes_the_shared_copy(pool: PgPool) {
             event_id,
             owner_id: member.to_string(),
             deleted: false,
+            team_ooo_changed: true,
         }]
     );
     let content = entity_content(&pool, event_id).await;
@@ -6430,6 +6513,7 @@ async fn canonical_selection_skips_copies_on_deleted_calendars(pool: PgPool) {
             event_id,
             owner_id: member.to_string(),
             deleted: true,
+            team_ooo_changed: false,
         }]
     );
 }

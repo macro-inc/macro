@@ -569,6 +569,9 @@ pub struct RetiredCalendarEvent {
     /// Whether the row is now gone. `false` means it was rewritten from a
     /// remaining source.
     pub deleted: bool,
+    /// Whether teammates' out-of-office rows may have changed. `false`
+    /// certifies that nothing retired here fed that overlay.
+    pub team_ooo_changed: bool,
 }
 
 /// Persistence operations used by calendar business logic.
