@@ -109,6 +109,12 @@ pub trait OAuthRepository: Send + Sync {
     async fn get_session(&self, token: &str) -> Result<Option<Session>, Error>;
     async fn save_state(&self, state: &OAuthState) -> Result<(), Error>;
     async fn take_state(&self, state: &str) -> Result<Option<TakenState>, Error>;
+    /// Reads a registered client without taking the register-once lock.
+    async fn get_client(
+        &self,
+        issuer: &str,
+        redirect_uri: &str,
+    ) -> Result<Option<OAuthClientRecord>, Error>;
     async fn lock_client(
         &self,
         issuer: &str,
@@ -534,12 +540,13 @@ impl OAuthService {
                 .get(app_id)
                 .and_then(|client| client.secret.clone()),
             ClientRegistration::Dcr => {
-                let mut locked = self
+                // A plain read: a refresh already holds the grant's lock on
+                // one pool connection, so it must not open a second one here.
+                let record = self
                     .repository
-                    .lock_client(issuer, &self.callback_url())
-                    .await?;
-                let record = locked.get().await?.ok_or(Error::OAuth)?;
-                locked.commit().await?;
+                    .get_client(issuer, &self.callback_url())
+                    .await?
+                    .ok_or(Error::OAuth)?;
                 match record.secret {
                     Some(envelope) => {
                         let mut secret = self
