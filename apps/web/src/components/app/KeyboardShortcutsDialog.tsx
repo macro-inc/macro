@@ -37,7 +37,7 @@ function ShortcutRow(props: {
       </span>
       <span
         aria-hidden="true"
-        class="flex shrink-0 flex-wrap items-center justify-end gap-1 text-xs text-ink-extra-muted"
+        class="flex max-w-[60%] flex-wrap items-center justify-end gap-1 text-xs text-ink-extra-muted"
       >
         <Index each={props.entry.bindings}>
           {(binding, bindingIndex) => (

@@ -403,7 +403,7 @@ export const LINEAR = {
       keys: ['l', 'shift+l'],
       description: () => t('hotkeyProfiles.changeTags'),
       target: { tokens: [TOKENS.entity.action.tags], contexts: ['view'] },
-      replaces: () => t('hotkeyProfiles.replacedExpandGroup'),
+      replaces: () => t('hotkeyProfiles.replacedExpandItem'),
     },
     {
       section: () => t('hotkeyProfiles.sectionIssueActions'),

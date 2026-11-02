@@ -98,9 +98,9 @@ export default {
   replacedGoToExternal: 'Go to External',
   replacedGoToEmail: 'Go to Email',
   replacedGoToDocuments: 'Go to Documents',
-  replacedSort: 'Sort',
-  replacedExpandGroup: 'Expand group',
+  replacedSort: 'Sort tasks',
+  replacedExpandItem: 'Expand item',
   replacedMoveToFolder: 'Move to folder',
-  replacedWorkspaceNavigation: 'Show or hide navigation',
+  replacedWorkspaceNavigation: 'Toggle workspace navigation',
   replacedEditProperties: 'Edit properties',
 };
