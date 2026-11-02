@@ -37,8 +37,9 @@ const isSettingsActive = () => {
 
 /**
  * Get the mobile app: opens the Mobile App settings page, which carries the
- * App Store QR code. Hidden inside the native app, where that page shows the
- * installed app's version instead, and wherever the page is unavailable.
+ * App Store and Google Play links. Hidden inside the native app, where that
+ * page shows the installed app's version instead, and wherever the page is
+ * unavailable.
  */
 const MobileAppButton = () => {
   const analytics = useAnalytics();
