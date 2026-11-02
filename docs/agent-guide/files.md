@@ -16,6 +16,12 @@ viewer identity is available, document inserts into Shared are rejected.
 Files opens **Drive** using the same shell as Tasks, on desktop and touch
 devices alike.
 
+The document header's **Copy Share Link** and the Share dialog's **Copy Link**
+copy a standalone link to the selected file, not the current browser URL.
+Folder paths, list filters, and other open splits are not included.
+PDF location links retain the selected page or annotation without unrelated
+query parameters from the surrounding view.
+
 With `enable-graphql-soup` enabled, supported file/folder/chat moves, trash,
 restore, permanent deletion, duplication, and share-policy changes use GraphQL
 mutations. Verify moving into a folder and back to root, opening the returned
