@@ -786,7 +786,7 @@ export const openEntityInSplitFromUnifiedList = async (
         markChannelNotificationsSeenOnOpen(hydrated, notificationSource, {
           channelReadScope: options.channelReadScope,
         });
-        span.setAttr('channel.open.outcome', 'marked');
+        span.setAttr('channel.open.outcome', 'loaded');
       } catch (error) {
         span.setAttr('channel.open.outcome', 'failed');
         console.error(
