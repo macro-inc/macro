@@ -274,6 +274,19 @@ When an editor's selection spans two or more checklist items, the button reads
 **N tasks** and creates one task per item without opening the composer; each
 item is replaced by its task mention and a **Created N tasks** toast appears.
 
+## Images in lists
+
+An image inserted or dropped while the caret is in a list item goes under that
+item's text, left-aligned with it, and stays resizable; the list is not split
+and numbered items keep counting. On the empty item Enter leaves after an item,
+the image goes under the item above and the caret stays on the empty item;
+pressing Enter again leaves the list, and an image inserted then sits below it.
+Enter at the end of an item's text starts the next item below its images.
+Dropped files target the item under the pointer's lower half, or the item
+above. Markdown saves the image as an indented line under its item. Verify
+with `list-images.browser.e2e.ts` in
+`apps/web/src/lib/core/component/LexicalMarkdown/component/core/browser-test`.
+
 ## Markdown outline
 
 On desktop, Markdown documents with at least three headings show a tick rail in

@@ -67,6 +67,7 @@ If metadata fails, events remain usable with the default calendar presentation.
 Provider backfill shows a persistent `Syncing your calendar…` banner above the
 grid, explaining that events will appear automatically and Macro remains usable.
 The banner stays visible as partial results arrive and disappears when sync finishes.
+A routine sync of an already imported account never shows it.
 Errors retain the separate retry state. Verify delayed occurrence
 responses: switch Month/Week/Day rapidly and navigate without blanking the grid.
 Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Retry.

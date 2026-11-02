@@ -917,6 +917,7 @@ dependencies = [
  "document_sub_type",
  "entity_access",
  "initiative",
+ "jev",
  "lexical_client",
  "macro_db_migrator",
  "macro_event_broker",
@@ -964,6 +965,7 @@ dependencies = [
  "entity_registry",
  "entity_registry_db_utils",
  "initiative",
+ "jev",
  "kafka_util",
  "lexical_client",
  "macro_config",
@@ -2237,6 +2239,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "strum 0.27.2",
+ "system_status",
  "teams",
  "thiserror 2.0.18",
  "time",
@@ -4632,7 +4635,7 @@ dependencies = [
  "webhook",
  "windows-sys 0.61.2",
  "workspace-hack",
- "zip 9.0.5",
+ "zip",
 ]
 
 [[package]]
@@ -5189,7 +5192,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "workspace-hack",
- "zip 9.0.5",
+ "zip",
 ]
 
 [[package]]
@@ -6675,7 +6678,7 @@ dependencies = [
  "wiremock",
  "work_feed",
  "workspace-hack",
- "zip 9.0.5",
+ "zip",
 ]
 
 [[package]]
@@ -6927,7 +6930,7 @@ dependencies = [
  "tracing",
  "urlencoding",
  "workspace-hack",
- "zip 9.0.5",
+ "zip",
 ]
 
 [[package]]
@@ -13593,7 +13596,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "workspace-hack",
- "zip 9.0.5",
+ "zip",
 ]
 
 [[package]]
@@ -19818,6 +19821,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "system_status"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "connection_gateway_client",
+ "http-body-util",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model-error-response",
+ "model_user",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
 name = "tabular"
 version = "0.2.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -21161,7 +21191,7 @@ dependencies = [
  "tracing",
  "walkdir",
  "workspace-hack",
- "zip 9.0.5",
+ "zip",
 ]
 
 [[package]]
@@ -21375,7 +21405,7 @@ dependencies = [
  "url",
  "utoipa",
  "utoipa-swagger-ui-vendored",
- "zip 3.0.0",
+ "zip",
 ]
 
 [[package]]
@@ -23009,6 +23039,7 @@ dependencies = [
  "xxhash-rust",
  "zerocopy",
  "zeroize",
+ "zip",
 ]
 
 [[package]]
@@ -23363,20 +23394,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "zip"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12598812502ed0105f607f941c386f43d441e00148fce9dec3ca5ffb0bde9308"
-dependencies = [
- "arbitrary",
- "crc32fast",
- "flate2",
- "indexmap 2.14.0",
- "memchr",
- "zopfli",
 ]
 
 [[package]]
