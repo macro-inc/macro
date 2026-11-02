@@ -88,7 +88,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
       thrownResultErrorHasCode(error, 'UNAUTHORIZED') ||
       thrownResultErrorHasCode(error, 'FORBIDDEN')
     ) {
-      return 'You do not have access to these labels.';
+      return t('channelSections.labelsNoAccess');
     }
 
     const message = error instanceof Error ? error.message : '';
@@ -100,7 +100,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     searchResults().find((channel) => channel.id === channelId);
   const channelName = (channelId: string) => {
     const name = labelChannelById(channelId)?.name;
-    return name ? `#${name}` : 'the channel';
+    return name ? `#${name}` : t('channelSections.unnamedChannel');
   };
 
   const canLabelChannelId = (channelId: string) =>
@@ -189,7 +189,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
         }
 
         setLabelOpen(created.id, true);
-        toast.success(`Created “${name}”`);
+        toast.success(t('channelSections.created', { name }));
       });
 
     if (sectionMode) {
@@ -255,7 +255,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
           return;
         }
 
-        toast.success(`Updated “${name}”`);
+        toast.success(t('channelSections.updated', { name }));
       });
 
     if (sectionMode) {
@@ -302,22 +302,24 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     let channelsText: string;
 
     if (label.rule) {
-      channelsText =
-        'Channels stop appearing in this smart label. Other labels are unchanged.';
+      channelsText = t('channelSections.deleteSmartChannels');
     } else if (label.channelCount === 0) {
-      channelsText = 'It has no channels in it.';
+      channelsText = t('channelSections.deleteEmptyChannels');
     } else {
       channelsText = t('channelSections.conversationsRemain');
     }
 
     const confirmed = await confirmDialog(
       {
-        title: `Delete “${label.name}”?`,
-        body: `${labelScopeDescription(scopeForLabel(label))} ${channelsText} Nobody loses access to a channel.`,
+        title: t('channelSections.deleteConfirmTitle', { name: label.name }),
+        body: t('channelSections.deleteConfirmBody', {
+          scopeDescription: labelScopeDescription(scopeForLabel(label)),
+          channelsText,
+        }),
         confirmLabel: label.teamId
           ? t('channelSections.deleteForEveryone')
           : t('channelSections.deleteSection'),
-        cancelLabel: 'Cancel',
+        cancelLabel: t('channelSections.cancel'),
         tone: 'danger',
       },
       { owner: labelDialogOwner() }
@@ -346,13 +348,15 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
         return;
       }
 
-      toast.success(`Deleted “${label.name}”`);
+      toast.success(t('channelSections.deleted', { name: label.name }));
     } catch (error) {
       if (actorId !== userId()) {
         return;
       }
 
-      toast.failure(errorMessage(error, 'Failed to delete label'));
+      toast.failure(
+        errorMessage(error, t('channelSections.deleteLabelFailed'))
+      );
     }
   };
 
@@ -428,15 +432,25 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
           }
 
           if (to) {
-            toast.success(`Moved ${channelName(channelId)} to “${to.name}”`);
+            toast.success(
+              t('channelSections.movedChannel', {
+                channel: channelName(channelId),
+                name: to.name,
+              })
+            );
           } else if (from) {
             toast.success(
-              `Removed ${channelName(channelId)} from “${from.name}”`
+              t('channelSections.removedChannel', {
+                channel: channelName(channelId),
+                name: from.name,
+              })
             );
           }
         } catch (error) {
           if (actorId === userId()) {
-            toast.failure(errorMessage(error, 'Failed to move channel'));
+            toast.failure(
+              errorMessage(error, t('channelSections.moveChannelFailed'))
+            );
           }
 
           throw error;
@@ -472,7 +486,7 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
       await notificationSource.bulkMarkAsRead(unread);
     } catch (error) {
       toast.failure(
-        errorMessage(error, 'Failed to mark channel label as read')
+        errorMessage(error, t('channelSections.markLabelReadFailed'))
       );
     }
   };
