@@ -18,6 +18,9 @@ vi.mock('@core/context/user', () => ({
 vi.mock('@design/app-store.svg', () => ({
   default: () => '<svg data-testid="app-store-qr"></svg>',
 }));
+vi.mock('@design/play-store.svg', () => ({
+  default: () => '<svg data-testid="play-store-qr"></svg>',
+}));
 vi.mock('@icon/system/regular/arrow-up-right.svg', () => ({
   default: () => '<svg></svg>',
 }));
@@ -56,6 +59,8 @@ afterEach(() => {
 
 describe('MobileApp', () => {
   const APP_STORE_URL = 'https://apps.apple.com/us/app/macro-app/id6743133649';
+  const PLAY_STORE_URL =
+    'https://play.google.com/store/apps/details?id=com.macro.workspace.mobile';
 
   it('renders the QR code and text', () => {
     render(() => <MobileApp />);
@@ -64,16 +69,6 @@ describe('MobileApp', () => {
     // Use getAllByText and check it appears multiple times (in the paragraph and in the button)
     const appStoreText = screen.getAllByText(/App Store/);
     expect(appStoreText.length).toBeGreaterThan(0);
-  });
-
-  it('renders the "Open in App Store" link with correct attributes', () => {
-    render(() => <MobileApp />);
-
-    const link = screen.getByRole('link', { name: /Open in App Store/ });
-    expect(link).toBeTruthy();
-    expect(link.getAttribute('href')).toBe(APP_STORE_URL);
-    expect(link.getAttribute('target')).toBe('_blank');
-    expect(link.getAttribute('rel')).toBe('noopener noreferrer');
   });
 
   it('renders the "Copy link" button', () => {
@@ -98,6 +93,21 @@ describe('MobileApp', () => {
 
     await vi.waitFor(() => {
       expect(navigator.clipboard.writeText).toHaveBeenCalledWith(APP_STORE_URL);
+    });
+  });
+
+  it('copies the Google Play URL after switching to Android', async () => {
+    render(() => <MobileApp />);
+
+    fireEvent.click(screen.getByRole('radio', { name: 'Android' }));
+    fireEvent.click(
+      await screen.findByRole('button', { name: /Copy Google Play link/ })
+    );
+
+    await vi.waitFor(() => {
+      expect(navigator.clipboard.writeText).toHaveBeenCalledWith(
+        PLAY_STORE_URL
+      );
     });
   });
 

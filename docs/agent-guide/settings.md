@@ -304,10 +304,12 @@ the app's embedded bundle runs. In the browser it links to the latest desktop re
 on GitHub, and only appears when the `desktop-app` PostHog flag is enabled. Native desktop always shows this section regardless of the flag;
 native mobile never shows it.
 
-The **Mobile App** page is titled **Mobile app**. In the browser it offers a QR
-code to download **Macro** from the App Store; inside the iOS and Android apps
-it shows the same Version, Build date, and Bundle date card as the desktop app,
-and the sidebar's **Get the mobile app** button stays hidden.
+The **Mobile App** page is titled **Mobile app**. In a desktop browser an
+**iPhone** / **Android** switch picks which phone and QR code to show (App Store
+or Google Play), with **Copy link** for that store's URL. Phone browsers show
+**App Store** and **Google Play** buttons instead, with no QR codes. Inside the
+iOS and Android apps it shows the same Version, Build date, and Bundle date card
+as the desktop app, and the sidebar's **Get the mobile app** button stays hidden.
 
 Search checks individual setting titles and keywords, tolerates common typos,
 and shows the parent page below each control result. Selecting a result opens
