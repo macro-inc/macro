@@ -3551,6 +3551,11 @@ export const MutationResult = z.object({
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
           confirmationMessage: z.string(),
+          branding: z.object({
+            logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            accentColor: z.union([z.string(), z.null()]).optional(),
+          }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
           isHiddenInDrive: z.boolean(),
@@ -11032,6 +11037,11 @@ export const ListResult = z.object({
           .union([z.string().datetime({ offset: true }), z.null()])
           .optional(),
         confirmationMessage: z.string(),
+        branding: z.object({
+          logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+          coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+          accentColor: z.union([z.string(), z.null()]).optional(),
+        }),
         createdAt: z.string().datetime({ offset: true }),
         updatedAt: z.string().datetime({ offset: true }),
         isHiddenInDrive: z.boolean(),
@@ -13777,6 +13787,11 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
           confirmationMessage: z.string(),
+          branding: z.object({
+            logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            accentColor: z.union([z.string(), z.null()]).optional(),
+          }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
           isHiddenInDrive: z.boolean(),
@@ -14390,6 +14405,11 @@ export const ReadResult = z.any().superRefine((x, ctx) => {
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
           confirmationMessage: z.string(),
+          branding: z.object({
+            logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            accentColor: z.union([z.string(), z.null()]).optional(),
+          }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
           isHiddenInDrive: z.boolean(),

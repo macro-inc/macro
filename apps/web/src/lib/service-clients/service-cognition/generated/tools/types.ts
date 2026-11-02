@@ -7864,6 +7864,7 @@ export interface Form {
    * default.
    */
   confirmationMessage: string;
+  branding: FormBranding;
   /**
    * When it was created.
    */
@@ -7877,6 +7878,23 @@ export interface Form {
    * listings, as for a channel poll.
    */
   isHiddenInDrive: boolean;
+}
+/**
+ * A form's logo, cover image and accent color, each unset by default.
+ */
+export interface FormBranding {
+  /**
+   * The static file shown as the logo above the title.
+   */
+  logoFileId?: string | null;
+  /**
+   * The static file shown as a banner across the top of the page.
+   */
+  coverFileId?: string | null;
+  /**
+   * The color of the page's buttons and selected answers.
+   */
+  accentColor?: string | null;
 }
 /**
  * Every section of a form, in order.
