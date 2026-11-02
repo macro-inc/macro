@@ -66,7 +66,8 @@ new page cursor before deciding whether to request another page.
 
 An empty human DM shows the centered conversations illustration and “Say hello”
 above the composer. The copy explains that recipients without a Macro account
-receive the message by email. Opening the DM sends nothing. Sending a human
+receive the message by email. Opening the DM sends nothing, and opening a person
+without one creates nothing: their draft makes the DM on the first send. Sending a human
 message queues an immediate email for nonusers, including follow-up messages,
 replies, and mentions; registered users retain their notification preferences.
 Check narrow and wide panes: the composer stays usable, and the empty state

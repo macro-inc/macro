@@ -1002,7 +1002,10 @@ its page under Settings → Bots. An agent's avatar beside its channel messages
 opens the same card. Touch devices have no hover, so tapping the mention
 or the picture opens that same card as a bottom sheet; any action there runs and
 dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touch
-drops in favour of the card's DM action.
+drops in favour of the card's DM action. DM, the picture click, channel and call
+participants, and people in Cmd+K open the existing DM, or else the Draft message
+composer addressed to that person; the first message creates the DM, so opening
+someone never adds an empty DM to the list.
 
 `Create` button (top-left) opens a menu of: Email E, Routine U, Agent A, Skill K,
 Document D, Task T, Project P, Snippet S, Message M, Channel G, Call C, Canvas N, Folder F, Code O.
