@@ -1,11 +1,14 @@
 import { AskMacroButton } from '@app/features/chat/ChatWithAgentButton';
+import { useCallContextOptional } from '@channel/Call/CallContext';
 import { CallChatHistory } from '@channel/Call/chat/CallChatHistory';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { SidePanel } from '@components/app/side-panel';
 import { CustomScrollbar } from '@core/component/CustomScrollbar';
 import { isMobile } from '@core/mobile/isMobile';
+import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { CallRecord } from '@service-call/client';
+import { Button } from '@ui';
 import { format } from 'date-fns';
 import {
   createEffect,
@@ -23,6 +26,7 @@ import {
   getSegmentVideoSeconds,
   sortTranscriptSegments,
 } from '../transcript-playback';
+import { useCallAgain } from '../use-call-again';
 import { CallRecordingParticipantsSection } from './CallRecordingParticipants';
 import { CallRecordingSummarySection } from './CallRecordingSummary';
 import { CallRecordingVideo } from './CallRecordingVideo';
@@ -146,6 +150,16 @@ export function CallRecordingBody(props: {
     return formatCallDuration(ms);
   });
 
+  const callCtx = useCallContextOptional();
+  const { canCallAgain, callAgain } = useCallAgain(
+    () => props.callId,
+    () => record().channelId
+  );
+  const canJoin = () =>
+    record().isActive &&
+    canCallAgain() &&
+    callCtx?.activeCallId() !== props.callId;
+
   return (
     <div class="relative flex-1 min-h-0 overflow-hidden">
       <SidePanel.HeaderActions>
@@ -191,6 +205,17 @@ export function CallRecordingBody(props: {
                   <span class="text-success font-medium">In progress</span>
                 </Show>
               </div>
+              <Show when={canJoin()}>
+                <Button
+                  variant="success"
+                  size="xl"
+                  class="mt-6"
+                  onClick={callAgain}
+                >
+                  <PhoneCallIcon />
+                  Join call
+                </Button>
+              </Show>
             </header>
 
             <CallRecordingParticipantsSection record={props.record} />

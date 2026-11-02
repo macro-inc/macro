@@ -4796,6 +4796,7 @@
           "link_id",
           "inbox_visible",
           "is_read",
+          "has_received_mail",
           "access_level",
           "created_at",
           "updated_at",
@@ -4812,6 +4813,10 @@
           "db_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "has_received_mail": {
+            "type": "boolean",
+            "description": "Whether any message was received rather than drafted or sent. Only\nthreads with received mail can return to the inbox."
           },
           "inbox_visible": {
             "type": "boolean"

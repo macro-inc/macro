@@ -619,6 +619,8 @@
 - [UpdateAiBillingOverageResponses](type-aliases/UpdateAiBillingOverageResponses.md)
 - [UpdateAutoReloadRequest](type-aliases/UpdateAutoReloadRequest.md)
 - [UpdateOverageRequest](type-aliases/UpdateOverageRequest.md)
+- [UpstreamErrorCode](type-aliases/UpstreamErrorCode.md)
+- [UpstreamErrorResponse](type-aliases/UpstreamErrorResponse.md)
 - [UsageSnapshot](type-aliases/UsageSnapshot.md)
 - [UserLanguage](type-aliases/UserLanguage.md)
 - [UserLinkResponse](type-aliases/UserLinkResponse.md)

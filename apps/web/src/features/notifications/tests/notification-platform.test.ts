@@ -417,6 +417,44 @@ describe('platform notification sender and conversation', () => {
     expect(resolveUserAvatar).not.toHaveBeenCalled();
   });
 
+  it('names the bot and the channel for a bot reply', async () => {
+    const result = await toPlatformNotificationData(
+      baseNotification({
+        entity_id: 'channel-1',
+        notification_event_type: 'channel_message_reply',
+        notification_metadata: {
+          tag: 'channel_message_reply',
+          content: {
+            threadId: 'thread-1',
+            messageId: 'message-1',
+            senderDisplayName: 'pickle',
+            messageContent: 'Task completed',
+            channelType: 'private',
+            channelName: 'bug-reports',
+          },
+        },
+      } as Partial<UnifiedNotification>),
+      async () => undefined,
+      async () => undefined,
+      async () => undefined
+    );
+
+    expect(result?.title).toBe('pickle <bug-reports>');
+    expect(result?.sender?.name).toBe('pickle');
+  });
+
+  it('leaves out a target it cannot name', async () => {
+    const result = await toPlatformNotificationData(
+      channelMessage('public'),
+      async () => 'Ada',
+      async () => undefined,
+      async () => undefined
+    );
+
+    expect(result?.title).toBe('Ada');
+    expect(result?.conversation?.name).toBeUndefined();
+  });
+
   it('has no sender when nobody can be named', async () => {
     const result = await toPlatformNotificationData(
       createChannelInviteNotification(),

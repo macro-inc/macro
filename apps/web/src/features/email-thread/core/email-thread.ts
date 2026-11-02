@@ -7,6 +7,8 @@ export interface EmailThread {
   created_at?: string;
   updated_at?: string;
   inbox_visible: boolean;
+  /** Only threads with received mail can return to the inbox. */
+  has_received_mail: boolean;
   is_read: boolean;
   latest_inbound_message_ts?: string | null;
   link_id: string;

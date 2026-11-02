@@ -2249,6 +2249,7 @@ dependencies = [
  "tower-cookies",
  "tower-http",
  "tracing",
+ "upstream_error",
  "url",
  "urlencoding",
  "user_language",
@@ -3720,7 +3721,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.52"
+version = "0.6.53"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -4585,6 +4586,7 @@ dependencies = [
  "agent_session",
  "agent_trigger",
  "arboard",
+ "base64 0.22.1",
  "bot_id",
  "channel_sender",
  "channels",
@@ -4904,6 +4906,7 @@ dependencies = [
  "dashmap",
  "doppler-config",
  "ensure_exists",
+ "entity_access",
  "frecency",
  "futures",
  "http-body-util",
@@ -6586,6 +6589,7 @@ dependencies = [
  "macro_config",
  "macro_cors",
  "macro_db_client",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -6672,6 +6676,7 @@ dependencies = [
  "uuid",
  "webhook",
  "whatsapp_linked",
+ "wiremock",
  "work_feed",
  "workspace-hack",
  "zip 9.0.5",
@@ -8452,6 +8457,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "upstream_error",
  "urlencoding",
  "uuid",
  "wiremock",
@@ -8892,6 +8898,7 @@ dependencies = [
  "model_owner",
  "model_user",
  "models_permissions",
+ "models_properties",
  "notification",
  "redis",
  "regex",
@@ -8906,6 +8913,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "upstream_error",
  "url",
  "urlencoding",
  "utoipa",
@@ -17614,6 +17622,7 @@ dependencies = [
  "anyhow",
  "aws-sdk-secretsmanager",
  "axum",
+ "calendar_events",
  "channels",
  "chrono",
  "comms_db_client",
@@ -21171,6 +21180,23 @@ dependencies = [
  "sqs_client",
  "tokio",
  "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "upstream_error"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "http 1.4.0",
+ "http-body-util",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "utoipa",
+ "wiremock",
  "workspace-hack",
 ]
 

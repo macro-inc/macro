@@ -31,7 +31,7 @@ check *ARGS:
     rs=$(grep -E '^(crates|services|tooling)/.*\.rs$' <<<"$changed" || true)
     # Match the SDK and collaboration Biome configs: preserve generator output verbatim.
     js=$(grep -E '^(apps/(web|marketing)|packages|services/(analytics-proxy|ai-editing-worker|lexical-service|websocket-service))/.*\.(ts|tsx)$' <<<"$changed" | grep -Ev '^packages/(sdk/generated|collaboration/src/sync-service/generated)/' || true)
-    sg=$(grep -E '^(apps|crates|packages|services|tooling)/.*\.(rs|ts|tsx)$' <<<"$changed" || true)
+    sg=$(grep -E '^(apps|crates|packages|services|tooling)/.*\.(rs|ts|tsx|plist)$' <<<"$changed" || true)
 
     fail=0
     if [ -n "$rs" ]; then

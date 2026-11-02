@@ -541,6 +541,7 @@
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
+      "crates/upstream_error",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -696,6 +697,7 @@
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
+      "crates/upstream_error",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -898,6 +900,7 @@
       "crates/trigger_context",
       "crates/unfurl",
       "crates/universal_input",
+      "crates/upstream_error",
       "crates/user_quota",
       "crates/workspace-hack",
       "services/agent_harness_service",
@@ -1084,6 +1087,7 @@
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
+      "crates/upstream_error",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -2425,6 +2429,7 @@
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
+      "crates/upstream_error",
       "crates/user_language",
       "crates/user_quota",
       "crates/workspace-hack",
@@ -4200,6 +4205,7 @@
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
+      "crates/upstream_error",
       "crates/user_quota",
       "crates/work_feed",
       "crates/workspace-hack"
@@ -4254,8 +4260,10 @@
       "crates/connection_gateway_client",
       "crates/connection_gateway_models",
       "crates/cowlike",
+      "crates/database_env_vars",
       "crates/document_sub_type",
       "crates/ensure_exists",
+      "crates/entity_access",
       "crates/filter_ast",
       "crates/frecency",
       "crates/genai_telemetry",
@@ -4281,6 +4289,7 @@
       "crates/model_owner",
       "crates/model_user",
       "crates/models_bulk_upload",
+      "crates/models_entity_access_management",
       "crates/models_pagination",
       "crates/models_permissions",
       "crates/non_empty",
@@ -5367,6 +5376,7 @@
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
+      "crates/upstream_error",
       "crates/user_api_key",
       "crates/user_quota",
       "crates/webhook",
@@ -7223,6 +7233,7 @@
     ],
     "fusionauth": [
       "crates/fusionauth",
+      "crates/upstream_error",
       "crates/workspace-hack"
     ],
     "genai_telemetry": [
@@ -7364,6 +7375,7 @@
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
+      "crates/upstream_error",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -8654,6 +8666,7 @@
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
+      "crates/upstream_error",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -10188,6 +10201,7 @@
       "crates/macro_env_var",
       "crates/macro_user_id",
       "crates/remote_env_var",
+      "crates/upstream_error",
       "crates/workspace-hack",
       "services/mcp_auth_proxy"
     ],
@@ -12004,6 +12018,7 @@
       "crates/teams",
       "crates/trigger_context",
       "crates/unfurl",
+      "crates/upstream_error",
       "crates/user_quota",
       "crates/workspace-hack"
     ],
@@ -12510,6 +12525,7 @@
       "crates/sync_service_client",
       "crates/system_properties",
       "crates/trigger_context",
+      "crates/upstream_error",
       "crates/user_quota",
       "crates/workspace-hack",
       "tooling/seed_cli"
@@ -14198,6 +14214,10 @@
       "crates/unfurl",
       "crates/workspace-hack",
       "services/upload_extractor_lambda_trigger"
+    ],
+    "upstream_error": [
+      "crates/upstream_error",
+      "crates/workspace-hack"
     ],
     "user_api_key": [
       "crates/bot_id",

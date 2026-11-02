@@ -64,6 +64,7 @@ use macro_event_broker::{
     NoopMacroEventBroker,
 };
 use macro_user_id::user_id::MacroUserIdStr;
+use models_properties::service::property_change_source::PropertyChangeSource;
 use models_properties::service::property_value::PropertyValue;
 use notification::domain::service::SqsNotificationIngress;
 use notification::inbound::ai_tool::NotificationToolContext;
@@ -775,6 +776,7 @@ impl TaskPropertiesPort for NoOpTaskProperties {
         &self,
         _access: &EntityAccessReceipt<EditAccessLevel>,
         _credited_user: Option<&MacroUserIdStr<'static>>,
+        _source: Option<&PropertyChangeSource>,
         _status: &str,
     ) -> anyhow::Result<()> {
         Ok(())
@@ -833,6 +835,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         credited_user: Option<&MacroUserIdStr<'static>>,
+        source: Option<&PropertyChangeSource>,
         status: &str,
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
@@ -858,7 +861,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
             matches!(access.auth(), EntityAccessAuth::Authenticated(_)),
         );
         self.properties
-            .set_entity_property(
+            .set_entity_property_with_source(
                 &access,
                 system_properties::SystemPropertyKey::STATUS_UUID,
                 Some(
@@ -866,6 +869,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
                         option_id: status_option.uuid(),
                     },
                 ),
+                source.cloned(),
             )
             .await
             .map(|_| ())

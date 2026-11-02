@@ -70,6 +70,7 @@ impl SoupEmailThreadMetadataEdgeReader for RecordingReader {
                     EmailThreadMetadataLoad::Found(EmailThreadMetadata {
                         thread_id,
                         link_id: Uuid::from_u128(100 + thread_id.as_u128()),
+                        has_received_mail: true,
                         latest_inbound_message_ts: None,
                         latest_outbound_message_ts: None,
                         latest_non_spam_message_ts: None,
@@ -255,6 +256,7 @@ impl EmailThreadMetadataService for RecordingContentService {
                     EmailThreadMetadata {
                         thread_id,
                         link_id: Uuid::from_u128(500 + thread_id.as_u128()),
+                        has_received_mail: true,
                         latest_inbound_message_ts: None,
                         latest_outbound_message_ts: None,
                         latest_non_spam_message_ts: None,

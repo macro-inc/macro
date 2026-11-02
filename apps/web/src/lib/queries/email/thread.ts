@@ -179,7 +179,11 @@ export async function threadCanBeMarkedNotDone(
   if (isFeatureEnabled(enableGraphqlSoup)) return true;
   const result = await fetchAndCacheThread(threadId);
   if (result.isErr()) return true;
-  return result.value.thread.latest_inbound_message_ts != null;
+  const { thread } = result.value;
+  return (
+    thread.has_received_mail !== false &&
+    thread.latest_inbound_message_ts != null
+  );
 }
 
 export type ThreadQueryData = {

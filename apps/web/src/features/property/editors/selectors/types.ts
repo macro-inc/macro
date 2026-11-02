@@ -28,4 +28,7 @@ export type EntitySelectorConfig = {
   /** When the query is a valid email that is not already in the pool,
    * offer it as an "Add {email}" row (calendar guests, share sheets). */
   allowCustomEmail?: boolean;
+  /** Let the list fill a sized container, such as a sheet, instead of
+   * capping it at the popover height. */
+  fillHeight?: boolean;
 };

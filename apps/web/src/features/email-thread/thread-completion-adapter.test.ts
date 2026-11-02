@@ -107,13 +107,15 @@ function setup(thread: EmailThread | undefined) {
 }
 const thread = (
   inbox_visible = false,
-  latest_inbound_message_ts: string | null = null
+  latest_inbound_message_ts: string | null = null,
+  has_received_mail = true
 ): EmailThread => ({
   db_id: 'thread',
   link_id: 'link',
   access_level: 'owner',
   is_read: true,
   inbox_visible,
+  has_received_mail,
   latest_inbound_message_ts,
   messages: [],
 });
@@ -148,6 +150,23 @@ describe('thread-header unarchive eligibility', () => {
         expect(adapter.canMarkThreadNotDone()).toBe(false);
         expect(adapter.markThreadNotDone()).toBe(false);
       }
+      expect(mocks.mutate).not.toHaveBeenCalled();
+    }
+  );
+
+  it.each([false, true])(
+    'never unarchives a done thread with no received mail (GraphQL=%s)',
+    (graphql) => {
+      mocks.feature.mockReturnValue({ enabled: graphql });
+      mocks.lookup.mockReturnValue({
+        original: { type: 'email', id: 'thread', done: true } as EntityData,
+      });
+      // A draft's edit time can stand in for the inbound timestamp until the
+      // thread is recomputed, so the timestamp alone cannot prove received mail.
+      const adapter = setup(thread(false, '2026-10-01T10:00:00Z', false));
+      expect(adapter.canMarkThreadNotDone()).toBe(false);
+      expect(adapter.markThreadNotDone()).toBe(false);
+      expect(mocks.executeNotDone).not.toHaveBeenCalled();
       expect(mocks.mutate).not.toHaveBeenCalled();
     }
   );

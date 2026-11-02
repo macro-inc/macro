@@ -1,8 +1,10 @@
 //! Ports implemented by calendar adapters.
 
+use std::collections::HashMap;
 use std::future::Future;
 
 use chrono::{DateTime, Utc};
+use futures::future::BoxFuture;
 use rootcause::Report;
 use uuid::Uuid;
 
@@ -12,6 +14,7 @@ use super::ics::{
     IcsParticipant,
 };
 use super::join_requests::{CalendarJoinRequest, CalendarJoinRequestStatus};
+use super::labels::{EventCopy, EventLabels};
 use super::meeting_links::{
     CreateEventWithMacroCallError, MeetingLink, MeetingLinkError, MeetingLinkRequest,
 };
@@ -434,6 +437,20 @@ pub trait CalendarCopyConfirmation: Send + Sync + 'static {
         inbox: Option<&str>,
         change: CopyChange,
     ) -> impl Future<Output = Result<Option<CopyRefusal>, CalendarMutationError>> + Send;
+}
+
+/// Inbound service port labelling events for a reader outside the calendar,
+/// such as search. Those readers hold it as a trait object, so it boxes its
+/// future.
+pub trait CalendarEventLabelReader: Send + Sync + 'static {
+    /// How each of `event_ids` reads for the requester. A caller resolves who
+    /// may see them first; an event that is on none of the requester's
+    /// calendars comes back with nothing to say.
+    fn event_labels<'a>(
+        &'a self,
+        requester_id: &'a str,
+        event_ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<HashMap<Uuid, EventLabels>, Report>>;
 }
 
 /// Inbound service port for querying calendar occurrence projections.
@@ -859,6 +876,13 @@ pub trait CalendarRepository: Send + Sync + 'static {
         requester_id: &str,
     ) -> impl Future<Output = Result<Option<String>, Report>> + Send;
 
+    /// The copies `event_ids` name, whoever asks: a caller resolves who may
+    /// see them first. An id with no event is absent.
+    fn event_copies(
+        &self,
+        event_ids: &[Uuid],
+    ) -> impl Future<Output = Result<Vec<EventCopy>, Report>> + Send;
+
     /// Every connected inbox the requester owns
     /// (`email_links.macro_id = requester`). Raw and unnormalized;
     /// [`ActorInboxes::from_owned`] is the single normalization point.
@@ -918,10 +942,10 @@ pub enum CalendarJoinRequestError {
 /// and for sharers reading the requests on their events.
 pub trait CalendarJoinRequestService: Send + Sync + 'static {
     /// Ask the person who shared an event with one of the requester's
-    /// channels to add them as a guest, notifying them when the request
-    /// becomes pending. Asking again while pending changes nothing; asking
-    /// after a decline is refused with `Declined`, so the sharer is asked
-    /// only once.
+    /// channels to add them as a guest. When the request becomes pending this
+    /// notifies them and refreshes the open request lists of their inbox's
+    /// viewers. Asking again while pending changes nothing; asking after a
+    /// decline is refused with `Declined`, so the sharer is asked only once.
     fn request_to_join(
         &self,
         requester_id: &str,
@@ -948,6 +972,16 @@ pub trait CalendarRefreshNotifier: Send + Sync + 'static {
         owner_id: &str,
         email_link_id: Uuid,
         team_ooo_changed: bool,
+    ) -> impl Future<Output = ()> + Send;
+
+    /// Signal that the request to join `event_id` by `requester_id` was
+    /// answered. The requester views the event through a channel share, so
+    /// [`Self::calendar_changed`], which reaches the viewers of the sharer's
+    /// inbox, never reaches them.
+    fn join_request_answered(
+        &self,
+        requester_id: &str,
+        event_id: Uuid,
     ) -> impl Future<Output = ()> + Send;
 }
 

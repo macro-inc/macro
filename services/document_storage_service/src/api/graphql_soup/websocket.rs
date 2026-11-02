@@ -128,7 +128,17 @@ async fn serve(
                 _ => None,
             })
         });
-    let output = WebSocket::new(executor, input, protocol).connection_data(data);
+    let output = WebSocket::new(executor, input, protocol)
+        .connection_data(data)
+        .on_connection_init(|payload: serde_json::Value| async move {
+            let mut capabilities = Data::default();
+            capabilities.insert(complete_graph::MailCacheProfile::from_advertised(
+                payload
+                    .get("mailCacheProfile")
+                    .and_then(serde_json::Value::as_str),
+            ));
+            Ok(capabilities)
+        });
     futures::pin_mut!(output);
     while let Some(message) = output.next().await {
         let message = match message {
