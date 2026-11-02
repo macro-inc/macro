@@ -270,6 +270,14 @@ describe('createFreshSearch with comma-separated channel matching', () => {
     expect(results[1].fuzzyScore).toBeLessThan(1);
   });
 
+  it('adds no channels for a query of separators alone', () => {
+    const items: MockItem[] = [
+      { id: '1', name: 'Avery Morgan, Blair Chen', type: 'channel' },
+    ];
+
+    expect(createCommaSeparatedSearch()(items, ' , ')).toEqual([]);
+  });
+
   it('ranks the exact participants above a newer larger group without name ranking', () => {
     const items: MockItem[] = [
       {

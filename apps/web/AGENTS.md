@@ -163,9 +163,9 @@ their full-name DM. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
 Quick Access, and Soup search including the Chat sidebar) matches channels and
 DMs by terms in any order, adding to uFuzzy's in-order matches, because names
 are generated from participants and people type them in any order. It also
-ranks a query naming every participant first, by name prefixes; a group with
-more people than the query names stays below, and one term never names two
-people.
+ranks a conversation whose participants the query names, by name prefixes,
+right after exact names. Each participant needs a term of their own, so a group
+with more people than the query names stays below it.
 Commas separate query terms like spaces in the cache search
 (`cache-core/search.rs`, mirrored by `matchesTokenSubsequences`) and in the
 server's channel name search; keep the three together.

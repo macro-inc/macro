@@ -413,6 +413,22 @@ describe('command menu search ranking', () => {
       expect(ids(items, 'avery')).toEqual(['project', 'namesakes']);
     });
 
+    it('keeps a recent group of namesakes below a DM with only one of them', () => {
+      const items = [
+        channel('namesakes', 'Avery Morgan, Avery Chen'),
+        channel('dm', 'Avery Morgan', NOW - 60 * DAY, 'dm'),
+      ];
+      expect(ids(items, 'avery morgan')).toEqual(['dm', 'namesakes']);
+    });
+
+    it('matches namesakes when each has a term of their own', () => {
+      const items = [
+        channel('namesakes', 'Avery Morgan, Avery Chen', NOW - 20 * DAY),
+        channel('group', 'Casey Reed, Avery Morgan, Avery Chen'),
+      ];
+      expect(ids(items, 'avery, morgan')).toEqual(['namesakes', 'group']);
+    });
+
     it('finds a one-to-one DM by its name reversed', () => {
       const dm = channel('dm', 'Avery Morgan', NOW, 'dm');
       expect(ids([dm], 'morgan avery', false)).toEqual(['dm']);

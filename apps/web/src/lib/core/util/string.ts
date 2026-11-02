@@ -114,6 +114,8 @@ export function matchesTokenSubsequences(text: string, query: string) {
     .trim()
     .split(/[\s,]+/)
     .filter(Boolean);
+  if (tokens.length === 0) return !query.trim();
+
   const haystack = text.toLowerCase();
   return tokens.every((token) => {
     let position = 0;

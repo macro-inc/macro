@@ -50,7 +50,7 @@ export interface FreshSortConfig<T = unknown> {
   channelBoost?: number;
   /** Boost multiplier for DM items. Default: 1.0 (no boost) */
   dmBoost?: number;
-  /** Also match channel names holding every query term in any order, and rank channels whose participants the query names exactly first. When enabled, query "b,a" matches channel name "a,c,b", which the fuzzy matcher alone misses. Default: false */
+  /** Also match channel names holding every query term in any order, and rank channels whose participants the query names exactly above all but exact names. When enabled, query "b,a" matches channel name "a,c,b", which the fuzzy matcher alone misses. Default: false */
   commaSeparatedChannelMatch?: boolean;
   /** Function to calculate per-item boost. Returns a boost multiplier (e.g., 0.2 for +20% boost). Default: undefined */
   boostFn?: BoostFn<T>;
@@ -76,7 +76,7 @@ export interface FreshSortResult<T> {
   timeScore: number;
   brevityScore: number;
   combinedScore: number;
-  /** 2 for an exact name, person's first name, or participant set, 1 for a name starting with the query, else 0. Without `rankNameMatchesFirst` only participant sets rank above 0, under `commaSeparatedChannelMatch`. */
+  /** 3 for an exact name or person's first name, 2 for a participant set, 1 for a name starting with the query, else 0. Without `rankNameMatchesFirst` only participant sets rank above 0, under `commaSeparatedChannelMatch`. */
   nameMatchRank: number;
 }
 
@@ -144,9 +144,9 @@ export function normalizeFuzzyScore(
 }
 
 /** Whether a query names everyone in a comma-separated channel name, in any
- * order: each term starts a word of some participant and none goes unnamed, so
- * a group with more people than the query names does not qualify. One term
- * cannot name two people, even when both names start with it. */
+ * order: each term starts a word of some participant and every participant has
+ * a term of their own, so a group with more people than the query names does
+ * not qualify, even when one term starts several of their names. */
 function namesEveryParticipant(normalizedName: string, term: string): boolean {
   const participants = normalizedName
     .split(',')
@@ -154,18 +154,25 @@ function namesEveryParticipant(normalizedName: string, term: string): boolean {
   if (participants.length < 2) return false;
 
   const terms = term.split(/[\s,]+/).filter(Boolean);
-  if (terms.length < participants.length) return false;
-
   const startsWordOf = (queryTerm: string, words: string[]) =>
     words.some((word) => word.startsWith(queryTerm));
+  const eachHasOwnTerm = (index: number, unusedTerms: string[]): boolean => {
+    if (index === participants.length) return true;
+
+    return unusedTerms.some(
+      (queryTerm, termIndex) =>
+        startsWordOf(queryTerm, participants[index]) &&
+        eachHasOwnTerm(
+          index + 1,
+          unusedTerms.filter((_, unusedIndex) => unusedIndex !== termIndex)
+        )
+    );
+  };
 
   return (
     terms.every((queryTerm) =>
       participants.some((words) => startsWordOf(queryTerm, words))
-    ) &&
-    participants.every((words) =>
-      terms.some((queryTerm) => startsWordOf(queryTerm, words))
-    )
+    ) && eachHasOwnTerm(0, terms)
   );
 }
 
@@ -175,8 +182,8 @@ function calculateNameMatchRank(
   isPerson: boolean
 ): number {
   if (!term) return 0;
-  if (normalizedName === term) return 2;
-  if (isPerson && normalizedName.split(/\s+/)[0] === term) return 2;
+  if (normalizedName === term) return 3;
+  if (isPerson && normalizedName.split(/\s+/)[0] === term) return 3;
   if (normalizedName.startsWith(term)) return 1;
   return 0;
 }
@@ -390,21 +397,24 @@ export function createFreshSearch<T>({
     const term = trimmedQuery.toLocaleLowerCase();
     const getNameMatchRank = (item: T) => {
       const name = getDisplayName(item).trim().toLocaleLowerCase();
+      const nameRank = finalConfig.rankNameMatchesFirst
+        ? calculateNameMatchRank(name, term, isPersonItem(item))
+        : 0;
       const namesParticipants =
         finalConfig.commaSeparatedChannelMatch &&
         isChannelItem(item) &&
         namesEveryParticipant(name, term);
-      if (namesParticipants) return 2;
 
-      return finalConfig.rankNameMatchesFirst
-        ? calculateNameMatchRank(name, term, isPersonItem(item))
-        : 0;
+      return namesParticipants ? Math.max(nameRank, 2) : nameRank;
     };
 
     const hasComma = trimmedQuery.includes(',');
     const hasSpace = trimmedQuery.includes(' ');
+    const hasTerms = /[^\s,]/.test(trimmedQuery);
     const useMultiTermChannelMatch =
-      finalConfig.commaSeparatedChannelMatch && (hasComma || hasSpace);
+      finalConfig.commaSeparatedChannelMatch &&
+      hasTerms &&
+      (hasComma || hasSpace);
 
     if (!trimmedQuery) {
       const allResults: FuzzyFilterResult<T>[] = items.map((item) => ({

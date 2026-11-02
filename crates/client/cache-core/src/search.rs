@@ -312,12 +312,6 @@ fn normalize_search_text(value: &str) -> String {
         .to_lowercase()
 }
 
-/// Commas separate query tokens like whitespace, as the server's channel name
-/// search does. Left on a token, a comma only matches a name with one after it.
-fn normalize_search_query(value: &str) -> String {
-    normalize_search_text(&value.replace(',', " "))
-}
-
 fn quick_access_timestamp(typename: &str, record: &Record) -> i64 {
     // Initiatives keep their timestamps in an embedded metadata object.
     if typename == "GraphqlSoupInitiative" {
@@ -405,7 +399,7 @@ pub fn compare_recent(left: &SearchDocument, right: &SearchDocument) -> Ordering
 /// match as an ordered subsequence. Fuzzy relevance contributes 70%, freshness
 /// contributes 30%, and matching direct messages receive the legacy 1.8x boost.
 pub fn fuzzy_freshness_score(document: &SearchDocument, query: &str, now_ms: i64) -> Option<f64> {
-    score_normalized_query(document, &normalize_search_query(query), now_ms)
+    score_normalized_query(document, &normalize_search_text(query), now_ms)
 }
 
 fn score_normalized_query(document: &SearchDocument, normalized: &str, now_ms: i64) -> Option<f64> {
@@ -414,9 +408,17 @@ fn score_normalized_query(document: &SearchDocument, normalized: &str, now_ms: i
     }
     let mut score = 0.0;
     let mut tokens = 0usize;
-    for token in normalized.split_whitespace() {
+    // Commas separate tokens as in the server's channel name search. Left on a
+    // token, a comma would only match a name with one after it.
+    for token in normalized
+        .split([' ', ','])
+        .filter(|token| !token.is_empty())
+    {
         tokens += 1;
         score += subsequence_score(&document.search_text, token)?;
+    }
+    if tokens == 0 {
+        return None;
     }
     let fuzzy = score / tokens as f64;
     let age = now_ms.saturating_sub(document.timestamp_ms).max(0) as f64;

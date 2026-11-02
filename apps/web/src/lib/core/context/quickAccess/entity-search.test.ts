@@ -43,6 +43,7 @@ describe('pending Quick Access matches', () => {
     ['Avery Morgan, Blair Chen', 'Blair, aver', true],
     ['Avery Morgan, Blair Chen', 'Blair,Avery', true],
     ['Avery Morgan, Blair Chen', 'Blair, casey', false],
+    ['Avery Morgan, Blair Chen', ' , ', false],
   ])(
     'matches cache subsequence semantics for %s and %s',
     (name, query, matches) => {

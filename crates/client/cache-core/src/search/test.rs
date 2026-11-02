@@ -99,6 +99,7 @@ fn commas_separate_query_tokens_in_any_order() {
         );
     }
     assert!(fuzzy_freshness_score(&group, "blair, casey", 1_000).is_none());
+    assert!(fuzzy_freshness_score(&group, " , ", 1_000).is_none());
 }
 
 #[test]
