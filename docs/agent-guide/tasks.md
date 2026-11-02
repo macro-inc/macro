@@ -154,8 +154,11 @@ No due date, or No project with the shared empty-value icons; custom fields show
 Not set. Click the empty value to open its existing picker or inline editor.
 The Properties panel also uses 16px Project icons on touch, for both assigned
 and empty values, without changing desktop sizes.
-Enter activates a pill or any other document control reached by keyboard. After a
-mouse click, Enter still moves to the editor.
+Enter activates a pill or any other document control holding focus, including one
+that gets focus back when its picker or menu closes, however it closed. After a
+mouse click on a control, Enter still moves to the editor. Tab reaches an editable
+property's pill directly, so its hover card opens on hover only; a read-only
+property keeps a stop that opens the card.
 Wide desktop task rows and group headers share their leading icon alignment.
 Task group headers retain their wide-layout caret-to-content gap at every list
 width, including phones: 8px in the Tasks header and 10px in the next-soup header.
@@ -208,6 +211,11 @@ instead. Keyboard list navigation only moves focus; press Enter to open the focu
 
 Status and Priority values use 12px icons beneath the opened task's title on
 desktop, 16px on touch, and 16px in the Properties side panel.
+Number, text, and link values in the Properties side panel edit in place. Enter
+saves and Escape cancels, and both return focus to the value, or to **+** on a link
+list, so the keyboard stays on the row. A failed save leaves the field open and
+focused. Tab or a click elsewhere saves and leaves focus where it went.
+
 In the task's Properties side panel, hover or focus a row for **Pin below title**
 or **Unpin from title**. Pinning adds the property to the title row; unpinning keeps
 its saved value and the side-panel row. The title pill's hover card also offers

@@ -14,11 +14,11 @@ import type { PropertyApiValues, Property as PropertyT } from '@property/types';
 import { getEntityValues, hasValue } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
+import { Key } from '@solid-primitives/keyed';
 import { cn, Layer } from '@ui';
 import {
   type Accessor,
   createMemo,
-  For,
   Match,
   Show,
   Suspense,
@@ -176,10 +176,10 @@ function KeyPropertiesRow(props: {
 
   return (
     <div class="flex items-center gap-1 justify-start text-xs">
-      <For each={props.properties()}>
+      <Key each={props.properties()} by="propertyDefinitionId">
         {(property) => (
           <Property.Root
-            property={property}
+            property={property()}
             canEdit={ctx.canEdit}
             onSave={ctx.saveHandler.saveProperty}
           >
@@ -282,7 +282,7 @@ function KeyPropertiesRow(props: {
             }}
           </Property.Root>
         )}
-      </For>
+      </Key>
     </div>
   );
 }

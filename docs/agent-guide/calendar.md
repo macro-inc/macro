@@ -164,6 +164,7 @@ If metadata fails, events remain usable with the default calendar presentation.
 Provider backfill shows a persistent `Syncing your calendar…` banner above the
 grid, explaining that events will appear automatically and Macro remains usable.
 The banner stays visible as partial results arrive and disappears when sync finishes.
+A routine sync of an already imported account never shows it.
 Errors retain the separate retry state. Verify delayed occurrence
 responses: switch Month/Week/Day rapidly and navigate without blanking the grid.
 Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Retry.
@@ -277,7 +278,8 @@ the flag request gets no answer, for example when a browser blocks it.
 
 Calendar connections live in **Settings → Calendar** (`/app/settings/calendar`).
 Connected calendars offers Connect account (pick Gmail or Outlook / Microsoft 365,
-then consent), Connect calendar for accounts missing calendar permission (consent
+then consent; Outlook is offered only to accounts with the `enable-outlook` flag,
+and without it Connect account goes straight to Google), Connect calendar for accounts missing calendar permission (consent
 again for that account at its own provider with its address preselected, as
 Settings → Email's Enable calendar does), and Disconnect with confirmation. When
 the only linked account lacks calendar permission, the Calendar accounts row

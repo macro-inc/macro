@@ -189,6 +189,32 @@ describe('history loading ahead of scrolling', () => {
     expect(f.paginate).toHaveBeenCalledTimes(3);
   });
 
+  it('ends native scrolling at the latest message while a gesture shifts the rows', async () => {
+    const f = setup();
+    await waitFor(() => expect(f.paginate).toHaveBeenCalledOnce());
+    expect(f.element.scrollTop).toBe(1520);
+    f.element.dispatchEvent(new TouchEvent('touchstart'));
+    // History arriving mid-gesture shifts the rows instead of writing scrollTop.
+    f.prepend(10);
+    f.element.dispatchEvent(new Event('scroll'));
+    await waitFor(() =>
+      expect(f.onScroll).toHaveBeenLastCalledWith(
+        expect.objectContaining({ distanceFromTop: 2480 }),
+        expect.anything()
+      )
+    );
+    expect(f.element.scrollTop).toBe(1520);
+    // Scrolling down from here would only reveal blank space below the rows.
+    expect(f.element.scrollHeight - f.element.clientHeight).toBe(1520);
+    expect(f.onScroll).toHaveBeenLastCalledWith(
+      expect.objectContaining({ distanceFromBottom: 0, isNearBottom: true }),
+      expect.anything()
+    );
+    f.element.dispatchEvent(new TouchEvent('touchend', { touches: [] }));
+    await waitFor(() => expect(f.element.scrollTop).toBe(2480));
+    expect(f.element.scrollHeight).toBe(30 * 96);
+  });
+
   it('does not repeat a request for an unchanged boundary', async () => {
     const f = setup();
     await waitFor(() => expect(f.paginate).toHaveBeenCalledOnce());
@@ -214,6 +240,13 @@ describe('history loading ahead of scrolling', () => {
 });
 
 describe('server acknowledgement scroll anchoring', () => {
+  // Acknowledgements arrive outside gestures, where WebKit writes scrollTop
+  // directly too. The mocked scroll events would otherwise start gesture
+  // compensation, which hides the offset these tests check.
+  beforeEach(() => {
+    platform.safari = false;
+  });
+
   it.each([0, 10])(
     'preserves the pin only when already at the end (%ipx gap)',
     async (gap) => {

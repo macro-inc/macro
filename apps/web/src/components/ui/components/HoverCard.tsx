@@ -13,6 +13,8 @@ type HoverCardProps = ParentProps<{
   as?: 'div' | 'span' | 'button';
   triggerAriaLabel?: string;
   triggerOnClick?: JSX.EventHandler<HTMLElement, MouseEvent>;
+  /** Use -1 when the children hold the focusable control themselves. */
+  triggerTabIndex?: number;
   /**
    * When true, force the hover card closed and prevent it from opening on
    * hover. Use to defer to another surface anchored on the same trigger — e.g.
@@ -80,6 +82,7 @@ export function HoverCard(props: HoverCardProps) {
         triggerAs={props.as ?? 'div'}
         triggerAriaLabel={props.triggerAriaLabel}
         triggerOnClick={props.triggerOnClick}
+        triggerTabIndex={props.triggerTabIndex}
         disabled={props.disabled}
         chokeGroup={props.chokeGroup}
       />

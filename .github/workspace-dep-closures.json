@@ -2324,6 +2324,7 @@
       "crates/entity_registry/entity_registry_db_utils",
       "crates/entity_registry/shared_entity_registry",
       "crates/favorites",
+      "crates/feature_flags",
       "crates/fig_engine",
       "crates/filter_ast",
       "crates/folds/agent_fold",

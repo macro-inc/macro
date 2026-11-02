@@ -81,7 +81,9 @@ survive switching settings pages. On phones, the signature preview, replies/forw
 toggle, and clear action are available; editing and import remain desktop-only.
 Accounts list each inbox as its own row, followed by **Connect another Google
 Workspace account** and **Connect an Outlook account**; Integrations shows the
-same rows. Its **Email settings**
+same rows. Outlook appears only once `/link/email/providers` offers it to the
+account (the `enable-outlook` flag); Integrations keeps an Outlook row with
+Manage alone for an account that already has an Outlook inbox. Its **Email settings**
 gear opens the dedicated page, and Email links to Notifications and Calendar.
 With a composer open, save a changed signature or reply-signature preference and
 verify its preview updates. Once the account refresh completes, reopen a composer
@@ -109,6 +111,13 @@ Trace signature actions under `email.signature.save`, `email.signature.clear`,
 or `email.signature.import`; the REST write and `email.settings.refresh` run
 under that action, including the account catalog's durable refresh.
 
+### Email read receipts
+
+Behind `enable-email-read-receipts` (on in dev), **Settings → Email → Read
+receipts** lists each owned inbox with a switch that saves immediately. It is
+off by default. Messages sent from an inbox with it on carry an invisible
+pixel; see [read receipts in a thread](email.md#read-receipts) for the status.
+
 ### Notification permission prompt
 
 After onboarding, an eligible desktop app user sees **Enable Desktop
@@ -117,9 +126,10 @@ notification provider; macOS uses its system permission dialog. The Android app
 says **Enable Notifications** and requests the Android notification permission
 through the same native provider. The web prompt says **Enable Browser
 Notifications** and uses browser permissions.
-Select **Hide** to dismiss the prompt. It waits in the same region as other
-prompts, one card at a time. On phones it stays under open sheets and their
-pickers.
+**Enable** is its only action; closing the prompt (its corner **Close** on
+desktop, a swipe on phones) counts as a decline and stops it returning on the
+next load. It waits in the same region as other prompts, one card at a time. On
+phones it stays under open sheets and their pickers.
 
 ### Notification snoozes
 
