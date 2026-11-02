@@ -84,6 +84,7 @@ function mount(
         entityType="md"
         label="document"
         load={load}
+        dispose={(data) => data.source?.cleanup()}
       >
         {(data) => {
           onCleanup(() => cleanupEditor?.());

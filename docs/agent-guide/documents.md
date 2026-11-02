@@ -19,15 +19,17 @@ On native mobile, an incoming share opens the drawer before its composer loads;
 Cancel stays available while loading. Cancelling must not restore a discarded
 batch when the composer finishes loading.
 
-In the Share dialog's **Optional message**, paste an image with Cmd/Ctrl+V,
-use **Attach files**, or drop a file into the composer. Images show a removable
-preview and are sent inline beside the shared item to each selected person or
-channel. Share (including Cmd/Ctrl+Enter and the phone drawer's Share button)
-waits for uploads; Enter still inserts a newline. Removing an uploading image
+In the Share dialog's **Optional message**, paste an image with Cmd/Ctrl+V
+or drop a file into the composer. Share composers have no paperclip button on
+desktop or mobile. Images show a removable preview and are sent inline beside
+the shared item to each selected person or channel. Share (including
+Cmd/Ctrl+Enter and the phone drawer's Share button) waits for uploads; Enter still inserts a newline. Removing an uploading image
 keeps it removed, and closing the dialog discards its attachment draft.
-Verify paste, file selection, drop, removal during upload, upload failure, and
+Verify paste, drop, removal during upload, upload failure, and
 sending to both a person and a channel. On touch, attachment previews scroll
-horizontally and removal remains available without hover.
+horizontally and removal remains available without hover. Composer fixture
+screenshots: [desktop](media/share-images/desktop.png) and
+[phone](media/share-images/mobile.png).
 
 With `enable-calendar-meeting-notes` enabled, owned markdown documents' Share
 panel also lists **Meeting links** (under the **Link** tab on mobile).
@@ -519,8 +521,10 @@ its days are `gridcell` buttons marked `data-active` (the keyboard's day),
 `data-selected` (the cell's date) and `data-today`.
 
 Images and charts (column, bar, line and area, each clustered, stacked or
-100% stacked, plus pie, doughnut, scatter, combo, radar, bubble, stock and
-surface, drawn as a contour) are drawn over their cells and move with them;
+100% stacked, plus pie, pie of pie, bar of pie, doughnut, scatter, combo,
+radar, bubble, stock, surface drawn as a contour, and Excel 2016's histogram,
+pareto, waterfall, funnel, box and whisker, treemap and sunburst) are drawn
+over their cells and move with them;
 charts redraw as the cells they read change. A 100% stacked chart fills each
 category to 100% of its positive values and to 100% of its negative values.
 Scatter charts plot markers without connecting lines. A combo chart draws
@@ -530,8 +534,15 @@ image description. The toolbar's **Insert chart, image or checkbox** menu (chart
 adds a chart of the selected cells — or, from one cell, of the table around
 it, placed beside it — or an image file (PNG, JPEG, GIF, WebP or BMP up to
 2 MB) at the active cell. Its **More charts** submenu holds Radar, Filled
-radar, Bubble, Stock and Contour. Edit chart's type list also offers 100%
-stacked bar, stacked line, 100% stacked line, 100% stacked area and Combo. A
+radar, Bubble, Stock, Contour, Histogram, Waterfall, Funnel, Box and whisker,
+Treemap and Sunburst. Edit chart's type list also offers 100% stacked bar,
+stacked line, 100% stacked line, 100% stacked area, Combo, Pareto, Pie of pie
+and Bar of pie. A histogram bins one column of numbers (Scott's rule, as
+Excel's automatic bins) or, with labels, sums values by label; a treemap or
+sunburst reads every column before its values as a level, a blank label
+continuing the one above. Excel 2016 charts download as chartEx parts with
+Excel's fallback note for older versions; Excel 2016 maps import as that
+fallback. A
 stock chart needs three or four series (high, low, close, with open first for
 up-down bars), a bubble chart reads x values from the first column, then
 values and sizes in pairs, and a combo chart needs at least two series. Imported shapes, text boxes, lines,

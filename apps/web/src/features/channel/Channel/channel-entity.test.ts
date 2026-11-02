@@ -20,8 +20,10 @@ vi.mock('@queries/soup/items', () => ({
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => mocks.client,
-  mapGraphqlSoupPage: (data: { entities: ChannelEntity[] }) => ({
-    items: data.entities,
+  mapGraphqlSoupPage: (data: {
+    user: { soup: { items: ChannelEntity[] } };
+  }) => ({
+    items: data.user.soup.items,
   }),
 }));
 vi.mock('@queries/soup/transform-utils', () => ({
@@ -74,7 +76,7 @@ beforeEach(() => {
             requests(operation);
             return {
               operation,
-              data: { entities: [CHANNEL] },
+              data: { user: { soup: { items: [CHANNEL] } } },
               stale: false,
               hasNext: false,
             };

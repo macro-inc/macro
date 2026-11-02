@@ -1,4 +1,3 @@
-import { fireAndForget } from '@core/util/fireAndForget';
 import { Show } from 'solid-js';
 import { useProperty } from '../../core/context';
 import { PropertyEmpty } from '../../extractors/PropertyEmpty';
@@ -23,16 +22,6 @@ export function InlineTextEditor() {
   const hasValue = () => {
     const v = property().value;
     return typeof v === 'string' && v.length > 0;
-  };
-
-  const handleKeyDown = (e: KeyboardEvent) => {
-    if (e.key === 'Enter') {
-      e.preventDefault();
-      fireAndForget(editor.save(), 'property-editor');
-    } else if (e.key === 'Escape') {
-      e.preventDefault();
-      editor.cancelEdit();
-    }
   };
 
   return (
@@ -67,8 +56,8 @@ export function InlineTextEditor() {
         value={editor.inputValue()}
         onInput={(e) => editor.setInputValue(e.currentTarget.value)}
         onBlur={editor.save}
-        onKeyDown={handleKeyDown}
-        disabled={editor.isSaving()}
+        onKeyDown={editor.handleKeyDown}
+        readOnly={editor.isSaving()}
         class="w-full field-sizing-content resize-none text-left text-ink px-2 py-0.5 bg-transparent focus:outline-none rounded-sm"
       />
     </Show>

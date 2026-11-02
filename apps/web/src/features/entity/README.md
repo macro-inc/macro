@@ -9,3 +9,7 @@ app-local entry point.
 existing inline metadata area. Names and icons use the shared property preview
 cache; the row does not search for related entities. Narrow rows compact these
 pills to icons, with full names available in tooltips and the overflow menu.
+
+Compose persistent trailing metadata through `NarrowLayout` children, before
+standard row actions and properties; keep feature-specific rendering and styling
+in the caller.

@@ -55,10 +55,19 @@ pub enum DocumentSearchMode {
     NameContent,
 }
 
+/// UTC bounds for an indexed DATE property.
+#[derive(Debug, Clone, Copy)]
+pub struct PropertyDateRange {
+    /// Inclusive lower bound, when provided.
+    pub start: Option<DateTime<Utc>>,
+    /// Exclusive upper bound, when provided.
+    pub end: Option<DateTime<Utc>>,
+}
+
 /// A property-equality filter applied against the indexed `properties` nested
 /// field. Matches parents that have a nested entry whose `definition_id`
 /// equals `definition_id` and whose `values` contains any of `values`.
-/// Empty `values` means "no constraint" and is dropped before querying.
+/// Empty `values` imposes no membership constraint; date predicates still apply.
 #[derive(Debug, Clone)]
 pub struct PropertyFilterArg {
     /// The property definition id to match on.
@@ -66,6 +75,10 @@ pub struct PropertyFilterArg {
     /// Candidate values (OR'd). Select-option UUIDs and entity-ref ids both
     /// live in the indexed `values` keyword array.
     pub values: Vec<String>,
+    /// UTC range with optional inclusive start and exclusive end.
+    pub date_range: Option<PropertyDateRange>,
+    /// True for a non-null DATE; false for absent, null, or cleared values.
+    pub has_date: Option<bool>,
 }
 
 #[derive(Clone)]
@@ -273,25 +286,51 @@ impl DocumentQueryBuilder {
 /// the filter's id AND `values` containing any of the filter's values.
 /// Returns `None` when the filter carries no values.
 fn build_property_filter<'a>(filter: &PropertyFilterArg) -> Option<QueryType<'a>> {
-    if filter.values.is_empty() {
+    if filter.values.is_empty() && filter.date_range.is_none() && filter.has_date.is_none() {
         return None;
     }
-    let mut inner = BoolQueryBuilder::new();
-    inner.filter(QueryType::term(
-        format!("{PROPERTIES_PATH}.definition_id"),
-        filter.definition_id.clone(),
-    ));
-    inner.filter(QueryType::terms(
-        format!("{PROPERTIES_PATH}.values"),
-        filter.values.clone(),
-    ));
-    // ignore_unmapped: the unified query spans indices that don't map
-    // `properties` as nested; there the clause is a no-op rather than an error.
-    Some(
+    let definition_field = format!("{PROPERTIES_PATH}.definition_id");
+    let date_field = format!("{PROPERTIES_PATH}.date_value");
+    let nested = |value_query: QueryType<'a>| {
+        let mut inner = BoolQueryBuilder::new();
+        inner.filter(QueryType::term(
+            definition_field.clone(),
+            filter.definition_id.clone(),
+        ));
+        inner.filter(value_query);
         NestedQuery::new(PROPERTIES_PATH, inner.build().into())
             .ignore_unmapped(true)
-            .into(),
-    )
+            .into()
+    };
+    if filter.date_range.is_none() && filter.has_date.is_none() {
+        return Some(nested(QueryType::terms(
+            format!("{PROPERTIES_PATH}.values"),
+            filter.values.clone(),
+        )));
+    }
+    let mut outer = BoolQueryBuilder::new();
+    if !filter.values.is_empty() {
+        outer.filter(nested(QueryType::terms(
+            format!("{PROPERTIES_PATH}.values"),
+            filter.values.clone(),
+        )));
+    }
+    if let Some(bounds) = filter.date_range {
+        let mut range = QueryType::range(date_field.clone());
+        if let Some(start) = bounds.start {
+            range.gte(start.timestamp_millis());
+        }
+        if let Some(end) = bounds.end {
+            range.lt(end.timestamp_millis());
+        }
+        outer.filter(nested(range.build().into()));
+    }
+    match filter.has_date {
+        Some(true) => outer.filter(nested(QueryType::Exists(date_field.into()))),
+        Some(false) => outer.must_not(nested(QueryType::Exists(date_field.into()))),
+        None => &mut outer,
+    };
+    Some(outer.build().into())
 }
 
 /// Highlight config attached to each `has_child` inner_hits block.
