@@ -8,6 +8,12 @@
 - Run Linux native cache-plugin tests from the repository root with `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin`; the [Tauri platform shell](../../docs/development/running-locally.md) supplies the required desktop libraries.
 - `bun run lint:oxlint` (repository root): type-aware oxlint. `typescript/no-floating-promises` is an error with no suppressions and `ignoreVoid: false` (FE-13), enforced in `just check` and CI; start detached work with `fireAndForget` from `@core/util/fireAndForget`, not `void`. Plain `oxlint` without `--type-aware` skips that rule silently. The ast-grep rule `ts-no-expression-void` covers `() => void p()`, which the lint can't see.
 - Email rendering is isolated in `packages/email-renderer` at the repository root. Run `just test-email-rendering` for its Node and Chromium suites. Add fixtures under `packages/email-renderer/tests/fixtures`, run `just test-email-rendering-update`, and review changed images. These are renderer tests, not inbox e2e.
+- Supported browsers are the `browserslist` in `package.json`. Safari and iOS
+  16.4 is the oldest WebKit the app starts on: startup code, including
+  `@pierre/diffs`, evaluates regex lookbehind. `vite.base.ts` builds to it,
+  and the ast-grep rules `ts-browser-floor-apis` and `tsx-browser-floor-apis`
+  ban APIs that turned out to be newer; add one there when it bites, or raise
+  the floor.
 - The app does not register a service worker. Keep `public/sw.js` as a retirement
   endpoint for existing installations; see the [startup bundle rule](../../.agents/rules/web/startup-bundle.md).
   Loro uses async WASM loading and HTML preloads independently of service workers.
@@ -57,7 +63,9 @@ browser regression for backdrop taps that must not press what the scrim covers,
 including mixed pointerdown/pointerup dismissal, for taps inside the top
 sheet that must still press its own controls, and for swipes whose owner keeps
 the sheet open (a discard prompt, a pending confirmation, event details under a
-stacked sheet), which must bring it back on screen:
+stacked sheet), which must bring it back on screen. It also keeps a persistent
+prompt under an open sheet and its picker, above a transient notice, and that
+notice on top of the sheet:
 `bunx playwright test --config src/components/app/mobile/browser-test/playwright.config.ts`.
 
 Composer typeahead menus choosing the side with room for their full list
@@ -122,11 +130,12 @@ Gate event notes and document Share meeting-link controls with
 on in dev and uses PostHog in production.
 See `docs/agent-guide/calendar.md` at the repo root.
 
-Share message image paste, file selection, drop, removal during upload, and
+Share message image paste, drop, removal during upload, and
 upload failure have desktop, phone, and tablet browser coverage:
 `bunx playwright test --config src/lib/core/component/ForwardMessageComposer/browser-test/playwright.config.ts`.
 Keep the shared uploader from restoring removed attachments or publishing after
 the composer is disposed. The Share button and shortcut use the same upload guard.
+Keep Share composers free of a paperclip button on desktop and mobile; preserve image paste and file drop.
 
 Menus that find entities by typed name (Command-K, mobile name search, @
 mentions) rank with `NAME_MATCH_RANKING` in `@core/util/freshSort`: names equal
@@ -272,6 +281,10 @@ key, and projects sort by name with No Project last. Data a grouped list shows
 about its groups (labels, order, membership) is computed on the server and
 mirrored by the cache's local grouping projection; never add a side cache in
 feature code to cover a remount.
+
+Resolve server date-group keys through the shared `DATE_GROUP_BUCKETS` metadata
+in `lib/queries/soup/grouped/api.ts` for labels and display order; cached Mail
+uses the same metadata.
 
 Keep persistent list hotkeys free of mounted-view closures, and clear
 virtualizer accessors when their view unmounts.
@@ -568,6 +581,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - When adding or changing a feature flag, follow the `feature-flags` skill.
 - Gate routine template actions, pages, dialogs, and message cards on `enable-routine-sharing`; keep ordinary routines usable while it is off.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
+- Keep Tasks date ranges on view-owned date-bucket boundaries in `features/tasks-view/core/task-due-date.ts`; send `sort_method=property` with the selected definition and direction, use keyed `date_ranges` grouping, and restart pages when midnight/timezone/resume changes the query key; preserve text-search ordering.
+- Render Tasks due dates in an editable list-property column with a calendar icon only when a date is set; show only the urgency-colored icon on phones and narrow panes, keep the current date visible in its dropdown, and limit warning urgency to today and tomorrow.
+- Revalidate Soup queries whose selected sort/group property or date predicate matches an edited definition; compute loaded date-group movement in TypeScript, then refetch authoritative counts and unloaded rows. Keep property sorts and date filters out of the timestamp-only WASM projection.
+- Keep REST grouped Soup item pools and `itemIds` keyed by raw entity IDs, matching Tasks readers and the normalized cache.
 
 ## Rules
 
@@ -704,6 +721,20 @@ and keep Pro checkout disabled while eligibility is unknown. Refresh the offer
 on focus/reconnect; route existing subscriptions to billing management. Keep
 known management access through refetch failures, but hide unconfirmed trials.
 Reset rejected checkout offers before refetching eligibility.
+
+## Native commands
+
+Over-the-air bundles reach native apps older than the commands they call.
+`native-commands.json` lists every Tauri command the web code invokes directly,
+through a wrapper such as the cache host's `request`, or by `addPluginListener`.
+`src/lib/tauri/native-commands.test.ts` reads the calls with the TypeScript
+parser and fails when one is missing from that list, is not registered by the
+app (`generate_handler!` or an in-repo plugin's `build.rs`), or names its
+command with a value it cannot read: use a string literal, a constant, or a
+parameter typed as a union of literals. Commands that published plugins' own
+JavaScript packages call are not covered. Before adding a command to the list,
+raise `min-native-build.json` to the first build with it, or handle
+`Command … not found` in the caller (see the src-tauri README).
 
 ## Desktop release builds: generated WASM
 
@@ -866,7 +897,7 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 ### Creation choices and notifications
 
 - Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
-- Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button.
+- Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
 - Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
 
 ### Sidebar tag dragging

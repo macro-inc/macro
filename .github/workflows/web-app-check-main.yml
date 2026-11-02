@@ -376,6 +376,8 @@ jobs:
     - name: Run Collaboration Package Biome
       run: biome ci --changed --no-errors-on-unmatched --error-on-warnings
       working-directory: packages/collaboration
+    - name: Check Browser Floor and Native Permissions
+      run: bunx --yes @ast-grep/cli@0.44.1 scan --filter '^(tsx?-browser-floor-apis|plist-media-.+)$'
     - name: Teardown Nix
       if: always()
       uses: './.github/actions/teardown-nix'

@@ -104,7 +104,10 @@ delivery progress is silent, as on Gmail: a composer or sent message shows a
 notice only for a conflict, uncertain or rejected delivery, revoked access,
 unsavable content, or an inbox move. Use its recovery actions and check the
 provider copy before choosing an explicit resend; a resend in flight shows as
-the send button's pending state. Switching the sender
+the send button's pending state. A new-email draft locked by a conflict or an
+unconfirmed draft or attachment write still discards from its trash and
+Cmd+Shift+D; delivery in progress, unknown or rejected delivery, and revoked
+access keep discard locked. Switching the sender
 inbox copies the draft and attachments into the destination; wait for completion
 before sending. If the copy is interrupted, use retry or keep the original.
 A draft the provider could not save can still switch From, which moves it to an
@@ -148,8 +151,7 @@ changing the list query. Text search still resolves favorite IDs for the search
 service. An empty favorites list shows `No favorite emails`.
 
 With `enable-email-focus` and `enable-graphql-soup` on, a `Focus` tab leads the
-desktop Inbox tabs (with an `Experimental` badge beside them while it is open)
-and the mobile pills (`Focus · Experimental`). It lists signal
+desktop Inbox tabs and the mobile pills. It lists signal
 threads from the last 30 days that the email focus worker
 (`services/email_focus_worker`) classified as worth attention, including inboxes
 linked to the account, by priority: the importance score halved for every 2 days
@@ -595,6 +597,9 @@ a failed local save keeps the composer and draft options open. The message list
 stays mounted underneath so closing a reply preserves its scroll position.
 On touch, a saved reply shows as a **Draft** row with its opening words under the
 message it answers (which stays expanded); tapping it reopens the draft.
+Opening a thread whose last message has a reply draft opens the composer once;
+after Back → Save Draft it stays closed while the save finishes, until the
+**Draft** row is tapped or the thread is opened again.
 On desktop, a saved reply that reappears with its thread (opening it, stepping
 to it with j/k, the reading pane following the list) stays unfocused, so the
 next j moves on instead of typing into it; `r` or a click continues it.
@@ -615,9 +620,10 @@ and type; every character must stay in Subject.
 In new emails, replies, reply-alls, and forwards, `Cmd+Shift+C` (`Ctrl+Shift+C`)
 reveals and focuses Cc and `Cmd+Shift+B` does the same for Bcc, expanding a
 collapsed reply header; inside a composer they never fall through to the
-thread's Copy link. `bunx playwright test --config
-src/features/email-compose/browser-test/playwright.app.config.ts` (from
-`apps/web`) checks both shortcuts in all four composers.
+thread's Copy link. Clicking the Cc or Bcc button also focuses the revealed
+field, so typing goes there instead of to app shortcuts. `bunx playwright test
+--config src/features/email-compose/browser-test/playwright.app.config.ts` (from
+`apps/web`) checks both shortcuts and both buttons in all four composers.
 While an editable field is focused, Escape is handled by that field before the
 close-reply shortcut.
 An edited reply remains a draft when navigating away and returning. Standalone
@@ -675,6 +681,10 @@ missing message or subject error does once filled in. Suggestions leave out
 automated addresses (`notifications@`, `mailer-daemon@`, `postmaster@`,
 `bounce@` and no-reply or do-not-reply addresses); typing one in full still adds
 it. Reply on a bounce goes to its sender, as for any other message.
+With a typed address chip in To or Cc, type text that is not an address
+(`notanemail`) and press Enter, or `bad@@x..com` and Tab: the chip stays, and
+the text stays in the field to be corrected. A typed address already chosen is
+not listed again in the suggestions.
 When checking draft autosave, edit the body of a draft with uploaded or forwarded
 attachments, wait for the save, and reopen it; the attachments should remain visible.
 In a long thread, scroll away from the bottom while a draft save is pending.
@@ -757,8 +767,8 @@ local copy rather than recreating the sent message. The REST compose path keeps
 its existing behavior.
 
 Native draft recovery requires a full app update containing queue inspection and
-durable mutation metadata support. An older app receiving an OTA bundle shows
-**Macro update required** and uses the existing uncached fallback. Its old queue
+durable mutation metadata support. An older app receiving an OTA bundle opens
+the update-required dialog once and uses the existing uncached fallback. Its old queue
 must remain intact, with no new claims or queued writes, until the native update.
 When the cache becomes unavailable, draft saves and discards must not bypass its
 preserved queue through GraphQL or REST fallback. Local editing stays durable;
