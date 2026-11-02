@@ -1,5 +1,6 @@
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
+import { FUSIONAUTH_THEME_IDS } from './theme-ids';
 
 const [stack, mode, ...extra] = process.argv.slice(2);
 if (
@@ -21,14 +22,12 @@ const config = (key: string) =>
     }
   ).trim();
 
-// These are the existing theme IDs configured in constants.ts.
-const themeId =
-  stack === 'prod'
-    ? 'e486f9ac-e63f-4549-8244-ee8ed641f8a0'
-    : '87cf78dd-03ba-478a-9211-3da0cdba9c3f';
 const entry =
   "[IdentityProviderValidationException]=We couldn't complete sign-in. If this Gmail address is connected as an additional inbox, sign in with the email you originally used to create your Macro account. Return to Macro and choose Continue with email, or contact support.";
-const url = new URL(`/api/theme/${themeId}`, config('host'));
+const url = new URL(
+  `/api/theme/${FUSIONAUTH_THEME_IDS[stack]}`,
+  config('host')
+);
 const headers = { Authorization: config('apiKey') };
 const response = await fetch(url, { headers, redirect: 'error' });
 if (!response.ok) throw new Error(`Theme read failed: HTTP ${response.status}`);

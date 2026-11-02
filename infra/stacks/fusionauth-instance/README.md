@@ -40,6 +40,7 @@ api-key: bf69486b-4733-4954-a44e-2e1b5f2c8a91
 conditional sign-in recovery guidance. It replaces or adds this one single-line
 entry, preserving the rest of `defaultMessages`. The PATCH sends no templates
 or other theme settings. Authentication and reconciliation are unchanged.
+The updater and Pulumi configuration share the theme IDs in `theme-ids.ts`.
 
 ```sh
 # From this directory; uses the stack's existing Pulumi host and API key.
