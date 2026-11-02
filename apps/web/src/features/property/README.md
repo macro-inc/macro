@@ -60,8 +60,9 @@ tags. For multiple tags, label the overflow chip “N tags” when every tag is
 collapsed; use “+N tags” only when individual tag chips remain visible.
 Hidden tags keep the existing overflow picker and hover actions. Keep the visible
 chip count stable while a picker or its nested editor is active so resizing
-cannot discard the editing session. Hosts without a controller retain their
-explicit or default chip limit.
+cannot discard the editing session. When editing ends, immediately re-evaluate
+new tags against the title's full width, even if the title is already truncated.
+Hosts without a controller retain their explicit or default chip limit.
 Tag chips, overflow chips, and inline tag pills retain their compact desktop
 height on touch instead of adopting the shared button touch minimum. Only
 the task-detail title-row tags selector uses the 36px touch target; document

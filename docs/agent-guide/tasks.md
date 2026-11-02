@@ -109,7 +109,9 @@ keeps that named chip, including on phones, rather than showing “1 tag”.
 Open the overflow to edit all tags; hover it for hidden-tag names and filter/edit actions.
 The overflow chip reads “N tags” when it represents all tags, or “+N tags” when
 individual tag chips remain visible.
-An open picker or nested tag editor stays mounted while resizing. The share
+An open picker or nested tag editor stays mounted while resizing. Add tags in a
+constrained row and close the picker: excess tags must enter overflow without
+resizing or reloading, restoring title space before truncating it. The share
 indicator remains immediately beside the title whenever it is shown.
 Compact desktop rows keep tags after the title and before the trailing properties;
 phone rows retain the single tag or collapsed multi-tag chip instead of dropping tags.
