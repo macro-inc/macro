@@ -220,8 +220,13 @@ toggles the device (pressed while on), and the caret opens a settings menu above
 the toolbar on click only; hovering opens nothing. **Audio settings** lists
 microphones, speakers (when the browser can choose one), and noise suppression.
 **Video settings** lists cameras and the background effects as tiles: None,
-Light blur, Strong blur, a selected custom image, and Upload. Screen share and
-Leave call are separate buttons. Click outside or press Escape to close a menu.
+Light blur, Strong blur, a selected custom image, and Upload. Screen share is
+the same kind of split button: the left half starts or stops sharing (pressed
+while sharing), and **Screen share settings** holds **Share audio**, off by
+default, saved per device, and locked while sharing. With it on, the browser
+picker offers tab audio (and system audio where Chromium supports it), and other
+participants hear it alongside microphones, even away from the Call tab. Leave
+call is a separate button. Click outside or press Escape to close a menu.
 The controls also work by keyboard and touch.
 
 ### Browser call diagnostics
