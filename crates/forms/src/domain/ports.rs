@@ -234,6 +234,13 @@ pub trait FormsRepo: Send + Sync + 'static {
         &self,
         form: FormId,
     ) -> impl Future<Output = Result<ResponseCounts, Self::Error>> + Send;
+
+    /// Who submitted each row: the signed-in respondents of accepted
+    /// responses that still point at a row, in submission order.
+    fn respondents_by_row(
+        &self,
+        form: FormId,
+    ) -> impl Future<Output = Result<Vec<(RowId, MacroUserIdStr<'static>)>, Self::Error>> + Send;
 }
 
 /// The forms domain service.

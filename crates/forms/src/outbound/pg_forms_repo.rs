@@ -544,4 +544,11 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
     async fn response_counts(&self, form: FormId) -> Result<ResponseCounts, Self::Error> {
         ledger::response_counts(&self.pool, form).await
     }
+
+    async fn respondents_by_row(
+        &self,
+        form: FormId,
+    ) -> Result<Vec<(RowId, MacroUserIdStr<'static>)>, Self::Error> {
+        ledger::respondents_by_row(&self.pool, form).await
+    }
 }

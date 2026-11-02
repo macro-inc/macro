@@ -517,6 +517,33 @@ async fn anonymous_responses_are_unbounded_and_counted(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn respondents_by_row_name_signed_in_responses_in_submission_order(pool: PgPool) {
+    let table = insert_table(&pool).await;
+    let repo = PgFormsRepo::new(pool.clone());
+    let form = form_over(&table);
+    repo.create_form(&form, &layout_over(&table), false)
+        .await
+        .unwrap();
+    let later = insert_row(&pool, table.table, "a0").await;
+    let earlier = insert_row(&pool, table.table, "a1").await;
+    let anonymous = insert_row(&pool, table.table, "a2").await;
+    repo.record_submission(form.id, Some(&user(OWNER)), later, at(11))
+        .await
+        .unwrap();
+    repo.record_submission(form.id, Some(&user(RESPONDENT)), earlier, at(10))
+        .await
+        .unwrap();
+    repo.record_submission(form.id, None, anonymous, at(9))
+        .await
+        .unwrap();
+
+    assert_eq!(
+        repo.respondents_by_row(form.id).await.unwrap(),
+        vec![(earlier, user(RESPONDENT)), (later, user(OWNER))]
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn concurrent_responses_by_one_person_record_exactly_one(pool: PgPool) {
     let table = insert_table(&pool).await;
     let repo = PgFormsRepo::new(pool.clone());

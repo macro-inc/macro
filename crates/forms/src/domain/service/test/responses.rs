@@ -487,10 +487,12 @@ async fn the_tally_counts_every_option_and_checkbox_in_layout_order() {
                         TallyBucket {
                             value: TallyValue::Option { option: EMPLOYEE },
                             count: 2,
+                            voters: Some(vec![VIEWER.to_string(), EDITOR.to_string()]),
                         },
                         TallyBucket {
                             value: TallyValue::Option { option: CONTRACTOR },
                             count: 0,
+                            voters: Some(Vec::new()),
                         },
                     ],
                 },
@@ -501,10 +503,12 @@ async fn the_tally_counts_every_option_and_checkbox_in_layout_order() {
                         TallyBucket {
                             value: TallyValue::Checkbox { checked: true },
                             count: 1,
+                            voters: Some(vec![EDITOR.to_string()]),
                         },
                         TallyBucket {
                             value: TallyValue::Checkbox { checked: false },
                             count: 0,
+                            voters: Some(Vec::new()),
                         },
                     ],
                 },
@@ -548,6 +552,61 @@ async fn respondents_read_the_tally_only_when_the_owner_shows_it() {
         .tally(anonymous_receipt::<ViewAccessLevel>(RSVP_FORM))
         .await
         .unwrap();
+}
+
+#[tokio::test]
+async fn respondents_see_who_voted_only_when_the_responses_are_shared() {
+    let world = world();
+    seed_rsvp(&world, Audience::Members);
+    world.lock().unwrap().forms[0].form.tally_visible = true;
+    let forms = service(&world);
+    respond(&forms, VIEWER, answers(EMPLOYEE, None)).await;
+    let voters_seen_by_viewer = || async {
+        forms
+            .tally(form_receipt::<ViewAccessLevel>(
+                RSVP_FORM,
+                VIEWER,
+                AccessLevel::View,
+            ))
+            .await
+            .unwrap()
+            .questions[0]
+            .buckets[0]
+            .voters
+            .clone()
+    };
+
+    assert_eq!(voters_seen_by_viewer().await, None);
+
+    world.lock().unwrap().forms[0].form.responses_visible = true;
+    assert_eq!(
+        voters_seen_by_viewer().await,
+        Some(vec![VIEWER.to_string()])
+    );
+}
+
+#[tokio::test]
+async fn nobody_sees_who_voted_when_the_form_hides_respondents() {
+    let world = world();
+    seed_rsvp(&world, Audience::Members);
+    {
+        let mut world = world.lock().unwrap();
+        world.forms[0].form.respondent_hidden = true;
+        world.forms[0].form.responses_visible = true;
+    }
+    let forms = service(&world);
+    respond(&forms, VIEWER, answers(EMPLOYEE, None)).await;
+
+    let tally = forms
+        .tally(form_receipt::<ViewAccessLevel>(
+            RSVP_FORM,
+            OWNER,
+            AccessLevel::Owner,
+        ))
+        .await
+        .unwrap();
+    assert_eq!(tally.questions[0].buckets[0].count, 1);
+    assert_eq!(tally.questions[0].buckets[0].voters, None);
 }
 
 #[tokio::test]

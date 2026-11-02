@@ -202,3 +202,33 @@ pub(super) async fn response_counts(
     }
     Ok(counts)
 }
+
+#[tracing::instrument(err, skip(pool))]
+pub(super) async fn respondents_by_row(
+    pool: &PgPool,
+    form: FormId,
+) -> Result<Vec<(RowId, MacroUserIdStr<'static>)>, PgFormsRepoError> {
+    let rows = sqlx::query!(
+        r#"
+        SELECT row_id AS "row_id!", respondent_id AS "respondent_id!"
+        FROM form_responses
+        WHERE form_id = $1 AND status = 'submitted'
+        AND row_id IS NOT NULL AND respondent_id IS NOT NULL
+        ORDER BY submitted_at, id
+        "#,
+        form.into_uuid(),
+    )
+    .fetch_all(pool)
+    .await?;
+    rows.into_iter()
+        .map(|row| {
+            let respondent = MacroUserIdStr::try_from(row.respondent_id.clone()).map_err(|_| {
+                PgFormsRepoError::Corrupt {
+                    kind: "respondent",
+                    value: row.respondent_id,
+                }
+            })?;
+            Ok((RowId::from_uuid(row.row_id), respondent))
+        })
+        .collect()
+}

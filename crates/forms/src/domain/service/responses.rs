@@ -1,5 +1,6 @@
 //! What editors and poll voters read of the responses: the ledger's counts
-//! and, for choice questions, how the table's rows answer them.
+//! and, for choice questions, how the table's rows answer them and, where
+//! the responses are shared and name their respondents, who chose what.
 
 use crate::domain::drafts::{FormDraftRepository, FormDraftStore};
 
@@ -9,6 +10,7 @@ use databases::domain::models::DatabaseError;
 use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, DatabasesService};
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, ViewAccessLevel};
 use macro_event_broker::MacroEventBroker;
+use macro_user_id::user_id::MacroUserIdStr;
 use models_databases::{CellValue, ColumnKind, OptionRef, RowId};
 
 use super::layout::question_columns;
@@ -22,11 +24,13 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, FormsRepo};
 
-/// One column's tally from its cells.
+/// One column's tally from its cells, naming each bucket's voters when
+/// `voters` (who submitted each row, in submission order) is given.
 fn tally_of(
     kind: ColumnKind,
     options: &[QuestionOption],
     cells: &HashMap<RowId, CellValue>,
+    voters: Option<&[(RowId, MacroUserIdStr<'static>)]>,
 ) -> (u64, Vec<TallyBucket>) {
     // A count of in-memory cells is a usize, at most 64 bits on every
     // target the service builds for, so it always fits a u64.
@@ -38,21 +42,35 @@ fn tally_of(
         CellValue::Clear => false,
         _ => true,
     });
+    let named = |holds: &dyn Fn(&CellValue) -> bool| -> Option<Vec<String>> {
+        voters.map(|voters| {
+            voters
+                .iter()
+                .filter(|(row, _)| cells.get(row).is_some_and(holds))
+                .map(|(_, voter)| voter.to_string())
+                .collect()
+        })
+    };
+    let bucket = |value: TallyValue, holds: &dyn Fn(&CellValue) -> bool| TallyBucket {
+        value,
+        count: count(holds),
+        voters: named(holds),
+    };
     let buckets = match kind {
         ColumnKind::Boolean => [true, false]
             .into_iter()
-            .map(|checked| TallyBucket {
-                value: TallyValue::Checkbox { checked },
-                count: count(&|value| *value == CellValue::Boolean(checked)),
+            .map(|checked| {
+                bucket(TallyValue::Checkbox { checked }, &|value| {
+                    *value == CellValue::Boolean(checked)
+                })
             })
             .collect(),
         _ => options
             .iter()
-            .map(|option| TallyBucket {
-                value: TallyValue::Option { option: option.id },
-                count: count(&|value| {
+            .map(|option| {
+                bucket(TallyValue::Option { option: option.id }, &|value| {
                     matches!(value, CellValue::Options(held) if held.contains(&OptionRef::Id(option.id)))
-                }),
+                })
             })
             .collect(),
     };
@@ -142,9 +160,22 @@ where
         receipt: &EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<FormTally, FormError> {
         let form = self.live_form(receipt_form_id(receipt)?).await?;
-        if receipt_access(receipt) < FormAccess::Edit && !form.tally_visible {
+        let editor = receipt_access(receipt) >= FormAccess::Edit;
+        if !editor && !form.tally_visible {
             return Err(FormError::TallyHidden);
         }
+        // Voters show to whoever may read the responses, and never on a form
+        // that hides its respondents.
+        let voters = if !form.respondent_hidden && (editor || form.responses_visible) {
+            Some(
+                self.repository
+                    .respondents_by_row(form.id)
+                    .await
+                    .map_err(repository_error)?,
+            )
+        } else {
+            None
+        };
         let table = self.live_table_of(&form).await?;
         let columns = question_columns(&table);
         let layout = self.refresh_layout(&form, Some(&table)).await?.layout;
@@ -174,7 +205,8 @@ where
                 Err(DatabaseError::NotFound) => continue,
                 Err(other) => return Err(database_error(other)),
             };
-            let (responses, buckets) = tally_of(column.kind, &column.options, &cells);
+            let (responses, buckets) =
+                tally_of(column.kind, &column.options, &cells, voters.as_deref());
             questions.push(QuestionTally {
                 question: question.id,
                 responses,

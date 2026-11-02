@@ -687,6 +687,29 @@ impl FormsRepo for FakeRepo {
         counts.stopped_by_section = stopped.into_iter().collect();
         Ok(counts)
     }
+
+    async fn respondents_by_row(
+        &self,
+        form: FormId,
+    ) -> Result<Vec<(RowId, MacroUserIdStr<'static>)>, FakeError> {
+        let world = self.0.lock().unwrap();
+        let mut entries: Vec<&LedgerEntry> = world
+            .ledger
+            .iter()
+            .filter(|entry| {
+                entry.response.form_id == form && entry.response.status == ResponseStatus::Submitted
+            })
+            .collect();
+        entries.sort_by_key(|entry| (entry.response.submitted_at, entry.response.id));
+        Ok(entries
+            .into_iter()
+            .filter_map(|entry| {
+                let row = entry.response.row?;
+                let respondent = MacroUserIdStr::try_from(entry.respondent.clone()?).ok()?;
+                Some((row, respondent))
+            })
+            .collect())
+    }
 }
 
 impl FormSharingRepo for FakeRepo {

@@ -351,10 +351,12 @@ fn a_tally_names_options_and_checkbox_states() {
                 TallyBucket {
                     value: TallyValue::Option { option: CONTRACTOR },
                     count: 2,
+                    voters: Some(vec!["macro|a@example.com".to_string()]),
                 },
                 TallyBucket {
                     value: TallyValue::Checkbox { checked: true },
                     count: 1,
+                    voters: None,
                 },
             ],
         }],
@@ -366,7 +368,7 @@ fn a_tally_names_options_and_checkbox_states() {
                 "question": "00000000-0000-0000-0000-000000000091",
                 "responses": 3,
                 "buckets": [
-                    {"value": {"kind": "option", "option": "00000000-0000-0000-0000-0000000000c0"}, "count": 2},
+                    {"value": {"kind": "option", "option": "00000000-0000-0000-0000-0000000000c0"}, "count": 2, "voters": ["macro|a@example.com"]},
                     {"value": {"kind": "checkbox", "checked": true}, "count": 1},
                 ],
             }],

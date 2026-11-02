@@ -201,6 +201,12 @@ pub struct TallyBucket {
     pub value: TallyValue,
     /// How many rows hold it.
     pub count: u64,
+    /// Who chose it, as Macro user ids in submission order: present only
+    /// for the form's editors, or its viewers when it shares its responses,
+    /// and never when it hides respondents. Rows no signed-in respondent
+    /// submitted count without a voter.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub voters: Option<Vec<String>>,
 }
 
 /// A value a tally counts.
