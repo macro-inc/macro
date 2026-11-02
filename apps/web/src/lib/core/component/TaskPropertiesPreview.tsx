@@ -19,11 +19,11 @@ import { hasValue } from '@property/utils/typeGuards';
 import type { PreviewDocumentProperties } from '@queries/preview/types';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useDocumentAccessLevelQuery } from '@queries/storage/document-metadata';
+import { Key } from '@solid-primitives/keyed';
 import {
   type Accessor,
   createContext,
   createMemo,
-  For,
   type JSX,
   Show,
   useContext,
@@ -226,22 +226,22 @@ function TaskPropertiesPreviewContent(
           when={props.mode === 'status'}
           fallback={
             <div class="px-2 pb-2 flex flex-row flex-wrap gap-1 text-xs justify-start">
-              <For each={previewProperties()}>
+              <Key each={previewProperties()} by="propertyDefinitionId">
                 {(property) => (
                   <InlinePropertyValue
-                    property={property}
+                    property={property()}
                     entityId={props.taskId}
                     class="bg-surface-2 border border-edge"
                   />
                 )}
-              </For>
+              </Key>
             </div>
           }
         >
-          <For each={previewProperties()}>
+          <Key each={previewProperties()} by="propertyDefinitionId">
             {(property) => (
               <PropertyUI.Root
-                property={property}
+                property={property()}
                 canEdit={props.canEdit}
                 onSave={saveHandler.saveProperty}
               >
@@ -279,7 +279,7 @@ function TaskPropertiesPreviewContent(
                 )}
               </PropertyUI.Root>
             )}
-          </For>
+          </Key>
         </Show>
         <Modals />
       </PropertiesProvider>

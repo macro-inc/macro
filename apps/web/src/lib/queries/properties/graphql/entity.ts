@@ -292,6 +292,17 @@ async function prepareMutationArgs(
       }
       const oldGroupKeys = groupedPropertyKeys(input.property);
       const newGroupKeys = groupedPropertyKeys(input.apiValues);
+      const dateChange =
+        input.apiValues.valueType === 'DATE'
+          ? {
+              from:
+                'value' in input.property &&
+                input.property.value instanceof Date
+                  ? input.property.value
+                  : null,
+              to: input.apiValues.value,
+            }
+          : undefined;
       const grouped = await (
         prepareGrouped ?? createGroupedPropertyPreparation(host)
       )({
@@ -299,6 +310,7 @@ async function prepareMutationArgs(
         propertyDefinitionId,
         oldGroupKeys: oldGroupKeys ?? [],
         newGroupKeys: newGroupKeys ?? [],
+        ...(dateChange && { dateChange }),
         revalidateOnly:
           oldGroupKeys === undefined || newGroupKeys === undefined,
       });

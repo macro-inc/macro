@@ -53,6 +53,7 @@ import type { PropertyApiValues, Property as PropertyT } from '@property/types';
 import { senderFromStorageId } from '@queries/messages/message-sender';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { EntityType } from '@service-storage/generated/schemas';
+import { Key } from '@solid-primitives/keyed';
 import { Avatar, cn, Tooltip } from '@ui';
 import { parseISO } from 'date-fns';
 import { createMemo, For, type JSX, Match, Show, Switch } from 'solid-js';
@@ -363,9 +364,9 @@ function PropertyPills(props: { entityId: string; properties?: PropertyT[] }) {
         saveHandler={saveHandler}
       >
         <div class="flex flex-wrap items-center gap-1 text-xs">
-          <For each={properties()}>
-            {(property) => <ListPropertyValue property={property} />}
-          </For>
+          <Key each={properties()} by="propertyDefinitionId">
+            {(property) => <ListPropertyValue property={property()} />}
+          </Key>
         </div>
       </PropertiesProvider>
     </Show>
