@@ -12,6 +12,44 @@ use crate::domain::event_runs::ConfigurationRevision;
 use crate::domain::event_trigger::ActionTrigger;
 
 #[test]
+fn five_field_crontab_normalizes_to_six_fields() {
+    let daily = Schedule::from_cron("0 9 * * *".into()).unwrap();
+    assert_eq!(daily.as_str(), "0 0 9 * * *");
+    let every_ten = Schedule::from_cron("*/10 * * * *".into()).unwrap();
+    assert_eq!(every_ten.as_str(), "0 */10 * * * *");
+}
+
+#[test]
+fn invalid_cron_names_the_schedule_field() {
+    for expression in ["not a cron", "0/10 * * * * * * *", ""] {
+        let error = Schedule::from_cron(expression.into())
+            .expect_err("invalid cron")
+            .to_string();
+        assert!(error.contains("cron schedule"), "{error}");
+        assert!(
+            error.contains("five-field") || error.contains("fields"),
+            "{error}"
+        );
+    }
+}
+
+#[test]
+fn canonical_create_surfaces_an_invalid_cron_field() {
+    let input = json!({
+        "name": "routine",
+        "kind": "Agent",
+        "enabled": true,
+        "task": {"model": "model", "prompt": "summarize", "user_prompt": "task"},
+        "trigger": {"type": "cron", "schedule": "not a cron", "timezone": "UTC"},
+    });
+    let error = serde_json::from_value::<CreateScheduledAction>(input)
+        .expect_err("invalid cron")
+        .to_string();
+    assert!(error.contains("schedule"), "{error}");
+    assert!(error.contains("cron"), "{error}");
+}
+
+#[test]
 fn both_request_representations_normalize_to_the_same_configuration() {
     let legacy = json!({"name":"routine", "kind":"Agent", "task":{}, "enabled":true,
         "schedule":"0 0 9 * * *", "timezone":"UTC"});

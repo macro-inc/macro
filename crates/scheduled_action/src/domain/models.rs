@@ -7,7 +7,7 @@ use cron::Schedule as CronSchedule;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_owner::{Owner, OwnerType};
-use serde::{Deserialize, Serialize};
+use serde::{Deserialize, Deserializer, Serialize};
 use serde_json::Value;
 use std::str::FromStr;
 use utoipa::ToSchema;
@@ -26,11 +26,19 @@ pub const MAX_ACTION_TIME: Duration = Duration::minutes(20);
 pub struct Schedule(String);
 
 impl Schedule {
-    /// Parse a cron expression in the 6-/7-field format required by the `cron`
-    /// crate (`sec min hour dom mon dow [year]`).
+    /// Parse a cron expression. Five-field crontab (`min hour dom mon dow`) is
+    /// stored as six fields with a zero second. Six- and seven-field forms
+    /// (`sec min hour dom mon dow [year]`) are kept as written.
     pub fn from_cron(cron: String) -> Result<Self> {
-        CronSchedule::from_str(&cron).map_err(anyhow::Error::from)?;
-        Ok(Self(cron))
+        let normalized = normalize_cron(&cron)?;
+        CronSchedule::from_str(&normalized).map_err(|error| {
+            anyhow::anyhow!(
+                "invalid cron schedule {cron:?}: {error}; \
+                 use five-field crontab (`min hour day month weekday`) or \
+                 six-field (`sec min hour day month weekday`)"
+            )
+        })?;
+        Ok(Self(normalized))
     }
 
     pub fn as_cron(&self) -> CronSchedule {
@@ -50,10 +58,24 @@ impl Schedule {
     }
 }
 
+fn normalize_cron(cron: &str) -> Result<String> {
+    let trimmed = cron.trim();
+    let fields: Vec<&str> = trimmed.split_whitespace().collect();
+    match fields.len() {
+        5 => Ok(format!("0 {trimmed}")),
+        6 | 7 => Ok(trimmed.to_owned()),
+        n => Err(anyhow::anyhow!(
+            "invalid cron schedule {cron:?}: expected 5, 6, or 7 fields, got {n}; \
+             use five-field crontab (`min hour day month weekday`) or \
+             six-field (`sec min hour day month weekday`)"
+        )),
+    }
+}
+
 impl<'de> Deserialize<'de> for Schedule {
     fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
     where
-        D: serde::Deserializer<'de>,
+        D: Deserializer<'de>,
     {
         let s = String::deserialize(deserializer)?;
         Schedule::from_cron(s).map_err(serde::de::Error::custom)
@@ -238,11 +260,26 @@ impl From<LegacyActionConfiguration> for ActionConfiguration {
 }
 
 /// Exactly one representation is accepted, even if mixed fields agree or are null.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+///
+/// Deserialization prefers the variant that matches the payload (`trigger`
+/// present → canonical) so a field error such as an invalid cron schedule is
+/// not swallowed by the untagged fallback.
+#[derive(Serialize, Debug, Clone, ToSchema)]
 #[serde(untagged)]
 pub enum CreateScheduledAction {
     Canonical(ActionConfiguration),
     Legacy(LegacyActionConfiguration),
+}
+
+impl<'de> Deserialize<'de> for CreateScheduledAction {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
+        decode_canonical_or_legacy(value, Self::Canonical, Self::Legacy)
+            .map_err(serde::de::Error::custom)
+    }
 }
 
 /// Canonical configuration replacement. Activation has its own endpoint, so
@@ -265,11 +302,38 @@ pub struct ActionConfigurationUpdate {
 }
 
 /// Full replacement of client configuration, not of server-owned action state.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[derive(Serialize, Debug, Clone, ToSchema)]
 #[serde(untagged)]
 pub enum UpdateScheduledAction {
     Canonical(ActionConfigurationUpdate),
     Legacy(LegacyActionConfiguration),
+}
+
+impl<'de> Deserialize<'de> for UpdateScheduledAction {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: Deserializer<'de>,
+    {
+        let value = Value::deserialize(deserializer)?;
+        decode_canonical_or_legacy(value, Self::Canonical, Self::Legacy)
+            .map_err(serde::de::Error::custom)
+    }
+}
+
+fn decode_canonical_or_legacy<Canonical, Legacy, Out>(
+    value: Value,
+    canonical: fn(Canonical) -> Out,
+    legacy: fn(Legacy) -> Out,
+) -> Result<Out, serde_json::Error>
+where
+    Canonical: for<'de> Deserialize<'de>,
+    Legacy: for<'de> Deserialize<'de>,
+{
+    if value.get("trigger").is_some() {
+        serde_json::from_value(value).map(canonical)
+    } else {
+        serde_json::from_value(value).map(legacy)
+    }
 }
 
 impl UpdateScheduledAction {

@@ -393,6 +393,29 @@ fn legacy() -> Value {
 }
 
 #[tokio::test]
+async fn five_field_crontab_create_normalizes_and_succeeds() {
+    let app = router(false);
+    let mut input = serde_json::to_value(configuration(false)).unwrap();
+    input["trigger"]["schedule"] = json!("0 9 * * *");
+    let (status, created) = request(&app, "POST", "/scheduled-actions", "owner", input).await;
+    assert_eq!(status, StatusCode::CREATED);
+    assert_eq!(created["trigger"]["schedule"], "0 0 9 * * *");
+    assert_eq!(created["schedule"], "0 0 9 * * *");
+}
+
+#[tokio::test]
+async fn invalid_cron_create_returns_the_schedule_error() {
+    let app = router(false);
+    let mut input = serde_json::to_value(configuration(false)).unwrap();
+    input["trigger"]["schedule"] = json!("not a cron");
+    let (status, body) = request(&app, "POST", "/scheduled-actions", "owner", input).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    let text = body.as_str().expect("plain-text validation body");
+    assert!(text.contains("schedule"), "{text}");
+    assert!(text.contains("cron"), "{text}");
+}
+
+#[tokio::test]
 async fn legacy_and_canonical_cron_create_update_return_compatibility_fields() {
     let app = router(false);
     for input in [

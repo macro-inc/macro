@@ -99,6 +99,9 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   prepared, so changing it affects later runs only.
 - `EventReference` rejects unknown keys, so a replica still on older code can't
   read a run row with a new key: write a new optional key only when it is set.
+- Cron `schedule` accepts five-field crontab (`min hour dom mon dow`), stored
+  as six fields with a zero second, plus the cron crate's six- and seven-field
+  forms. Invalid JSON bodies return the serde field error, not a generic 400.
 
 ## Related
 
