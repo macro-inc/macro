@@ -67,6 +67,16 @@ view. `Shift+M` mutes the selected rows or the open thread, and `S` and
 or closes the selected message (the latest when none is selected), `Shift+O`
 opens every message including the collapsed middle run, and `N`/`P` step
 messages like the arrows. `Cmd+Up`/`Cmd+Down` jump to either end of a list.
+With **Superhuman shortcuts in Email** on (Settings → Keyboard shortcuts, flag
+`enable-hotkey-profiles`), Superhuman's keys take over Macro's on the same keys
+while Email is focused: `C` composes instead of opening the Create menu,
+`Shift+C` composes in a new split, `R` in a thread replies to the sender only
+(Macro's `R` replies to all), `U` toggles read, `Shift+U` shows unread only,
+`Shift+S`/`Shift+I` go to Favorites/Signal, `Shift+R` shows Focus follow-ups,
+`L` edits tags, `V` moves to a folder, `g h` goes to Reminders, `Ctrl+1`–`9`
+shows one account, `Ctrl+/` copies the link and `Cmd+Shift+A` attaches in a
+reply. `?` labels the profile's keys and lists what they replaced. Turn it off
+and every key is Macro's again.
 In every composer `Cmd+Shift+.`, `Cmd+Shift+,` and `Cmd+Shift+D` discard the
 draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 `Cmd+Shift+X`, `7`, `8` and `9` apply strikethrough, numbered list, bulleted
