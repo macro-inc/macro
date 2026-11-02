@@ -59,7 +59,8 @@ pulumi up --stack dev
 ```
 
 Pulumi builds the API image from the repository root, creates the database
-with an RDS-managed password, and writes `APP_SECRETS_JSON` to its own Secrets
+with a Pulumi-generated password (kept in stack state; RDS does not rotate it,
+so the stored `DATABASE_URL` stays valid), and writes `APP_SECRETS_JSON` to its own Secrets
 Manager secret for ECS injection. Connect reads no runtime Doppler project.
 After the deploy succeeds, check:
 
