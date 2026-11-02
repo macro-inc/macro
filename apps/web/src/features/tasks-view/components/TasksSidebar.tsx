@@ -9,6 +9,7 @@ import { ConnectorImportSidebar } from '@app/features/connector-import/connector
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { t } from '@app/lib/i18n';
+import { useParams } from '@app/lib/split-router';
 import {
   favoriteSplitContent,
   useFavoriteDisplayName,
@@ -18,10 +19,10 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CheckSquareIcon from '@icon/system/regular/check-square.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import ListChecksIcon from '@icon/system/regular/list-checks.svg';
 import NoteIcon from '@icon/system/regular/note-pencil.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
-import StackIcon from '@icon/system/regular/stack.svg';
 import { useFavoritesData } from '@queries/favorites/favorites';
 import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import { createMemo, For, Show } from 'solid-js';
@@ -42,8 +43,8 @@ const TAB_ICONS: Record<TasksTab, typeof NoteIcon> = {
   'my-tasks': CheckSquareIcon,
   'team-tasks': ListChecksIcon,
   'created-by-me': NoteIcon,
-  'my-projects': StackIcon,
-  projects: StackIcon,
+  'my-projects': ProjectIcon,
+  projects: ProjectIcon,
   'created-projects': NoteIcon,
 };
 
@@ -157,9 +158,11 @@ export function TasksSidebar() {
     setState,
     projectsEnabled,
     setTab,
+    selectedTask,
     isSidebarSectionOpen,
     setSidebarSectionOpen,
   } = useTasksView();
+  const params = useParams<{ projectId?: string }>();
 
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
@@ -170,6 +173,10 @@ export function TasksSidebar() {
       ),
     activeId: () => state.tab,
     setActiveId: (id) => setTab(id as TasksTab),
+    // Tab cycles these tabs over a list and is focus order over an open project
+    // or task. A pane's own override can't hold this: the sidebar remounts after
+    // it whenever the view crosses its layout breakpoint.
+    shouldHandleSequentialKeyEvent: () => !params.projectId && !selectedTask(),
   });
 
   return (

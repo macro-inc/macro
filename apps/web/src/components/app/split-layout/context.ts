@@ -8,9 +8,9 @@ import {
   type Setter,
   type Signal,
 } from 'solid-js';
+import type { PriorityCollapser } from '../../priority-collapse/createPriorityCollapser';
 import type { SplitHandle, SplitManager } from './layoutManager';
 import type { ReplaceOwnedSlot } from './utils/createOwnedSlots';
-import type { PriorityCollapser } from './utils/createPriorityCollapser';
 
 export const SplitLayoutContext = createContext<{
   manager: SplitManager;

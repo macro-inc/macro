@@ -119,7 +119,9 @@ export function createCrmWorkspace(
     return tab !== VIEW_TAB_PRESETS.companies.default ? tab : undefined;
   });
   // A record link names its list; nothing may move it off the record.
-  const initialRecordOpen = untrack(() => route.records().length > 0);
+  const initialRecordOpen = untrack(
+    () => route.records().length > 0 || !!route.item()
+  );
   const initialTabPreset =
     initialUrlTab && initialUrlTab in VIEW_TAB_PRESETS.companies.tabs
       ? getViewPreset('companies', initialUrlTab)
