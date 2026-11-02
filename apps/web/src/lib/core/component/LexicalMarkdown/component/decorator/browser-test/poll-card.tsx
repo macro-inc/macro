@@ -76,6 +76,7 @@ function pollDetail(
       confirmationMessage: '',
       submittedColumnId: null,
       respondentColumnId: null,
+      branding: { logoFileId: null, coverFileId: null, accentColor: null },
     },
     layout: {
       sections: [
