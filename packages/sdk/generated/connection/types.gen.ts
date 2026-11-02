@@ -209,6 +209,27 @@ export type BatchSendMessageHandlerResponses = {
 
 export type BatchSendMessageHandlerResponse = BatchSendMessageHandlerResponses[keyof BatchSendMessageHandlerResponses];
 
+export type BroadcastMessageHandlerData = {
+    body: SendMessageBody;
+    path?: never;
+    query?: never;
+    url: '/message/broadcast';
+};
+
+export type BroadcastMessageHandlerErrors = {
+    401: string;
+    500: string;
+};
+
+export type BroadcastMessageHandlerError = BroadcastMessageHandlerErrors[keyof BroadcastMessageHandlerErrors];
+
+export type BroadcastMessageHandlerResponses = {
+    /**
+     * Broadcast accepted
+     */
+    202: unknown;
+};
+
 export type SendMessageHandlerData = {
     body: SendMessageBody;
     path: {

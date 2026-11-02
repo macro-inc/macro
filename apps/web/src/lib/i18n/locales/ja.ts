@@ -781,7 +781,6 @@ export default {
     goForward: '進む',
     createNewSplit: '新しい分割画面を作成',
     close: '閉じる',
-    returnToList: 'リストに戻る',
     previousItem: '前の項目',
     nextItem: '次の項目',
     itemNavigation: '項目のナビゲーション',

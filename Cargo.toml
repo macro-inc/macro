@@ -130,6 +130,7 @@ members = [
   "crates/soup_filter_projection",
   "crates/soup_realtime",
   "crates/system_skills",
+  "crates/system_status",
   "crates/task_dedup",
   "crates/unfurl",
   "crates/upstream_error",
