@@ -1,3 +1,5 @@
+import { match, P } from 'ts-pattern';
+
 /** Base for every error the SDK throws. */
 export class MacroError extends Error {
   constructor(message: string) {
@@ -6,30 +8,40 @@ export class MacroError extends Error {
   }
 }
 
-/** A non-2xx HTTP response (Macro API, or a raw fetch like presigned downloads). */
+/** Longest server explanation copied into an error message. */
+const MAX_DETAIL_LENGTH = 500;
+
+/** The server's explanation in an error body: its text, `message` or `error`. */
+function errorDetail(data: unknown): string {
+  const detail = match(data)
+    .with(P.string, (text) => text)
+    .with({ message: P.string }, ({ message }) => message)
+    .with({ error: P.string }, ({ error }) => error)
+    .otherwise(() => '')
+    .trim();
+  return detail.length > MAX_DETAIL_LENGTH
+    ? `${detail.slice(0, MAX_DETAIL_LENGTH)}…`
+    : detail;
+}
+
+/**
+ * A non-2xx HTTP response (Macro API, or a raw fetch like presigned downloads).
+ * The message includes the server's explanation, such as a validation error,
+ * and `data` holds the parsed error body.
+ */
 export class MacroApiError extends MacroError {
   constructor(
     readonly status: number,
     readonly data: unknown,
   ) {
-    const reason = errorReason(data);
+    const detail = errorDetail(data);
     super(
-      reason
-        ? `Macro API error ${status}: ${reason}`
+      detail
+        ? `Macro API error ${status}: ${detail}`
         : `Macro API error ${status}`,
     );
     this.name = 'MacroApiError';
   }
-}
-
-/** The server's own explanation, when its error body carries one. */
-function errorReason(data: unknown): string | undefined {
-  if (typeof data === 'string') return data.trim() || undefined;
-  if (typeof data === 'object' && data !== null && 'message' in data) {
-    const { message } = data;
-    if (typeof message === 'string') return message.trim() || undefined;
-  }
-  return undefined;
 }
 
 /** The API succeeded but the addressed entity doesn't exist in the result. */

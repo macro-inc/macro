@@ -1,18 +1,12 @@
-import { Tool } from '@core/component/AI/component/tool/Tool';
-import FileText from '@icon/system/regular/file-text.svg';
 import { For } from 'solid-js';
 
 /** The full path list behind a truncated inline summary. */
 export function FoldedPathList(props: { paths: string[] }) {
   return (
-    <Tool.List>
+    <ul class="flex min-w-0 flex-col">
       <For each={props.paths}>
-        {(path) => (
-          <Tool.ListItem icon={<FileText class="size-4" />}>
-            <span class="truncate font-mono text-xs">{path}</span>
-          </Tool.ListItem>
-        )}
+        {(path) => <li class="truncate font-mono">{path}</li>}
       </For>
-    </Tool.List>
+    </ul>
   );
 }
