@@ -23,22 +23,21 @@ export function ChannelSectionHeading(props: {
   return (
     <CollapsibleSection.Root open={props.open} onOpenChange={props.onToggle}>
       <CollapsibleSection.Header
-        class={cn('rounded-lg pr-0', props.focused && 'bg-hover text-ink')}
+        class={cn(
+          'relative rounded-lg pr-0',
+          props.focused && 'bg-hover text-ink'
+        )}
       >
         {props.dragHandle}
         <CollapsibleSection.Trigger
           id={props.id}
           role="treeitem"
           tabIndex={-1}
-          class={cn(
-            'flex-1',
-            props.dragHandle && 'pl-0',
-            props.focused && 'text-ink'
-          )}
+          class={cn('flex-1', props.focused && 'text-ink')}
         >
           <Tooltip
             as="span"
-            class="min-w-0"
+            class="relative z-20 min-w-0"
             label={props.tooltip ?? props.label}
           >
             <span class="truncate">{props.label}</span>
@@ -87,7 +86,7 @@ export function ChannelSectionDragHandle(props: {
       {...draggable.dragActivators}
       variant="ghost"
       size="icon-xs"
-      class="shrink-0 cursor-grab opacity-0 group-hover/rail-section:opacity-100 focus-visible:opacity-100 active:cursor-grabbing"
+      class="absolute -left-(--sidebar-gutter) top-1 z-10 cursor-grab opacity-0 group-hover/rail-section:opacity-100 focus-visible:opacity-100 active:cursor-grabbing"
       aria-label={t('channelSections.reorderSection', { name: props.label })}
       tooltip={t('channelSections.reorderSectionHint')}
       onClick={(event: MouseEvent) => event.stopPropagation()}
@@ -102,7 +101,7 @@ export function ChannelSectionDragHandle(props: {
         props.reorder.move(props.section, event.key === 'ArrowUp' ? -1 : 1);
       }}
     >
-      <DotsSixVerticalIcon class="size-3.5" />
+      <DotsSixVerticalIcon class="size-3 -translate-x-1" />
     </Button>
   );
 }

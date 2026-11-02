@@ -254,7 +254,10 @@ function BrowseRow(props: {
   return (
     <div
       classList={{
-        'pl-2': props.row.kind !== 'section' && props.row.kind !== 'label',
+        'pl-2':
+          props.row.kind === 'favorite' ||
+          props.row.kind === 'conversation' ||
+          props.row.kind === 'reference-status',
       }}
     >
       <Switch>

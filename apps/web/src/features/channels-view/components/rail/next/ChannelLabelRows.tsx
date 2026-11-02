@@ -146,11 +146,10 @@ export function ChannelLabelEmptyState(props: { label: ChannelLabel }) {
 
   return (
     <ChannelSectionEmptyState>
-      <p>{message()}</p>
+      <p class="font-medium text-ink">{message()}</p>
       <Button
-        variant="ghost"
-        size="xs"
-        class="mt-1"
+        variant="secondary"
+        size="sm"
         disabled={!rail.labelsAvailable()}
         onClick={act}
       >
