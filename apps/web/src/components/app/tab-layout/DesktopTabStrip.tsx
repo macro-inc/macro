@@ -19,7 +19,7 @@ function TabItem(props: { tabManager: TabManager; tab: DesktopTab }) {
       role="tab"
       aria-selected={active()}
       class={cn(
-        'group flex h-7 min-w-9 max-w-44 flex-initial basis-40 items-center gap-1 rounded-md pl-2 pr-1 text-xs select-none',
+        'group flex h-7 min-w-9 max-w-72 flex-initial basis-56 items-center gap-1 rounded-md pl-2 pr-1 text-xs select-none',
         active()
           ? 'bg-active text-ink'
           : 'text-ink-muted not-touch:hover:bg-hover not-touch:hover:text-ink'
