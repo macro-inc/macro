@@ -211,6 +211,7 @@ function ImageActions(props: {
   onUpload: () => void;
   onRemove: () => void;
 }) {
+  const action = () => (props.set ? 'Replace' : 'Upload');
   return (
     <>
       <Button
@@ -218,10 +219,12 @@ function ImageActions(props: {
         size="sm"
         disabled={props.disabled}
         aria-busy={props.uploading}
-        aria-label={`${props.set ? 'Replace' : 'Upload'} ${props.name}`}
+        aria-label={`${action()} ${props.name}`}
         onClick={props.onUpload}
       >
-        {props.uploading ? 'Uploading…' : props.set ? 'Replace' : 'Upload'}
+        <Show when={props.uploading} fallback={action()}>
+          Uploading…
+        </Show>
       </Button>
       <Show when={props.set}>
         <Button
