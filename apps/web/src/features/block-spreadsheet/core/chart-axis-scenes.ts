@@ -5,6 +5,7 @@ import {
   type Box,
   CHARACTER_WIDTH,
   type ChartShape,
+  DEFAULT_GAP_WIDTHS,
   type Scale,
   tickFormat,
   truncate,
@@ -21,9 +22,6 @@ import {
 /** A value as its cells show it, to four decimals at most. */
 export const valueText = (sample: string | undefined) =>
   tickFormat(sample, 1e-4);
-
-/** Excel's default gaps between bars, in percent of a bar's width. */
-const GAP_WIDTH = { waterfall: 50, boxWhisker: 100 } as const;
 
 type Frame = {
   scale: Scale;
@@ -241,7 +239,7 @@ export function histogramChart(
     percent: pareto,
   });
   if (!area) return;
-  const gap = plot.gapWidth ?? 0;
+  const gap = plot.gapWidth ?? DEFAULT_GAP_WIDTHS[plot.kind] ?? 0;
   const format = valueText(sample);
   shown.forEach((index, position) => {
     const value = groups.values[index];
@@ -298,7 +296,7 @@ export function waterfallChart(
     { font, zoom, sample: series.sample, zero: true }
   );
   if (!area) return;
-  const gap = plot.gapWidth ?? GAP_WIDTH.waterfall;
+  const gap = plot.gapWidth ?? DEFAULT_GAP_WIDTHS.waterfall ?? 0;
   const format = valueText(series.sample);
   const colors = {
     increase: data.palette[0],
@@ -371,7 +369,8 @@ export function boxWhiskerChart(
   const method = plot.quartiles ?? 'exclusive';
   const slot =
     area.band /
-    (plot.series.length + (plot.gapWidth ?? GAP_WIDTH.boxWhisker) / 100);
+    (plot.series.length +
+      (plot.gapWidth ?? DEFAULT_GAP_WIDTHS.boxWhisker ?? 0) / 100);
   plot.series.forEach((series, position) => {
     const format = valueText(series.sample);
     const means: [number, number][] = [];

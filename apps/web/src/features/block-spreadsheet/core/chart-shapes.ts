@@ -1,3 +1,4 @@
+import type { ChartKind } from '@macro-inc/spreadsheet/sheet-drawings';
 import type { scaleLinear } from 'd3-scale';
 
 /** Shapes a chart draws, in pixels within its box; the view only paints. */
@@ -98,3 +99,15 @@ export function axisDomain(low: number, high: number): [number, number] {
     return low === 0 ? [0, 1] : [Math.min(0, low), Math.max(0, high)];
   return [low, high];
 }
+
+/**
+ * Excel's default gaps between the bars of its 2016 charts, in percent of a
+ * bar's width (a funnel's, of a bar's height).
+ */
+export const DEFAULT_GAP_WIDTHS: Partial<Record<ChartKind, number>> = {
+  histogram: 0,
+  pareto: 0,
+  waterfall: 50,
+  boxWhisker: 100,
+  funnel: 6,
+};

@@ -3,7 +3,6 @@ import {
   type ChartKind,
   type ChartPlot,
   type ChartSeries,
-  type ChartValue,
   chartLiteral,
   type DrawingPoint,
   MAX_CHART_SOURCE_LENGTH,
@@ -27,6 +26,22 @@ import {
   SPREADSHEET_MAX_ROWS,
 } from './spreadsheet-document';
 import type { XlsxArchive } from './xlsx-archive';
+import {
+  type CellChartValue,
+  type ChartValues,
+  numberFormat,
+  numberText,
+  xml,
+} from './xlsx-chart-values';
+import {
+  CHARTEX,
+  CHARTEX_RELATIONSHIP,
+  chartExPart,
+  chartExRequirement,
+  isChartEx,
+  isChartExPart,
+  readChartEx,
+} from './xlsx-chartex';
 import { attributes, parse, relationships } from './xlsx-parts';
 import {
   diagramShape,
@@ -211,6 +226,33 @@ type PendingPlot = {
   direction?: string;
 };
 
+const SPLITS = {
+  pos: 'position',
+  val: 'value',
+  percent: 'percent',
+  cust: 'custom',
+} as const;
+
+/** An option of a pie of pie or bar of pie, onto its plot. */
+function readOfPie(plot: ChartPlot, local: string, value: string | undefined) {
+  if (local === 'ofPieType')
+    plot.ofPie = { ...plot.ofPie, type: value === 'bar' ? 'bar' : 'pie' };
+  const ofPie = plot.ofPie;
+  if (!ofPie) return;
+  const number = Number(value);
+  if (local === 'splitType') {
+    const split = SPLITS[value as keyof typeof SPLITS];
+    if (split) ofPie.split = split;
+  } else if (
+    local === 'splitPos' &&
+    value !== undefined &&
+    Number.isFinite(number)
+  )
+    ofPie.splitAt = number;
+  else if (local === 'secondPieSize' && number >= 5 && number <= 200)
+    ofPie.size = number;
+}
+
 /** Read a chart part into what Macro draws, keeping the part for export. */
 export function readChart(
   archive: XlsxArchive,
@@ -220,6 +262,7 @@ export function readChart(
 ): SheetChart | undefined {
   const bytes = archive.read(path);
   if (!bytes) return;
+  if (isChartExPart(bytes)) return readChartEx(bytes, path, theme, warnings);
   const references: string[] = [];
   const plots: PendingPlot[] = [];
   const rightAxes = new Set<string>();
@@ -314,6 +357,16 @@ export function readChart(
                 : undefined;
           else if (node.local === 'axId') plot.axes.push(value.val ?? '');
           else if (node.local === 'ser') series = { values: -1 };
+          else if (plot.local === 'ofPieChart')
+            readOfPie(plot.plot, node.local, value.val);
+        } else if (
+          plot?.local === 'ofPieChart' &&
+          node.local === 'secondPiePt' &&
+          parent === 'custSplit'
+        ) {
+          const index = Number(value.val);
+          if (plot.plot.ofPie && Number.isInteger(index) && index >= 0)
+            plot.plot.ofPie.custom = [...(plot.plot.ofPie.custom ?? []), index];
         } else if (
           parent === 'plotArea' &&
           (node.local === 'valAx' ||
@@ -422,6 +475,15 @@ export function readChart(
         seriesColorDepth = undefined;
       } else if (plot && node.local === plot.local) {
         if (plot.direction === 'bar') plot.plot.kind = 'bar';
+        // A position counts whole points.
+        const ofPie = plot.plot.ofPie;
+        if (ofPie?.split === 'position' && ofPie.splitAt !== undefined)
+          ofPie.splitAt = Math.min(
+            99_999,
+            Math.max(0, Math.round(ofPie.splitAt))
+          );
+        if (ofPie?.custom)
+          ofPie.custom = ofPie.custom.filter((index) => index < 100_000);
         plots.push(plot);
         plot = undefined;
       } else if (axis && parent === 'plotArea' && node.local.endsWith('Ax')) {
@@ -481,6 +543,8 @@ type PendingAnchor = {
   field?: keyof Marker;
   position?: { x: number; y: number };
   extent?: { cx: number; cy: number };
+  /** An Excel 2016 chart's frame, read from the choice before its fallback. */
+  chartEx?: { id?: string; name?: string };
   content?:
     | {
         type: 'pic';
@@ -489,7 +553,7 @@ type PendingAnchor = {
         description?: string;
         extent?: { cx: number; cy: number };
       }
-    | { type: 'chart'; id?: string; name?: string }
+    | { type: 'chart'; id?: string; name?: string; chart?: SheetChart }
     | {
         type: 'shape';
         builder: ReturnType<typeof elementBuilder>;
@@ -579,8 +643,20 @@ export function readSheetDrawings(options: {
   let choiceDepth = 0;
   // A graphic frame's size, read before it is known to hold SmartArt.
   let frameExtent: { cx: number; cy: number } | undefined;
+  // The name of the frame in a choice, for an Excel 2016 chart there.
+  let choiceName: string | undefined;
   const stack: string[] = [];
   const finish = (value: PendingAnchor) => {
+    // Excel 2016's chart stands in for its fallback when Macro can draw it.
+    if (value.chartEx) {
+      const target = relations.get(value.chartEx.id ?? '');
+      const chart =
+        target && !target.external
+          ? readChart(archive, target.target, options.theme, warnings)
+          : undefined;
+      if (chart)
+        value.content = { type: 'chart', name: value.chartEx.name, chart };
+    }
     const content = value.content;
     if (!content || content.type === 'other') {
       unsupported = true;
@@ -677,6 +753,10 @@ export function readSheetDrawings(options: {
       else unsupported = true;
       return;
     }
+    if (content.type === 'chart' && content.chart) {
+      drawings.push({ ...placement, type: 'chart', chart: content.chart });
+      return;
+    }
     const target = relations.get(
       (content.type === 'pic' ? content.embed : content.id) ?? ''
     );
@@ -716,7 +796,13 @@ export function readSheetDrawings(options: {
         choiceDepth++;
         return;
       }
-      if (choiceDepth) return;
+      if (choiceDepth) {
+        if (anchor && node.uri === XDR && node.local === 'cNvPr')
+          choiceName = value.name;
+        else if (anchor && node.uri === CHARTEX && node.local === 'chart')
+          anchor.chartEx = { id: value.id, name: choiceName };
+        return;
+      }
       // A shape is kept whole, to read and to export.
       if (anchor?.content?.type === 'shape' && anchor.content.builder.open) {
         anchor.content.builder.start(node);
@@ -788,7 +874,8 @@ export function readSheetDrawings(options: {
         node.uri === DRAWING &&
         node.local === 'graphicData' &&
         anchor.content?.type === 'chart' &&
-        value.uri !== CHART_NAMESPACE
+        value.uri !== CHART_NAMESPACE &&
+        value.uri !== CHARTEX
       )
         anchor.content =
           value.uri === DIAGRAM
@@ -818,7 +905,7 @@ export function readSheetDrawings(options: {
         anchor.content.data = value.dm;
         anchor.content.extent ??= frameExtent;
       } else if (
-        node.uri === CHART_NAMESPACE &&
+        (node.uri === CHART_NAMESPACE || node.uri === CHARTEX) &&
         node.local === 'chart' &&
         anchor.content?.type === 'chart'
       )
@@ -873,29 +960,8 @@ export function readSheetDrawings(options: {
 
 // Export -------------------------------------------------------------------
 
-/** A cell a chart reads, with the Excel number format it displays with. */
-export type CellChartValue = ChartValue & { format?: string };
-export type ChartValues = (reference: string) => CellChartValue[] | undefined;
-
 const RELATIONSHIPS =
   'http://schemas.openxmlformats.org/officeDocument/2006/relationships';
-
-function xml(value: string) {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-const numberText = (value: number) =>
-  Number.isInteger(value)
-    ? String(value)
-    : String(Number(value.toPrecision(15)));
-
-/** The number format of the first number among values, as Excel caches it. */
-const numberFormat = (values: CellChartValue[] | undefined) =>
-  values?.find((value) => value.number !== undefined)?.format || 'General';
 
 /** Points of a cache or of fixed values, as Excel writes them. */
 function points(
@@ -1148,59 +1214,88 @@ function generatedChart(chart: SheetChart, values: ChartValues): string {
     const grouping = plot.grouping ?? 'clustered';
     const axisIds = axes.map((id) => `<c:axId val="${id}"/>`).join('');
     const stacking = grouping === 'clustered' ? 'standard' : grouping;
-    return match(plot.kind)
-      .with(
-        'column',
-        'bar',
-        (kind) =>
-          `<c:barChart><c:barDir val="${kind === 'bar' ? 'bar' : 'col'}"/><c:grouping val="${grouping}"/><c:varyColors val="0"/>${series}<c:gapWidth val="150"/>${grouping === 'clustered' ? '' : '<c:overlap val="100"/>'}${axisIds}</c:barChart>`
-      )
-      .with(
-        'line',
-        () =>
-          `<c:lineChart><c:grouping val="${stacking}"/><c:varyColors val="0"/>${series}<c:marker val="1"/>${axisIds}</c:lineChart>`
-      )
-      .with(
-        'area',
-        () =>
-          `<c:areaChart><c:grouping val="${stacking}"/><c:varyColors val="0"/>${series}${axisIds}</c:areaChart>`
-      )
-      .with(
-        'pie',
-        () =>
-          `<c:pieChart><c:varyColors val="1"/>${series}<c:firstSliceAng val="0"/></c:pieChart>`
-      )
-      .with(
-        'doughnut',
-        () =>
-          `<c:doughnutChart><c:varyColors val="1"/>${series}<c:firstSliceAng val="0"/><c:holeSize val="50"/></c:doughnutChart>`
-      )
-      .with(
-        'scatter',
-        () =>
-          `<c:scatterChart><c:scatterStyle val="${plot.series.every((value) => value.noLine) ? 'marker' : 'lineMarker'}"/><c:varyColors val="0"/>${series}${axisIds}</c:scatterChart>`
-      )
-      .with(
-        'radar',
-        () =>
-          `<c:radarChart><c:radarStyle val="${plot.filled ? 'filled' : 'marker'}"/><c:varyColors val="0"/>${series}${axisIds}</c:radarChart>`
-      )
-      .with(
-        'bubble',
-        () =>
-          `<c:bubbleChart><c:varyColors val="0"/>${series}<c:bubbleScale val="100"/><c:showNegBubbles val="0"/>${axisIds}</c:bubbleChart>`
-      )
-      .with(
-        'stock',
-        () =>
-          `<c:stockChart>${series}${plot.hiLow ? '<c:hiLowLines/>' : ''}${plot.upDown ? '<c:upDownBars><c:gapWidth val="150"/><c:upBars/><c:downBars/></c:upDownBars>' : ''}${axisIds}</c:stockChart>`
-      )
-      .with(
-        'surface',
-        () =>
-          `<c:surfaceChart><c:wireframe val="0"/>${series}${axisIds}<c:axId val="${SERIES_AXIS}"/></c:surfaceChart>`
-      )
-      .exhaustive();
+    return (
+      match(plot.kind)
+        .with(
+          'column',
+          'bar',
+          (kind) =>
+            `<c:barChart><c:barDir val="${kind === 'bar' ? 'bar' : 'col'}"/><c:grouping val="${grouping}"/><c:varyColors val="0"/>${series}<c:gapWidth val="150"/>${grouping === 'clustered' ? '' : '<c:overlap val="100"/>'}${axisIds}</c:barChart>`
+        )
+        .with(
+          'line',
+          () =>
+            `<c:lineChart><c:grouping val="${stacking}"/><c:varyColors val="0"/>${series}<c:marker val="1"/>${axisIds}</c:lineChart>`
+        )
+        .with(
+          'area',
+          () =>
+            `<c:areaChart><c:grouping val="${stacking}"/><c:varyColors val="0"/>${series}${axisIds}</c:areaChart>`
+        )
+        .with('pie', () => {
+          const ofPie = plot.ofPie;
+          if (!ofPie)
+            return `<c:pieChart><c:varyColors val="1"/>${series}<c:firstSliceAng val="0"/></c:pieChart>`;
+          const split = match(ofPie.split)
+            .with('position', () => 'pos')
+            .with('value', () => 'val')
+            .with('percent', () => 'percent')
+            .with('custom', () => 'cust')
+            .with(undefined, () => 'auto')
+            .exhaustive();
+          return `<c:ofPieChart><c:ofPieType val="${ofPie.type}"/><c:varyColors val="1"/>${series}<c:gapWidth val="100"/><c:splitType val="${split}"/>${
+            ofPie.splitAt === undefined
+              ? ''
+              : `<c:splitPos val="${numberText(ofPie.splitAt)}"/>`
+          }${
+            ofPie.custom
+              ? `<c:custSplit>${ofPie.custom.map((index) => `<c:secondPiePt val="${index}"/>`).join('')}</c:custSplit>`
+              : ''
+          }${ofPie.size === undefined ? '' : `<c:secondPieSize val="${ofPie.size}"/>`}<c:serLines/></c:ofPieChart>`;
+        })
+        .with(
+          'doughnut',
+          () =>
+            `<c:doughnutChart><c:varyColors val="1"/>${series}<c:firstSliceAng val="0"/><c:holeSize val="50"/></c:doughnutChart>`
+        )
+        .with(
+          'scatter',
+          () =>
+            `<c:scatterChart><c:scatterStyle val="${plot.series.every((value) => value.noLine) ? 'marker' : 'lineMarker'}"/><c:varyColors val="0"/>${series}${axisIds}</c:scatterChart>`
+        )
+        .with(
+          'radar',
+          () =>
+            `<c:radarChart><c:radarStyle val="${plot.filled ? 'filled' : 'marker'}"/><c:varyColors val="0"/>${series}${axisIds}</c:radarChart>`
+        )
+        .with(
+          'bubble',
+          () =>
+            `<c:bubbleChart><c:varyColors val="0"/>${series}<c:bubbleScale val="100"/><c:showNegBubbles val="0"/>${axisIds}</c:bubbleChart>`
+        )
+        .with(
+          'stock',
+          () =>
+            `<c:stockChart>${series}${plot.hiLow ? '<c:hiLowLines/>' : ''}${plot.upDown ? '<c:upDownBars><c:gapWidth val="150"/><c:upBars/><c:downBars/></c:upDownBars>' : ''}${axisIds}</c:stockChart>`
+        )
+        .with(
+          'surface',
+          () =>
+            `<c:surfaceChart><c:wireframe val="0"/>${series}${axisIds}<c:axId val="${SERIES_AXIS}"/></c:surfaceChart>`
+        )
+        // Excel 2016's charts are chartEx parts, written by `chartExPart`.
+        .with(
+          'histogram',
+          'pareto',
+          'waterfall',
+          'funnel',
+          'boxWhisker',
+          'treemap',
+          'sunburst',
+          () => ''
+        )
+        .exhaustive()
+    );
   });
   const axisPairs = [false, true].flatMap((secondary) => {
     const plot = plots.find(
@@ -1269,6 +1364,7 @@ export function chartPart(
   values: ChartValues,
   pivotExists: (sheet: string, name: string) => boolean = () => false
 ): string {
+  if (isChartEx(chart)) return chartExPart(chart, values);
   return keptChart(chart, values, pivotExists) ?? generatedChart(chart, values);
 }
 
@@ -1349,10 +1445,25 @@ export function drawingPart(options: {
     } else {
       const id = takeId();
       const path = options.chart(drawing.chart);
+      const ex = isChartEx(drawing.chart);
       relations.push(
-        `<Relationship Id="rId${relations.length + 1}" Type="${RELATIONSHIPS}/chart" Target="../${path.replace(/^xl\//, '')}"/>`
+        `<Relationship Id="rId${relations.length + 1}" Type="${ex ? CHARTEX_RELATIONSHIP : `${RELATIONSHIPS}/chart`}" Target="../${path.replace(/^xl\//, '')}"/>`
       );
-      content = `<xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="${id}" name="${xml(drawing.name ?? `Chart ${index + 1}`)}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="${CHART_NAMESPACE}"><c:chart xmlns:c="${CHART_NAMESPACE}" r:id="rId${relations.length}"/></a:graphicData></a:graphic></xdr:graphicFrame>`;
+      const name = xml(drawing.name ?? `Chart ${index + 1}`);
+      const frame = (uri: string, element: string) =>
+        `<xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="${id}" name="${name}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="${uri}">${element}</a:graphicData></a:graphic></xdr:graphicFrame>`;
+      if (ex) {
+        // Older Excel shows the fallback: a note where the chart would be.
+        const requirement = chartExRequirement(drawing.chart);
+        const corner = options.origin(drawing.from);
+        const { width, height } = options.size(drawing);
+        const note = `<xdr:sp macro="" textlink=""><xdr:nvSpPr><xdr:cNvPr id="${id}" name="${name}"/><xdr:cNvSpPr><a:spLocks noTextEdit="1"/></xdr:cNvSpPr></xdr:nvSpPr><xdr:spPr><a:xfrm><a:off x="${Math.round(corner.x * EMU_PER_PIXEL)}" y="${Math.round(corner.y * EMU_PER_PIXEL)}"/><a:ext cx="${Math.round(width * EMU_PER_PIXEL)}" cy="${Math.round(height * EMU_PER_PIXEL)}"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom><a:solidFill><a:prstClr val="white"/></a:solidFill><a:ln w="1"><a:solidFill><a:prstClr val="green"/></a:solidFill></a:ln></xdr:spPr><xdr:txBody><a:bodyPr vertOverflow="clip" horzOverflow="clip"/><a:lstStyle/><a:p><a:r><a:rPr lang="en-US" sz="1100"/><a:t>This chart isn't available in your version of Excel.</a:t></a:r></a:p></xdr:txBody></xdr:sp>`;
+        content = `<mc:AlternateContent xmlns:mc="${COMPATIBILITY}"><mc:Choice xmlns:${requirement.prefix}="${requirement.namespace}" Requires="${requirement.prefix}">${frame(CHARTEX, `<cx:chart xmlns:cx="${CHARTEX}" r:id="rId${relations.length}"/>`)}</mc:Choice><mc:Fallback>${note}</mc:Fallback></mc:AlternateContent>`;
+      } else
+        content = frame(
+          CHART_NAMESPACE,
+          `<c:chart xmlns:c="${CHART_NAMESPACE}" r:id="rId${relations.length}"/>`
+        );
     }
     anchors.push(
       drawing.to

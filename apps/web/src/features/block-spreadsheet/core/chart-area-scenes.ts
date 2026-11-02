@@ -5,6 +5,7 @@ import {
   type Box,
   CHARACTER_WIDTH,
   type ChartShape,
+  DEFAULT_GAP_WIDTHS,
   truncate,
 } from './chart-shapes';
 import {
@@ -15,9 +16,6 @@ import {
   squarify,
   sunburst,
 } from './chart-statistics';
-
-/** Excel's default gap between funnel bars, in percent of a bar's height. */
-const FUNNEL_GAP_WIDTH = 6;
 
 const fits = (text: string, width: number, size: number) =>
   text.length * size * CHARACTER_WIDTH + 4 <= width;
@@ -61,7 +59,8 @@ export function funnelChart(
   const largest = Math.max(0, ...totals);
   if (width < 20 || !largest) return;
   const band = (outer.bottom - outer.top) / count;
-  const height = band / (1 + (plot.gapWidth ?? FUNNEL_GAP_WIDTH) / 100);
+  const height =
+    band / (1 + (plot.gapWidth ?? DEFAULT_GAP_WIDTHS.funnel ?? 0) / 100);
   const middle = left + width / 2;
   categories.forEach((category, index) => {
     const y = outer.top + band * index + (band - height) / 2;
