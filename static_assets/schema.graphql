@@ -9202,9 +9202,9 @@ type GraphqlSoupInitiative implements GraphqlSoupEntity {
 	"""
 	activity(limit: Int): [GraphqlActivityEvent!]!
 	"""
-	The associated tasks this viewer may view, from the same access walk
-	as `taskIds` and in its order. A public link opens each task the same
-	way it opens the project, so a caller with no account reads them too.
+	Every task the project lists, in `taskIds` order. Viewing a project
+	lets the viewer list its tasks, a caller with no account included;
+	opening a task still needs the task's own access.
 	"""
 	tasks: [GraphqlSoupEntity!]!
 	"""
@@ -9212,7 +9212,7 @@ type GraphqlSoupInitiative implements GraphqlSoupEntity {
 	"""
 	memberIds: [String!]!
 	"""
-	Associated task identifiers visible to this viewer.
+	Identifiers of every task the project lists.
 	"""
 	taskIds: [ID!]!
 	"""
@@ -9901,7 +9901,7 @@ input InitiativeSharePermissionInput {
 }
 
 """
-Cursor pagination for visible initiative tasks.
+Cursor pagination for an initiative's listed tasks.
 """
 input InitiativeTasksInput {
 	"""
@@ -9915,19 +9915,19 @@ input InitiativeTasksInput {
 }
 
 """
-A page of visible task references.
+A page of the task references a project lists.
 """
 type InitiativeTasksPage {
 	"""
-	Visible task identifiers in the current page.
+	Listed task identifiers in the current page.
 	"""
 	taskIds: [ID!]!
 	"""
-	Continuation when another visible page exists.
+	Continuation when another page exists.
 	"""
 	nextCursor: String
 	"""
-	Total tasks visible to this viewer.
+	Total tasks the project lists.
 	"""
 	total: Int!
 }

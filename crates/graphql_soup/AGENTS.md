@@ -25,11 +25,11 @@ viewer pattern), which apply to every type defined here.
   nothing that needs an inbox or a listing. To open another type to links,
   add it to `hydrates_through_receipts` and to Soup's viewable hydration.
   Documents hydrate through the listing first; only a document the listing
-  leaves out (a task the viewer reaches through its project, a link-shared
-  file) gets a per-item view check, so realtime patches, which go to a
-  document's own grantees, rarely pay for one. Chats hydrate through
-  receipts only where an earlier read already holds them
-  (`SoupItemDataLoader::hydrate_receipted`, as a project's `tasks` does).
+  leaves out (a link-shared file) gets a per-item view check, so realtime
+  patches, which go to a document's own grantees, rarely pay for one.
+  A project's `tasks` list through `SoupItemDataLoader::hydrate_project_tasks`:
+  the project's View receipt authorizes listing every task in it, with no
+  per-task check, and opening a task still checks the task.
 - `NOTIFIED_AT` maps to Soup's notified request, not a simple sort: `soup`
   accepts it descending only and `groupSoup` rejects it. Its continuation
   cursors carry a different sort tag, so `inputs.rs` decodes both cursor shapes.

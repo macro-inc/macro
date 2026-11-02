@@ -366,8 +366,8 @@ where
                 .collect::<Vec<_>>();
             let mut listed = self.load_soup_items(user.clone(), soup_entities).await?;
             // The listing leaves out documents the viewer reaches only
-            // through entity access, such as a task through its project.
-            // Only those misses pay for a per-item check.
+            // through entity access, such as a link-shared document. Only
+            // those misses pay for a per-item check.
             let found = listed
                 .iter()
                 .map(|hydration| hydration.item.entity())
@@ -457,6 +457,17 @@ where
         }
         self.soup_service
             .get_viewable_items(receipts, team)
+            .await
+            .map_err(|error| rootcause::report!(error).into_dynamic().into_cloneable())
+    }
+
+    /// List the tasks of a project the viewer holds a View receipt for.
+    async fn hydrate_project_tasks(
+        &self,
+        project: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<SoupProjectionHydration>, SoupItemLoaderError> {
+        self.soup_service
+            .get_project_tasks(project)
             .await
             .map_err(|error| rootcause::report!(error).into_dynamic().into_cloneable())
     }
@@ -599,9 +610,9 @@ where
     loader.load_one::<OwnedSoupItemLoaderKey>(key).await
 }
 
-/// Type-erased receipt hydration through the same loader's Soup service.
-type HydrateReceipted = dyn Fn(
-        Vec<EntityAccessReceipt<ViewAccessLevel>>,
+/// Type-erased project task listing through the same loader's Soup service.
+type HydrateProjectTasks = dyn Fn(
+        EntityAccessReceipt<ViewAccessLevel>,
     ) -> BoxFuture<'static, Result<Vec<SoupProjectionHydration>, SoupItemLoaderError>>
     + Send
     + Sync;
@@ -611,8 +622,8 @@ type HydrateReceipted = dyn Fn(
 pub struct SoupItemDataLoader {
     /// Function backed by the concrete async-graphql DataLoader.
     load_one: Arc<LoadOne>,
-    /// Hydrates entities an earlier read already authorized.
-    hydrate_receipted: Arc<HydrateReceipted>,
+    /// Hydrates the tasks a viewable project lists.
+    hydrate_project_tasks: Arc<HydrateProjectTasks>,
 }
 
 impl SoupItemDataLoader {
@@ -632,9 +643,9 @@ impl SoupItemDataLoader {
                 let loader = Arc::clone(&loader);
                 Box::pin(load_one_owned(loader, key))
             }),
-            hydrate_receipted: Arc::new(move |receipts| {
+            hydrate_project_tasks: Arc::new(move |project| {
                 let loader = Arc::clone(&hydrating);
-                Box::pin(async move { loader.loader().hydrate_receipted(receipts, None).await })
+                Box::pin(async move { loader.loader().hydrate_project_tasks(project).await })
             }),
         }
     }
@@ -648,14 +659,14 @@ impl SoupItemDataLoader {
         (self.load_one)(OwnedSoupItemLoaderKey { viewer, entity }).await
     }
 
-    /// Hydrate entities an earlier read already authorized, such as the tasks
-    /// a project read found visible, in one Soup read with no further access
-    /// check. Items Soup does not hydrate this way are absent.
-    pub async fn hydrate_receipted(
+    /// Hydrate every live task the project lists, to the viewer who holds
+    /// its View receipt. Soup finds the tasks; no task is access checked, and
+    /// opening one still needs the task's own access.
+    pub async fn hydrate_project_tasks(
         &self,
-        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+        project: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<Vec<SoupProjectionHydration>, SoupItemLoaderError> {
-        (self.hydrate_receipted)(receipts).await
+        (self.hydrate_project_tasks)(project).await
     }
 }
 

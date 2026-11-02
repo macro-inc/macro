@@ -1,12 +1,11 @@
 //! Read-use-case policy, pagination and visibility.
 
-use std::{cmp::Ordering, collections::HashMap};
+use std::cmp::Ordering;
 
 use chrono::{DateTime, Utc};
 use entity_access::domain::models::{
     Entity, EntityAccessAuth, EntityAccessReceipt, EntityType, ViewAccessLevel,
 };
-use futures::{StreamExt, TryStreamExt, stream};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
 use serde::{Deserialize, Serialize};
 
@@ -142,24 +141,12 @@ impl<R: InitiativeRepo, S: InitiativeDescriptionSurfaces> InitiativeServiceImpl<
         read: &InitiativeRead,
     ) -> Result<InitiativePageRow, InitiativeError> {
         let detail = read.detail();
-        let tasks = read.task_receipts();
+        let tasks = read.tasks();
         let mut properties = self
             .resources
-            .properties(
-                std::iter::once(read.receipt())
-                    .chain(tasks)
-                    .cloned()
-                    .collect(),
-            )
+            .properties(vec![read.receipt().clone()])
             .await?;
-        let completed_task_count = tasks
-            .iter()
-            .filter(|task| {
-                properties
-                    .get(&task.entity().entity_id)
-                    .is_some_and(|value| value.completed)
-            })
-            .count();
+        let completed_task_count = tasks.iter().filter(|task| task.completed).count();
         Ok(InitiativePageRow {
             initiative: crate::domain::models::InitiativeSummary {
                 id: detail.id,
@@ -173,30 +160,6 @@ impl<R: InitiativeRepo, S: InitiativeDescriptionSurfaces> InitiativeServiceImpl<
             task_count: u32::try_from(tasks.len()).unwrap_or(u32::MAX),
             completed_task_count: u32::try_from(completed_task_count).unwrap_or(u32::MAX),
         })
-    }
-
-    /// The tasks the caller may view, in `ids` order. Checks run 16 at a
-    /// time: a caller who reaches the tasks only through their project costs
-    /// a few queries per task.
-    pub(super) async fn visible_tasks(
-        &self,
-        auth: &EntityAccessAuth,
-        ids: Vec<String>,
-    ) -> Result<Vec<EntityAccessReceipt<ViewAccessLevel>>, InitiativeError> {
-        stream::iter(ids)
-            .map(|id| {
-                self.resources.view(
-                    auth.clone(),
-                    Entity {
-                        entity_id: id,
-                        entity_type: EntityType::Document,
-                    },
-                )
-            })
-            .buffered(16)
-            .try_filter_map(|receipt| async move { Ok(receipt) })
-            .try_collect()
-            .await
     }
 
     pub(super) async fn read_page(
@@ -330,44 +293,14 @@ impl<R: InitiativeRepo, S: InitiativeDescriptionSurfaces> InitiativeServiceImpl<
         } else {
             None
         };
-        // Hydrate progress only for the selected page, using current task access.
-        let mut tasks_by_project = HashMap::new();
-        let mut task_receipts = Vec::new();
-        for row in &rows {
-            let mut ids = Vec::new();
-            for id in self.resources.project_tasks(row.initiative.id).await? {
-                if let Some(receipt) = self
-                    .resources
-                    .view(
-                        auth.clone(),
-                        Entity {
-                            entity_id: id.clone(),
-                            entity_type: EntityType::Document,
-                        },
-                    )
-                    .await?
-                {
-                    ids.push(id);
-                    task_receipts.push(receipt);
-                }
-            }
-            tasks_by_project.insert(row.initiative.id, ids);
-        }
-        let task_properties = self.resources.properties(task_receipts).await?;
+        // Progress only for the selected page: every live task each project
+        // lists, which its viewers may see.
         for row in &mut rows {
-            if let Some(ids) = tasks_by_project.get(&row.initiative.id) {
-                row.task_count = u32::try_from(ids.len()).unwrap_or(u32::MAX);
-                row.completed_task_count = u32::try_from(
-                    ids.iter()
-                        .filter(|id| {
-                            task_properties
-                                .get(*id)
-                                .is_some_and(|properties| properties.completed)
-                        })
-                        .count(),
-                )
-                .unwrap_or(u32::MAX);
-            }
+            let tasks = self.resources.project_task_list(row.initiative.id).await?;
+            row.task_count = u32::try_from(tasks.len()).unwrap_or(u32::MAX);
+            row.completed_task_count =
+                u32::try_from(tasks.iter().filter(|task| task.completed).count())
+                    .unwrap_or(u32::MAX);
         }
         Ok(InitiativePage {
             initiatives: rows,

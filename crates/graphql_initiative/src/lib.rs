@@ -14,8 +14,8 @@ mod test;
 pub use context::{InitiativeAuthorizer, InitiativeGraphqlContext};
 pub use inputs::InitiativeTasksInput;
 pub use loaders::{
-    InitiativeLoader, LoadedInitiative, initiative_loader, load_initiative_detail,
-    load_initiative_summary, load_initiative_task_receipts,
+    InitiativeLoader, InitiativeTaskListing, LoadedInitiative, initiative_loader,
+    load_initiative_detail, load_initiative_summary, load_initiative_task_listing,
 };
 pub use mutation::{InitiativeEntityLoader, InitiativeMutationRoot};
 pub use objects::{GraphqlInitiativeSharePermission, GraphqlInitiativeTasksPage};

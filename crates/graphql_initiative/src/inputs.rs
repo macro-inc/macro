@@ -13,7 +13,7 @@ use models_permissions::share_permission::{
     channel_share_permission::{UpdateChannelSharePermission, UpdateOperation},
 };
 
-/// Cursor pagination for visible initiative tasks.
+/// Cursor pagination for an initiative's listed tasks.
 #[derive(Default, InputObject)]
 pub struct InitiativeTasksInput {
     /// Page size, one through one hundred.

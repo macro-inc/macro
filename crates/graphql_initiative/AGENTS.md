@@ -12,13 +12,14 @@ inbound adapter exposing initiative queries, mutations, and loaders.
 - `src/query.rs` / `src/mutation.rs`: `resolve_initiative`,
   `InitiativeMutationRoot`.
 - `src/loaders.rs`: `InitiativeLoader` — one batched initiative read per
-  request for Soup and detail views. Detail and progress fields share its
-  task-access walk; progress is summarized lazily from that read. Its viewer
-  is optional: reads authorize through `InitiativeAuthorizer::authorize_view`,
-  so a public link opens a project for a caller with no account. The same
-  read's task receipts back `GraphqlSoupInitiative.tasks`
-  (`load_initiative_task_receipts`), which hydrates them without checking
-  access again.
+  request for Soup and detail views. Detail, task and progress fields share
+  its task list (every live task in the project, none access checked);
+  progress is summarized lazily from that read. Its viewer is optional:
+  reads authorize through `InitiativeAuthorizer::authorize_view`, so a public
+  link opens a project for a caller with no account. The read's project
+  receipt backs `GraphqlSoupInitiative.tasks`
+  (`load_initiative_task_listing`), which lists the tasks in `taskIds` order;
+  opening one still needs the task's own access.
 - `src/lib.rs` `graphql_error`: maps `InitiativeError` to GraphQL error codes
   (`NOT_FOUND`, `FORBIDDEN`, `BAD_USER_INPUT`, `CONFLICT`) — follow this
   pattern rather than returning a bare `async_graphql::Error`.

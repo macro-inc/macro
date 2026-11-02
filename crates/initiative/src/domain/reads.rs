@@ -82,7 +82,7 @@ pub struct InitiativePageRequest {
     pub descending: Option<bool>,
 }
 
-/// A project row with caller-specific permissions, properties and visible task progress.
+/// A project row with caller-specific permissions, properties and task progress.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
@@ -94,45 +94,52 @@ pub struct InitiativePageRow {
     pub user_access_level: AccessLevel,
     /// Canonical property values.
     pub properties: InitiativePropertySnapshot,
-    /// Number of associated tasks the caller may view.
+    /// Number of tasks the project lists.
     pub task_count: u32,
-    /// Number of visible tasks whose status is completed.
+    /// Number of listed tasks whose status is completed.
     pub completed_task_count: u32,
 }
 
-/// An authorized project with the tasks its viewer may see, checked once.
+/// A live task in a project. Anyone who may view the project may list it;
+/// opening it still needs the task's own access.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectTask {
+    /// The task's document id.
+    pub id: String,
+    /// Whether the task's status is Completed.
+    pub completed: bool,
+}
+
+/// An authorized project with every live task it lists.
 ///
-/// Progress is summarized from the retained task receipts, so detail and
-/// counts share one task-access walk.
+/// The project's View access authorizes listing its tasks, like a folder
+/// lists its documents; no task is checked or opened here.
 #[cfg(feature = "ports")]
 #[derive(Debug, Clone)]
 pub struct InitiativeRead {
     receipt: EntityAccessReceipt<ViewAccessLevel>,
     detail: InitiativeDetail,
-    task_receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    tasks: Vec<ProjectTask>,
 }
 
 #[cfg(feature = "ports")]
 impl InitiativeRead {
-    /// Pair a project receipt with its detail and the viewer's task receipts.
-    /// The detail's `task_ids` are replaced by the receipts' entity ids.
+    /// Pair a project receipt with its detail and the tasks it lists. The
+    /// detail's `task_ids` are replaced by the tasks' ids.
     pub fn new(
         receipt: EntityAccessReceipt<ViewAccessLevel>,
         mut detail: InitiativeDetail,
-        task_receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+        tasks: Vec<ProjectTask>,
     ) -> Self {
-        detail.task_ids = task_receipts
-            .iter()
-            .map(|task| task.entity().entity_id.clone())
-            .collect();
+        detail.task_ids = tasks.iter().map(|task| task.id.clone()).collect();
         Self {
             receipt,
             detail,
-            task_receipts,
+            tasks,
         }
     }
 
-    /// Project detail with only the viewer's visible task ids.
+    /// Project detail with every task it lists.
     pub fn detail(&self) -> &InitiativeDetail {
         &self.detail
     }
@@ -142,13 +149,14 @@ impl InitiativeRead {
         self.detail
     }
 
-    pub(crate) fn receipt(&self) -> &EntityAccessReceipt<ViewAccessLevel> {
+    /// The project's View receipt, which authorizes listing its tasks.
+    pub fn receipt(&self) -> &EntityAccessReceipt<ViewAccessLevel> {
         &self.receipt
     }
 
-    /// View receipts for the tasks this viewer may see, in the detail's order.
-    pub fn task_receipts(&self) -> &[EntityAccessReceipt<ViewAccessLevel>] {
-        &self.task_receipts
+    /// The tasks the project lists, in the detail's order.
+    pub fn tasks(&self) -> &[ProjectTask] {
+        &self.tasks
     }
 }
 
@@ -174,16 +182,16 @@ pub struct InitiativeTasksRequest {
     pub cursor: Option<String>,
 }
 
-/// Visible tasks with visibility applied before paging and counting.
+/// A page of the tasks a project lists, counted before paging.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[cfg_attr(feature = "inbound", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct InitiativeTasksPage {
-    /// Visible task ids; hydrate through existing task reads.
+    /// Listed task ids; opening one still needs the task's own access.
     pub task_ids: Vec<String>,
-    /// Continuation when another visible page exists.
+    /// Continuation when another page exists.
     pub next_cursor: Option<String>,
-    /// Total associated tasks visible to the caller.
+    /// Total tasks the project lists.
     pub total: u32,
 }
 
