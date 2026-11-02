@@ -78,15 +78,15 @@ use referral::{
     domain::service::ReferralServiceImpl,
     outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
 };
-use user_language::{
-    domain::service::UserLanguageServiceImpl, outbound::pg_user_language_repo::PgUserLanguageRepo,
-};
 use system_status::{
     domain::service::SystemStatusServiceImpl,
     outbound::{
         connection_gateway_broadcaster::ConnectionGatewayStatusBroadcaster,
         pg_system_status_repo::PgSystemStatusRepo,
     },
+};
+use user_language::{
+    domain::service::UserLanguageServiceImpl, outbound::pg_user_language_repo::PgUserLanguageRepo,
 };
 
 use crate::{
