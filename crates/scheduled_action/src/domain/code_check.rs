@@ -48,9 +48,9 @@ fn describe(steps: &[StepProblems]) -> String {
         .join("\n\n")
 }
 
-/// `task` with every code and tool step named, as saving stores it
-/// ([`RoutineProgram::assign_step_ids`]), so placeholder validation, change
-/// detection and the checker all see the same ids. Malformed programs come
+/// `task` with every code step named, as saving stores it
+/// ([`RoutineProgram::assign_step_ids`]), so validation, change detection
+/// and the checker all see the same ids. Malformed programs come
 /// back as they are, for target validation to report, and a single agent
 /// task has no steps to name.
 pub fn named_steps(task: &Value) -> Value {
@@ -68,7 +68,7 @@ pub fn named_steps(task: &Value) -> Value {
     named
 }
 
-/// `task` with an id on every code and tool step, and its `sdk` set to the
+/// `task` with an id on every code step, and its `sdk` set to the
 /// version every code step now checks against. A routine's code steps are
 /// checked together, each against the outputs of the steps before it, unless
 /// `previous`, the task as stored, held the same code checked against the
