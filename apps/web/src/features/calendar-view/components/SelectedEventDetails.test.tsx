@@ -53,17 +53,9 @@ vi.mock('@app/features/calendar/hooks/create-guest-invite-controller', () => ({
 vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
   useCalendarGuestInvitesFlag: () => () => false,
   useCalendarInvitationForwardFlag: () => () => false,
-  useCalendarMeetingNotesFlag: () => () => true,
 }));
 // The sections have their own tests; exercise the overlay's actions and
 // navigation/focus handoff here.
-vi.mock('@app/features/calendar-notes/calendar-meeting-notes', () => ({
-  CalendarMeetingNotes: (props: { onOpenDocument: (id: string) => void }) => (
-    <button onClick={() => props.onOpenDocument('note-1')}>
-      Open linked note
-    </button>
-  ),
-}));
 vi.mock('@app/features/calendar/components/EventDetails', () => ({
   EventDetails: () => null,
 }));

@@ -226,8 +226,7 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `ReadCalendarEvent` (`src/inbound/toolset/read_calendar_event.rs`), which goes
   through `mention_previews`: the hover card's visibility and fields. A preview
   that falls back to a channel share loses its Macro call there, in the
-  repository so that meeting-note references (`reference_previews`) get the
-  same, and before the description cap, since the join line closes the
+  repository and before the description cap, since the join line closes the
   description. Whoever resolves to their own copy keeps it: the card's Join
   button reads the link from the preview. Only the generated Macro call goes;
   join text a provider wrote into the body, as a Teams invitation's, stays, as
