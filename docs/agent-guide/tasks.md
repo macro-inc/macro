@@ -205,7 +205,7 @@ remain available. In the theme editor's **Task statuses** section, change a stat
 color and verify its icons and group-header tints update together in List and Gantt,
 while Board column icons match and global warning/success colors stay unchanged.
 In Progress defaults to amber blended with the theme's foreground: 20% foreground
-in dark mode and 50% in light mode. Check the icon's legibility against the list,
+in dark mode and 15% in light mode. Check the icon's legibility against the list,
 menu, and board surfaces in both modes; custom status-color overrides stay intact.
 
 Click a task row or favorite to replace the list with the editable task document. Its top

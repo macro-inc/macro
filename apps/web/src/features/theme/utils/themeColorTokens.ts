@@ -113,7 +113,7 @@ export function getDefaultSemanticColorTokens(
     'task-status-in-progress': mixTokens(
       'amber',
       'content-0',
-      mode === 'dark' ? 0.8 : 0.7,
+      mode === 'dark' ? 0.8 : 0.85,
       'srgb'
     ),
     'task-status-in-review': tokenReference('violet'),
