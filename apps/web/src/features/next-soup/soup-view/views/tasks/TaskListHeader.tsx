@@ -19,11 +19,18 @@ import './list-property-value.css';
 // modes, so the narrow header matches each row's 24px property button.
 const HEADER_ICON_CLASS = 'size-3 text-ink-muted';
 
-/** Map column IDs to their icons for narrow mode */
-const COLUMN_ICONS: Record<string, () => JSX.Element> = {
-  status: () => <StatusInProgress class={HEADER_ICON_CLASS} />,
-  priority: () => <PriorityHigh class={HEADER_ICON_CLASS} />,
-  assignees: () => <UsersIcon class={HEADER_ICON_CLASS} />,
+/** Column presentation stays with the column rather than the header renderer. */
+const COLUMN_PRESENTATION: Record<
+  string,
+  { icon: () => JSX.Element; compactClass?: string; compactIconClass?: string }
+> = {
+  status: { icon: () => <StatusInProgress class={HEADER_ICON_CLASS} /> },
+  priority: { icon: () => <PriorityHigh class={HEADER_ICON_CLASS} /> },
+  assignees: {
+    icon: () => <UsersIcon class={HEADER_ICON_CLASS} />,
+    compactClass: '@max-[840px]/u-list:justify-start',
+    compactIconClass: '@max-[840px]/u-list:px-1',
+  },
 };
 
 /** Which `TASK_GRID_COLUMNS.id` values map to a sort key (others are read-only). */
@@ -95,7 +102,9 @@ function TaskListHeader(props: { class?: string }) {
               active={sortKey !== undefined && activeSort()?.id === sortKey}
               reversed={activeSort()?.reversed ?? false}
               onSort={setSort}
-              narrowIcon={COLUMN_ICONS[col.id]}
+              narrowIcon={COLUMN_PRESENTATION[col.id]?.icon}
+              compactClass={COLUMN_PRESENTATION[col.id]?.compactClass}
+              compactIconClass={COLUMN_PRESENTATION[col.id]?.compactIconClass}
               // Match the wide pill inset; compact assignees keep their leading anchor.
               class="@min-[841px]/u-list:pl-2"
             />
@@ -131,16 +140,14 @@ function HeaderCell(props: {
   narrowIcon?: () => JSX.Element;
   align?: 'start' | 'end';
   class?: string;
+  compactClass?: string;
+  compactIconClass?: string;
 }) {
   const justify = () =>
     props.align === 'end' ? 'justify-end' : 'justify-start';
-  // Assignee stacks grow right from the same anchor as the first avatar.
-  const narrowJustify = () => {
-    if (!props.narrowIcon) return '';
-    return props.gridArea === 'assignees'
-      ? '@max-[840px]/u-list:justify-start'
-      : '@max-[840px]/u-list:justify-center';
-  };
+  const narrowJustify = () =>
+    props.narrowIcon &&
+    (props.compactClass ?? '@max-[840px]/u-list:justify-center');
 
   return (
     <div
@@ -164,9 +171,7 @@ function HeaderCell(props: {
               <span
                 class={cn(
                   'hidden @max-[840px]/u-list:flex',
-                  props.gridArea === 'assignees'
-                    ? '@max-[840px]/u-list:px-1'
-                    : '@max-[840px]/u-list:px-1.5'
+                  props.compactIconClass ?? '@max-[840px]/u-list:px-1.5'
                 )}
               >
                 {props.narrowIcon?.()}

@@ -223,17 +223,16 @@ function KeyPropertiesRow(props: {
                         >
                           <Match when={isEmpty()}>
                             <PropertyEmptyIcon
+                              muted
                               propertyDefinitionId={
                                 shown().propertyDefinitionId
                               }
-                              class={cn(
+                              class={
                                 shown().propertyDefinitionId ===
-                                  SYSTEM_PROPERTY_IDS.PRIORITY
+                                SYSTEM_PROPERTY_IDS.PRIORITY
                                   ? '@max-2xl/u-list:size-4 mobile:size-5'
-                                  : 'size-3.5 @max-2xl/u-list:size-4 mobile:size-5',
-                                shown().propertyDefinitionId !==
-                                  SYSTEM_PROPERTY_IDS.PRIORITY && 'opacity-50'
-                              )}
+                                  : 'size-3.5 @max-2xl/u-list:size-4 mobile:size-5'
+                              }
                             />
                           </Match>
                           <Match when={userCount() > 1}>

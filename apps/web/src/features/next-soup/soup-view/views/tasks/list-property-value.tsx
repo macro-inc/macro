@@ -1,6 +1,5 @@
 import { useMaybeBlockId } from '@core/block';
 import { Property } from '@property';
-import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { usePropertiesContext } from '@property/context/PropertiesContext';
 import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
 import type { Property as PropertyT } from '@property/types';
@@ -96,12 +95,9 @@ function ListPropertyPill(props: { property: Accessor<PropertyT> }) {
               fallback={
                 <>
                   <PropertyEmptyIcon
+                    muted
                     propertyDefinitionId={props.property().propertyDefinitionId}
-                    class={cn(
-                      'text-ink-extra-muted',
-                      props.property().propertyDefinitionId !==
-                        SYSTEM_PROPERTY_IDS.PRIORITY && 'opacity-50'
-                    )}
+                    class="text-ink-extra-muted"
                   />
                   <span class="truncate flex-1 opacity-50 @max-[840px]/u-list:hidden">
                     {props.property().displayName}

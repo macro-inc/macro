@@ -110,8 +110,9 @@ Compact desktop rows keep tags after the title and before the trailing propertie
 phone rows retain the single tag or collapsed multi-tag chip instead of dropping tags.
 Tag pills keep their compact height on touch.
 Task rows order trailing properties as Due date, Project, then Assignees on
-desktop and phones. Compact rows
-show both avatars for exactly two assignees; larger groups show the first avatar
+desktop and phones. List Due date icons use 12px on wide rows and the shared
+16px icon size in compact columns. Compact rows show both avatars for exactly
+two assignees; larger groups show the first avatar
 and the remaining count. Compact assignee slots reserve their width and keep the
 first avatar anchored left, so a second avatar or count grows only to the right
 without shifting Project or other properties.
@@ -203,8 +204,8 @@ the originating tab breadcrumb, a task tab, or a tag to return to the list.
 Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
 
-Status and Priority values use 12px icons beneath the opened task's title and
-16px icons in the Properties side panel, without changing their tap targets.
+Status and Priority values use 12px icons beneath the opened task's title on
+desktop, 16px on touch, and 16px in the Properties side panel.
 In the task's Properties side panel, hover or focus a row for **Pin below title**
 or **Unpin from title**. Pinning adds the property to the title row; unpinning keeps
 its saved value and the side-panel row. The title pill's hover card also offers

@@ -20,11 +20,11 @@ type Props = {
  * - DATE: calendar icon.
  * - everything else: null (extractor stays uninvolved).
  *
- * Layout-free — caller controls sizing/spacing.
+ * Uses compact defaults; callers can override sizing and spacing.
  */
 export function PropertyIcon(props: Props): JSX.Element {
   if (props.property.valueType === 'DATE') {
-    return <CalendarIcon class={props.class} />;
+    return <CalendarIcon class={cn('size-3 shrink-0', props.class)} />;
   }
   if (
     props.property.valueType === 'SELECT_STRING' ||

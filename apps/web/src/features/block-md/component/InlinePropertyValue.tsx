@@ -99,7 +99,7 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
           : undefined
       }
       class={props.class}
-      iconClass={props.iconClass}
+      iconClass={props.iconClass ?? 'size-3 touch:size-4 shrink-0'}
       emptyLabel={props.emptyLabel}
       opensProject={
         props.entityId !== undefined &&

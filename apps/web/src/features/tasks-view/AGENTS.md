@@ -24,6 +24,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Set task-list horizontal padding from its container width: 8px below 640px, 12px from 640px, and 4px on phones.
 - Render phone task rows with the narrow layout, an 8px unread-only rail, no checkbox column, 4px outer list padding, and 44px row height; preserve row selection handlers and 36px property-editor touch targets.
 - Keep leading task status icons at 18px and priority icons at 16px desktop/20px phone without flex shrinking; use the shared 12px property default elsewhere unless a surface overrides it, and preserve 16px group-header carets and existing hit targets.
+- Give list Due date glyphs the shared 12px base size and the existing 16px compact-column override; never leave calendar SVG dimensions implicit.
 - Use the matching `task-status-*` theme token for each status icon and group-header tint; default Completed to accent while preserving explicit theme overrides and independent global colors.
 - Edit priority then status through leading `TaskPropertyControl` icons on desktop and mobile; place status directly beside the title, and keep separate Status/Priority columns and duplicate trailing mobile pills removed.
 - Order trailing task properties as Due date, Project, then Assignees in wide and narrow rows and title pills; show both avatars for exactly two compact assignees, otherwise one avatar plus the remaining count, anchored left in a fixed-width slot so overflow grows right.

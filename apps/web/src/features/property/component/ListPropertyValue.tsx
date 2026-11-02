@@ -108,6 +108,7 @@ function ListPropertyCell(props: {
                 <>
                   <Show when={props.property().valueType !== 'DATE'}>
                     <PropertyEmptyIcon
+                      muted
                       propertyDefinitionId={
                         props.property().propertyDefinitionId
                       }
@@ -115,7 +116,7 @@ function ListPropertyCell(props: {
                         props.property().propertyDefinitionId ===
                         SYSTEM_PROPERTY_IDS.PRIORITY
                           ? 'text-ink-extra-muted @max-[840px]/u-list:size-4'
-                          : 'size-3.5 text-ink-extra-muted opacity-50 @max-[840px]/u-list:size-4'
+                          : 'size-3.5 text-ink-extra-muted @max-[840px]/u-list:size-4'
                       }
                     />
                   </Show>

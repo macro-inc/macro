@@ -9,6 +9,8 @@ import { SYSTEM_PROPERTY_IDS } from '../constants';
 export function PropertyEmptyIcon(props: {
   propertyDefinitionId?: string;
   class?: string;
+  /** Dim empty glyphs without dimming intrinsically muted artwork twice. */
+  muted?: boolean;
 }) {
   return (
     <span
@@ -16,7 +18,13 @@ export function PropertyEmptyIcon(props: {
       aria-hidden="true"
       data-icon-motion="none"
     >
-      <Switch fallback={<CircleDashedEmpty class="size-full" />}>
+      <Switch
+        fallback={
+          <CircleDashedEmpty
+            class={cn('size-full', props.muted && 'opacity-50')}
+          />
+        }
+      >
         <Match
           when={props.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PRIORITY}
         >
@@ -25,12 +33,12 @@ export function PropertyEmptyIcon(props: {
         <Match
           when={props.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT}
         >
-          <ProjectIcon class="size-full" />
+          <ProjectIcon class={cn('size-full', props.muted && 'opacity-50')} />
         </Match>
         <Match
           when={props.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES}
         >
-          <PersonIcon class="size-full" />
+          <PersonIcon class={cn('size-full', props.muted && 'opacity-50')} />
         </Match>
       </Switch>
     </span>
@@ -52,30 +60,16 @@ type Props = {
  */
 export function PropertyEmpty(props: Props) {
   return (
-    <span
-      class={cn(
-        'inline-flex items-center gap-1.5',
-        props.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.PRIORITY &&
-          'opacity-50',
-        props.class
-      )}
-    >
+    <span class={cn('inline-flex items-center gap-1.5', props.class)}>
       <Show when={!props.hideIcon}>
         <PropertyEmptyIcon
+          muted
           propertyDefinitionId={props.propertyDefinitionId}
           class={props.iconClass}
         />
       </Show>
       <Show when={props.label}>
-        <span
-          class={cn(
-            'truncate',
-            props.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PRIORITY &&
-              'opacity-50'
-          )}
-        >
-          {props.label}
-        </span>
+        <span class="truncate opacity-50">{props.label}</span>
       </Show>
     </span>
   );

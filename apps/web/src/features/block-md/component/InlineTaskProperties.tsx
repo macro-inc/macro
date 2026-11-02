@@ -182,7 +182,7 @@ export function InlineTaskProperties() {
             entityType={entityType}
             variant="secondary"
             size="xs"
-            class={documentKind === 'task' ? 'touch:min-h-9' : undefined}
+            class="touch:min-h-9"
             showAddButton={documentKind === 'document' && canEdit()}
           />
           {/* A placeholder keeps its chip, and a pick in it, when saving assigns its ID. */}
@@ -196,11 +196,6 @@ export function InlineTaskProperties() {
                   property().propertyDefinitionId ===
                     SYSTEM_PROPERTY_IDS.DUE_DATE
                     ? false
-                    : undefined
-                }
-                iconClass={
-                  documentKind === 'task'
-                    ? 'size-3 touch:size-4 shrink-0'
                     : undefined
                 }
                 canManage={

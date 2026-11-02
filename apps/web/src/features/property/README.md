@@ -26,20 +26,24 @@ board cards, group and column headers, and pickers: the wide ascending priority
 bars at 30% opacity for no priority, a corner-dashed cube for no project, and a
 filled person in a dashed circular frame for no assignees. No priority uses the
 same color and display box as Low/Medium/High, without additional icon dimming.
-In task and project lists, empty icons other than No priority use 50%
-opacity; empty labels stay at 50% opacity. Populated values stay at full opacity.
+In task and project lists, request `PropertyEmptyIcon.muted` for 50%-opacity
+empty glyphs; intrinsically muted No priority artwork is not dimmed again.
+`Property.Empty` uses the same treatment and 50%-opacity labels. Populated values
+stay at full opacity.
 Other empty properties retain the dashed circle. Populated project properties
 use the regular cube icon through `Property.Icon`. Keep these state indicators
 static and readable in compact rows. When composing a project icon separately,
 pass `hideIcon` to `Property.Text` to avoid duplicate glyphs.
-Status and Priority option icons share a 12px default, including desktop and
-mobile edit menus and desktop title property pills. Task-detail title pills
-also size Due date icons to 12px on desktop, omit the `Due date:` prefix, and
-order Due date before Project and Assignees. These pills use 16px value and
-empty-state icons on touch; side-panel Status/Priority
+Status, Priority, and Date icons share a 12px default. List date icons use the
+existing 16px compact-column override instead of stretching to the cell width.
+Inline task and document title pills use 12px icons on desktop and 16px value
+and empty-state icons on touch. Task title pills omit the `Due date:` prefix
+and order Due date before Project and Assignees. Side-panel Status/Priority
 values use explicit 16px icons. Side-panel Project icons, including empty
 values, use 16px on touch and retain their desktop sizes. Other callers can
 override the size.
+`Property.UserStack` overlaps assignee avatars and their overflow count by 8px;
+other avatar groups retain their shared spacing.
 Editable list cells use the shared ghost `Property.Pill` styling. Project hover
 cards use a cube header with the assigned value below it; empty Project hover
 cards retain the one-line empty message.
