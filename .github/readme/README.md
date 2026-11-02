@@ -13,6 +13,18 @@ The editable composition and source assets remain in the local
 
 ## Product screenshots
 
+The README references the nine PNGs in `framed/`. Each uses the marketing
+Calls hero’s `monterey-dark.jpg` background with `grayscale(1) brightness(1.6)
+contrast(1.05)`, reduced padding of 30 pixels per 1200-pixel frame, and the same
+proportional 16-pixel inner and outer corner radius. Outer corners are transparent
+so they work on both GitHub themes. Screenshot content is unchanged and never
+upscaled; Email and CRM retain their lower source resolution. The header,
+security badges, and star-history charts are not part of this treatment.
+
+Unframed sources are retained below for future edits. Editable compositions and
+the rendering recipe are in the local
+`Macro README header/2026-11-02-all-framed/` package.
+
 The root README uses nine product screenshots. The October 29 final gallery
 supplies Databases, Agents, and Calendar. A subsequent sharpness review replaces
 Chat, Tasks, and Docs with the user's higher-resolution first-pass captures.
@@ -33,17 +45,17 @@ Keep enough source pixels for a sharp display on high-density screens. Capture
 at a useful desktop viewport and retain roughly 2× pixels; do not downsample to
 the README's display width before saving. Use lossless PNG for cropped UI text.
 
-| Asset | View |
-| --- | --- |
-| `email-thread.jpg` | First Macro Outlook Email!, a team test message, with email navigation open |
-| `messages-channel.png` | Engineers agent result, with links to the created project and task |
-| `tasks-list.png` | Search Surface Area project grouped by assignee, higher-resolution desktop capture |
-| `docs-prd.png` | PRD: Team Channels, compact desktop view with tags, assignees, and document content |
-| `crm-board.jpg` | Sales Demo pipeline, showing 9 fictional companies in Lead, Demo, and Customer; 2 Churned companies are outside the crop; all deal values are sample data |
-| `databases-table.png` | Donations Example, showing dates, amounts, designations, and donor relations |
-| `agents-task-handoff.png` | Add Reminder Icon To Tasks, recaptured on web with a successful audit and PR #8824 |
-| `calls-recording.png` | Tasks & Docs Page Design Review with Jacob, recording at 3:45 and speaker-labelled transcript |
-| `calendar-week.png` | Populated weekly calendar with connected calendars and booking-link controls |
+| Unframed source | README asset | View |
+| --- | --- | --- |
+| `email-thread.jpg` | `framed/email.png` | First Macro Outlook Email!, a team test message, with email navigation open |
+| `messages-channel.png` | `framed/chat.png` | Engineers agent result, with links to the created project and task |
+| `tasks-list.png` | `framed/tasks.png` | Search Surface Area project grouped by assignee, higher-resolution desktop capture |
+| `docs-prd.png` | `framed/docs.png` | PRD: Team Channels, compact desktop view with tags, assignees, and document content |
+| `crm-board.jpg` | `framed/crm.png` | Sales Demo pipeline, showing 9 fictional companies in Lead, Demo, and Customer; 2 Churned companies are outside the crop; all deal values are sample data |
+| `databases-table.png` | `framed/databases.png` | Donations Example, showing dates, amounts, designations, and donor relations |
+| `agents-task-handoff.png` | `framed/agents.png` | Add Reminder Icon To Tasks, recaptured on web with a successful audit and PR #8824 |
+| `calls-recording.png` | `framed/calls.png` | Tasks & Docs Page Design Review with Jacob, recording at 3:45 and speaker-labelled transcript |
+| `calendar-week.png` | `framed/calendar.png` | Populated weekly calendar with connected calendars and booking-link controls |
 
 Keep the navigation rail visible; show the expanded sidebar when it adds useful context. Capture browser page
 content so macOS screen-sharing indicators and window controls stay out of the

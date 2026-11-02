@@ -70,7 +70,7 @@ Macro Mail is inspired by Superhuman's keyboard-first interface with a few key a
 2. Unified inbox: emails, messages, @mentions, and tasks to complete, all in the same list. Use `j` `k` and `e` to navigate everything.
 3. Better AI, with a tools/MCP surface designed to work across inboxes and to help your agents more accurately retrieve information. For example, we expose a unified search tool that allows agents to search all file attachment PDFs (parsed out of email) directly, rather than pulling email threads then attachments. You can also draft, edit and send emails right from AI chats, without opening your email.
 
-![A Macro team test email with the email navigation sidebar open](.github/readme/email-thread.jpg)
+![A Macro team test email with the email navigation sidebar open](.github/readme/framed/email.png)
 
 4. Multitasking ability — Macro has a built-in window manager that lets you create 3+ splits (scales with monitor size) so you can draft emails while reviewing prior threads.
 5. Company/Contact objects. Macro has native CRM capability so you can `cmd+k` to a contact, like tim@acme.com to see all emails between you and that person, or companies, to see all emails and files between everyone on your team and everyone at that company, e.g. `@acme.com`. All of this right from your email without having to open a heavyweight CRM like HubSpot or Salesforce. Email aggregation by contact or company is also available to your agents so they can better assist with CRM-type queries and actions.
@@ -85,7 +85,7 @@ Macro Mail lives in the same interface as channels, docs, tasks, and code. From 
 
 Macro Chat is designed to be more focused than Slack. The first couple of replies show inline and the rest collapse into a thread, so a busy channel stays readable. Copy a link to a message/thread to reference it elsewhere in Macro. Everything is stored in a bidirectional graph, so tasks @link to messages that created them, customer support emails tie into support channels, CRM records get updated when they're discussed in messages, etc. The core idea is that (i) messaging should be the centerpiece around which tasks, mail, docs, and content management are built, all in a lightweight way, and agents should be first-class citizens like human users and (ii) messaging needs to be more focused and readable for technical conversations, and not turn into battles where context is lost and progress is indistinguishable from noise.
 
-![An agent in the Engineers channel completing a request and linking the resulting project and task](.github/readme/messages-channel.png)
+![An agent in the Engineers channel completing a request and linking the resulting project and task](.github/readme/framed/chat.png)
 
 We've also added ways for you to bring in conversations outside of your team into Macro. We wanted to make sure that all your external and internal communication can live in Macro.
 
@@ -105,7 +105,7 @@ The core problem with traditional issue trackers or project management tools is 
 
 The solution isn't to forgo tracking entirely. We tried that and it was a different form of chaos. **The solution we've found is lightweight issues tightly coupled to your channels and DMs, so that issue tracking naturally occurs where the conversation itself happens.**
 
-![Macro search project tasks grouped by assignee, with statuses, priorities, and project links](.github/readme/tasks-list.png)
+![Macro search project tasks grouped by assignee, with statuses, priorities, and project links](.github/readme/framed/tasks.png)
 
 Creating tasks in Macro is easy. Where possible, tasks created are bidirectionally linked to the creating context (e.g. a customer email) so the full chain is auditable from "why are we doing this" → task → agent → pull request, all in one system.
 
@@ -136,7 +136,7 @@ We wanted everything in a single markdown editor without switching tools.
 - Mobile-friendly, in our [iOS app](https://apps.apple.com/us/app/macro-app/id6743133649), [Android app](https://play.google.com/store/apps/details?id=com.macro.workspace.mobile&pcampaignid=web_share), or on the web.
 - Agent native editing, powered by swarms of agents operating as peers in the CRDT collaboration system like human collaborators. See [Wolf's tech blog on this](https://404wolf.com/posts/AgentsAttackTheDocument/). Use via MCP or internal agent.
 
-![The Team Channels PRD in Macro with tags, assignees, and collaborative document content](.github/readme/docs-prd.png)
+![The Team Channels PRD in Macro with tags, assignees, and collaborative document content](.github/readme/framed/docs.png)
 
 Agents can edit documents that are open or closed. One interesting use case for agentic editing is to maintain team-context. For example we have a Macro Routine that runs daily to update our in-office Pool Games markdown doc. It scans through all of the channels to see if anyone has won and then updates the doc. If somebody has already edited the doc, it can know that and forgo the update. Conflicts are handled natively by the CRDT collaboration system.
 
@@ -150,7 +150,7 @@ We want you to be able to run your entire company in Macro including workflows t
 
 You can ask agents to create tables, update records, and answer questions about your data. You can also embed a database view or query result in a document and it'll stay up to date as the underlying data changes.
 
-![A Donations Example database with dates, amounts, categories, and related donors](.github/readme/databases-table.png)
+![A Donations Example database with dates, amounts, categories, and related donors](.github/readme/framed/databases.png)
 
 <br />
 
@@ -160,7 +160,7 @@ The problem with standalone CRM is the same as with task trackers: it's not up t
 
 **Macro fixes this by colocating your CRM with your team chat and email, instead of having a separate system.** When you @mention a company record in a message, your team can click that record to see the latest — it's much faster than navigating to your CRM to find the record, going back to Slack and pasting it in, and this speed difference makes all the difference. Secondly, @mentioning a Company/Contact creates a bidirectional link between that message and the record, so from the record later you can trace the conversations that happened. This fixes the core issue we had with Attio/HubSpot/Salesforce: the actual important conversation about a deal happens not in the CRM but over messages. Macro makes this a feature rather than making you feel disorganized about it. It's not your fault, it was the CRM's fault!
 
-![Macro Sales Demo pipeline with nine visible fictional company cards across three stages and its navigation sidebar open](.github/readme/crm-board.jpg)
+![Macro Sales Demo pipeline with nine visible fictional company cards across three stages and its navigation sidebar open](.github/readme/framed/crm.png)
 
 - Customizable sales pipelines and deal stages with board and list views.
 - Company and contact records have their own discussions where your team can leave notes and @mention people and work.
@@ -181,7 +181,7 @@ Agents in Macro have the superpower of all your context. Your emails, conversati
 - Create routines for work that should happen on a schedule or in response to activity in your workspace.
 - Give agents reusable instructions through skills, so you don’t have to explain the same process every time.
 
-![A Macro coding-agent session with tool calls, a successful audit, and a pull request](.github/readme/agents-task-handoff.png)
+![A Macro coding-agent session with tool calls, a successful audit, and a pull request](.github/readme/framed/agents.png)
 
 Macro also builds memory from your work across conversations, email, tasks, and documents. That gives agents background on what you’re working on and what matters to you, beyond what you’ve told them in an individual chat.
 
@@ -206,7 +206,7 @@ Since Macro already has your CRM, chats, DMs, booking links, and calendar, calls
 - Calls are automatically recorded and transcribed, with speaker labels and AI summaries.
 - Agents can use the call context to write follow-ups, create tasks, and update documents.
 
-![A recorded design-review call showing screen sharing, participant video, playback controls, and a speaker-labelled transcript](.github/readme/calls-recording.png)
+![A recorded design-review call showing screen sharing, participant video, playback controls, and a speaker-labelled transcript](.github/readme/framed/calls.png)
 
 [Calls docs &rarr;](https://docs.macro.com/product/calls)
 
@@ -221,7 +221,7 @@ We built a simple Calendar in Macro so you can manage your week right next to wh
 - Set your availability and avoid conflicts across connected calendars.
 - Ask agents to find time, schedule meetings, and update events.
 
-![Macro Calendar showing a populated week, connected calendars, and booking links](.github/readme/calendar-week.png)
+![Macro Calendar showing a populated week, connected calendars, and booking links](.github/readme/framed/calendar.png)
 
 <br />
 
