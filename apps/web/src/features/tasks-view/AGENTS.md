@@ -38,6 +38,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Pass enabled grid columns as a typed ordered array; default Project before Assignees and derive full-row spans from the same array.
 - Include each visible task cell's 8px leading inset inside its track and keep the grid's column gap at zero so hidden metadata columns reserve no space.
 - Give Priority, Due date, Project, and Assignees Show / Hide when empty / Hide modes; give Tags, Updated, and Created by Show / Hide, keep Status and title visible, and default all configurable properties to Show.
+- Arrange View-menu properties as wrapping icon pills; cycle supported modes on pill activation, explain the current and next mode in a tooltip, and expose direct choices through a separate icon trigger on hover, keyboard focus, and always on touch.
 - Keep empty-only hiding within the shared desktop grid track; remove that detail entirely in phone rows, and never reintroduce desktop-only metadata on phones.
 - Remember unsaved-list property visibility per account on the device, synchronize mounted task lists, and keep saved definitions and drafts isolated from those preferences; render View-menu checkmarks in accent ink.
 - Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers: 30%-opacity wide priority bars, a dashed user circle, a corner-dashed project cube, and a slashed calendar for no due date; use the regular cube for set projects.

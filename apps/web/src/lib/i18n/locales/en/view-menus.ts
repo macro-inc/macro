@@ -77,6 +77,13 @@ export default {
   hideProperty: 'Hide',
   assignees: 'Assignees',
   propertyDisplaySummary: 'Properties: {{settings}}',
+  showPropertyDescription: 'Show this property, including empty values.',
+  hideWhenEmptyDescription: 'Show this property only when it has a value.',
+  hidePropertyDescription: 'Hide this property from the task list.',
+  propertyDisplayAction: '{{property}}: {{mode}}. Change to {{nextMode}}',
+  propertyDisplayTooltip:
+    '{{property}}: {{mode}}. {{description}} Click to change to {{nextMode}}.',
+  propertyDisplayMenu: 'Change {{property}} visibility',
 
   // Filter menu
   filter: 'Filter',

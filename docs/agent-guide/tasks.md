@@ -83,7 +83,14 @@ The sidebar has no Tags section: filter by tag from the `Tags` group of the `Fil
 and switching tabs clears it like any other filter. On mobile, the tabs
 are pills, with separate leading Filters and View controls. Filters contains only
 filter facets (including Tags); View opens a sheet with Group by, Sort, and Properties choices.
-In the mobile View sheet, tap a property to expand its display modes.
+In Properties, icon pills use a wrapping row on desktop and touch. Click or tap
+one to cycle Show → Hide when empty → Hide (skipping Hide when empty for Tags,
+Updated, and Created by). An eye, half-filled circle, or crossed-out eye marks
+the current mode. A pill tooltip explains the current mode and next click.
+Use its separate chevron to choose a mode directly; the chevron appears on
+hover or keyboard focus on desktop and stays visible on touch. On touch,
+the chevron opens a small visibility sheet above View; dismissing it returns
+focus to the chevron. Mode choices keep View open.
 The mobile bottom dock has **+ Task** and Search, with no floating Ask AI input.
 Project and CRM task lists use the same separate controls. Changes in either
 sheet remain part of the existing saved-view draft; its save actions stay in
