@@ -1,5 +1,6 @@
 import { promptActionOf } from '@app/features/block-agent/component/prompt-action';
 import { createRecentAgentSelections } from '@app/features/block-agent/context/recent-agent-selections';
+import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
 import {
   createInputAttachmentTracker,
   type InputAttachmentData,
@@ -601,6 +602,7 @@ export function NewChatPage(props: {
               data-agent-new-composer={props.workspaceId}
               class="agents-view-portal touch:px-(--mobile-chrome-gutter) pointer-events-auto min-w-0"
             >
+              <LocalRuntimePrompt />
               {composer()}
             </div>
           </FloatRegionOrInline>

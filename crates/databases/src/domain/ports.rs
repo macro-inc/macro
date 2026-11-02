@@ -335,11 +335,13 @@ pub trait TableEventPublisher: Send + Sync + 'static {
         version: TableVersion,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 
-    /// Relay where a viewer is to the database's other viewers.
+    /// Relay where a viewer is to the database's other viewers, and whether
+    /// their grant lets them edit.
     fn awareness(
         &self,
         database_id: DatabaseId,
         user_id: &MacroUserIdStr<'_>,
+        can_edit: bool,
         state: &Awareness,
     ) -> impl Future<Output = Result<(), Self::Error>> + Send;
 }
@@ -485,8 +487,9 @@ pub trait DatabasesService: Send + Sync + 'static {
         since: TableVersion,
     ) -> impl Future<Output = Result<TableChanges, DatabaseError>> + Send;
 
-    /// Tell the database's other viewers where this viewer is; a relay
-    /// failure is the caller's error.
+    /// Tell the database's other viewers where this viewer is and whether
+    /// they can edit; a viewer who cannot is never relayed as editing. A
+    /// relay failure is the caller's error.
     fn share_awareness(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,

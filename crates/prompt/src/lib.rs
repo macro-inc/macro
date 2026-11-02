@@ -21,6 +21,7 @@ pub mod email;
 pub mod math;
 pub mod mcp_item_links;
 pub mod mentions;
+pub mod privacy;
 pub mod pull_requests;
 pub mod skills;
 pub mod tasks;
@@ -314,6 +315,29 @@ mod tests {
     }
 
     #[test]
+    fn every_in_app_agent_prompt_posts_a_channel_form_as_one_live_poll_card() {
+        for prompt in [
+            &DIRECT_TOOL_USE_PROMPT,
+            &TOOL_USE_PROMPT,
+            &SESSION_TOOL_USE_PROMPT,
+            &CODE_MODE_SESSION_TOOL_USE_PROMPT,
+        ] {
+            let text = prompt.to_string();
+            for guidance in [
+                "A form for a channel is a poll:",
+                "one required single- or multi-select question",
+                "`tallyVisible: true`",
+                "`widget: \"choice\"`",
+                "`channelGrants: []`",
+                r#"<m-document-card>{"documentId":"{form_id}","documentName":"{question}","blockName":"form","previewData":{"poll":{"optionCount":2}}}</m-document-card>"#,
+                "or a second copy.",
+            ] {
+                assert!(text.contains(guidance), "missing poll guidance: {guidance}");
+            }
+        }
+    }
+
+    #[test]
     fn mentions_and_document_content_links_share_an_identical_document_mention_tag() {
         // document_content_links deliberately repeats this tag literal (rather
         // than importing it) so it stays self-contained for MCP composition,
@@ -408,4 +432,13 @@ mod tests {
         assert!(in_app.contains("non-Markdown documents"));
         assert!(in_app.contains("apply to your own conversational replies only"));
     }
+}
+
+/// Compose runtime sections in their supplied order without retaining their data.
+pub fn compose(sections: &[&dyn std::fmt::Display]) -> String {
+    sections
+        .iter()
+        .map(ToString::to_string)
+        .collect::<Vec<_>>()
+        .join("\n")
 }

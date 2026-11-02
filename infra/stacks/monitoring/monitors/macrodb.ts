@@ -276,15 +276,22 @@ prodMonitor('macrodb-blocked-connections', {
   runbook: 'docs/runbooks/macrodb.md#locks',
 });
 
+// Database Monitoring query samples, not the host-level xact_start_age gauge:
+// that metric has no SQL tag, so the notification could not name the statement.
+// The dashboard graph still plots xact_start_age with the same age markers.
 prodMonitor('macrodb-long-transactions', {
   title: 'macro-db-prod long-running transaction',
   service: 'macro-db-prod',
+  type: 'database-monitoring alert',
   query:
-    'avg(last_10m):max:postgresql.activity.xact_start_age{host:macro-db-prod*} by {host} > 1800',
-  monitorThresholds: { critical: '1800', warning: '600' },
+    'database-monitoring("dbm_type:activity host:macro-db-prod* @duration:>1800s").rollup("count").by("host,@db.statement").last("10m") > 0',
+  monitorThresholds: { critical: '0' },
   pages: false,
+  enableLogsSample: true,
+  alertDetail: 'oldest transaction >= 1800s',
+  recoveryDetail: 'no transaction over 1800s',
   description:
-    'The oldest open transaction on {{host.name}} is {{value}} seconds old. Long transactions hold locks and stop vacuum.',
+    'The oldest open transaction on {{host.name}}, "{{[@db.statement].name}}", is at least 1800 seconds old. Long transactions hold locks and stop vacuum.',
   dashboard: dashboard.url,
   runbook: 'docs/runbooks/macrodb.md#locks',
 });

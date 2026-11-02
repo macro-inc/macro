@@ -14,7 +14,6 @@ field and mutate.
 - [`UserApiKey`](../../api-keys/api-key/classes/UserApiKey.md)
 - [`Calendar`](../../calendar/calendar/classes/Calendar.md)
 - [`CalendarEvent`](../../calendar/event/classes/CalendarEvent.md)
-- [`CalendarNote`](../../calendar/note/classes/CalendarNote.md)
 - [`CallMessage`](../../calls/message/classes/CallMessage.md)
 - [`ChatMessage`](../../chats/generation/classes/ChatMessage.md)
 - [`CrmComment`](../../crm/comment/classes/CrmComment.md)
