@@ -57,9 +57,10 @@ icons do not change. Drive folders, tasks, skills, and internal descriptions do
 not have appearance editing.
 
 Desktop uses a compact popover; phones use the shared dialog sheet. Search
-Macro icons or emoji. Colors use a fixed theme-aware palette; emoji keep their
-native colors. **Default icon** and **Default color** reset independently;
-**Reset all** resets both. Draft choices preview only inside the picker.
+Macro icons or emoji. Colors use a fixed theme-aware palette on the Icons tab;
+the Emoji tab hides color controls and emoji keep their native colors.
+**Default icon** and **Default color** reset independently; **Reset all** resets
+both. Draft choices preview only inside the picker.
 **Apply** updates visible icons immediately while saving both fields together,
 then closes on success. A failed save restores the previous icons and keeps the
 draft available to retry; Cancel or dismiss discards only the unsaved draft.

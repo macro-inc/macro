@@ -130,44 +130,46 @@ export function AppearancePicker(props: {
       <Button variant="ghost" size="sm" onClick={() => setIcon(null)}>
         {t('appearance.defaultIcon')}
       </Button>
-      <fieldset
-        class="flex flex-col gap-2"
-        disabled={props.appearance.icon?.kind === 'emoji'}
-      >
-        <legend class="mb-2 text-xs text-ink-muted">
-          {t('appearance.color')}
-        </legend>
-        <div class="flex flex-wrap">
-          <For each={APPEARANCE_COLORS}>
-            {(color) => (
-              <Button
-                variant="ghost"
-                size="icon-md"
-                aria-label={t(`appearance.${color}`)}
-                aria-pressed={props.appearance.color === color}
-                tooltip={t(`appearance.${color}`)}
-                onClick={() => props.onChange({ ...props.appearance, color })}
-              >
-                <span
-                  class="size-4 rounded-full"
-                  classList={{
-                    'ring-2 ring-ink ring-offset-2 ring-offset-page':
-                      props.appearance.color === color,
-                  }}
-                  style={{ background: appearanceColor(color) }}
-                />
-              </Button>
-            )}
-          </For>
-        </div>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => props.onChange({ ...props.appearance, color: null })}
+      <Show when={tab() === 'icons'}>
+        <fieldset
+          class="flex flex-col gap-2"
+          disabled={props.appearance.icon?.kind === 'emoji'}
         >
-          {t('appearance.defaultColor')}
-        </Button>
-      </fieldset>
+          <legend class="mb-2 text-xs text-ink-muted">
+            {t('appearance.color')}
+          </legend>
+          <div class="flex flex-wrap">
+            <For each={APPEARANCE_COLORS}>
+              {(color) => (
+                <Button
+                  variant="ghost"
+                  size="icon-md"
+                  aria-label={t(`appearance.${color}`)}
+                  aria-pressed={props.appearance.color === color}
+                  tooltip={t(`appearance.${color}`)}
+                  onClick={() => props.onChange({ ...props.appearance, color })}
+                >
+                  <span
+                    class="size-4 rounded-full"
+                    classList={{
+                      'ring-2 ring-ink ring-offset-2 ring-offset-page':
+                        props.appearance.color === color,
+                    }}
+                    style={{ background: appearanceColor(color) }}
+                  />
+                </Button>
+              )}
+            </For>
+          </div>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => props.onChange({ ...props.appearance, color: null })}
+          >
+            {t('appearance.defaultColor')}
+          </Button>
+        </fieldset>
+      </Show>
       <Show when={props.appearance.icon?.kind === 'emoji'}>
         <p class="text-xs text-ink-muted">{t('appearance.emojiColor')}</p>
       </Show>
