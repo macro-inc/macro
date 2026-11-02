@@ -1,8 +1,8 @@
+import { useRegisterPriorityCollapseItem } from '@app/components/priority-collapse/createPriorityCollapser';
 import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
-} from '@components/app/split-layout/components/PriorityCollapseOverflowSensor';
-import { useRegisterPriorityCollapseItem } from '@components/app/split-layout/layoutUtils';
+} from '@app/components/priority-collapse/PriorityCollapseOverflowSensor';
 import {
   Entity,
   isProjectContainedEntity,

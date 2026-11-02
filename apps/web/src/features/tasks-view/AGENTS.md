@@ -35,6 +35,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Include each visible task cell's 8px leading inset inside its track and keep the grid's column gap at zero so hidden metadata columns reserve no space.
 - Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers: 30%-opacity wide priority bars, a dashed user circle, and a corner-dashed project cube; use the regular cube for set projects.
 - Use shared ghost-button interaction styling for editable list properties; dim empty icons and labels without applying opacity twice to No priority.
+- Register task-row collapse items with the shared `src/components/priority-collapse/` controller and sensor, not split-layout wrappers.
 - Show at most three individual tag chips; keep a sole tag as its named chip even in collapsed layouts, otherwise collapse the folder path first, then more tags on measured overflow, and truncate the title last while preserving open tag editors.
 - Keep the tag chip or collapsed multi-tag overflow after the title on phone rows instead of dropping tags with the desktop columns.
 

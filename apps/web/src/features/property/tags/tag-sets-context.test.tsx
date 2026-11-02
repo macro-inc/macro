@@ -2,7 +2,7 @@
  * @vitest-environment jsdom
  */
 
-import type { CollapsibleRegistration } from '@components/app/split-layout/utils/createPriorityCollapser';
+import type { CollapsibleRegistration } from '@app/components/priority-collapse/createPriorityCollapser';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';

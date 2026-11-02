@@ -1,9 +1,9 @@
-import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
+import { useRegisterPriorityCollapseItem } from '@app/components/priority-collapse/createPriorityCollapser';
 import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
-} from '@components/app/split-layout/components/PriorityCollapseOverflowSensor';
-import { useRegisterPriorityCollapseItem } from '@components/app/split-layout/layoutUtils';
+} from '@app/components/priority-collapse/PriorityCollapseOverflowSensor';
+import { useMaybeSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import {
   Entity,
   type EntityData,

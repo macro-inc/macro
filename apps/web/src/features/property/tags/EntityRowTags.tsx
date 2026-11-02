@@ -1,4 +1,4 @@
-import type { PriorityCollapser } from '@components/app/split-layout/utils/createPriorityCollapser';
+import type { PriorityCollapser } from '@app/components/priority-collapse/createPriorityCollapser';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import FilterIcon from '@icon/system/regular/funnel-simple.svg';

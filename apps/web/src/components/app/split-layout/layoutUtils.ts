@@ -5,11 +5,14 @@ import {
   type Accessor,
   createEffect,
   createMemo,
-  createSignal,
   onCleanup,
   untrack,
   useContext,
 } from 'solid-js';
+import {
+  type CollapsibleItemInput,
+  useRegisterPriorityCollapseItem,
+} from '../../priority-collapse/createPriorityCollapser';
 import { SplitLayoutContext, SplitPanelContext } from './context';
 import type {
   SplitContent,
@@ -17,10 +20,6 @@ import type {
   SplitHandle,
   SplitManager,
 } from './layoutManager';
-import type {
-  CollapsibleItemInput,
-  PriorityCollapser,
-} from './utils/createPriorityCollapser';
 
 const _isInSplit = createCallback(() => {
   return !!useContext(SplitPanelContext);
@@ -216,30 +215,6 @@ function _createIsActiveSplitContentMemo(
     const content = activeSplit()?.content();
     return content?.type === contentType && content.id === id;
   });
-}
-
-/**
- * Register a collapsible item with an explicit collapser for the lifetime of
- * the calling owner. Rows outside the split header (a ViewShell top bar with
- * its own overflow sensor) hand their controller's collapser in directly.
- */
-export function useRegisterPriorityCollapseItem(
-  collapser: PriorityCollapser,
-  input: CollapsibleItemInput
-): Accessor<boolean> {
-  const [collapsed, setCollapsedInner] = createSignal(false);
-  const setCollapsed = (value: boolean, opts?: { silent?: boolean }) => {
-    setCollapsedInner(value);
-    if (!opts?.silent) input.onCollapsedChange?.(value);
-  };
-  input.onCollapsedChange?.(false);
-  const cleanup = collapser.register({
-    ...input,
-    collapsed,
-    setCollapsed,
-  });
-  onCleanup(cleanup);
-  return collapsed;
 }
 
 function useRegisterCollapsibleItem(

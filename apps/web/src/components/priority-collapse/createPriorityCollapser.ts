@@ -167,3 +167,23 @@ export function createPriorityCollapser(
     },
   };
 }
+
+/** Register a collapsible item with an explicit collapser for the caller's lifetime. */
+export function useRegisterPriorityCollapseItem(
+  collapser: PriorityCollapser,
+  input: CollapsibleItemInput
+): Accessor<boolean> {
+  const [collapsed, setCollapsedInner] = createSignal(false);
+  const setCollapsed = (value: boolean, opts?: { silent?: boolean }) => {
+    setCollapsedInner(value);
+    if (!opts?.silent) input.onCollapsedChange?.(value);
+  };
+  input.onCollapsedChange?.(false);
+  const cleanup = collapser.register({
+    ...input,
+    collapsed,
+    setCollapsed,
+  });
+  onCleanup(cleanup);
+  return collapsed;
+}
