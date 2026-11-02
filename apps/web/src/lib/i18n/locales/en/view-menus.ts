@@ -57,8 +57,8 @@ export default {
   dueDate: 'Due date',
 
   // List controls
-  view: 'View',
-  viewOptions: 'View options',
+  view: 'Display',
+  viewOptions: 'Display options',
   groupBy: 'Group by',
   searchOrder: 'Search order',
   searchOrderDescription:
@@ -80,10 +80,11 @@ export default {
   showPropertyDescription: 'Show this property, including empty values.',
   hideWhenEmptyDescription: 'Show this property only when it has a value.',
   hidePropertyDescription: 'Hide this property from the task list.',
-  propertyDisplayAction: '{{property}}: {{mode}}. Change to {{nextMode}}',
   propertyDisplayTooltip:
     '{{property}}: {{mode}}. {{description}} Click to change to {{nextMode}}.',
   propertyDisplayMenu: 'Change {{property}} visibility',
+  propertyDisplayMenuTooltip:
+    '{{property}}: {{mode}}. {{description}} Click to choose visibility.',
 
   // Filter menu
   filter: 'Filter',

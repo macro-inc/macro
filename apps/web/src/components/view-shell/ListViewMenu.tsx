@@ -1,13 +1,14 @@
 import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { deepEqual } from '@core/util/compareUtils';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import ViewIcon from '@icon/system/regular/sliders-horizontal.svg';
 import SortIcon from '@icon/system/regular/sort-ascending.svg';
 import GroupIcon from '@icon/system/regular/stack.svg';
-import { Button, ButtonGroup, Dropdown } from '@ui';
-import { createSignal, For, type JSX, Show } from 'solid-js';
+import { Button, ButtonGroup, Dropdown, Tabs } from '@ui';
+import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
 import type { ListControlOption, ViewLayout } from './ListDropdowns';
 
 type ViewSelection<T extends string> = {
@@ -97,6 +98,31 @@ function DesktopOptions<T extends string>(props: {
   );
 }
 
+function LayoutTabs(props: { selection: ViewSelection<ViewLayout> }) {
+  // Keep the radio inputs mounted while the selected layout changes.
+  const options = createMemo(
+    () =>
+      props.selection.options.map((option) => ({
+        value: option.id,
+        label: option.label,
+        icon: option.icon,
+        disabled: option.disabled,
+      })),
+    undefined,
+    { equals: deepEqual }
+  );
+  return (
+    <Tabs
+      aria-label={t('viewMenus.layout')}
+      size="sm"
+      fullWidth
+      value={props.selection.value}
+      options={options()}
+      onChange={props.selection.onChange}
+    />
+  );
+}
+
 function MobileSelection<T extends string>(props: {
   label: string;
   selection: ViewSelection<T>;
@@ -158,14 +184,30 @@ export function ListViewMenu<TGroup extends string, TSort extends string>(
             <ViewIcon class="size-4" />
             {t('viewMenus.view')}
           </Dropdown.Trigger>
-          <Dropdown.Content class="min-w-64 max-w-96">
+          <Dropdown.Content class="min-w-56 max-w-64">
             <Show when={props.layout}>
               {(layout) => (
                 <Dropdown.Group>
                   <Dropdown.GroupLabel>
                     {t('viewMenus.layout')}
                   </Dropdown.GroupLabel>
-                  <DesktopOptions selection={layout()} />
+                  <Dropdown.Item
+                    role="presentation"
+                    closeOnSelect={false}
+                    textValue={t('viewMenus.layout')}
+                    class="p-0 data-highlighted:bg-transparent"
+                    onFocusIn={(
+                      event: FocusEvent & { currentTarget: HTMLElement }
+                    ) => {
+                      if (event.target === event.currentTarget) {
+                        event.currentTarget
+                          .querySelector<HTMLInputElement>('input:checked')
+                          ?.focus();
+                      }
+                    }}
+                  >
+                    <LayoutTabs selection={layout()} />
+                  </Dropdown.Item>
                 </Dropdown.Group>
               )}
             </Show>
@@ -225,10 +267,14 @@ export function ListViewMenu<TGroup extends string, TSort extends string>(
             <MobileDrawer.ScrollBody class="gap-4">
               <Show when={props.layout}>
                 {(layout) => (
-                  <MobileSelection
-                    label={t('viewMenus.layout')}
-                    selection={layout()}
-                  />
+                  <div>
+                    <MobileDrawer.Label>
+                      {t('viewMenus.layout')}
+                    </MobileDrawer.Label>
+                    <div class="px-6">
+                      <LayoutTabs selection={layout()} />
+                    </div>
+                  </div>
                 )}
               </Show>
               <Show when={props.group}>

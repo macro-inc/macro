@@ -5,6 +5,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
+import userEvent from '@testing-library/user-event';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { HeaderActionGroup } from '../app/HeaderActionGroup';
@@ -19,11 +20,13 @@ vi.mock('@ui', async () => ({
   ...(await import('../ui/components/Button')),
   ...(await import('../ui/components/ButtonGroup')),
   ...(await import('../ui/components/Dropdown')),
+  ...(await import('../ui/components/Tabs')),
 }));
 
 let motionStyles: HTMLStyleElement;
 beforeEach(() => {
   device.touch = false;
+  vi.stubGlobal('CSS', { escape: (value: string) => value });
   motionStyles = document.createElement('style');
   motionStyles.textContent =
     '* { transition-duration: 0s; animation-name: none; }';
@@ -46,11 +49,12 @@ afterEach(() => {
 });
 
 it('applies layout and grouping from one menu without closing it', async () => {
+  const user = userEvent.setup();
   const [layout, setLayout] = createSignal<'list' | 'board'>('list');
   const [group, setGroup] = createSignal('priority');
   const [open, setOpen] = createSignal(true);
   render(() => (
-    <HeaderActionGroup label="View options">
+    <HeaderActionGroup label="Display options">
       <ListViewMenu
         open={open()}
         onOpenChange={setOpen}
@@ -76,13 +80,20 @@ it('applies layout and grouping from one menu without closing it', async () => {
     </HeaderActionGroup>
   ));
 
-  fireEvent.keyDown(screen.getByRole('menuitemradio', { name: 'Board' }), {
-    key: 'Enter',
-  });
+  const list = screen.getByRole('radio', { name: 'List' });
+  await waitFor(() => expect(document.activeElement).toBe(list));
+  await user.keyboard('{ArrowRight}');
   expect(layout()).toBe('board');
   expect(open()).toBe(true);
   const groupTrigger = screen.getByRole('menuitem', { name: /Group by/ });
-  groupTrigger.focus();
+  await user.keyboard('{ArrowDown}');
+  expect(document.activeElement).toBe(groupTrigger);
+  await user.keyboard('{ArrowUp}');
+  expect(document.activeElement).toBe(
+    screen.getByRole('radio', { name: 'Board' })
+  );
+  await user.keyboard('{ArrowDown}');
+  expect(document.activeElement).toBe(groupTrigger);
   fireEvent.keyDown(groupTrigger, { key: 'ArrowRight' });
   const status = await screen.findByRole('menuitemradio', { name: 'Status' });
   fireEvent.keyDown(status, { key: 'Enter' });
@@ -97,7 +108,7 @@ it('applies layout and grouping from one menu without closing it', async () => {
 it('keeps search ordering authoritative while other settings remain available', () => {
   const changeSort = vi.fn();
   render(() => (
-    <HeaderActionGroup label="View options">
+    <HeaderActionGroup label="Display options">
       <ListViewMenu
         open
         sort={{
@@ -144,7 +155,7 @@ it('applies mobile group and sort changes in a sheet and restores focus on dismi
     />
   ));
 
-  const trigger = screen.getByRole('button', { name: 'View options' });
+  const trigger = screen.getByRole('button', { name: 'Display options' });
   fireEvent.click(trigger);
   const status = await screen.findByRole('radio', { name: 'Status' });
   await waitFor(() =>

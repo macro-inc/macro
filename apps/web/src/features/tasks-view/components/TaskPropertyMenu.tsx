@@ -2,6 +2,7 @@ import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CalendarIcon from '@icon/system/regular/calendar.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import ConditionalIcon from '@icon/system/regular/circle-half.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
@@ -13,8 +14,7 @@ import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import PriorityIcon from '@icon/wide-priority-high.svg';
 import { Dropdown, Tooltip } from '@ui';
-import { For, Show } from 'solid-js';
-import { Dynamic } from 'solid-js/web';
+import { For, Match, Show, Switch } from 'solid-js';
 import {
   type TaskPropertyDisplay,
   type TaskPropertyDisplayMode,
@@ -139,30 +139,31 @@ function TaskPropertyPill(props: {
       (modes.findIndex((mode) => mode.id === props.mode) + 1) % modes.length
     ];
   const cycle = () => props.onChange(next().id);
-  const label = () =>
-    t('viewMenus.propertyDisplayAction', {
-      property: props.property.label,
-      mode: current().label,
-      nextMode: next().label,
-    });
-  const tooltip = () =>
-    t('viewMenus.propertyDisplayTooltip', {
+  const hasMenu = modes.length > 2;
+  const menuLabel = () =>
+    t('viewMenus.propertyDisplayMenu', { property: props.property.label });
+  const tooltip = () => {
+    if (hasMenu) {
+      return t('viewMenus.propertyDisplayMenuTooltip', {
+        property: props.property.label,
+        mode: current().label,
+        description: current().description,
+      });
+    }
+    return t('viewMenus.propertyDisplayTooltip', {
       property: props.property.label,
       mode: current().label,
       description: current().description,
       nextMode: next().label,
     });
-  const menuLabel = () =>
-    t('viewMenus.propertyDisplayMenu', { property: props.property.label });
+  };
   const content = () => (
     <>
-      <props.property.icon class="size-3.5 shrink-0" />
-      <span
-        class="truncate"
-        classList={{ 'opacity-50': props.mode === 'hide' }}
-      >
-        {props.property.label}
-      </span>
+      <props.property.icon class="size-3 shrink-0" />
+      <span class="truncate">{props.property.label}</span>
+      <Show when={hasMenu}>
+        <CaretDownIcon class="size-3 shrink-0" data-icon-motion="none" />
+      </Show>
     </>
   );
   const options = () => (
@@ -190,116 +191,102 @@ function TaskPropertyPill(props: {
   );
 
   return (
-    <div class="group/property relative inline-flex max-w-full">
+    <div data-mode={props.mode} class="group/property inline-flex max-w-full">
       <Tooltip.Root>
-        <Show
-          when={isTouchDevice()}
-          fallback={
+        <Switch>
+          <Match when={!hasMenu && !isTouchDevice()}>
             <Tooltip.Trigger
               as={Dropdown.Item}
+              role="menuitemcheckbox"
+              aria-checked={props.mode === 'show'}
               closeOnSelect={false}
               onSelect={cycle}
               textValue={props.property.label}
-              aria-label={label()}
-              class="inline-flex min-h-7 min-w-0 w-auto items-center gap-2 rounded-full border border-edge-button bg-control px-2.5 text-sm text-ink-muted outline-none select-none not-touch:hover:text-ink focus-visible:ring-2 focus-visible:ring-accent touch:min-h-9 touch:pr-10"
+              aria-label={props.property.label}
+              class="inline-flex h-6 min-w-0 w-auto items-center gap-1.5 rounded-full border border-edge-button bg-surface px-2 py-0 text-xs text-ink-muted outline-none select-none data-highlighted:bg-surface focus-visible:ring-2 focus-visible:ring-accent group-data-[mode=show]/property:bg-control group-data-[mode=show]/property:text-ink group-data-[mode=hide]/property:border-transparent group-data-[mode=hide]/property:text-ink-extra-muted touch:h-9"
             >
               {content()}
             </Tooltip.Trigger>
-          }
-        >
-          <Tooltip.Trigger
-            as="button"
-            type="button"
-            onClick={cycle}
-            aria-label={label()}
-            class="inline-flex min-h-7 min-w-0 items-center gap-2 rounded-full border border-edge-button bg-control px-2.5 text-sm text-ink-muted outline-none select-none not-touch:hover:text-ink focus-visible:ring-2 focus-visible:ring-accent touch:min-h-9 touch:pr-10"
-          >
-            {content()}
-          </Tooltip.Trigger>
-        </Show>
-        <Tooltip.Portal>
-          <Tooltip.Content>{tooltip()}</Tooltip.Content>
-        </Tooltip.Portal>
-      </Tooltip.Root>
-      <div class="pointer-events-none absolute inset-y-0 right-0 z-1 flex items-center rounded-r-full bg-linear-to-l from-control from-60% to-transparent pl-4 not-touch:invisible not-touch:group-hover/property:visible not-touch:group-focus-within/property:visible has-[[data-expanded]]:visible has-[[data-highlighted]]:visible">
-        <Show
-          when={isTouchDevice()}
-          fallback={
+          </Match>
+          <Match when={!hasMenu && isTouchDevice()}>
+            <Tooltip.Trigger
+              as="button"
+              type="button"
+              onClick={cycle}
+              aria-label={props.property.label}
+              aria-pressed={props.mode === 'show'}
+              class="inline-flex h-6 min-w-0 items-center gap-1.5 rounded-full border border-edge-button bg-surface px-2 py-0 text-xs text-ink-muted outline-none select-none focus-visible:ring-2 focus-visible:ring-accent group-data-[mode=show]/property:bg-control group-data-[mode=show]/property:text-ink group-data-[mode=hide]/property:border-transparent group-data-[mode=hide]/property:text-ink-extra-muted touch:h-9"
+            >
+              {content()}
+            </Tooltip.Trigger>
+          </Match>
+          <Match when={hasMenu && !isTouchDevice()}>
             <Dropdown.Sub>
-              <Tooltip.Root>
-                <Tooltip.Trigger
-                  as={Dropdown.SubTrigger}
-                  aria-label={menuLabel()}
-                  textValue={menuLabel()}
-                  onPointerMove={(event) => event.preventDefault()}
-                  class="pointer-events-auto flex h-full w-7 shrink-0 items-center justify-center rounded-full p-0 text-ink-muted outline-none not-touch:hover:text-ink focus-visible:ring-2 focus-visible:ring-accent touch:min-h-9 touch:w-9"
-                >
-                  <Dynamic
-                    component={current().icon}
-                    class="size-3.5"
-                    data-icon-motion="none"
-                  />
-                </Tooltip.Trigger>
-                <Tooltip.Portal>
-                  <Tooltip.Content>{menuLabel()}</Tooltip.Content>
-                </Tooltip.Portal>
-              </Tooltip.Root>
+              <Tooltip.Trigger
+                as={Dropdown.SubTrigger}
+                aria-label={menuLabel()}
+                textValue={props.property.label}
+                onPointerMove={(event) => event.preventDefault()}
+                onPointerLeave={(event) => event.preventDefault()}
+                class="inline-flex h-6 min-w-0 w-auto items-center gap-1.5 rounded-full border border-edge-button bg-surface px-2 py-0 text-xs text-ink-muted outline-none select-none data-highlighted:bg-surface focus-visible:ring-2 focus-visible:ring-accent group-data-[mode=show]/property:bg-control group-data-[mode=show]/property:text-ink group-data-[mode=hide\_when\_empty]/property:border-dashed group-data-[mode=hide]/property:border-transparent group-data-[mode=hide]/property:text-ink-extra-muted touch:h-9"
+              >
+                {content()}
+              </Tooltip.Trigger>
               <Dropdown.SubContent class="min-w-48 max-w-80">
                 {options()}
               </Dropdown.SubContent>
             </Dropdown.Sub>
-          }
-        >
-          <MobileDrawer restoreFocus>
-            <MobileDrawer.Trigger
-              as="button"
-              type="button"
-              aria-label={menuLabel()}
-              class="pointer-events-auto flex h-full w-7 shrink-0 items-center justify-center rounded-full p-0 text-ink-muted outline-none not-touch:hover:text-ink focus-visible:ring-2 focus-visible:ring-accent touch:min-h-9 touch:w-9"
-            >
-              <Dynamic
-                component={current().icon}
-                class="size-3.5"
-                data-icon-motion="none"
-              />
-            </MobileDrawer.Trigger>
-            <MobileDrawer.Portal>
-              <MobileDrawer.Overlay />
-              <MobileDrawer.Content>
-                <MobileDrawer.Handle />
-                <MobileDrawer.Title class="px-6 pb-4 text-lg font-semibold">
-                  {menuLabel()}
-                </MobileDrawer.Title>
-                <MobileDrawer.ScrollBody>
-                  <MobileDrawer.Section
-                    role="radiogroup"
-                    aria-label={props.property.label}
-                  >
-                    <For each={modes}>
-                      {(mode) => (
-                        <MobileDrawer.Item
-                          role="radio"
-                          aria-checked={props.mode === mode.id}
-                          onClick={() => props.onChange(mode.id)}
-                        >
-                          <mode.icon
-                            class="size-4 shrink-0"
-                            data-icon-motion="none"
-                          />
-                          <span class="flex-1">{mode.label}</span>
-                          <Show when={props.mode === mode.id}>
-                            <CheckIcon class="size-4 shrink-0 text-accent" />
-                          </Show>
-                        </MobileDrawer.Item>
-                      )}
-                    </For>
-                  </MobileDrawer.Section>
-                </MobileDrawer.ScrollBody>
-              </MobileDrawer.Content>
-            </MobileDrawer.Portal>
-          </MobileDrawer>
-        </Show>
-      </div>
+          </Match>
+          <Match when={hasMenu && isTouchDevice()}>
+            <MobileDrawer restoreFocus>
+              <Tooltip.Trigger
+                as={MobileDrawer.Trigger}
+                aria-label={menuLabel()}
+                class="inline-flex h-6 min-w-0 items-center gap-1.5 rounded-full border border-edge-button bg-surface px-2 py-0 text-xs text-ink-muted outline-none select-none focus-visible:ring-2 focus-visible:ring-accent group-data-[mode=show]/property:bg-control group-data-[mode=show]/property:text-ink group-data-[mode=hide\_when\_empty]/property:border-dashed group-data-[mode=hide]/property:border-transparent group-data-[mode=hide]/property:text-ink-extra-muted touch:h-9"
+              >
+                {content()}
+              </Tooltip.Trigger>
+              <MobileDrawer.Portal>
+                <MobileDrawer.Overlay />
+                <MobileDrawer.Content>
+                  <MobileDrawer.Handle />
+                  <MobileDrawer.Title class="px-6 pb-4 text-lg font-semibold">
+                    {menuLabel()}
+                  </MobileDrawer.Title>
+                  <MobileDrawer.ScrollBody>
+                    <MobileDrawer.Section
+                      role="radiogroup"
+                      aria-label={props.property.label}
+                    >
+                      <For each={modes}>
+                        {(mode) => (
+                          <MobileDrawer.Item
+                            role="radio"
+                            aria-checked={props.mode === mode.id}
+                            onClick={() => props.onChange(mode.id)}
+                          >
+                            <mode.icon
+                              class="size-4 shrink-0"
+                              data-icon-motion="none"
+                            />
+                            <span class="flex-1">{mode.label}</span>
+                            <Show when={props.mode === mode.id}>
+                              <CheckIcon class="size-4 shrink-0 text-accent" />
+                            </Show>
+                          </MobileDrawer.Item>
+                        )}
+                      </For>
+                    </MobileDrawer.Section>
+                  </MobileDrawer.ScrollBody>
+                </MobileDrawer.Content>
+              </MobileDrawer.Portal>
+            </MobileDrawer>
+          </Match>
+        </Switch>
+        <Tooltip.Portal>
+          <Tooltip.Content>{tooltip()}</Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
     </div>
   );
 }
@@ -314,7 +301,7 @@ export function TaskPropertyMenu(props: {
       (property) => property.id !== 'project' || props.showProject
     );
   const pills = () => (
-    <div class="flex flex-row flex-wrap gap-2 px-2 py-1.5">
+    <div class="flex flex-row flex-wrap gap-1.5 px-2 py-1.5">
       <For each={properties()}>
         {(property) => (
           <TaskPropertyPill

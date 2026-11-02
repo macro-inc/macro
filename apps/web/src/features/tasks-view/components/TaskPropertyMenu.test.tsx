@@ -27,6 +27,7 @@ vi.mock('@ui', async () => ({
   ...(await import('../../../components/ui/components/ButtonGroup')),
   ...(await import('../../../components/ui/components/Dropdown')),
   ...(await import('../../../components/ui/components/Tooltip')),
+  ...(await import('../../../components/ui/components/Tabs')),
 }));
 
 beforeEach(() => {
@@ -48,14 +49,14 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-it('cycles supported pill modes and keeps direct keyboard choices in View', async () => {
+it('toggles two-state pills and opens three-state choices without changing their value', async () => {
   const user = userEvent.setup();
   const [display, setDisplay] = createSignal<TaskPropertyDisplay>({
     ...DEFAULT_TASK_PROPERTY_DISPLAY,
   });
   const [open, setOpen] = createSignal(true);
   render(() => (
-    <HeaderActionGroup label="View options">
+    <HeaderActionGroup label="Display options">
       <ListViewMenu open={open()} onOpenChange={setOpen}>
         <TaskPropertyMenu
           display={display()}
@@ -69,27 +70,26 @@ it('cycles supported pill modes and keeps direct keyboard choices in View', asyn
       </ListViewMenu>
     </HeaderActionGroup>
   ));
-  const dueDate = screen.getByRole('menuitem', { name: /^Due date:/ });
-  await user.click(dueDate);
-  expect(display().dueDate).toBe('hide_when_empty');
-  await user.click(dueDate);
-  expect(display().dueDate).toBe('hide');
-  dueDate.focus();
-  fireEvent.keyDown(dueDate, { key: 'Enter' });
-  expect(display().dueDate).toBe('show');
-
-  const tags = screen.getByRole('menuitem', { name: /^Tags:/ });
+  const tags = screen.getByRole('menuitemcheckbox', { name: 'Tags' });
   await user.click(tags);
   expect(display().tags).toBe('hide');
-  await user.click(tags);
+  expect(tags.getAttribute('aria-checked')).toBe('false');
+  tags.focus();
+  fireEvent.keyDown(tags, { key: 'Enter' });
   expect(display().tags).toBe('show');
+  expect(tags.getAttribute('aria-checked')).toBe('true');
 
-  dueDate.focus();
-  fireEvent.keyDown(dueDate, { key: 'ArrowDown' });
   const trigger = screen.getByRole('menuitem', {
     name: 'Change Due date visibility',
   });
-  expect(document.activeElement).toBe(trigger);
+  await user.click(trigger);
+  expect(display().dueDate).toBe('show');
+  const hidden = await screen.findByRole('menuitemradio', { name: 'Hide' });
+  await user.click(hidden);
+  expect(display().dueDate).toBe('hide');
+  expect(open()).toBe(true);
+  fireEvent.keyDown(hidden, { key: 'ArrowLeft' });
+  trigger.focus();
   fireEvent.keyDown(trigger, { key: 'ArrowRight' });
   const empty = await screen.findByRole('menuitemradio', {
     name: 'Hide when empty',
@@ -105,7 +105,7 @@ it('opens visibility choices on click, not pointer hover', async () => {
   const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
   const [open, setOpen] = createSignal(true);
   render(() => (
-    <HeaderActionGroup label="View options">
+    <HeaderActionGroup label="Display options">
       <ListViewMenu open={open()} onOpenChange={setOpen}>
         <TaskPropertyMenu
           display={DEFAULT_TASK_PROPERTY_DISPLAY}
@@ -130,7 +130,7 @@ it('opens visibility choices on click, not pointer hover', async () => {
   expect(open()).toBe(true);
 });
 
-it('keeps View open while touch pills and their visibility sheet change modes', async () => {
+it('keeps Display open while touch pills and their visibility sheet change modes', async () => {
   const user = userEvent.setup();
   device.touch = true;
   const [display, setDisplay] = createSignal<TaskPropertyDisplay>({
@@ -150,22 +150,23 @@ it('keeps View open while touch pills and their visibility sheet change modes', 
         <TaskPropertyMenu
           display={display()}
           showProject
-          onChange={(property, mode) => {
-            if (property === 'dueDate')
-              setDisplay((current) => ({ ...current, dueDate: mode }));
-          }}
+          onChange={(property, mode) =>
+            setDisplay((current) =>
+              taskPropertyDisplaySchema.parse({ ...current, [property]: mode })
+            )
+          }
         />
       </ListViewMenu>
     </>
   ));
-  await user.click(screen.getByRole('button', { name: 'View options' }));
-  const dueDate = await screen.findByRole('button', { name: /^Due date:/ });
-  await user.pointer({ keys: '[TouchA]', target: dueDate });
-  expect(display().dueDate).toBe('hide_when_empty');
-  await user.pointer({ keys: '[TouchA]', target: dueDate });
-  expect(display().dueDate).toBe('hide');
-  await user.pointer({ keys: '[TouchA]', target: dueDate });
-  expect(display().dueDate).toBe('show');
+  await user.click(screen.getByRole('button', { name: 'Display options' }));
+  const tags = await screen.findByRole('button', { name: 'Tags' });
+  await user.pointer({ keys: '[TouchA]', target: tags });
+  expect(display().tags).toBe('hide');
+  expect(tags.getAttribute('aria-pressed')).toBe('false');
+  await user.pointer({ keys: '[TouchA]', target: tags });
+  expect(display().tags).toBe('show');
+  expect(tags.getAttribute('aria-pressed')).toBe('true');
 
   const trigger = screen.getByRole('button', {
     name: 'Change Due date visibility',

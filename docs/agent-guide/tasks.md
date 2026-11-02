@@ -3,11 +3,11 @@
 ## Surface
 
 `Go to Tasks` → `/app/component/tasks`. Task views: `My tasks`, `All tasks`, and `Created by me`.
-The single-row desktop header contains the title, `Filter`, `View`, `New`, and an
-expandable Search icon (`Ctrl+F` opens it). `View` contains Layout choices for
+The single-row desktop header contains the title, `Filter`, `Display`, `New`, and an
+expandable Search icon (`Ctrl+F` opens it). `Display` contains Layout tabs for
 `List`, `Board`, and enabled `Gantt`, plus `Group by` and `Sort` submenus showing
-the current selection. Choices apply immediately without closing View. `S` opens
-View; `F` opens Filter. During search, Sort explains that search controls ordering.
+the current selection. Choices apply immediately without closing Display. `S` opens
+Display; `F` opens Filter. During search, Sort explains that search controls ordering.
 In List layout, the Properties section controls Priority, Tags, Due date, Project,
 Assignees, Updated, and Created by. Priority, Due date, Project, and Assignees offer
 Show, Hide when empty, and Hide; the other properties offer Show and Hide. The
@@ -81,17 +81,19 @@ including a changed cursor and a failed later page. Retrying should replace the
 old pages; changing projects or filters must discard the old scope immediately.
 The sidebar has no Tags section: filter by tag from the `Tags` group of the `Filter` menu,
 and switching tabs clears it like any other filter. On mobile, the tabs
-are pills, with separate leading Filters and View controls. Filters contains only
-filter facets (including Tags); View opens a sheet with Group by, Sort, and Properties choices.
-In Properties, icon pills use a wrapping row on desktop and touch. Click or tap
-one to cycle Show → Hide when empty → Hide (skipping Hide when empty for Tags,
-Updated, and Created by). A pill tooltip explains the current mode and next click.
-Hover or keyboard-focus a pill to reveal its current-state menu icon (an eye,
-half-filled circle, or crossed-out eye), overlaid at the right on a background
-that fades to transparent toward the left. Hover only reveals the icon;
-activate it by click or keyboard to open the mode menu. On touch, the icon stays
-visible and opens a small visibility sheet above View; dismissing it returns
-focus to the icon. Mode choices keep View open.
+are pills, with separate leading Filters and Display controls. Filters contains only
+filter facets (including Tags); Display opens a sheet with Group by, Sort, and Properties choices.
+On desktop, Display opens a compact menu with Layout tabs, Group by, Sort, and Properties.
+In Properties, compact icon pills use a wrapping row on desktop and touch.
+Shown properties have a filled pill, Hide when empty uses a dashed outline,
+and hidden properties have a muted, unframed pill. Tags, Updated, and Created by
+switch directly between Show and Hide when clicked or tapped. Priority, Due date,
+Project, and Assignees have a persistent chevron; activating the whole pill opens
+Show, Hide when empty, and Hide choices without changing its current value.
+A pill tooltip explains its current mode and action. There are no hover-only
+buttons or gradient overlays. On touch, three-state pills open a small visibility
+sheet above Display; dismissing it returns focus to the pill. Mode choices keep
+Display open.
 The mobile bottom dock has **+ Task** and Search, with no floating Ask AI input.
 Project and CRM task lists use the same separate controls. Changes in either
 sheet remain part of the existing saved-view draft; its save actions stay in
@@ -282,7 +284,7 @@ empty. Cancel leaves the previous filter unchanged. Status remains independent:
 select Completed or Canceled explicitly to include closed tasks in a date filter.
 The mobile controls use the same options and date-range dialog in the sliders drawer.
 
-**View → Group by → Due date** puts No due date first, then uses non-overlapping viewer-local calendar buckets:
+**Display → Group by → Due date** puts No due date first, then uses non-overlapping viewer-local calendar buckets:
 Overdue is before today's midnight; Today and Tomorrow cover those entire days;
 Next 7 days covers D+2 through D+7; Later starts at D+8; No due date includes
 missing and cleared dates. Relative filters and groups refresh at local midnight,
@@ -338,7 +340,7 @@ Verify property-only Save changes, Reset, Duplicate, and reload. Switch from a s
 
 ## Gantt layout
 
-Choose **View → Gantt** to see task timelines.
+Choose **Display → Layout → Gantt** to see task timelines.
 The same option is available in a project's Tasks section. The timeline uses
 Created at as the start and Due date as the end; no separate Start date is
 created or saved. Bars without a due date fade to transparent at the right edge.
@@ -478,8 +480,8 @@ Gantt persists in `tasks.layout` or `projectTasks.layout`, just like List and Bo
 
 ## Board layout
 
-Choose **View → Board** in the toolbar (or **List** to switch back).
-The selected layout has a checkmark. **View → Group by** offers Status, Priority, Assignee, Due date,
+Choose **Display → Layout → Board** in the toolbar (or **List** to switch back).
+The selected layout tab is highlighted. **Display → Group by** offers Status, Priority, Assignee, Due date,
 and (when Projects is enabled) Project.
 Both layouts share one grouping, which restores with the Tasks navigation entry.
 List-only None and Date groupings display Status columns in Board; switching
@@ -1060,7 +1062,7 @@ tasks whose Project property names the project.
 
 The project's Tasks tab starts with task search, controls, and the selected List or
 Board layout; the project title and property pills appear only on Overview.
-Use the same **View** menu to choose a layout. Both layouts
+Use the same **Display** menu to choose a layout. Both layouts
 show only tasks linked to the current project and use the same filters and editors.
 Layout, sort direction, and grouping use `projectTasks.layout`, `projectTasks.sort`,
 `projectTasks.sortReversed`, and `projectTasks.groupBy` URL parameters, independent

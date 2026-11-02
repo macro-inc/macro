@@ -11,7 +11,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - `primitives/create-task-saved-view-draft.ts`: confirmed filter/due-date/layout/grouping/sort/property-display snapshots, dirty state, skipped-setting diagnostics, and revision-aware reconciliation; receives only the detail source, without navigation, mutation, or dialog state.
 - `views/task-saved-views.tsx`: compound sidebar/mobile lists, filter summaries, imperative action dialogs, and request-scoped write/reload completion; the Tasks host owns selection and navigation.
 - `queries/use-tasks-query.ts`: shared list, board, Gantt, and search filtering.
-- `components/TasksViewMenu.tsx`: adapts task state to the shared `ListViewMenu`; desktop combines layout, grouping, sorting, and list property visibility, while touch keeps its separate View sheet.
+- `components/TasksViewMenu.tsx`: adapts task state to the shared `ListViewMenu`; the compact desktop Display menu combines layout tabs, grouping, sorting, and list property visibility, while touch keeps its separate Display sheet.
 - `core/task-property-display.ts` and `primitives/create-task-property-display.ts`: property modes and account-scoped device preferences, separate from saved-view drafts.
 
 ## Gotchas
@@ -38,9 +38,9 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Pass enabled grid columns as a typed ordered array; default Project before Assignees and derive full-row spans from the same array.
 - Include each visible task cell's 8px leading inset inside its track and keep the grid's column gap at zero so hidden metadata columns reserve no space.
 - Give Priority, Due date, Project, and Assignees Show / Hide when empty / Hide modes; give Tags, Updated, and Created by Show / Hide, keep Status and title visible, and default all configurable properties to Show.
-- Arrange View-menu properties as wrapping custom button pills; cycle modes on pill activation, explain the current and next mode in a tooltip, and overlay a click-only current-state menu trigger on a right-to-left transparent gradient, revealing it on hover or keyboard focus and keeping it visible on touch.
+- Arrange Display-menu properties as compact wrapping custom pills with 36px touch targets: filled for Show, dashed for Hide when empty, and muted for Hide; toggle two-state pills directly, open three-state choices by clicking the whole chevron-marked pill, and never add hover-only actions or gradient overlays.
 - Keep empty-only hiding within the shared desktop grid track; remove that detail entirely in phone rows, and never reintroduce desktop-only metadata on phones.
-- Remember unsaved-list property visibility per account on the device, synchronize mounted task lists, and keep saved definitions and drafts isolated from those preferences; render View-menu checkmarks in accent ink.
+- Remember unsaved-list property visibility per account on the device, synchronize mounted task lists, and keep saved definitions and drafts isolated from those preferences; render Display-menu checkmarks in accent ink.
 - Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers: 30%-opacity wide priority bars, a dashed user circle, a corner-dashed project cube, and a slashed calendar for no due date; use the regular cube for set projects.
 - Use shared ghost-button interaction styling for editable list properties; dim empty icons and labels without applying opacity twice to No priority.
 - Register task-row collapse items with the shared `src/components/priority-collapse/` controller and sensor, not split-layout wrappers.
@@ -62,7 +62,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Place the saved-view picker after Filters and before built-in mobile tabs; omit duplicate headers and general create controls, but offer Create view in the empty state.
 - Group the shared sidebar and picker empty state in a subtly bordered, rounded container with 12px padding, the inherited background, and no shadow: “Your go-to views”, “Save your setup for next time.” and a `secondary`, `sm` Create view button with a leading plus icon, without a separate illustration; keep the sidebar header's icon-only plus available in every section state, and isolate both creation buttons' keyboard scopes from task-list selection shortcuts.
 - Keep mobile pills in a flex wrapper inside the header so their shadow margins cannot collapse the header and overlap task content.
-- Keep desktop list-header Filters and View at `md` / `icon-md` (32px), matching New and Search; keep the mobile Filters drawer separate from the View sheet.
+- Keep desktop list-header Filters and Display at `md` / `icon-md` (32px), matching New and Search; keep the mobile Filters drawer separate from the Display sheet.
 - Show one local New view draft row after creation starts; prefill its save dialog with New view, replace the row on confirmed save, and remove it on cancellation or navigation without adding fake cached records.
 - Close the selected-view menu before opening a dialog, discard deferred actions after account or selection changes, and close dialogs after account, saved-view, or built-in-tab navigation.
 - Own mobile action dialogs outside closing drawers; finish drawer closure before opening a dialog, and reopen filters after cancellation only within the same navigation scope.
