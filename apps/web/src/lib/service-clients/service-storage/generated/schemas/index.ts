@@ -2106,6 +2106,7 @@ export * from './takenIdOneOfSevenKind';
 export * from './takenIdOneOfThree';
 export * from './takenIdOneOfThreeKind';
 export * from './tallyBucket';
+export * from './tallyBucketVoters';
 export * from './tallyValue';
 export * from './tallyValueOneOf';
 export * from './tallyValueOneOfKind';

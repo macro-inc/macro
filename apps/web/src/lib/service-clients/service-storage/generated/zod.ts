@@ -25787,6 +25787,12 @@ export const getFormTallyResponse = zod
                           .describe('A checkbox state.'),
                       ])
                       .describe('A value a tally counts.'),
+                    voters: zod
+                      .array(zod.string())
+                      .nullish()
+                      .describe(
+                        "Who chose it, as Macro user ids in submission order: present only\nfor the form's editors, or its viewers when it shares its responses,\nand never when it hides respondents. Rows no signed-in respondent\nsubmitted count without a voter."
+                      ),
                   })
                   .describe('How many rows hold one value.')
               )
