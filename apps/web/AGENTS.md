@@ -499,6 +499,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   feature-specific query orchestration with its owning feature.
 - Refresh the channel list's bounded unread edge when opening a conversation,
   including an empty unread result after a read on another device.
+- Decide channel detail access from completed server results; bound confirmations of contradictory cache membership, preserve known unavailable state during retries, and keep unavailable routes registered for notification/reconnect refresh.
 - Read folders for picking or moving through `createFolderList`
   (`queries/storage/folder-list`): it matches the Drive sidebar's source, so a
   folder open in Drive, including a team folder, is always in the list. Keep
