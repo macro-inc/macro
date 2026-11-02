@@ -47,6 +47,12 @@ type LiveQueryHost = Pick<
   'entityFilter' | 'onCacheChanged' | 'onCacheGenerationChanged'
 >;
 
+export type PredicateQueryStatus =
+  | 'idle'
+  | 'loading'
+  | 'ready'
+  | 'unsupported'
+  | 'error';
 /**
  * Binds one cache-engine maintained view for `createSoupLiveQuery`. Owns
  * subscription, coalescing, generation recovery, and keyed Solid rows.
@@ -59,9 +65,7 @@ export function createPredicateQuery<T extends object>(options: {
   query: Accessor<PredicateQueryRequest<T> | undefined>;
 }) {
   const [data, setData] = createSignal<LiveQuerySnapshot<T>>();
-  const [status, setStatus] = createSignal<
-    'idle' | 'loading' | 'ready' | 'unsupported' | 'error'
-  >('idle');
+  const [status, setStatus] = createSignal<PredicateQueryStatus>('idle');
   const [error, setError] = createSignal<unknown>();
   let requestRefresh = () => {};
   // A caller may derive a new request object from a query snapshot even when

@@ -1062,7 +1062,7 @@ where
             // gone once the commit lands, so nothing downstream can rediscover
             // it by re-reading Postgres.
             report.events_retired += retired.len();
-            report.team_ooo_changed |= !retired.is_empty() || cancellation_count > 0;
+            report.team_ooo_changed |= retired.iter().any(|event| event.team_ooo_changed);
             self.publish_retirements(retired);
             // Tombstones only apply inside the snapshot commit, so they
             // count once it succeeds.
@@ -1162,7 +1162,7 @@ where
             .reconcile_google_calendar_list(key, lease_token, account_id, calendar_ids)
             .await?;
         report.events_retired += retired.len();
-        report.team_ooo_changed |= !retired.is_empty();
+        report.team_ooo_changed |= retired.iter().any(|event| event.team_ooo_changed);
         self.publish_retirements(retired);
 
         Ok(())

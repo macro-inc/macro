@@ -1,6 +1,6 @@
 # Type Alias: ChannelLabelsList
 
-> **ChannelLabelsList** = \{ `labels`: [`ChannelLabel`](ChannelLabel.md)[]; `teamId?`: `string` \| `null`; \}
+> **ChannelLabelsList** = \{ `labels`: [`ChannelLabel`](ChannelLabel.md)[]; `scope`: [`ChannelLabelScopeSelection`](ChannelLabelScopeSelection.md); `teamId?`: `string` \| `null`; \}
 
 The authorized scope's labels in manual order.
 
@@ -9,4 +9,5 @@ The authorized scope's labels in manual order.
 | Property | Type | Description |
 | ------ | ------ | ------ |
 | <a id="property-labels"></a> `labels` | [`ChannelLabel`](ChannelLabel.md)[] | Every label of the scope, whether or not the caller sees channels in it. |
+| <a id="property-scope"></a> `scope` | [`ChannelLabelScopeSelection`](ChannelLabelScopeSelection.md) | Resolved label namespace. |
 | <a id="property-teamid"></a> `teamId?` | `string` \| `null` | Team scope, or `None` for private labels. |
