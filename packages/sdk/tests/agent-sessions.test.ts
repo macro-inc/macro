@@ -444,6 +444,30 @@ describe('AgentSession', () => {
     });
   });
 
+  test('names the reason a create was refused', async () => {
+    globalThis.fetch = (async (_input) =>
+      new Response(
+        'repoUrl needs a Cursor coding agent; choose a Cursor agent persona or omit repoUrl',
+        { status: 422, headers: { 'content-type': 'text/plain' } },
+      )) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+
+    await expect(
+      macro.agentSessions.createManaged({
+        agent: macro.agents.byId(session.botId),
+        repoUrl: 'https://github.com/macro-inc/macro',
+      }),
+    ).rejects.toMatchObject({
+      name: 'MacroApiError',
+      status: 422,
+      message:
+        'Macro API error 422: repoUrl needs a Cursor coding agent; choose a Cursor agent persona or omit repoUrl',
+    });
+  });
+
   test('prompt is sugar over control and reports queueing', async () => {
     let request: Request | undefined;
     globalThis.fetch = (async (input) => {

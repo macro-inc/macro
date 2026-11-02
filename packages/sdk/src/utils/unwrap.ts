@@ -12,9 +12,24 @@ export class MacroApiError extends MacroError {
     readonly status: number,
     readonly data: unknown,
   ) {
-    super(`Macro API error ${status}`);
+    const reason = errorReason(data);
+    super(
+      reason
+        ? `Macro API error ${status}: ${reason}`
+        : `Macro API error ${status}`,
+    );
     this.name = 'MacroApiError';
   }
+}
+
+/** The server's own explanation, when its error body carries one. */
+function errorReason(data: unknown): string | undefined {
+  if (typeof data === 'string') return data.trim() || undefined;
+  if (typeof data === 'object' && data !== null && 'message' in data) {
+    const { message } = data;
+    if (typeof message === 'string') return message.trim() || undefined;
+  }
+  return undefined;
 }
 
 /** The API succeeded but the addressed entity doesn't exist in the result. */
