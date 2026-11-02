@@ -255,6 +255,16 @@ export const NATIVE_SESSION_SERVICE_URLS = [
   SYNC_PERMISSION_TOKEN_DSS_HOST,
 ];
 
+/** Hosts the email service may have embedded in sent mail. Development
+ * proxies rewrite `SERVER_HOSTS`, while the backend embeds its direct URL. */
+export const EMAIL_SERVICE_EMBEDDED_HOSTS: readonly string[] = [
+  ...new Set([
+    SERVER_HOSTS['email-service'],
+    directServerHostRemote['email-service'],
+    serverHostLocal['email-service'],
+  ]),
+];
+
 /** Creates endpoint URL for accessing a static file by its ID */
 export function staticFileIdEndpoint(id: string): string {
   return `${SERVER_HOSTS['static-file']}/file/${id}`;

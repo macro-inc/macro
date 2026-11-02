@@ -1,4 +1,5 @@
 import { UserIcon } from '@core/component/UserIcon';
+import CalendarIcon from '@phosphor/calendar-blank.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue/PropertyValueIcon';
 import { cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
@@ -14,11 +15,15 @@ type Props = {
  * Renders the icon associated with a property's value:
  * - SELECT_*: option icon for the first value (status/priority icons).
  * - ENTITY+USER: avatar for the first user.
+ * - DATE: calendar icon.
  * - everything else: null (extractor stays uninvolved).
  *
  * Layout-free — caller controls sizing/spacing.
  */
 export function PropertyIcon(props: Props): JSX.Element {
+  if (props.property.valueType === 'DATE') {
+    return <CalendarIcon class={props.class} />;
+  }
   if (
     props.property.valueType === 'SELECT_STRING' ||
     props.property.valueType === 'SELECT_NUMBER'

@@ -15,7 +15,7 @@ test.beforeEach(async ({ page }) => {
   await page.goto('/');
   await expect(page.locator('[data-address="B4"]')).toHaveText('30');
   const chooser = page.waitForEvent('filechooser');
-  await menu(page, 'Import and export', 'Import…');
+  await page.getByRole('button', { name: 'Import', exact: true }).click();
   await (await chooser).setFiles(
     fileURLToPath(
       new URL('../core/xlsx-fixtures/chart-types.xlsx', import.meta.url)
@@ -132,7 +132,7 @@ test('more chart types are inserted from the Insert menu and downloaded', async 
   await dialog.getByRole('button', { name: 'Cancel' }).click();
 
   const downloaded = page.waitForEvent('download');
-  await menu(page, 'Import and export', 'Download as Excel (.xlsx)');
+  await menu(page, 'Download', 'Download as Excel (.xlsx)');
   const path = await (await downloaded).path();
   if (!path) throw new Error('Workbook download missing');
   const files = unzipSync(new Uint8Array(readFileSync(path)));

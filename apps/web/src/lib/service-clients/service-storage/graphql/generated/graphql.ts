@@ -945,6 +945,16 @@ export type GraphqlDatabaseRowLiteral =
   |  { id?: never; include?: never;   /** Match the rows of a table. */
   tableId: string | number; };
 
+/** One named half-open UTC interval. */
+export type GraphqlDateBucketRange = {
+  /** Exclusive RFC 3339 UTC end; null means positive infinity. */
+  end?: string | null | undefined;
+  /** Unique group key. */
+  key: string;
+  /** Inclusive RFC 3339 UTC start; null means negative infinity. */
+  start?: string | null | undefined;
+};
+
 /** GraphQL input representing the date literal. */
 export type GraphqlDateLiteral =
   {   /** The gt option. */
@@ -989,8 +999,8 @@ export type GraphqlDocumentLiteral =
   createdAt: GraphqlDateLiteral; crmAssociated?: never; emailAttachmentParticipant?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; nameContains?: never; notificationState?: never; owner?: never; projectId?: never; property?: never; subType?: never; updatedAt?: never; }
   |  { createdAt?: never;   /**
    * Associated with a CRM record through its Companies or Contacts
-   * property or a reference to the record. Requires an expanded,
-   * timestamp-sorted query.
+   * property or a reference to the record. Requires an expanded query
+   * sorted by a timestamp or task due date.
    */
   crmAssociated: GraphqlCrmAssociation; emailAttachmentParticipant?: never; fileAssoc?: never; fileType?: never; id?: never; importance?: never; includeCbmAtmNc?: never; isEmailAttachment?: never; nameContains?: never; notificationState?: never; owner?: never; projectId?: never; property?: never; subType?: never; updatedAt?: never; }
   |  { createdAt?: never; crmAssociated?: never;   /** Uploaded from an email attachment sent by, or to, a matching address. */
@@ -1159,7 +1169,7 @@ export type GraphqlEntityFilterAst = {
   /**
    * Restrict every entity type to items associated with this CRM record,
    * or to activity across visible CRM-enabled teams.
-   * Requires an expanded, timestamp-sorted query.
+   * Requires an expanded query sorted by a timestamp or selected property.
    */
   crmAssociation?: GraphqlCrmAssociation | null | undefined;
   /** The crm company filter to apply. */
@@ -1306,9 +1316,11 @@ export type GraphqlFilterPropertiesLiteral = {
 
 /** GraphQL input value used when matching a property. */
 export type GraphqlFilterPropertyMatchValue =
-  {   /** Entity reference id to match. */
+  {   /** Match a DATE property in a UTC range. */
+  dateRange: GraphqlPropertyDateRange; entityRef?: never; selectOption?: never; }
+  |  { dateRange?: never;   /** Entity reference id to match. */
   entityRef: string | number; selectOption?: never; }
-  |  { entityRef?: never;   /** Select option id to match. */
+  |  { dateRange?: never; entityRef?: never;   /** Select option id to match. */
   selectOption: string | number; };
 
 /** The two operands of a recursive `ForeignEntityFilterExpr` binary expression. */
@@ -1470,6 +1482,8 @@ export type GraphqlGroupByField =
 
 /** GraphQL representation of a field used to group Soup items. */
 export type GraphqlGroupByInput = {
+  /** Optional caller-defined date ranges; requires PROPERTY grouping. */
+  bucketing?: GraphqlPropertyBucketing | null | undefined;
   /** Optional property entity type restriction. */
   entityType?: GraphqlPropertyEntityType | null | undefined;
   /** The kind of grouping to perform. */
@@ -1593,6 +1607,24 @@ export type GraphqlProjectLiteral =
   |  { createdAt?: never; importance?: never; notificationState?: never; owner?: never; projectId?: never; projectIdSelf?: never;   /** The updated at option. */
   updatedAt: GraphqlDateLiteral; };
 
+/**
+ * Transform the selected DATE property into caller-defined ranges.
+ * Non-DATE values use the missing-value bucket.
+ */
+export type GraphqlPropertyBucketing = {
+  /** Key for entities whose selected property is absent or cleared. */
+  missingValueBucketKey: string;
+  /** Ordered, contiguous UTC ranges covering every present date. */
+  ranges: Array<GraphqlDateBucketRange>;
+  /** Bucketing transformation. */
+  type: GraphqlPropertyBucketingType;
+};
+
+/** Supported property-value transformations. */
+export type GraphqlPropertyBucketingType =
+  /** Caller-defined half-open UTC date ranges. */
+  | 'DATE_RANGES';
+
 /** A property definition's supported value type. */
 export type GraphqlPropertyDataType =
   /** Boolean true/false values. */
@@ -1615,6 +1647,14 @@ export type GraphqlPropertyDataType =
   | 'STRING'
   /** User- or team-scoped colored labels. */
   | 'TAG';
+
+/** Explicit UTC bounds for a DATE property. */
+export type GraphqlPropertyDateRange = {
+  /** Exclusive UTC end, or no upper bound. */
+  end?: string | null | undefined;
+  /** Inclusive UTC start, or no lower bound. */
+  start?: string | null | undefined;
+};
 
 /** An entity type supported by the properties domain. */
 export type GraphqlPropertyEntityType =
@@ -1757,7 +1797,7 @@ export type GraphqlSharedEmailFilter =
   /** The only option. */
   | 'ONLY';
 
-/** GraphQL representation of supported Soup sorts. */
+/** GraphQL representation of Soup timestamp, notification, and selected-property sorts. */
 export type GraphqlSimpleSortMethod =
   /** Sort by creation timestamp. */
   | 'CREATED_AT'
@@ -1766,6 +1806,12 @@ export type GraphqlSimpleSortMethod =
    * notified first. Descending `soup` only; not supported by `groupSoup`.
    */
   | 'NOTIFIED_AT'
+  /**
+   * Sort by the selected property key, missing last, then newest update and ID.
+   * Missing definitions and unsupported types use update-time ordering.
+   * Email, channels, calls, companies, and agent sessions never appear.
+   */
+  | 'PROPERTY'
   /** Sort by update timestamp. */
   | 'UPDATED_AT'
   /** Sort by most recently viewed. */
@@ -1829,8 +1875,15 @@ export type GroupedSoupInitialInput = {
   groupBy: GraphqlGroupByInput;
   /** Maximum number of items to return per bin. Defaults to 20, max 500. */
   limit?: number | null | undefined;
-  /** Sort order within each bin. Defaults to `VIEWED_UPDATED`. */
+  /** Direction of property values. Defaults to DESC. */
+  sortDirection?: GraphqlSortDirection | null | undefined;
+  /**
+   * Sort order within each bin. Defaults to `VIEWED_UPDATED`.
+   * Grouped PROPERTY reads retain calendar events; flat PROPERTY reads do not.
+   */
   sortMethod?: GraphqlSimpleSortMethod | null | undefined;
+  /** Property definition selected for numeric property sorting. */
+  sortPropertyDefinitionId?: string | number | null | undefined;
 };
 
 /** Input for `Query.groupSoup`. */
@@ -2168,10 +2221,13 @@ export type SoupInitialInput = {
   /** Direction to order the page in. Defaults to DESC. */
   sortDirection?: GraphqlSortDirection | null | undefined;
   /**
-   * Simple timestamp sort. Defaults to VIEWED_AT. Frecency is intentionally
-   * not supported by this initial GraphQL adapter.
+   * Timestamp or selected numeric property sort. Defaults to VIEWED_AT.
+   * Frecency is not supported by this GraphQL adapter.
+   * Flat PROPERTY reads omit calendar events, email, channels, calls, companies, and agent sessions.
    */
   sortMethod?: GraphqlSimpleSortMethod | null | undefined;
+  /** Property definition selected for numeric property sorting. */
+  sortPropertyDefinitionId?: string | number | null | undefined;
 };
 
 /** Input for `Query.soup`. */
@@ -11853,7 +11909,7 @@ export type GroupSoupQueryVariables = Exact<{
 }>;
 
 
-export type GroupSoupQuery = { user: { id: string, groupSoup: { bins: Array<{ key: string, label: string | null, totalCount: number, nextCursor: string | null, items: Array<
+export type GroupSoupQuery = { user: { id: string, groupSoup: { bins: Array<{ key: string, displayOrder: number | null, label: string | null, totalCount: number, nextCursor: string | null, items: Array<
           | { __typename: 'GraphqlSoupAgentSession', cacheProjection: string | null, frecencyScore: number | null, id: string, entityType: GraphqlSoupEntityType, displayName: string | null, isFavorited: boolean, isArchived: boolean, ownerId: string, botId: string, harness: string, repoUrl: string | null, repoBranch: string | null, pullRequestUrl: string | null, workingBranch: string | null, pullRequestState: GraphqlAgentPullRequestState | null, pullRequestId: string | null, turnState: string | null, threadId: string | null, source: GraphqlAgentSessionSource, visibility: GraphqlAgentSessionVisibility, status: string, createdAt: string, updatedAt: string, viewedAt: string | null, sessionName: string, notifications: Array<{ __typename: 'GraphqlNotification', id: string, eventType: string, entityType: GraphqlSoupEntityType, targetEntityType: GraphqlEntityType, entityId: string, sent: boolean, state: NotificationState, createdAt: string, viewedAt: string | null, updatedAt: string, senderId: string | null, metadata:
                 | { __typename: 'GraphqlAgentSessionMentionedMetadata', agentSessionMentionedMentionedBy: string | null, agentSessionMentionedActionId: string, agentSessionMentionedSession: { sessionId: string, sessionName: string, botId: string, botName: string, channelId: string | null, threadId: string | null, announcementMessageId: string | null } }
                 | { __typename: 'GraphqlAgentSessionSettledMetadata', agentSessionSettledTurn: number, agentSessionSettledActor: string | null, agentSessionSettledStopReason: string, agentSessionSettledExcerpt: string | null, agentSessionSettledSession: { sessionId: string, sessionName: string, botId: string, botName: string, channelId: string | null, threadId: string | null, announcementMessageId: string | null } }
@@ -21395,7 +21451,7 @@ export const DriveFoldersDocument = {"kind":"Document","definitions":[{"kind":"O
 export const RenameFormDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"RenameForm"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}},{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"displayName"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"String"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"renameEntities"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"inputs"},"value":{"kind":"ListValue","values":[{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"entity"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"type"},"value":{"kind":"EnumValue","value":"FORM"}},{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"displayName"},"value":{"kind":"Variable","name":{"kind":"Name","value":"displayName"}}}]}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"results"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FormEntityMutationResultFields"}}]}}]}}]}},_sharedFragment_FormEntityMutationResultFields]} as unknown as DocumentNode<RenameFormMutation, RenameFormMutationVariables>;
 export const TrashFormDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"mutation","name":{"kind":"Name","value":"TrashForm"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"id"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"trashEntities"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"entities"},"value":{"kind":"ListValue","values":[{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"type"},"value":{"kind":"EnumValue","value":"FORM"}},{"kind":"ObjectField","name":{"kind":"Name","value":"id"},"value":{"kind":"Variable","name":{"kind":"Name","value":"id"}}}]}]}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"results"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"FormEntityMutationResultFields"}}]}}]}}]}},_sharedFragment_FormEntityMutationResultFields]} as unknown as DocumentNode<TrashFormMutation, TrashFormMutationVariables>;
 export const GroupSoupMembershipDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GroupSoupMembership"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"GroupedSoupInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"user"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"groupSoup"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"bins"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"key"}},{"kind":"Field","name":{"kind":"Name","value":"totalCount"}},{"kind":"Field","name":{"kind":"Name","value":"nextCursor"}},{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"id"}}]}}]}}]}}]}}]}}]} as unknown as DocumentNode<GroupSoupMembershipQuery, GroupSoupMembershipQueryVariables>;
-export const GroupSoupDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GroupSoup"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"GroupedSoupInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"user"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"groupSoup"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"bins"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"key"}},{"kind":"Field","name":{"kind":"Name","value":"label"}},{"kind":"Field","name":{"kind":"Name","value":"totalCount"}},{"kind":"Field","name":{"kind":"Name","value":"nextCursor"}},{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"SoupItemFields"}}]}}]}}]}}]}}]}},_sharedFragment_SoupEntityIdentityFields,_sharedFragment_SoupPropertyValueFields,_sharedFragment_SoupPropertyFields,_sharedFragment_SoupAgentSessionFields,_sharedFragment_MailPreviewFields,_sharedFragment_EmailDraftAggregateFields,_sharedFragment_EmailDraftStateFields,_sharedFragment_SoupChannelMessageFields,_sharedFragment_GraphqlCrmContactFields,_sharedFragment_SoupItemPreviewFields,_sharedFragment_SoupNotificationStateFields,_sharedFragment_SoupNotificationNavigationMetadataFields,_sharedFragment_SoupNotificationMetadataFields,_sharedFragment_SoupNotificationFields,_sharedFragment_SoupItemFields]} as unknown as DocumentNode<GroupSoupQuery, GroupSoupQueryVariables>;
+export const GroupSoupDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"GroupSoup"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"GroupedSoupInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"user"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"groupSoup"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"bins"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"key"}},{"kind":"Field","name":{"kind":"Name","value":"displayOrder"}},{"kind":"Field","name":{"kind":"Name","value":"label"}},{"kind":"Field","name":{"kind":"Name","value":"totalCount"}},{"kind":"Field","name":{"kind":"Name","value":"nextCursor"}},{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"SoupItemFields"}}]}}]}}]}}]}}]}},_sharedFragment_SoupEntityIdentityFields,_sharedFragment_SoupPropertyValueFields,_sharedFragment_SoupPropertyFields,_sharedFragment_SoupAgentSessionFields,_sharedFragment_MailPreviewFields,_sharedFragment_EmailDraftAggregateFields,_sharedFragment_EmailDraftStateFields,_sharedFragment_SoupChannelMessageFields,_sharedFragment_GraphqlCrmContactFields,_sharedFragment_SoupItemPreviewFields,_sharedFragment_SoupNotificationStateFields,_sharedFragment_SoupNotificationNavigationMetadataFields,_sharedFragment_SoupNotificationMetadataFields,_sharedFragment_SoupNotificationFields,_sharedFragment_SoupItemFields]} as unknown as DocumentNode<GroupSoupQuery, GroupSoupQueryVariables>;
 export const HomeUnreadPresenceDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"HomeUnreadPresence"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"input"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"SoupInput"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"user"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"soup"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"input"},"value":{"kind":"Variable","name":{"kind":"Name","value":"input"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"items"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}},{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"metadata"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"createdAt"}},{"kind":"Field","name":{"kind":"Name","value":"updatedAt"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"unreadNotifications"},"name":{"kind":"Name","value":"notifications"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"states"},"value":{"kind":"ListValue","values":[{"kind":"EnumValue","value":"UNSEEN"}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"channelFeedOnly"},"value":{"kind":"BooleanValue","value":true}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"state"}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlSoupDocument"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"subType"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"__typename"}}]}}]}},{"kind":"InlineFragment","typeCondition":{"kind":"NamedType","name":{"kind":"Name","value":"GraphqlSoupEmailThread"}},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"isRead"}},{"kind":"Field","name":{"kind":"Name","value":"inboxVisible"}},{"kind":"Field","name":{"kind":"Name","value":"isDraft"}},{"kind":"Field","name":{"kind":"Name","value":"sortTs"}},{"kind":"Field","name":{"kind":"Name","value":"labels"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"name"}},{"kind":"Field","name":{"kind":"Name","value":"providerLabelId"}}]}},{"kind":"Field","alias":{"kind":"Name","value":"unreadReminders"},"name":{"kind":"Name","value":"notifications"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"filter"},"value":{"kind":"ObjectValue","fields":[{"kind":"ObjectField","name":{"kind":"Name","value":"states"},"value":{"kind":"ListValue","values":[{"kind":"EnumValue","value":"UNSEEN"}]}},{"kind":"ObjectField","name":{"kind":"Name","value":"eventTypes"},"value":{"kind":"ListValue","values":[{"kind":"StringValue","value":"reminder","block":false}]}}]}},{"kind":"Argument","name":{"kind":"Name","value":"limit"},"value":{"kind":"IntValue","value":"1"}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"state"}}]}}]}}]}}]}}]}}]}}]} as unknown as DocumentNode<HomeUnreadPresenceQuery, HomeUnreadPresenceQueryVariables>;
 export const InitiativeDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"Initiative"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"initiativeId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"user"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"initiative"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"initiativeId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"initiativeId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"InitiativeDetailFields"}}]}}]}}]}},_sharedFragment_SoupPropertyValueFields,_sharedFragment_SoupPropertyFields,_sharedFragment_InitiativeDetailFields]} as unknown as DocumentNode<InitiativeQuery, InitiativeQueryVariables>;
 export const InitiativeIdentityDocument = {"kind":"Document","definitions":[{"kind":"OperationDefinition","operation":"query","name":{"kind":"Name","value":"InitiativeIdentity"},"variableDefinitions":[{"kind":"VariableDefinition","variable":{"kind":"Variable","name":{"kind":"Name","value":"initiativeId"}},"type":{"kind":"NonNullType","type":{"kind":"NamedType","name":{"kind":"Name","value":"ID"}}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"user"},"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"Field","name":{"kind":"Name","value":"id"}},{"kind":"Field","name":{"kind":"Name","value":"initiative"},"arguments":[{"kind":"Argument","name":{"kind":"Name","value":"initiativeId"},"value":{"kind":"Variable","name":{"kind":"Name","value":"initiativeId"}}}],"selectionSet":{"kind":"SelectionSet","selections":[{"kind":"FragmentSpread","name":{"kind":"Name","value":"InitiativeIdentityFields"}}]}}]}}]}},_sharedFragment_InitiativeIdentityFields]} as unknown as DocumentNode<InitiativeIdentityQuery, InitiativeIdentityQueryVariables>;
