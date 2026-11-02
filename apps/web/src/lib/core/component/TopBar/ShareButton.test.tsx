@@ -98,6 +98,7 @@ const mocks = vi.hoisted(() => ({
   blockPermissionsRead: vi.fn(),
   blockEditPermissionEnabled: true,
   inBlock: true,
+  blockId: 'launcher-placeholder',
 }));
 vi.mock('@app/features/crm/sharing-adapter', () => ({
   fetchPipelineSharePermissions: mocks.getPipelinePermissions,
@@ -146,7 +147,7 @@ vi.mock('@core/block', () => ({
   useBlockName: () => 'md',
   useMaybeBlockName: () => 'md',
   useMaybeBlockAliasedName: () => 'md',
-  useMaybeBlockId: () => 'launcher-placeholder',
+  useMaybeBlockId: () => (mocks.inBlock ? mocks.blockId : undefined),
 }));
 vi.mock('@core/component/CustomScrollbar', () => ({
   CustomScrollbar: () => null,
@@ -309,7 +310,7 @@ vi.mock('@queries/call/call', () => ({
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({
     isSuccess: mocks.hasTeam,
-    data: mocks.hasTeam ? { id: 'team-1' } : undefined,
+    data: mocks.hasTeam ? { team: { id: 'team-1', name: 'Macro' } } : undefined,
   }),
 }));
 vi.mock('@solidjs/router', () => ({ useNavigate: () => vi.fn() }));
@@ -423,6 +424,10 @@ beforeEach(() => {
   });
   vi.clearAllMocks();
   mocks.inBlock = true;
+  mocks.blockId = 'launcher-placeholder';
+  mocks.getDocumentPermissions.mockResolvedValue(
+    ok({ channelSharePermissions: [] })
+  );
   mocks.blockEditPermissionEnabled = true;
   mocks.mobile = false;
   mocks.hasTeam = false;
@@ -458,6 +463,44 @@ beforeEach(() => {
   });
 });
 afterEach(cleanup);
+
+describe('document permissions source', () => {
+  it('loads a document’s own permissions instead of its enclosing block’s', async () => {
+    mocks.blockId = 'calendar';
+    mocks.blockEditPermissionEnabled = false;
+    mocks.getDocumentPermissions.mockResolvedValue(
+      ok({
+        linkShare: 'PUBLIC',
+        linkShareAccessLevel: 'view',
+        channelSharePermissions: [],
+      })
+    );
+    render(() => (
+      <ShareModal
+        id="shared-doc"
+        name="Shared doc"
+        owner={ME}
+        itemType="document"
+        blockAlias="md"
+        userPermissions={Permissions.OWNER}
+        open
+        onOpenChange={vi.fn()}
+      />
+    ));
+    await vi.waitFor(() =>
+      expect(mocks.getDocumentPermissions).toHaveBeenCalledWith({
+        document_id: 'shared-doc',
+      })
+    );
+    expect(
+      await screen.findByRole('group', { name: 'Link sharing scope' })
+    ).toBeTruthy();
+    expect(mocks.blockPermissionsRead).not.toHaveBeenCalled();
+    expect(
+      await screen.findByRole('button', { name: 'Set option edit' })
+    ).toBeTruthy();
+  });
+});
 function mountShare(isOwner: boolean) {
   const onOpenChange = vi.fn();
   const onCopyLink = mocks.copyLink;
@@ -935,6 +978,7 @@ describe('share edit availability', () => {
 });
 
 function mountChatShare() {
+  mocks.blockId = 'chat-1';
   mocks.blockPermissionsRead.mockReturnValue({
     isErr: () => false,
     value: {
@@ -961,6 +1005,7 @@ function mountChatShare() {
 }
 
 function mountCallShare() {
+  mocks.blockId = 'call-1';
   mocks.blockPermissionsRead.mockReturnValue({
     isErr: () => false,
     value: {
@@ -1178,6 +1223,7 @@ describe('chat team sharing', () => {
 });
 
 function mountProjectShare() {
+  mocks.blockId = 'project-1';
   mocks.blockPermissionsRead.mockReturnValue({
     isErr: () => false,
     value: {
@@ -1678,6 +1724,7 @@ describe('pipeline sharing', () => {
 });
 
 it('database sharing reads its block permissions and disables public links', () => {
+  mocks.blockId = 'database-id';
   mocks.blockPermissionsRead.mockReturnValue({
     isErr: () => false,
     value: { id: 'database-id', owner: 'owner', channelSharePermissions: [] },
@@ -1701,6 +1748,7 @@ it('database sharing reads its block permissions and disables public links', () 
 
 describe('database team sharing', () => {
   function mountDatabaseShare() {
+    mocks.blockId = 'database-id';
     mocks.blockPermissionsRead.mockReturnValue({
       isErr: () => false,
       value: {
@@ -1755,6 +1803,9 @@ describe('database team sharing', () => {
 });
 
 describe('form share roles', () => {
+  beforeEach(() => {
+    mocks.blockId = 'form-id';
+  });
   it.each([false, true])(
     'shows form link sharing in the native link area (mobile: %s)',
     async (mobile) => {

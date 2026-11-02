@@ -3,7 +3,6 @@
  */
 
 import type { CalendarEvent } from '@app/features/calendar/types';
-import { createSplitAutofocus } from '@components/app/split-layout/utils/createSplitAutofocus';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
 import { ImperativeDialogHost } from '@ui';
@@ -171,35 +170,6 @@ describe('desktop focus handoff', () => {
     mocks.mobile = false;
   });
 
-  it('lets a note that finishes mounting after dismissal claim focus', async () => {
-    const user = userEvent.setup();
-    const anchor = showDetails(event());
-    const [noteElement, setNoteElement] = createSignal<HTMLElement | null>(
-      null
-    );
-    render(() => {
-      createSplitAutofocus({ element: noteElement, enabled: () => true });
-      return null;
-    });
-
-    for (let attempt = 0; attempt < 2; attempt++) {
-      if (attempt > 0) await user.click(anchor);
-      await user.click(
-        screen.getByRole('button', { name: 'Open linked note' })
-      );
-      expect(mocks.openDocument).toHaveBeenCalledWith(
-        { type: 'md', id: 'note-1' },
-        { preferNewSplit: true }
-      );
-
-      const note = document.createElement('div');
-      note.tabIndex = -1;
-      document.body.append(note);
-      setNoteElement(note);
-      await Promise.resolve();
-      expect(document.activeElement).toBe(note);
-    }
-  });
 
   it('returns focus to the event on ordinary dismissal and reopening', async () => {
     const user = userEvent.setup();

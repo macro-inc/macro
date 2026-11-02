@@ -986,8 +986,8 @@ export function ShareModal(props: ShareModalProps) {
   const callRecordQuery = useCallRecordQuery(() =>
     props.itemType === 'call' ? props.id : ''
   );
-  // A calendar can open Share for a linked note. Only reuse the enclosing
-  // block's permissions when the dialog is sharing that same entity.
+  // A block can open Share for another entity it shows. Only reuse the
+  // enclosing block's permissions when the dialog is sharing that same entity.
   const enclosingBlockId = useMaybeBlockId();
   const isBlockContext = () =>
     !!enclosingBlockId &&
