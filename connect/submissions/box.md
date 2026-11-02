@@ -1,12 +1,12 @@
 ---
 vendor: box
 apps: [box]
-state: drafting
+state: deferred
 portal: https://developer.box.com/guides/box-mcp/remote/
 account: connect@macro.com
 submitted:
 last_contact:
-next_action: Human approves emailing integrate@box.com from connect@macro.com to ask how an MCP client becomes a predefined Box MCP integration (draft below)
+next_action: Deferred by Eric on 2026-11-02
 next_action_owner: human
 due: 2026-11-02
 ---

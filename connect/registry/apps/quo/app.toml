@@ -6,5 +6,5 @@ mcp_url = "https://mcp.quo.com/mcp"
 client_registration = "dcr"
 scopes = []
 pipedream_app_slugs = ["openphone"]
-status = "pending"
-probed = 2026-10-30
+status = "live"
+probed = 2026-10-31
