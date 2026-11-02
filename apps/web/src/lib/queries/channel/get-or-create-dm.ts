@@ -59,7 +59,7 @@ export function useGetOrCreateDirectMessageMutation(
  * The 1:1 DM between `viewerId` and `recipientId` in a channel list, picked as
  * the server's get-or-create picks it: the oldest two-member DM with both.
  */
-export function findDirectMessage(
+function findDirectMessage(
   channels: ApiChannelWithLatest[],
   viewerId: string,
   recipientId: string
