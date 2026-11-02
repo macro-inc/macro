@@ -172,7 +172,6 @@ export function PollBars(props: {
 export function PollResults(props: {
   ref?: (element: HTMLElement) => void;
   bars: readonly PollBar[];
-  summary: string;
   /** The viewer, marked among the voters. */
   viewerId: string | undefined;
   renderPerson: (userId: string) => JSX.Element;
@@ -216,10 +215,9 @@ export function PollResults(props: {
           </div>
         )}
       </For>
-      <div class="flex items-center justify-between gap-2 border-t border-edge-divider pt-2 text-[11px] text-ink-muted">
-        <span>{props.summary}</span>
-        <Show when={props.onOpenResponses}>
-          {(open) => (
+      <Show when={props.onOpenResponses}>
+        {(open) => (
+          <div class="flex justify-end border-t border-edge-divider pt-2 text-[11px]">
             <button
               type="button"
               class="text-accent-ink hover:underline"
@@ -227,9 +225,9 @@ export function PollResults(props: {
             >
               Responses table
             </button>
-          )}
-        </Show>
-      </div>
+          </div>
+        )}
+      </Show>
     </section>
   );
 }

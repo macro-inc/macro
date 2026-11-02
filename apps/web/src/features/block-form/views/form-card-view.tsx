@@ -96,7 +96,6 @@ function PollCardBody(props: {
             )
           }
           bars={voting.bars()}
-          summary={voting.summary()}
           viewerId={context.viewer.userId()}
           renderPerson={context.ui.renderPerson}
           onOpenResponses={
