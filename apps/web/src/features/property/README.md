@@ -67,8 +67,10 @@ When editing ends, immediately re-evaluate new tags against the title's full
 width, even if the title is already truncated.
 Hosts without a controller retain their explicit or default chip limit.
 After confirmed GraphQL tag writes, refresh only lists the normalized cache cannot
-maintain so stale reads do not replace the committed selection. REST writes keep
-their full refresh behavior.
+maintain so stale reads do not replace the committed selection. Match option-filtered
+lists by property definition as well as sorted/grouped lists; leave unrelated lists
+alone. Use the write's actual transport for refresh scope, even if the feature flag
+changes while saving. REST writes retain refreshes for cache-maintained readers.
 Tag chips, overflow chips, and inline tag pills retain their compact desktop
 height on touch instead of adopting the shared button touch minimum. Only
 the task-detail title-row tags selector uses the 36px touch target; document

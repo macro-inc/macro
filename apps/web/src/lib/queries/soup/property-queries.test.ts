@@ -70,4 +70,59 @@ describe('refreshPropertyQueries', () => {
     expect(unmaintained).toHaveBeenCalledTimes(2);
     expect(unrelated).not.toHaveBeenCalled();
   });
+
+  it.each([false, true])(
+    'refreshes option-filtered readers with unmaintainedOnly=%s without refreshing unrelated lists',
+    async (unmaintainedOnly) => {
+      onTestFinished(() => queryClient.clear());
+      const filtered = {
+        propf: { l: { pd: 'tag-definition', v: { so: 'tag-option' } } },
+      };
+      const unrelated = {
+        propf: { l: { pd: 'other-definition', v: { so: 'tag-definition' } } },
+      };
+      const ordinary = { df: { l: { dst: 'task' } } };
+      const bodies = [filtered, unrelated, ordinary];
+      const keys = bodies.map(
+        (body) =>
+          soupKeys.astItems({ params: { sort_method: 'updated_at' }, body })
+            .queryKey
+      );
+      const readers = bodies.map((body) => {
+        const refresh = vi.fn(async () => {});
+        onTestFinished(
+          registerActiveGraphqlSoupQuery({
+            isEnabled: () => true,
+            refresh,
+            cacheMaintained: () => false,
+            body: () => body,
+          })
+        );
+        return refresh;
+      });
+      const maintained = vi.fn(async () => {});
+      onTestFinished(
+        registerActiveGraphqlSoupQuery({
+          isEnabled: () => true,
+          refresh: maintained,
+          cacheMaintained: () => true,
+          body: () => filtered,
+        })
+      );
+      for (const key of keys) queryClient.setQueryData(key, []);
+
+      await refreshPropertyQueries('tag-definition', {
+        includeOptionFilters: true,
+        unmaintainedOnly,
+      });
+
+      expect(
+        keys.map((key) => queryClient.getQueryState(key)?.isInvalidated)
+      ).toEqual([true, false, false]);
+      expect(readers[0]).toHaveBeenCalledOnce();
+      expect(readers[1]).not.toHaveBeenCalled();
+      expect(readers[2]).not.toHaveBeenCalled();
+      expect(maintained).toHaveBeenCalledTimes(unmaintainedOnly ? 0 : 1);
+    }
+  );
 });
