@@ -30,6 +30,10 @@ vi.mock('@entity', async () => ({
   ...(await import('@entity/utils/company-properties')),
 }));
 vi.mock('@notifications', async () => await import('@notifications/types'));
+vi.mock('@core/constant/featureFlags', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/featureFlags')>()),
+  ENABLE_CLIENT_EMAIL_SIGNAL_FILTER: false,
+}));
 const flags = vi.hoisted(() => ({ graphqlSoup: false }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: (flag: { key: string }) => () => ({
