@@ -42,11 +42,6 @@ import { ResultAsync } from 'neverthrow';
 import { $insertNodesAndSplitList } from '../../utils';
 import { mapRegisterDelete } from '../shared';
 import {
-  $insertImageIntoListItem,
-  registerListItemImages,
-} from './listItemImages';
-
-import {
   INSERT_MEDIA_COMMAND,
   ON_MEDIA_COMPONENT_MOUNT_COMMAND,
   TRY_INSERT_MEDIA_UPLOAD_COMMAND,
@@ -55,6 +50,10 @@ import {
   UPLOAD_MEDIA_START_COMMAND,
   UPLOAD_MEDIA_SUCCESS_COMMAND,
 } from './commands';
+import {
+  $insertImageIntoListItem,
+  registerListItemImages,
+} from './listItemImages';
 
 export {
   INSERT_MEDIA_COMMAND,

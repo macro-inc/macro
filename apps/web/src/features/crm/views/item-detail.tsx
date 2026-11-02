@@ -1,9 +1,9 @@
-import {
-  EntityDetail,
-  entityDetailBlockType,
-} from '@app/components/entity-detail/EntityDetail';
+import { EntityDetail } from '@app/components/entity-detail/EntityDetail';
 import { EntityDetailBreadcrumbSkeleton } from '@app/components/entity-detail/EntityDetailBreadcrumbSkeleton';
-import type { EntityDetailTarget } from '@app/components/entity-detail/entity-detail-target';
+import {
+  type EntityDetailTarget,
+  entityDetailBlockType,
+} from '@app/components/entity-detail/entity-detail-target';
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { FileDetailBreadcrumbItem } from '@app/features/drive-view/views/FileDetailBreadcrumbItem';
 import { MarkdownDetail } from '@app/features/drive-view/views/MarkdownDetail';
