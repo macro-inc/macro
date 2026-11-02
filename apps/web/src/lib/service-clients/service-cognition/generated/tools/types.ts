@@ -8292,18 +8292,15 @@ export interface CreateProjectResponse {
  * Triggers: `once` (future RFC3339 time), `cron` (six-field expression and IANA time zone), or `event` (activity such as `email.message_received`, `task.created` or `channel.message_posted`, optionally limited to item `ids` and gated by a yes/no `condition`). Only people's actions trigger routines.
  *
  * Steps run in order and a failed step stops the run:
- * - `code`: TypeScript against Macro's SDK; see Code steps at the end.
- * - `tool`: one Macro tool with fixed `arguments`, exactly as that tool documents them. Allowed tools: UpdateThreadLabels (pass `label` by name so it works in every inbox: archive = remove INBOX, mark read = remove UNREAD, star = add STARRED, or a custom label's name), SetSenderPolicy (pass `thread_id` `{{trigger.entity_id}}` so it applies to the inbox that received the email), SetEntityProperty (status, priority, assignees, due date, tags, CRM stage or any property), CreateDocument (set isTask for tasks; outputs documentId), Comment (`entityType` `document` for a task or document), SendChannelMessage (to reply to the triggering message, pass `channel_id` `{{trigger.entity_id}}` and `thread_id` `{{trigger.message.thread_id}}`), MoveToProject. Look up other ids first with ListTags, GetEntityProperties, ListTeamMembers or channel search; never pass names where an id is required.
- * - `if`: a yes/no `condition` about the triggering item, with `then` and `else` steps.
- * - `choose`: an optional `question` and 2-8 `options` (label, optional description, steps); the best fitting option runs, else `otherwise`. With `"multiple": true`, every option that fits runs instead, in order. Use it to classify, e.g. email triage, or to let the classifier pick values: one option per label, tag, priority or person, each with the single step that applies it (`multiple` for labels and tags).
- * - `agent`: hand off to a model (`model`) or an agent from ListAgents (`agent.bot_id`, optional `model` override) with `instructions`, for open-ended work such as drafting, research or filling CRM fields. It sees the triggering event and what earlier steps did. A run reaches at most one agent; agents in different branches are fine. To schedule yourself, use your own persona id as `agent.bot_id`. Apps the agent needs beyond its own go in `requiredApps`.
+ * - `code`: TypeScript against Macro's SDK, for anything that acts or decides: labeling or archiving email, setting properties, creating tasks, posting messages, or judging items with `macro.ai.decide`. See Code steps at the end.
+ * - `agent` ("Ask AI"): hand off to a model (`model`) or an agent from ListAgents (`agent.bot_id`, optional `model` override) with `instructions`, for open-ended work such as drafting, research or summarizing many items. It sees the triggering event and what earlier steps returned. A routine has at most one agent step. To schedule yourself, use your own persona id as `agent.bot_id`. Apps the agent needs beyond its own go in `requiredApps`.
  *
- * Decisions (`if`, `choose`) are answered by a fast classifier in one call, so prefer them over agents for routing. Tool arguments may embed placeholders: `{{trigger.entity_id}}` (the email thread, task, document or channel that triggered the run), `{{trigger.message_id}}`, `{{trigger.message.thread_id}}` (the thread a reply to the triggering message joins), the item's content such as `{{trigger.email.subject}}`, `{{trigger.email.from.email}}`, `{{trigger.message.text}}` or `{{trigger.item.name}}`, and an earlier tool or code step's output by its `id`, e.g. `{{steps.task.documentId}}`, when that step always runs first: earlier in the same list or in a list that encloses this one, never in a sibling branch or inside a decision that comes before this step. A value that is exactly one placeholder keeps its JSON type. Decisions and `{{trigger…}}` placeholders need event triggers only.
+ * Prefer code: it is exact and cheap, and it can read many items, loop and decide. Use an agent step only for open-ended work, and put it last.
  *
- * Example, file invoices and archive newsletters. Its `steps` string holds:
- * [{"type":"choose","question":"What kind of email is this?","options":[{"label":"Invoice","description":"bills, receipts, payment requests","steps":[{"type":"tool","tool":"UpdateThreadLabels","arguments":{"thread_id":"{{trigger.entity_id}}","label":"Finance","add":true}},{"type":"tool","id":"task","tool":"CreateDocument","arguments":{"documentName":"Pay: {{trigger.email.subject}}","fileContent":"","fileExtension":"md","isTask":true}}]},{"label":"Newsletter","steps":[{"type":"tool","tool":"UpdateThreadLabels","arguments":{"thread_id":"{{trigger.entity_id}}","label":"INBOX","add":false}}]}]}]
+ * Example, label invoices as they arrive. Triggers: `[{"type":"event","events":["email.message_received"]}]`. Its `steps` string holds:
+ * [{"type":"code","title":"Label invoices","summary":"Asks AI whether the new email is an invoice and adds the inbox's Finance label if so.","writes":["email"],"source":"export async function main({ macro, trigger }: StepContext) {\n  if (trigger.kind !== 'event') return { labeled: false };\n  const { probabilities } = await macro.ai.decide({\n    input: { subject: trigger.item.email?.subject },\n    questions: { invoice: 'Is this email an invoice or a payment request?' },\n  });\n  if ((probabilities.invoice ?? 0) < 0.5) return { labeled: false };\n  const thread = macro.email.byId(trigger.item.entity_id);\n  const inbox = (await thread.link()).id;\n  for (const label of await macro.email.labels()) {\n    if ((await label.linkId()) === inbox && (await label.name()) === 'Finance') {\n      await thread.addLabel(label);\n      return { labeled: true };\n    }\n  }\n  return { labeled: false, missing: 'Finance' };\n}\n"}]
  *
- * Code steps: a `code` step runs TypeScript against Macro's SDK, the same SDK code mode uses. Use one for work a single tool call or decision can't do: reading many items, a loop, or acting on what an earlier call returned. It takes:
+ * Code steps: a `code` step runs TypeScript against Macro's SDK, the same SDK code mode uses. Use code for everything a routine does or decides: labeling or archiving email, setting properties, creating tasks, posting messages, reading many items, loops, and judgments with `macro.ai.decide`. Usually one code step does all of it. It takes:
  * - `title`: what it does, in a few words. Saving names the step's output after it: "Find open invoices" becomes `find_open_invoices`. An `id` you give is kept.
  * - `summary`: one sentence on how, for the routine's owner.
  * - `writes`: every area it changes: `email`, `calendar`, `workspace` (documents, tasks, channels, comments and folders), `properties`, `contacts`, `notifications` (marking them seen or done), `ai` (structured completions with tools, images; `macro.ai.decide` is a read). Reads need none. A write outside these is refused when it runs.
@@ -8312,9 +8309,11 @@ export interface CreateProjectResponse {
  *   - `run.lastSucceededAt` (null on the first run) and `run.previous` (`{ at, outcome }`) say when the routine last ran. Work on what is new since then instead of everything each time.
  *   - `trigger` says what started the run: `{ kind: 'schedule', schedule, timezone }`, `{ kind: 'event', event, item }` with the item as JSON (`item.entity_id`, `item.email?.subject`, …), or `{ kind: 'manual', by }`. Check `trigger.kind` before reading `item`.
  *   - `run.dryRun` is true when writes change nothing; `routine` is `{ id, name }`.
- *   - `steps.<id>` is the output of a code or tool step that always runs before this one, typed from that step's code. Changing what a step returns can break the steps that read it; every code step is checked with the others.
- * - What `main` returns is the step's output: JSON (dates become strings) of at most 64 KB. Return only what later steps need, such as ids and counts, not whole items; a larger output fails the step. Tool step arguments can read it as `{{steps.<id>.<path>}}`.
- * - Call SDK methods as their declarations show, with `await`. Use `macro.ai.decide({ input, questions })` for yes/no judgments: `questions` maps keys to questions, and `probabilities[key]` in the answer is from 0 to 1. Don't import anything.
+ *   - `steps.<id>` is the output of a code step before this one, typed from that step's code. Changing what a step returns can break the steps that read it; every code step is checked with the others.
+ * - What `main` returns is the step's output: JSON (dates become strings) of at most 64 KB. Return only what later steps need, such as ids and counts, not whole items; a larger output fails the step. An Ask AI step after it sees it too.
+ * - Call SDK methods as their declarations show, with `await`. Don't import anything.
+ * - Judge with `macro.ai.decide({ input, questions })`: `questions` maps keys to yes/no questions, and `probabilities[key]` in the answer is from 0 to 1 (treat 0.5 and above as yes). Ask every question about one item in one call. To pick one of several options (a label, a priority, a person), ask one question per option and take the most likely one that reaches 0.5.
+ * - Resolve names to ids in code, from the SDK (labels, properties, people, channels), rather than hard-coding ids.
  * - The code is type-checked against the SDK; the checker's errors come back, and the step isn't saved until they are fixed. It runs as the owner, within 30 seconds.
  *
  */
@@ -8335,9 +8334,7 @@ export interface RoutineConfiguration {
   triggers: RoutineTrigger[];
   /**
    * What it does each run, in order: a JSON array of steps, encoded as a
-   * string (see the tool description for the step format). Steps that
-   * decide about or read the triggering item (`if`, `choose`,
-   * `{{trigger.…}}`) need activity triggers only.
+   * string (see the tool description for the step format).
    */
   steps: string;
   /**

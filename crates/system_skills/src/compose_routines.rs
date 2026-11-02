@@ -6,7 +6,7 @@ use crate::SystemSkill;
 
 static TITLE: &str = "Compose Routines";
 
-static INSTRUCTIONS: &str = r##"Follow this skill when the user asks to create a routine or to change one - when it runs, what each run does, or whether it runs at all. A routine is triggers plus steps that run as the user after this session ends. `CreateRoutine` documents the configuration, the tools a step may call and their arguments; this skill is how to put one together well.
+static INSTRUCTIONS: &str = r##"Follow this skill when the user asks to create a routine or to change one - when it runs, what each run does, or whether it runs at all. A routine is triggers plus steps that run as the user after this session ends. `CreateRoutine` documents the configuration and how to write code steps; this skill is how to put one together well.
 
 ## Start from what exists
 
@@ -23,14 +23,13 @@ static INSTRUCTIONS: &str = r##"Follow this skill when the user asks to create a
 
 Steps run in order and a failed step stops the run.
 
-- Prefer `tool` steps: they are exact, cheap and predictable. Use one per action the user described - label or archive an email, set a property, create a task or document, comment, post or reply in a channel, move to a folder.
-- Route with decisions rather than an agent: `if` for a yes/no question, `choose` for 2 to 8 labelled options, with `"multiple": true` when several can apply (labels, tags). One classifier call answers every decision before any step runs, so a decision judges the triggering item, not what earlier steps did.
-- Use a `code` step when the work needs what one tool call can't do: several calls per item, a loop, a decision about what an earlier call returned, or an SDK capability no tool covers. Write it like code-mode code, type the argument `StepContext`, take the run's time from `run.at` and `run.timezone` rather than the clock, list every area it changes in `writes`, and give it a title and one-sentence summary the user can read. Saving type-checks it; fix the errors the tool returns and save again.
-- Use an `agent` step only for open-ended work: drafting, research, summarizing many items. A run reaches at most one agent (agents in different branches are fine). It sees the triggering event and what earlier steps did, so put it last. Apps it needs beyond its own go in `requiredApps`, and the user must already have them connected.
-- Decisions and `{{trigger.…}}` placeholders read the triggering item, so they need activity triggers only: a routine that also has a schedule is rejected. A schedule-only routine uses fixed arguments, a code step or an agent step.
-- To act on what an earlier step made, pass its output by the step's `id`, e.g. `{{steps.task.documentId}}` for the task a `CreateDocument` step created, or `steps.task` in a later code step. Saving gives a step without an `id` one from its title (code) or tool (`create_document`); set one to choose the name. The step must always run first: earlier in the same list or in an enclosing one. A step in another branch, or inside a decision before this step, may not have run, so put the follow-up in the same branch.
-- Resolve every id before writing (ListTags, GetEntityProperties, ListTeamMembers, channel search). Never invent an id or pass a name where an id is required; label steps take the label's name.
-- Limits: 40 steps in all, decisions nested at most 4 deep, 32 questions across decisions (each option of a choice is one), option labels up to 80 characters, choice questions and option descriptions up to 200.
+A routine has two kinds of step: `code` and `agent` ("Ask AI").
+
+- Use a `code` step for everything that acts or decides: label or archive an email, set a property, create a task, comment, post in a channel, move to a folder, judge items with `macro.ai.decide`, or read many items and loop. One code step usually does all of it. Write it like code-mode code, type the argument `StepContext`, check `trigger.kind` before reading the triggering item, take the run's time from `run.at` and `run.timezone` rather than the clock, list every area it changes in `writes`, and give it a title and one-sentence summary the user can read. Saving type-checks it; fix the errors the tool returns and save again.
+- Use an `agent` step only for open-ended work: drafting, research, summarizing many items. A routine has at most one, and it sees the triggering event and what earlier steps returned, so put it last. Apps it needs beyond its own go in `requiredApps`, and the user must already have them connected.
+- A later code step reads an earlier one's output as `steps.<id>`. Saving gives a step without an `id` one from its title ("Find invoices" becomes `find_invoices`); set one to choose the name.
+- Resolve names in code through the SDK, or look ids up first (ListTags, GetEntityProperties, ListTeamMembers, channel search). Never invent an id.
+- Limits: 40 steps in all.
 
 ## Confirm, then write
 
@@ -45,15 +44,12 @@ Say in one or two sentences what the routine now does - when it runs and what ea
 
 ## Example
 
-"When an invoice email arrives, label it Finance and make a task to pay it if it's due within a week; archive newsletters." Triggers: `[{"type":"event","events":["email.message_received"]}]`. The `steps` string holds:
-
-[{"type":"choose","question":"What kind of email is this?","options":[{"label":"Invoice","description":"bills, receipts, payment requests","steps":[{"type":"tool","tool":"UpdateThreadLabels","arguments":{"thread_id":"{{trigger.entity_id}}","label":"Finance","add":true}},{"type":"if","condition":"Is the payment due within 7 days?","then":[{"type":"tool","id":"task","tool":"CreateDocument","arguments":{"documentName":"Pay: {{trigger.email.subject}}","fileContent":"","fileExtension":"md","isTask":true}}]}]},{"label":"Newsletter","description":"digests, announcements, marketing","steps":[{"type":"tool","tool":"UpdateThreadLabels","arguments":{"thread_id":"{{trigger.entity_id}}","label":"INBOX","add":false}}]}]}]
+"When an invoice email arrives, label it Finance." `CreateRoutine` ends with this routine's configuration: an `email.message_received` trigger and one code step that asks `macro.ai.decide` whether the email is an invoice and adds the inbox's Finance label if so.
 "##;
 
 static INTENT: &str = "Requests to create or change a routine become one complete configuration - triggers \
-     that fit the work, plain tool steps first, decisions for routing and at most one agent, with \
-     every id resolved - written through CreateRoutine or UpdateRoutine and reported in plain \
-     words.";
+     that fit the work, code steps that act and decide, and at most one Ask AI step, with every \
+     id resolved - written through CreateRoutine or UpdateRoutine and reported in plain words.";
 
 /// The skill's instructions as a composable prompt section.
 pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(TITLE, INSTRUCTIONS, INTENT);

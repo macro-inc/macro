@@ -41,8 +41,8 @@ Pulumi stacks; they do not host extra agent processes.
   composes staged search type/field extraction and Clairic content extraction
   with Nemotron temporal extraction and the shared admission/usage services.
 - `src/scheduling.rs`: routine HTTP routes and background scheduling;
-  domain/adapters live in `crates/scheduled_action`. Routine tool steps run
-  through `src/routine_tools.rs`; code steps through `src/routine_code.rs`,
+  domain/adapters live in `crates/scheduled_action`. Routine code steps run
+  through `src/routine_code.rs`,
   on routines' own Deno executor (own slots, CPU limit, lower priority) and
   type checker, with the owner's token limited to each step's `writes`.
   A routine's code steps are checked together, one file each; the owner's

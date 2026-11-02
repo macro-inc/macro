@@ -14,12 +14,12 @@ each run.
   and the ports its adapters implement.
 - `src/domain/event_trigger.rs` + `src/domain/target_runner.rs`: how an event
   (Kafka or polled) turns into a dispatched run.
-- `src/domain/program_runner.rs`: runs a routine's steps (`crates/routine_program`):
-  one classifier call for its decisions, tool steps through the `RoutineTools`
-  port (the harness's catalog, in process, limited to `RoutineTool`),
-  code steps through the `RoutineCode` port (the harness's Deno executor,
-  limited to each step's `writes`), and at most one agent step through
-  `target_runner.rs`. An old single-agent task runs as one agent step.
+- `src/domain/program_runner.rs`: runs a routine's steps (`crates/routine_program`)
+  in order: code steps through the `RoutineCode` port (the harness's Deno
+  executor, limited to each step's `writes`) and at most one agent ("Ask
+  AI") step through `target_runner.rs`. An old single-agent task runs as one
+  agent step. Event trigger conditions are answered before a run starts
+  (`event_runs/condition.rs`), not by the runner.
   `run_context` builds what code receives: the trigger's time (not the
   clock), the schedule's zone or else the owner's, and the previous run
   (`ScheduledActionRepo::run_history`, skipped runs excluded). Every tool and

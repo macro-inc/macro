@@ -1,4 +1,4 @@
-Code steps: a `code` step runs TypeScript against Macro's SDK, the same SDK code mode uses. Use one for work a single tool call or decision can't do: reading many items, a loop, or acting on what an earlier call returned. It takes:
+Code steps: a `code` step runs TypeScript against Macro's SDK, the same SDK code mode uses. Use code for everything a routine does or decides: labeling or archiving email, setting properties, creating tasks, posting messages, reading many items, loops, and judgments with `macro.ai.decide`. Usually one code step does all of it. It takes:
 - `title`: what it does, in a few words. Saving names the step's output after it: "Find open invoices" becomes `find_open_invoices`. An `id` you give is kept.
 - `summary`: one sentence on how, for the routine's owner.
 - `writes`: every area it changes: `email`, `calendar`, `workspace` (documents, tasks, channels, comments and folders), `properties`, `contacts`, `notifications` (marking them seen or done), `ai` (structured completions with tools, images; `macro.ai.decide` is a read). Reads need none. A write outside these is refused when it runs.
@@ -7,7 +7,9 @@ Code steps: a `code` step runs TypeScript against Macro's SDK, the same SDK code
   - `run.lastSucceededAt` (null on the first run) and `run.previous` (`{ at, outcome }`) say when the routine last ran. Work on what is new since then instead of everything each time.
   - `trigger` says what started the run: `{ kind: 'schedule', schedule, timezone }`, `{ kind: 'event', event, item }` with the item as JSON (`item.entity_id`, `item.email?.subject`, …), or `{ kind: 'manual', by }`. Check `trigger.kind` before reading `item`.
   - `run.dryRun` is true when writes change nothing; `routine` is `{ id, name }`.
-  - `steps.<id>` is the output of a code or tool step that always runs before this one, typed from that step's code. Changing what a step returns can break the steps that read it; every code step is checked with the others.
-- What `main` returns is the step's output: JSON (dates become strings) of at most 64 KB. Return only what later steps need, such as ids and counts, not whole items; a larger output fails the step. Tool step arguments can read it as `{{steps.<id>.<path>}}`.
-- Call SDK methods as their declarations show, with `await`. Use `macro.ai.decide({ input, questions })` for yes/no judgments: `questions` maps keys to questions, and `probabilities[key]` in the answer is from 0 to 1. Don't import anything.
+  - `steps.<id>` is the output of a code step before this one, typed from that step's code. Changing what a step returns can break the steps that read it; every code step is checked with the others.
+- What `main` returns is the step's output: JSON (dates become strings) of at most 64 KB. Return only what later steps need, such as ids and counts, not whole items; a larger output fails the step. An Ask AI step after it sees it too.
+- Call SDK methods as their declarations show, with `await`. Don't import anything.
+- Judge with `macro.ai.decide({ input, questions })`: `questions` maps keys to yes/no questions, and `probabilities[key]` in the answer is from 0 to 1 (treat 0.5 and above as yes). Ask every question about one item in one call. To pick one of several options (a label, a priority, a person), ask one question per option and take the most likely one that reaches 0.5.
+- Resolve names to ids in code, from the SDK (labels, properties, people, channels), rather than hard-coding ids.
 - The code is type-checked against the SDK; the checker's errors come back, and the step isn't saved until they are fixed. It runs as the owner, within 30 seconds.
