@@ -17,19 +17,24 @@ type EmailAttachmentPillProps = {
   onClick?: (chip: HTMLElement) => void;
 };
 
-export function EmailAttachmentPill(props: EmailAttachmentPillProps) {
-  let parentDiv!: HTMLDivElement;
-
+/** The file-type icon for an attachment; unknown types get the generic file icon. */
+export function EmailAttachmentIcon(props: {
+  fileName: string;
+  mimeType?: string;
+}) {
   const fileType = () => {
-    if (isCalendarFile(props.attachment.fileName, props.attachment.mimeType)) {
+    if (isCalendarFile(props.fileName, props.mimeType)) {
       return 'ics';
     }
-    const mimeType = props.attachment.mimeType
-      ?.split(';')[0]
-      .trim()
-      .toLowerCase();
+    const mimeType = props.mimeType?.split(';')[0].trim().toLowerCase();
     return mimeType ? mimeToFileExtTypeMap.get(mimeType) : undefined;
   };
+
+  return <EntityIcon targetType={fileType()} size="xs" />;
+}
+
+export function EmailAttachmentPill(props: EmailAttachmentPillProps) {
+  let parentDiv!: HTMLDivElement;
 
   return (
     <div
@@ -52,8 +57,16 @@ export function EmailAttachmentPill(props: EmailAttachmentPillProps) {
           if (e.key === 'Enter' || e.key === ' ') e.stopPropagation();
         }}
       >
-        <Show when={fileType() !== undefined || props.attachment.mimeType}>
-          <EntityIcon targetType={fileType()} size="xs" />
+        <Show
+          when={
+            props.attachment.mimeType ||
+            isCalendarFile(props.attachment.fileName, props.attachment.mimeType)
+          }
+        >
+          <EmailAttachmentIcon
+            fileName={props.attachment.fileName}
+            mimeType={props.attachment.mimeType}
+          />
         </Show>
         <span class="ph-no-capture truncate ml-1">
           {props.attachment.fileName}

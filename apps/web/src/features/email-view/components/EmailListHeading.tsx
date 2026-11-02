@@ -1,8 +1,12 @@
 import { DateGroupHeading } from '@app/features/next-soup/soup-view/date-group-heading';
-import type { SoupGroupHeaderRow } from '@app/features/soup';
+import type {
+  SoupGroupHeaderRow,
+  SoupSectionHeaderRow,
+} from '@app/features/soup';
 
-export function EmailDateGroupHeader(props: {
-  row: SoupGroupHeaderRow;
+/** A date group, or a search section (Files, Emails), among the email rows. */
+export function EmailListHeading(props: {
+  row: SoupGroupHeaderRow | SoupSectionHeaderRow;
   isFirst: boolean;
 }) {
   return (

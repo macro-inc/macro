@@ -46,6 +46,7 @@ import {
 import { DEFAULT_EMAIL_FOCUS_SORT, DEFAULT_EMAIL_TAB } from './constants';
 import {
   emailDetailSearch,
+  emailDetailSearchCodec,
   emailTabSearch,
   emailTabSearchCodec,
 } from './email-route';
@@ -226,7 +227,11 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
       selection: {
         getKey: (row) => (row.kind === 'entity' ? row.entity.id : row.id),
       },
-      isNavigable: (row) => row.kind === 'entity' || row.kind === 'load-more',
+      isNavigable: (row) =>
+        row.kind === 'entity' ||
+        row.kind === 'load-more' ||
+        row.kind === 'email-file' ||
+        row.kind === 'email-files-toggle',
       isSelectable: (row) => row.kind === 'entity',
       onActivate: (activation) => listActivationHandler?.(activation),
     })
@@ -282,7 +287,12 @@ export const [EmailViewProvider, useEmailView] = createAssertedContextProvider<
         {
           replace: options?.replace,
           search: {
-            [emailDetailSearch.namespace]: {},
+            [emailDetailSearch.namespace]: thread.messageId
+              ? emailDetailSearchCodec.serialize({
+                  messageId: thread.messageId,
+                  seek: crypto.randomUUID(),
+                })
+              : {},
             [emailTabSearch.namespace]: emailTabSearchCodec.serialize({
               tab: state.tab,
             }),

@@ -38,15 +38,21 @@ import { advanceEmptyAliasPages } from './advance-empty-alias-pages';
 import { buildEmailQuery, type EmailQueryContext } from './email-query';
 import { buildEmailDateRows } from './email-results';
 import { buildEmailSearchRequest } from './email-search';
+import type { EmailSearchFilesItem } from './email-search-files';
 import { emailAdmissionBatches, mergeEmailAdmission } from './read-admission';
+import { useEmailSearchFiles } from './use-email-search-files';
 import { useFocusEmailSource } from './use-focus-email-source';
 import { useReminderEmailSource } from './use-reminder-email-source';
 import { useScheduledEmailSource } from './use-scheduled-email-source';
 
-export type EmailDataSourceItem = SoupRow<WithNotification<EntityData>>;
+export type EmailDataSourceItem =
+  | SoupRow<WithNotification<EntityData>>
+  | EmailSearchFilesItem;
 
 export type EmailDataSource = ListDataSource<EmailDataSourceItem> & {
   reminderForThread?: (threadId: string) => EmailRowReminder | undefined;
+  /** Shows or hides the search Files section's overflow. */
+  toggleSearchFiles?: () => void;
 };
 
 export type EmailDataSourceInput = Pick<
@@ -494,6 +500,12 @@ export function useEmailDataSource(
     ];
   };
 
+  const searchFiles = useEmailSearchFiles({
+    threads: () => (search.isSearching() ? entities() : []),
+    query: () => state.search.trim(),
+    context: queryContext,
+  });
+
   const listEntities = createMemo((): WithNotification<EntityData>[] =>
     entities().map((email) =>
       withEntityNotifications(email, notificationSource)
@@ -541,7 +553,7 @@ export function useEmailDataSource(
     // Search results keep their relevance order, so only the list page is
     // bucketed by date.
     const result: EmailDataSourceItem[] = search.isSearching()
-      ? buildFlatSoupRows(listEntities())
+      ? [...searchFiles.rows(), ...buildFlatSoupRows(listEntities())]
       : buildEmailDateRows(listEntities());
 
     if (hasMore()) {
@@ -577,6 +589,7 @@ export function useEmailDataSource(
   return {
     reminderForThread: (threadId) =>
       showsReminders() ? reminders.reminderForThread?.(threadId) : undefined,
+    toggleSearchFiles: searchFiles.toggleExpanded,
     items: () =>
       showsReminders()
         ? reminders.items()

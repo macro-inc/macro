@@ -47,4 +47,6 @@ export type EmailViewStateOptions = Partial<EmailViewState>;
 export type EmailThreadTarget = {
   id: string;
   fallbackName?: string;
+  /** Message to scroll to and highlight once the thread opens. */
+  messageId?: string;
 };
