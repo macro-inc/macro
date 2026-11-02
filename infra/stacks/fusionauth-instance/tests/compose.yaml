@@ -1,0 +1,41 @@
+services:
+  db:
+    image: postgres:16.0-bookworm
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: local-test-password
+    tmpfs:
+      - /var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U postgres]
+      interval: 1s
+      timeout: 3s
+      retries: 60
+  fusionauth:
+    image: fusionauth/fusionauth-app:1.69.4
+    init: true
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: jdbc:postgresql://db:5432/fusionauth
+      DATABASE_ROOT_USERNAME: postgres
+      DATABASE_ROOT_PASSWORD: local-test-password
+      DATABASE_USERNAME: fusionauth
+      DATABASE_PASSWORD: local-test-password
+      FUSIONAUTH_APP_RUNTIME_MODE: development
+      FUSIONAUTH_APP_MEMORY: 512M
+      FUSIONAUTH_APP_KICKSTART_FILE: /test/kickstart.json
+      SEARCH_TYPE: database
+      FUSIONAUTH_TEST_API_KEY: ${FUSIONAUTH_TEST_API_KEY:?Run reproduce-handoff-race.mjs}
+    healthcheck:
+      test: [CMD-SHELL, "curl -fs -H \"Authorization: $$FUSIONAUTH_TEST_API_KEY\" http://localhost:9011/api/tenant > /dev/null"]
+      interval: 1s
+      timeout: 5s
+      retries: 120
+    ports:
+      - 127.0.0.1::9011
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    volumes:
+      - ${FUSIONAUTH_TEST_KICKSTART:?Run reproduce-handoff-race.mjs}:/test/kickstart.json:ro

@@ -57,6 +57,18 @@ or remove it if it was previously inherited.
 
 Use Biome from `nix develop` to match infrastructure CI.
 
+## Secondary-inbox login validation investigation
+
+Keep the rejection in `templates/reconcile_secondary_idp_link.js`. On
+FusionAuth 1.69.4, moving it to a login-validation lambda via a boolean in
+`user.data` allows overlapping secondary-inbox attempts to receive tokens for
+the primary account. Sequential tests pass and the specific error renders,
+but the handoff does not isolate concurrent attempts.
+
+The [isolated reproducer and findings](tests/README.md) exercise both the
+hosted-login flow and the IdP Login API. Its experimental lambdas are test
+fixtures only; neither Pulumi nor local bootstrap references them.
+
 # TODO
 - [ ] configure idps
 - [ ] sync prod with pulumi stack
