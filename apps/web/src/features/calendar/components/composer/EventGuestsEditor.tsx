@@ -70,6 +70,8 @@ export function EventGuestPicker(props: {
   excluded?: SelectedEventEditorGuest[];
   onChange: (selected: SelectedEventEditorGuest[]) => void;
   onClose: () => void;
+  /** Fill a sized container, such as a sheet, rather than a popover's height. */
+  fillHeight?: boolean;
 }) {
   const known = () => [...(props.excluded ?? []), ...props.selected];
   const users = createMemo((): IUser[] => {
@@ -93,6 +95,7 @@ export function EventGuestPicker(props: {
         users,
         excludedIds,
         allowCustomEmail: true,
+        fillHeight: props.fillHeight,
       }}
       selectedOptions={() => new Set(props.selected.map((guest) => guest.id))}
       setSelectedOptions={(ids) => {
@@ -142,17 +145,18 @@ export function AddOnlyGuestsEditor(props: {
                   <EventGuestRow guest={guest}>
                     {props.addedControls?.(guest)}
                     <Button
-                      label={`Remove ${guestDisplayName(guest)}`}
+                      aria-label={`Remove ${guestDisplayName(guest)}`}
+                      tooltip={`Remove ${guestDisplayName(guest)}`}
                       variant="ghost"
                       size="icon-sm"
-                      class="shrink-0 text-ink-muted [&_svg]:size-3.5"
+                      class="shrink-0 text-ink-muted"
                       onClick={() =>
                         props.onAddedChange(
                           props.added.filter((added) => added.id !== guest.id)
                         )
                       }
                     >
-                      <XIcon />
+                      <XIcon class="size-3.5 shrink-0" />
                     </Button>
                   </EventGuestRow>
                 </li>

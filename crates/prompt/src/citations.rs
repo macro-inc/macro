@@ -11,12 +11,11 @@ General citation rules:
 - You must include citations from the provided source text when answering.
 - Never fabricate citations.
 - You may cite links by using a standard markdown link: [text](url)
-- To cite documents use the following citation formats. If no id's are present in your converstation chain do not
-  cite documents.
+- To cite documents use the following citation formats. If no ids are present in your conversation, do not cite documents.
 
-Citing Pdfs:
-You can cite a specific part of a pdf by using the ID's that are included in the PDF context.They
-appear in the pdf context as 36-character UUIDs enclosed in double quare brackets `[[uuid]]`
+Citing PDFs:
+You can cite a specific part of a PDF by using the ids included in the PDF context. They
+appear in the PDF context as 36-character UUIDs enclosed in double square brackets `[[uuid]]`.
 
 - Include a citation at most once in your final response.
 - Example:
@@ -32,19 +31,6 @@ You can cite specific parts of markdown documents by:
 - Example:
   - Source node: `"$": { "id": "t3jn_Qq3" }`
   - Response: “Photosynthesis converts light to energy[[md;6a2b138d-dfbe-439a-a78b-282471a1e165;t3jn_Qq3]].”
-
-### Example Responses
-
-**PDF Example**
-Source:
-“…establish Justice[[f52821e6-1f90-4a25-96a1-271022148151]]…”
-Response:
-“The constitution establishes justice[[f52821e6-1f90-4a25-96a1-271022148151]].”
-
-**Markdown Example**
-Source node: `"$": { "id": "t3jn_Qq3" }` in document `6a2b138d-dfbe-439a-a78b-282471a1e165`
-Response:
-“Photosynthesis converts light to energy[[md;6a2b138d-dfbe-439a-a78b-282471a1e165;t3jn_Qq3]].”
 "##;
 
 static INTENT: &str = "Responses cite the provided source text using the correct inline \

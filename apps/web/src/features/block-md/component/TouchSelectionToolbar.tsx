@@ -397,24 +397,14 @@ export function TouchSelectionToolbar(props: {
         <div class="flex w-max flex-row items-center" ref={measureRowRef}>
           <For each={options()}>
             {(option) => (
-              <Button
-                size="sm"
-                class={optionButtonClass}
-                depth={3}
-                variant="ghost"
-              >
+              <Button size="sm" class={optionButtonClass} variant="ghost">
                 {option.content()}
               </Button>
             )}
           </For>
         </div>
         <div class="w-max" ref={measureArrowRef}>
-          <Button
-            size="icon-sm"
-            class={arrowButtonClass}
-            depth={3}
-            variant="ghost"
-          >
+          <Button size="icon-sm" class={arrowButtonClass} variant="ghost">
             <CaretRightIcon class="size-4" />
           </Button>
         </div>
@@ -423,7 +413,6 @@ export function TouchSelectionToolbar(props: {
         <Button
           size="icon-sm"
           class={arrowButtonClass}
-          depth={3}
           variant="ghost"
           aria-label="Previous options"
           onClick={() => page(-1)}
@@ -483,7 +472,6 @@ export function TouchSelectionToolbar(props: {
                       <Button
                         size="sm"
                         class={optionButtonClass}
-                        depth={3}
                         variant="ghost"
                         onClick={() => option.onSelect()}
                       >
@@ -502,7 +490,6 @@ export function TouchSelectionToolbar(props: {
         <Button
           size="icon-sm"
           class={arrowButtonClass}
-          depth={3}
           variant="ghost"
           aria-label="More options"
           onClick={() => page(1)}

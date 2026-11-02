@@ -216,7 +216,7 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
             disabled={pending()}
             onClick={leave}
           >
-            <CaretLeftIcon />
+            <CaretLeftIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
             Back to bots
           </Button>
           <Show
@@ -265,7 +265,7 @@ export function BotDetail(props: { botId: string; onBack: () => void }) {
                     <Button
                       type="button"
                       size="sm"
-                      variant="outline"
+                      variant="secondary"
                       class="ml-auto"
                       disabled={agentDm?.pending()}
                       onClick={() =>

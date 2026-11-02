@@ -64,7 +64,7 @@ export function MarkdownDetailBodyState(props: {
             <pre class="max-h-48 max-w-full overflow-auto whitespace-pre-wrap text-left text-failure text-xs">
               {String(props.error)}
             </pre>
-            <Button variant="outline" size="sm" onClick={props.onAction}>
+            <Button variant="secondary" size="sm" onClick={props.onAction}>
               {props.actionLabel ?? 'Reset'}
             </Button>
           </div>
@@ -154,6 +154,7 @@ export function MarkdownDetail(props: MarkdownDetailProps) {
       entityType="md"
       label={props.kind === 'task' ? 'task' : 'document'}
       load={loadMarkdownDocument}
+      dispose={(data) => data.source.cleanup()}
     >
       {(data) => (
         <MarkdownDetailContent

@@ -42,7 +42,7 @@ export function FailureNoticeCard(props: FailureNoticeCardProps) {
           {(link) => (
             <Button
               type="button"
-              variant="outline"
+              variant="secondary"
               size="sm"
               class="gap-1.5"
               onClick={() => props.onOpenLink(link().url)}

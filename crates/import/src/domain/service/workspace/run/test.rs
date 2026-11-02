@@ -3,6 +3,8 @@
 
 use std::sync::{Arc, Mutex};
 
+use chrono::{DateTime, TimeZone, Utc};
+
 use agent_runtime_protocol::domain::notification::{
     ImportOutcome, ImportWorkspace, NotificationEvent, ReviewSettlement,
 };
@@ -28,7 +30,7 @@ use crate::domain::models::{
 };
 use crate::domain::ports::{
     ImportedDocumentProperties, ImportedTaskProperties, NewDatabase, NotionLinks, PlanRow,
-    SharedEntity, TeamMember,
+    SharedEntity, SourceDates, TeamMember,
 };
 use crate::domain::service::NotionWorkspaceImporter;
 use crate::domain::service::test::admission::NoConnector;
@@ -36,6 +38,19 @@ use crate::outbound::pg_import_repo::PgImportRepo;
 
 fn page_id(hex: char) -> NotionId {
     NotionId::parse(&hex.to_string().repeat(32)).unwrap()
+}
+
+/// When page `e` (the wiki) and `f` (a page under it) were created and last
+/// edited; other pages cannot be read.
+fn page_times(id: &NotionId) -> Option<(DateTime<Utc>, DateTime<Utc>)> {
+    let at = |month| Utc.with_ymd_and_hms(2024, month, 1, 0, 0, 0).unwrap();
+    if *id == page_id('e') {
+        Some((at(1), at(3)))
+    } else if *id == page_id('f') {
+        Some((at(2), at(6)))
+    } else {
+        None
+    }
 }
 
 /// A workspace of plain pages, each with a body.
@@ -50,8 +65,18 @@ impl NotionApi for Pages {
         unimplemented!("writing never searches")
     }
 
-    async fn page(&self, _: &NotionId) -> std::result::Result<NotionPage, NotionError> {
-        Err(NotionError::NotFound)
+    async fn page(&self, id: &NotionId) -> std::result::Result<NotionPage, NotionError> {
+        let (created, last_edited) = page_times(id).ok_or(NotionError::NotFound)?;
+        Ok(NotionPage {
+            id: id.clone(),
+            title: String::new(),
+            url: id.url(),
+            parent: import_notion::domain::model::NotionParent::Workspace,
+            last_edited,
+            created,
+            in_trash: false,
+            properties: Default::default(),
+        })
     }
 
     async fn page_markdown(&self, id: &NotionId) -> std::result::Result<PageMarkdown, NotionError> {
@@ -122,6 +147,8 @@ struct Writer {
     tracker_links: Mutex<Vec<Uuid>>,
     reject_tracker_links: std::sync::atomic::AtomicBool,
     reject_tracker_projects: std::sync::atomic::AtomicBool,
+    /// Each document written with the source dates it was given.
+    document_dates: Mutex<Vec<(Uuid, Option<SourceDates>)>>,
 }
 
 impl WorkspaceWriter for Writer {
@@ -209,7 +236,9 @@ impl WorkspaceWriter for Writer {
         links: &NotionLinks,
         _: &ImportedDocumentProperties,
         _: Option<Uuid>,
+        dates: Option<SourceDates>,
     ) -> anyhow::Result<String> {
+        self.document_dates.lock().unwrap().push((id, dates));
         if let Some((entered, shutdown)) = &self.hold {
             entered.notify_one();
             shutdown.cancelled().await;
@@ -231,6 +260,7 @@ impl WorkspaceWriter for Writer {
         _: &NotionLinks,
         _: &ImportedTaskProperties,
         _: Option<Uuid>,
+        _: Option<SourceDates>,
     ) -> anyhow::Result<String> {
         unimplemented!("only pages here")
     }
@@ -988,3 +1018,52 @@ async fn a_plan_presented_while_planning_fills_in_batch_by_batch_and_restages_on
 /// The session events the import produces, in order.
 mod events;
 mod tracker;
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn written_pages_keep_their_notion_dates(pool: PgPool) {
+    let owner = user("dates");
+    let mut spec = page('f', "Spec");
+    spec.parent_foreign_id = Some(page_id('e').as_str().to_string());
+    let (review, rows) = approved(&pool, &owner, &[page('e', "Wiki"), spec]).await;
+    let repo = PgImportRepo::new(pool.clone());
+    planned(&repo, &owner).await;
+    let tracker = TaskTracker::new();
+    let writer = Arc::new(Writer::default());
+    let service = ImportServiceImpl::new(
+        PgImportRepo::new(pool.clone()),
+        Arc::new(NoConnector),
+        Arc::clone(&writer),
+        Arc::new(ai_usage::NoOpUsageRecorder),
+    )
+    .with_notion_connections(Arc::new(Connected))
+    .with_job_shutdown(tokio_util::sync::CancellationToken::new(), tracker.clone());
+
+    service
+        .start_notion_write(&owner, review, NotionWriteChoices::default())
+        .await
+        .unwrap();
+    tracker.close();
+    tracker.wait().await;
+
+    let at = |month| Utc.with_ymd_and_hms(2024, month, 1, 0, 0, 0).unwrap();
+    let mut documents = writer.document_dates.lock().unwrap().clone();
+    documents.sort_by_key(|(id, _)| *id);
+    let mut expected = vec![
+        (
+            write::document_id(rows[0]),
+            Some(SourceDates {
+                created: at(1),
+                last_edited: at(3),
+            }),
+        ),
+        (
+            write::document_id(rows[1]),
+            Some(SourceDates {
+                created: at(2),
+                last_edited: at(6),
+            }),
+        ),
+    ];
+    expected.sort_by_key(|(id, _)| *id);
+    assert_eq!(documents, expected, "each page keeps its own dates");
+}

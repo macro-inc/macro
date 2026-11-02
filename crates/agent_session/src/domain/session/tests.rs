@@ -1237,7 +1237,7 @@ fn session_new_carries_the_sessions_workspace() {
 }
 
 #[test]
-fn session_new_names_the_macro_session_in_meta() {
+fn session_new_names_the_macro_session_and_permission_policy_in_meta() {
     let mut machine = SessionMachine::new(
         AgentSessionId::TEST_A,
         "/home/operator/code".to_owned(),
@@ -1247,7 +1247,7 @@ fn session_new_names_the_macro_session_in_meta() {
     machine.handle(acp_ready());
     let effects = machine.handle(initialized());
 
-    let named: Vec<String> = effects
+    let named: Vec<(String, String)> = effects
         .iter()
         .filter_map(|effect| match effect {
             Effect::Send {
@@ -1255,14 +1255,23 @@ fn session_new_names_the_macro_session_in_meta() {
                 ..
             } if request.method.as_ref() == "session/new" => {
                 let params = request.params.clone()?.into_value();
-                params["_meta"][crate::domain::model::MACRO_AGENT_SESSION_META_KEY]
-                    .as_str()
-                    .map(str::to_owned)
+                let meta = &params["_meta"];
+                Some((
+                    meta[crate::domain::model::MACRO_AGENT_SESSION_META_KEY]
+                        .as_str()?
+                        .to_owned(),
+                    meta[crate::domain::model::MACRO_PERMISSION_POLICY_META_KEY]
+                        .as_str()?
+                        .to_owned(),
+                ))
             }
             _ => None,
         })
         .collect();
-    assert_eq!(named, [AgentSessionId::TEST_A.to_string()]);
+    assert_eq!(
+        named,
+        [(AgentSessionId::TEST_A.to_string(), "autoAccept".to_owned())]
+    );
 }
 
 #[test]
@@ -2004,7 +2013,10 @@ fn new_mcp_servers_resume_a_live_session_before_its_next_prompt() {
                 "url": "https://egress.example.com/mcp/linear",
                 "headers": [],
             }],
-            "_meta": { "macro.com/agentSessionId": AgentSessionId::TEST_A.to_string() },
+            "_meta": {
+                "macro.com/agentSessionId": AgentSessionId::TEST_A.to_string(),
+                "macro.com/permissionPolicy": "autoAccept",
+            },
         }))
     );
     assert_eq!(machine.status(), RuntimeStatus::Handshaking);

@@ -34,7 +34,7 @@ import IconShared from '@icon/share.svg';
 import DownloadSimple from '@icon/system/regular/download-simple.svg';
 import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import type { CallRecord } from '@service-call/client';
-import { Button } from '@ui';
+import { ButtonGroup } from '@ui';
 import { Show } from 'solid-js';
 import { callRecordingDownloadSource } from '../../queries/recording-download';
 import { useCallAgain } from '../use-call-again';
@@ -126,8 +126,9 @@ export function CallRecordingSplitHeader(props: { record: CallRecord }) {
           name: callName(),
           fileType: 'call',
         }),
-      buttonComponent: () => (
+      buttonComponent: (control) => (
         <ChatWithAgentButton
+          grouped={control.grouped}
           entity={{
             type: 'document',
             id: blockId,
@@ -178,16 +179,15 @@ export function CallRecordingSplitHeader(props: { record: CallRecord }) {
           <div class="order-[900] flex items-center">
             <HeaderActionGroup label="Call actions">
               <HeaderIsland>
-                <Button
-                  depth={2}
-                  variant="outline"
-                  size={isTouchDevice() ? 'icon-xs' : 'icon-md'}
+                <ButtonGroup.Button
+                  variant="secondary"
+                  size={isTouchDevice() ? 'icon-xs' : 'icon-sm'}
                   class={isTouchDevice() ? 'bg-surface' : undefined}
                   tooltip="Call Again"
                   onClick={callAgain}
                 >
                   <PhoneCallIcon class="size-4" />
-                </Button>
+                </ButtonGroup.Button>
               </HeaderIsland>
             </HeaderActionGroup>
           </div>

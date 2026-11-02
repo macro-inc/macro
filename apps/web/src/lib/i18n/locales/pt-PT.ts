@@ -778,7 +778,6 @@ export default {
     groupAdmin: 'Administração',
     tabTeamGeneral: 'Geral',
     tabTeamMembers: 'Membros',
-    tabTeamConnections: 'Ligações',
     tabEmail: 'Email',
     tabCalendar: 'Calendário',
     tabAgents: 'Agentes',

@@ -463,7 +463,7 @@ function ReviewsRoot() {
               >
                 <span>Reviews couldn’t be loaded.</span>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   onClick={() =>
                     fireAndForget(listSource.retry(), 'reviews-view')

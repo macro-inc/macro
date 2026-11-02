@@ -140,10 +140,13 @@ async fn main() -> anyhow::Result<()> {
         ),
     });
 
+    // One message per receive: messages are processed one at a time and only the one in
+    // progress renews its visibility, so the rest of a batch would time out behind a long
+    // mailbox purge and be processed again by another worker.
     let link_manager_worker = sqs_worker::SQSWorker::new(
         aws_sdk_sqs::Client::new(&gmail_queue_aws_config),
         link_manager_queue.to_string(),
-        config.queue_max_messages,
+        1,
         config.queue_wait_time_seconds,
     );
 
@@ -493,11 +496,15 @@ async fn main() -> anyhow::Result<()> {
         },
         worker_cancellation_token.clone(),
     ));
+    let read_receipts = email_service::composition::read_receipts(db.clone(), env)?;
     worker_tracker.spawn(email_service::mailbox_sync_worker::run_drafts(
         email::domain::mailbox::drafts::MailboxDraftService::new(
             mailbox_repository.clone(),
             email_service::outbound::email_api::ProviderMailboxGateway(outlook_api.clone()),
-            draft_content.clone(),
+            email::domain::read_receipts::ReadReceiptMaterializer::new(
+                draft_content.clone(),
+                read_receipts.clone(),
+            ),
         )
         .with_writes_enabled(config.outlook_writes_enabled),
         worker_cancellation_token.clone(),
@@ -766,6 +773,7 @@ async fn main() -> anyhow::Result<()> {
                 s3_client: s3_client_scheduled,
                 attachment_bucket: attachment_bucket_scheduled,
                 macro_event_broker: macro_event_broker_scheduled,
+                read_receipts,
             },
             cancellation_token,
         )

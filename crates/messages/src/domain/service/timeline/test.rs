@@ -24,6 +24,7 @@ fn message(id: u128) -> MessageListItem {
             bot_profile: None,
             mentions: vec![],
             imported_author: None,
+            triggered_via: None,
             triggered_by: None,
             content: "hello".into(),
             created_at: at,

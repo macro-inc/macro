@@ -362,13 +362,21 @@ it('omits pipelines and lists when those features are disabled', () => {
   const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
   expect(
     tabs.getAllByRole('button').map((button) => button.textContent)
-  ).toEqual(['Companies', 'People', 'Tasks', 'Email', 'Notes', 'Calls']);
+  ).toEqual([
+    'Companies',
+    'People',
+    'Tasks',
+    'Email',
+    'Notes',
+    'Calls',
+    'Databases',
+  ]);
 });
 
 it('opens each CRM activity feed instead of the company list', () => {
   const { activeTab } = setup();
   const tabs = within(screen.getByRole('navigation', { name: 'CRM views' }));
-  for (const label of ['Tasks', 'Email', 'Notes', 'Calls']) {
+  for (const label of ['Tasks', 'Email', 'Notes', 'Calls', 'Databases']) {
     fireEvent.click(tabs.getByRole('button', { name: label }));
     expect(activeTab()).toBe(label.toLowerCase());
     expect(screen.getByText(`${label.toLowerCase()} feed`)).toBeTruthy();
@@ -384,7 +392,9 @@ it('waits for the rollout before resolving a cold activity link', () => {
     loading: true,
   });
   expect(activeTab()).toBe('tasks');
-  expect(screen.getByText('Loading CRM activity…')).toBeTruthy();
+  expect(
+    screen.getByRole('status', { name: 'Loading CRM activity' })
+  ).toBeTruthy();
   expect(screen.queryByText('tasks feed')).toBeNull();
   expect(screen.queryByText('Record list')).toBeNull();
   setActivityFlag({ enabled: true, loading: false });

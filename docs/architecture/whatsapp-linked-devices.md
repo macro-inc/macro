@@ -97,10 +97,26 @@ one shared with them by someone else (`shared`, with its owner).
 and direct chats: name, last activity, archived and pinned, and the newest
 known message (the anchor). WhatsApp's history sync right after pairing fills
 it (initial, recent and full bundles; push-name bundles rename direct chats);
-live messages in any chat bump activity and add new chats; contact, push-name,
-archive and pin updates change existing rows. It never holds message content.
+live messages in any chat bump activity and add new chats; push-name, archive
+and pin updates change existing rows. The phone's saved contacts (address-book
+names from app state) are listed as direct chats with no activity, so the owner
+can start a chat with someone never written to: all of them on connect and
+after each app-state sync, each contact change as it arrives; a row that didn't
+change signals nothing. It never holds message content.
 `GET /whatsapp/chats` merges it with the roster (the roster names groups and decides
-which groups can be added), newest first.
+which groups can be added), newest first, and gives a direct chat's phone
+number.
+
+Anyone else is reached by phone number: `POST /whatsapp/lookups {phoneNumber}`
+(E.164; the owner's own session only, at most 20 per account per hour, since
+WhatsApp bans accounts that check many numbers) records a `whatsapp_lookup`
+and signals `whatsapp_lookup_requested`; the session holding the account asks
+WhatsApp once (`IsOnWhatsApp`, which also stores the number's LID pairing) and
+records `found`, `not_on_whatsapp` or `failed`. A found number joins the chat
+list as a direct chat by phone number, so the ordinary add accepts it; the web
+polls `GET /whatsapp/lookups/{id}`, then adds and opens the chat. A lookup still
+pending after 60 seconds reads as `failed`. Lookups are deleted an hour later,
+and with the account's consent.
 
 Direct chats are added like groups (`external_chat.kind = 'direct'`,
 `remote_id` the other person's JID, by phone number when known) and named after the
@@ -115,17 +131,30 @@ added by; history is requested in the chat as the phone keys it (by LID).
 An account paired before the list existed only gets groups and chats with new
 messages: WhatsApp sends the full list once, at pairing.
 
-Adding a group sets `backfill_state = 'pending'` when a message of the chat is
-known to start from (the chat list's anchor, or a stored message the account
-saw), else `waiting_for_message`: nothing to import from until someone posts.
-The chat's first message (live, history sync or chat-list update) makes it
-`pending` and starts the import at once. The owner's account then
-imports the chat's earlier messages from the phone, on demand only: it asks for
-the anchor message itself when it predates adoption (a placeholder resend) and
-for pages of 50 messages before the oldest imported one (history sync on
-demand), until the phone has nothing older (`done`) or 500 messages / 90 days
-(`partial`). An unanswered request (60 s) means `waiting_for_phone`, retried
-every 5 minutes and at once on reconnect. WhatsApp's group info carries no
+Earlier messages come only from the owner's phone, and Macro asks it only
+when the owner presses **Import**. Every request wakes WhatsApp on the phone;
+on iOS one it can't finish in the background shows "Syncing with WhatsApp on
+Other device stopped", so nothing asks on a timer, on reconnect or on adding.
+Adding a group sets `backfill_state = 'waiting_for_phone'` (the import needs the
+phone) when a message of the chat is known to start from (the chat list's
+anchor, or a stored message the account saw), else `waiting_for_message`:
+nothing to import from until someone posts; the chat's first message (live,
+history sync or chat-list update) makes it `waiting_for_phone`. A direct chat
+with no known message (a saved contact or looked-up number) starts `done`:
+there is nothing earlier to import, and its first message arrives live. If a
+chat update later brings a message from before the chat was added (the phone
+had history after all), it becomes `waiting_for_phone`.
+
+The web shows the owner a closable bottom-right prompt while any of their
+chats is `waiting_for_phone` ("open WhatsApp on your phone … **Import**").
+`POST /whatsapp/history-import` (the owner's own session) moves those chats
+to `pending` and signals `whatsapp_history_requested`; the replica holding the
+account then asks for the anchor message itself when it predates adoption (a
+placeholder resend) and for pages of 50 messages before the oldest imported
+one (history sync on demand), each answered page asking for the next, until
+the phone has nothing older (`done`) or 500 messages / 90 days (`partial`). A
+request unanswered for 60 s puts the chat back to `waiting_for_phone`, and the
+prompt returns; it is never retried otherwise. WhatsApp's group info carries no
 message id, so a quiet chat of an account paired before the chat list existed
 has no other anchor. Imported messages are ingested as history (origin
 `history`): no notifications, no unread, deduplicated with live messages by
@@ -192,7 +221,10 @@ The web flag `enable-whatsapp-linked` is the only rollout gate; DSS always
 serves `/external-chats` and `/whatsapp`. To stop all WhatsApp traffic (receiving and sending),
 scale the session service to zero tasks: accounts stay `connected`, history and
 access are kept, and sends recorded meanwhile expire unsent after ten minutes.
-Replicas pick every account up again when scaled back.
+Replicas pick every account up again when scaled back. Prod runs two replicas
+and dev one (`infra/stacks/whatsapp-session-service/service.ts`); with two, a
+deploy hands every lease to a running replica. A deploy restores the task
+count. Prod deploys with each published release.
 
 ## Media
 

@@ -274,6 +274,8 @@ inspect the content type and code rather than assuming every 503 is billing.
 - Optional chat/session naming is independently admitted as ChatRename, an exempt
   feature, so the gate does no quota billing I/O and never charges the user; a
   refusal retains the existing/default title without failing successful primary work.
+  Post-turn session retitling (the Jev check and the Haiku retitle) is admitted the
+  same way, once per finished turn, before either model runs.
   Optional bot/trigger inference (including image captions) skips classification
   on failure, without AI fallback or implied approval. Explicit mentions still
   route deterministically; downstream execution has its own gate and failures.

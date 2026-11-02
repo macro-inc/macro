@@ -1,4 +1,5 @@
 import { openBulkEditModal } from '@app/features/entity/bulk-edit/BulkEditEntityModal';
+import { toastMovedToFolder } from '@app/features/entity/bulk-edit/moved-to-folder-toast';
 import {
   makeAddTagAction,
   makeCopyEntityIdAction,
@@ -184,7 +185,7 @@ function DesktopRender(props: SplitFileMenuRenderProps) {
         size="icon-sm"
         variant="ghost"
       >
-        <DotsThree />
+        <DotsThree class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       </Dropdown.Trigger>
       <Dropdown.Content class="min-w-64 max-w-[min(22rem,calc(100vw-1rem))]">
         <For each={sections()}>
@@ -632,8 +633,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
                   openBulkEditModal({
                     view: 'moveToProject',
                     entities: [entity],
-                    onFinish: () =>
-                      toast.success(t('entityActions.toastMovedToFolder')),
+                    onMoved: (folder) => toastMovedToFolder(1, folder.id),
                     onError: () =>
                       toast.failure(t('entityActions.toastMoveToFolderFailed')),
                   });

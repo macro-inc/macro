@@ -95,6 +95,8 @@ export function MentionsMenuItem(props: {
 
       case 'calendarEvent':
         return <EntityIcon targetType="calendar" size="xs" />;
+      case 'routine':
+        return <EntityIcon targetType="routine" size="xs" />;
 
       case 'entity':
         if (props.item.bucket === 'email') {

@@ -27,7 +27,6 @@ const service = new WhatsappSessionService(
     ecsClusterName: cloudStorageStack
       .getOutput('cloudStorageClusterName')
       .apply((value) => value as string),
-    desiredCount: config.requireNumber('desired_count'),
     kmsDeletionWindowInDays: config.requireNumber(
       'session_kms_deletion_window_days'
     ),

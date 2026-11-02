@@ -5,6 +5,7 @@ import type {
 } from '@components/app/split-layout/layoutManager';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import {
   type NotificationSource,
   openNotificationFromId,
@@ -28,7 +29,7 @@ type NavigationAttempt = {
 };
 
 export function usePendingNotificationNavigationEffect(
-  notificationSource: NotificationSource,
+  notificationSource: Pick<NotificationSource, 'notifications'>,
   recipientId: Accessor<string | undefined>
 ) {
   const [retryRevision, setRetryRevision] = createSignal(0);
@@ -142,6 +143,11 @@ export function usePendingNotificationNavigationEffect(
             layoutManager.contentNavigationVersion() !== navigationVersion
           ) {
             return;
+          }
+          if (error.tag === 'NavigationFailedError') {
+            Telemetry.error(error.cause, {
+              surface: 'notification-navigation',
+            });
           }
           finishNotificationNavigation(intent, 'failed');
           toast.failure('Failed to open notification.');

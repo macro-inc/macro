@@ -5,6 +5,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { SERVER_HOSTS } from '@core/constant/servers';
+import { requireNativeUpdate } from '@core/mobile/nativeUpdateRequired';
 import { hasLoginCookie } from '@core/util/cookies';
 import { fetchToken } from '@core/util/fetchWithToken';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -78,11 +79,12 @@ import {
   type Client as GraphqlWsClient,
 } from 'graphql-ws';
 import { batch, createSignal, untrack } from 'solid-js';
-import { match, P } from 'ts-pattern';
+import { match } from 'ts-pattern';
 import { delegateChannelNotificationRefresh } from '../../queries/channel/notification-refresh';
 import { soupOptimisticResolvers } from '../../queries/optimistic-resolvers';
 import { createCacheRecovery } from './cache-recovery';
 import { emailCacheDeletionKeys } from './email-cache-deletions';
+import { emailThreadSortTs } from './email-thread-sort';
 import type { SoupApiItem } from './generated/schemas/soupApiItem';
 import type { SoupCalendarEventSoupPropertiesField } from './generated/schemas/soupCalendarEventSoupPropertiesField';
 import type { SoupCalendarEventTime } from './generated/schemas/soupCalendarEventTime';
@@ -115,6 +117,9 @@ import {
   shouldRetryGraphqlSoupWebSocket,
   waitToRetryGraphqlSoupWebSocket,
 } from './graphql-soup-websocket';
+import { mailCacheProfile } from './mail-cache-profile';
+
+export { emailThreadSortTs } from './email-thread-sort';
 
 const dssHost = SERVER_HOSTS['document-storage-service'];
 const QUEUE_CLEAR_INSPECTION_TIMEOUT_MS = 1000;
@@ -328,11 +333,16 @@ export async function dssGraphqlFetch(
       const traceHeaders: Record<string, string> = {};
       span.injectTraceHeaders(traceHeaders);
       const requestInit = graphqlSoupTransportRequest(init);
+      const mail = await mailCacheProfile();
+      span.setAttr('mail.cache_profile', mail.profile);
+      span.setAttr('mail.cache_profile_outcome', mail.outcome);
       // Links this request, and a queued mutation attempt above it, to the
       // server's request and `graphql.execute` spans.
       const transportInit: RequestInit = {
         ...requestInit,
-        headers: mergeHeaders(requestInit?.headers, traceHeaders),
+        headers: mergeHeaders(requestInit?.headers, traceHeaders, {
+          'x-macro-mail-cache-profile': mail.profile,
+        }),
       };
       span.event('request_dispatch');
       const response = await authorizedDssGraphqlFetch(input, transportInit);
@@ -414,6 +424,13 @@ function createGraphqlSoupWebSocketClient(
   });
   return createGraphqlWsClient({
     url: resolveWebSocketUrl,
+    connectionParams: () =>
+      Telemetry.span('graphql.websocket.connection_params', async (span) => {
+        const mail = await mailCacheProfile();
+        span.setAttr('mail.cache_profile', mail.profile);
+        span.setAttr('mail.cache_profile_outcome', mail.outcome);
+        return { mailCacheProfile: mail.profile };
+      }),
     // Session cookies live in the native HTTP client's jar, which the WebView's
     // own WebSocket cannot send; the native socket forwards them.
     webSocketImpl:
@@ -498,8 +515,12 @@ let cacheInitializationFailed = false;
 const cacheRecovery = createCacheRecovery(() =>
   Telemetry.span('graphql.cache_recovery', async (span) => {
     const session = cacheSessionGeneration;
-    cachedClient = undefined;
-    getGraphqlSoupClient();
+    // A host whose read was refused mid-handoff is still running; prove it
+    // readable now instead of stacking another registration on it.
+    if (!cachedCacheHost || cachedCacheHost.disabled) {
+      cachedClient = undefined;
+      getGraphqlSoupClient();
+    }
     const host = cachedCacheHost;
     if (!host || host.disabled)
       throw new Error('Local cache could not restart.');
@@ -739,19 +760,16 @@ export function getGraphqlSoupClient(): Client {
       }
       reportCacheError(error, 'initialization');
       fallbackAfterInitializationFailure(error);
-      toast.failure(
-        error instanceof NativeCacheUpgradeRequiredError
-          ? 'Macro update required'
-          : 'Local cache unavailable',
-        {
+      if (error instanceof NativeCacheUpgradeRequiredError) {
+        requireNativeUpdate(error.message);
+      } else {
+        toast.failure('Local cache unavailable', {
           subtext:
-            error instanceof NativeCacheUpgradeRequiredError
-              ? error.message
-              : cacheRecovery.state() === 'unavailable'
-                ? 'Drafts remain on this device. Reconnect or retry draft synchronization.'
-                : 'Queued changes are preserved. Update or reload Macro to recover local storage.',
-        }
-      );
+            cacheRecovery.state() === 'unavailable'
+              ? 'Drafts remain on this device. Reconnect or retry draft synchronization.'
+              : 'Queued changes are preserved. Update or reload Macro to recover local storage.',
+        });
+      }
       console.warn(
         'graphql cache async init failed; using uncached client',
         error
@@ -1723,42 +1741,6 @@ function mapGraphqlNotifications(
   return notifications?.map(mapGraphqlNotification);
 }
 
-function latestTimestamp(
-  ...timestamps: (string | null | undefined)[]
-): string | undefined {
-  return timestamps.reduce<string | undefined>(
-    (latest, timestamp) =>
-      typeof timestamp === 'string' &&
-      (latest === undefined || Date.parse(timestamp) > Date.parse(latest))
-        ? timestamp
-        : latest,
-    undefined
-  );
-}
-
-/** The server's per-view sort key, recomputed from the thread's own facts so a
- * cache re-read never dates a row by the view that fetched the thread last.
- * Mirrors `get_sort_timestamp_field` in crates/email; INBOX is the server's
- * default view. */
-export function emailThreadSortTs(
-  thread: {
-    latestInboundMessageTs?: string | null;
-    reminderReturnedAt?: string | null;
-    latestOutboundMessageTs?: string | null;
-    latestNonSpamMessageTs?: string | null;
-    updatedAt: string;
-  },
-  emailView: GraphqlEmailView | null | undefined
-): string {
-  const key = match(emailView)
-    .with('SENT', () => thread.latestOutboundMessageTs)
-    .with('INBOX', P.nullish, () =>
-      latestTimestamp(thread.latestInboundMessageTs, thread.reminderReturnedAt)
-    )
-    .otherwise(() => thread.latestNonSpamMessageTs);
-  return key ?? thread.updatedAt;
-}
-
 /** An agent session's own row fields in the REST shape, without the
  * notifications a list selects alongside them. */
 export function mapGraphqlAgentSessionRow(
@@ -1928,6 +1910,7 @@ export function mapGraphqlSoupItem(
             providerId: entity.providerId ?? undefined,
             ownerId: entity.ownerId,
             inboxVisible: entity.inboxVisible,
+            hasReceivedMail: entity.hasReceivedMail,
             name: entity.emailName ?? undefined,
             snippet: entity.snippet ?? undefined,
             senderEmail: entity.senderEmail ?? undefined,

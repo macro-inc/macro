@@ -8,6 +8,7 @@ fn a_channel_follow_up_has_a_stable_wire_shape() {
     let context = TriggerContext::FollowUp(FollowUpContext {
         addressed_by: AddressedBy::ExplicitReply,
         discussion: DiscussionContext {
+            agent_request: None,
             surface: DiscussionSurface::Channel {
                 id: Uuid::parse_str("00000000-0000-0000-0000-0000000000c1").unwrap(),
                 name: Some("eng".to_owned()),
@@ -36,6 +37,7 @@ fn a_channel_follow_up_has_a_stable_wire_shape() {
                     },
                     content: "please fix".to_owned(),
                     posted_at: Utc.with_ymd_and_hms(2026, 10, 8, 14, 2, 0).unwrap(),
+                    attachments: Vec::new(),
                 }],
                 messages_omitted: false,
             }),
@@ -249,5 +251,162 @@ fn a_task_assignment_has_a_stable_wire_shape() {
     assert_eq!(
         serde_json::from_value::<TriggerContext>(wire).unwrap(),
         context
+    );
+}
+
+fn julia() -> ContextPerson {
+    ContextPerson {
+        id: "macro|julia@example.com".to_owned(),
+        name: "Julia".to_owned(),
+        email: Some("julia@example.com".to_owned()),
+    }
+}
+
+fn message(id: u128, content: &str, attachments: Vec<ContextAttachment>) -> ContextMessage {
+    ContextMessage {
+        id: Uuid::from_u128(id),
+        author: julia(),
+        content: content.to_owned(),
+        posted_at: Utc.with_ymd_and_hms(2026, 10, 8, 14, 0, 0).unwrap(),
+        attachments,
+    }
+}
+
+fn image(entity_id: &str) -> ContextAttachment {
+    ContextAttachment {
+        entity_type: "static/image".to_owned(),
+        entity_id: entity_id.to_owned(),
+        url: None,
+    }
+}
+
+#[test]
+fn a_message_attachment_has_a_stable_wire_shape() {
+    let message = message(
+        1,
+        "We need agent templates",
+        vec![image("9ec21122-4bd8-473f-bfb0-21d2e6e5f03b")],
+    );
+    let wire = json!({
+        "id": "00000000-0000-0000-0000-000000000001",
+        "author": {
+            "id": "macro|julia@example.com",
+            "name": "Julia",
+            "email": "julia@example.com"
+        },
+        "content": "We need agent templates",
+        "posted_at": "2026-10-08T14:00:00Z",
+        "attachments": [{
+            "entity_type": "static/image",
+            "entity_id": "9ec21122-4bd8-473f-bfb0-21d2e6e5f03b"
+        }]
+    });
+    assert_eq!(serde_json::to_value(&message).unwrap(), wire);
+    assert_eq!(
+        serde_json::from_value::<ContextMessage>(wire).unwrap(),
+        message
+    );
+}
+
+#[test]
+fn prompt_thread_attachments_put_the_prompt_message_first() {
+    let root = image("root-file");
+    let prompt = image("prompt-file");
+    let later = image("later-file");
+    let discussion = DiscussionContext {
+        agent_request: None,
+        surface: DiscussionSurface::Channel {
+            id: Uuid::from_u128(0xc1),
+            name: Some("eng".to_owned()),
+            channel_type: ChannelType::Public,
+        },
+        prompt_message_id: Uuid::from_u128(2),
+        sender: julia(),
+        reply_target: ReplyTarget::Thread {
+            root_id: Uuid::from_u128(1),
+        },
+        thread: Some(ContextThread {
+            root_id: Uuid::from_u128(1),
+            messages: vec![
+                message(1, "screenshot", vec![root.clone()]),
+                message(2, "@cursor look", vec![prompt.clone()]),
+                message(3, "and this", vec![later.clone()]),
+            ],
+            messages_omitted: false,
+        }),
+        channel: vec![ContextThread {
+            root_id: Uuid::from_u128(9),
+            messages: vec![message(9, "unrelated", vec![image("background-file")])],
+            messages_omitted: false,
+        }],
+    };
+
+    assert_eq!(
+        discussion
+            .prompt_thread_attachments()
+            .into_iter()
+            .map(|attachment| attachment.entity_id.as_str())
+            .collect::<Vec<_>>(),
+        ["prompt-file", "root-file", "later-file"]
+    );
+    assert_eq!(
+        TriggerContext::Mentioned(discussion)
+            .discussion()
+            .map(|discussion| discussion.prompt_thread_attachments().len()),
+        Some(3)
+    );
+}
+
+#[test]
+fn github_events_have_a_stable_wire_shape() {
+    let github = RoutineEvent::Github {
+        delivery: GithubDelivery {
+            event: "workflow_run".into(),
+            action: Some("completed".into()),
+            repository: Some("macro-inc/macro".into()),
+            sender: Some("octocat".into()),
+            payload: Some(json!({ "workflow_run": { "name": "CI", "conclusion": "failure" } })),
+        },
+    };
+    let trigger = RoutineTrigger::Events {
+        events: vec!["github".into()],
+        entity_ids: Vec::new(),
+        github: Some(GithubWatch {
+            events: vec!["workflow_run".into()],
+            actions: vec!["completed".into()],
+            repositories: vec!["macro-inc/macro".into()],
+            include_bots: false,
+        }),
+        payload_match: vec!["workflow_run.conclusion in [\"failure\"]".into()],
+        condition: None,
+    };
+
+    // The same examples are in services/lexical-service/test/agent-context.test.ts.
+    assert_eq!(
+        serde_json::to_value(&github).unwrap(),
+        json!({
+            "event": "github",
+            "delivery": {
+                "event": "workflow_run",
+                "action": "completed",
+                "repository": "macro-inc/macro",
+                "sender": "octocat",
+                "payload": { "workflow_run": { "name": "CI", "conclusion": "failure" } },
+            },
+        })
+    );
+    assert_eq!(
+        serde_json::to_value(&trigger).unwrap(),
+        json!({
+            "type": "events",
+            "events": ["github"],
+            "github": {
+                "events": ["workflow_run"],
+                "actions": ["completed"],
+                "repositories": ["macro-inc/macro"],
+                "include_bots": false,
+            },
+            "payload_match": ["workflow_run.conclusion in [\"failure\"]"],
+        })
     );
 }

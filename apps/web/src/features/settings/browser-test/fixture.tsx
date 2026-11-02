@@ -12,7 +12,7 @@ import { createMemo, createSignal, For, onMount, Show } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroDarkTheme } from '../../theme/themes/macro-dark';
 import { macroLightTheme } from '../../theme/themes/macro-light';
-import { themeCssVars } from '../../theme/utils/themeColorTokens';
+import { themeCssVars } from '../../theme/utils/themeCssVars';
 import { Appearance } from '../Appearance';
 import { AppInfo } from '../components/app-info';
 import { SettingsSearchTarget } from '../components/settings-search-target';
@@ -104,14 +104,14 @@ function Fixture() {
       >
         <SettingsSection
           title="Accounts"
-          description="Connect Gmail accounts and manage their sync with Macro."
+          description="Connect email accounts and manage their sync with Macro."
         >
           <SettingsCard>
             <For each={['alex@example.com', 'alex@gmail.com']}>
               {(email) => (
                 <SettingsRow label={email} description="Up to date">
                   <Show when={email === 'alex@example.com'}>
-                    <Button variant="outline" size="md">
+                    <Button variant="secondary" size="md">
                       Enable calendar
                     </Button>
                   </Show>
@@ -123,9 +123,9 @@ function Fixture() {
             </For>
             <SettingsRow
               label="Add another inbox"
-              description="Connect more Gmail accounts."
+              description="Connect Gmail, Outlook.com, or Microsoft 365."
             >
-              <Button variant="outline" size="md">
+              <Button variant="secondary" size="md">
                 Add account
               </Button>
             </SettingsRow>

@@ -16,7 +16,6 @@ import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { enableForms } from '@core/constant/featureFlags';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useGetPermissions } from '@core/signal/permissions';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { DatabaseEntity } from '@entity';
@@ -24,7 +23,7 @@ import SparkleIcon from '@icon/system/regular/sparkle.svg';
 import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
 import type { TableDetail } from '@service-storage/generated/schemas/tableDetail';
 import { getEntityGraphqlClient } from '@service-storage/graphql-soup';
-import { Button } from '@ui';
+import { ButtonGroup } from '@ui';
 import type { ResultAsync } from 'neverthrow';
 import { lazy, Show, Suspense } from 'solid-js';
 import { DatabaseTitle } from '../../database/components/database-title';
@@ -183,9 +182,9 @@ export function TopBar(props: {
       <Show when={props.detail}>
         <SplitHeaderRight>
           <HeaderActionGroup label="Database actions">
-            <Button
+            <ButtonGroup.Button
               variant="ghost"
-              size={isTouchDevice() ? 'sm' : 'md'}
+              size="sm"
               class="gap-1.5 touch:px-2 touch:text-xs"
               disabled={props.openingChat}
               aria-label="Database AI"
@@ -194,7 +193,7 @@ export function TopBar(props: {
             >
               <SparkleIcon class="size-4" />
               <span>AI</span>
-            </Button>
+            </ButtonGroup.Button>
           </HeaderActionGroup>
         </SplitHeaderRight>
       </Show>

@@ -280,9 +280,8 @@ export function RepositoryPicker(props: {
               <div class="flex items-center justify-between gap-2 px-2 py-2 text-xs text-ink-muted">
                 Couldn't load your repositories.
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
-                  depth={3}
                   onClick={() => props.onRetryRepositories()}
                 >
                   Retry
@@ -300,9 +299,8 @@ export function RepositoryPicker(props: {
                 repositories your coders should work on.
                 <Show when={props.onConnectGitHub}>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
-                    depth={3}
                     class="self-start"
                     onClick={() => props.onConnectGitHub?.()}
                   >
@@ -432,9 +430,8 @@ export function RepositoryPicker(props: {
                 <div class="flex items-center justify-between gap-2 px-2 py-2 text-xs text-ink-muted">
                   Couldn't load this repository's branches.
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
-                    depth={3}
                     onClick={() => props.onRetryBranches()}
                   >
                     Retry

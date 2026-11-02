@@ -509,10 +509,7 @@ function CommandSearchMenu(
   };
   const selectedIsEntity = () => {
     const item = selectedItem();
-    return (
-      item &&
-      (isEntityItem(item) || isUserItem(item) || item.kind === 'initiative')
-    );
+    return item && (isEntityItem(item) || isUserItem(item));
   };
   const selectedIsSearch = () => {
     const item = selectedItem();
@@ -528,7 +525,8 @@ function CommandSearchMenu(
   function handleItemAction(item: CommandMenuItem, openInNewSplit = false) {
     if (!item) return;
     if (
-      (item.kind === 'new-project' || item.kind === 'initiative') &&
+      (item.kind === 'new-project' ||
+        (isEntityItem(item) && item.bucket === 'initiative')) &&
       !projectsFlag().enabled
     )
       return;

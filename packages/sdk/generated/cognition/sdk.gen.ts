@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { AddMcpServerData, AddMcpServerErrors, AddMcpServerResponses, BrowsePipedreamMcpCatalogData, BrowsePipedreamMcpCatalogErrors, BrowsePipedreamMcpCatalogResponses, CallToolData, CallToolErrors, CallToolResponses, CancelNotionHandlerData, CancelNotionHandlerErrors, CancelNotionHandlerResponses, CancelWorkspaceHandlerData, CancelWorkspaceHandlerResponses, CompleteHandlerData, CompleteHandlerErrors, CompleteHandlerResponses, CompletePipedreamMcpConnectionData, CompletePipedreamMcpConnectionErrors, CompletePipedreamMcpConnectionResponses, CopyChatData, CopyChatErrors, CopyChatResponses, CreateChatData, CreateChatErrors, CreateChatResponses, CreatePipedreamMcpTokenData, CreatePipedreamMcpTokenErrors, CreatePipedreamMcpTokenResponses, DecisionsData, DecisionsErrors, DecisionsResponses, DeleteChatData, DeleteChatErrors, DeleteChatResponses, DeleteMcpServerData, DeleteMcpServerErrors, DeleteMcpServerResponses, DeletePipedreamMcpConnectionData, DeletePipedreamMcpConnectionErrors, DeletePipedreamMcpConnectionResponses, DiscoverHandlerData, DiscoverHandlerErrors, DiscoverHandlerResponses, DismissedPromptsHandlerData, DismissedPromptsHandlerErrors, DismissedPromptsHandlerResponses, DismissPromptHandlerData, DismissPromptHandlerErrors, DismissPromptHandlerResponses, GetBatchPreviewData, GetBatchPreviewErrors, GetBatchPreviewResponses, GetChatData, GetChatErrors, GetChatHistoryBatchMessagesHandlerData, GetChatHistoryBatchMessagesHandlerErrors, GetChatHistoryBatchMessagesHandlerResponses, GetChatHistoryHandlerData, GetChatHistoryHandlerErrors, GetChatHistoryHandlerResponses, GetChatPermissionsData, GetChatPermissionsErrors, GetChatPermissionsResponses, GetChatResponses, GetChatsForAttachmentHandlerData, GetChatsForAttachmentHandlerErrors, GetChatsForAttachmentHandlerResponses, GetCitationHandlerData, GetCitationHandlerErrors, GetCitationHandlerResponses, GetMemoryHandlerData, GetMemoryHandlerErrors, GetMemoryHandlerResponses, GetStateHandler2Data, GetStateHandler2Errors, GetStateHandler2Responses, GetStateHandlerData, GetStateHandlerErrors, GetStateHandlerResponses, GetUsageHandlerData, GetUsageHandlerErrors, GetUsageHandlerResponses, HealthHandlerData, HealthHandlerResponses, ListMcpServersData, ListMcpServersErrors, ListMcpServersResponses, ListPipedreamMcpConnectionsData, ListPipedreamMcpConnectionsErrors, ListPipedreamMcpConnectionsResponses, ListPipedreamMcpOverlaysData, ListPipedreamMcpOverlaysErrors, ListPipedreamMcpOverlaysResponses, McpAuthCallbackData, McpAuthCallbackErrors, McpAuthCallbackResponses, McpOauthClientMetadataData, McpOauthClientMetadataResponses, NotionReportHandlerData, NotionReportHandlerErrors, NotionReportHandlerResponses, PatchChatData, PatchChatErrors, PatchChatResponses, PermanentlyDeleteChatData, PermanentlyDeleteChatErrors, PermanentlyDeleteChatResponses, RecoverPipedreamMcpConnectionData, RecoverPipedreamMcpConnectionErrors, RecoverPipedreamMcpConnectionResponses, RejectToolCallData, RejectToolCallErrors, RejectToolCallResponses, RevertDeleteChatData, RevertDeleteChatErrors, RevertDeleteChatResponses, RunImportHandlerData, RunImportHandlerErrors, RunImportHandlerResponses, SendChatMessageData, SendChatMessageErrors, SendChatMessageResponses, SetPricingHandlerData, SetPricingHandlerErrors, SetPricingHandlerResponses, StartMcpAuthData, StartMcpAuthErrors, StartMcpAuthResponses, StopChatStreamData, StopChatStreamErrors, StopChatStreamResponses, StructuredCompletionData, StructuredCompletionErrors, StructuredCompletionResponses, UpdateMcpServerData, UpdateMcpServerErrors, UpdateMcpServerResponses, UpdatePipedreamMcpConnectionData, UpdatePipedreamMcpConnectionErrors, UpdatePipedreamMcpConnectionResponses, UpdateToolCallData, UpdateToolCallErrors, UpdateToolCallResponses, UpdateToolResponseData, UpdateToolResponseErrors, UpdateToolResponseResponses, UpsertAiProjectionData, UpsertAiProjectionErrors, UpsertAiProjectionResponses, WorkspaceReportHandlerData, WorkspaceReportHandlerResponses } from './types.gen';
+import type { AddMcpServerData, AddMcpServerErrors, AddMcpServerResponses, BrowsePipedreamMcpCatalogData, BrowsePipedreamMcpCatalogErrors, BrowsePipedreamMcpCatalogResponses, CallToolData, CallToolErrors, CallToolResponses, CancelNotionHandlerData, CancelNotionHandlerErrors, CancelNotionHandlerResponses, CancelWorkspaceHandlerData, CancelWorkspaceHandlerResponses, CompleteHandlerData, CompleteHandlerErrors, CompleteHandlerResponses, CompletePipedreamMcpConnectionData, CompletePipedreamMcpConnectionErrors, CompletePipedreamMcpConnectionResponses, CopyChatData, CopyChatErrors, CopyChatResponses, CreateChatData, CreateChatErrors, CreateChatResponses, CreatePipedreamMcpTokenData, CreatePipedreamMcpTokenErrors, CreatePipedreamMcpTokenResponses, DecisionsData, DecisionsErrors, DecisionsResponses, DeleteChatData, DeleteChatErrors, DeleteChatResponses, DeleteMcpServerData, DeleteMcpServerErrors, DeleteMcpServerResponses, DeletePipedreamMcpConnectionData, DeletePipedreamMcpConnectionErrors, DeletePipedreamMcpConnectionResponses, DiscoverHandlerData, DiscoverHandlerErrors, DiscoverHandlerResponses, DismissedPromptsHandlerData, DismissedPromptsHandlerErrors, DismissedPromptsHandlerResponses, DismissPromptHandlerData, DismissPromptHandlerErrors, DismissPromptHandlerResponses, GenerateDatabaseQueryData, GenerateDatabaseQueryErrors, GenerateDatabaseQueryResponses, GenerateImageData, GenerateImageErrors, GenerateImageResponses, GetBatchPreviewData, GetBatchPreviewErrors, GetBatchPreviewResponses, GetChatData, GetChatErrors, GetChatHistoryBatchMessagesHandlerData, GetChatHistoryBatchMessagesHandlerErrors, GetChatHistoryBatchMessagesHandlerResponses, GetChatHistoryHandlerData, GetChatHistoryHandlerErrors, GetChatHistoryHandlerResponses, GetChatPermissionsData, GetChatPermissionsErrors, GetChatPermissionsResponses, GetChatResponses, GetChatsForAttachmentHandlerData, GetChatsForAttachmentHandlerErrors, GetChatsForAttachmentHandlerResponses, GetCitationHandlerData, GetCitationHandlerErrors, GetCitationHandlerResponses, GetMemoryHandlerData, GetMemoryHandlerErrors, GetMemoryHandlerResponses, GetStateHandler2Data, GetStateHandler2Errors, GetStateHandler2Responses, GetStateHandlerData, GetStateHandlerErrors, GetStateHandlerResponses, GetUsageHandlerData, GetUsageHandlerErrors, GetUsageHandlerResponses, HealthHandlerData, HealthHandlerResponses, ListMcpServersData, ListMcpServersErrors, ListMcpServersResponses, ListPipedreamMcpConnectionsData, ListPipedreamMcpConnectionsErrors, ListPipedreamMcpConnectionsResponses, ListPipedreamMcpOverlaysData, ListPipedreamMcpOverlaysErrors, ListPipedreamMcpOverlaysResponses, McpAuthCallbackData, McpAuthCallbackErrors, McpAuthCallbackResponses, McpOauthClientMetadataData, McpOauthClientMetadataResponses, NotionReportHandlerData, NotionReportHandlerErrors, NotionReportHandlerResponses, PatchChatData, PatchChatErrors, PatchChatResponses, PermanentlyDeleteChatData, PermanentlyDeleteChatErrors, PermanentlyDeleteChatResponses, RecoverPipedreamMcpConnectionData, RecoverPipedreamMcpConnectionErrors, RecoverPipedreamMcpConnectionResponses, RejectToolCallData, RejectToolCallErrors, RejectToolCallResponses, RevertDeleteChatData, RevertDeleteChatErrors, RevertDeleteChatResponses, RunImportHandlerData, RunImportHandlerErrors, RunImportHandlerResponses, SendChatMessageData, SendChatMessageErrors, SendChatMessageResponses, SetPricingHandlerData, SetPricingHandlerErrors, SetPricingHandlerResponses, StartMcpAuthData, StartMcpAuthErrors, StartMcpAuthResponses, StopChatStreamData, StopChatStreamErrors, StopChatStreamResponses, StructuredCompletionData, StructuredCompletionErrors, StructuredCompletionResponses, UpdateMcpServerData, UpdateMcpServerErrors, UpdateMcpServerResponses, UpdatePipedreamMcpConnectionData, UpdatePipedreamMcpConnectionErrors, UpdatePipedreamMcpConnectionResponses, UpdateToolCallData, UpdateToolCallErrors, UpdateToolCallResponses, UpdateToolResponseData, UpdateToolResponseErrors, UpdateToolResponseResponses, UpsertAiProjectionData, UpsertAiProjectionErrors, UpsertAiProjectionResponses, WorkspaceReportHandlerData, WorkspaceReportHandlerResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -255,6 +255,17 @@ export class Sdk extends HeyApiClient {
         return (options.client ?? this.client).get<GetCitationHandlerResponses, GetCitationHandlerErrors, ThrowOnError>({ url: '/citations/{id}', ...options });
     }
     
+    public generateDatabaseQuery<ThrowOnError extends boolean = false>(options: Options<GenerateDatabaseQueryData, ThrowOnError>): RequestResult<GenerateDatabaseQueryResponses, GenerateDatabaseQueryErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<GenerateDatabaseQueryResponses, GenerateDatabaseQueryErrors, ThrowOnError>({
+            url: '/database-query',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
     public decisions<ThrowOnError extends boolean = false>(options: Options<DecisionsData, ThrowOnError>): RequestResult<DecisionsResponses, DecisionsErrors, ThrowOnError> {
         return (options.client ?? this.client).post<DecisionsResponses, DecisionsErrors, ThrowOnError>({
             url: '/decisions',
@@ -271,6 +282,21 @@ export class Sdk extends HeyApiClient {
      */
     public healthHandler<ThrowOnError extends boolean = false>(options?: Options<HealthHandlerData, ThrowOnError>): RequestResult<HealthHandlerResponses, unknown, ThrowOnError> {
         return (options?.client ?? this.client).get<HealthHandlerResponses, unknown, ThrowOnError>({ url: '/health', ...options });
+    }
+    
+    /**
+     * Generate an image with Nano Banana and store it as a static file owned by
+     * the caller. Charged to the acting user's AI allowance.
+     */
+    public generateImage<ThrowOnError extends boolean = false>(options: Options<GenerateImageData, ThrowOnError>): RequestResult<GenerateImageResponses, GenerateImageErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<GenerateImageResponses, GenerateImageErrors, ThrowOnError>({
+            url: '/images/generate',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
     }
     
     /**
@@ -346,7 +372,8 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * Add a new MCP server for the authenticated user.
+     * Add a new MCP server for the authenticated user. A URL the user already
+     * has is returned as stored, keeping its credentials.
      */
     public addMcpServer<ThrowOnError extends boolean = false>(options: Options<AddMcpServerData, ThrowOnError>): RequestResult<AddMcpServerResponses, AddMcpServerErrors, ThrowOnError> {
         return (options.client ?? this.client).post<AddMcpServerResponses, AddMcpServerErrors, ThrowOnError>({

@@ -272,6 +272,7 @@ export function ReviewsBoard(props: {
       <Show when={props.hasMore}>
         <div class="p-3">
           <Button
+            variant="secondary"
             size="sm"
             disabled={props.isLoadingMore}
             onClick={props.onLoadMore}

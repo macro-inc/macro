@@ -42,8 +42,9 @@ pub(crate) async fn handle_email_api_error(
     error: EmailApiError,
 ) -> ProcessingError {
     match error_policy(&error) {
-        ErrorPolicy::RateLimited => handle_rate_limit(ctx, data, error).await,
-        ErrorPolicy::Retry => processing_error(error, true),
+        // A Gmail outage can outlast the primary queue's few receives, so it
+        // waits in the retry queue like a rate limit.
+        ErrorPolicy::RateLimited | ErrorPolicy::Retry => handle_rate_limit(ctx, data, error).await,
         ErrorPolicy::Permanent => processing_error(error, false),
     }
 }
@@ -56,14 +57,16 @@ async fn handle_rate_limit(
     if rate_limit_route(ctx.retry_worker) == RateLimitRoute::RetryAfterVisibilityTimeout {
         tracing::info!(
             link_id = %data.link_id,
-            "Gmail API rate limited in retry worker, message will be retried after visibility timeout"
+            error = %error,
+            "Gmail API rate limited or unavailable in retry worker, message will be retried after visibility timeout"
         );
         return processing_error(error, true);
     }
 
     tracing::info!(
         link_id = %data.link_id,
-        "Gmail API rate limited, moving message from primary queue to retry queue"
+        error = %error,
+        "Gmail API rate limited or unavailable, moving message from primary queue to retry queue"
     );
     if let Err(enqueue_error) = ctx
         .sqs_client
@@ -90,12 +93,12 @@ fn rate_limit_route(retry_worker: bool) -> RateLimitRoute {
 fn processing_error(error: EmailApiError, retryable: bool) -> ProcessingError {
     let reason = match error {
         EmailApiError::RateLimited { .. } => FailureReason::GmailApiRateLimited,
+        EmailApiError::Transient { .. } => FailureReason::GmailApiUnavailable,
         EmailApiError::AuthRequired => FailureReason::AccessTokenFetchFailed,
         EmailApiError::OutdatedCursor => FailureReason::OutdatedHistoryId,
         EmailApiError::Forbidden
         | EmailApiError::NotFound
         | EmailApiError::Conflict
-        | EmailApiError::Transient { .. }
         | EmailApiError::SendRejected { .. }
         | EmailApiError::Permanent { .. } => FailureReason::GmailApiFailed,
     };

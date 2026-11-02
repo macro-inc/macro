@@ -4,7 +4,9 @@
 //! their rows - every session gets it, because every session's owner is a
 //! Macro user. What has to be resolved per owner is the credential:
 //! `mcp_service` authenticates a *user*, so the proxy exchanges the session
-//! owner's identity for a short-lived Macro API token and stamps that.
+//! owner's identity for a short-lived Macro API token and stamps that. The
+//! token also carries the session's bound agent as its signed `agent_id`
+//! claim, so the tools write as that agent rather than the generic Macro bot.
 //!
 //! The exchange is local signing with the same RS256 key
 //! `authentication_service` uses - this process holds a key that can
@@ -13,6 +15,7 @@
 //! network; what limits the blast radius is that every token minted here is
 //! single-user, scoped to the session's owner, and minutes from expiry.
 
+use bot_id::BotId;
 use chrono::{DateTime, Duration as ChronoDuration, TimeZone, Utc};
 use lru::LruCache;
 use macro_auth::macro_api_token::{EncodeMacroApiTokenArgs, encode_macro_api_token};
@@ -37,10 +40,11 @@ const EXPIRY_MARGIN_MINUTES: i64 = 5;
 /// Implementations own the whole exchange - including finding whatever else
 /// the minting side needs to know about the owner beyond their id.
 pub trait MacroApiTokens: Send + Sync {
-    /// A token that acts as `owner`, and nobody else.
+    /// A token that acts as `owner`, and nobody else, attributed to `agent`.
     fn mint(
         &self,
         owner: &MacroUserIdStr<'static>,
+        agent: BotId,
     ) -> impl Future<Output = Result<String, EgressError>> + Send;
 }
 
@@ -56,11 +60,11 @@ pub struct WithMacroMcp<Inner, Tokens> {
     /// Whether [`UpstreamCall::bearer_over_local_cleartext`] is permitted.
     /// Set only by a composition root that has checked `ENVIRONMENT=local`.
     local_cleartext: bool,
-    /// Keyed by owner: the token *is* the owner's identity, so a cache hit
-    /// for one owner can never answer for another. Bounded, so the map cannot
-    /// grow with every owner ever seen; freshness still comes from each
-    /// token's own expiry, never from cache residency.
-    cached: Mutex<LruCache<MacroUserIdStr<'static>, CachedToken>>,
+    /// Keyed by owner and agent: the token *is* both identities, so a cache
+    /// hit for one owner or agent can never answer for another. Bounded, so
+    /// the map cannot grow with every owner ever seen; freshness still comes
+    /// from each token's own expiry, never from cache residency.
+    cached: Mutex<LruCache<(MacroUserIdStr<'static>, BotId), CachedToken>>,
 }
 
 /// How many owners' tokens are kept at once. Far past any real concurrency;
@@ -109,10 +113,15 @@ where
         })
     }
 
-    async fn token(&self, owner: &MacroUserIdStr<'static>) -> Result<String, EgressError> {
+    async fn token(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        agent: BotId,
+    ) -> Result<String, EgressError> {
+        let key = (owner.clone(), agent);
         {
             let mut cached = self.cached.lock().expect("token cache poisoned");
-            match usable(cached.get(owner).cloned()) {
+            match usable(cached.get(&key).cloned()) {
                 Some(live) => {
                     tracing::debug!(%owner, "macro api token cache hit");
                     return Ok(live.token);
@@ -120,16 +129,16 @@ where
                 // A stale entry is evicted now rather than on capacity
                 // pressure: there is no reason to keep a dead credential.
                 None => {
-                    let expired = cached.pop(owner).is_some();
+                    let expired = cached.pop(&key).is_some();
                     tracing::debug!(%owner, expired, "macro api token cache miss; minting");
                 }
             }
         }
 
-        let token = self.tokens.mint(owner).await?;
+        let token = self.tokens.mint(owner, agent).await?;
         let expires_at = token_expiry(&token)?;
         self.cached.lock().expect("token cache poisoned").put(
-            owner.clone(),
+            key,
             CachedToken {
                 token: token.clone(),
                 expires_at,
@@ -145,17 +154,18 @@ where
     Inner: McpCredentials,
     Tokens: MacroApiTokens,
 {
-    #[tracing::instrument(skip_all, err, fields(%owner, ?destination))]
+    #[tracing::instrument(skip_all, err, fields(%owner, %agent, ?destination))]
     async fn resolve(
         &self,
         owner: &MacroUserIdStr<'static>,
+        agent: BotId,
         destination: &McpDestination,
     ) -> Result<McpResolution, EgressError> {
         if *destination != McpDestination::Macro {
-            return self.inner.resolve(owner, destination).await;
+            return self.inner.resolve(owner, agent, destination).await;
         }
 
-        let token = BearerToken::new(self.token(owner).await?);
+        let token = BearerToken::new(self.token(owner, agent).await?);
         // Every session has Macro's own server; there is no grant to lack.
         let call = if self.local_cleartext && self.url.scheme() != "https" {
             UpstreamCall::bearer_over_local_cleartext(self.url.clone(), token)
@@ -315,7 +325,12 @@ impl MacroApiTokenSigner {
 }
 
 impl MacroApiTokens for MacroApiTokenSigner {
-    async fn mint(&self, owner: &MacroUserIdStr<'static>) -> Result<String, EgressError> {
-        self.mint_for(owner, MINTED_TOKEN_LIFETIME_SECONDS).await
+    async fn mint(
+        &self,
+        owner: &MacroUserIdStr<'static>,
+        agent: BotId,
+    ) -> Result<String, EgressError> {
+        self.mint_for_agent(owner, MINTED_TOKEN_LIFETIME_SECONDS, Some(agent.as_uuid()))
+            .await
     }
 }

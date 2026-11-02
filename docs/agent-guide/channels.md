@@ -33,6 +33,35 @@ Home previews remain display-only as described above. The backend-free browser
 check is in
 `apps/web/src/lib/core/component/LexicalMarkdown/component/core/browser-test/README.md`.
 
+## Block formatting
+
+Selecting several paragraphs and choosing Quote or a heading in the floating
+format toolbar applies it to the same paragraphs in either selection direction.
+Verify a selection from the last paragraph back to the start of the first:
+the first paragraph must receive the format too. A range ending at the start of
+the following paragraph leaves that following paragraph unchanged.
+Typing `> ` creates a quote. Pasting text with paragraph breaks into that quote
+keeps all pasted paragraphs quoted, including HTML and text copied from another
+Macro editor. Inline formatting survives. Verify an empty quote and a selection
+within a quote, then type after the paste and save the message; every pasted
+paragraph must still have the quote styling.
+Selections across adjacent quoted paragraphs preserve quoting too. A selection
+that includes unquoted paragraphs keeps the normal paste behavior.
+The backend-free quote check is documented in the Markdown browser-test README
+linked above.
+
+## Query document ownership
+
+Switch between Home and Channels repeatedly, including after backgrounding the
+native app. Conversation queries must remain reusable: their operation names and
+serialized GraphQL documents must stay consistent. The backend-free desktop and
+iPhone WebKit regression is
+`bunx playwright test --config src/lib/urql-solid/browser-test/playwright.config.ts`
+from `apps/web`.
+
+Data and loading state publish together, so automatic pagination observes the
+new page cursor before deciding whether to request another page.
+
 ## Empty direct messages
 
 An empty human DM shows the centered conversations illustration and “Say hello”
@@ -98,34 +127,52 @@ state, and exclude conversation reservations; genuine
 speculative sessions still expire normally.
 
 Send normally: no `@` mention is needed. Attachments, references, and quoted
-messages use the channel composer. While the agent works, a typing row with its
-avatar sits under the newest message: `<name> is thinking`, `is typing`,
-`is working`, or `is waiting for an answer`. Below that row, the owner sees the
-passage being written as it streams. They also see any live question or
-permission request and **Stop**, which cancels the active turn. Answer those
-controls to continue. If **Stop** fails, a failure toast appears and the control
-becomes available again so you can retry.
+messages use the channel composer. While the agent works, a typing row sits
+under the newest message: the agent's avatar beside the working line, which
+names the step the agent is on, or says what the turn is doing (`Thinking`,
+`Writing`, `Working`, or `Waiting for an answer`) between steps and to anyone
+who cannot read the session. The owner also gets **Stop** on that row, which
+cancels the active turn, and any live question or permission request beneath
+it. Answer those controls to continue. If **Stop** fails, a failure toast
+appears and the control becomes available again so you can retry.
 
 The reply is posted as ordinary messages while the turn runs. Each finished
-passage becomes a message. The steps taken between passages show inside the
-message as compact rows: a status icon (spinner, check, cross, or warning for
-interrupted), a label such as `Ran`, `Read`, `Edited`, or `Searching`, and a
-short detail like the command or file name for readers with session access.
+passage becomes a message, led by the steps the agent took to get to it, so
+nothing is posted until the agent has written something and no message shows
+a step running. Steps a turn ends on, with no passage after them (Stop, a
+failure), are posted with how it ended. The working line is one shimmering
+line, led by the working dots, naming the step in progress by its label alone,
+such as `Ran`, `Read`, `Edited`, or `Searching`; the command, query, or file
+stays in the session. The next step slides in as it starts, and steps running
+at the same time take turns every two seconds. In a DM it is the typing row.
+A channel mention's reply in its thread is one message, so the line sits in
+it, and reads `Thinking` whenever the turn is running with no open run, before
+the first step or while the agent writes after one.
+Once a run closes, it folds to a `Used N tools` summary (with
+`· N failed` when a step failed), with a caret after it on hover, that opens
+to compact rows like the session's tool rows: the label, and **Failed** or
+**Interrupted** when a step did not finish.
+Documents, sessions, pull requests, and contacts an agent's reply mentions are
+set in the accent color.
 Stored activity snapshots keep the status and label but omit commands and tool
 input details, in both shared threads and DMs. A view the agent presents
-(`execution.views.present`) is part of the reply: it is stored with its run and drawn under
-the run's steps, never folded away, and each item it shows loads with the
-reader's own access. A long run shows its latest six steps behind an
-`N earlier steps` control. Rows tick live while the run is
-open, then freeze
-into the snapshot saved in the message. Readers without session access always
-see that snapshot. Only the turn's last message notifies. Previews and search
+(`execution.views.present`) is part of the reply: it is stored with its run and
+drawn after the run's line or summary, never folded into it, and each item it
+shows loads with the reader's own access. The line follows the session
+live while the run is open; the summary shows the snapshot saved in the
+message. Readers without session access always see that snapshot. Only the
+turn's last message notifies. Previews and search
 quote the passages, not the steps. Typing refreshes every 3 seconds and clears
 on its own if the agent's replica dies. Follow-up messages queue in order, and
 the bar above the composer counts them (`1 queued`). Editing a sent message
 does not invoke the agent again. A reply inside a thread is not part of the
 conversation: the agent answers it only when mentioned there, in the thread,
 as in any channel.
+
+The local playground at `/app/debug/agent-progress` shows each of these states
+in three tabs: **DM**, **Channel mention** (the reply in its thread), and
+**Agent session**, with theme, viewer, and phone-width toggles and a looping
+replay of one turn.
 
 Each failed, stopped, or interrupted source message has its own **Retry message**
 action in the current context. Retry is explicit because an interrupted attempt
@@ -160,9 +207,9 @@ internal rollout. Model usage continues through the existing session metering.
 ## Imported Slack history
 
 Import starts from the **Create or import channels** card's **Import Slack**
-button at the bottom of the Chat sidebar, or **Settings → Team → Connections →
-Import from Slack**. The card's **New channel** button beside it opens the new
-channel dialog instead. The card is
+button at the bottom of the Chat sidebar, or **Import** on the Slack row in
+**Settings → Integrations** (team admins). The card's **New channel** button
+beside it opens the new channel dialog instead. The card is
 the shared connector-import card (see
 [Import from connected apps](setup-cards.md#import-from-connected-apps)) and is
 visible to team admins and owners when Slack archive import is enabled. It
@@ -278,6 +325,17 @@ be loaded or exceeds the inline limit, its URL remains available. To check this,
 ask the agent to inspect an image on a channel message and a video on a reply;
 verify that its tool response includes the matching attachment URLs.
 
+## Messages sent through an MCP client
+
+A message a user's MCP client (Claude Code, Cursor, ChatGPT) sends through
+Macro MCP's `SendChannelMessage` is posted by the Macro bot with a
+**from <user> via <client>** pill under the sender name, where the client is the
+name it registered with Macro's OAuth broker. A self-hosted agent's message
+shows the agent as the sender with **from <user>**, and a message sent with a
+pasted Macro API key shows the Macro bot with **from <user>**. To check this,
+connect an MCP client over OAuth, ask it to post in a channel, and confirm the
+pill names both you and the client on desktop and at phone width.
+
 ## Message composer
 
 Channel messages and thread replies have a microphone next to Send on pointer
@@ -315,6 +373,10 @@ wrapping paragraph should stay expanded without briefly collapsing; check this
 after reopening the channel with a draft already saved. Open reply composers always place the editor
 above the action row, including for empty and single-line drafts, so the
 attachment, delete-reply, and send controls have their own space.
+Shift+Enter adds a line to the draft; Enter sends. The composer spaces its
+paragraphs the way the sent message does, so a multi-line draft reads as what
+it will send. Check a multi-line message against the draft that wrote it: the
+spacing must not change on send.
 Both the expanded and collapsed composers start with a `+` button (`Add`). It
 opens a menu on desktop and a bottom drawer on mobile: `Mention` (opens the `@` typeahead), `Attach files` (the file
 picker; the iOS media picker on iOS), `GIF` (the same picker as `/gif`), then under `Create` the same actions as
@@ -413,22 +475,47 @@ event without attendees creates the event right away (unlike AI chat, where crea
 for the user to confirm a composer card). For an event with attendees the bot is prompted to
 ask for confirmation in the thread first, since Google sends the invitations the moment the
 event is created — no invitation goes out from the initial request. It cannot draft or send
-email at all. When that reply links something the rest of the channel may not already open
-(a calendar event, document, or similar chip), it ends by asking "Do you want me to share this
-with the members of the channel?" A yes in the thread — "yes", "please", "go ahead" — is
-enough: the bot replies "Okay." and grants current members access. It does not share before
-that yes unless the request already asked it to. A decline is not shared. Private and
-confidential calendar events stay unshared, and a calendar event can only be shared by
-someone who holds it on their own calendar. The bot's prompt carries the current date and time in the mentioning user's
+email at all. A bot or agent reply posted for a person shares, as that person, the linked items
+(chips or attachments) that the replying bot created for them while answering: those with a
+`created` activity row by that bot on the person's behalf since the person's latest message in
+the thread before the reply. Activity arrives asynchronously, so missing rows are re-checked
+after 5 and 30 seconds. Existing items it links, plain URLs, and bot posts with no person
+behind them share nothing. The bot never asks whether to share; it calls `ShareWithChannel` when asked to
+share an existing item. Private and confidential calendar events stay unshared, and a
+calendar event can only be shared by someone who holds it on their own calendar.
+The bot's prompt carries the current date and time in the mentioning user's
 own time zone (their primary calendar's), so it resolves relative times ("tomorrow at 4",
 "EOD") without asking; when no calendar is connected the prompt falls back to UTC and the
 bot asks before scheduling a specific clock time. Within the rollout, `@Macro` — plus
 `@cursor` / `@codex` when available — opens
 an agent session; follow-up
 `@` mentions of that bot in the same thread route to it.
+An agent mentioned in a thread reply gets, on its first turn, the images and
+videos on the mentioning message and then on the thread root and earlier
+replies (at most 8, no duplicates); follow-ups carry only their own files.
+Files elsewhere in the channel appear only as `<attachment>` entries in its
+context. To check, post an image on a thread root, mention an agent in a
+reply without attaching anything, and confirm it describes the image.
 Macro Coding Agent (`@coder`) is unavailable in mention suggestions, including
 when it appears among existing participants or bots. Check with the agents
 rollout both enabled and disabled.
+
+Agent-authored messages trigger other agents exactly like a person's: an explicit
+mention starts or continues the mentioned agent's session, and an unmentioned reply
+in a thread can reach another live agent there by quote-reply or inference. The
+originating user's permissions, connected runtime, and usage allowance apply through
+the bot message's server-recorded attribution. Autonomous webhook posts without that
+attribution trigger nothing, and a bot never triggers its own session. Finalized bot
+answers are evaluated like new posts, mentioned or not; streaming updates and
+ordinary edits are not. Agents handing the thread back and forth stop after 128
+agent turns (64 round trips) with no person writing in between; the next agent
+message is logged and triggers nothing, before any classifier runs. The invoked session's
+prompt reads "Started by <agent> for <person>" (or "Asked by" on a follow-up).
+To verify, ask session-backed `@Macro` to post a mention of `@cursor`, then have
+Cursor post a mention of session-backed Macro in the same thread. Check that the
+first mention opens Cursor and the return mention continues Macro's existing
+session. Repeat with revoked channel access and confirm no new work starts.
+
 When the backend is configured with AI usage enforcement, a rejected classic
 `@Macro` request gets a thread reply explaining the allowance failure (for example,
 `ai_allowance_exhausted`) or temporary validation failure (`ai_billing_unavailable`),
@@ -517,10 +604,10 @@ new GitHub PR with their session. Macro Internal MCP is hosted by the harness
 service at `/mcp/internal` on its egress listener, separately from workspace MCP.
 Cursor, sandbox, and macrod sessions receive session-scoped credentials; the
 model supplies only the URL. The tool records the link, not the GitHub PR itself.
-The shared Macro system instructions ask agents to register PRs when
-`macro_internal.set_pull_request` is available, to open them ready for review
-rather than as drafts, and to get CI passing before handing off. Macro Internal
-MCP also advertises this guidance in its server instructions. It is not prepended
+Macro Internal MCP's server instructions ask coding agents to register PRs with
+it, to open them ready for review rather than as drafts, and to get CI passing
+before handing off. External MCP clients get the ready-for-review rule in
+Macro's MCP instructions, and in-app agents tell coding agents they dispatch. It is not prepended
 to individual user messages. Cursor
 enables automatic PR creation when a repository is selected. Its returned URL
 is also recorded because
@@ -550,6 +637,9 @@ session header (and the side panel's **Task** row) shows a task chip before the
 PR chip: the task title, or `Task` while loading or without access. Clicking it
 opens the task in a new split (in place on touch devices). Linking a different
 task sends the same session-update notification, so mounted headers refresh.
+When the agent names that task in a reply — after creating or linking it, or
+later — the reply includes an `<m-document-mention>` task chip, not a URL or
+`MACRO-` id.
 
 When the agent stops to ask a question the question takes the area in the passage's
 place, cropped and expandable the same way: the prompt, then what is asked - a form's
@@ -616,6 +706,12 @@ that buffer. Check that pagination retains the visible message, and that latest
 stays pinned when messages arrive, images load, or the composer resizes. Verify
 message/reply navigation, restoration, and the custom scrollbar after pagination.
 Very long flings or slow responses can still exhaust the available scroll range.
+In the iOS app, fling repeatedly through a long channel, starting each fling before
+the previous one's momentum ends, then let it settle. The messages must not jump when
+scrolling comes to rest, nor when it bounces or is held against the top of loaded history.
+In a channel opened for the first time, fling up through unmeasured history and
+straight back down: scrolling must stop at the latest message, never in blank space
+below it.
 
 Inline document mentions should show their stored title before entering the viewport
 and while preview requests are pending. With a slow preview response, check that a
@@ -663,9 +759,21 @@ Its count includes only distinct offscreen unread threads, not notifications.
 Three replies and a mention in one thread count as one; reactions do not count.
 Clicking the chip expands the target thread and reveals an unread message.
 Scrolling an inline indicator into view does not expand the thread or mark its
-hidden replies seen. Notifications are still marked seen when their message mounts,
-including virtualized overscan. Collapsed replies that are not rendered remain
-unread.
+hidden replies seen. Automatic read marking waits until the actual message intersects
+the visible scroll area, excluding floating header/composer insets. Offscreen
+overscan, collapsed replies, hidden panes, and background tabs remain unread.
+Expanded standalone threads and the thread side panel use the same visibility
+rule. New notifications on an already-mounted offscreen reply remain unread until
+that reply comes into view. Explicit notification clicks and mark-read actions
+retain their existing behavior.
+
+Visibility is conservative: moving a partly off-window pane without crossing
+either observer's visibility threshold can leave a now-visible reply unread
+until the next intersection update or an explicit mark-read action.
+
+The backend-free regression uses the real message read marker and channel
+virtualizer on desktop, phone, and tablet:
+`bunx playwright test --config src/features/notifications/browser-test/playwright.config.ts`.
 Check the last channel message with a long collapsed unread thread: at the bottom,
 the inline dot and accent border should be visible without a downward chip. With
 another unread thread above, an upward chip should remain and count only that offscreen thread.
@@ -776,9 +884,14 @@ response must not switch back or mark that earlier channel read.
 A transient notification-fetch failure keeps the conversation and composer mounted
 while notifications are unavailable. Recovery marks top-level message notifications
 seen without moving the conversation. No notification read marking runs
-from an abbreviated list result, even if that result is empty. Access failures
+from an abbreviated list result, even if that result is empty. Access failures and server-confirmed missing channels
 show **Conversation unavailable** and stay hidden during retry until access is
-confirmed. A route without cached channel metadata shows **Loading conversation**
+confirmed. With GraphQL caching enabled, an empty local projection cannot hide a
+server-confirmed conversation; a stale positive row cannot undo a fresh denial or
+deletion. Contradictory cache membership triggers a bounded server confirmation.
+An initially empty cache result waits for that confirmation before declaring the
+channel unavailable. Unavailable routes still recover from invite notifications
+and reconnect without mounting a message view first. A route without cached channel metadata shows **Loading conversation**
 until its channel arrives. On mobile, opening from the Recent conversation list
 also navigates immediately: a slow or failed notification lookup must not prevent
 messages and the composer from loading. Full-edge notification hydration runs
@@ -805,8 +918,15 @@ aligned with New. Choices use equal widths, a transparent outlined track with
 1px padding, and fully rounded pill shapes. The 32px selected state matches
 New's fill and border without an extra shadow. All contains an optional
 `Favorites` section and the
-independently paginated `Channels` and `DMs` sections. Favorites appears when
-the user has channel favorites and only lists channels. Channel favorites open
+independently paginated `Team channels`, `Channels`, and `DMs` sections, in
+that order. `Team channels` lists team channels; `Channels` lists every other
+non-DM channel (public and private). Each section collapses on its own and
+keeps its own sort; open sections split the column evenly, and the bottom-most
+open one takes any remaining height. Favorites appears when
+the user has channel favorites and only lists channels. Favorites show a custom
+channel picture when set; otherwise all non-DM channels use a hashtag, including
+team channels. Favorites, regular rows, and headers share the same channel/DM
+icon renderer, including participant avatars, self-DMs, and bot personas. Channel favorites open
 in the shared channel detail. Shift-clicking a favorite, channel, or DM opens that
 conversation in a new split instead. Shift-click refreshes the notification
 selection and opens at latest. Split opens mark top-level notifications seen,
@@ -815,7 +935,7 @@ Deferred navigation waits until the destination is applied; an unavailable split
 must leave unread state unchanged. Join-only channels remain
 blocked after hydration, including on mobile.
 
-With GraphQL caching enabled, a current-query cached Channels or DMs page
+With GraphQL caching enabled, a current-query cached Team channels, Channels, or DMs page
 (including an empty page) remains quiet on a response-free refresh failure.
 Hold or fail the refresh before local filtering finishes: cached rows must not
 flash **Couldn’t load conversations** while awaiting reconciliation. Changing
@@ -842,7 +962,10 @@ with the same sort and `+` controls as the All tab's sections. Conversations
 lists only channels and DMs that hold threads the user takes part in; it pages
 through the user's threads and loads their channels, so scrolling the section
 reveals more. Selecting a row filters the main pane instead of opening the
-conversation. `All threads` clears the filter.
+conversation. `All threads` clears the filter. At desktop width the rail stays
+docked on Threads with no **Hide navigation** control. In narrow splits the tab
+neither opens nor closes the slide-over, so switching between `Threads`, `All`,
+and `Recent` inside it keeps it open.
 
 The main pane is a virtualized list of channel threads the user takes part in,
 newest reply first. It loads more as it nears the end and returns to the top
@@ -864,7 +987,7 @@ until explicitly enabled, including in development. For a local frontend,
 `VITE_ENABLE_CHANNEL_TAGS=true` enables it and `VITE_ENABLE_CHANNEL_TAGS=false`
 forces it off; restart the frontend after changing the environment override.
 
-With the flag off, Channels remains a flat list in its selected sort order.
+With the flag off, Team channels remains a flat list in its selected sort order.
 The heading's `+` creates a channel directly. Label headings, creation dialogs,
 channel-menu label actions, and label drag targets are absent, and the app makes
 no channel-label list or smart-label preview requests. Existing saved labels
@@ -884,7 +1007,8 @@ dialog and cancel to check the controls without changing shared data. The
 creation, assignment, and persistence checks below require the label backend
 and an account where those changes are safe.
 
-Labels group channels inside the `Channels` section. Team members share the
+Labels group channels inside the `Team channels` section; the `Channels`
+section's `+` only creates a channel. Team members share the
 same labels and can create, rename, delete, or move their channels between them.
 Users without a team have labels private to their account. The naming and delete
 dialogs explain which scope applies. Collapse/expand state is per user.
@@ -903,7 +1027,7 @@ row has an unread count, a `···` menu (`Rename`, `Mark all as read`, `Delete 
 Clicking the row or pressing Enter toggles it; `h` / `l` on a label or one of its
 channels collapses or expands that label. `[` / `]` jump between section headings.
 
-Creating: use the `Channels` heading's `+` → `New label`, including when the
+Creating: use the `Team channels` heading's `+` → `New label`, including when the
 account has no team. The name field receives focus on opening and reopening.
 Enter or `Create label` saves; Escape or Cancel dismisses without saving.
 The dialog stays open while saving and shows a failure inline, preserving the
@@ -915,7 +1039,7 @@ private ones. Channels remain accessible after deleting their label.
 Moving: right-click a team channel for `Add to label` / `Move to label`, including a
 `New label…` option, or use `Ungroup from “<label>”`. Drag a channel onto a label
 heading or one of its channels to move in. Drag a grouped channel onto a plain
-team channel, the Channels heading, or empty space below the list to ungroup it.
+team channel, the Team channels heading, or empty space below the list to ungroup it.
 Dragging one ungrouped team channel onto another opens a name dialog; saving creates
 the label with both channels atomically. A failed save changes neither channel.
 Dropping on the source channel or its current label does nothing; Escape from
@@ -1088,10 +1212,20 @@ an opened unread conversation, so mark-read and message targeting retain their
 complete top-level inputs in Chat and thread-scoped inputs in Inbox. Reopening
 a conversation must refresh that full
 edge even within 30 seconds; mark-read waits for the refresh rather than using
-older cached notifications. Failed lookups and successful lookups with no matching
+older cached notifications. Failed server lookups and successful server lookups with no matching
 channel show **Conversation unavailable** with **Retry**, never permanent loading.
 Retry rather than marking just the one unread witness. Repeated mobile taps must
 open the last selected conversation, not a slower earlier request.
+
+A backend-free cache regression runs on desktop and phone viewports:
+`bunx playwright test --config src/lib/queries/channel/browser-test/playwright.config.ts`.
+It uses the production normalized exchange, query adapter, and detail state with a
+controlled transport. Confirm a channel, type a draft, then deliver repeated empty
+cache projections: the composer must remain mounted. A fresh server absence must
+hide it, a cached positive row must leave it hidden, and a fresh grant must recover
+it. See the [desktop fixture](assets/channel-access-cache-desktop.png) and
+[phone fixture](assets/channel-access-cache-phone.png); these show synthetic data,
+not a full app session.
 
 Opening also refreshes that channel's bounded unread edge in the same request.
 Read a DM on another device while its web sidebar retains an unread dot (for
@@ -1414,3 +1548,10 @@ If the metadata is unavailable, the fallback extension comes from the response
 MIME type. Linked video preview cards also offer Download, using the document's
 current version, name, and file type. See [Downloading files](files.md#downloading-files)
 for progress, cancellation, retries, and mobile save/share verification.
+
+## Pending message drafts
+
+Sending clears the composer immediately while delivery is pending. If delivery
+fails and the composer is still empty, its text, mentions, and attachments return.
+A new draft typed during delivery stays intact if the earlier send fails. Verify
+this with both the Send button on a phone and the desktop composer.

@@ -14,6 +14,7 @@ export default {
   workspaceLabel: 'Workspace folder',
   workspaceHint: "Where sessions run. Created if it doesn't exist.",
   fullAccess: 'Full access',
+  suggested: 'Suggested',
   fullAccessHint:
     'Let agents run commands and edit files without asking each time.',
   connectorHint: 'A small connector is downloaded on first start.',

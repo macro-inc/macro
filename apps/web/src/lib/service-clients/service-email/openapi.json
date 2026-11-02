@@ -391,7 +391,7 @@
     "/email/calendar-events/{event_id}/forward": {
       "post": {
         "tags": ["email"],
-        "summary": "Email one of the viewer's events to people the organizer's guest list\ndoes not name: the event's iCalendar file (`METHOD:PUBLISH`, no\nattendees, no join link), sent from the inbox that holds the viewer's\ncopy, with the usual undo delay. Recipients can add the event to their\nown calendar; they are not added to the guest list and the organizer is\nnot told.",
+        "summary": "Email one of the viewer's events to people the organizer's guest list\ndoes not name, from the inbox that holds the viewer's copy, with the\nusual undo delay, carrying the copy's join link. When the copy is Google's\nprivate copy of an invitation from an organizer outside Google, it is a\nreal invitation (`METHOD:REQUEST`) naming the recipients, who answer it to\nthe organizer, who gets the email too. Otherwise it is the event's file\n(`METHOD:PUBLISH`, no attendees): recipients can add the event to their\nown calendar, are not added to the guest list, and the organizer is not\ntold.",
         "operationId": "forward_calendar_event",
         "parameters": [
           {
@@ -2712,6 +2712,97 @@
         }
       }
     },
+    "/email/messages/{id}/eml": {
+      "get": {
+        "tags": ["Messages"],
+        "summary": "Download a message's original source as an `.eml` file.",
+        "operationId": "get_message_eml",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "description": "Message ID.",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "message/rfc822": {
+                "schema": {
+                  "$ref": "#/components/schemas/EmlFile"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/email/settings": {
       "patch": {
         "tags": ["Settings"],
@@ -3780,6 +3871,42 @@
         }
       }
     },
+    "/email/threads/{thread_id}/read-receipts": {
+      "get": {
+        "tags": ["email"],
+        "operationId": "get_thread_read_receipts",
+        "parameters": [
+          {
+            "name": "thread_id",
+            "in": "path",
+            "description": "Authorized email thread",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ThreadReadReceipts"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": ""
+          },
+          "403": {
+            "description": ""
+          }
+        }
+      }
+    },
     "/health": {
       "get": {
         "tags": ["Health"],
@@ -3794,6 +3921,32 @@
                   "$ref": "#/components/schemas/EmptyResponse"
                 }
               }
+            }
+          }
+        }
+      }
+    },
+    "/opens/{token}": {
+      "get": {
+        "tags": ["email"],
+        "summary": "Every request gets the same uncacheable pixel so the response reveals nothing\nabout the token, and each open reaches the server.",
+        "operationId": "get_read_receipt_pixel",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "path",
+            "description": "Opaque pixel token",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Transparent pixel, for any token",
+            "content": {
+              "image/gif": {}
             }
           }
         }
@@ -4705,6 +4858,7 @@
           "link_id",
           "inbox_visible",
           "is_read",
+          "has_received_mail",
           "access_level",
           "created_at",
           "updated_at",
@@ -4721,6 +4875,10 @@
           "db_id": {
             "type": "string",
             "format": "uuid"
+          },
+          "has_received_mail": {
+            "type": "boolean",
+            "description": "Whether any message was received rather than drafted or sent. Only\nthreads with received mail can return to the inbox."
           },
           "inbox_visible": {
             "type": "boolean"
@@ -5725,6 +5883,10 @@
           }
         }
       },
+      "EmlFile": {
+        "type": "string",
+        "format": "binary"
+      },
       "EmptyResponse": {
         "type": "object",
         "description": "Empty response is required due to custom fetch forcing `response.json()`"
@@ -5900,7 +6062,7 @@
         "properties": {
           "bodyText": {
             "type": ["string", "null"],
-            "description": "The email's plain-text body. Without one, it names the event and\nsays the recipient won't be on the organizer's guest list."
+            "description": "A plain-text summary of the event the email opens with; the title\nwhen absent. The email ends with a note saying what the recipient\ncan do with the forward."
           },
           "to": {
             "type": "array",
@@ -6849,6 +7011,34 @@
           }
         }
       },
+      "MessageReadReceipt": {
+        "type": "object",
+        "description": "Open state of one tracked, sent message.",
+        "required": ["message_id", "open_count"],
+        "properties": {
+          "first_opened_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "First counted fetch."
+          },
+          "last_opened_at": {
+            "type": ["string", "null"],
+            "format": "date-time",
+            "description": "Latest counted fetch."
+          },
+          "message_id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "The tracked message."
+          },
+          "open_count": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Counted pixel fetches.",
+            "minimum": 0
+          }
+        }
+      },
       "ParsedMessage": {
         "type": "object",
         "required": [
@@ -7170,6 +7360,10 @@
       "Settings": {
         "type": "object",
         "properties": {
+          "read_receipts_enabled": {
+            "type": ["boolean", "null"],
+            "description": "Whether messages sent from this inbox carry an open-tracking pixel."
+          },
           "signature": {
             "type": ["string", "null"],
             "description": "The user's email signature content (HTML). On a patch, omit or send\n`null` to leave unchanged (both deserialize to `None`); pass an empty\nstring to clear it. The column cannot be set to SQL NULL via patch."
@@ -7361,6 +7555,19 @@
           "viewedAt": {
             "type": ["string", "null"],
             "format": "date-time"
+          }
+        }
+      },
+      "ThreadReadReceipts": {
+        "type": "object",
+        "description": "Open state of the caller's tracked, sent messages in one thread.",
+        "required": ["receipts"],
+        "properties": {
+          "receipts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/MessageReadReceipt"
+            }
           }
         }
       },

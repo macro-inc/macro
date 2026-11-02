@@ -120,11 +120,26 @@ export function invalidatedPatch() {
   } as WorkFeedPatchFieldsFragment;
 }
 
+/** A page whose read stops at its last entry unless `nextPosition` says
+ * otherwise; without a cursor the feed is exhausted. */
 export function workFeedPage(
   entries: WorkFeedEntryFieldsFragment[],
-  nextCursor: string | null = null
+  nextCursor: string | null = null,
+  nextPosition: { sortAt: string; entityId: string } | null = nextCursor
+    ? lastPosition(entries)
+    : null
 ) {
   return {
-    user: { id: 'macro|viewer@example.com', workFeed: { entries, nextCursor } },
+    user: {
+      id: 'macro|viewer@example.com',
+      workFeed: { entries, nextCursor, nextPosition },
+    },
   };
+}
+
+function lastPosition(entries: WorkFeedEntryFieldsFragment[]) {
+  const last = entries.at(-1);
+  return last
+    ? { sortAt: last.sortAt, entityId: last.item.id.split(':')[1] }
+    : null;
 }

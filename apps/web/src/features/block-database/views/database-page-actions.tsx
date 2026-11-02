@@ -161,10 +161,11 @@ export function DatabasePageActions(props: {
       </Show>
       <Dropdown>
         <Dropdown.Trigger
+          aria-label="Database actions"
+          tooltip="Database actions"
           ref={menuButton}
           variant="ghost"
           size="icon-sm"
-          label="Database actions"
         >
           <DotsThreeIcon class="size-5" />
         </Dropdown.Trigger>
@@ -272,12 +273,14 @@ export function DatabasePageActions(props: {
       </Show>
       <Show when={webhooksOpen() && props.table}>
         {(table) => (
-          <WebhooksDialog
-            databaseId={props.detail.database.id}
-            table={table()}
-            onClose={() => setWebhooksOpen(false)}
-            returnFocus={menuButton}
-          />
+          <Show keyed when={`${props.detail.database.id}:${table().table.id}`}>
+            <WebhooksDialog
+              databaseId={props.detail.database.id}
+              table={table()}
+              onClose={() => setWebhooksOpen(false)}
+              returnFocus={menuButton}
+            />
+          </Show>
         )}
       </Show>
       <DeleteDialog

@@ -283,14 +283,18 @@ function Fixture() {
                   />
                 </Show>
                 <div class="ml-auto flex shrink-0 items-center gap-1">
-                  <Button label="Delete draft" size="icon-composer">
-                    <TrashIcon />
+                  <Button
+                    aria-label="Delete draft"
+                    tooltip="Delete draft"
+                    size="icon-md"
+                  >
+                    <TrashIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                   </Button>
-                  <Button label="Attach" size="icon-composer">
-                    <PaperclipIcon />
+                  <Button aria-label="Attach" tooltip="Attach" size="icon-md">
+                    <PaperclipIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                   </Button>
-                  <Button label="Format" size="icon-composer">
-                    <TextAa />
+                  <Button aria-label="Format" tooltip="Format" size="icon-md">
+                    <TextAa class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                   </Button>
                   <div class="shrink-0">
                     <EmailDateSelector
@@ -307,9 +311,8 @@ function Fixture() {
                     appearance="composer"
                     disabled={actionDisabled()}
                     aria-label={actionLabel()}
-                    tooltip={actionLabel()}
+                    tooltip={{ content: actionLabel(), shortcut: 'cmd+enter' }}
                     onClick={submit}
-                    shortcut="cmd+enter"
                   />
                 </div>
               </div>

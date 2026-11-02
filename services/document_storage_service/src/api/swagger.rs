@@ -199,8 +199,8 @@ use soup::domain::models::{SoupItemWithProperties, SoupPropertiesField};
 use soup::inbound::axum_router::{
     ApiGroupByField, ApiGroupMeta, GroupedSoupGroupPage, GroupedSoupInitialPage, GroupedSoupPage,
     PostGroupedSoupAstGroupPageRequest, PostGroupedSoupAstInitialRequest,
-    PostGroupedSoupAstRequest, PostSoupAstRequest, PostSoupRequest, SoupApiItem, SoupApiSort,
-    SoupPage,
+    PostGroupedSoupAstRequest, PostSoupAstRequest, PostSoupRequest, PropertyBucketing,
+    PropertyDateRange, PropertyDateRanges, SoupApiItem, SoupApiSort, SoupPage,
 };
 use user_api_key::domain::models::{CreatedUserApiKey, UserApiKeyInfo};
 use user_api_key::inbound::axum_router::{CreateUserApiKeyRequest, UserApiKeysList};
@@ -262,6 +262,7 @@ use utoipa::OpenApi;
         documents::revert_delete_document::handler,
         documents::export_document::handler,
         documents_hex::inbound::axum_router::create_task::create_task_handler,
+        documents_hex::inbound::axum_router::task_duplicates::task_similarity_search_handler,
         documents_hex::inbound::axum_router::create_snippet::create_snippet_handler,
         documents_hex::inbound::axum_router::create_skill::create_skill_handler,
         documents_hex::inbound::axum_router::system_skills::get_system_skills_handler,
@@ -473,6 +474,9 @@ use utoipa::OpenApi;
         whatsapp_linked::inbound::router::passkey,
         whatsapp_linked::inbound::router::disconnect,
         whatsapp_linked::inbound::router::chats,
+        whatsapp_linked::inbound::router::start_lookup,
+        whatsapp_linked::inbound::router::lookup,
+        whatsapp_linked::inbound::router::import_history,
 
         access_requests::inbound::axum_router::state_handler,
         access_requests::inbound::axum_router::submit_handler,
@@ -602,6 +606,9 @@ use utoipa::OpenApi;
             documents_hex::domain::models::CreateMarkdownDocumentResponse,
             documents_hex::domain::models::CreateTaskRequest,
             documents_hex::domain::models::CreateTaskResponse,
+            documents_hex::inbound::axum_router::task_duplicates::TaskSimilaritySearchRequest,
+            documents_hex::inbound::axum_router::task_duplicates::TaskSimilaritySearchResponse,
+            task_dedup::TaskSimilarityResult,
             documents_hex::domain::models::CreateSnippetRequest,
             documents_hex::domain::models::CreateSnippetResponse,
             documents_hex::domain::models::CreateSkillRequest,
@@ -816,6 +823,9 @@ use utoipa::OpenApi;
             PostGroupedSoupAstInitialRequest,
             PostGroupedSoupAstGroupPageRequest,
             PostGroupedSoupAstRequest,
+            PropertyBucketing,
+            PropertyDateRange,
+            PropertyDateRanges,
             ApiGroupByField,
             ApiGroupMeta,
             GroupedSoupInitialPage,

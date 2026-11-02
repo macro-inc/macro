@@ -19,10 +19,10 @@ export function DesktopTitleBar() {
     >
       <div class="flex items-center gap-1">
         <Button
+          aria-label="Go Back"
+          tooltip={{ content: 'Go Back', hotkey: TOKENS.split.go.back }}
           variant="ghost"
           size="icon-sm"
-          label="Go Back"
-          hotkey={TOKENS.split.go.back}
           disabled={!activeSplit()?.canGoBack()}
           onClick={() => {
             if (splitBackInterceptor()?.()) return;
@@ -32,10 +32,10 @@ export function DesktopTitleBar() {
           <CaretLeftIcon class="size-4" />
         </Button>
         <Button
+          aria-label="Go Forward"
+          tooltip={{ content: 'Go Forward', hotkey: TOKENS.split.go.forward }}
           variant="ghost"
           size="icon-sm"
-          label="Go Forward"
-          hotkey={TOKENS.split.go.forward}
           disabled={!activeSplit()?.canGoForward()}
           onClick={() => activeSplit()?.goForward()}
         >
@@ -51,10 +51,13 @@ export function DesktopTitleBar() {
       <Show when={globalSplitManager()}>
         {(manager) => (
           <Button
+            aria-label="New Split"
+            tooltip={{
+              content: 'New Split',
+              hotkey: TOKENS.global.createNewSplit,
+            }}
             variant="ghost"
             size="icon-sm"
-            label="New Split"
-            hotkey={TOKENS.global.createNewSplit}
             disabled={!manager().canAppendSplit()}
             onClick={() =>
               manager().openWithSplit(

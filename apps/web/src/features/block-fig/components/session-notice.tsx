@@ -21,7 +21,7 @@ export function SessionNotice(props: {
       <WarningCircle class="size-3.5 shrink-0 text-warning" />
       <span class="min-w-0 flex-1">{props.message}</span>
       <Button
-        variant="outline"
+        variant="secondary"
         size="sm"
         data-testid="fig-session-action"
         onClick={() => props.onAction()}

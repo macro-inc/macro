@@ -176,6 +176,7 @@ impl<D: DocumentService> DraftAttachmentSource for DocumentAttachmentSource<D> {
             file_name: attachment_file_name(&name, extension),
             content_type,
             bytes,
+            is_inline: false,
         })
     }
 }

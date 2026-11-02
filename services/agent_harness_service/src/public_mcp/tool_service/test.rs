@@ -1,5 +1,6 @@
 use super::*;
 use ai_toolset::AsyncToolCollection;
+use bot_id::BotId;
 use rmcp::{handler::server::ServerHandler, model::ErrorCode};
 
 fn empty_service() -> AuthenticatedToolService<()> {
@@ -220,12 +221,58 @@ fn authenticated_user_id_requires_user_extension_inside_request_parts() {
     assert_eq!(error.message, "missing user identity — is auth configured?");
 }
 
+fn call_extensions(
+    caller: Option<ToolCaller>,
+    headers: &[(&str, &str)],
+) -> rmcp::model::Extensions {
+    let mut request = http::Request::new(());
+    for (name, value) in headers {
+        request.headers_mut().insert(
+            http::HeaderName::from_bytes(name.as_bytes()).unwrap(),
+            http::HeaderValue::from_str(value).unwrap(),
+        );
+    }
+    let mut parts = request.into_parts().0;
+    if let Some(caller) = caller {
+        parts.extensions.insert(caller);
+    }
+    let mut extensions = rmcp::model::Extensions::new();
+    extensions.insert(parts);
+    extensions
+}
+
+/// The caller is whatever the bearer middleware authenticated; a bot the
+/// request names for itself never replaces it.
+#[test]
+fn the_caller_is_the_authenticated_one_not_one_the_request_names() {
+    let forged = BotId::TEST_A.to_string();
+
+    assert_eq!(
+        caller(&call_extensions(
+            Some(ToolCaller::ApiKey),
+            &[("x-macro-agent-id", &forged), ("x-macro-bot-id", &forged)],
+        ))
+        .unwrap(),
+        ToolCaller::ApiKey
+    );
+}
+
+/// With no authenticated caller there is nothing to write as, so the call
+/// fails instead of falling back to the Macro bot.
+#[test]
+fn a_call_without_a_caller_is_refused() {
+    let error = caller(&call_extensions(None, &[])).expect_err("no caller");
+
+    assert_eq!(error.code, ErrorCode::INTERNAL_ERROR);
+}
+
 mod code_mode {
     use super::*;
     use agent_code_mode::domain::{
         CodeModeError, ExecutionStatus, UserCodeMode, UserExecutionReceipt,
     };
-    use agent_inmem::domain::tool_mode::{ToolMode, ToolModeSelector};
+    use agent_inmem::domain::tool_mode::ToolModeSelector;
+    use ai_toolset::{ToolAnnotated, ToolAnnotations};
     use axum::{
         body::{Body, to_bytes},
         http::Request,
@@ -234,6 +281,7 @@ mod code_mode {
     use rmcp::transport::streamable_http_server::{
         StreamableHttpServerConfig, StreamableHttpService, session::local::LocalSessionManager,
     };
+    use serde::Deserialize;
     use std::{future::Future, pin::Pin, sync::Mutex};
     use tokio_util::sync::CancellationToken;
     use tower::ServiceExt;
@@ -257,17 +305,19 @@ mod code_mode {
         }
     }
 
-    /// Records who ran what and returns the source length as data.
+    /// Records who ran what, as which agent, and returns the source length as data.
     #[derive(Default)]
-    struct Runs(Mutex<Vec<(String, String)>>);
+    struct Runs(Mutex<Vec<(String, String)>>, Mutex<Vec<ToolCaller>>);
     #[async_trait::async_trait]
     impl UserCodeMode for Runs {
         async fn execute(
             &self,
             user: &MacroUserIdStr<'static>,
+            caller: &ToolCaller,
             request: ExecuteRequest,
             _: CancellationToken,
         ) -> Result<UserExecutionReceipt, CodeModeError> {
+            self.1.lock().unwrap().push(caller.clone());
             self.0
                 .lock()
                 .unwrap()
@@ -282,14 +332,111 @@ mod code_mode {
         }
     }
 
+    /// Direct tools that used to leak next to code mode on `tools/list`.
+    #[derive(Deserialize, schemars::JsonSchema)]
+    #[schemars(title = "NameSearch", description = "Search by name.")]
+    struct NameSearch {}
+    impl ToolAnnotated for NameSearch {
+        const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Search by name");
+    }
+    #[async_trait::async_trait]
+    impl ai_toolset::AsyncTool<()> for NameSearch {
+        type Output = serde_json::Value;
+        async fn call(
+            &self,
+            _: ai_toolset::ServiceContext<()>,
+            _: ai_toolset::RequestContext,
+        ) -> ai_toolset::ToolResult<Self::Output> {
+            Ok(serde_json::json!({"ok": true}))
+        }
+    }
+
+    #[derive(Deserialize, schemars::JsonSchema)]
+    #[schemars(title = "ReadContent", description = "Read a document.")]
+    struct ReadContent {}
+    impl ToolAnnotated for ReadContent {
+        const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read document");
+    }
+    #[async_trait::async_trait]
+    impl ai_toolset::AsyncTool<()> for ReadContent {
+        type Output = serde_json::Value;
+        async fn call(
+            &self,
+            _: ai_toolset::ServiceContext<()>,
+            _: ai_toolset::RequestContext,
+        ) -> ai_toolset::ToolResult<Self::Output> {
+            Ok(serde_json::json!({"ok": true}))
+        }
+    }
+
+    #[derive(Deserialize, schemars::JsonSchema)]
+    #[schemars(title = "EditDocument", description = "Edit a document.")]
+    struct EditDocument {}
+    impl ToolAnnotated for EditDocument {
+        const ANNOTATIONS: ToolAnnotations = ToolAnnotations::destructive("Edit document");
+    }
+    #[async_trait::async_trait]
+    impl ai_toolset::AsyncTool<()> for EditDocument {
+        type Output = serde_json::Value;
+        async fn call(
+            &self,
+            _: ai_toolset::ServiceContext<()>,
+            _: ai_toolset::RequestContext,
+        ) -> ai_toolset::ToolResult<Self::Output> {
+            Ok(serde_json::json!({"ok": true}))
+        }
+    }
+
+    #[derive(Deserialize, schemars::JsonSchema)]
+    #[schemars(title = "ListCalendarEvents", description = "List calendar events.")]
+    struct ListCalendarEvents {}
+    impl ToolAnnotated for ListCalendarEvents {
+        const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("List calendar events");
+    }
+    #[async_trait::async_trait]
+    impl ai_toolset::AsyncTool<()> for ListCalendarEvents {
+        type Output = serde_json::Value;
+        async fn call(
+            &self,
+            _: ai_toolset::ServiceContext<()>,
+            _: ai_toolset::RequestContext,
+        ) -> ai_toolset::ToolResult<Self::Output> {
+            Ok(serde_json::json!({"ok": true}))
+        }
+    }
+
+    const DIRECT_TOOLS: [&str; 4] = [
+        "EditDocument",
+        "ListCalendarEvents",
+        "NameSearch",
+        "ReadContent",
+    ];
+
+    fn catalog() -> Arc<AsyncToolCollection<()>> {
+        Arc::new(
+            AsyncToolCollection::new()
+                .add_tool::<NameSearch, ()>()
+                .add_tool::<ReadContent, ()>()
+                .add_tool::<EditDocument, ()>()
+                .add_tool::<ListCalendarEvents, ()>(),
+        )
+    }
+
+    fn catalog_service() -> AuthenticatedToolService<()> {
+        AuthenticatedToolService::new(
+            catalog(),
+            (),
+            "https://macro.com".to_owned(),
+            url::Url::parse("https://static-file-service.macro.com").unwrap(),
+            McpAnalytics::disabled(),
+        )
+    }
+
     fn app(runs: Arc<dyn UserCodeMode>) -> axum::Router {
         let surface = Arc::new(CodeModeSurface {
-            native: Arc::new(AsyncToolCollection::new()),
             tools: Arc::new(agent_code_mode::inbound::toolset::user_toolset()),
-            context: agent_code_mode::inbound::toolset::UserCodeModeToolContext {
-                service: runs,
-                cognition: None,
-            },
+            service: runs,
+            cognition: None,
             selector: Arc::new(Flag),
         });
         let mut config =
@@ -297,11 +444,12 @@ mod code_mode {
         config.stateful_mode = false;
         config.json_response = true;
         let service = StreamableHttpService::new(
-            move || Ok(empty_service().with_code_mode(surface.clone())),
+            move || Ok(catalog_service().with_code_mode(surface.clone())),
             Arc::new(LocalSessionManager::default()),
             config,
         );
-        // Stands in for the OAuth bearer middleware, which inserts the user id.
+        // Stands in for the bearer middleware's user id; each request carries
+        // its caller as the middleware would leave it.
         axum::Router::new()
             .nest_service("/mcp", service)
             .layer(axum::middleware::from_fn(
@@ -321,9 +469,24 @@ mod code_mode {
         method: &str,
         params: serde_json::Value,
     ) -> serde_json::Value {
+        rpc_as(app, user, Some(ToolCaller::ApiKey), method, params).await
+    }
+
+    /// An RPC the bearer middleware authenticated as `caller`.
+    async fn rpc_as(
+        app: axum::Router,
+        user: &str,
+        caller: Option<ToolCaller>,
+        method: &str,
+        params: serde_json::Value,
+    ) -> serde_json::Value {
+        let mut request = Request::builder();
+        if let Some(caller) = caller {
+            request = request.extension(caller);
+        }
         let response = app
             .oneshot(
-                Request::builder()
+                request
                     .method("POST")
                     .uri("/mcp")
                     .header("host", "localhost")
@@ -366,8 +529,19 @@ mod code_mode {
             tool_names(&flagged),
             ["DescribeCodeTools", "ExecuteCode", "ReadCodeDocs"]
         );
+        for leaked in DIRECT_TOOLS {
+            assert!(
+                !tool_names(&flagged).iter().any(|name| name == leaked),
+                "{leaked} must not appear on the code-mode catalog"
+            );
+        }
         let unflagged = rpc(app.clone(), UNFLAGGED, "tools/list", serde_json::json!({})).await;
-        assert!(tool_names(&unflagged).is_empty());
+        assert_eq!(tool_names(&unflagged), DIRECT_TOOLS);
+        assert!(
+            !tool_names(&unflagged)
+                .iter()
+                .any(|name| name == "ExecuteCode")
+        );
 
         let initialize = serde_json::json!({
             "protocolVersion": "2025-06-18",
@@ -375,19 +549,26 @@ mod code_mode {
             "clientInfo": {"name": "test", "version": "1"},
         });
         let flagged = rpc(app.clone(), FLAGGED, "initialize", initialize.clone()).await;
-        assert!(
-            flagged["result"]["instructions"]
-                .as_str()
-                .unwrap()
-                .contains("Code mode is on")
-        );
+        let flagged_instructions = flagged["result"]["instructions"].as_str().unwrap();
+        assert!(flagged_instructions.contains("Code mode is on"));
+        assert!(flagged_instructions.contains("ExecuteCode"));
+        assert!(flagged_instructions.contains("DescribeCodeTools"));
+        for leaked in [
+            "NameSearch",
+            "ReadContent",
+            "ContentSearch",
+            "Direct tools remain",
+        ] {
+            assert!(
+                !flagged_instructions.contains(leaked),
+                "code-mode initialize must not advertise {leaked}"
+            );
+        }
         let unflagged = rpc(app, UNFLAGGED, "initialize", initialize).await;
-        assert!(
-            !unflagged["result"]["instructions"]
-                .as_str()
-                .unwrap()
-                .contains("Code mode is on")
-        );
+        let unflagged_instructions = unflagged["result"]["instructions"].as_str().unwrap();
+        assert!(!unflagged_instructions.contains("Code mode is on"));
+        assert!(unflagged_instructions.contains("ContentSearch"));
+        assert!(unflagged_instructions.contains("NameSearch"));
     }
 
     #[tokio::test]
@@ -403,7 +584,7 @@ mod code_mode {
         assert!(unflagged.get("error").is_some());
         assert!(runs.0.lock().unwrap().is_empty());
 
-        let flagged = rpc(app, FLAGGED, "tools/call", call).await;
+        let flagged = rpc(app.clone(), FLAGGED, "tools/call", call).await;
         assert_eq!(
             flagged["result"]["structuredContent"]["status"],
             "succeeded"
@@ -414,6 +595,70 @@ mod code_mode {
                 format!("macro|{FLAGGED}"),
                 "export async function main() { return {data: 1}; }".to_owned()
             )]
+        );
+    }
+
+    /// `ExecuteCode` runs for exactly the caller the middleware
+    /// authenticated, one per kind, so its credential can be minted for it.
+    #[tokio::test]
+    async fn execute_code_runs_for_each_kind_of_caller() {
+        let runs = Arc::new(Runs::default());
+        let app = app(runs.clone());
+        let call = serde_json::json!({
+            "name": "ExecuteCode",
+            "arguments": {"source": "export async function main() { return {data: 1}; }"},
+        });
+        let callers = [
+            ToolCaller::Agent(BotId::TEST_A),
+            ToolCaller::McpClient {
+                name: Some("Claude Code".to_owned()),
+            },
+            ToolCaller::ApiKey,
+        ];
+
+        for caller in callers.clone() {
+            rpc_as(
+                app.clone(),
+                FLAGGED,
+                Some(caller),
+                "tools/call",
+                call.clone(),
+            )
+            .await;
+        }
+
+        assert_eq!(*runs.1.lock().unwrap(), callers);
+    }
+
+    /// A request the middleware left without a caller runs nothing.
+    #[tokio::test]
+    async fn execute_code_without_a_caller_runs_nothing() {
+        let runs = Arc::new(Runs::default());
+        let app = app(runs.clone());
+        let call = serde_json::json!({
+            "name": "ExecuteCode",
+            "arguments": {"source": "export async function main() { return {data: 1}; }"},
+        });
+
+        let response = rpc_as(app, FLAGGED, None, "tools/call", call).await;
+
+        assert!(response.get("error").is_some());
+        assert!(runs.1.lock().unwrap().is_empty());
+    }
+
+    #[tokio::test]
+    async fn hidden_native_tools_remain_callable_in_code_mode() {
+        let app = app(Arc::new(Runs::default()));
+        let result = rpc(
+            app,
+            FLAGGED,
+            "tools/call",
+            serde_json::json!({"name": "NameSearch", "arguments": {}}),
+        )
+        .await;
+        assert_eq!(
+            result["result"]["structuredContent"],
+            serde_json::json!({"ok": true})
         );
     }
 
@@ -436,6 +681,7 @@ mod code_mode {
         async fn issue(
             &self,
             _: &MacroUserIdStr<'static>,
+            _: &ToolCaller,
         ) -> Result<code_execution::domain::RunEnvironment, CodeModeError> {
             Ok(code_execution::domain::RunEnvironment::default())
         }

@@ -17,7 +17,7 @@ export function DesktopAppDownload() {
             href="https://github.com/macro-inc/macro/releases/latest"
             target="_blank"
             rel="noopener noreferrer"
-            class={buttonClasses({ variant: 'outline', size: 'md' })}
+            class={buttonClasses({ variant: 'secondary', size: 'md' })}
           >
             Download desktop app
           </a>

@@ -73,7 +73,7 @@ function BackToExternal() {
         )
       }
     >
-      <CaretLeftIcon />
+      <CaretLeftIcon class="size-3.5 touch:size-6" />
     </Button>
   );
 }

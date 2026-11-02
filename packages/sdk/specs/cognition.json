@@ -1046,6 +1046,87 @@
         }
       }
     },
+    "/database-query": {
+      "post": {
+        "tags": ["database_query"],
+        "operationId": "generate_database_query",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/DatabaseQueryRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DatabaseQueryAnswer"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          },
+          "504": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StructuredCompletionError"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/decisions": {
       "post": {
         "tags": ["decisions"],
@@ -1152,6 +1233,108 @@
               "text/plain": {
                 "schema": {
                   "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/images/generate": {
+      "post": {
+        "tags": ["images"],
+        "summary": "Generate an image with Nano Banana and store it as a static file owned by\nthe caller. Charged to the acting user's AI allowance.",
+        "operationId": "generate_image",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/GenerateImageRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "The stored image",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateImageResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid prompt or reference",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateImageErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "AI allowance exhausted",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateImageErrorBody"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "A reference is not accessible, or no user to bill",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateImageErrorBody"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The model declined to render the prompt",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateImageErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "The image could not be read or stored",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateImageErrorBody"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "The image model request failed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateImageErrorBody"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "Image generation or usage validation unavailable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/GenerateImageErrorBody"
                 }
               }
             }
@@ -1444,7 +1627,7 @@
       },
       "post": {
         "tags": ["mcp"],
-        "summary": "Add a new MCP server for the authenticated user.",
+        "summary": "Add a new MCP server for the authenticated user. A URL the user already\nhas is returned as stored, keeping its credentials.",
         "operationId": "add_mcp_server",
         "requestBody": {
           "content": {
@@ -1463,6 +1646,16 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ServerResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
                 }
               }
             }
@@ -2567,7 +2760,8 @@
           "agent_repository_choice",
           "agent_mode_choice",
           "dictation",
-          "image_generation"
+          "image_generation",
+          "email_focus"
         ]
       },
       "AssistantMessagePart": {
@@ -3359,6 +3553,100 @@
         ],
         "description": "What a successful tool call committed to the user's databases."
       },
+      "DatabaseQueryAnswer": {
+        "type": "object",
+        "description": "A proposal, never stored results or permission to read the named database.",
+        "required": [
+          "answerable",
+          "sql",
+          "explanation",
+          "title",
+          "displayMode"
+        ],
+        "properties": {
+          "answerable": {
+            "type": "boolean"
+          },
+          "chart": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/DatabaseQueryChart"
+              }
+            ]
+          },
+          "databaseId": {
+            "type": ["string", "null"]
+          },
+          "displayMode": {
+            "$ref": "#/components/schemas/DatabaseQueryDisplayMode"
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "sql": {
+            "type": "string"
+          },
+          "title": {
+            "type": "string"
+          }
+        },
+        "additionalProperties": false
+      },
+      "DatabaseQueryChart": {
+        "type": "object",
+        "description": "Chart fields name the proposal's result columns exactly.",
+        "required": ["x", "y", "title", "stack"],
+        "properties": {
+          "color": {
+            "type": ["string", "null"]
+          },
+          "stack": {
+            "type": "boolean"
+          },
+          "title": {
+            "type": "string"
+          },
+          "x": {
+            "type": "string"
+          },
+          "y": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            }
+          }
+        },
+        "additionalProperties": false
+      },
+      "DatabaseQueryDisplayMode": {
+        "type": "string",
+        "description": "Supported live-answer presentations.",
+        "enum": ["scalar", "table", "bar", "line", "area", "scatter", "pie"]
+      },
+      "DatabaseQueryRequest": {
+        "type": "object",
+        "description": "The question and untrusted schema hints; authorization remains in the read services.",
+        "required": ["model", "prompt", "sql", "schema"],
+        "properties": {
+          "error": {
+            "type": ["string", "null"],
+            "description": "The SQL engine's error from one failed proposal, used for a bounded repair."
+          },
+          "model": {
+            "type": "string"
+          },
+          "prompt": {
+            "type": "string"
+          },
+          "schema": {},
+          "sql": {
+            "type": "string"
+          }
+        }
+      },
       "DecisionErrorBody": {
         "type": "object",
         "description": "Sanitized, machine-readable failure of a decision request.",
@@ -4018,6 +4306,141 @@
         "type": "string",
         "description": "A `provider/model` id every user may request without professional features.",
         "enum": ["google/gemini-3.8-flash"]
+      },
+      "GenerateImageAspectRatio": {
+        "type": "string",
+        "description": "Shape of the generated image.",
+        "enum": ["square", "landscape", "portrait", "widescreen", "tall"]
+      },
+      "GenerateImageErrorBody": {
+        "type": "object",
+        "description": "Sanitized, machine-readable failure of an image request.",
+        "required": ["error", "code"],
+        "properties": {
+          "code": {
+            "type": "string",
+            "description": "Stable failure code."
+          },
+          "error": {
+            "type": "string",
+            "description": "Explanation without provider or storage diagnostics."
+          }
+        }
+      },
+      "GenerateImageReference": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "An image document the caller can view.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The Macro document ID."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["document"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "An uploaded or previously generated static file.",
+            "required": ["id", "type"],
+            "properties": {
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The static file ID."
+              },
+              "type": {
+                "type": "string",
+                "enum": ["staticFile"]
+              }
+            }
+          }
+        ],
+        "description": "A reference image already stored in Macro."
+      },
+      "GenerateImageRequest": {
+        "type": "object",
+        "description": "What image to generate.",
+        "required": ["prompt"],
+        "properties": {
+          "aspectRatio": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GenerateImageAspectRatio",
+                "description": "Shape of the image; the model default (square) when omitted."
+              }
+            ]
+          },
+          "prompt": {
+            "type": "string",
+            "description": "Description of the image: subject, style, composition, colours, and any text to render."
+          },
+          "referenceImages": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/GenerateImageReference"
+            },
+            "description": "Up to three reference images, in the order the prompt refers to them."
+          }
+        }
+      },
+      "GenerateImageResponse": {
+        "type": "object",
+        "description": "The stored generated image.",
+        "required": [
+          "staticFileId",
+          "url",
+          "mimeType",
+          "sizeBytes",
+          "width",
+          "height"
+        ],
+        "properties": {
+          "height": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Intrinsic pixel height.",
+            "minimum": 0
+          },
+          "mimeType": {
+            "type": "string",
+            "description": "IANA media type of the image, e.g. `image/png`."
+          },
+          "note": {
+            "type": ["string", "null"],
+            "description": "Commentary the model produced alongside the image, when any."
+          },
+          "sizeBytes": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Size of the image in bytes.",
+            "minimum": 0
+          },
+          "staticFileId": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Static file ID, reusable as a reference image or a message attachment."
+          },
+          "url": {
+            "type": "string",
+            "description": "Permanent URL of the image."
+          },
+          "width": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Intrinsic pixel width.",
+            "minimum": 0
+          }
+        }
       },
       "GenericErrorResponse": {
         "type": "object",

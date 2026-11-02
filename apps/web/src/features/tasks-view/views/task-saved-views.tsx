@@ -11,7 +11,13 @@ import BookmarkIcon from '@phosphor/bookmark-simple.svg';
 import DotsIcon from '@phosphor/dots-three.svg';
 import InfoIcon from '@phosphor/info.svg';
 import WarningIcon from '@phosphor/warning-circle.svg';
-import { Button, type DialogHandle, Dropdown, openDialog } from '@ui';
+import {
+  Button,
+  ButtonGroup,
+  type DialogHandle,
+  Dropdown,
+  openDialog,
+} from '@ui';
 import { ok } from 'neverthrow';
 import { batch, For, getOwner, type Owner, onCleanup, Show } from 'solid-js';
 import { v4 as uuid } from 'uuid';
@@ -32,6 +38,7 @@ import {
   SavedViewDialog,
 } from '../../saved-views/views/saved-view-dialogs';
 import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
+import { TASK_DUE_DATE_BUCKETS } from '../core/task-due-date';
 import {
   decodeTaskSavedView,
   materializeTaskSavedView,
@@ -54,6 +61,15 @@ function TaskSavedViewSummary(props: {
   const { state } = useTasksView();
   const filters = useTaskFilters();
   const selection = () => materializeTaskSavedView(props.config);
+  const dueDateLabel = () => {
+    const filter = props.config.dueDate;
+    if (!filter) return;
+    if (filter.type === 'range')
+      return `Custom range (${filter.start ?? 'Any'} – ${filter.end ?? 'Any'})`;
+    if (filter.type === 'has_due_date') return 'Has due date';
+    return TASK_DUE_DATE_BUCKETS.find((bucket) => bucket.id === filter.type)
+      ?.label;
+  };
   return (
     <>
       <Show when={props.omittedFilters?.length}>
@@ -79,6 +95,7 @@ function TaskSavedViewSummary(props: {
           </Show>
         )}
       </For>
+      <Show when={dueDateLabel()}>{(label) => <p>Due date: {label()}</p>}</Show>
       <p>Layout: {LAYOUT_LABELS[props.config.layout]}</p>
       <p>
         Group by:{' '}
@@ -93,7 +110,7 @@ function TaskSavedViewSummary(props: {
         {props.config.sort
           .map(
             (sort) =>
-              `${TASK_SORT_OPTIONS.find((option) => option.id === sort.id)?.label} (${sort.reversed ? 'oldest first' : 'newest first'})`
+              `${TASK_SORT_OPTIONS.find((option) => option.id === sort.id)?.label} (${sort.id.startsWith('due_date_') ? 'missing last' : sort.id === 'status' || sort.id === 'priority' ? (sort.reversed ? 'reverse order' : 'option order') : sort.reversed ? 'oldest first' : 'newest first'})`
           )
           .join(', ') || 'Default'}
       </p>
@@ -202,6 +219,7 @@ function useCreateTaskSavedViewDialog(owner = getOwner()) {
                 layout: restored.layout,
                 groupBy: restored.groupBy,
                 sort: restored.sort,
+                dueDate: restored.dueDate,
               });
             }
             selectCreatedSavedView(created.id);
@@ -409,7 +427,7 @@ function TaskSavedViewRows(props: {
               <Button
                 ref={attachCreateHotkeys}
                 size="sm"
-                variant="outline"
+                variant="secondary"
                 onClick={() => run(startSavedView)}
               >
                 <PlusIcon class="size-3.5" />
@@ -492,11 +510,9 @@ export function TaskSaveViewButton() {
   };
   return (
     <Show when={visible()}>
-      <HeaderActionGroup label="Save task view">
-        <Button size="md" variant="cta" onClick={() => create()}>
-          Save view
-        </Button>
-      </HeaderActionGroup>
+      <Button variant="primary" onClick={() => create()}>
+        Save view
+      </Button>
     </Show>
   );
 }
@@ -522,7 +538,7 @@ export function TaskSavedViewCreateBanner(props: TaskSavedViewDialogProps) {
       >
         <InfoIcon class="size-4 shrink-0 text-accent" aria-hidden="true" />
         <span class="min-w-0 flex-1">Save these filters as a view</span>
-        <Button size="sm" variant="cta" onClick={showCreate}>
+        <Button size="sm" variant="primary" onClick={showCreate}>
           <BookmarkIcon class="size-4" aria-hidden="true" />
           Save view
         </Button>
@@ -589,7 +605,8 @@ export function TaskSavedViewMenu() {
             ref={trigger}
             size="icon-md"
             variant="ghost"
-            label="Saved view actions"
+            aria-label="Saved view actions"
+            tooltip="Saved view actions"
           >
             <DotsIcon class="size-4" />
           </Dropdown.Trigger>
@@ -668,45 +685,43 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
   return (
     <>
       <Show when={savedViews?.view().kind === 'new' || selected()?.dirty}>
-        <HeaderActionGroup label="Saved view actions">
-          <Show
-            when={savedViews?.view().kind === 'new'}
-            fallback={
-              <>
-                <Show when={selected()?.record.ownerId === viewerId()}>
-                  <Button
-                    size="md"
-                    variant="cta"
-                    class="touch:order-last"
-                    disabled={update.isPending || !!selected()?.issues.length}
-                    title={
-                      selected()?.issues.length
-                        ? 'Update the app or remove unsupported settings before saving.'
-                        : undefined
-                    }
-                    onClick={() => fireAndForget(save(), 'saved-views')}
-                  >
-                    Save changes
-                  </Button>
-                </Show>
-                <Button
-                  size="md"
-                  variant="ghost"
-                  onClick={() => savedViews?.reset()}
+        <Show
+          when={savedViews?.view().kind === 'new'}
+          fallback={
+            <HeaderActionGroup label="Saved view actions">
+              <Show when={selected()?.record.ownerId === viewerId()}>
+                <ButtonGroup.Button
+                  variant="primary"
+                  class="touch:order-last"
+                  disabled={update.isPending || !!selected()?.issues.length}
+                  title={
+                    selected()?.issues.length
+                      ? 'Update the app or remove unsupported settings before saving.'
+                      : undefined
+                  }
+                  onClick={() => fireAndForget(save(), 'saved-views')}
                 >
-                  Reset
-                </Button>
-              </>
-            }
-          >
-            <Button size="md" variant="cta" onClick={() => showCreate()}>
+                  Save changes
+                </ButtonGroup.Button>
+              </Show>
+              <ButtonGroup.Button
+                variant="ghost"
+                onClick={() => savedViews?.reset()}
+              >
+                Reset
+              </ButtonGroup.Button>
+            </HeaderActionGroup>
+          }
+        >
+          <div class="flex items-center gap-2">
+            <Button variant="primary" onClick={() => showCreate()}>
               Save view
             </Button>
-            <Button size="md" variant="ghost" onClick={leaveSavedView}>
+            <Button variant="ghost" onClick={leaveSavedView}>
               Cancel
             </Button>
-          </Show>
-        </HeaderActionGroup>
+          </div>
+        </Show>
       </Show>
       <Show when={failure()}>
         {(error) => (
@@ -721,21 +736,19 @@ export function TaskSavedViewActions(props: TaskSavedViewDialogProps = {}) {
             <Show
               when={error().graphQLErrors[0]?.extensions.code === 'CONFLICT'}
             >
-              <Button
-                size="sm"
+              <ButtonGroup.Button
                 variant="ghost"
                 onClick={() => fireAndForget(reload(), 'saved-views')}
               >
                 Reload saved view
-              </Button>
+              </ButtonGroup.Button>
             </Show>
-            <Button
-              size="sm"
+            <ButtonGroup.Button
               variant="ghost"
               onClick={() => showCreate(selected()?.record)}
             >
               Duplicate
-            </Button>
+            </ButtonGroup.Button>
           </HeaderActionGroup>
         )}
       </Show>
@@ -753,7 +766,9 @@ export function TaskSavedViewFailure() {
   return (
     <div class="flex h-full flex-col items-center justify-center gap-4 p-6 text-sm">
       <p role="alert">{message()}</p>
-      <Button onClick={() => setTab('my-tasks')}>Return to Tasks</Button>
+      <Button variant="ghost" onClick={() => setTab('my-tasks')}>
+        Return to Tasks
+      </Button>
     </div>
   );
 }

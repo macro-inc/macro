@@ -43,7 +43,8 @@ current, ingests the traffic of added chats (`external_chat`) through `whatsapp_
   non-zero so ECS replaces it), release announcements, and discovery through
   `SessionService` (`discoverable_accounts`, `fleet_health`).
 - `outbound/signals.rs`: `LISTEN` for `whatsapp_{account_released,
-  pairing_requested, send_requested, groups_requested, account_changed}`.
+  pairing_requested, send_requested, roster_requested, lookup_requested,
+  account_changed}`.
   Payloads are `external_chat::signals::Signal` JSON; each
   one's `traceparent` parents a `whatsapp.signal.receive` span that travels
   with the signal (`ports::Traced`): the supervisor's work and the runner's
@@ -87,15 +88,26 @@ current, ingests the traffic of added chats (`external_chat`) through `whatsapp_
   sync bundles, live messages (any chat) and contact/archive/pin events into
   `ChatUpdate`s (`events.rs`: `history_chats`, `message_chat`,
   `chat_setting`; direct chats by phone number) that the runner stores with
-  `update_chats`. On-demand history answers are parsed with
+  `update_chats`. The device store's saved contacts (`events::contact_chats`:
+  address-book names only, not people merely seen in groups) are listed on
+  `Connected` and every `AppStateSyncComplete`, and a `Contact` event lists
+  its contact, so the owner can start a chat with them.
+- Phone-number lookups (`domain/account/lookups.rs`): on
+  `whatsapp_lookup_requested`, on connect and on every tick, the runner
+  answers pending lookups with one `IsOnWhatsApp` usync each
+  (`WhatsAppSession::look_up`; whatsmeow stores the number's LID pairing, so a
+  later message by LID lands in the same chat) and records the answer
+  (`events::lookup_answer` names it like any chat). Only explicit owner
+  lookups, rate-limited in DSS: WhatsApp bans bulk usync. On-demand history answers are parsed with
   `Client::parse_web_message`, ingested as history events through the inbound
-  gate, then reported as a `HistoryPage`. The runner's `backfill` asks the
-  phone for pages of added groups (`request_history`, plus `request_message`
-  for an anchor that predates adoption), marks a group with no anchor
-  `waiting_for_message` (an `update_chats` that gives it one returns true and
-  the runner imports at once), marks unanswered requests
-  `waiting_for_phone` after `backfill_timeout` and retries after
-  `backfill_retry` or on reconnect.
+  gate, then reported as a `HistoryPage`. The runner's `backfill`
+  (`domain/account/backfill.rs`) only continues imports the owner started
+  (`pending`, on `whatsapp_history_requested`, connect and tick): it asks the
+  phone for pages (`request_history`, plus `request_message` for an anchor
+  that predates adoption), the next one as each answer lands, and marks a
+  request unanswered after `backfill_timeout` `waiting_for_phone`. It never
+  asks the phone on its own: each request wakes WhatsApp on the phone (on
+  iOS, a "syncing stopped" notification when it can't finish).
 - QR pairing: whatsmeow rotates codes (60 s, then 20 s each) and then
   times out; that timeout ends the pairing as `expired`
   (`SessionEvent::PairExpired`), not `failed`, so the web starts a new one.
@@ -126,7 +138,8 @@ current, ingests the traffic of added chats (`external_chat`) through `whatsapp_
 Spans: `whatsapp.account.{lease,release,rescan,connect}`,
 `whatsapp.inbound.ingest`, `whatsapp.media.import`, `whatsapp.send.dispatch`
 (parented on the trace of the request that recorded the send),
-`whatsapp.groups.{refresh,event}`, `whatsapp.signal.receive`,
+`whatsapp.groups.{refresh,event}`, `whatsapp.contacts.sync`, `whatsapp.lookup`
+(outcome `found`/`not_on_whatsapp`/`failed`), `whatsapp.signal.receive`,
 `whatsapp.account.signal`, `whatsapp.drain`,
 `whatsapp.history.{sync,page}`, `whatsapp.backfill.request`
 (`whatsapp.inbound.ingest` records the message `kind`; `whatsapp.history.page`
@@ -140,7 +153,9 @@ JIDs, phone numbers, QR codes or message text.
 
 - **Stop all WhatsApp traffic**: scale the ECS service to 0 tasks. Accounts
   stay `connected` and are picked up again when it scales back; sends recorded
-  meanwhile expire unsent after ten minutes. The web flag
+  meanwhile expire unsent after ten minutes. A deploy restores the task
+  count in `infra/stacks/whatsapp-session-service/service.ts` (2 in prod, 1 in
+  dev). The web flag
   `enable-whatsapp-linked` only hides the UI; the API keeps answering.
 - **Stuck lease** (an account no replica runs, `accounts_unowned` > 0): find
   the holder with `SELECT pid FROM pg_locks WHERE locktype = 'advisory' AND

@@ -1,5 +1,5 @@
 mod backfill_attachment;
-mod backfill_message;
+pub(in crate::pubsub) mod backfill_message;
 mod backfill_thread;
 pub(crate) mod db_error;
 mod deferral;

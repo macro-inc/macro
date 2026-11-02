@@ -15,7 +15,8 @@ use bot_id::BotId;
 use chrono_tz::Tz;
 use macro_user_id::user_id::MacroUserIdStr;
 use trigger_context::{
-    ContextPerson, RoutineContext, RoutineFiring, RoutineTrigger as ContextTrigger, TriggerContext,
+    ContextPerson, GithubWatch, RoutineContext, RoutineFiring, RoutineTrigger as ContextTrigger,
+    TriggerContext,
 };
 
 use super::{
@@ -305,6 +306,16 @@ fn triggers(trigger: &ActionTrigger) -> Vec<ContextTrigger> {
                     .map(|event| event.as_str().to_owned())
                     .collect(),
                 entity_ids: filter.ids().map(<[_]>::to_vec).unwrap_or_default(),
+                github: filter.github().map(|selector| GithubWatch {
+                    events: selector.events().to_vec(),
+                    actions: selector.actions().to_vec(),
+                    repositories: selector.repositories().to_vec(),
+                    include_bots: selector.include_bots(),
+                }),
+                payload_match: filter
+                    .payload()
+                    .map(|conditions| conditions.as_slice().iter().map(|c| c.describe()).collect())
+                    .unwrap_or_default(),
                 condition: filter
                     .condition()
                     .map(|condition| condition.as_str().to_owned()),

@@ -37,6 +37,8 @@ Old copied `/app/call/<callId>` links redirect to the Calls detail without losin
 the transcript target. Existing `/app/drive/call/<callId>` links still work.
 The detail shows a loading state, recording/transcript/summary, Share, and a call
 side panel below the breadcrumb header; a failed load shows Retry.
+While the call is in progress, a `Join call` button under the title joins it
+(desktop and phone); it is hidden once you are in that call.
 `call_transcript_id=<segmentId>` seeks the matching video segment after loading.
 Check a direct link, both old link formats, a Calls-list click, a second split,
 the breadcrumb return, browser Back/Forward, and clicking the same transcript
@@ -64,7 +66,9 @@ channel.
 
 The desktop Chat sidebar lists every live channel call and quick call in a `Live`
 section above the conversations. Each row reads `Join`, or `Open` when you are
-already in that call, which returns to the channel's Call tab. To see the section
+already in that call, which returns to the channel's Call tab. A channel call that is
+still ringing for you also shows a `Dismiss` button, which declines it like the
+conversation row's Decline. To see the section
 without starting a real call, answer `/call/active` and `/call/<channelId>/active`
 with a fake call through CDP `Fetch` interception.
 
@@ -180,7 +184,7 @@ Check channel, scheduled, and instant calls with another participant remaining
 and as the last participant, including at phone width. During a delayed leave,
 the page shows `Leaving call…` without flashing setup; navigating elsewhere must
 not be undone when cleanup finishes. Inline channel call controls return to
-Messages on leave and open the record when that hangup ends the call.
+Messages on leave and stay in the channel, even when that hangup ends the call.
 `Copy Meeting Url` is available during the call.
 Rejoining from a new page waits for the prior page's pending leave cleanup before
 requesting another connection, so a slow leave cannot disconnect the replacement.
@@ -294,9 +298,27 @@ iOS: tap it to reopen the drawer, drag it to another corner, or drag it past a s
 to tuck it away (an edge tab brings it back once someone else is in the call). Leaving the app continues the call in system PiP (you and the
 active speaker); tapping PiP shows Android's menu with Mute, **Leave** and expand,
 which reopens the drawer. **Open call controls** in the web call controls also
-reopens the drawer. Leaving the channel does not end the call. Incoming calls
-expose Answer/Decline in the **Calls** notification channel, including while
-locked/backgrounded; while Android 14+ blocks full-screen notifications, a toast
+reopens the drawer. Leaving the channel does not end the call. While ringing,
+a locked phone opens a full-screen incoming-call screen when permitted, with
+caller initials/name, channel context and large Answer/Decline controls. Back
+hides this screen and leaves the call available in its notification. Incoming calls
+also expose Answer/Decline in the **Calls** notification channel, including while
+locked/backgrounded. When full-screen access is unavailable, the notification
+remains usable; Answer opens the call screen directly for microphone permission
+and retry errors. Verify allowed/denied full-screen access, missing microphone
+permission, cancellation/expiry and stale notification actions after a replacement
+call arrives. While Android 14+ blocks full-screen notifications, a toast
 offers **Allow** (system setting) or **Hide**. PiP is a native, device-dependent
 flow. Browser-only tests cannot validate Telecom, FCM wakeup or background media;
 follow the hardware matrix in [Android development](../development/android.md#native-calling).
+
+Synthetic emulator captures: [incoming screen](media/calls/android-incoming-call.png),
+[notification fallback](media/calls/android-call-notification.png), and
+[microphone permission after Answer](media/calls/android-call-microphone-permission.png).
+
+Native Android call spans use service `android-calls` and the opaque `call.id`.
+The existing telemetry gate also controls cold calls. W3C context connects the
+push producer, notification/activity, permission and answer phases, and status
+HTTP requests; connection and cancellation outcomes end the incoming trace.
+For local collector verification and the exporter fixture, see
+[native call tracing](../development/android.md#native-call-tracing).

@@ -72,7 +72,7 @@ export function ModelSelector(props: ModelSelectorProps) {
       placement="top-end"
       triggerClass={cn(
         'h-8 w-auto gap-1.5 border-0 px-2 text-sm text-ink-subtle hover:bg-hover',
-        'not-touch:h-[33.75px] not-touch:text-base not-touch:gap-[5.625px] not-touch:px-[7.5px] not-touch:[&_svg]:size-[15px] not-touch:light-mode:text-composer-placeholder not-touch:light-mode:font-normal',
+        'not-touch:h-[33.75px] not-touch:text-base not-touch:gap-[5.625px] not-touch:px-[7.5px] not-touch:light-mode:text-composer-placeholder not-touch:light-mode:font-normal',
         props.compact && 'not-touch:p-[3.75px]',
         isMobile() &&
           'touch:min-h-11 touch:min-w-11 justify-center rounded-full',

@@ -241,6 +241,7 @@ impl SoupService for CountingSoupService {
                     },
                 );
                 soup::domain::models::SoupProjectionHydration {
+                    sort_key: None,
                     item,
                     document_server_facts,
                 }
@@ -311,12 +312,22 @@ impl SoupService for CountingSoupService {
         self.grouped_calls.fetch_add(1, Ordering::SeqCst);
         Ok(vec![
             soup::domain::models::grouping::ItemGroupingInfo {
+                sort_key: None,
+                display_order: None,
+                document_server_facts: Some(soup::domain::models::SoupDocumentServerFacts {
+                    is_email_attachment: false,
+                    is_important: true,
+                    status_option_ids: Vec::new(),
+                }),
                 key: "document".to_string(),
                 total_group_count: 3,
                 index_in_group: 1,
                 item: grouped_document(Uuid::from_u128(1)),
             },
             soup::domain::models::grouping::ItemGroupingInfo {
+                sort_key: None,
+                display_order: None,
+                document_server_facts: None,
                 key: "document".to_string(),
                 total_group_count: 3,
                 index_in_group: 2,
@@ -324,6 +335,15 @@ impl SoupService for CountingSoupService {
             },
         ]
         .into_iter())
+    }
+
+    async fn group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _group_by: &'a soup::domain::models::grouping::GroupByField,
+        _keys: &'a [String],
+    ) -> Result<soup::domain::models::grouping::GroupLabels, soup::domain::models::SoupErr> {
+        Ok(Default::default())
     }
 
     async fn caller_tag_sets<'a>(
@@ -811,6 +831,7 @@ impl graphql_email::SoupEmailThreadMetadataEdgeReader for RecordingEmailContentR
                     graphql_email::EmailThreadMetadataLoad::Found(EmailThreadMetadata {
                         thread_id,
                         link_id: Uuid::from_u128(900 + thread_id.as_u128()),
+                        has_received_mail: true,
                         latest_inbound_message_ts: (thread_id.as_u128() % 2 == 1)
                             .then(Default::default),
                         latest_outbound_message_ts: (thread_id.as_u128() % 2 == 1)
@@ -2157,6 +2178,28 @@ async fn flat_soup_emits_server_fact_supplements_for_documents_and_mail() {
             .unwrap()
     );
     assert!(mail_supplement.mail_facts().is_some());
+    assert_eq!(
+        mail_supplement.target_profile().token().as_str(),
+        "soup-mail-v2"
+    );
+    let current = harness.schema.execute(
+        harness.request("{ user { soup(input: {initial: {}}) { items { __typename cacheProjection } } } }", authenticated_parts())
+            .data(crate::MailCacheProfile::from_advertised(Some("soup-mail-v5")))
+    ).await;
+    assert!(current.errors.is_empty(), "{:?}", current.errors);
+    let current = current.data.into_json().unwrap();
+    let current = current["user"]["soup"]["items"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|item| item["__typename"] == "GraphqlSoupEmailThread")
+        .unwrap();
+    let current = soup_filter_projection::decode_cache_projection_supplement(
+        current["cacheProjection"].as_str().unwrap(),
+    )
+    .unwrap();
+    assert_eq!(current.target_profile().token().as_str(), "soup-mail-v5");
+    assert_eq!(current.mail_facts(), mail_supplement.mail_facts());
     for (typename, id) in [
         ("GraphqlSoupProject", project_id),
         ("GraphqlSoupChat", chat_id),
@@ -2226,7 +2269,7 @@ async fn group_soup_nests_items_in_bins_and_reuses_cached_authorization() {
 
     let response = harness
         .execute(
-            "{ user { id groupSoup(input: {initial: {groupBy: {field: ENTITY_TYPE}}}) { bins { key totalCount nextCursor items { id entityType } } } } }",
+            "{ user { id groupSoup(input: {initial: {groupBy: {field: ENTITY_TYPE}}}) { bins { key totalCount displayOrder nextCursor items { id entityType cacheProjection } } } } }",
         )
         .await;
 
@@ -2238,6 +2281,18 @@ async fn group_soup_nests_items_in_bins_and_reuses_cached_authorization() {
     assert_eq!(harness.authorization_calls.load(Ordering::SeqCst), 1);
     let cursor = bin["nextCursor"].as_str().unwrap();
     assert_eq!(bin["items"].as_array().unwrap().len(), 2);
+    assert_eq!(bin["displayOrder"], 0);
+    let items = bin["items"].as_array().unwrap();
+    let supplement = soup_filter_projection::decode_cache_projection_supplement(
+        items[0]["cacheProjection"].as_str().unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        supplement.record_key(),
+        &predicate_index::RecordKey::new(format!("GraphqlSoupDocument:{}", Uuid::from_u128(1)))
+            .unwrap()
+    );
+    assert!(items[1]["cacheProjection"].is_null());
 
     let continuation = format!(
         "{{ user {{ groupSoup(input: {{continuation: {{groupBy: {{field: ENTITY_TYPE}}, groupKey: \"document\", cursor: \"{cursor}\"}}}}) {{ bins {{ key }} }} }} }}"

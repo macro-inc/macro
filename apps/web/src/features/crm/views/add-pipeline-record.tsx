@@ -371,10 +371,10 @@ export function AddPipelineRecordDialog(
                 <Dialog.CloseButton
                   tabIndex={-1}
                   aria-label="Close"
-                  class={buttonClasses({ size: 'icon-composer' })}
+                  class={buttonClasses({ size: 'icon-md' })}
                   disabled={pending()}
                 >
-                  <XIcon />
+                  <XIcon class="size-4 shrink-0 touch:size-6" />
                 </Dialog.CloseButton>
               </EntityComposer.Header>
               <EntityComposer.Main class="gap-5 overflow-y-auto px-5 py-5">
@@ -404,7 +404,7 @@ export function AddPipelineRecordDialog(
               </EntityComposer.Main>
               <EntityComposer.Footer class="items-center justify-end border-t border-edge-muted/60 px-5 py-3">
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   class="gap-3 not-touch:h-[33.75px] not-touch:px-[15px]"
                   disabled={pending()}
                   onClick={close}

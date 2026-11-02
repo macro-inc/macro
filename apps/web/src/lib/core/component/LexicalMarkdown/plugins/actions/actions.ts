@@ -1,5 +1,5 @@
+import type { ComposeTaskSuccess } from '@app/features/task-composer/core/types';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import type { ComposeTaskSuccess } from '@block-md/component/ComposeTask';
 import { toast } from '@core/component/Toast/Toast';
 import { enableDatabases, isFeatureEnabled } from '@core/constant/featureFlags';
 import { trackMention } from '@core/signal/mention';

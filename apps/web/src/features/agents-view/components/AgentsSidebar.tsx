@@ -342,7 +342,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
               />
               <Show when={isTouchDevice()}>
                 <CollapsibleSection.Action
-                  label="Search conversations"
+                  aria-label="Search conversations"
                   aria-pressed={searchOpen()}
                   class={cn(searchOpen() && 'bg-active text-ink')}
                   onClick={() => (searchOpen() ? closeSearch() : openSearch())}
@@ -351,7 +351,7 @@ export function AgentsSidebar(props: AgentsSidebarProps) {
                 </CollapsibleSection.Action>
               </Show>
               <CollapsibleSection.Action
-                label="Show hidden routine runs"
+                aria-label="Show hidden routine runs"
                 aria-pressed={props.showUnlistedRuns}
                 class={cn(props.showUnlistedRuns && 'bg-active text-ink')}
                 onClick={() =>

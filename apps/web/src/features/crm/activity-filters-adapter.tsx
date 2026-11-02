@@ -9,11 +9,11 @@ import { CALL_AUDIENCES } from '../calls-view/core/call-filters';
 import { createEmailFilters } from '../email-view/filters/use-email-filters';
 import type { ActivityFilters } from './context/crm-context';
 import type { CrmActivityViewState } from './core/activity-view';
-import type { CrmActivityTab } from './core/navigation';
+import type { CrmSoupActivityTab } from './core/navigation';
 
 /** Normal Email facets and the applicable Notes/Calls filters, with local intent. */
 export function createCrmActivityFilters(
-  tab: CrmActivityTab,
+  tab: CrmSoupActivityTab,
   state: Store<CrmActivityViewState>,
   setState: SetStoreFunction<CrmActivityViewState>
 ): ActivityFilters {

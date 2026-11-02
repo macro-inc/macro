@@ -9,7 +9,6 @@ import { Show } from 'solid-js';
 import type { LayoutField } from '../core/selection-layout';
 import type { InspectorNumberScrub } from '../primitives/create-inspector-preview';
 import { CanvasAlignmentControls } from './arrange-controls';
-import { INSPECTOR_CONTROL_FRAME_CLASS } from './inspector-control-frame';
 import { InspectorNumberField } from './inspector-number-field';
 import { InspectorSection } from './inspector-section';
 
@@ -69,33 +68,35 @@ export function SelectionLayoutInspector(props: {
             onScrub={() => props.onScrub('rotation')}
           />
           <ButtonGroup
+            finish="raised"
+            variant="secondary"
             size="icon-sm"
-            class={`w-full data-[orientation=horizontal]:rounded-lg ${INSPECTOR_CONTROL_FRAME_CLASS}`}
+            class="w-full data-[orientation=horizontal]:rounded-lg"
           >
-            <Button
+            <ButtonGroup.Button
+              aria-label="Rotate 90°"
+              tooltip="Rotate 90°"
               fullWidth
-              class="bg-transparent"
-              label="Rotate 90°"
               onClick={() => props.onTransform('rotate90')}
             >
-              <ArrowClockwise />
-            </Button>
-            <Button
+              <ArrowClockwise class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+            </ButtonGroup.Button>
+            <ButtonGroup.Button
+              aria-label="Flip horizontal"
+              tooltip="Flip horizontal"
               fullWidth
-              class="bg-transparent"
-              label="Flip horizontal"
               onClick={() => props.onTransform('flipX')}
             >
-              <ArrowsHorizontal />
-            </Button>
-            <Button
+              <ArrowsHorizontal class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+            </ButtonGroup.Button>
+            <ButtonGroup.Button
+              aria-label="Flip vertical"
+              tooltip="Flip vertical"
               fullWidth
-              class="bg-transparent"
-              label="Flip vertical"
               onClick={() => props.onTransform('flipY')}
             >
-              <ArrowsVertical />
-            </Button>
+              <ArrowsVertical class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+            </ButtonGroup.Button>
           </ButtonGroup>
         </div>
       </InspectorSection>
@@ -123,14 +124,21 @@ export function SelectionLayoutInspector(props: {
             onScrub={() => props.onScrub('height')}
           />
           <Button
+            variant="ghost"
+            aria-label="Lock aspect ratio"
+            tooltip="Lock aspect ratio"
             size="icon-sm"
-            label="Lock aspect ratio"
             aria-pressed={props.lockAspectRatio}
             class="aria-pressed:bg-active aria-pressed:text-ink"
             onClick={() => props.onLockAspectRatio(!props.lockAspectRatio)}
           >
-            <Show when={props.lockAspectRatio} fallback={<LockOpen />}>
-              <Lock />
+            <Show
+              when={props.lockAspectRatio}
+              fallback={
+                <LockOpen class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+              }
+            >
+              <Lock class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Show>
           </Button>
         </div>

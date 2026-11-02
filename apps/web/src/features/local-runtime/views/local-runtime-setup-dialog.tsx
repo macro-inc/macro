@@ -30,11 +30,11 @@ export function LocalRuntimeSetupDialog(props: {
             <Button
               variant="ghost"
               size="icon-sm"
-              label={t('localRuntime.close')}
+              tooltip={t('localRuntime.close')}
               aria-label={t('localRuntime.close')}
               onClick={() => props.onClose()}
             >
-              <XIcon />
+              <XIcon class="size-4" />
             </Button>
           </div>
         </Panel.Header>

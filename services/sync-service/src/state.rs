@@ -1,7 +1,8 @@
 use std::{borrow::Cow, collections::HashSet, sync::Mutex};
 
 use loro::{
-    Container, ContainerID, ExportMode, Frontiers, ID, LoroDoc, LoroValue, ToJson, VersionVector,
+    Container, ContainerID, ExportMode, Frontiers, ID, IdSpan, JsonMapOp, JsonMovableListOp,
+    JsonOpContent, LoroDoc, LoroValue, ToJson, VersionVector,
 };
 use tracing::debug;
 use web_time::Instant;
@@ -15,12 +16,15 @@ mod test;
 const FROM_CLIENT_TAG: &str = "from_client";
 const FROM_SERVICE_TAG: &str = "from_service";
 const FRONTIERS_ID_SEPERATOR: &str = "|";
+/// The Lexical `type` of the node that wraps text carrying a comment mark.
+const COMMENT_NODE_TYPE: &str = "comment";
 
 /// Result of applying an update, before any persistence awaits.
 pub struct ImportedUpdate {
     /// Whether the operation log gained new operations.
     pub changed: bool,
-    /// Lexical node IDs used by the existing blame tracking.
+    /// Lexical node IDs the update edited, for blame tracking. Empty when the
+    /// update only adds or removes a comment mark.
     pub touched_nodes: Vec<String>,
 }
 
@@ -158,8 +162,13 @@ impl DocumentState {
     /// so it reads only those operations: diffing the two versions checks the
     /// document out and costs time that grows with its history.
     fn touched_lexical_ids(&self, before: &VersionVector, after: &VersionVector) -> Vec<String> {
+        let spans: Vec<IdSpan> = after.sub_iter(before).collect();
+        if spans.iter().any(|span| self.changes_comment_marks(*span)) {
+            debug!("update adds or removes a comment mark; recording no blame");
+            return Vec::new();
+        }
         let mut containers = HashSet::new();
-        for span in after.sub_iter(before) {
+        for span in spans {
             let Ok(len) = usize::try_from(span.counter.end - span.counter.start) else {
                 continue;
             };
@@ -175,6 +184,54 @@ impl DocumentState {
         touched.sort();
         touched.dedup();
         touched
+    }
+
+    /// Whether the operations in `span` add or remove a comment mark. Lexical
+    /// moves marked text into a `comment` node, which the client's mirror
+    /// writes as recreated or split text nodes; removing the mark merges them
+    /// back. Neither writes new text, so it must not take over the text's blame.
+    fn changes_comment_marks(&self, span: IdSpan) -> bool {
+        self.loro_doc
+            .export_json_in_id_span(span)
+            .iter()
+            .flat_map(|change| &change.ops)
+            .any(|op| match &op.content {
+                JsonOpContent::Map(JsonMapOp::Insert { key, value }) => {
+                    key == "type" && is_comment_type(value)
+                }
+                JsonOpContent::MovableList(JsonMovableListOp::Delete { len, start_id, .. }) => {
+                    (0..len.abs()).any(|offset| self.is_comment_node(start_id.inc(offset)))
+                }
+                _ => false,
+            })
+    }
+
+    /// Whether the list item created by the operation `item` holds a comment
+    /// node. Loro keeps a deleted container's state, so this also answers for
+    /// items the update removed. Items moved within their list, or older than
+    /// a shallow snapshot, read as not comments.
+    fn is_comment_node(&self, item: ID) -> bool {
+        let inserted = self
+            .loro_doc
+            .export_json_in_id_span(IdSpan::new(item.peer, item.counter, item.counter + 1))
+            .into_iter()
+            .flat_map(|change| change.ops)
+            .find_map(|op| match op.content {
+                JsonOpContent::MovableList(JsonMovableListOp::Insert { value, .. }) => {
+                    let index = usize::try_from(item.counter - op.counter).ok()?;
+                    value.into_iter().nth(index)
+                }
+                _ => None,
+            });
+        let Some(LoroValue::Container(container_id)) = inserted else {
+            return false;
+        };
+        let Some(Container::Map(node)) = self.loro_doc.get_container(container_id) else {
+            return false;
+        };
+        node.get("type")
+            .and_then(|kind| kind.into_value().ok())
+            .is_some_and(|kind| is_comment_type(&kind))
     }
 
     /// Walk from a changed container up to the nearest ancestor LoroMap whose
@@ -257,6 +314,10 @@ impl DocumentState {
 
         Ok(())
     }
+}
+
+fn is_comment_type(value: &LoroValue) -> bool {
+    matches!(value, LoroValue::String(kind) if kind.as_str() == COMMENT_NODE_TYPE)
 }
 
 fn deep_json(doc: &LoroDoc) -> Result<serde_json::Value> {

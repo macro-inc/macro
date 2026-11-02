@@ -47,7 +47,7 @@ function SidebarTrigger(props: { label: string }) {
 
 function ToolbarTrigger(props: { label: string }) {
   return (
-    <Dropdown.Trigger variant="outline" size="md" aria-label={props.label}>
+    <Dropdown.Trigger variant="secondary" size="md" aria-label={props.label}>
       <PlusIcon class="size-4" />
       <span>{t('create.new')}</span>
       <CaretDownIcon class="size-3" />

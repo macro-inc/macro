@@ -1,6 +1,9 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { type PillTabItem, PillTabs } from '@components/app/mobile/PillTabs';
-import { enableCrmActivity } from '@core/constant/featureFlags';
+import {
+  enableCrmActivity,
+  enableDatabases,
+} from '@core/constant/featureFlags';
 import type { JSX } from 'solid-js';
 import {
   CRM_ACTIVITY_TABS,
@@ -16,10 +19,15 @@ export function CrmMobileTabs(props: {
   onNavigate(id: string): void;
 }) {
   const activityFlag = useFeatureFlag(enableCrmActivity);
+  const databasesFlag = useFeatureFlag(enableDatabases);
   const items = (): PillTabItem[] => [
     ...[
       ...CRM_RECORDS,
-      ...(activityFlag().enabled ? CRM_ACTIVITY_TABS : []),
+      ...(activityFlag().enabled
+        ? CRM_ACTIVITY_TABS.filter(
+            (tab) => tab.id !== 'databases' || databasesFlag().enabled
+          )
+        : []),
     ].map((record) => ({
       value: record.id,
       label: record.label,

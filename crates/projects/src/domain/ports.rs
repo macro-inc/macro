@@ -451,6 +451,16 @@ pub trait ProjectService: Send + Sync + 'static {
         args: CreateProjectRequest,
     ) -> impl Future<Output = Result<Project, ProjectError>> + Send;
 
+    /// Create a project that takes its last-edit time from what is put in
+    /// it: it starts never edited and does not mark its parent updated, and
+    /// documents created in it with their own dates date it and the projects
+    /// above it. For importers, so a copied tree keeps its source's dates.
+    fn create_project_dated_by_contents(
+        &self,
+        principal: &CreationPrincipal,
+        args: CreateProjectRequest,
+    ) -> impl Future<Output = Result<Project, ProjectError>> + Send;
+
     /// Edit project metadata and sharing settings.
     fn edit_project(
         &self,

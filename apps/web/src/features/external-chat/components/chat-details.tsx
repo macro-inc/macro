@@ -167,7 +167,7 @@ export function ChatDetails(props: {
               ? 'Only its owner can reply.'
               : `Only ${label()} members can send.`}
           </p>
-          <Button variant="outline" size="sm" onClick={() => props.onShare()}>
+          <Button variant="secondary" size="sm" onClick={() => props.onShare()}>
             Share…
           </Button>
         </div>

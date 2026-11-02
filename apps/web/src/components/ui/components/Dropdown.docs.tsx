@@ -42,6 +42,24 @@ function MultiselectDemo() {
 }
 // #endregion
 
+// #region demo:unavailable
+function UnavailableDemo() {
+  return (
+    <Dropdown>
+      <Dropdown.Trigger>Add</Dropdown.Trigger>
+      <Dropdown.Content class="min-w-48">
+        <Dropdown.Group>
+          <Dropdown.Item disabledReason="This model doesn't support images">
+            Add photos
+          </Dropdown.Item>
+          <Dropdown.Item>Add files</Dropdown.Item>
+        </Dropdown.Group>
+      </Dropdown.Content>
+    </Dropdown>
+  );
+}
+// #endregion
+
 export default defineDoc({
   name: 'Dropdown',
   category: 'Overlays',
@@ -58,6 +76,13 @@ export default defineDoc({
       description:
         'Checkbox or Space toggles and stays open. Row or Enter adds and closes. Shift-click, Shift+Enter, or Only selects just one and stays open. Only is always visible on touch.',
       render: MultiselectDemo,
+    },
+    {
+      id: 'unavailable',
+      title: 'Unavailable items',
+      description:
+        'disabledReason grays an item out and explains why in a tooltip beside it on hover or keyboard focus, or as a second line on touch. Unlike disabled, arrow keys still reach it; selecting it does nothing.',
+      render: UnavailableDemo,
     },
   ],
 });

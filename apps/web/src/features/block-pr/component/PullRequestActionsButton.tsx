@@ -1,6 +1,6 @@
 import { t } from '@app/lib/i18n';
 import CaretDown from '@icon/system/regular/caret-down.svg';
-import { Button, ButtonGroup, Dropdown } from '@ui';
+import { ButtonGroup, Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { PrActions } from '../primitives/create-pr-actions';
@@ -16,11 +16,11 @@ export function PullRequestActionsButton(props: { actions: PrActions }) {
       {(primary) => (
         <Dropdown placement="bottom-end">
           <ButtonGroup
-            variant={primary().key === 'merge' ? 'success' : 'outline'}
-            depth={2}
-            label={t('entityActions.prActions')}
+            variant={primary().key === 'merge' ? 'success' : 'secondary'}
+            size="sm"
+            aria-label={t('entityActions.prActions')}
           >
-            <Button
+            <ButtonGroup.Button
               disabled={props.actions.pending() || !!primary().disabledReason}
               tooltip={primary().disabledReason}
               aria-description={primary().disabledReason}
@@ -33,12 +33,15 @@ export function PullRequestActionsButton(props: { actions: PrActions }) {
                   ? t('entityActions.prMerging')
                   : primary().label}
               </span>
-            </Button>
+            </ButtonGroup.Button>
             <Show when={props.actions.secondary().length > 0}>
               <ButtonGroup.Divider />
               <Dropdown.Trigger
-                size="icon-md"
-                label={t('entityActions.prMoreActions')}
+                as={ButtonGroup.Button}
+                variant={primary().key === 'merge' ? 'success' : 'secondary'}
+                size="icon-sm"
+                aria-label={t('entityActions.prMoreActions')}
+                tooltip={t('entityActions.prMoreActions')}
                 disabled={props.actions.pending()}
               >
                 <CaretDown class="size-3.5" />

@@ -23,7 +23,15 @@ import {
   useRefreshGithubPullRequest,
 } from '@queries/storage/github-pull-requests';
 import { githubPullRequestChangesKeys } from '@queries/storage/keys';
-import { Button, CopyButton, cn, Layer, Scroll, Tooltip } from '@ui';
+import {
+  Button,
+  ButtonGroup,
+  CopyButton,
+  cn,
+  Layer,
+  Scroll,
+  Tooltip,
+} from '@ui';
 import { type Accessor, createMemo, Show, Suspense } from 'solid-js';
 import { confirmMergePullRequest } from '../component/MergePullRequestButton';
 import { PrChangesProvider } from '../component/PrChanges';
@@ -214,18 +222,23 @@ export function PrDetailActions(props: {
         <HeaderActionGroup label="Sharing">
           <Tooltip label="Share pull request">
             <HeaderActionButton
+              grouped
               label="Share"
-              icon={<IconShared />}
+              icon={
+                <IconShared class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+              }
               onClick={openShare}
             />
           </Tooltip>
           <CopyButton
+            as={ButtonGroup.Button}
             variant="ghost"
+            aria-label="Copy Share Link"
             tooltip="Copy Share Link"
-            size="icon-md"
+            size="icon-sm"
             onClick={copyLink}
           >
-            <IconLink class="size-3.5!" />
+            <IconLink class="size-3.5" />
           </CopyButton>
         </HeaderActionGroup>
         <PullRequestActionsButton actions={props.actions} />
@@ -424,7 +437,7 @@ function PrLoadErrorBanner(props: { onRetry: () => void }) {
   return (
     <div class="mt-6 flex flex-col items-start gap-3 rounded-lg border border-edge-muted px-3 py-2 text-xs text-ink-muted">
       <span>Couldn't load this pull request from cached GitHub data.</span>
-      <Button variant="outline" size="sm" onClick={props.onRetry}>
+      <Button variant="secondary" size="sm" onClick={props.onRetry}>
         Retry
       </Button>
     </div>

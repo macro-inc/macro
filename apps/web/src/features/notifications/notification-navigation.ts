@@ -204,10 +204,16 @@ type NavigationDeferredError = {
   notificationId: string;
 };
 
+type NavigationFailedError = {
+  tag: 'NavigationFailedError';
+  cause: unknown;
+};
+
 type OpenNotificationFromIdError =
   | NotSupportedError
   | NotFoundError
-  | NavigationDeferredError;
+  | NavigationDeferredError
+  | NavigationFailedError;
 
 function getSupportedHandler(
   notification: UnifiedNotification,
@@ -727,7 +733,7 @@ export function openSingleStackNotification(
 export function openNotificationFromId(
   notificationId: string,
   layoutManager: SplitManager,
-  notificationSource: NotificationSource,
+  notificationSource: Pick<NotificationSource, 'notifications'>,
   options: {
     canOpen?: () => boolean;
     onApplied?: VoidFunction;
@@ -746,14 +752,18 @@ export function openNotificationFromId(
       }),
       'notification-navigation'
     );
-    return ResultAsync.fromSafePromise(
+    return ResultAsync.fromPromise(
       navigateToChannelMessage(
         layoutManager.getOrchestrator(),
         channelId,
         messageId,
         threadId ?? messageId,
         { splitManager: layoutManager, onApplied: options.onApplied }
-      )
+      ),
+      (cause): NavigationFailedError => ({
+        tag: 'NavigationFailedError',
+        cause,
+      })
     );
   }
   const openIfReady = (notification: UnifiedNotification) => {
@@ -763,14 +773,22 @@ export function openNotificationFromId(
         notificationId,
       });
     }
-    return openNotification(
-      notification,
-      layoutManager,
-      false,
-      undefined,
-      undefined,
-      { onApplied: options.onApplied, source: 'native_push' }
-    );
+    // Preserve the in-app caller contract while giving native navigation one
+    // error result for both rejected handlers and unsupported destinations.
+    return ResultAsync.fromPromise(
+      openNotification(
+        notification,
+        layoutManager,
+        false,
+        undefined,
+        undefined,
+        { onApplied: options.onApplied, source: 'native_push' }
+      ),
+      (cause): NavigationFailedError => ({
+        tag: 'NavigationFailedError',
+        cause,
+      })
+    ).andThen((result) => result);
   };
 
   // Check notification source first
@@ -782,8 +800,9 @@ export function openNotificationFromId(
   }
 
   // Fetch if not in notification source
-  return ResultAsync.fromSafePromise(
-    getNotificationById(notificationId)
+  return ResultAsync.fromPromise(
+    getNotificationById(notificationId),
+    (cause): NavigationFailedError => ({ tag: 'NavigationFailedError', cause })
   ).andThen((unified) => {
     if (!unified) {
       const err: NotFoundError = { tag: 'NotFoundError', notificationId };

@@ -71,12 +71,12 @@ export function RoutineTemplateView(props: {
           />
           <Show when={props.canActivate}>
             <Button
-              variant="cta"
+              variant="primary"
               size="md"
               class="ml-auto shrink-0"
               onClick={() => props.onActivate()}
             >
-              <PlayIcon />
+              <PlayIcon class="size-4" />
               Activate for me
             </Button>
           </Show>

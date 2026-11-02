@@ -128,7 +128,9 @@ export function useMarkdownDocumentTools() {
       label: 'Chat',
       icon: ChatWithAgentIcon,
       action: () => openChatWithAgent(chatEntity()),
-      buttonComponent: () => <ChatWithAgentButton entity={chatEntity()} />,
+      buttonComponent: (control) => (
+        <ChatWithAgentButton grouped={control.grouped} entity={chatEntity()} />
+      ),
     },
     {
       group: 'sharing',

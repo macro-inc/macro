@@ -188,6 +188,9 @@ export class LoroManager<S extends GenericRootSchema = GenericRootSchema>
   get initialized(): boolean {
     return this._initialized;
   }
+  get documentId(): string {
+    return this.options.documentId;
+  }
   get peerId(): bigint {
     return this._doc.peerId;
   }
