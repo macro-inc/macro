@@ -11,7 +11,8 @@ import type { ProjectSection } from '../core/project';
 
 /**
  * A project's tasks as a caller with no account reads them: every task in
- * the project, read-only, each opening in the same pane.
+ * the project, read-only. Each opens in the same pane at the task's own
+ * access, so a task the project lists may still ask the visitor to sign in.
  */
 export function ProjectVisitorTasks(props: {
   projectId: string;

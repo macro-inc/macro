@@ -83,9 +83,9 @@ query InitiativeIdentity($initiativeId: ID!, $signedIn: Boolean = false) {
   }
 }
 
-# The tasks a project read found visible to the viewer, hydrated without
-# another access check. A visitor with no account lists a project's tasks
-# this way; the Tasks list needs an account.
+# Every task the project lists, read through the project's own access;
+# opening one still checks the task. A visitor with no account lists a
+# project's tasks this way; the Tasks list needs an account.
 query InitiativeTasks($initiativeId: ID!) {
   initiative(initiativeId: $initiativeId) {
     id
