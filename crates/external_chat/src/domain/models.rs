@@ -125,13 +125,14 @@ pub enum CannotAdd {
 pub enum BackfillState {
     /// Nothing to start from: the owner's account knows no message in this
     /// chat yet (paired before WhatsApp sent its chat list, and quiet since).
-    /// Becomes `pending` with the chat's first message.
+    /// Becomes `waiting_for_phone` with the chat's first message.
     WaitingForMessage,
-    /// About to start: the owner's account has not picked it up yet.
+    /// The owner started the import; their account has not asked yet.
     Pending,
     /// Asking the owner's phone for earlier messages.
     Running,
-    /// The owner's phone did not answer; retried when it is back.
+    /// The import needs the owner's phone: not started yet, or the phone did
+    /// not answer. Only the owner starts it again (asking wakes the phone).
     WaitingForPhone,
     /// Everything the phone had (within the limits) was imported.
     Done,

@@ -28,6 +28,8 @@ import { AiUsageLimitDialog } from '@app/features/paywall/AiUsageLimitDialog';
 import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-limit-handling';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
+import { StatusBanner } from '@app/features/system-status/components/StatusBanner';
+import { useBannerStatus } from '@app/features/system-status/primitives/use-banner-status';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { CreateChannelModal } from '@channel/CreateChannelModal';
@@ -43,7 +45,10 @@ import {
 import { useIsAuthenticated } from '@core/auth';
 import { UserCardDrawer } from '@core/component/UserCardDrawer';
 import { useAiUsageLimitState } from '@core/constant/AiUsageLimitState';
-import { enableDatabases } from '@core/constant/featureFlags';
+import {
+  enableDatabases,
+  enableWhatsappLinked,
+} from '@core/constant/featureFlags';
 import { usePaywallState } from '@core/constant/PaywallState';
 import { attachGlobalDOMScope } from '@core/hotkey/hotkeys';
 import { isMobile } from '@core/mobile/isMobile';
@@ -95,6 +100,11 @@ const StarterDatabase = lazy(async () => {
 const Paywall = lazyNamed(
   () => import('@app/features/paywall/Paywall'),
   'Paywall'
+);
+const WhatsAppHistoryImportPrompt = lazyNamed(
+  () =>
+    import('@app/features/whatsapp-linked/components/history-import-prompt'),
+  'WhatsAppHistoryImportPrompt'
 );
 const LocalRuntimeHost = lazyNamed(
   () => import('@app/features/local-runtime/local-runtime-host'),
@@ -253,6 +263,7 @@ export function AppChrome(props: ParentProps) {
   // Route mailto: links (via openExternalUrl) to the in-app email composer.
   registerMailtoComposerHandler();
   useNewOnboardingRedirect();
+  const systemStatus = useBannerStatus();
 
   const companyDialogUsed = hasOpened(companyCreation.open);
   const contactDialogUsed = hasOpened(
@@ -273,6 +284,11 @@ export function AppChrome(props: ParentProps) {
           <GithubReauthenticationPrompt />
           <GmailReauthenticationPrompt />
           <CalendarPermissionPrompt />
+          <ShowFeatureFlag flag={enableWhatsappLinked}>
+            <Suspense>
+              <WhatsAppHistoryImportPrompt />
+            </Suspense>
+          </ShowFeatureFlag>
           <GlobalShortcuts />
           <Show when={!isTouchDevice()}>
             <GoToHotkeys />
@@ -311,7 +327,14 @@ export function AppChrome(props: ParentProps) {
           </Show>
         </Show>
       </Suspense>
-      <div class="min-h-0 flex-1 flex">
+      <Show when={systemStatus()}>
+        {(status) => <StatusBanner {...status()} />}
+      </Show>
+      {/* The banner already sits below the status bar on touch devices. */}
+      <div
+        class="min-h-0 flex-1 flex"
+        classList={{ 'touch:[--safe-top:0px]': systemStatus() !== undefined }}
+      >
         <ItemDndProvider>
           {/* The rail and each view's switcher share the rail preferences. */}
           <SidebarPrefsProvider>

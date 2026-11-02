@@ -379,6 +379,17 @@ export type CreditCheckoutResponse = {
 };
 
 /**
+ * The status every user sees, without who set it.
+ */
+export type CurrentSystemStatus = SystemStatus & {
+    /**
+     * When it was set; absent when no status was ever set. Clients keep the
+     * newest status they have seen, whether fetched or pushed.
+     */
+    updatedAt?: string | null;
+};
+
+/**
  * What settings needs to render the Cursor connection.
  *
  * Deliberately thin. `registered` drives the whole UI; `updatedAt` lets it say
@@ -446,10 +457,14 @@ export type CursorModelsResponse = {
 export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
 
 /**
- * Actual deployment availability for the provider selector.
+ * What the provider selector offers the requesting user.
  */
 export type EmailConnectionProviders = {
     gmail: boolean;
+    /**
+     * Whether this user may start a new Outlook connection: the deployment
+     * switch and their `enable-outlook` flag.
+     */
     outlook: boolean;
     /**
      * Where a Microsoft 365 administrator approves Macro for their whole
@@ -1648,6 +1663,24 @@ export type SsoRequiredResponse = {
 };
 
 /**
+ * One status a staff member set. The newest is the current status.
+ */
+export type StatusUpdate = SystemStatus & {
+    /**
+     * When it was set.
+     */
+    createdAt: string;
+    /**
+     * UUIDv7, so ids sort by creation.
+     */
+    id: string;
+    /**
+     * The staff member who set it.
+     */
+    userId: string;
+};
+
+/**
  * Response containing the Stripe session URL
  */
 export type StripeSessionResponse = {
@@ -1666,6 +1699,35 @@ export type SubscriptionStatus = {
      */
     renewalDate?: string | null;
     scheduledChange?: null | ScheduledSeatPlan;
+};
+
+/**
+ * The platform status. Only the non-operational statuses carry a message.
+ */
+export type SystemStatus = {
+    status: 'operational';
+} | {
+    /**
+     * What users should know.
+     */
+    message: string;
+    status: 'degraded';
+} | {
+    /**
+     * What users should know.
+     */
+    message: string;
+    status: 'major_outage';
+};
+
+/**
+ * Recent status updates, newest first.
+ */
+export type SystemStatusHistory = {
+    /**
+     * The updates.
+     */
+    updates: Array<StatusUpdate>;
 };
 
 /**
@@ -1912,6 +1974,26 @@ export type UpdateOverageRequest = {
      * Per-period cap on overage spend, cents. Required when enabling.
      */
     limitCents?: number;
+};
+
+/**
+ * What kind of upstream failure a 502 or 503 reports, for clients that
+ * branch on it.
+ */
+export type UpstreamErrorCode = 'upstream_unavailable' | 'upstream_rate_limited' | 'upstream_invalid_response';
+
+/**
+ * The body of a 502 or 503 caused by a third-party service.
+ */
+export type UpstreamErrorResponse = {
+    /**
+     * The kind of failure.
+     */
+    code: UpstreamErrorCode;
+    /**
+     * What failed and what to do about it, written for the user.
+     */
+    message: string;
 };
 
 /**
@@ -2625,6 +2707,8 @@ export type SetGithubPullRequestDraftErrors = {
     422: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type SetGithubPullRequestDraftError = SetGithubPullRequestDraftErrors[keyof SetGithubPullRequestDraftErrors];
@@ -2647,6 +2731,8 @@ export type EnrichGithubPullRequestsErrors = {
     404: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type EnrichGithubPullRequestsError = EnrichGithubPullRequestsErrors[keyof EnrichGithubPullRequestsErrors];
@@ -2681,6 +2767,8 @@ export type MergeGithubPullRequestErrors = {
     422: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type MergeGithubPullRequestError = MergeGithubPullRequestErrors[keyof MergeGithubPullRequestErrors];
@@ -2710,6 +2798,8 @@ export type GetGithubPullRequestMergeabilityErrors = {
     422: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type GetGithubPullRequestMergeabilityError = GetGithubPullRequestMergeabilityErrors[keyof GetGithubPullRequestMergeabilityErrors];
@@ -2743,6 +2833,8 @@ export type SetGithubPullRequestStateErrors = {
     422: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type SetGithubPullRequestStateError = SetGithubPullRequestStateErrors[keyof SetGithubPullRequestStateErrors];
@@ -3002,6 +3094,7 @@ export type EmailConnectionProvidersData = {
 
 export type EmailConnectionProvidersErrors = {
     400: ErrorResponse;
+    401: ErrorResponse;
 };
 
 export type EmailConnectionProvidersError = EmailConnectionProvidersErrors[keyof EmailConnectionProvidersErrors];
@@ -3023,6 +3116,8 @@ export type DeleteGithubLinkErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type DeleteGithubLinkError = DeleteGithubLinkErrors[keyof DeleteGithubLinkErrors];
@@ -3050,6 +3145,8 @@ export type InitGithubLinkErrors = {
     401: ErrorResponse;
     429: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type InitGithubLinkError = InitGithubLinkErrors[keyof InitGithubLinkErrors];
@@ -3072,6 +3169,8 @@ export type CheckGithubLinkStatusErrors = {
     404: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type CheckGithubLinkStatusError = CheckGithubLinkStatusErrors[keyof CheckGithubLinkStatusErrors];
@@ -3564,6 +3663,71 @@ export type SessionLoginResponses = {
 };
 
 export type SessionLoginResponse = SessionLoginResponses[keyof SessionLoginResponses];
+
+export type GetSystemStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/system-status';
+};
+
+export type GetSystemStatusErrors = {
+    500: ErrorResponse;
+};
+
+export type GetSystemStatusError = GetSystemStatusErrors[keyof GetSystemStatusErrors];
+
+export type GetSystemStatusResponses = {
+    200: CurrentSystemStatus;
+};
+
+export type GetSystemStatusResponse = GetSystemStatusResponses[keyof GetSystemStatusResponses];
+
+export type SetSystemStatusData = {
+    body: SystemStatus;
+    path?: never;
+    query?: never;
+    url: '/system-status';
+};
+
+export type SetSystemStatusErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    /**
+     * The body is not a valid status
+     */
+    422: unknown;
+    500: ErrorResponse;
+};
+
+export type SetSystemStatusError = SetSystemStatusErrors[keyof SetSystemStatusErrors];
+
+export type SetSystemStatusResponses = {
+    200: StatusUpdate;
+};
+
+export type SetSystemStatusResponse = SetSystemStatusResponses[keyof SetSystemStatusResponses];
+
+export type ListSystemStatusHistoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/system-status/history';
+};
+
+export type ListSystemStatusHistoryErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListSystemStatusHistoryError = ListSystemStatusHistoryErrors[keyof ListSystemStatusHistoryErrors];
+
+export type ListSystemStatusHistoryResponses = {
+    200: SystemStatusHistory;
+};
+
+export type ListSystemStatusHistoryResponse = ListSystemStatusHistoryResponses[keyof ListSystemStatusHistoryResponses];
 
 export type DeleteTeamData = {
     body?: never;

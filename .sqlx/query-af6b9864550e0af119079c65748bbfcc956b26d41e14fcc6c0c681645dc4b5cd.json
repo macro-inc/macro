@@ -1,0 +1,29 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, phone_number FROM whatsapp_lookup\n        WHERE account_id = $1 AND state = 'pending'\n          AND created_at > now() - make_interval(secs => $2)\n        ORDER BY created_at, id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "phone_number",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false
+    ]
+  },
+  "hash": "af6b9864550e0af119079c65748bbfcc956b26d41e14fcc6c0c681645dc4b5cd"
+}

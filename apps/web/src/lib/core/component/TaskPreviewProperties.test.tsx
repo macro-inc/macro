@@ -215,6 +215,44 @@ describe('task preview data ownership', () => {
     view.unmount();
   });
 
+  it('keeps the focused status control and detail chips through a fresh emission', () => {
+    const priority = {
+      ...status,
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.PRIORITY,
+      displayName: 'Priority',
+    } as Property;
+    const [properties, setProperties] = createSignal<Property[]>([
+      status,
+      priority,
+    ]);
+    propertiesQuery.mockReturnValue({
+      properties,
+      isLoading: () => false,
+      refetch: vi.fn(),
+    });
+    const view = render(() => (
+      <TaskPropertiesPreviewProvider taskId="task">
+        <TaskPropertiesPreview taskId="task" mode="status" />
+        <TaskPropertiesPreview taskId="task" mode="details" />
+      </TaskPropertiesPreviewProvider>
+    ));
+    const statusControl = view.getByRole('button', {
+      name: /Task status: status-1/,
+    });
+    const detailChip = view.getByText('Priority');
+    statusControl.focus();
+
+    setProperties([
+      { ...status, value: ['status-2'] } as Property,
+      { ...priority },
+    ]);
+
+    expect(document.activeElement).toBe(statusControl);
+    expect(statusControl.textContent).toContain('status-2');
+    expect(detailChip.isConnected).toBe(true);
+    view.unmount();
+  });
+
   it('omits the duplicate status chip from card details', () => {
     const priority = {
       ...status,

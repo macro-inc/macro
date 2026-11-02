@@ -11,6 +11,7 @@ const mocks = vi.hoisted(() => ({
 }));
 const [connected, setConnected] = createSignal(false);
 const [multiInbox, setMultiInbox] = createSignal(false);
+const [outlookOffered, setOutlookOffered] = createSignal(true);
 
 vi.mock('@core/email-link', () => ({
   useEmailLinks: () => ({
@@ -22,6 +23,7 @@ vi.mock('@core/email-link', () => ({
 }));
 vi.mock('@queries/auth/outlook-link', () => ({
   fetchEmailConnectionProviders: mocks.providers,
+  useOutlookAvailable: () => outlookOffered,
 }));
 vi.mock('@app/lib/analytics/posthog', () => ({
   useFeatureFlag: () => () => ({ enabled: multiInbox() }),
@@ -55,6 +57,7 @@ vi.mock('./SignatureSection', () => ({ clearSignatureState: vi.fn() }));
 beforeEach(() => {
   setConnected(false);
   setMultiInbox(false);
+  setOutlookOffered(true);
   mocks.providers.mockResolvedValue({ outlook: true });
 });
 afterEach(() => {
@@ -78,7 +81,7 @@ it('connects the chosen provider without asking again', async () => {
   );
 });
 
-it('stops before consent when new Outlook connections are closed', async () => {
+it('stops before consent when Outlook closed after the row was shown', async () => {
   mocks.providers.mockResolvedValue({ outlook: false });
   render(() => <EmailCard />);
   fireEvent.click(

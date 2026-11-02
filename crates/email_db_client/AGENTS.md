@@ -45,6 +45,10 @@ Parsed message responses expose the draft generation captured in the same SQL sn
 
 ## Gotchas
 
+- Undated provider drafts use creation time for All Mail eligibility; spam/junk
+  and trash remain excluded, including the timestamp override for synced Macro
+  drafts. Keep ingestion, recomputation, and cached projections aligned.
+
 - Message deletion may return `Deferred` while an accepted send owns the row; reconcile retained deletions under the message lock and compare both provider identity and draft generation.
 - Resolve provider deletions with `get_simple_message_by_provider_and_link_for_update` inside the deletion transaction; retain the message lock through cleanup and deletion so Send completion or Undo cannot invalidate the snapshot.
 

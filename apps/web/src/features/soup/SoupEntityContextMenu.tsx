@@ -4,6 +4,7 @@ import type {
   EntityActionViewContext,
 } from '@app/features/next-soup/actions';
 import { makeAddTagAction } from '@app/features/next-soup/actions';
+import { createFolderRowDropTarget } from '@app/features/next-soup/actions/folder-drop-zone';
 import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done-delegate';
 import {
   ContextMenuContent,
@@ -11,7 +12,11 @@ import {
 } from '@core/component/ContextMenu';
 import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
-import type { EntityData } from '@entity';
+import {
+  type EntityData,
+  type EntityDragSelection,
+  EntityDragSelectionContext,
+} from '@entity';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import type { TreeTag } from '@property/tags/core/tag-tree';
 import { DroppedTagApplier } from '@property/tags/DroppedTagApplier';
@@ -70,6 +75,17 @@ export const SoupEntityContextMenu: FlowComponent<
   const menuEntities = () =>
     getSoupMenuEntities(props.entity, props.selectedEntities());
 
+  const dragSelection: EntityDragSelection = {
+    entities: menuEntities,
+    selected: () => props.selectedEntities(),
+    clear: () => props.list.selection.clear(),
+  };
+  const row = () => (
+    <EntityDragSelectionContext.Provider value={dragSelection}>
+      {props.children}
+    </EntityDragSelectionContext.Provider>
+  );
+
   const pickers = createSoupEntityMenuPickers({
     entity: () => props.entity,
     entities: menuEntities,
@@ -91,6 +107,7 @@ export const SoupEntityContextMenu: FlowComponent<
         entities: menuEntities().filter(addTagAction.canExecute),
       }),
   });
+  const folderDropTarget = createFolderRowDropTarget(() => props.entity);
 
   return (
     <Switch>
@@ -115,17 +132,20 @@ export const SoupEntityContextMenu: FlowComponent<
             }));
           }}
         >
-          {props.children}
+          {row()}
         </div>
       </Match>
       <Match when={true}>
         <ContextMenu onOpenChange={props.onOpenChange}>
           <ContextMenuTrigger
             as={props.as}
-            ref={(element: HTMLElement) => tagDropTarget?.ref(element)}
+            ref={(element: HTMLElement) => {
+              tagDropTarget?.ref(element);
+              folderDropTarget?.ref(element);
+            }}
             class={cn(
               'h-full w-full group/cm-trigger',
-              tagDropTarget?.isOver() &&
+              (tagDropTarget?.isOver() || folderDropTarget?.isOver()) &&
                 'rounded-xl outline-2 -outline-offset-2 outline-accent',
               props.class
             )}
@@ -133,7 +153,7 @@ export const SoupEntityContextMenu: FlowComponent<
               setMenuPosition({ x: event.clientX, y: event.clientY })
             }
           >
-            {props.children}
+            {row()}
           </ContextMenuTrigger>
           <ContextMenu.Portal>
             <Show when={props.entity}>

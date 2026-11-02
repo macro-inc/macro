@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { RefreshCalendarEventOneOf } from './refreshCalendarEventOneOf';
+import type { RefreshCalendarEventOneOfFive } from './refreshCalendarEventOneOfFive';
 import type { RefreshCalendarEventOneOfThree } from './refreshCalendarEventOneOfThree';
 
 /**
@@ -12,4 +13,5 @@ import type { RefreshCalendarEventOneOfThree } from './refreshCalendarEventOneOf
  */
 export type RefreshCalendarEvent =
   | RefreshCalendarEventOneOf
-  | RefreshCalendarEventOneOfThree;
+  | RefreshCalendarEventOneOfThree
+  | RefreshCalendarEventOneOfFive;

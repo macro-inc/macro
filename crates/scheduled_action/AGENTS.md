@@ -77,7 +77,9 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   `RoutineSessions::prepare` checks again on every run, then adds them to an
   agent limited to selected apps. An update that omits the key is rejected
   when the stored task has apps (`require_explicit_selection`).
-- Macro events store only ids and are read again, as the owner, at dispatch.
+- Macro events store only ids, plus the GitHub pull request and account behind
+  a task status change (`change_source`), and are read again, as the owner, at
+  dispatch.
   GitHub deliveries can't be read again, so their event runs keep the bounded
   payload in `event_context`; access for them is the owner's installation
   claim, which needs a linked GitHub account and, for a personal installation,
@@ -95,6 +97,8 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   it after the template is unshared or its source routine is deleted.
 - `run_visibility` is copied onto each run's agent session when the run is
   prepared, so changing it affects later runs only.
+- `EventReference` rejects unknown keys, so a replica still on older code can't
+  read a run row with a new key: write a new optional key only when it is set.
 
 ## Related
 
