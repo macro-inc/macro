@@ -49,7 +49,7 @@ export function proxyImageUrl(src: string): string {
 /** URL to put on an `<img>` for a remote markdown image. */
 export function displayImageUrl(src: string): string {
   // Static files and Klipy's GIF CDN are public and send their own CORS
-  // headers. The authenticated proxy cannot serve an anonymous image request.
+  // headers, so they do not need the authenticated proxy.
   if (
     src.startsWith(`${SERVER_HOSTS['static-file']}/`) ||
     src.startsWith('https://static.klipy.com/')
@@ -57,4 +57,14 @@ export function displayImageUrl(src: string): string {
     return src;
   }
   return proxyImageUrl(githubRawImageUrl(src));
+}
+
+/**
+ * Whether `src` loads through the image proxy. The proxy authenticates by
+ * session cookie, which a cross-origin request only sends with credentials
+ * (`crossorigin="use-credentials"` on an `<img>`, `credentials: 'include'` on
+ * a fetch).
+ */
+export function isImageProxyUrl(src: string): boolean {
+  return src.startsWith(`${SERVER_HOSTS['image-proxy-service']}/proxy?`);
 }

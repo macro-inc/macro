@@ -378,6 +378,8 @@ Shift+Enter adds a line to the draft; Enter sends. The composer spaces its
 paragraphs the way the sent message does, so a multi-line draft reads as what
 it will send. Check a multi-line message against the draft that wrote it: the
 spacing must not change on send.
+Typing `6.` then Enter (or `6. `) starts an ordered list at 6; the marker is
+not rewritten to `1.`
 Both the expanded and collapsed composers start with a `+` button (`Add`). It
 opens a menu on desktop and a bottom drawer on mobile: `Mention` (opens the `@` typeahead), `Attach files` (the file
 picker; the iOS media picker on iOS), `GIF` (the same picker as `/gif`), then under `Create` the same actions as
@@ -392,6 +394,12 @@ after the first three (five participants shows **+2**).
 Drag the handle, tap the backdrop, or press Escape to dismiss without starting a
 call. Only confirming notifies participants; joining a live call skips the sheet.
 Check both DMs and channels, including long names, in light and dark themes.
+On phones, a collapsed composer with attachments shows a thumbnail of the
+first one between `+` and the draft, with the number of attachments over it
+when there are two or more; a document shows its file icon. It shows with or
+without draft text, and tapping it opens the composer with the attachments
+below the editor. Check one image, several mixed attachments, and a document
+alone, with and without text, in light and dark themes.
 Input action and formatting buttons show the app tooltip without a second
 native browser tooltip.
 On desktop, select draft text to open the floating formatting toolbar. Its
@@ -404,7 +412,10 @@ beside the buttons and collapse when it fits again, without flickering between
 layouts. Also add and remove a line break or attachment and
 confirm the draft and caret position survive. The attachment and send controls
 should remain usable in both layouts. Existing message and reply edit inputs show
-only the send control, with no format or discard button; Escape cancels the edit.
+Attach files, Discard Edit, and Send, with no format toggle; Escape also cancels
+an edit. The iOS app uses its native media picker. Check inline and unified edits
+on desktop and touch: attach a file and save, then edit again and discard changes
+without changing the original message or attachments.
 The iOS share sheet keeps its editor above the attachment and formatting controls.
 Check this arrangement at both phone and tablet widths.
 
@@ -501,7 +512,9 @@ event is created — no invitation goes out from the initial request. It cannot 
 email at all. A bot or agent reply posted for a person shares, as that person, the linked items
 (chips or attachments) that the replying bot created for them while answering: those with a
 `created` activity row by that bot on the person's behalf since the person's latest message in
-the thread before the reply. Activity arrives asynchronously, so missing rows are re-checked
+the thread before the reply, or, for a bot message that starts its own thread (a poll card
+posted top-level), their latest message in the channel. Forms an agent creates through code
+mode (its SDK token) are attributed to its bot like native tool creations. Activity arrives asynchronously, so missing rows are re-checked
 after 5 and 30 seconds. Existing items it links, plain URLs, and bot posts with no person
 behind them share nothing. The bot never asks whether to share; it calls `ShareWithChannel` when asked to
 share an existing item. Private and confidential calendar events stay unshared, and a
@@ -626,11 +639,14 @@ Coding agents use `macro_internal.set_pull_request` to register an existing or
 new GitHub PR with their session. Macro Internal MCP is hosted by the harness
 service at `/mcp/internal` on its egress listener, separately from workspace MCP.
 Cursor, sandbox, and macrod sessions receive session-scoped credentials; the
-model supplies only the URL. The tool records the link, not the GitHub PR itself.
+model supplies only the URL. The tool records the link, not the GitHub PR itself,
+and returns the session's `/app/agent/<id>` URL.
 Macro Internal MCP's server instructions ask coding agents to register PRs with
-it, to open them ready for review rather than as drafts, and to get CI passing
-before handing off. External MCP clients get the ready-for-review rule in
-Macro's MCP instructions, and in-app agents tell coding agents they dispatch. It is not prepended
+it, to link the returned session URL in the PR description (the PR block reads
+that link as the PR's origin), to open them ready for review rather than as
+drafts, and to get CI passing before handing off. External MCP clients get the
+ready-for-review rule in Macro's MCP instructions, and in-app agents tell coding
+agents they dispatch. It is not prepended
 to individual user messages. Cursor
 enables automatic PR creation when a repository is selected. Its returned URL
 is also recorded because

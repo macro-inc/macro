@@ -19699,6 +19699,11 @@
   },
   "components": {
     "schemas": {
+      "AccentColor": {
+        "type": "string",
+        "description": "A color as `#rrggbb`, kept in lowercase.",
+        "pattern": "^#[0-9a-fA-F]{6}$"
+      },
       "AccessLevel": {
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
@@ -21549,8 +21554,12 @@
       "AwarenessRelay": {
         "type": "object",
         "description": "The [`AWARENESS_MESSAGE_TYPE`] payload: one viewer's awareness, stamped\nwhen the server relayed it so receivers can drop older relays.",
-        "required": ["databaseId", "userId", "state", "relayedAt"],
+        "required": ["databaseId", "userId", "canEdit", "state", "relayedAt"],
         "properties": {
+          "canEdit": {
+            "type": "boolean",
+            "description": "Whether the viewer's grant lets them edit; a viewer who cannot is\nshown as viewing."
+          },
           "databaseId": {
             "type": "string",
             "format": "uuid",
@@ -31729,6 +31738,7 @@
           "status",
           "closesAt",
           "confirmationMessage",
+          "branding",
           "createdAt",
           "updatedAt",
           "isHiddenInDrive"
@@ -31737,6 +31747,10 @@
           "audience": {
             "$ref": "#/components/schemas/Audience",
             "description": "Who may respond."
+          },
+          "branding": {
+            "$ref": "#/components/schemas/FormBranding",
+            "description": "Its logo, cover image and accent color."
           },
           "closesAt": {
             "type": ["string", "null"],
@@ -31813,6 +31827,34 @@
         "description": "The caller's level on a form: view responds, edit changes questions and\nreads responses, owner also sets the audience, closes and trashes it.",
         "enum": ["view", "edit", "owner"]
       },
+      "FormBranding": {
+        "type": "object",
+        "description": "A form's logo, cover image and accent color, each unset by default.",
+        "required": ["logoFileId", "coverFileId", "accentColor"],
+        "properties": {
+          "accentColor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccentColor",
+                "description": "The color of the page's buttons and selected answers."
+              }
+            ]
+          },
+          "coverFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The static file shown as a banner across the top of the page."
+          },
+          "logoFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The static file shown as the logo above the title."
+          }
+        }
+      },
       "FormCollaboration": {
         "type": "object",
         "description": "A ready collaborative form and the result of publishing its latest draft.",
@@ -31877,6 +31919,7 @@
           "invalidName",
           "invalidSharing",
           "tallyHidden",
+          "invalidBranding",
           "conflict",
           "internal"
         ]
@@ -44566,8 +44609,13 @@
       },
       "UpdateForm": {
         "type": "object",
-        "description": "A change to a form's facts; what is left out stays. The description and\nconfirmation message take edit, the rest owner. A form is renamed\nthrough the entity mutation router.",
+        "description": "A change to a form's facts; what is left out stays. The description,\nconfirmation message and branding take edit, the rest owner. A form is renamed\nthrough the entity mutation router.",
         "properties": {
+          "accentColor": {
+            "type": ["string", "null"],
+            "description": "A new accent color, or `null` for the default.",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
           "audience": {
             "$ref": "#/components/schemas/Audience",
             "description": "Who may respond from now on."
@@ -44581,9 +44629,19 @@
             "type": "string",
             "description": "Its new confirmation message."
           },
+          "coverFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "A new cover image, or `null` to remove it."
+          },
           "description": {
             "type": "string",
             "description": "Its new description."
+          },
+          "logoFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "A new logo, or `null` to remove it."
           },
           "status": {
             "$ref": "#/components/schemas/FormStatus",

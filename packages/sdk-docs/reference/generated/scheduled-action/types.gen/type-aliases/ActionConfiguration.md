@@ -2,7 +2,8 @@
 
 > **ActionConfiguration** = \{ `enabled`: `boolean`; `kind`: [`ActionKind`](ActionKind.md); `name`: `string`; `run_visibility?`: [`RunVisibility`](RunVisibility.md); `task`: \{\[`key`: `string`\]: `unknown`; \}; `trigger`: [`ActionTrigger`](ActionTrigger.md); \}
 
-Canonical client configuration. Ownership and execution state are server-owned.
+Client configuration, the create body. Ownership and execution state are
+server-owned.
 
 ## Properties
 

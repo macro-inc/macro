@@ -3,6 +3,7 @@ import { SERVER_HOSTS } from '../constant/servers';
 import {
   displayImageUrl,
   githubRawImageUrl,
+  isImageProxyUrl,
   proxyImageUrl,
 } from './imageProxy';
 
@@ -76,5 +77,17 @@ describe('displayImageUrl', () => {
     expect(proxyImageUrl('data:image/png;base64,AAAA')).toBe(
       'data:image/png;base64,AAAA'
     );
+  });
+});
+
+describe('isImageProxyUrl', () => {
+  it('recognizes a proxied URL and nothing else', () => {
+    const src = 'https://example.com/shot.png';
+    expect(isImageProxyUrl(proxyImageUrl(src))).toBe(true);
+    expect(isImageProxyUrl(src)).toBe(false);
+    expect(
+      isImageProxyUrl(`${SERVER_HOSTS['static-file']}/file/299c189c`)
+    ).toBe(false);
+    expect(isImageProxyUrl('data:image/png;base64,AAAA')).toBe(false);
   });
 });

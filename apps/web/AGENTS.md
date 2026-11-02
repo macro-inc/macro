@@ -54,6 +54,18 @@ It uses the real records view with a local source and picker to exercise opening
 replacement, cancellation, keyboard editing, and read-only references. Navigation
 adapter tests separately check file types, access failures, and split selection.
 
+Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
+backend-free desktop/phone regression: the card reserves its height from
+`previewData.poll.optionCount` as a `min-height`, grows to wrapped text, and
+never scrolls or clips inside:
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts poll-card.browser.e2e.ts`.
+
+Pinch zoom on opened image files (Drive details and image splits) has a
+backend-free phone and tablet regression:
+`bunx playwright test --config src/features/block-image/browser-test/playwright.config.ts`.
+Keep the zoomed image laid out at its zoomed size, translating only: WebKit
+rasterizes an `<img>` at its layout size, so a `scale()` transform blurs it.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
@@ -67,6 +79,10 @@ stacked sheet), which must bring it back on screen. It also keeps a persistent
 prompt under an open sheet and its picker, above a transient notice, and that
 notice on top of the sheet:
 `bunx playwright test --config src/components/app/mobile/browser-test/playwright.config.ts`.
+The same suite covers where a sheet puts focus as it opens: on itself, leaving
+its first row unringed, unless the first tab stop is a text field, the sheet
+focused something itself, or it names its own target; Tab then moves into the
+rows, which do show the ring.
 
 CRM creation has backend-free desktop/phone coverage for name-only companies,
 personal-email contacts and explicit company selection:
@@ -112,30 +128,6 @@ agent, retry, open a session) has a backend-free browser regression over a
 scripted runtime:
 `bunx playwright test --config src/features/local-runtime/browser-test/playwright.config.ts`.
 
-Meeting-note creation, linking, optional team access, retry, and unlinking have desktop and
-phone browser coverage in `features/calendar-notes`:
-`bunx playwright test --config src/features/calendar-notes/browser-test/playwright.config.ts`.
-The browser fixture uses the real event details popover and mobile drawer over
-sample data; keep notes aligned with those existing surfaces and preserve their
-dialog open guards. Open the existing document Share dialog for note access,
-keep labeled Options controls visible beside truncated titles without redundant
-hover tooltips, and use existing team memberships for optional note sharing.
-Keep meeting-note reads cached across event opens, show cached Quick Access
-matches while note searches refresh, and keep event actions usable while notes
-load. Show meeting-derived team viewing in the document's Team access summary;
-keep it distinct from additional direct sharing and keep Unlink stable while
-team access saves.
-Include linked meetings in Markdown side-panel References, behind the same flag;
-reuse the shared single-line ReferenceRow with the title and date inline, and
-resolve meeting details and opening targets through authorized calendar previews.
-Treat missing reference projection fields during backend rollout as unresolved,
-not denied; offer Retry on the links query without bypassing the server's
-reference authorization.
-Gate event notes and document Share meeting-link controls with
-`enable-calendar-meeting-notes` before mounting their query sources; it defaults
-on in dev and uses PostHog in production.
-See `docs/agent-guide/calendar.md` at the repo root.
-
 Share message image paste, drop, removal during upload, and
 upload failure have desktop, phone, and tablet browser coverage:
 `bunx playwright test --config src/lib/core/component/ForwardMessageComposer/browser-test/playwright.config.ts`.
@@ -151,13 +143,29 @@ boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
 lift a row past a better name match. The one exception: Cmd+K then keeps Macro
 users and DMs ahead of CRM contacts across the people positions, whatever their
 match. Tune name relevance there for every menu.
+Cmd+K and mobile name search widen the first group: a query equal to the first
+word of a DM or person name counts as exact, so a person's first name reaches
+their full-name DM. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
+Quick Access, and Soup search including the Chat sidebar) matches channels and
+DMs by terms in any order, adding to uFuzzy's in-order matches, because names
+are generated from participants and people type them in any order. It also
+ranks a conversation whose participants the query names, by name prefixes,
+right after exact names. Each participant needs a term of their own, so a group
+with more people than the query names stays below it.
+Commas separate query terms like spaces in the cache search
+(`cache-core/search.rs`, mirrored by `matchesTokenSubsequences`) and in the
+server's channel name search; keep the three together.
 Name groups and match position use the row's label (`getDisplayName`), so search
 text can add emails, aliases, or command keywords before or after it. Mention
 menus rank loaded entity sources together with `MENTION_RANKING_CONFIG` in
 `MentionsMenu/utils/mention-ranking.ts`: name relevance, viewed recency,
 brevity, and type boosts. Task projects use the `initiative` bucket; `project`
 means a Drive folder. Preserve broader cache/server matches and the existing
-People preview/pinning. The channel browser suite below also checks project
+People preview/pinning. Group company and contact records under
+Contacts & Companies, separate from People; keep contact selection as a CRM link
+even for a matching Macro user.
+Only Macro users and groups participate in mobile People pinning.
+The channel browser suite below also checks project
 ranking and insertion on desktop and phone.
 
 Channel composer draft persistence has a backend-free browser regression:
@@ -230,6 +238,14 @@ new MutationObserver(() => {
 ```
 
 Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '1,2,3'` (the same ids coming back) is a `<Suspense>` detach and re-attach. Fresh ids are a true remount. Nothing at all means the subtree never moved and the cause is elsewhere. Re-running the same interaction a second time is the cheapest way to prove a cold-cache cause: a once-per-session query settles after the first attempt, so the second attempt stays clean.
+
+Remote database selections have a backend-free desktop/phone regression that
+measures every row and cell while collaborators move, share a cell, or select a
+range, and checks their name labels above the header and under it once
+scrolled: `just test-database-browser`. Keep the outline an overlay, never a
+border on the cell. Virtual rows are transformed, so each is its own stacking
+context: a row carrying labels rises above the header only while its top edge
+is in view.
 
 Column renames have a backend-free desktop/phone regression using the real
 schema query and mutation adapter with delayed service responses:
@@ -319,6 +335,10 @@ Connect can close without reporting success (an OAuth provider severs its
 consent popup's opener) even though Pipedream created the account. Every close
 without success, on web and native, asks `/pipedream/mcp/recover` to register
 the user's newest account for that app from the last fifteen minutes.
+Desktop Home and Agents new-conversation and active-session composers show the shared **Run agents
+on this computer** invitation until this installation is paired or the current
+user dismisses it locally. Keep the invitation tied to bundled macrod support,
+not to account-wide paired runtime count; a user can pair several computers.
 
 ### General
 
@@ -408,6 +428,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   behind ordered writes and never replay alerts when the cache resumes. Link
   cache queue/apply spans to receipt and mark listener failures without stopping
   the remaining callbacks.
+- The Soup GraphQL websocket pings when the app returns to the foreground or
+  comes back online, and terminates a socket that does not answer within five
+  seconds (close 4499, retried). A phone can wake to a socket that reads open but
+  is dead; the reconnect is what tells followers such as agent sessions
+  (`subscribeGraphqlSoupReconnected`) to refetch what they missed.
 - Drain browser cache engines when their last visible consumer hides, then park
   without retiring clients; queue background work until a visible owner reopens
   storage, retaining accepted mutation settlements even if their caller leaves.
@@ -444,7 +469,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab over the router's `layoutSnapshot`/`restoreLayout`; only the active tab is live, and the strip renders in the title bar's center slot. Cmd+click becomes a background tab through `openInNewTabMiddleware`, so tab operations must disarm the intent tracker before navigating. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
 - Show only the Recent conversation feed in mobile Channels, without view tabs or a persisted mobile tab selection; render its rows with Home's touch row (`ChannelCardLayout` and `InboxDivider`) and pin at most six channel favorites above it.
 - Mount the mobile search input before focusing it inside the dock tap; keep navigation in that handler so focus does not trigger a second navigation or lose iOS keyboard activation.
-- Preserve focused chrome editors during deferred split insertion/removal autofocus; explicit return-focus commands may still focus the pane.
+- Preserve focused chrome editors during deferred split insertion/removal/content-change autofocus; explicit return-focus commands may still focus the pane. On desktop, content changes claim focus only for Cmd+K navigation or create-menu arrivals, and only if the destination has not already focused a child. Back/forward and ordinary clicks do not autofocus content.
 - Reconcile global focus when focused DOM subtrees are removed; iOS can omit blur events, otherwise floating creation actions stay hidden after search or editor teardown.
 - Mount the floating mobile AI composer only on the Agents view; other views keep their New action or their own reply/comment composer.
 - Keep desktop New actions on `ViewCreateButton`: full width below the inner
@@ -457,7 +482,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep desktop headers on the shared `ListHeader` / `HeaderActionGroup` pattern: view `Tabs` as pills after the title, `sm`/`icon-sm` semantic islands (28px controls) with 8px gaps on the right, fully rounded frames, New then expandable Search; retain `md` sizing for Tabs, New, and Search. Drive and Tasks list-header filter, layout, sort, and grouping islands use `md`/`icon-md` (32px) to match New and Search. Preserve touch layouts. Compose ButtonGroup actions with explicit `ButtonGroup.Button` segments; use `variant="secondary" finish="raised"` on action frames. Standalone Buttons do not inherit group styling. Pick each control by role from the [design system rule](../../.agents/rules/web/design-system.md); see [UI conventions](../../docs/agent-guide/ui-conventions.md#top-bars). Never use recessed/inset backgrounds in headers.
 - Keep desktop model and effort controls separate: the model selector opens the catalog and the speedometer opens the runtime's advertised slider stops; retain the mobile effort sheet.
 - Passive PR mentions must not retry initial GitHub status failures on remount; preserve confirmed status through refetch errors and keep pending data reads out of their parent Suspense boundary.
-- PR description and comment images are remote URL images: rewrite GitHub blob/`raw` links to `raw.githubusercontent.com` and load them through the image proxy so COEP does not block github.com. Load Macro's own static-file URLs and public Klipy GIFs directly with anonymous CORS, including in the image viewer: the authenticated proxy needs a session cookie that an anonymous image never sends.
+- PR description and comment images are remote URL images: rewrite GitHub blob/`raw` links to `raw.githubusercontent.com` and load them through the image proxy so COEP does not block github.com. Load Macro's own static-file URLs and public Klipy GIFs directly with anonymous CORS, including in the image viewer. The proxy authenticates by session cookie, so a proxied `<img>` uses `crossorigin="use-credentials"` and a fetch of it `credentials: 'include'` (`isImageProxyUrl`); `anonymous` drops the cookie cross-origin and the proxy answers 401.
 - Download selected GIFs without re-encoding through the shared abortable static-file uploader, and insert an `sfs` image only after success; preserve the caret, discard failed or unaccepted uploads, reject stale completions, and keep failure retry in the picker. Give explicit GIF picker opens precedence over formatting and link menus, and anchor to the editor when the browser selection is missing or has no rendered geometry.
 - Keep native booking exit navigation in the route shell, outside page loading boundaries, and use the router so the native hash route stays intact.
 - Diagnose native full reloads with `native_webview_started`, `native_diagnostic_recovered`, and the shared `frontend_instance_id`; use `reloadApp(reason)` for frontend reloads and keep breadcrumbs content-free. Treat `previous_document_*` checkpoints as last-observed lifecycle evidence, never a crash verdict; clear them on logout. `previous_document_last_*` comes from the native navigation breadcrumb (route and entity type, never ids). See [frontend checkpoints](docs/native-reload-diagnostics.md) and `tauri/src-tauri/README.md`.
@@ -489,8 +514,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Add Google Meet account hints only to join actions using the displayed calendar's
   connected email; keep stored and copied conference links unchanged. See the
   [calendar walkthrough](../../docs/agent-guide/calendar.md).
-- Mark loaded calendar and agent-session row notifications through the
-  notification source (`markRowNotificationsSeenOnOpen`) so read dots update
+- Mark loaded calendar, agent-session, and CRM company/contact row notifications
+  through the notification source (`markRowNotificationsSeenOnOpen`) so read dots update
   immediately and failed writes roll back; calendar grid selections and links
   to an event also mark the canonical event read, excluding team projections.
 - Route explicit meeting-page exits using the server's `callEnded` result: ended
@@ -526,6 +551,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   through restarts and remove them on explicit logout. See the Tasks walkthrough.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
+- Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;
+  bump its checkpoint version when changing the hydration input contract.
 - Refresh the channel list's bounded unread edge when opening a conversation,
   including an empty unread result after a read on another device.
 - Decide channel detail access from completed server results; bound confirmations of contradictory cache membership, preserve known unavailable state during retries, and keep unavailable routes registered for notification/reconnect refresh.
@@ -612,6 +639,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Render Tasks due dates in an editable list-property column with a calendar icon for set dates and a slashed calendar for no due date; show only the icon on phones and narrow panes, preserve urgency colors for set dates, keep the current date visible in its dropdown, and limit warning urgency to today and tomorrow.
 - Revalidate Soup queries whose selected sort/group property or date predicate matches an edited definition; compute loaded date-group movement in TypeScript, then refetch authoritative counts and unloaded rows. Keep property sorts and date filters out of the timestamp-only WASM projection.
 - Keep REST grouped Soup item pools and `itemIds` keyed by raw entity IDs, matching Tasks readers and the normalized cache.
+
+- Memory tool results use expandable rows on desktop and mobile; explicit preferences and activity reports remain inspectable after each tool call.
 
 ## Rules
 

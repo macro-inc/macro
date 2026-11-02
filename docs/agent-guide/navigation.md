@@ -437,6 +437,10 @@ Split focus mode (`Shift+Esc`) floats the active split in a rounded, bordered
 panel over the same glass scrim as dialogs. Click the scrim or use the shortcut
 again to restore the split layout.
 
+On desktop, when navigation replaces a pane's content, keyboard focus moves into the active
+pane. If the destination editor or input focuses itself, it keeps focus. A
+focused search or other input outside the panes remains focused while it is open.
+
 Image lightboxes, channel media viewers, sharing, and onboarding dialogs use
 the standard glass scrim. Scroll-edge indicators fade smoothly toward content
 and disappear at the corresponding scroll boundary. Image and video error
@@ -650,6 +654,14 @@ dragging at non-default zoom, and closing a split during a drag; later pointer
 movement must not keep resizing the removed split. Arrow keys still resize
 immediately, with Shift selecting the larger step.
 
+A view's narrow/wide layout reads its width when it mounts, then applies later
+split or window resizes on the next animation frame. Open a channel beside Home,
+drag the split gutter back and forth across the narrow breakpoint, and resize
+the window: the console should show no `ResizeObserver loop completed with
+undelivered notifications` errors, and the sidebar should switch between docked
+and overlay as the split crosses the breakpoint. Drive and other `virtua` lists
+can still report it from the virtualizer's own observer.
+
 Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
 inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,
 with regular-weight labels and consistent icon spacing.
@@ -784,7 +796,9 @@ shows the absolute date, time, timezone, calendar, and invitees. For example,
 “Call John at 3pm tomorrow” becomes a one-hour event at 3 PM tomorrow with no
 invitation; inviting John requires an explicit invitation request or guest edit.
 Bare hours use a reasonable default (1–7 PM, 8–11 AM, 12 noon). For example,
-“call with Julia tomorrow at 7” becomes 7 PM tomorrow for one hour. An assumption
+“call with Julia tomorrow at 7” becomes 7 PM tomorrow for one hour. A time with
+no day is its next occurrence: “sync at 3pm” is 3 PM today, or tomorrow once 3 PM
+has passed, and a task deadline “by 3pm” resolves the same way. An assumption
 cue beneath the date/time range draws attention to the inferred AM/PM; editing the start
 time removes that cue. The temporal model identifies clock facts, explicit AM/PM and day parts;
 Rust resolves them, marks assumed AM/PM, validates timestamps and supplies
@@ -1315,15 +1329,17 @@ its requested cache buckets, so a document-only category must not read the email
 catalog. Switching categories still discovers previously unopened buckets;
 renames, subtype moves, DM priority, and stable tie ordering remain unchanged.
 
-With CRM enabled, normal `@` menus include CRM contacts under **People** in
-documents, channels, discussions, and composers. Contact search loads paged
+With CRM enabled, normal `@` menus include companies and contacts under
+**Contacts & Companies** in documents, channels, discussions, and composers.
+**People** contains only Macro users and groups. Contact search loads paged
 GraphQL results from all accessible CRM-enabled teams, excludes hidden contacts
-and companies, and collapses duplicate full email addresses case-insensitively.
-The most recently active visible team record represents each email. An eligible
-Macro user with the same email takes precedence and keeps normal user-mention
-notifications. External contacts insert a link to their original CRM record;
-they do not invite or notify that email address. Assignee and other user-only
-pickers continue to list Macro users only.
+and companies, and
+collapses duplicate full email addresses case-insensitively. The most recently
+active visible team record represents each email. Picking a CRM contact inserts
+a link to that original CRM record, even if a Macro user shares its email; it
+does not invite or notify that email address. Assignee and other user-only
+pickers continue to list Macro users only. Mobile keeps a single list, with
+only Macro users and groups pinned ahead of ranked entity results.
 
 Typed Cmd+K **People** and **All** queries find known Macro users, including
 teammates supplied by the contacts service, before their first DM and without a
@@ -1425,6 +1441,8 @@ restart rules still apply.
 ## Keyboard model (from the in-app guide; verified partially)
 
 - `Ctrl/Cmd+K` — jump to anything by name.
+  Selecting a destination focuses its split or editor after the menu closes.
+  Clicking through lists and moving Back/Forward leaves editor focus alone.
 - `?` — the focused view's shortcuts, read from its registered keys (hidden
   navigation keys and `g` sequences included); `?` again closes it. Only the
   key opens it: the command menu does not list it, since run from there it

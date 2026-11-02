@@ -5,7 +5,7 @@ false && internalDrag;
 import { Lightbox } from '@core/component/Lightbox';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { displayImageUrl } from '@core/util/imageProxy';
+import { displayImageUrl, isImageProxyUrl } from '@core/util/imageProxy';
 import ImageIcon from '@icon/system/regular/image-broken.svg';
 import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import { Dialog } from '@kobalte/core/dialog';
@@ -336,7 +336,9 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           />
         </Show>
         <img
-          crossorigin="anonymous"
+          crossorigin={
+            isImageProxyUrl(imageUrl()) ? 'use-credentials' : 'anonymous'
+          }
           class={cn(
             'h-full object-contain',
             effectiveDims()[0] > 0 && 'absolute inset-0 size-full',
@@ -415,7 +417,9 @@ export function MarkdownImage(props: ImageDecoratorProps) {
         <Dialog.Overlay class="fixed inset-0 z-modal scrim-glass" />
         <Lightbox
           src={imageUrl}
-          crossOrigin="anonymous"
+          crossOrigin={
+            isImageProxyUrl(imageUrl()) ? 'use-credentials' : 'anonymous'
+          }
           imageId={() => props.id}
           navigationHidden
         />

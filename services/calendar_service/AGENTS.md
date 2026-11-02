@@ -16,7 +16,7 @@ gateway `/calendar` prefix.
 ## Scope
 
 - Owns: the Google Calendar push webhook, calendar mutation routes, calendar
-  sync scheduling/outbox, meeting-note link routes, and the backfill queue worker.
+  sync scheduling/outbox, and the backfill queue worker.
 - Not here: calendar domain logic and the Postgres/Google adapters →
   `crates/calendar_events`, `crates/calendar_scheduling`.
 
@@ -45,8 +45,6 @@ gateway `/calendar` prefix.
 
 - The router is mounted at both `/` and `/calendar` (`GATEWAY_PATH_PREFIX` in
   `src/api.rs`) because the gateway forwards the path unchanged.
-- Meeting-note routes remain mounted with calendar sync disabled; compose their
-  repository and document access service from the primary database.
 - Reauth-required notifications ride the shared `LinkManagerQueue`, consumed by
   `email_service`; don't add a second calendar-specific reconnect notification.
 - Forward `team_ooo_changed` to both inbox and teammate refresh notifications;

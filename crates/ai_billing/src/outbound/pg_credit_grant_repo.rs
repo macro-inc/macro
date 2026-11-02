@@ -5,8 +5,10 @@ mod test;
 
 use super::pg_funding_repo::lock_payer;
 use crate::domain::credit_grant::{CreditGrant, CreditGrantRepo};
+use crate::domain::invite_reward::FreeAllowanceBonusRepo;
 use crate::domain::{BillingError, Result};
 use macro_user_id::user_id::MacroUserIdStr;
+use macro_uuid::Uuid;
 use sqlx::PgPool;
 
 /// Postgres-backed [`CreditGrantRepo`].
@@ -66,5 +68,31 @@ impl CreditGrantRepo for PgCreditGrantRepo {
         .fetch_one(&self.pool)
         .await
         .map_err(storage)
+    }
+}
+
+impl FreeAllowanceBonusRepo for PgCreditGrantRepo {
+    async fn record_free_allowance_bonus(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        id: Uuid,
+        cost_cents: i64,
+        note: &str,
+    ) -> Result<bool> {
+        let result = sqlx::query!(
+            r#"
+            INSERT INTO ai_free_allowance_bonus (id, user_id, cost_cents, note)
+            VALUES ($1, $2, $3, $4)
+            ON CONFLICT (id) DO NOTHING
+            "#,
+            id,
+            user.as_ref(),
+            cost_cents,
+            note,
+        )
+        .execute(&self.pool)
+        .await
+        .map_err(storage)?;
+        Ok(result.rows_affected() == 1)
     }
 }

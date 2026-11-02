@@ -11,6 +11,11 @@ There are no built-in company views or Board/List layout. Companies and People
 are plain soup lists with the shared pagination. Existing personal/team saved
 views stay in the toolbar's Views menu.
 
+Opening a company or contact row in Companies or People clears its blue unread
+dot, including desktop preview activation, keyboard opening, and phone navigation.
+The read is saved in the background; a failed request restores the dot so opening
+it again can retry. Marking read does not mark the notification done.
+
 **Rollout:** Tasks, Email, Notes, Calls and Databases require PostHog `enable-crm-activity`
 (off by default; local override: `VITE_ENABLE_CRM_ACTIVITY=true`). CRM also uses
 this flag to decide whether to supply its task-composer preset; the shared
@@ -130,6 +135,10 @@ are accepted. **Add contact** on a company's Team tab skips the company pill.
 a company domain, not a personal email provider. The company, contact and pipeline dialogs share the
 task/project composer layout: name on the first row beside **Close**, details
 below, and a **Create …** button that also submits on Command-Enter.
+
+Verify company domain validation by creating a company with an allowed business
+domain, then adding a contact whose email matches it. Personal email provider
+domains must still be rejected as company domains.
 
 Desktop `Search companies` and `Search people` start as outlined icon buttons
 and expand into the shared Email/Tasks search bar. Command-F expands and focuses
