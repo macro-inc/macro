@@ -130,7 +130,8 @@ where
             if kind != AgentKind::Cursor {
                 return Err(
                     agent_session::domain::error::AgentSessionError::InvalidRepositorySelection(
-                        "repository selection is supported for Cursor coding agents",
+                        "repoUrl needs a Cursor coding agent; choose a Cursor agent persona or \
+                         omit repoUrl",
                     ),
                 );
             }

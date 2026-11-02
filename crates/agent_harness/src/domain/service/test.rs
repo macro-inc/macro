@@ -4853,6 +4853,29 @@ async fn a_cursor_managed_session_is_always_stamped_cursor() {
     assert_eq!(session.harness, "cursor");
 }
 
+/// A repository goes only to a Cursor persona; one chosen explicitly that
+/// cannot take it is told so, by the field's wire name, before anything is
+/// provisioned.
+#[tokio::test]
+async fn a_repository_for_a_persona_that_cannot_take_one_is_refused_by_name() {
+    let (service, _, containers, _, _) = harness();
+    let mut request = explicit_cursor_request();
+    request.repo_branch = None;
+    request.profile = Some(agent_session::domain::ports::SelectedManagedPersona {
+        bot_id: bot_id::CODEX_BOT_ID,
+        profile: None,
+    });
+    let result = service.open_managed_session(request).await;
+    let Err(agent_session::domain::error::AgentSessionError::InvalidRepositorySelection(reason)) =
+        result
+    else {
+        panic!("expected a repository refusal, got {result:?}");
+    };
+    assert!(reason.contains("repoUrl"), "{reason}");
+    assert!(reason.contains("Cursor"), "{reason}");
+    assert_eq!(containers.spawned(), 0);
+}
+
 fn explicit_cursor_request() -> OpenManagedSession {
     OpenManagedSession {
         id: None,
