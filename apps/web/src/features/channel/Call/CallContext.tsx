@@ -24,6 +24,7 @@ import type {
   LocalTrack,
   RemoteParticipant,
   Room,
+  ScreenShareCaptureOptions,
 } from 'livekit-client';
 import {
   createContext,
@@ -189,6 +190,23 @@ function microphoneCaptureOptions(
       ? { voiceIsolation: useBrowserProcessing && !noiseSuppressionSupported }
       : {}),
     ...(deviceId ? { deviceId: { exact: deviceId } } : {}),
+  };
+}
+
+function screenShareCaptureOptions(
+  includeAudio: boolean
+): ScreenShareCaptureOptions {
+  if (!includeAudio) return { audio: false };
+  return {
+    // Shared audio is usually music or video, which voice processing mangles.
+    audio: {
+      echoCancellation: false,
+      noiseSuppression: false,
+      autoGainControl: false,
+    },
+    // Chromium offers system audio only when asked (Windows, ChromeOS); other
+    // platforms and browsers capture tab audio or none.
+    systemAudio: 'include',
   };
 }
 
@@ -359,6 +377,13 @@ const [persistedNoiseSuppressionMode, setPersistedNoiseSuppressionMode] =
     },
   });
 
+// Persisted across reloads. Off by default: shared tab or system audio is heard
+// by everyone in the call, so including it is an explicit choice.
+const [persistedShareScreenAudio, setPersistedShareScreenAudio] = makePersisted(
+  createSignal(false),
+  { name: 'call.shareScreenAudio' }
+);
+
 export type CallState = {
   /** Media connection owned by the meeting session; channel calls use callLifecycle. */
   meetingSession: Pick<
@@ -409,6 +434,10 @@ export type CallState = {
   toggleVideo: () => Promise<void>;
   /** Toggle screen sharing */
   toggleScreenShare: () => Promise<void>;
+  /** Whether the next screen share captures tab or system audio */
+  shareScreenAudio: () => boolean;
+  /** Choose whether the next screen share captures tab or system audio */
+  setShareScreenAudio: (value: boolean) => void;
   /** Switch active audio input device */
   switchAudioInput: (deviceId: string) => Promise<void>;
   /** Switch active audio output device */
@@ -1551,13 +1580,17 @@ function createCallState() {
     if (!r) return;
     const newSharing = !store.isScreenSharing;
     try {
-      await r.localParticipant.setScreenShareEnabled(newSharing);
+      await r.localParticipant.setScreenShareEnabled(
+        newSharing,
+        screenShareCaptureOptions(persistedShareScreenAudio())
+      );
       setStore('isScreenSharing', newSharing);
       analytics.track('call_action', {
         action: 'screen_share_toggled',
         channelId: store.activeChannelId ?? '',
         callId: store.activeCallId ?? undefined,
         enabled: newSharing,
+        audio: newSharing ? persistedShareScreenAudio() : undefined,
       });
     } catch (e) {
       console.error('failed to toggle screen share', e);
@@ -1799,6 +1832,8 @@ function createCallState() {
     toggleAudio,
     toggleVideo,
     toggleScreenShare,
+    shareScreenAudio: persistedShareScreenAudio,
+    setShareScreenAudio: (value) => setPersistedShareScreenAudio(value),
     switchAudioInput,
     switchAudioOutput,
     switchVideoInput,

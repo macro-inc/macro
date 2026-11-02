@@ -206,8 +206,9 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/agents/chat/<uuid>` | Legacy AI chat opened in the Agents workspace (`/app/agent-chats/<uuid>` remains a compatibility alias) |
 | `/app/calls` | Calls list |
 | `/app/companies` | Customers (CRM; needs a team). The selected list is `sN.crm.tab` |
-| `/app/companies/<company-or-contact>/<uuid>` | Customers with a company or contact opened inline, keeping its list's `sN.crm.tab`; a record tab other than Overview adds `/<team-emails-files-tasks-or-calls>`. On desktop, `/app/company/<uuid>` and `/app/contact/<uuid>` redirect here, a `comment_id` moving to `sN.crm-record.commentId`; touch devices keep those standalone pages |
+| `/app/companies/<company-or-contact>/<uuid>` | Customers with a company or contact opened inline, keeping its list's `sN.crm.tab`; a record tab other than Overview adds `/<team-emails-files-tasks-calls-or-databases>`. On desktop, `/app/company/<uuid>` and `/app/contact/<uuid>` redirect here, a `comment_id` moving to `sN.crm-record.commentId`; touch devices keep those standalone pages |
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
+| `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/calendar` | Redirects to `/app/calendar/<month-or-week-or-day>` at the remembered period (Day on phones and Week on desktop by default), keeping an `eventId` |
@@ -1450,10 +1451,12 @@ restart rules still apply.
 Settings → Agents, its Cursor guide, and Runtimes render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
-Settings → Agents → Agents ends with **Coding sessions**: per-user **Create
+Settings → Agents → Agents ends with **Coding sessions**: a **Default repository**
+select saved per user on this device (see the AI chat guide), then per-user **Create
 tasks** and **Open pull requests** switches, then **Auto-archive**: **When its
-pull requests merge** and **When its machine session closes** switches. All are
-off by default; each saves on toggle and reverts with a toast if the save fails.
+pull requests merge** and **When its machine session closes** switches. The
+switches are off by default; each saves on toggle and reverts with a toast if the
+save fails.
 
 Home does not bind Delete or Backspace to deleting list items. These keys remain
 available to the open editor (for example, clearing a selected spreadsheet range).

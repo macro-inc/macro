@@ -20,6 +20,8 @@ export type CallMediaControlsState = Pick<
   | 'toggleAudio'
   | 'toggleVideo'
   | 'toggleScreenShare'
+  | 'shareScreenAudio'
+  | 'setShareScreenAudio'
   | 'audioInputDevices'
   | 'audioOutputDevices'
   | 'videoInputDevices'
@@ -149,6 +151,23 @@ export function CallMediaControls(props: {
               </Dropdown.CheckboxItem>
             </Dropdown.Group>
           </>
+        }
+        screenMenu={
+          <Dropdown.Group>
+            <Dropdown.CheckboxItem
+              checked={call.shareScreenAudio()}
+              disabled={call.isConnecting() || call.isScreenSharing()}
+              closeOnSelect={false}
+              onChange={(checked) => call.setShareScreenAudio(checked)}
+            >
+              Share audio
+            </Dropdown.CheckboxItem>
+            <p class="px-2 pb-1 text-xs text-ink-muted">
+              {call.isScreenSharing()
+                ? 'Stop sharing to change this.'
+                : 'Shares audio from a tab, or from your whole system where the browser supports it.'}
+            </p>
+          </Dropdown.Group>
         }
         videoMenu={
           <>
