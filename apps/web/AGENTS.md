@@ -24,6 +24,17 @@
   [web-app delivery](../../infra/stacks/web-app/README.md); its publisher tests
   are backend-free, and its Pulumi tests must not run real staging/cloud commands.
 
+## Account-scoped source queries
+
+Key channel lists/activity, cached Quick Access channels, email links and inbox
+health probes by viewer. Use `queries/auth/account-scope.ts` to fence requests
+and cache writes; mutation ownership comes from the execute-time
+`MutationFunctionContext.meta`, not a live accessor or mutable observer options.
+Login closes this source gate until a fresh auth query succeeds, without clearing
+the app shell's retained identity. Legacy unscoped channel lists are not restored.
+The settings signature browser suite also exercises real channel/link observers
+across account switches with delayed responses (`account-sources.browser.e2e.ts`).
+
 ## Verifying a change in a real browser
 
 `just test-functional` builds a production-like bundle of its fixtures and runs

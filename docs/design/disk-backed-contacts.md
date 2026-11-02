@@ -9,6 +9,11 @@ The contact debug inspector, Calendar search's organizer/attendee pickers,
 Drive creator filters and CRM Notes creator filters now use bounded windows. Explicit selected ID/email lookup reads viewer-scoped
 keys offline and authoritative bounded batches online; selected values remain
 independent of suggestions. Other product menus still retain legacy arrays.
+Channel/inbox source queries are now viewer-keyed, cached channel reads fence
+storage generation, and mutation success/rollback use their captured account.
+A replacement login clears these sources and gates them until fresh identity
+confirmation, while retaining the shell's identity. This closes a prerequisite
+for safely publishing local DM/inbox facts.
 **Next step:** publish channel/inbox context in bounded batches, then cut
 Quick Access/shared recipients over to the bounded host API. Their old full-list source remains until that wiring lands.
 Soup/CRM owner filters and Tasks' AI-filter catalog also remain.
