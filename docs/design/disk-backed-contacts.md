@@ -5,9 +5,11 @@ contact hydration, bounded page retention, a `person` projection, and a generate
 cursor-only backfill result. Background hydration is now wired under Soup's
 existing authenticated tab leadership and cache flag. It admits pages under an
 engine-checked account/storage generation and saves only committed cursors.
-The frontend UI still retains the full directory through legacy hooks.
-**Next step:** the first bounded cached contact consumer, including before-limit
-DM ranking/exclusions and exact selected-contact resolution.
+The contact debug inspector is the first bounded UI consumer: one replaceable
+50-result window, cached search/browse, scoped server fallback, and explicit
+snapshot/offline status. Product menus still retain the directory through legacy hooks.
+**Next step:** migrate a product picker after implementing before-limit DM
+ranking/exclusions and bounded exact selected-contact resolution.
 
 ## Goal and scope
 
@@ -49,8 +51,8 @@ branch changes, not a claim that the feature is deployed.
   path currently excludes `person`, even though the core search profile has that bucket.
 - [`useCombinedRecipient.ts`](../../apps/web/src/lib/core/signal/useCombinedRecipient.ts)
   derives additional arrays, consumed by email, sharing, invitations, and creation flows.
-- Filters, calendar editors, onboarding, imports, debug views, and the database SQL
-  `people` source also request the full directory.
+- Filters, calendar editors, onboarding, imports, and the database SQL `people`
+  source still request the full directory. The contact debug inspector no longer does.
 
 ## Target data flow
 
@@ -134,24 +136,28 @@ bounded point reads before resolving names.
   covering index and borrowed-row ranker (projection version 5). Public `User` /
   `GraphqlUser` profiles no longer imply contact membership. No timestamps are
   invented from relationship metadata.
-- [ ] Materialize bounded `IUser` windows with target `userId` as `IUser.id`;
+- [x] Materialize bounded `IUser` windows with target `userId` as `IUser.id`;
   the viewer-scoped `GraphqlContact.id` is a cache key, not a DM/navigation target.
+  `directory.ts` maps returned names directly without populating the global name store.
 - [ ] Preserve DM recency, deduplication, and secondary-inbox exclusions. Ranking
   facts needed to choose the top results must apply before the result limit;
   relationship `updated_at` is not automatically equivalent to DM activity.
-- [ ] Add shared contact operations under `apps/web/src/lib/queries/contacts`:
-  bounded search, cursor-based browse, explicit ID/email resolution, and
-  loading/error/synchronization status. These replace the all-array contract.
-- [ ] Bound retained result windows and query-history caches, not just SQL result
-  counts. Keep selected contacts independently of the current suggestions.
-- [ ] For cold, disabled, or unsupported caches, use bounded server reads through
-  the same frontend contract. Never fall back to downloading the full directory.
-- [ ] Account for older native engines: runtime GraphQL metadata can accept a new
+- [x] Add bounded search/browse under `apps/web/src/lib/queries/contacts`, with
+  pending/error, snapshot/partial/cold, and offline/source status. Cursors bind to
+  source, account, query and (for cache) generation; pagination never switches sources.
+- [ ] Add shared exact ID/email resolution, including offline selected contacts.
+- [x] Bound result windows and query history in the new API: one page per observer,
+  immediate TanStack garbage collection, plain copied cursors, and no page accumulation.
+- [ ] Keep selected contacts independent of suggestions when migrating product pickers.
+- [x] For cold, disabled, or unsupported caches, the new reader uses one bounded
+  server page. Offline fallback requires an identity-checked cached window and
+  never masks authorization errors; legacy full-list APIs are not a fallback.
+- [x] Account for older native engines: runtime GraphQL metadata can accept a new
   type, but its handwritten search projection still needs a rebuilt native binary.
   Gate local contact-search capability rather than treating missing support as no matches.
   Search responses now advertise `projectionVersion`; missing or below 5 means
   the engine lacks contact projection/retention. The background runner and native
-  guarded-write boundary now gate on this capability; UI fallback is still pending.
+  guarded-write boundary and the bounded UI reader now gate on this capability.
 - [ ] Wire Quick Access `person` materialization and query-driven shared recipient
   selection; remove global contact indexing and full-directory recipient transforms.
 
@@ -189,7 +195,9 @@ checkpoint describes a cached snapshot, not current authoritative membership.
 - [ ] Imports: batch exact matching of the imported assignees, plus bounded picker search.
 - [ ] Database SQL `people`: move filtering/aggregation to an appropriate execution
   boundary. Paging everyone and concatenating the pages in JS is not a solution.
-- [ ] Debug views: counts and paginated inspection, not the full directory.
+- [x] Contact debug view: visible counts, search and paginated inspection; JSON
+  export contains only the current window. Desktop/phone browser coverage uses
+  the production reader/window/inspector with bounded stand-in cache/network sources.
 - [ ] Bound and account-scope the shared display-name cache. Retain active/selected
   names without creating eviction/refetch loops; TTL alone is not a size bound.
 - [ ] Remove `useContacts()`, `useContactsQuery()`, the full-list query options,

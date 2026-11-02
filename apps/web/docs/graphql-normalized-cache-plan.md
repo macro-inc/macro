@@ -1201,8 +1201,16 @@ the same engine lock as the write, without switching accounts. Coordinator
 protocol 11 forwards that scope; native hosts refuse guarded writes on older
 engines. Checkpoints advance only after persistence and a generation recheck.
 Invalidations coalesce on a 15-minute cadence without interrupting active scans;
-hourly passes refresh names. Scan omissions never delete records. UI migration
-and authoritative removal reconciliation are pending; see [the contacts checklist](../../../docs/design/disk-backed-contacts.md).
+hourly passes refresh names. Scan omissions never delete records.
+
+The first UI consumer is `/app/debug/data`: its contact card uses one replaceable
+50-row window, with immediately collected query history. The reader validates
+viewer identity and storage generation around cache reads, preserves target user
+IDs, and uses bounded server pages for cold/unsupported caches. Offline windows
+remain explicitly incomplete; authorization failures never become cached successes.
+Server continuations stay server-side even if hydration finishes between pages.
+Product picker migration, before-limit DM ranking/exclusions, exact selected-contact
+resolution, and authoritative removal reconciliation remain in [the contacts checklist](../../../docs/design/disk-backed-contacts.md).
 
 ## Cached email Quick Access
 

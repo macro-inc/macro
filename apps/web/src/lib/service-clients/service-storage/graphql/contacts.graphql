@@ -1,3 +1,9 @@
+query ContactDirectoryIdentity {
+  user {
+    id
+  }
+}
+
 fragment ContactDirectoryFields on GraphqlContact {
   id
   userId

@@ -7,6 +7,9 @@ import {
   type ContactDirectoryBackfillQuery,
   type ContactDirectoryBackfillQueryVariables,
   type ContactDirectoryBackfillResult,
+  ContactDirectoryPageDocument,
+  type ContactDirectoryPageQuery,
+  type ContactDirectoryPageQueryVariables,
 } from './graphql/generated/graphql';
 import {
   getGraphqlSoupNetworkClient,
@@ -16,6 +19,25 @@ import {
 const DOCUMENT = print(ContactDirectoryBackfillDocument);
 const TRANSPORT_DOCUMENT = graphqlSoupTransportDocument(DOCUMENT);
 const PAGE_SIZE = 500;
+
+/** Foreground fallback is one bounded server page, never the legacy full list.
+ * It is fetch-only: obsolete UI requests cannot change cache identity. */
+export async function fetchContactDirectoryPage(
+  variables: ContactDirectoryPageQueryVariables,
+  signal: AbortSignal
+): Promise<ContactDirectoryPageQuery> {
+  signal.throwIfAborted();
+  const result = await getGraphqlSoupNetworkClient()
+    .query(ContactDirectoryPageDocument, variables, {
+      requestPolicy: 'network-only',
+      fetchOptions: { signal },
+    })
+    .toPromise();
+  signal.throwIfAborted();
+  if (result.error) throw result.error;
+  if (!result.data) throw new Error('Contact directory returned no data');
+  return result.data;
+}
 
 /** One bounded page, explicitly admitted after cancellation checks. The engine
  * checks account/generation again under its lock; returning a cursor proves the
