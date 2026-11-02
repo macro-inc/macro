@@ -10,10 +10,9 @@ as gray rather than transparent.
 
 ## Canvas link paste
 
-Pasting a supported routed Macro app link onto the canvas creates a text
-node with an entity mention, as legacy links do. Routed links retain compatible
-block targets, but not workspace paths or pane-local search state; unsupported
-links remain text.
+Pasting a supported routed Macro app link onto the canvas creates a document
+reference card. Routed links retain compatible block targets, but not workspace
+paths or pane-local search state; unsupported links remain text.
 
 ## Copying and saving images
 

@@ -10,7 +10,7 @@ import ThreadIcon from '@icon/system/regular/chats-circle.svg';
 import HighlightIcon from '@icon/system/regular/highlighter-circle.svg';
 import MapPinIcon from '@icon/system/regular/map-pin-simple.svg';
 import { Card } from '@ui/components/Card';
-import { type ComponentProps, Suspense } from 'solid-js';
+import { Suspense } from 'solid-js';
 import type { DocumentPreviewContentProps } from './DocumentPreviewContent';
 import { DocumentPreviewSkeleton } from './DocumentPreviewSkeleton';
 
@@ -20,26 +20,12 @@ const PreviewBody = lazyNamed(
   () => import('./DocumentPreviewContent'),
   'DocumentPreviewContent'
 );
-const CalendarDetails = lazyNamed(
-  () => import('./DocumentPreviewContent'),
-  'CalendarEventPreviewDetails'
-);
 
 /** Keep parsing, actions and rendering inside the visible preview's boundary. */
 export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
   return (
     <Suspense fallback={<DocumentPreviewSkeleton />}>
       <PreviewBody {...props} />
-    </Suspense>
-  );
-}
-
-export function CalendarEventPreviewDetails(
-  props: ComponentProps<typeof CalendarDetails>
-) {
-  return (
-    <Suspense fallback={<DocumentPreviewSkeleton />}>
-      <CalendarDetails {...props} />
     </Suspense>
   );
 }

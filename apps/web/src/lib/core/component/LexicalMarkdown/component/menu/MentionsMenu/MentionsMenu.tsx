@@ -608,7 +608,17 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       })
     : undefined;
 
+  /**
+   * Agents whose runtime is away are listed but not pickable: a mention
+   * inserted here would sit in the message unanswered until the machine comes
+   * back, which reads as the agent ignoring you. The flag rides on the user
+   * entry so this menu needs no view of runtimes.
+   */
+  const isOffline = (item: MentionItem) =>
+    item.kind === 'user' && item.data.offline === true;
+
   const itemAction = async (item: MentionItem) => {
+    if (isOffline(item)) return;
     analytics.track('mentions_menu_use', { itemType: item.kind });
     if (props.onPick) props.onPick(item);
     else await itemActionHandler?.(item);
@@ -664,6 +674,9 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     },
     onSelect: () => {
       const selectedItem = controller.selectedItem();
+      // Keep the menu open on an offline agent so Enter reads as "not that
+      // one" rather than silently dismissing with nothing inserted.
+      if (selectedItem && isOffline(selectedItem)) return;
       if (selectedItem) {
         itemAction(selectedItem).catch((error) =>
           Telemetry.error(error, {
@@ -884,6 +897,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                                   itemAction={itemAction}
                                   setIndex={setSelectedIndexFromMouse}
                                   setOpen={setMenuOpen}
+                                  offline={isOffline(item())}
                                 />
                               )}
                             </Key>
@@ -929,6 +943,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
                 items={controller.combinedItems()}
                 selectedIndex={controller.selectedIndex()}
                 itemAction={itemAction}
+                offline={isOffline}
                 setIndex={setSelectedIndexFromMouse}
                 setOpen={setMenuOpen}
                 maxHeight={contentMaxHeight()}
@@ -955,6 +970,8 @@ function VirtualizedItemList(props: {
   items: MentionItem[];
   selectedIndex: number;
   itemAction: (item: MentionItem) => void;
+  /** Whether an item's agent runtime is away; such rows are not pickable. */
+  offline: (item: MentionItem) => boolean;
   setIndex: (index: number) => void;
   setOpen: (open: boolean) => void;
   maxHeight?: number;
@@ -1029,6 +1046,7 @@ function VirtualizedItemList(props: {
                       itemAction={props.itemAction}
                       setIndex={props.setIndex}
                       setOpen={props.setOpen}
+                      offline={props.offline(currentItem())}
                       disableScrollIntoView
                     />
                   </div>

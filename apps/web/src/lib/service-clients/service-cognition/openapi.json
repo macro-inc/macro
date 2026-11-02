@@ -1859,7 +1859,7 @@
       "get": {
         "tags": ["memory"],
         "summary": "Get the authenticated user's latest memory.",
-        "description": "Returns the current memory if one exists. If the memory is stale or missing,\na background generation is triggered and the endpoint returns the stale\nmemory (200) or 404 if none exists yet.",
+        "description": "Compose stored private preferences, latest activity, and current team profiles.\nEnrolls the caller for daily refresh; generation never runs on this request.",
         "operationId": "get_memory_handler",
         "responses": {
           "200": {
@@ -1873,7 +1873,7 @@
             }
           },
           "404": {
-            "description": "No memory exists for this user yet (generation triggered)"
+            "description": "No composed memory exists for this user yet"
           },
           "500": {
             "description": "Internal server error",

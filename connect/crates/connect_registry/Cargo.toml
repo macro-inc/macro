@@ -1,0 +1,13 @@
+[package]
+name = "connect_registry"
+version = "0.1.0"
+edition = "2024"
+publish = false
+
+[dependencies]
+chrono = { workspace = true }
+serde = { workspace = true }
+thiserror = { workspace = true }
+toml = { workspace = true }
+url = { workspace = true }
+workspace-hack = { version = "0.1", path = "../../../crates/workspace-hack" }

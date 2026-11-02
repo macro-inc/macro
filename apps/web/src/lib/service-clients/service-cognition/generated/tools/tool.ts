@@ -235,6 +235,10 @@ type ToolParserMap = {
     response: types.TeamAvailability;
   };
   GetThread: { call: types.GetThread; response: types.GetThreadResponse };
+  GetUserActivity: {
+    call: types.GetUserActivity;
+    response: types.ActivityReports;
+  };
   ImportCompaniesCsv: {
     call: types.ImportCompaniesCsv;
     response: types.ImportCompaniesCsvResponse;
@@ -425,6 +429,7 @@ type ToolParserMap = {
     call: types.ReadInitiativeActivity;
     response: types.ProjectActivityResult;
   };
+  ReadMemory: { call: types.ReadMemory; response: types.ExplicitMemory };
   ReadMetadata: {
     call: types.ReadMetadata;
     response: types.ReadMetadataResponse;
@@ -540,6 +545,7 @@ type ToolParserMap = {
     call: types.UpdateInitiativeSharing;
     response: types.ProjectDetails;
   };
+  UpdateMemory: { call: types.UpdateMemory; response: types.ExplicitMemory };
   UpdatePipelineEntries: {
     call: types.UpdatePipelineEntries;
     response: types.UpdatePipelineEntriesResponse;
@@ -839,6 +845,10 @@ const toolParserMap = {
     call: schemas.getGetThreadSchema,
     response: schemas.getGetThreadResponseSchema,
   },
+  GetUserActivity: {
+    call: schemas.getGetUserActivitySchema,
+    response: schemas.getActivityReportsSchema,
+  },
   ImportCompaniesCsv: {
     call: schemas.getImportCompaniesCsvSchema,
     response: schemas.getImportCompaniesCsvResponseSchema,
@@ -1083,6 +1093,10 @@ const toolParserMap = {
     call: schemas.getReadInitiativeActivitySchema,
     response: schemas.getProjectActivityResultSchema,
   },
+  ReadMemory: {
+    call: schemas.getReadMemorySchema,
+    response: schemas.getExplicitMemorySchema,
+  },
   ReadMetadata: {
     call: schemas.getReadMetadataSchema,
     response: schemas.getReadMetadataResponseSchema,
@@ -1230,6 +1244,10 @@ const toolParserMap = {
   UpdateInitiativeSharing: {
     call: schemas.getUpdateInitiativeSharingSchema,
     response: schemas.getProjectDetailsSchema,
+  },
+  UpdateMemory: {
+    call: schemas.getUpdateMemorySchema,
+    response: schemas.getExplicitMemorySchema,
   },
   UpdatePipelineEntries: {
     call: schemas.getUpdatePipelineEntriesSchema,
@@ -1496,6 +1514,10 @@ type ToolDataMap = {
     response: types.TeamAvailability;
   };
   GetThread: { call: types.GetThread; response: types.GetThreadResponse };
+  GetUserActivity: {
+    call: types.GetUserActivity;
+    response: types.ActivityReports;
+  };
   ImportCompaniesCsv: {
     call: types.ImportCompaniesCsv;
     response: types.ImportCompaniesCsvResponse;
@@ -1686,6 +1708,7 @@ type ToolDataMap = {
     call: types.ReadInitiativeActivity;
     response: types.ProjectActivityResult;
   };
+  ReadMemory: { call: types.ReadMemory; response: types.ExplicitMemory };
   ReadMetadata: {
     call: types.ReadMetadata;
     response: types.ReadMetadataResponse;
@@ -1801,6 +1824,7 @@ type ToolDataMap = {
     call: types.UpdateInitiativeSharing;
     response: types.ProjectDetails;
   };
+  UpdateMemory: { call: types.UpdateMemory; response: types.ExplicitMemory };
   UpdatePipelineEntries: {
     call: types.UpdatePipelineEntries;
     response: types.UpdatePipelineEntriesResponse;

@@ -3266,7 +3266,7 @@ export type GetMemoryHandlerData = {
 
 export type GetMemoryHandlerErrors = {
     /**
-     * No memory exists for this user yet (generation triggered)
+     * No composed memory exists for this user yet
      */
     404: unknown;
     /**
