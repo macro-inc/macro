@@ -183,6 +183,10 @@ export type CodeGuide = {
      */
     contract: string;
     /**
+     * Starter routines, as worked examples of code steps.
+     */
+    examples: Array<StarterRoutine>;
+    /**
      * The SDK's entities relevant to the task, with method signatures.
      */
     reference: string;
@@ -655,6 +659,27 @@ export type ShareRoutineTemplate = {
 };
 
 /**
+ * A starter routine whose step is code: offered when a routine is created,
+ * and shown to the drafter as a worked example.
+ */
+export type StarterRoutine = {
+    /**
+     * Names it, e.g. `inbox`.
+     */
+    key: string;
+    /**
+     * What someone asks for, with when it runs.
+     */
+    request: string;
+    /**
+     * Its steps, in the shape a routine's task holds them.
+     */
+    steps: Array<{
+        [key: string]: unknown;
+    }>;
+};
+
+/**
  * A user-specific part of a shared routine.
  */
 export type TemplateVariable = {
@@ -811,6 +836,28 @@ export type RoutineCodeGuideResponses = {
 };
 
 export type RoutineCodeGuideResponse = RoutineCodeGuideResponses[keyof RoutineCodeGuideResponses];
+
+export type RoutineCodeStartersData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/scheduled-actions/code/starters';
+};
+
+export type RoutineCodeStartersErrors = {
+    401: string;
+};
+
+export type RoutineCodeStartersError = RoutineCodeStartersErrors[keyof RoutineCodeStartersErrors];
+
+export type RoutineCodeStartersResponses = {
+    /**
+     * Starter routines whose step is code; empty where code steps aren't available
+     */
+    200: Array<StarterRoutine>;
+};
+
+export type RoutineCodeStartersResponse = RoutineCodeStartersResponses[keyof RoutineCodeStartersResponses];
 
 export type DeleteScheduledActionData = {
     body?: never;

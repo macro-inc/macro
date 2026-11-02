@@ -21,6 +21,7 @@ import type {
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
+  StarterRoutine,
   UpdateScheduledAction,
 } from './schemas';
 
@@ -335,6 +336,53 @@ export const routineCodeGuide = async (
     status: res.status,
     headers: res.headers,
   } as routineCodeGuideResponse;
+};
+
+export type routineCodeStartersResponse200 = {
+  data: StarterRoutine[];
+  status: 200;
+};
+
+export type routineCodeStartersResponse401 = {
+  data: string;
+  status: 401;
+};
+
+export type routineCodeStartersResponseSuccess =
+  routineCodeStartersResponse200 & {
+    headers: Headers;
+  };
+export type routineCodeStartersResponseError =
+  routineCodeStartersResponse401 & {
+    headers: Headers;
+  };
+
+export type routineCodeStartersResponse =
+  | routineCodeStartersResponseSuccess
+  | routineCodeStartersResponseError;
+
+export const getRoutineCodeStartersUrl = () => {
+  return `/scheduled-actions/code/starters`;
+};
+
+export const routineCodeStarters = async (
+  options?: RequestInit
+): Promise<routineCodeStartersResponse> => {
+  const res = await fetch(getRoutineCodeStartersUrl(), {
+    ...options,
+    method: 'GET',
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: routineCodeStartersResponse['data'] = body
+    ? JSON.parse(body)
+    : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as routineCodeStartersResponse;
 };
 
 export type getScheduledActionResponse200 = {

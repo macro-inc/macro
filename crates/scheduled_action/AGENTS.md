@@ -30,8 +30,10 @@ each run.
   `routine_program::code_version`); unchanged code already checked against the
   current version isn't checked again. `POST /scheduled-actions/code/guide`
   (the shared code-step text, `StepContext` and the SDK reference for a
-  task) and `/code/check` (the same check of a drafted `steps` list, without
-  saving, with problems by code step) serve the web routine drafter.
+  task, with the starter routines as examples), `/code/check` (the same check
+  of a drafted `steps` list, without saving, with problems by code step) and
+  `GET /code/starters` (the starter routines, none where code can't be saved)
+  serve the web routine drafter and new-routine flow.
 - `src/domain/code_upgrade.rs`: before a run uses code checked against an
   older version (SDK or `StepContext`), it is checked again, and rewritten by
   a model only if that fails (once per routine and version,

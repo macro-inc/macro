@@ -2009,6 +2009,12 @@
     "path": "/scheduled-actions/code/guide",
     "write": true
   },
+  "scheduled-action.routineCodeStarters": {
+    "label": "Routine Code Starters",
+    "method": "GET",
+    "path": "/scheduled-actions/code/starters",
+    "write": false
+  },
   "scheduled-action.deleteScheduledAction": {
     "label": "Delete Scheduled Action",
     "method": "DELETE",

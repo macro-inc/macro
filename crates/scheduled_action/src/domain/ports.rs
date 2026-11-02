@@ -225,6 +225,10 @@ pub trait ScheduledActionService: Send + Sync + 'static {
         task: &str,
     ) -> impl Future<Output = Result<super::code_check::CodeGuide>> + Send;
 
+    /// Starter routines whose step is code, to offer when a routine is
+    /// created; none on hosts where code can't be saved.
+    fn code_starters(&self) -> Vec<super::code_check::StarterRoutine>;
+
     /// Type-check a routine's code steps the way saving it does, without
     /// saving it.
     fn check_code(

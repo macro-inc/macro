@@ -482,4 +482,22 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         );
         server.await.unwrap();
     }
+
+    /// Starters are offered as they are, and the CreateRoutine example is
+    /// copied by agents, so both must check against today's SDK.
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn every_starter_and_the_create_routine_example_type_check() {
+        let (_root, code) = code("http://127.0.0.1:9").await;
+        for starter in routine_program::STARTERS.iter() {
+            let routine = program(json!([routine_program::Step::Code(starter.step.clone())]));
+            let problems = code.check_program(&routine).await.unwrap();
+            assert_eq!(problems, Vec::new(), "starter {}", starter.key);
+        }
+        let doc = include_str!("../../../../crates/routines/src/create_routine.md");
+        let (_, example) = doc.split_once("Its `steps` string holds:\n").unwrap();
+        let steps: serde_json::Value = serde_json::from_str(example.trim()).unwrap();
+        let problems = code.check_program(&program(steps)).await.unwrap();
+        assert_eq!(problems, Vec::new(), "the CreateRoutine example");
+    }
 }

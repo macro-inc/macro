@@ -49,6 +49,7 @@ use model::response::EmptyResponse;
         crate::inbound::axum_router::list_history,
         crate::inbound::axum_router::list_code_upgrades,
         crate::inbound::axum_router::code_guide,
+        crate::inbound::axum_router::code_starters,
         crate::inbound::axum_router::check_code,
         crate::inbound::template_router::share_template,
         crate::inbound::template_router::get_template,
@@ -59,6 +60,7 @@ use model::response::EmptyResponse;
         schemas(
             AiAdmissionErrorBody,
             crate::domain::code_check::CodeGuide,
+            crate::domain::code_check::StarterRoutine,
             crate::domain::code_check::CodeCheck,
             crate::domain::code_check::CodeStepCheck,
             crate::inbound::axum_router::CodeGuideRequest,

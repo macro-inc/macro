@@ -1,7 +1,7 @@
 use std::sync::Arc;
 
 use crate::domain::code_check::{
-    CodeCheck, CodeCheckError, CodeGuide, InvalidCodeSteps, InvalidCodeTask,
+    CodeCheck, CodeCheckError, CodeGuide, InvalidCodeSteps, InvalidCodeTask, StarterRoutine,
 };
 use crate::domain::code_upgrade::CodeUpgrade;
 use crate::domain::event_trigger::ActionTrigger;
@@ -180,6 +180,10 @@ where
         .route(
             "/scheduled-actions/code/check",
             post(check_code::<S, Svc, Auth>),
+        )
+        .route(
+            "/scheduled-actions/code/starters",
+            get(code_starters::<S, Svc, Auth>),
         )
         .with_state(state)
 }
@@ -541,6 +545,28 @@ where
         .get_code_upgrades(entity_access_receipt)
         .await?;
     Ok(Json(upgrades))
+}
+
+#[utoipa::path(
+    get,
+    path = "/scheduled-actions/code/starters",
+    tag = "scheduled actions",
+    operation_id = "routine_code_starters",
+    responses(
+        (status = 200, body = Vec<StarterRoutine>, description = "Starter routines whose step is code; empty where code steps aren't available"),
+        (status = 401, body = String),
+    )
+)]
+pub async fn code_starters<S, Svc, Auth>(
+    State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
+    _user: MacroAuthorizationExtractor<Auth, UserOnly>,
+) -> Json<Vec<StarterRoutine>>
+where
+    S: ScheduledActionService + Send + Sync + 'static,
+    Svc: EntityAccessService,
+    Auth: MacroAuthorizationService,
+{
+    Json(state.service.code_starters())
 }
 
 /// What code should do, to choose the SDK reference for.

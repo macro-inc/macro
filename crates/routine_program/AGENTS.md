@@ -20,6 +20,9 @@ no I/O.
   `assign_step_ids` (ids from titles, on save) and `check_files` (each code
   step's file, with `steps` typed from the code steps before it).
 - `src/plan.rs`: `StepRecord`, what each step of a run did.
+- `src/starters.rs` + `src/starters/*.ts`: starter routines whose step is
+  code, offered by the new-routine flow and shown to the drafter as worked
+  examples. The harness's real-Deno test type-checks each one.
 - `src/validate.rs`: save-time rules and `limits`.
 
 ## Scope

@@ -16,8 +16,8 @@ persona/model to run later.
   and turns it into one agent step.
 - `src/inbound.rs`: the AI toolset exposed to MCP and embedded agents.
 - `src/create_routine.md`: `CreateRoutine`'s description — triggers, the two
-  step types (code and Ask AI) and a worked example, which a test parses. Its
-  code-step section is
+  step types (code and Ask AI) and a worked example, which a test parses and
+  the harness's real-Deno test type-checks. Its code-step section is
   `routine_program`'s `code_steps.md`, appended at compile time and shared
   with the web drafter; edit it there.
 - `CreateRoutine` tells agents to use `m-document-mention` with the routine ID,

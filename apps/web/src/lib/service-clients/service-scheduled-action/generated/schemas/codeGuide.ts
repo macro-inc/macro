@@ -5,6 +5,7 @@
  * API for managing scheduled actions
  * OpenAPI spec version: 0.1.0
  */
+import type { StarterRoutine } from './starterRoutine';
 
 /**
  * How to write a code step for a described task.
@@ -12,6 +13,8 @@
 export interface CodeGuide {
   /** TypeScript declaring `StepContext`, what `main` receives. */
   contract: string;
+  /** Starter routines, as worked examples of code steps. */
+  examples: StarterRoutine[];
   /** The SDK's entities relevant to the task, with method signatures. */
   reference: string;
   /** The version code is checked against: the SDK and the step contract. */

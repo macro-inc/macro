@@ -221,6 +221,7 @@ async fn a_guide_carries_the_shared_rules_the_contract_and_the_tasks_reference()
     .unwrap();
     assert_eq!(found.sdk, VERSION);
     assert_eq!(found.steps, routine_program::CODE_STEPS);
+    assert_eq!(found.examples, starters(&Checker::default()));
     assert!(found.contract.contains("interface RoutineStepContext"));
     assert_eq!(
         found.reference,
@@ -248,4 +249,26 @@ async fn checking_steps_reports_each_failing_step_with_declarations_to_fix_it() 
         .await
         .unwrap_err();
     assert!(error.downcast_ref::<InvalidCodeSteps>().is_some());
+}
+
+#[test]
+fn starters_are_offered_as_code_only_where_code_can_be_saved() {
+    assert!(starters(&NoRoutineCode).is_empty());
+    let offered = starters(&Checker::default());
+    assert_eq!(
+        offered
+            .iter()
+            .map(|starter| starter.key.as_str())
+            .collect::<Vec<_>>(),
+        ["inbox", "triage", "updates"]
+    );
+    for starter in &offered {
+        assert_eq!(starter.steps.len(), 1);
+        assert_eq!(starter.steps[0]["type"], "code");
+        // Each is a program that saves as it is.
+        RoutineProgram::from_task(&json!({ "steps": starter.steps }))
+            .unwrap()
+            .validate()
+            .unwrap();
+    }
 }

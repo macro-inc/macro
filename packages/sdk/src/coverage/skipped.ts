@@ -276,6 +276,7 @@ export const scheduledActionExcluded = [
   'checkRoutineCode', // The routine drafter checks the code it writes.
   'listScheduledActionCodeUpgrades', // The routine page's review of SDK upgrades.
   'routineCodeGuide', // The routine drafter's SDK reference for code steps.
+  'routineCodeStarters', // The new-routine flow's starter code steps.
   'scheduledActionHealth',
 ] as const satisfies readonly (keyof ScheduledActionSdk)[];
 

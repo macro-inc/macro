@@ -14,9 +14,11 @@
 mod contract;
 mod model;
 mod plan;
+mod starters;
 mod validate;
 
 pub use contract::{CODE_STEPS, CheckFile, MAX_OUTPUT_BYTES, STEP_CONTEXT, code_version};
 pub use model::*;
 pub use plan::{CallRecord, CallStatus, StepPath, StepRecord, StepResult};
+pub use starters::{STARTERS, Starter};
 pub use validate::{ProgramError, limits};

@@ -125,6 +125,8 @@ export * from './scheduledActionUpdateOneOfResource';
 export * from './scheduledActionUpdateOneOfType';
 export * from './setScheduledActionEnabled';
 export * from './shareRoutineTemplate';
+export * from './starterRoutine';
+export * from './starterRoutineStepsItem';
 export * from './templateVariable';
 export * from './templateVariableOneOf';
 export * from './templateVariableOneOfFive';

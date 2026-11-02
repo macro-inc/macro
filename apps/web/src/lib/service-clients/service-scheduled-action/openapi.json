@@ -293,6 +293,37 @@
         }
       }
     },
+    "/scheduled-actions/code/starters": {
+      "get": {
+        "tags": ["scheduled actions"],
+        "operationId": "routine_code_starters",
+        "responses": {
+          "200": {
+            "description": "Starter routines whose step is code; empty where code steps aren't available",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "array",
+                  "items": {
+                    "$ref": "#/components/schemas/StarterRoutine"
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/scheduled-actions/{id}": {
       "get": {
         "tags": ["scheduled actions"],
@@ -1366,11 +1397,18 @@
       "CodeGuide": {
         "type": "object",
         "description": "How to write a code step for a described task.",
-        "required": ["sdk", "steps", "contract", "reference"],
+        "required": ["sdk", "steps", "contract", "reference", "examples"],
         "properties": {
           "contract": {
             "type": "string",
             "description": "TypeScript declaring `StepContext`, what `main` receives."
+          },
+          "examples": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StarterRoutine"
+            },
+            "description": "Starter routines, as worked examples of code steps."
           },
           "reference": {
             "type": "string",
@@ -2222,6 +2260,28 @@
           }
         },
         "additionalProperties": false
+      },
+      "StarterRoutine": {
+        "type": "object",
+        "description": "A starter routine whose step is code: offered when a routine is created,\nand shown to the drafter as a worked example.",
+        "required": ["key", "request", "steps"],
+        "properties": {
+          "key": {
+            "type": "string",
+            "description": "Names it, e.g. `inbox`."
+          },
+          "request": {
+            "type": "string",
+            "description": "What someone asks for, with when it runs."
+          },
+          "steps": {
+            "type": "array",
+            "items": {
+              "type": "object"
+            },
+            "description": "Its steps, in the shape a routine's task holds them."
+          }
+        }
       },
       "TemplateVariable": {
         "oneOf": [

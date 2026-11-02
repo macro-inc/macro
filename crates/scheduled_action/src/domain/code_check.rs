@@ -3,7 +3,7 @@
 //! checked against.
 
 use macro_user_id::user_id::MacroUserIdStr;
-use routine_program::{CODE_STEPS, RoutineProgram, STEP_CONTEXT};
+use routine_program::{CODE_STEPS, RoutineProgram, STARTERS, STEP_CONTEXT, Step};
 use serde::Serialize;
 use serde_json::Value;
 use utoipa::ToSchema;
@@ -130,6 +130,40 @@ pub struct CodeGuide {
     pub contract: String,
     /// The SDK's entities relevant to the task, with method signatures.
     pub reference: String,
+    /// Starter routines, as worked examples of code steps.
+    pub examples: Vec<StarterRoutine>,
+}
+
+/// A starter routine whose step is code: offered when a routine is created,
+/// and shown to the drafter as a worked example.
+#[derive(Debug, Clone, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct StarterRoutine {
+    /// Names it, e.g. `inbox`.
+    pub key: String,
+    /// What someone asks for, with when it runs.
+    pub request: String,
+    /// Its steps, in the shape a routine's task holds them.
+    #[schema(value_type = Vec<Object>)]
+    pub steps: Vec<Value>,
+}
+
+/// The starter routines whose step is code; none where code can't be saved.
+pub fn starters(code: &impl RoutineCode) -> Vec<StarterRoutine> {
+    if code.sdk().is_none() {
+        return Vec::new();
+    }
+    STARTERS
+        .iter()
+        .filter_map(|starter| {
+            let step = serde_json::to_value(Step::Code(starter.step.clone())).ok()?;
+            Some(StarterRoutine {
+                key: starter.key.to_owned(),
+                request: starter.request.to_owned(),
+                steps: vec![step],
+            })
+        })
+        .collect()
 }
 
 /// What type-checking a routine's code steps found.
@@ -186,6 +220,7 @@ pub async fn guide(
         steps: CODE_STEPS.to_owned(),
         contract: STEP_CONTEXT.to_owned(),
         reference,
+        examples: starters(code),
     })
 }
 
