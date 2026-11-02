@@ -19,6 +19,7 @@ const detail: FormCollaboration['detail'] = {
     confirmationMessage: 'Thank you',
     createdAt: '2026-10-05T09:00:00Z',
     updatedAt: '2026-10-05T09:00:00Z',
+    projectId: null,
     isHiddenInDrive: false,
   },
   access: 'edit',

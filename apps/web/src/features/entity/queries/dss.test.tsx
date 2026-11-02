@@ -89,6 +89,7 @@ import {
   type GraphqlSoupDeleteContext,
   usePendingGraphqlSoupDeleteIds,
 } from '@queries/soup/graphql/optimistic-deletions';
+import { databasesKeys, formsKeys } from '@queries/storage/keys';
 import { BulkDeleteFailure } from './bulk-delete-result';
 import {
   createBulkCopyDssEntityMutation,
@@ -653,4 +654,99 @@ describe('bulk delete GraphQL optimism', () => {
       expect(mocks.rollbackSearch).toHaveBeenCalledTimes(fails ? 1 : 0);
     }
   );
+});
+
+describe('moving databases and forms between folders', () => {
+  const listedDatabase = {
+    database: {
+      id: 'intake',
+      name: 'Client intake',
+      owner_id: 'viewer',
+      created_at: '2026-10-01T00:00:00Z',
+      trashed_at: null,
+      project_id: null,
+    },
+    grant: 'owner',
+    tables: [],
+  };
+  const listedForm = {
+    form: { id: 'survey', name: 'Survey', projectId: 'old' },
+    access: 'owner',
+  };
+  const filed = () => ({
+    database: (
+      client.getQueryData(databasesKeys.list.queryKey) as
+        | (typeof listedDatabase)[]
+        | undefined
+    )?.[0]?.database.project_id,
+    form: (
+      client.getQueryData(formsKeys.list.queryKey) as
+        | (typeof listedForm)[]
+        | undefined
+    )?.[0]?.form.projectId,
+  });
+  const seed = () => {
+    client.setQueryData(databasesKeys.list.queryKey, [listedDatabase]);
+    client.setQueryData(formsKeys.list.queryKey, [listedForm]);
+  };
+
+  it('files them in the Drive lists at once and moves each through moveToFolder', async () => {
+    seed();
+    const pending = deferred<boolean>();
+    mocks.moveToFolder.mockReturnValue(pending.promise);
+    const mutation = mountMutation(createBulkMoveToProjectDssEntityMutation);
+    const result = mutation.mutateAsync({
+      entities: [
+        { ...entity('intake', 'database'), name: 'Client intake' },
+        { ...entity('survey', 'form'), name: 'Survey' },
+      ],
+      project: { id: 'clients', name: 'Clients' },
+    });
+    await vi.waitFor(() =>
+      expect(filed()).toEqual({ database: 'clients', form: 'clients' })
+    );
+    pending.resolve(true);
+    await result;
+    expect(mocks.moveToFolder.mock.calls).toEqual([
+      [{ itemType: 'database', id: 'intake', folderId: 'clients' }],
+      [{ itemType: 'form', id: 'survey', folderId: 'clients' }],
+    ]);
+    expect(
+      client.getQueryState(databasesKeys.list.queryKey)?.isInvalidated
+    ).toBe(true);
+    expect(client.getQueryState(formsKeys.list.queryKey)?.isInvalidated).toBe(
+      true
+    );
+  });
+
+  it('puts them back when the move fails', async () => {
+    seed();
+    mocks.moveToFolder.mockResolvedValue(false);
+    const mutation = mountMutation(createBulkMoveToProjectDssEntityMutation);
+    await expect(
+      mutation.mutateAsync({
+        entities: [
+          { ...entity('intake', 'database'), name: 'Client intake' },
+          { ...entity('survey', 'form'), name: 'Survey' },
+        ],
+        project: { id: 'clients', name: 'Clients' },
+      })
+    ).rejects.toThrow();
+    expect(filed()).toEqual({ database: null, form: 'old' });
+  });
+
+  it('takes them out of their folder', async () => {
+    seed();
+    const mutation = mountMutation(
+      createBulkRemoveFromProjectDssEntityMutation
+    );
+    await mutation.mutateAsync({
+      entities: [entity('intake', 'database'), entity('survey', 'form')],
+    });
+    expect(filed()).toEqual({ database: null, form: null });
+    expect(mocks.moveToFolder.mock.calls).toEqual([
+      [{ itemType: 'database', id: 'intake', folderId: null }],
+      [{ itemType: 'form', id: 'survey', folderId: null }],
+    ]);
+  });
 });

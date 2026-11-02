@@ -149,7 +149,10 @@ rows stay.
 ## Finding forms
 
 Drive lists forms you can open (type facet **Form**) and opens them inline at
-`/app/drive/form/<uuid>`, and Quick Access has a
+`/app/drive/form/<uuid>`. The owner can file a form in a folder by dragging its
+row onto the folder or with **Move to folder** in the form's title menu; it
+then appears in that folder's contents and inherits the folder's sharing, while
+its database stays where it was. Quick Access has a
 Forms bucket. Both come from `/forms/accessible`, so a form shared with you
 appears without access to its database. Deleting a database table warns which
 forms it deletes; deleting a column warns which forms ask it (both say so

@@ -6,6 +6,7 @@
  */
 import type { Audience } from './audience';
 import type { FormClosesAt } from './formClosesAt';
+import type { FormProjectId } from './formProjectId';
 import type { FormRespondentColumnId } from './formRespondentColumnId';
 import type { FormStatus } from './formStatus';
 import type { FormSubmittedColumnId } from './formSubmittedColumnId';
@@ -37,6 +38,8 @@ a form attached to an existing table has its own name. */
   name: string;
   /** Its owner. */
   ownerId: string;
+  /** The folder it is filed in; `null` at the root. */
+  projectId: FormProjectId;
   /** The person column each signed-in submission names its respondent in;
 `null` once deleted. */
   respondentColumnId: FormRespondentColumnId;

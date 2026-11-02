@@ -1660,6 +1660,7 @@ describe('database command discovery', () => {
           owner_id: 'me',
           created_at: '2026-09-01T00:00:00Z',
           trashed_at: null,
+          project_id: null,
         },
         grant: 'owner',
         tables: [],
