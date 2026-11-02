@@ -218,10 +218,12 @@ fn setup_execution_runtime() -> Step<gh_workflow::Use> {
         ))
 }
 
-/// Exercise the real permission boundary and authenticated SDK execution in CI.
+/// Exercise the real permission boundary, authenticated SDK execution, and
+/// routine code (the step contract, starters and examples) against the SDK
+/// in CI.
 fn test_execution_runtime() -> Step<Run> {
-    Step::new("Test Deno sandbox and authenticated SDK execution")
-        .run("cargo test --locked -p code_execution -- --ignored --test-threads=2\ncargo test --locked -p agent_harness_service authenticated_mcp_runs_javascript_and_persists_source_and_result -- --ignored")
+    Step::new("Test Deno sandbox, authenticated SDK execution and routine code")
+        .run("cargo test --locked -p code_execution -- --ignored --test-threads=2\ncargo test --locked -p agent_harness_service authenticated_mcp_runs_javascript_and_persists_source_and_result -- --ignored\ncargo test --locked -p agent_harness_service --bin agent_harness_service routine_code -- --ignored")
         .if_condition(Expression::new(
             "env.RUST_PACKAGES == 'all' || contains(env.RUST_PACKAGES, 'code_execution') || contains(env.RUST_PACKAGES, 'agent_code_mode') || contains(env.RUST_PACKAGES, 'agent_harness_service')",
         ))
