@@ -31,7 +31,7 @@ use crate::resolve::{
     column_key, compile, row_id_key, row_position_key,
 };
 use crate::run::{Answer, Outcome, OutcomeColumn, PAGE_LIMIT, Page, ROW_CAP, RunError, describe};
-use crate::split::{GqlQuery, KeyHint, MAX_KEY_HINT_VALUES, Plan, Shape, split};
+use crate::split::{GqlQuery, KeyHint, MAX_KEY_HINT_VALUES, Plan, RelationPlan, Shape, split};
 use crate::write::{self, Sent};
 
 /// What the driver does next.
@@ -84,8 +84,6 @@ pub struct Engine {
     read: Option<Read>,
     /// What the statement writes once its read is done.
     then: Option<Then>,
-    /// The ops sent, whose results make the outcome.
-    sent: Option<Sent>,
     requests: Requests,
 }
 
@@ -93,8 +91,17 @@ pub struct Engine {
 /// it asked for.
 #[derive(Debug, Clone, Default)]
 struct Requests {
-    outstanding: Option<(u32, Answer)>,
+    outstanding: Option<(u32, Awaiting)>,
     next: u32,
+}
+
+/// What the outstanding request waits on.
+#[derive(Debug, Clone)]
+enum Awaiting {
+    Page,
+    Bins,
+    /// The results of the ops sent, read back as `Sent` says.
+    OpResults(Sent),
 }
 
 /// A read's progress.
@@ -124,39 +131,39 @@ impl Engine {
     pub fn start(catalog: &Catalog, sql: &str) -> Result<(Engine, Step), RunError> {
         let mut engine = Engine::new(catalog);
         let step = match compile(catalog, sql)? {
-            Query::Select(select) => engine.begin_read(select),
+            Query::Select(select) => engine.begin_read(select)?,
             Query::Insert(insert) => {
-                let op = write::insert(catalog, &insert);
-                engine.send(insert.table, Sent::Rows, op)
+                let op = write::insert(catalog, &insert)?;
+                engine.send(insert.table, Sent::Rows, op)?
             }
             Query::AlterColumnType(alter) => {
-                let op = write::alter(catalog, &alter);
+                let op = write::alter(catalog, &alter)?;
                 let sent = Sent::Column {
                     table: alter.table,
                     column: alter.column,
                     to: alter.to,
                 };
-                engine.send(alter.table, sent, op)
+                engine.send(alter.table, sent, op)?
             }
             Query::Update(update) => {
                 let read = update.read.clone();
                 engine.then = Some(Then::Update(update));
-                engine.begin_read(read)
+                engine.begin_read(read)?
             }
             Query::Delete(delete) => {
                 let read = delete.read.clone();
                 engine.then = Some(Then::Delete(delete));
-                engine.begin_read(read)
+                engine.begin_read(read)?
             }
         };
         Ok((engine, step))
     }
 
     /// Plan a resolved `SELECT` and ask for its first fetch.
-    pub fn from_select(catalog: &Catalog, select: SelectQuery) -> (Engine, Step) {
+    pub fn from_select(catalog: &Catalog, select: SelectQuery) -> Result<(Engine, Step), RunError> {
         let mut engine = Engine::new(catalog);
-        let step = engine.begin_read(select);
-        (engine, step)
+        let step = engine.begin_read(select)?;
+        Ok((engine, step))
     }
 
     fn new(catalog: &Catalog) -> Engine {
@@ -164,7 +171,6 @@ impl Engine {
             catalog: catalog.clone(),
             read: None,
             then: None,
-            sent: None,
             requests: Requests::default(),
         }
     }
@@ -173,10 +179,13 @@ impl Engine {
     /// property definition, as a source reads them; the engine keys a
     /// joined relation's cells itself (see [`column_key`]).
     pub fn feed_page(&mut self, request_id: u32, page: Page) -> Result<Step, RunError> {
-        self.requests.answer(request_id, Answer::Page)?;
-        let read = reading(&mut self.read);
-        let keyed = keyed(&self.catalog, read, page.rows);
-        let rows = &mut read.fetched[read.current];
+        match self.requests.answer(request_id)? {
+            Awaiting::Page => {}
+            awaiting => return Err(awaiting.refuse(request_id, Answer::Page)),
+        }
+        let read = reading(&mut self.read)?;
+        let keyed = keyed(&self.catalog, read, page.rows)?;
+        let rows = read.current_rows()?;
         rows.extend(keyed);
         if rows.len() >= ROW_CAP {
             rows.truncate(ROW_CAP);
@@ -184,15 +193,18 @@ impl Engine {
             return self.finish_relation();
         }
         match page.next {
-            Some(cursor) => Ok(request(read, &mut self.requests, Some(cursor))),
+            Some(cursor) => request(read, &mut self.requests, Some(cursor)),
             None => self.finish_relation(),
         }
     }
 
     /// Take the bins of the outstanding request.
     pub fn feed_bins(&mut self, request_id: u32, bins: Vec<Bin>) -> Result<Step, RunError> {
-        self.requests.answer(request_id, Answer::Bins)?;
-        let read = reading(&mut self.read);
+        match self.requests.answer(request_id)? {
+            Awaiting::Bins => {}
+            awaiting => return Err(awaiting.refuse(request_id, Answer::Bins)),
+        }
+        let read = reading(&mut self.read)?;
         let rows = fold_bins(&self.catalog, &read.plan, bins)?;
         let outcome = read.outcome(rows, Vec::new());
         self.finish_read(outcome)
@@ -200,23 +212,24 @@ impl Engine {
 
     /// Take the results of the outstanding ops, one per op.
     pub fn feed_ops(&mut self, request_id: u32, results: Vec<OpResult>) -> Result<Step, RunError> {
-        self.requests.answer(request_id, Answer::OpResults)?;
-        let sent = self
-            .sent
-            .take()
-            .expect("op results are only asked for once ops are sent");
-        Ok(Step::Done(write::outcome(&sent, &results)?))
+        match self.requests.answer(request_id)? {
+            Awaiting::OpResults(sent) => Ok(Step::Done(write::outcome(&sent, &results)?)),
+            awaiting => Err(awaiting.refuse(request_id, Answer::OpResults)),
+        }
     }
 
     /// Plan a read and ask for its first fetch.
-    fn begin_read(&mut self, select: SelectQuery) -> Step {
+    fn begin_read(&mut self, select: SelectQuery) -> Result<Step, RunError> {
+        for relation in &select.relations {
+            table(&self.catalog, relation.table)?;
+        }
         let columns = describe(
             &self.catalog,
             &select.items,
             &select.labels,
             &select.bindings,
             &select.relations,
-        );
+        )?;
         let plan = split(&self.catalog, select);
         let read = self.read.insert(Read {
             columns,
@@ -232,16 +245,17 @@ impl Engine {
     /// A relation is complete: give it its row ids and positions, then move
     /// on or fold.
     fn finish_relation(&mut self) -> Result<Step, RunError> {
-        let read = reading(&mut self.read);
-        let table = read.plan.relations[read.current].relation.table;
+        let read = reading(&mut self.read)?;
+        let table = read.current_relation()?.relation.table;
         let bound = |key: Uuid| binding(&read.plan.bindings, key).is_some();
         let (id_key, position_key) = (row_id_key(table), row_position_key(table));
         let (ids, positions) = (bound(id_key), bound(position_key));
         // Sources list rows in any order (Soup: newest first); the fold sees
         // them in table order, as the server's row store keeps them, so an
         // unordered result or its groups come out alike on both.
-        read.fetched[read.current].sort_by(table_order);
-        for row in &mut read.fetched[read.current] {
+        let rows = read.current_rows()?;
+        rows.sort_by(table_order);
+        for row in rows {
             if ids {
                 row.cells.insert(id_key, Cell::Row(row.id));
             }
@@ -252,7 +266,7 @@ impl Engine {
         }
         read.current += 1;
         if read.current < read.plan.relations.len() {
-            return Ok(begin_relation(read, &mut self.requests));
+            return begin_relation(read, &mut self.requests);
         }
         let fetched = std::mem::take(&mut read.fetched);
         let (rows, row_ids) = fold_relations(&self.catalog, &read.plan, fetched);
@@ -287,46 +301,40 @@ impl Engine {
             });
         }
         let (table, op) = match &then {
-            Then::Update(update) => (update.table, write::update(&self.catalog, update, &found)),
+            Then::Update(update) => (update.table, write::update(&self.catalog, update, &found)?),
             Then::Delete(delete) => (delete.table, write::delete(delete.table, &found)),
         };
-        Ok(match op {
+        match op {
             Some(op) => self.send(table, Sent::Rows, op),
-            None => Step::Done(Outcome::default()),
-        })
+            None => Ok(Step::Done(Outcome::default())),
+        }
     }
 
     /// Ask for one op to be applied to the database `table` belongs to.
-    fn send(&mut self, table_id: TableId, sent: Sent, op: DatabaseOp) -> Step {
-        let database = table(&self.catalog, table_id).database_id;
-        self.sent = Some(sent);
-        Step::Ops {
-            id: self.requests.issue(Answer::OpResults),
+    fn send(&mut self, table_id: TableId, sent: Sent, op: DatabaseOp) -> Result<Step, RunError> {
+        let database = table(&self.catalog, table_id)?.database_id;
+        Ok(Step::Ops {
+            id: self.requests.issue(Awaiting::OpResults(sent)),
             database,
             ops: vec![op],
-        }
+        })
     }
 }
 
 impl Requests {
-    /// A new request's id, now the one outstanding, answered by `answer`.
-    fn issue(&mut self, answer: Answer) -> u32 {
+    /// A new request's id, now the one outstanding, waiting on `awaiting`.
+    fn issue(&mut self, awaiting: Awaiting) -> u32 {
         let id = self.next;
         self.next += 1;
-        self.outstanding = Some((id, answer));
+        self.outstanding = Some((id, awaiting));
         id
     }
 
-    /// A feed of `fed` for `request_id`, which must be the outstanding
-    /// request and ask for it. The request is spent either way.
-    fn answer(&mut self, request_id: u32, fed: Answer) -> Result<(), RunError> {
+    /// What `request_id`, which must be the outstanding request, waits on.
+    /// The request is spent either way.
+    fn answer(&mut self, request_id: u32) -> Result<Awaiting, RunError> {
         match self.outstanding.take() {
-            Some((expected, wanted)) if expected == request_id && wanted == fed => Ok(()),
-            Some((expected, wanted)) if expected == request_id => Err(RunError::WrongAnswer {
-                request: request_id,
-                expected: wanted,
-                fed,
-            }),
+            Some((expected, awaiting)) if expected == request_id => Ok(awaiting),
             Some((expected, _)) => Err(RunError::WrongRequest {
                 expected,
                 fed: request_id,
@@ -336,7 +344,41 @@ impl Requests {
     }
 }
 
+impl Awaiting {
+    /// The refusal of `fed` as the answer to `request`, which waits on this.
+    fn refuse(&self, request: u32, fed: Answer) -> RunError {
+        RunError::WrongAnswer {
+            request,
+            expected: match self {
+                Awaiting::Page => Answer::Page,
+                Awaiting::Bins => Answer::Bins,
+                Awaiting::OpResults(_) => Answer::OpResults,
+            },
+            fed,
+        }
+    }
+}
+
 impl Read {
+    /// The plan of the relation being fetched.
+    fn current_relation(&self) -> Result<&RelationPlan, RunError> {
+        self.plan
+            .relations
+            .get(self.current)
+            .ok_or(RunError::Internal {
+                invariant: "the relation being fetched is in the plan",
+            })
+    }
+
+    /// The rows of the relation being fetched, so far.
+    fn current_rows(&mut self) -> Result<&mut Vec<Row>, RunError> {
+        self.fetched
+            .get_mut(self.current)
+            .ok_or(RunError::Internal {
+                invariant: "the relation being fetched has begun",
+            })
+    }
+
     /// The rows the current relation needs: for the `FROM` table, the rows
     /// its `WHERE` names by id; for a joined one, the values it is joined on.
     /// `None` past [`MAX_KEY_HINT_VALUES`].
@@ -376,7 +418,9 @@ impl Read {
         let owner = binding(&self.plan.bindings, left)?;
         let mut seen: HashSet<CellKey> = HashSet::new();
         let mut values: Vec<Cell> = Vec::new();
-        for cell in self.fetched[owner.relation]
+        for cell in self
+            .fetched
+            .get(owner.relation)?
             .iter()
             .filter_map(|row| row.cells.get(&left))
         {
@@ -414,17 +458,17 @@ impl Read {
 
 /// Start fetching the current relation, with the join's key hint filled
 /// in.
-fn begin_relation(read: &mut Read, requests: &mut Requests) -> Step {
+fn begin_relation(read: &mut Read, requests: &mut Requests) -> Result<Step, RunError> {
     read.fetched.push(Vec::new());
-    let mut query = read.plan.relations[read.current].query.clone();
+    let mut query = read.current_relation()?.query.clone();
     if let GqlQuery::GroupSoup { .. } = query {
-        return Step::Bins(Request {
-            id: requests.issue(Answer::Bins),
+        return Ok(Step::Bins(Request {
+            id: requests.issue(Awaiting::Bins),
             query,
             needs: Vec::new(),
             cursor: None,
             limit: 0,
-        });
+        }));
     }
     if let Some(hint) = read.key_hint() {
         match &mut query {
@@ -449,31 +493,32 @@ fn begin_relation(read: &mut Read, requests: &mut Requests) -> Step {
 }
 
 /// The next page of the current relation.
-fn request(read: &Read, requests: &mut Requests, cursor: Option<String>) -> Step {
-    let relation = &read.plan.relations[read.current];
-    let fetched = read.fetched[read.current].len();
-    Step::Fetch(Request {
-        id: requests.issue(Answer::Page),
-        query: read
-            .query
-            .clone()
-            .expect("a relation's query is set when it starts"),
+fn request(read: &Read, requests: &mut Requests, cursor: Option<String>) -> Result<Step, RunError> {
+    let relation = read.current_relation()?;
+    let fetched = read.fetched.get(read.current).map_or(0, Vec::len);
+    let query = read.query.clone().ok_or(RunError::Internal {
+        invariant: "a relation's query is set when it starts",
+    })?;
+    Ok(Step::Fetch(Request {
+        id: requests.issue(Awaiting::Page),
+        query,
         needs: relation.needs.clone(),
         cursor,
-        limit: (ROW_CAP - fetched).min(PAGE_LIMIT),
-    })
+        limit: ROW_CAP.saturating_sub(fetched).min(PAGE_LIMIT),
+    }))
 }
 
 /// A joined relation's cells under the keys the plan uses for it: a cell
 /// keyed by one of its table's definitions moves to that column's key for
 /// this relation. The `FROM` relation's keys are its definitions already,
 /// and a cell keyed some other way is kept as is.
-fn keyed(catalog: &Catalog, read: &Read, rows: Vec<Row>) -> Vec<Row> {
+fn keyed(catalog: &Catalog, read: &Read, rows: Vec<Row>) -> Result<Vec<Row>, RunError> {
     if read.current == 0 {
-        return rows;
+        return Ok(rows);
     }
-    let table = table(catalog, read.plan.relations[read.current].relation.table);
-    rows.into_iter()
+    let table = table(catalog, read.current_relation()?.relation.table)?;
+    Ok(rows
+        .into_iter()
         .map(|row| Row {
             id: row.id,
             position: row.position,
@@ -489,16 +534,16 @@ fn keyed(catalog: &Catalog, read: &Read, rows: Vec<Row>) -> Vec<Row> {
                 })
                 .collect(),
         })
-        .collect()
+        .collect())
 }
 
 /// A table the statement reads or writes.
-fn table(catalog: &Catalog, id: TableId) -> &Table {
+fn table(catalog: &Catalog, id: TableId) -> Result<&Table, RunError> {
     catalog
         .tables
         .iter()
         .find(|table| table.id == id)
-        .expect("the engine resolved its statement against this catalog")
+        .ok_or(RunError::TableNotInCatalog { table: id })
 }
 
 /// The rows of `table` a `WHERE row_id = …` or `WHERE row_id IN (…)` names.
@@ -530,9 +575,10 @@ fn named_rows(table: TableId, filter: Option<&Filter>) -> Vec<RowId> {
 }
 
 /// The read in flight; pages and bins are only asked for while reading.
-fn reading(read: &mut Option<Read>) -> &mut Read {
-    read.as_mut()
-        .expect("pages and bins are only asked for while reading")
+fn reading(read: &mut Option<Read>) -> Result<&mut Read, RunError> {
+    read.as_mut().ok_or(RunError::Internal {
+        invariant: "pages and bins are only asked for while reading",
+    })
 }
 
 /// Position, then id, as `database_rows` orders a table; rows without a

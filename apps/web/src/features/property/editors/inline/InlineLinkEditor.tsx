@@ -1,8 +1,8 @@
 import { useUnfurl } from '@core/signal/unfurl';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { openExternalUrl } from '@core/util/url';
-import LinkIcon from '@phosphor/link.svg';
-import DeleteIcon from '@phosphor/x.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import DeleteIcon from '@icon/system/regular/x.svg';
 import { proxyResource } from '@service-unfurl/client';
 import { type Component, createSignal, For, Show } from 'solid-js';
 import { createStore } from 'solid-js/store';
@@ -30,6 +30,7 @@ export function InlineLinkEditor() {
   const [hoveredLink, setHoveredLink] = createSignal<string | null>(null);
   const [isSaving, setIsSaving] = createSignal(false);
   const [badLinks, setBadLinks] = createStore<Record<string, true>>({});
+  let addButton: HTMLButtonElement | undefined;
 
   const property = () => ctx.property();
   const isReadOnly = () => property().isMetadata || !ctx.canEdit();
@@ -65,6 +66,7 @@ export function InlineLinkEditor() {
   };
 
   const handleAddLink = async () => {
+    if (isSaving()) return;
     const raw = inputValue().trim();
     if (!raw) {
       cancelAdding();
@@ -88,7 +90,6 @@ export function InlineLinkEditor() {
         : [normalized];
       await ctx.onSave?.(property(), { valueType: 'LINK', values: next });
       cancelAdding();
-      ctx.onRefresh?.();
     } catch {
       // mutation onError owns toast
     } finally {
@@ -105,7 +106,6 @@ export function InlineLinkEditor() {
         valueType: 'LINK',
         values: next.length > 0 ? next : null,
       });
-      ctx.onRefresh?.();
     } catch {
       // mutation onError owns toast
     } finally {
@@ -113,13 +113,31 @@ export function InlineLinkEditor() {
     }
   };
 
+  // Enter and Escape remove the focused input, which drops focus to the page.
+  // A single link has no add button left, so focus goes to its chip.
+  const returnFocus = () => {
+    if (document.activeElement !== document.body) return;
+    if (addButton?.isConnected) addButton.focus();
+    else ctx.closeEditor();
+  };
+
+  const addFromKeyboard = async () => {
+    await handleAddLink();
+    if (!isAdding()) returnFocus();
+  };
+
   const handleKeyDown = (e: KeyboardEvent) => {
+    // An IME owns Enter and Escape while it composes; WebKit reports its
+    // confirming keydown as 229 after composition ends.
+    if (e.isComposing || e.keyCode === 229) return;
     if (e.key === 'Enter') {
       e.preventDefault();
-      fireAndForget(handleAddLink(), 'property-editor');
+      fireAndForget(addFromKeyboard(), 'property-editor');
     } else if (e.key === 'Escape') {
+      if (isSaving()) return;
       e.preventDefault();
       cancelAdding();
+      returnFocus();
     } else if (error()) {
       setError(null);
     }
@@ -158,6 +176,7 @@ export function InlineLinkEditor() {
           fallback={
             <Show when={property().isMultiSelect || links().length === 0}>
               <button
+                ref={addButton}
                 type="button"
                 class={ADD_BUTTON_CLASS}
                 onClick={startAdding}
@@ -181,7 +200,7 @@ export function InlineLinkEditor() {
               }, 100);
             }}
             placeholder="Enter URL..."
-            disabled={isSaving()}
+            readOnly={isSaving()}
             class="text-left px-2 py-0.5 bg-transparent focus:outline-none text-ink inline-block shrink-0 rounded-sm"
           />
           <Show when={error()}>

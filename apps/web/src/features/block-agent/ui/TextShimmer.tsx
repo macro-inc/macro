@@ -66,6 +66,10 @@ export function TextShimmer(props: TextShimmerProps) {
       <span
         aria-hidden="true"
         class="col-start-1 row-start-1 transition-opacity duration-200 motion-reduce:transition-none"
+        // Share the page clock so a newly mounted status continues the sweep.
+        style={{
+          'animation-delay': run() ? `${-performance.now()}ms` : undefined,
+        }}
         classList={{
           'opacity-0': !props.active,
           'magic-chip-shimmer': run(),

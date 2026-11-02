@@ -64,6 +64,10 @@ maybe_env_vars!(
     /// unauthenticated because Pipedream is the caller. When unset, the
     /// webhook route is not mounted.
     pub struct PipedreamWebhookSecret;
+    /// PostHog project token. When unset, integration analytics are not sent.
+    pub struct PosthogApiKey;
+    /// PostHog ingestion origin. Falls back to the US origin when unset.
+    pub struct PosthogHost;
 );
 
 /// The configuration parameters for the application.
@@ -78,8 +82,8 @@ pub struct Config {
     /// service's own policy decides whether it does.
     #[macro_config_default(ai_billing::AiUsageBilling::Disabled)]
     pub enable_ai_usage_billing: ai_billing::AiUsageBilling,
-    /// Optional TypeSafe credential for named yes/no decisions. Without it,
-    /// the decisions endpoint remains available but responds with 503.
+    /// Optional TypeSafe credential for named decisions.
+    /// Without it, these endpoints respond with 503.
     pub typesafe_api_key: jev::outbound::TypesafeApiKey,
     /// The free plan's hard monthly AI cap, in cents at provider cost.
     /// Mandatory; set in Doppler.
@@ -144,6 +148,10 @@ pub struct Config {
     pub pipedream_webhook_uri: PipedreamWebhookUri,
     /// Shared secret guarding the public Pipedream webhook route.
     pub pipedream_webhook_secret: PipedreamWebhookSecret,
+    /// PostHog project token for integration connect/disconnect analytics.
+    pub posthog_api_key: PosthogApiKey,
+    /// PostHog ingestion origin for integration analytics.
+    pub posthog_host: PosthogHost,
     /// The internal api key
     pub internal_api_key: InternalApiKey,
     /// AI editing worker URL
@@ -245,6 +253,8 @@ impl Config {
             pipedream_allowed_origins: PipedreamAllowedOrigins::Unset,
             pipedream_webhook_uri: PipedreamWebhookUri::Unset,
             pipedream_webhook_secret: PipedreamWebhookSecret::Unset,
+            posthog_api_key: PosthogApiKey::Unset,
+            posthog_host: PosthogHost::Unset,
             internal_api_key: InternalApiKey::Comptime(""),
             ai_editing_worker_url: AiEditingWorkerUrl::unwrap_new().to_string(),
             document_permission_jwt: DocumentPermissionJwt::Comptime("DOCUMENT_PERMISSION_JWT"),

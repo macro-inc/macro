@@ -1,0 +1,14 @@
+query ImportIssues($after: String) {
+  issues(first: 50, after: $after, includeArchived: true) {
+    nodes { id identifier title description url dueDate estimate priority
+      state { name type } assignee { email } parent { id }
+      project { id } team { id } cycle { id }
+      comments(first: 10) {
+        nodes { id body createdAt user { name } }
+        pageInfo { hasNextPage endCursor }
+      }
+      labels(first: 10) { nodes { name } pageInfo { hasNextPage endCursor } }
+    }
+    pageInfo { hasNextPage endCursor }
+  }
+}

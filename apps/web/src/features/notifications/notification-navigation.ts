@@ -1,6 +1,7 @@
 import { openCalendarView } from '@app/features/calendar-view/calendar-navigation';
 import { createCalendarRange } from '@app/features/calendar-view/calendar-range';
 import { crmRecordContent } from '@app/features/crm/crm-hosted-content';
+import { analytics } from '@app/lib/analytics';
 import {
   getChannelParams,
   navigateToChannelMessage,
@@ -8,7 +9,7 @@ import {
 import { prefetchChannelTarget } from '@channel/queries/prefetch-channel-target';
 import { contentReference } from '@components/app/split-layout/content-reference';
 import type {
-  OpenSplitResult,
+  SplitContent,
   SplitHandle,
   SplitManager,
 } from '@components/app/split-layout/layoutManager';
@@ -19,6 +20,7 @@ import { itemToBlockName, resolveBlockAlias } from '@core/constant/allBlocks';
 import {
   enableCalendarUi,
   enableProjects,
+  enableWhatsappLinked,
   isFeatureEnabled,
   USE_MACRO_PR_SUMMARY_BLOCK,
 } from '@core/constant/featureFlags';
@@ -34,6 +36,7 @@ import type { PushNotificationNavigation } from '@service-notification/generated
 import { errAsync, ResultAsync } from 'neverthrow';
 import { match, P } from 'ts-pattern';
 import { shareEntity } from '../access-requests/core/types';
+import { externalChatContent } from '../external-view/hosted-content';
 import { projectRouteId } from '../projects/core/route';
 import {
   getDocumentCommentLocation,
@@ -65,16 +68,16 @@ async function goToLocationInSplit(
 }
 
 /** Opens or activates the requested content from the source split. */
-function openSplitIfNotOpen(
+type OpenOptions = {
+  newSplit?: boolean;
+  sourceHandle?: SplitHandle;
+  onApplied?: VoidFunction;
+};
+
+function openContent(
   layoutManager: SplitManager,
-  type: BlockName | BlockAlias | 'component',
-  id: string,
-  options: {
-    newSplit?: boolean;
-    params?: Record<string, unknown>;
-    sourceHandle?: SplitHandle;
-    onApplied?: VoidFunction;
-  } = {}
+  content: SplitContent,
+  options: OpenOptions
 ) {
   let onApplied = options.onApplied;
   const reportApplied = () => {
@@ -82,25 +85,38 @@ function openSplitIfNotOpen(
     onApplied = undefined;
     callback?.();
   };
-  const reportImmediateResult = (result: OpenSplitResult | undefined) => {
-    if (!result) return;
-    if (result.status === 'opened' || result.status === 'reused') {
-      reportApplied();
-    }
-  };
+  const result = layoutManager.openWithSplit(content, {
+    activate: true,
+    referredFrom: null,
+    preferNewSplit: options.newSplit,
+    handle: options.sourceHandle,
+    ...(options.onApplied ? { onApplied: reportApplied } : {}),
+  });
+  if (result?.status === 'opened' || result?.status === 'reused')
+    reportApplied();
+}
+
+/** Chats open in External's main pane; the chat's route claim reuses an open one. */
+function openExternalChat(
+  layoutManager: SplitManager,
+  chatId: string,
+  options: OpenOptions
+) {
+  openContent(layoutManager, externalChatContent(chatId), options);
+}
+
+function openSplitIfNotOpen(
+  layoutManager: SplitManager,
+  type: BlockName | BlockAlias | 'component',
+  id: string,
+  options: OpenOptions & { params?: Record<string, unknown> } = {}
+) {
   const existing = layoutManager.getSplitByContent(type, id);
   if (existing) {
     existing.activate();
-    reportApplied();
+    options.onApplied?.();
   } else {
-    const result = layoutManager.openWithSplit(contentReference(type, id), {
-      activate: true,
-      referredFrom: null,
-      preferNewSplit: options.newSplit,
-      handle: options.sourceHandle,
-      ...(options.onApplied ? { onApplied: reportApplied } : {}),
-    });
-    reportImmediateResult(result);
+    openContent(layoutManager, contentReference(type, id), options);
   }
   if (options.params && type !== 'component') {
     goToLocationInSplit(layoutManager, type, id, options.params).catch(
@@ -188,10 +204,16 @@ type NavigationDeferredError = {
   notificationId: string;
 };
 
+type NavigationFailedError = {
+  tag: 'NavigationFailedError';
+  cause: unknown;
+};
+
 type OpenNotificationFromIdError =
   | NotSupportedError
   | NotFoundError
-  | NavigationDeferredError;
+  | NavigationDeferredError
+  | NavigationFailedError;
 
 function getSupportedHandler(
   notification: UnifiedNotification,
@@ -225,6 +247,15 @@ function getSupportedHandler(
               onApplied,
             })
       )
+      .with('external_chat_message', () => {
+        if (!isFeatureEnabled(enableWhatsappLinked)) return null;
+        return async (lm: SplitManager, newSplit: boolean = false) =>
+          openExternalChat(lm, notification.entity_id, {
+            newSplit,
+            sourceHandle,
+            onApplied,
+          });
+      })
       .with('new_email', () => {
         const meta = notification.notification_metadata;
         if (meta.tag !== 'new_email') return null;
@@ -257,7 +288,12 @@ function getSupportedHandler(
           notification.entity_type,
           notification.entity_id
         );
-        if (!target) return null;
+        if (
+          !target ||
+          (target.entityType === 'external_chat' &&
+            !isFeatureEnabled(enableWhatsappLinked))
+        )
+          return null;
         return async (lm: SplitManager, newSplit = false) =>
           Telemetry.span('access_requests.notification.open', async (span) => {
             span.setAttr('entity.id', target.entityId);
@@ -317,24 +353,26 @@ function getSupportedHandler(
                     )
                   : undefined;
               const block =
-                target.entityType === 'initiative'
-                  ? 'initiative'
-                  : itemToBlockName({
-                      type:
-                        target.entityType === 'email_thread'
-                          ? 'email'
-                          : target.entityType,
-                      fileType:
-                        document?.fileType ??
-                        entity?.fileType ??
-                        meta.content.fileType ??
-                        undefined,
-                      subType:
-                        document?.subType &&
-                        document.subType !== 'initiative_description'
-                          ? { type: document.subType }
-                          : undefined,
-                    });
+                target.entityType === 'external_chat'
+                  ? 'external_chat'
+                  : target.entityType === 'initiative'
+                    ? 'initiative'
+                    : itemToBlockName({
+                        type:
+                          target.entityType === 'email_thread'
+                            ? 'email'
+                            : target.entityType,
+                        fileType:
+                          document?.fileType ??
+                          entity?.fileType ??
+                          meta.content.fileType ??
+                          undefined,
+                        subType:
+                          document?.subType &&
+                          document.subType !== 'initiative_description'
+                            ? { type: document.subType }
+                            : undefined,
+                      });
               const applied = () => {
                 onApplied?.();
                 if (meta.tag === 'entity_access_requested')
@@ -353,14 +391,24 @@ function getSupportedHandler(
                   });
               };
               span.setAttr('access_requests.outcome', 'navigation_requested');
-              openSplitIfNotOpen(
-                lm,
-                block === 'initiative' ? 'component' : block,
-                block === 'initiative'
-                  ? projectRouteId({ id: target.entityId, section: 'overview' })
-                  : target.entityId,
-                { newSplit, sourceHandle, onApplied: applied }
-              );
+              if (block === 'external_chat')
+                openExternalChat(lm, target.entityId, {
+                  newSplit,
+                  sourceHandle,
+                  onApplied: applied,
+                });
+              else
+                openSplitIfNotOpen(
+                  lm,
+                  block === 'initiative' ? 'component' : block,
+                  block === 'initiative'
+                    ? projectRouteId({
+                        id: target.entityId,
+                        section: 'overview',
+                      })
+                    : target.entityId,
+                  { newSplit, sourceHandle, onApplied: applied }
+                );
             } catch {
               span.setAttr('access_requests.outcome', 'error');
               span.error('Access-request notification could not be opened');
@@ -605,6 +653,17 @@ function getSupportedHandler(
 }
 
 /**
+ * Where a notification was opened from: the app's own lists, a browser
+ * notification, a native (iOS, Android, macOS) notification, or a home
+ * recommendation that opens through its notification.
+ */
+export type NotificationOpenSource =
+  | 'in_app'
+  | 'browser_push'
+  | 'native_push'
+  | 'home_recommendation';
+
+/**
  * Opens the notification given the layout manager.
  * Some notifications are not supported and will return an error.
  */
@@ -618,13 +677,28 @@ export function openNotification(
    * clicked).
    */
   sourceHandle?: SplitHandle,
-  options: { onApplied?: VoidFunction } = {}
+  options: { onApplied?: VoidFunction; source?: NotificationOpenSource } = {}
 ): ResultAsync<void, NotSupportedError> {
+  const reportOpened = () =>
+    analytics.track('notification_opened', {
+      source: options.source ?? 'in_app',
+      notificationType: notification.notification_metadata.tag,
+      entityType: notification.entity_type,
+    });
+  // A native tap on a cold start is retried until the layout applies it, so
+  // it counts once, when it applies.
+  const reportOnApplied =
+    options.source === 'native_push' ? options.onApplied : undefined;
   const handler = getSupportedHandler(
     notification,
     entity,
     sourceHandle,
-    options.onApplied
+    reportOnApplied
+      ? () => {
+          reportOpened();
+          reportOnApplied();
+        }
+      : options.onApplied
   );
   if (!handler) {
     return errAsync({
@@ -632,6 +706,7 @@ export function openNotification(
       notificationType: notification.notification_metadata.tag,
     });
   }
+  if (!reportOnApplied) reportOpened();
   return ResultAsync.fromSafePromise(handler(layoutManager, newSplit));
 }
 
@@ -654,10 +729,11 @@ export function openSingleStackNotification(
   return true;
 }
 
+/** Opens a notification a native notification tap named by id. */
 export function openNotificationFromId(
   notificationId: string,
   layoutManager: SplitManager,
-  notificationSource: NotificationSource,
+  notificationSource: Pick<NotificationSource, 'notifications'>,
   options: {
     canOpen?: () => boolean;
     onApplied?: VoidFunction;
@@ -676,14 +752,18 @@ export function openNotificationFromId(
       }),
       'notification-navigation'
     );
-    return ResultAsync.fromSafePromise(
+    return ResultAsync.fromPromise(
       navigateToChannelMessage(
         layoutManager.getOrchestrator(),
         channelId,
         messageId,
         threadId ?? messageId,
         { splitManager: layoutManager, onApplied: options.onApplied }
-      )
+      ),
+      (cause): NavigationFailedError => ({
+        tag: 'NavigationFailedError',
+        cause,
+      })
     );
   }
   const openIfReady = (notification: UnifiedNotification) => {
@@ -693,14 +773,22 @@ export function openNotificationFromId(
         notificationId,
       });
     }
-    return openNotification(
-      notification,
-      layoutManager,
-      false,
-      undefined,
-      undefined,
-      { onApplied: options.onApplied }
-    );
+    // Preserve the in-app caller contract while giving native navigation one
+    // error result for both rejected handlers and unsupported destinations.
+    return ResultAsync.fromPromise(
+      openNotification(
+        notification,
+        layoutManager,
+        false,
+        undefined,
+        undefined,
+        { onApplied: options.onApplied, source: 'native_push' }
+      ),
+      (cause): NavigationFailedError => ({
+        tag: 'NavigationFailedError',
+        cause,
+      })
+    ).andThen((result) => result);
   };
 
   // Check notification source first
@@ -712,8 +800,9 @@ export function openNotificationFromId(
   }
 
   // Fetch if not in notification source
-  return ResultAsync.fromSafePromise(
-    getNotificationById(notificationId)
+  return ResultAsync.fromPromise(
+    getNotificationById(notificationId),
+    (cause): NavigationFailedError => ({ tag: 'NavigationFailedError', cause })
   ).andThen((unified) => {
     if (!unified) {
       const err: NotFoundError = { tag: 'NotFoundError', notificationId };

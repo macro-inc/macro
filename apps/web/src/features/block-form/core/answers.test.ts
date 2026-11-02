@@ -270,6 +270,19 @@ describe('validation', () => {
     expect(
       answerProblem(question, date, { type: 'date', value: 'not a date' })
     ).toBe('Enter a valid date.');
+    const trip: FormColumn = { ...link, kind: { type: 'date_range' } };
+    expect(
+      answerProblem(question, trip, {
+        type: 'date_range',
+        value: { start: '2026-03-05T00:00:00Z', end: '2026-03-01T00:00:00Z' },
+      })
+    ).toBe('The end date can’t be before the start date.');
+    expect(
+      answerProblem(question, trip, {
+        type: 'date_range',
+        value: { start: '2026-03-01T00:00:00Z', end: '2026-03-01T00:00:00Z' },
+      })
+    ).toBeUndefined();
     const person: FormColumn = {
       ...link,
       kind: { type: 'entity', target: 'USER', multi: false },

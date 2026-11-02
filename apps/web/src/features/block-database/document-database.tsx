@@ -1,8 +1,8 @@
 import { openDocument } from '@core/component/LexicalMarkdown/component/core/BlockLink';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import DatabaseIcon from '@phosphor/database.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import DatabaseIcon from '@icon/system/regular/database.svg';
 import {
   onDatabaseBatchCommitted,
   undoDatabaseChange,
@@ -267,6 +267,7 @@ export function DocumentDatabase(props: {
                       />
                     </div>
                     <DatabaseGrid
+                      host="document"
                       contentClass="m-3 rounded-lg border border-edge-muted"
                       databaseId={databaseId}
                       table={shown()}

@@ -1,6 +1,6 @@
 import { refreshBookingLinkResult } from '@app/features/scheduling/queries/agent-sync';
 import { fireAndForget } from '@core/util/fireAndForget';
-import Link from '@phosphor-icons/core/regular/link.svg';
+import Link from '@icon/system/regular/link.svg';
 import type { BookingLinkResult } from '@service-cognition/generated/tools/types';
 import { createEffect, createSignal, For } from 'solid-js';
 import { BaseTool } from './BaseTool';

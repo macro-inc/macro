@@ -13,6 +13,7 @@ mod test;
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Deserializer, Serialize};
 
+use crate::date_range::DateRange;
 use crate::formula::Formula;
 use crate::ids::{ColumnId, DatabaseId, OptionId, PropertyId, RowId, TableId, TableVersion};
 use crate::views::{
@@ -425,6 +426,8 @@ pub enum CellValue {
     Boolean(bool),
     /// A date-time.
     Date(DateTime<Utc>),
+    /// A span of time; its end may not come before its start.
+    DateRange(DateRange),
     /// Complete http or https URLs; at most one for a single-valued column.
     Link(Vec<String>),
     /// Options of a select or tag column; at most one for a single-valued
@@ -521,6 +524,8 @@ pub enum ColumnKind {
     Boolean,
     /// A date-time.
     Date,
+    /// A span from one date-time to another.
+    DateRange,
     /// A URL.
     Link,
     /// Text options.

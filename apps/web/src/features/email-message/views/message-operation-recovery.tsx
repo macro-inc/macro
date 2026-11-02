@@ -76,7 +76,11 @@ export function MessageOperationRecovery(props: {
               editing.
             </p>
             <Show when={props.onReloadDraft}>
-              <Button size="sm" variant="outline" onClick={props.onReloadDraft}>
+              <Button
+                size="sm"
+                variant="secondary"
+                onClick={props.onReloadDraft}
+              >
                 Reload draft
               </Button>
             </Show>
@@ -123,7 +127,7 @@ export function MessageOperationRecovery(props: {
                 <div class="flex gap-2">
                   <Button
                     size="sm"
-                    variant="strong"
+                    variant="secondary"
                     disabled={
                       pending() ||
                       ((decision()?.action === 'retry_send' ||
@@ -159,7 +163,7 @@ export function MessageOperationRecovery(props: {
                 {(action) => (
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     disabled={pending()}
                     onClick={() => {
                       if (

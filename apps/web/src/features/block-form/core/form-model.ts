@@ -68,6 +68,7 @@ export type FormColumnKind =
   | { type: 'number' }
   | { type: 'boolean' }
   | { type: 'date' }
+  | { type: 'date_range' }
   | { type: 'link' }
   | { type: 'select'; multi: boolean }
   | { type: 'select_number'; multi: boolean }
@@ -103,6 +104,8 @@ export type FormCellValue =
   | { type: 'number'; value: number }
   | { type: 'boolean'; value: boolean }
   | { type: 'date'; value: string }
+  /** Two instants; the end is never before the start. */
+  | { type: 'date_range'; value: { start: string; end: string } }
   | { type: 'link'; value: string[] }
   | { type: 'options'; value: FormOptionReference[] }
   | { type: 'entities'; value: FormEntityReference[] }
@@ -126,6 +129,13 @@ export type NumberOperator =
   | 'lessThan'
   | 'lessThanOrEqual';
 export type DateOperator = 'before' | 'after' | 'onOrBefore' | 'onOrAfter';
+export type DateRangeOperator =
+  | 'contains'
+  | 'doesNotContain'
+  | 'endsBefore'
+  | 'endsOnOrAfter'
+  | 'startsAfter'
+  | 'startsOnOrBefore';
 export type SetOperator =
   | 'isAnyOf'
   | 'isNoneOf'
@@ -139,6 +149,7 @@ export type GateTest =
   | { kind: 'text'; operator: TextOperator; value: string }
   | { kind: 'number'; operator: NumberOperator; value: number }
   | { kind: 'date'; operator: DateOperator; value: string }
+  | { kind: 'dateRange'; operator: DateRangeOperator; value: string }
   | { kind: 'checkbox'; checked: boolean }
   | { kind: 'options'; operator: SetOperator; options: string[] }
   | { kind: 'entities'; operator: SetOperator; entities: string[] };

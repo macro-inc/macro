@@ -6,8 +6,8 @@
 
 import type { TextDirection } from '@core/pptx-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
+import X from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import X from '@phosphor/x.svg';
 import { Button } from '@ui/components/Button';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { boxOf } from '../core/geometry';
@@ -318,12 +318,13 @@ export function FormatPane(props: {
       <div class="flex h-9 items-center justify-between border-edge-muted border-b px-3">
         <span class="font-semibold text-ink text-sm">{title()}</span>
         <Button
+          aria-label="Close"
+          tooltip="Close"
           size="icon-xs"
           variant="ghost"
-          label="Close"
           onClick={props.onClose}
         >
-          <X />
+          <X class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <Show when={props.section !== 'background'}>
@@ -804,7 +805,7 @@ export function FormatPane(props: {
           <div class="flex gap-2 p-3">
             <Button
               size="sm"
-              variant="outline"
+              variant="secondary"
               disabled={ro()}
               onClick={() => c.applyBackgroundToAll()}
             >

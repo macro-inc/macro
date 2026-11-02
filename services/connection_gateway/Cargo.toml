@@ -40,6 +40,7 @@ connection_gateway_models = { path = "../../crates/connection_gateway_models" }
 cowlike = { path = "../../crates/cowlike" }
 dashmap = { workspace = true }
 ensure_exists = { path = "../../crates/ensure_exists", features = ["dynamodb"] }
+entity_access = { path = "../../crates/entity_access", default-features = false, features = ["outbound"] }
 frecency = { path = "../../crates/frecency", features = [
   "inbound",
   "outbound",
@@ -61,6 +62,7 @@ macro_env = { path = "../../crates/macro_env" }
 macro_env_var = { path = "../../crates/macro_env_var" }
 macro_tower_layers = { path = "../../crates/macro_tower_layers" }
 mockall.workspace = true
+postcard = { workspace = true }
 model = { path = "../../crates/model" }
 model-entity = { path = "../../crates/model-entity" }
 models_bulk_upload = { path = "../../crates/models_bulk_upload" }

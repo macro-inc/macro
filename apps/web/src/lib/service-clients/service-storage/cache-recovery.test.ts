@@ -85,3 +85,18 @@ it('pauses offline and fences a completion from the previous session', async () 
   expect(recovery.state()).toBe('recovery-required');
   recovery.reset();
 });
+
+it('retries after a read refused while the database changed owners', async () => {
+  const rebuild = vi.fn(async () => {});
+  const recovery = createCacheRecovery(rebuild);
+  const blocked = Object.assign(
+    new Error('cache reads unavailable after owner handoff timeout'),
+    { errorCode: 'owner-handoff-blocked' }
+  );
+  recovery.failed(blocked);
+  expect(recovery.state()).toBe('unavailable');
+  await vi.advanceTimersByTimeAsync(2_000);
+  expect(rebuild).toHaveBeenCalledOnce();
+  expect(recovery.state()).toBe('ready');
+  recovery.reset();
+});

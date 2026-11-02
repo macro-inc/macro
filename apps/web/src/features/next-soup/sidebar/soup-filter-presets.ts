@@ -109,6 +109,10 @@ const getInboxSignalFilters = () => {
       chatUpdatedAt: { gte: twoWeeksAgo },
       folderDone: false,
       folderUpdatedAt: { gte: twoWeeksAgo },
+      // Projects with a not-done notification (an access request, a
+      // discussion). Off by default server-side, so this literal is what
+      // surfaces them in the feed.
+      initiativeDone: false,
       // Foreign entities (e.g. GitHub PRs) with a not-done notification.
       // Referencing `fef` also opts them into the signal query (otherwise
       // defineQueryFilters excludes unreferenced entity types). Rendering is
@@ -144,6 +148,7 @@ const getInboxNoiseFilters = () =>
       channelThreadDone: false,
       chatDone: false,
       folderDone: false,
+      initiativeDone: false,
       emailShared: 'exclude',
     },
     exclude: getDisabledSnippetSubtypeExclude(),

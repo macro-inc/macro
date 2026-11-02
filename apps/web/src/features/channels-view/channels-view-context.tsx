@@ -74,12 +74,15 @@ function createInitialState(
     tab: initial.tab ?? 'browse',
     expandedGroups: {
       favorites: initial.expandedGroups?.favorites ?? true,
+      team_channels: initial.expandedGroups?.team_channels ?? true,
       channels: initial.expandedGroups?.channels ?? true,
       direct_messages: initial.expandedGroups?.direct_messages ?? true,
     },
     collapsedLabels: initial.collapsedLabels ?? [],
     threadsChannelId: initial.threadsChannelId,
     sortBy: {
+      team_channels:
+        initial.sortBy?.team_channels ?? CHANNELS_DEFAULT_SORT_BY.team_channels,
       channels: initial.sortBy?.channels ?? CHANNELS_DEFAULT_SORT_BY.channels,
       direct_messages:
         initial.sortBy?.direct_messages ??

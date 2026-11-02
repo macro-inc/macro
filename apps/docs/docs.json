@@ -170,6 +170,8 @@
               "AI/mcp/tools/get-team-availability",
               "AI/mcp/tools/get-thread",
               "AI/mcp/tools/import-companies-csv",
+              "AI/mcp/tools/import-from-jira",
+              "AI/mcp/tools/import-from-linear",
               "AI/mcp/tools/import-from-notion",
               "AI/mcp/tools/import-notion-page",
               "AI/mcp/tools/import-pipeline-csv",

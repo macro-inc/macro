@@ -61,6 +61,14 @@ export const invitationFixtures = {
     method: 'counter',
     comment: 'Can we start half an hour later?',
   },
+  shared: {
+    ...invitationFixture,
+    method: 'publish',
+    attendees: [],
+    location: 'Room 4',
+    conference_url: undefined,
+    recurrence: [],
+  },
   allDay: {
     ...invitationFixture,
     title: 'Team offsite',

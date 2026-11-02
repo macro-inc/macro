@@ -9,6 +9,8 @@ import {
 import { stringifyDocument } from '@urql/core';
 
 type Entry = WorkFeedEntryFieldsFragment;
+/** A place in the feed's order; a page's `nextPosition` is where its read stopped. */
+type Position = NonNullable<WorkFeedQuery['user']['workFeed']['nextPosition']>;
 
 const workFeedQuery = stringifyDocument(WorkFeedDocument);
 
@@ -22,18 +24,25 @@ function subMillis(time: string): number {
 const entityIdOf = (itemId: string) => itemId.slice(itemId.indexOf(':') + 1);
 
 /** The server's feed order: newest `sortAt` first, then entity id descending. */
-export function compareWorkFeedEntries(a: Entry, b: Entry): number {
+function comparePositions(a: Position, b: Position): number {
   const millis = Date.parse(b.sortAt) - Date.parse(a.sortAt);
   if (millis !== 0) return millis;
   const sub = subMillis(b.sortAt) - subMillis(a.sortAt);
   if (sub !== 0) return sub;
-  const left = entityIdOf(a.item.id);
-  const right = entityIdOf(b.item.id);
-  return left < right ? 1 : left > right ? -1 : 0;
+  return a.entityId < b.entityId ? 1 : a.entityId > b.entityId ? -1 : 0;
 }
 
+const positionOf = (entry: Entry): Position => ({
+  sortAt: entry.sortAt,
+  entityId: entityIdOf(entry.item.id),
+});
+
+/** Entries in the server's feed order. */
+export const compareWorkFeedEntries = (a: Entry, b: Entry): number =>
+  comparePositions(positionOf(a), positionOf(b));
+
 /** Insert an entry before the first loaded row it sorts ahead of. */
-function insertEntry(pages: Entry[][], entry: Entry, hasMore: boolean) {
+function insertEntry(pages: Entry[][], entry: Entry, next: Position | null) {
   for (const page of pages) {
     const index = page.findIndex(
       (row) => compareWorkFeedEntries(entry, row) < 0
@@ -43,35 +52,40 @@ function insertEntry(pages: Entry[][], entry: Entry, hasMore: boolean) {
       return;
     }
   }
-  // Older than every loaded row: it arrives with its page while more remain.
-  if (!hasMore) pages.at(-1)?.push(entry);
+  // Older than every loaded row. The last page's read may have gone past
+  // its last row, so the entry is its own while it falls within that read;
+  // past it, the entry arrives with a later page.
+  if (!next || comparePositions(positionOf(entry), next) <= 0) {
+    pages.at(-1)?.push(entry);
+  }
 }
 
 /**
  * Apply one server batch to a feed's loaded pages, in order. A removed item
  * leaves whichever page holds it; an upserted entry moves to its place in
  * the server's order. Keyset cursors are positions in that order, so a row
- * inserted into one page leaves no gap before the next. Returns undefined
- * when the batch invalidates the feed.
+ * inserted into one page leaves no gap before the next. `next` is where the
+ * last loaded page's read stopped, null once the feed is exhausted. Returns
+ * undefined when the batch invalidates the feed.
  */
 export function placeWorkFeedPatches(
   pages: readonly (readonly Entry[])[],
   patches: readonly WorkFeedPatchFieldsFragment[],
-  hasMore: boolean
+  next: Position | null
 ): Entry[][] | undefined {
-  let next = pages.map((page) => [...page]);
+  let placed = pages.map((page) => [...page]);
   for (const patch of patches) {
     if (patch.__typename === 'WorkFeedInvalidated') return undefined;
     const itemId =
       patch.__typename === 'WorkFeedEntryRemoved'
         ? patch.itemId
         : patch.entry.item.id;
-    next = next.map((page) => page.filter((row) => row.item.id !== itemId));
+    placed = placed.map((page) => page.filter((row) => row.item.id !== itemId));
     if (patch.__typename === 'WorkFeedEntryUpserted') {
-      insertEntry(next, patch.entry, hasMore);
+      insertEntry(placed, patch.entry, next);
     }
   }
-  return next;
+  return placed;
 }
 
 const sameEntries = (a: readonly Entry[], b: readonly Entry[]) =>
@@ -86,8 +100,7 @@ const sameEntries = (a: readonly Entry[], b: readonly Entry[]) =>
 export async function writeWorkFeedPatches(
   host: Pick<CacheHost, 'readQuery' | 'writeQuery'>,
   pageVariables: readonly WorkFeedQueryVariables[],
-  patches: readonly WorkFeedPatchFieldsFragment[],
-  hasMore: boolean
+  patches: readonly WorkFeedPatchFieldsFragment[]
 ): Promise<boolean> {
   if (pageVariables.length === 0) return false;
   const pages: WorkFeedQuery[] = [];
@@ -105,7 +118,7 @@ export async function writeWorkFeedPatches(
   const placed = placeWorkFeedPatches(
     pages.map((page) => page.user.workFeed.entries),
     patches,
-    hasMore
+    pages.at(-1)?.user.workFeed.nextPosition ?? null
   );
   if (!placed) return false;
   for (const [index, entries] of placed.entries()) {

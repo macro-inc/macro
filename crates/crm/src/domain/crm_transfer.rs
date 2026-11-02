@@ -132,6 +132,7 @@ fn importable(field: &PipelineField) -> bool {
                 | FieldKind::Number
                 | FieldKind::Checkbox
                 | FieldKind::Date
+                | FieldKind::DateRange
                 | FieldKind::Link
                 | FieldKind::Select
                 | FieldKind::Tags
@@ -149,6 +150,7 @@ fn exported_value(value: &FieldValue) -> String {
         FieldValue::Number(number) => number.to_string(),
         FieldValue::Checkbox(checked) => checked.to_string(),
         FieldValue::Date(date) => date.to_rfc3339(),
+        FieldValue::DateRange(range) => range.iso(),
         FieldValue::Labels(values) | FieldValue::Links(values) => values.join(", "),
         // People leave as emails, which another team can match.
         FieldValue::References(ids) => ids

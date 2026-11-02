@@ -11,7 +11,7 @@ use uuid::Uuid;
 mod import;
 
 use crate::domain::{
-    ics::CalendarEventExport,
+    ics::EventSnapshot,
     models::{
         ActorInboxes, AttendeeResponseStatus, CalendarAttendee, CalendarAttendeeInput,
         CalendarEvent, CalendarEventDraft, CalendarEventOverride, CalendarEventPatch,
@@ -1240,6 +1240,30 @@ impl<G: GoogleRequestGate> CalendarMutationProvider for GoogleCalendarClient<G> 
         fields(provider_calendar_id = %target.provider_calendar_id),
         err
     )]
+    async fn refresh_event(
+        &self,
+        access_token: &str,
+        target: &ProviderCalendarTarget,
+        master_provider_event_id: &str,
+    ) -> Result<Option<CalendarEventUpsert>, CalendarProviderError> {
+        match self
+            .refresh_series(access_token, target, master_provider_event_id, None)
+            .await?
+        {
+            SeriesOutcome::Refreshed(upsert) => Ok(Some(*upsert)),
+            SeriesOutcome::Gone => Ok(None),
+            SeriesOutcome::Malformed => Err(CalendarProviderError::new(
+                CalendarProviderErrorKind::Permanent,
+                "Google Calendar returned a malformed series",
+            )),
+        }
+    }
+
+    #[tracing::instrument(
+        skip(self, access_token, target),
+        fields(provider_calendar_id = %target.provider_calendar_id),
+        err
+    )]
     async fn delete_event(
         &self,
         access_token: &str,
@@ -1513,7 +1537,7 @@ impl<G: GoogleRequestGate> CalendarMutationProvider for GoogleCalendarClient<G> 
         &self,
         access_token: &str,
         target: &ProviderCalendarTarget,
-        source: &CalendarEventExport,
+        source: &EventSnapshot,
     ) -> Result<ProviderImportOutcome, CalendarProviderError> {
         self.import_copy(access_token, target, source).await
     }
@@ -2468,10 +2492,26 @@ fn google_time(event: &GoogleEvent) -> Result<EventTime, Report> {
                 .with_timezone(&Utc),
             time_zone: start.time_zone.clone(),
         },
-        (_, _, Some(start_value), Some(end_value)) => EventTime::AllDay {
-            start_date: NaiveDate::parse_from_str(start_value, "%Y-%m-%d").map_err(report)?,
-            end_date: NaiveDate::parse_from_str(end_value, "%Y-%m-%d").map_err(report)?,
-        },
+        (_, _, Some(start_value), Some(end_value)) => {
+            let start_date = NaiveDate::parse_from_str(start_value, "%Y-%m-%d").map_err(report)?;
+            let mut end_date = NaiveDate::parse_from_str(end_value, "%Y-%m-%d").map_err(report)?;
+            // Imported Google events can use the same date for both ends.
+            // Represent that day with an exclusive end; retain Google's
+            // original dates in the source payload without writing them back.
+            if end_date == start_date {
+                end_date = end_date.succ_opt().ok_or_else(|| {
+                    rootcause::report!("Google event {} has an out-of-range all-day end", event.id)
+                })?;
+                tracing::debug!(
+                    provider_event_id = %event.id,
+                    "normalized a Google all-day event with matching dates"
+                );
+            }
+            EventTime::AllDay {
+                start_date,
+                end_date,
+            }
+        }
         _ => {
             return Err(rootcause::report!(
                 "Google event {} has mixed or missing time fields",

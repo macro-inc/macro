@@ -9,7 +9,9 @@ services:
     # The default 100 max_connections is exhausted when every service's pool
     # fills under load (e.g. a large email backfill): workers then die on
     # "pool timed out" / "too many clients". Local-only headroom.
-    command: postgres -c max_connections=500
+    # The migration installs pg_stat_statements; preload it so local query
+    # profiling can separate database execution from application timings.
+    command: postgres -c max_connections=500 -c shared_preload_libraries=pg_stat_statements
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U user"]
       interval: 2s

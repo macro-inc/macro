@@ -5,6 +5,21 @@ single Vite build that runs identically for web, desktop, iOS, and Android — t
 platform is detected at runtime via `getPlatform()` rather than baked into the
 bundle.
 
+## Native authentication cookies
+
+The native HTTP plugin stores its cookie jar at `$APPLOCALDATA/.cookies`, which
+resolves to `Library/Application Support/<bundle-identifier>/.cookies` on iOS
+and macOS. Keep credentials out of `$APPCACHE`: iOS may purge that directory
+under storage pressure. The same native jar supplies HTTP and WebSocket cookies;
+this is separate from the WebView's browser storage.
+
+Macro passes `$APPLOCALDATA` to the plugin fork's `init_with_cookie_store_dir`;
+the plugin owns the `.cookies` filename within that directory. Its default
+`init()` still uses the cache directory. Macro deliberately does not migrate
+the old cache file, so the first launch after this native update requires
+sign-in again. Cookie expiry, refresh, and write behavior are unchanged. This
+requires a native app release; an OTA frontend bundle cannot relocate the jar.
+
 ## File saving and sharing
 
 The optional `file_export_plugin` registers iOS save/share commands. The web
@@ -319,7 +334,8 @@ versionCode that implements the command and `MIN_NATIVE_BUILD_IOS` to the first
 iOS CFBundleVersion that implements it. Set both together: build numbers are
 independent. Production builds (`just build-prod`) read both from
 `apps/web/min-native-build.json`; `just ios-bump` raises the iOS one (see
-`apps/web/docs/ios-releases.md`). The schema 3 manifest carries
+`apps/web/docs/ios-releases.md`) and `just android-bump` the Android one (see
+`docs/development/android.md`). The schema 3 manifest carries
 `minNativeBuilds: { android, ios }`;
 the endpoint returns the requesting platform's minimum in its existing response.
 The updater checks that minimum during extraction, restore, and application.

@@ -11,10 +11,15 @@ pub async fn handle_non_retryable_error(
     data: &GmailOpsPubsubMessage,
     e: &DetailedError,
 ) -> anyhow::Result<()> {
-    // A rate-limited operation is only non-retryable here once it has been
+    // A deferred operation is only non-retryable here once it has been
     // re-enqueued to the retry queue, so deleting it loses nothing.
-    if e.reason == FailureReason::GmailApiRateLimited {
-        tracing::debug!(error = ?e, payload = ?data.operation, "Rate-limited gmail ops message deferred. The message will be deleted.");
+    if matches!(
+        e.reason,
+        FailureReason::GmailApiRateLimited
+            | FailureReason::GmailApiUnavailable
+            | FailureReason::NewerLabelWritePending
+    ) {
+        tracing::debug!(error = ?e, payload = ?data.operation, "Deferred gmail ops message moved to the retry queue. The message will be deleted.");
     } else {
         tracing::error!(error = ?e, payload = ?data.operation, "Non-retryable error processing gmail ops message. The message will be deleted.");
     }

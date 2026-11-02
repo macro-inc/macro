@@ -1,4 +1,4 @@
-import PlayIcon from '@phosphor/play.svg';
+import PlayIcon from '@icon/system/regular/play.svg';
 import { cn } from '@ui';
 import type { ParentProps } from 'solid-js';
 
@@ -16,6 +16,7 @@ function Preview(props: {
   onOpen?: () => void;
   width?: number;
   height?: number;
+  onError?: () => void;
 }) {
   return (
     <video
@@ -27,6 +28,7 @@ function Preview(props: {
       width={props.width}
       height={props.height}
       onClick={() => props.onOpen?.()}
+      onError={() => props.onError?.()}
       onLoadedMetadata={(e) => {
         // iOS Safari doesn't paint the first frame with preload="metadata".
         // Seeking to a tiny positive time forces it to decode and display the frame.

@@ -36,4 +36,5 @@ export const ListFavoritesEntityTypeItem = {
   database: 'database',
   database_row: 'database_row',
   form: 'form',
+  external_chat: 'external_chat',
 } as const;

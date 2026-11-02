@@ -1,4 +1,4 @@
-import LockIcon from '@phosphor/lock-simple.svg';
+import LockIcon from '@icon/system/regular/lock-simple.svg';
 import { cn } from '@ui';
 import { IMPORT_SECURITY_NOTE } from '../core/providers';
 

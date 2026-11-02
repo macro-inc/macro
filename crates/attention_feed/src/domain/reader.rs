@@ -116,7 +116,14 @@ where
     #[tracing::instrument(
         name = "attention_feed.page",
         skip_all,
-        fields(user = %request.viewer.user, keying = ?request.keying, limit = request.limit),
+        fields(
+            user = %request.viewer.user,
+            keying = ?request.keying,
+            limit = request.limit,
+            fill_rounds = tracing::field::Empty,
+            entries = tracing::field::Empty,
+            has_next = tracing::field::Empty,
+        ),
         err
     )]
     pub async fn page<T>(
@@ -127,7 +134,9 @@ where
         let limit = usize::from(request.limit);
         let mut entries = Vec::with_capacity(limit);
         let mut after = request.after.clone();
-        for _ in 0..MAX_FILL_ROUNDS {
+        let mut rounds = 0;
+        'read: for _ in 0..MAX_FILL_ROUNDS {
+            rounds += 1;
             let page = self
                 .source
                 .page(CandidateRequest {
@@ -147,20 +156,19 @@ where
                 if entries.len() == limit && index + 1 < total {
                     // Full before the page ran out: resume just past the
                     // last candidate walked.
-                    return Ok(FeedPage {
-                        entries,
-                        next: Some(walked),
-                    });
+                    after = Some(walked);
+                    break 'read;
                 }
             }
-            if entries.len() == limit || page.next.is_none() {
-                return Ok(FeedPage {
-                    entries,
-                    next: page.next,
-                });
-            }
             after = page.next;
+            if entries.len() == limit || after.is_none() {
+                break;
+            }
         }
+        let span = tracing::Span::current();
+        span.record("fill_rounds", rounds);
+        span.record("entries", entries.len());
+        span.record("has_next", after.is_some());
         Ok(FeedPage {
             entries,
             next: after,

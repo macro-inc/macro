@@ -1,4 +1,4 @@
-import Copy from '@phosphor/copy.svg';
+import Copy from '@icon/system/regular/copy.svg';
 import { CopyButton, Tabs } from '@ui';
 import { createUniqueId, Show } from 'solid-js';
 import type { FormAudience } from '../../core/form-model';
@@ -47,7 +47,7 @@ export function AudiencePanel(props: {
         <p class="text-xs text-ink-muted">Only the owner can change this.</p>
       </Show>
       <CopyButton
-        variant="outline"
+        variant="secondary"
         class="self-start"
         onClick={async () => {
           try {

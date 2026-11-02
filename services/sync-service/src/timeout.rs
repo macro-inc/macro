@@ -130,18 +130,8 @@ impl<T> TimeoutResult<T> {
 /// # Returns
 /// A `TimeoutResult` indicating whether the operation completed or timed out
 ///
-/// # Examples
-/// ```rust
-/// use crate::timeout::{timeout, TimeoutResult};
-///
-/// async fn example() {
-///     let result = timeout(some_async_operation(), 5000).await;
-///     match result {
-///         TimeoutResult::Ok(value) => println!("Got result: {:?}", value),
-///         TimeoutResult::Timeout(err) => println!("Operation timed out: {}", err),
-///     }
-/// }
-/// ```
+/// Await the returned future and handle `TimeoutResult::Ok` or
+/// `TimeoutResult::Timeout`.
 pub fn timeout<F>(future: F, duration_ms: u32) -> Timeout<F>
 where
     F: Future,

@@ -33,7 +33,7 @@ afterEach(() => {
 
 describe('controlled confirmation', () => {
   it.each([false, true])(
-    'uses ghost/strong actions with mobile=%s',
+    'uses ghost/danger actions with mobile=%s',
     (isMobile) => {
       mobile.value = isMobile;
       render(() => (
@@ -50,7 +50,7 @@ describe('controlled confirmation', () => {
       ).toBe('ghost');
       expect(
         screen.getByRole('button', { name: 'Confirm' }).dataset.variant
-      ).toBe('strong');
+      ).toBe('danger');
     }
   );
 

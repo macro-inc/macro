@@ -19,6 +19,7 @@ vi.mock('@app/lib/urql-solid', () => ({
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => mocks.client,
+  hasGraphqlCacheHost: () => false,
   mapGraphqlNotification: vi.fn(),
 }));
 

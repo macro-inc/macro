@@ -8,7 +8,7 @@ import type {
   BaseListEntityProps,
   LayoutProps,
 } from '@entity/composed/list-entity/shared';
-import BuildingsIcon from '@phosphor/buildings.svg';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import { cn } from '@ui/utils/classname';
 import { Show } from 'solid-js';
 import { contactGridTemplate } from '../components/contact-grid-template';

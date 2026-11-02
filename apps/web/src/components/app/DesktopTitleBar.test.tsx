@@ -9,11 +9,9 @@ import { afterEach, expect, it, vi } from 'vitest';
 import { DesktopTitleBar } from './DesktopTitleBar';
 
 vi.mock('@ui', () => ({
-  Button: (
-    props: JSX.ButtonHTMLAttributes<HTMLButtonElement> & { label: string }
-  ) => (
+  Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button
-      aria-label={props.label}
+      aria-label={props['aria-label']}
       disabled={props.disabled}
       onClick={props.onClick}
     >

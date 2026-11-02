@@ -1,6 +1,6 @@
 import { SplitPanel } from '@components/app/split-panel';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { cn } from '@ui';
 import { For, type JSX, type ParentProps, Show } from 'solid-js';
 import { ListHeader } from './ListHeader';

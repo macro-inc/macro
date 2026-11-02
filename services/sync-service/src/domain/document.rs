@@ -174,6 +174,22 @@ fn export_state(doc: &LoroDoc, mode: ExportMode<'_>) -> Result<(Vec<u8>, Vec<u8>
     Ok((snapshot, revision))
 }
 
+/// Peers that authored operations carried by an update or snapshot, so they
+/// can be mapped to the writer. Read from the blob, not the import result, so a
+/// retried write that changes nothing still registers its peers.
+pub fn writing_peers(blob: &[u8]) -> Result<Vec<u64>, DocumentError> {
+    let meta = LoroDoc::decode_import_blob_meta(blob, false)
+        .map_err(|_| DocumentError::Invalid("Invalid Loro update."))?;
+    let mut peers: Vec<u64> = meta
+        .partial_end_vv
+        .iter()
+        .filter(|(peer, end)| **end > meta.partial_start_vv.get(peer).copied().unwrap_or(0))
+        .map(|(peer, _)| *peer)
+        .collect();
+    peers.sort_unstable();
+    Ok(peers)
+}
+
 /// Synchronous preflight. The caller must apply the returned delta before its
 /// next await, so websocket writes cannot interleave with this version check.
 pub fn prepare_update(

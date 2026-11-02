@@ -27,7 +27,7 @@ export type AddServerRequest = {
  * Everything we use AI for. The wire / DB form of each variant is its
  * `snake_case` name.
  */
-export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'dictation' | 'image_generation';
+export type AiFeature = 'chat' | 'memory' | 'automation' | 'dynamic_completions_api' | 'chat_rename' | 'call_summary' | 'channel_bot' | 'ai_projection' | 'ai_editing' | 'import' | 'agent_session' | 'agent_repository_choice' | 'agent_mode_choice' | 'dictation' | 'image_generation' | 'email_focus';
 
 /**
  * A structured part within an assistant message.
@@ -476,6 +476,49 @@ export type DatabaseChange = {
 };
 
 /**
+ * A proposal, never stored results or permission to read the named database.
+ */
+export type DatabaseQueryAnswer = {
+    answerable: boolean;
+    chart?: null | DatabaseQueryChart;
+    databaseId?: string | null;
+    displayMode: DatabaseQueryDisplayMode;
+    explanation: string;
+    sql: string;
+    title: string;
+};
+
+/**
+ * Chart fields name the proposal's result columns exactly.
+ */
+export type DatabaseQueryChart = {
+    color?: string | null;
+    stack: boolean;
+    title: string;
+    x: string;
+    y: Array<string>;
+};
+
+/**
+ * Supported live-answer presentations.
+ */
+export type DatabaseQueryDisplayMode = 'scalar' | 'table' | 'bar' | 'line' | 'area' | 'scatter' | 'pie';
+
+/**
+ * The question and untrusted schema hints; authorization remains in the read services.
+ */
+export type DatabaseQueryRequest = {
+    /**
+     * The SQL engine's error from one failed proposal, used for a bounded repair.
+     */
+    error?: string | null;
+    model: string;
+    prompt: string;
+    schema: unknown;
+    sql: string;
+};
+
+/**
  * Sanitized, machine-readable failure of a decision request.
  */
 export type DecisionErrorBody = {
@@ -576,7 +619,7 @@ export type Entity = {
 /**
  * The type of an entity in Macro
  */
-export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form';
+export type EntityType = 'user' | 'chat' | 'channel' | 'channel_message' | 'document' | 'project' | 'email_thread' | 'calendar_event' | 'team' | 'call' | 'foreign_entity' | 'static_file' | 'crm_company' | 'crm_contact' | 'crm_pipeline' | 'reminder' | 'skill' | 'agent_session' | 'scheduled_action' | 'initiative' | 'database' | 'database_row' | 'form' | 'external_chat';
 
 /**
  * Error response body.
@@ -644,6 +687,91 @@ export type FileType = 'docx' | 'pdf' | 'md' | 'spreadsheet' | 'canvas' | 'coffe
  * A `provider/model` id every user may request without professional features.
  */
 export type FreeTierModel = 'google/gemini-3.8-flash';
+
+/**
+ * Shape of the generated image.
+ */
+export type GenerateImageAspectRatio = 'square' | 'landscape' | 'portrait' | 'widescreen' | 'tall';
+
+/**
+ * Sanitized, machine-readable failure of an image request.
+ */
+export type GenerateImageErrorBody = {
+    /**
+     * Stable failure code.
+     */
+    code: string;
+    /**
+     * Explanation without provider or storage diagnostics.
+     */
+    error: string;
+};
+
+/**
+ * A reference image already stored in Macro.
+ */
+export type GenerateImageReference = {
+    /**
+     * The Macro document ID.
+     */
+    id: string;
+    type: 'document';
+} | {
+    /**
+     * The static file ID.
+     */
+    id: string;
+    type: 'staticFile';
+};
+
+/**
+ * What image to generate.
+ */
+export type GenerateImageRequest = {
+    aspectRatio?: null | GenerateImageAspectRatio;
+    /**
+     * Description of the image: subject, style, composition, colours, and any text to render.
+     */
+    prompt: string;
+    /**
+     * Up to three reference images, in the order the prompt refers to them.
+     */
+    referenceImages?: Array<GenerateImageReference>;
+};
+
+/**
+ * The stored generated image.
+ */
+export type GenerateImageResponse = {
+    /**
+     * Intrinsic pixel height.
+     */
+    height: number;
+    /**
+     * IANA media type of the image, e.g. `image/png`.
+     */
+    mimeType: string;
+    /**
+     * Commentary the model produced alongside the image, when any.
+     */
+    note?: string | null;
+    /**
+     * Size of the image in bytes.
+     */
+    sizeBytes: number;
+    /**
+     * Static file ID, reusable as a reference image or a message attachment.
+     */
+    staticFileId: string;
+    /**
+     * Permanent URL of the image.
+     */
+    url: string;
+    /**
+     * Intrinsic pixel width.
+     */
+    width: number;
+};
 
 export type GenericErrorResponse = {
     /**
@@ -815,7 +943,7 @@ export type ImportEntity = {
  * kinds; a Notion database and a Notion page, or a Linear project and a
  * Linear issue, are tracked and deduplicated separately.
  */
-export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'channel';
+export type ImportKind = 'issue' | 'project' | 'document' | 'page' | 'database' | 'data_source' | 'row' | 'jira_issue' | 'jira_project' | 'jira_epic' | 'channel';
 
 /**
  * Discovery-run state for one user × source.
@@ -848,7 +976,7 @@ export type ImportRun = {
 /**
  * External systems items can be imported from.
  */
-export type ImportSource = 'linear' | 'notion' | 'slack';
+export type ImportSource = 'linear' | 'jira' | 'notion' | 'slack';
 
 /**
  * The full import aggregate for a user: discovery runs plus visible ledger
@@ -1095,6 +1223,10 @@ export type NotionImportReport = {
      */
     imported: number;
     /**
+     * Tracker issues in the plan.
+     */
+    issues?: number;
+    /**
      * Whether the user is on a team. Without one, everything the import
      * writes stays visible only to them.
      */
@@ -1103,6 +1235,10 @@ export type NotionImportReport = {
      * Pages in the plan.
      */
     pages: number;
+    /**
+     * Tracker groups written as Macro projects.
+     */
+    projects?: number;
     /**
      * The review the plan is tied to, once presented.
      */
@@ -1134,6 +1270,10 @@ export type NotionImportReport = {
      * for the team; they link to the teammate's copy once it is written.
      */
     waitingOnTeammates?: number;
+    /**
+     * Provider items skipped because they were unreadable, or optional features unavailable.
+     */
+    warnings?: Array<string>;
     /**
      * Plan objects being written now.
      */
@@ -1376,6 +1516,36 @@ export type PipedreamConnectionResponse = {
      * Human-readable display name.
      */
     server_name: string;
+};
+
+/**
+ * A catalog app that connects through its own MCP server instead of
+ * Pipedream.
+ */
+export type PipedreamOverlayResponse = {
+    /**
+     * Pipedream app name slug, as it appears in the catalog.
+     */
+    app_slug: string;
+    /**
+     * The MCP server to authorize with the native MCP OAuth flow.
+     */
+    server_url: string;
+};
+
+/**
+ * Request body for recovering a connect flow whose result the Connect UI
+ * never reported.
+ */
+export type PipedreamRecoverRequest = {
+    /**
+     * The Pipedream app the flow was connecting, by name slug.
+     */
+    app_slug: string;
+    /**
+     * Optional display name for the connector, as for completion.
+     */
+    server_name?: string | null;
 };
 
 /**
@@ -2625,6 +2795,33 @@ export type GetCitationHandlerResponses = {
 
 export type GetCitationHandlerResponse = GetCitationHandlerResponses[keyof GetCitationHandlerResponses];
 
+export type GenerateDatabaseQueryData = {
+    body: DatabaseQueryRequest;
+    path?: never;
+    query?: never;
+    url: '/database-query';
+};
+
+export type GenerateDatabaseQueryErrors = {
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    402: StructuredCompletionError;
+    403: StructuredCompletionError;
+    500: StructuredCompletionError;
+    503: StructuredCompletionError;
+    504: StructuredCompletionError;
+};
+
+export type GenerateDatabaseQueryError = GenerateDatabaseQueryErrors[keyof GenerateDatabaseQueryErrors];
+
+export type GenerateDatabaseQueryResponses = {
+    200: DatabaseQueryAnswer;
+};
+
+export type GenerateDatabaseQueryResponse = GenerateDatabaseQueryResponses[keyof GenerateDatabaseQueryResponses];
+
 export type DecisionsData = {
     body: DecisionRequest;
     path?: never;
@@ -2693,6 +2890,59 @@ export type HealthHandlerResponses = {
 };
 
 export type HealthHandlerResponse = HealthHandlerResponses[keyof HealthHandlerResponses];
+
+export type GenerateImageData = {
+    body: GenerateImageRequest;
+    path?: never;
+    query?: never;
+    url: '/images/generate';
+};
+
+export type GenerateImageErrors = {
+    /**
+     * Invalid prompt or reference
+     */
+    400: GenerateImageErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * AI allowance exhausted
+     */
+    402: GenerateImageErrorBody;
+    /**
+     * A reference is not accessible, or no user to bill
+     */
+    403: GenerateImageErrorBody;
+    /**
+     * The model declined to render the prompt
+     */
+    422: GenerateImageErrorBody;
+    /**
+     * The image could not be read or stored
+     */
+    500: GenerateImageErrorBody;
+    /**
+     * The image model request failed
+     */
+    502: GenerateImageErrorBody;
+    /**
+     * Image generation or usage validation unavailable
+     */
+    503: GenerateImageErrorBody;
+};
+
+export type GenerateImageError = GenerateImageErrors[keyof GenerateImageErrors];
+
+export type GenerateImageResponses = {
+    /**
+     * The stored image
+     */
+    200: GenerateImageResponse;
+};
+
+export type GenerateImageResponse2 = GenerateImageResponses[keyof GenerateImageResponses];
 
 export type NotionReportHandlerData = {
     body?: never;
@@ -2815,6 +3065,36 @@ export type GetStateHandlerResponses = {
 
 export type GetStateHandlerResponse = GetStateHandlerResponses[keyof GetStateHandlerResponses];
 
+export type WorkspaceReportHandlerData = {
+    body?: never;
+    path: {
+        source: ImportSource;
+    };
+    query?: never;
+    url: '/import/workspaces/{source}';
+};
+
+export type WorkspaceReportHandlerResponses = {
+    200: NotionImportReport;
+};
+
+export type WorkspaceReportHandlerResponse = WorkspaceReportHandlerResponses[keyof WorkspaceReportHandlerResponses];
+
+export type CancelWorkspaceHandlerData = {
+    body?: never;
+    path: {
+        source: ImportSource;
+    };
+    query?: never;
+    url: '/import/workspaces/{source}/cancel';
+};
+
+export type CancelWorkspaceHandlerResponses = {
+    200: NotionImportReport;
+};
+
+export type CancelWorkspaceHandlerResponse = CancelWorkspaceHandlerResponses[keyof CancelWorkspaceHandlerResponses];
+
 export type DeleteMcpServerData = {
     body?: never;
     path?: never;
@@ -2868,6 +3148,7 @@ export type AddMcpServerData = {
 };
 
 export type AddMcpServerErrors = {
+    400: ErrorResponse;
     401: string;
     500: ErrorResponse;
 };
@@ -3150,6 +3431,7 @@ export type CompletePipedreamMcpConnectionData = {
 export type CompletePipedreamMcpConnectionErrors = {
     401: string;
     404: ErrorResponse;
+    409: ErrorResponse;
     500: ErrorResponse;
     501: ErrorResponse;
 };
@@ -3227,6 +3509,49 @@ export type UpdatePipedreamMcpConnectionResponses = {
 };
 
 export type UpdatePipedreamMcpConnectionResponse = UpdatePipedreamMcpConnectionResponses[keyof UpdatePipedreamMcpConnectionResponses];
+
+export type ListPipedreamMcpOverlaysData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/pipedream/mcp/overlays';
+};
+
+export type ListPipedreamMcpOverlaysErrors = {
+    401: string;
+    500: ErrorResponse;
+};
+
+export type ListPipedreamMcpOverlaysError = ListPipedreamMcpOverlaysErrors[keyof ListPipedreamMcpOverlaysErrors];
+
+export type ListPipedreamMcpOverlaysResponses = {
+    200: Array<PipedreamOverlayResponse>;
+};
+
+export type ListPipedreamMcpOverlaysResponse = ListPipedreamMcpOverlaysResponses[keyof ListPipedreamMcpOverlaysResponses];
+
+export type RecoverPipedreamMcpConnectionData = {
+    body: PipedreamRecoverRequest;
+    path?: never;
+    query?: never;
+    url: '/pipedream/mcp/recover';
+};
+
+export type RecoverPipedreamMcpConnectionErrors = {
+    401: string;
+    404: ErrorResponse;
+    409: ErrorResponse;
+    500: ErrorResponse;
+    501: ErrorResponse;
+};
+
+export type RecoverPipedreamMcpConnectionError = RecoverPipedreamMcpConnectionErrors[keyof RecoverPipedreamMcpConnectionErrors];
+
+export type RecoverPipedreamMcpConnectionResponses = {
+    200: PipedreamConnectionResponse;
+};
+
+export type RecoverPipedreamMcpConnectionResponse = RecoverPipedreamMcpConnectionResponses[keyof RecoverPipedreamMcpConnectionResponses];
 
 export type CreatePipedreamMcpTokenData = {
     body?: never;

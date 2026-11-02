@@ -67,6 +67,78 @@ describe('createListController', () => {
     });
   });
 
+  it("moves focus to the item that takes a removed item's place", () => {
+    withRoot(() => {
+      const [items, setItems] = createSignal<readonly Item[]>(
+        ['a', 'b', 'c', 'd'].map((id) => item(id))
+      );
+      const list = createListController({
+        items,
+        getKey: (value: Item) => value.id,
+      });
+
+      list.focus.set('b');
+      // b and c leave together (archived elsewhere); d takes their place.
+      setItems([item('a'), item('d')]);
+      expect(
+        list.focus.restore(list.focus.requestedKey(), { fallback: 'successor' })
+          ?.key
+      ).toBe('d');
+
+      list.focus.set('d');
+      setItems([item('a')]);
+      expect(
+        list.focus.restore(list.focus.requestedKey(), { fallback: 'successor' })
+          ?.key
+      ).toBe('a');
+    });
+  });
+
+  it('skips rows a successor cannot be, such as a load-more row', () => {
+    withRoot(() => {
+      const [items, setItems] = createSignal<readonly Item[]>(
+        ['a', 'b', 'more'].map((id) => item(id))
+      );
+      const list = createListController({
+        items,
+        getKey: (value: Item) => value.id,
+      });
+
+      list.focus.set('b');
+      // The last loaded email leaves; only the load-more row follows it.
+      setItems([item('a'), item('more')]);
+      expect(
+        list.focus.restore(list.focus.requestedKey(), {
+          fallback: 'successor',
+          isNavigable: (value) => value.id !== 'more',
+        })?.key
+      ).toBe('a');
+    });
+  });
+
+  it('keeps waiting for a removed item when none of its neighbours remain', () => {
+    withRoot(() => {
+      const [items, setItems] = createSignal<readonly Item[]>([
+        item('a'),
+        item('b'),
+      ]);
+      const list = createListController({
+        items,
+        getKey: (value: Item) => value.id,
+      });
+
+      list.focus.set('a');
+      // A page reload briefly drops every row; focus must not move.
+      setItems([]);
+      expect(
+        list.focus.restore('a', { fallback: 'successor' })
+      ).toBeUndefined();
+      expect(list.focus.requestedKey()).toBe('a');
+      setItems([item('a'), item('b')]);
+      expect(list.focus.key()).toBe('a');
+    });
+  });
+
   it('skips structural rows and wraps only when requested', () => {
     withRoot(() => {
       const values = [item('header', 'Header', true), item('a'), item('b')];

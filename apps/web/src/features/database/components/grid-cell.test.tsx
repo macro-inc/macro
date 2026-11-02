@@ -26,6 +26,8 @@ vi.mock('@property/utils/focus', () => ({
   // Like the real helper, focus after the menu has taken focus on open.
   useSearchInputFocus: (input: () => HTMLElement | undefined) =>
     setTimeout(() => input()?.focus(), 100),
+  useAutoFocus: (element: () => HTMLElement | undefined) =>
+    setTimeout(() => element()?.focus(), 100),
 }));
 
 const column: DatabaseViewColumn = {
@@ -42,6 +44,7 @@ beforeEach(() => {
     '[role="menu"], [role="dialog"] { animation-name: none; }';
   document.head.append(style);
   vi.spyOn(window, 'scrollTo').mockImplementation(() => {});
+  Element.prototype.scrollIntoView = vi.fn();
 });
 afterEach(() => {
   cleanup();
@@ -671,6 +674,48 @@ describe('grid cell', () => {
     expect(onOpenMention).toHaveBeenCalledTimes(2);
     expect(onWrite).not.toHaveBeenCalled();
   });
+
+  it.each([true, false])(
+    'right-click changes an openable reference only when editable (%s)',
+    async (canEdit) => {
+      const onOpenMention = vi.fn();
+      const onMention = vi.fn(async () => true);
+      render(() => (
+        <GridCell
+          column={{
+            ...column,
+            name: 'File',
+            dataType: 'ENTITY',
+            specificEntityType: 'DOCUMENT',
+          }}
+          value="project-plan"
+          canEdit={canEdit}
+          onWrite={vi.fn(async () => true)}
+          onAddOption={vi.fn(async () => true)}
+          onOpenMention={onOpenMention}
+          onMention={onMention}
+          renderMentionValue={() => <span>Project plan</span>}
+          renderMentionPicker={(props) => <MentionPicker {...props} />}
+        />
+      ));
+      const button = screen.getByRole('button', { name: 'File: Project plan' });
+      fireEvent.contextMenu(button);
+      expect(onOpenMention).not.toHaveBeenCalled();
+      if (canEdit) {
+        await screen.findByRole('textbox', { name: 'Find an item' });
+        await userEvent.keyboard('{Escape}');
+        await waitFor(() => expect(document.activeElement).toBe(button));
+        expect(onMention).not.toHaveBeenCalled();
+      } else {
+        expect(screen.queryByRole('dialog')).toBeNull();
+        fireEvent.click(button);
+        expect(onOpenMention).toHaveBeenCalledExactlyOnceWith(
+          'project-plan',
+          'DOCUMENT'
+        );
+      }
+    }
+  );
 
   it('keeps the selected label through a delayed write and hands it to the entity renderer when the schema arrives', async () => {
     const [value, setValue] = createSignal<DatabaseCellValue>(null);
@@ -1510,6 +1555,144 @@ describe('grid cell', () => {
     expect(screen.queryByRole('textbox')).toBeNull();
     expect(screen.getByRole('button').textContent).toContain('one, two');
     expect(onWrite).not.toHaveBeenCalled();
+  });
+
+  describe('time-range cells', () => {
+    const trip: DatabaseViewColumn = {
+      ...column,
+      id: 'trip',
+      name: 'Trip',
+      dataType: 'DATE_RANGE',
+    };
+    /** A day of the shown month; days of the months around it are disabled. */
+    const day = (label: string) =>
+      screen
+        .getAllByRole('gridcell')
+        .find(
+          (cell) => cell.textContent === label && !cell.hasAttribute('disabled')
+        );
+
+    const renderTrip = (value: DatabaseCellValue) => {
+      const onWrite = vi.fn(async () => true);
+      render(() => (
+        <GridCell
+          column={trip}
+          value={value}
+          canEdit
+          onWrite={onWrite}
+          onAddOption={vi.fn(async () => true)}
+        />
+      ));
+      return onWrite;
+    };
+    const field = (end: 'start' | 'end') =>
+      screen.getByRole('button', { name: `Edit Trip ${end} date` });
+    const time = (end: 'start' | 'end') =>
+      screen.getByRole('combobox', { name: `Trip ${end} time` });
+    // The open menu hides the rest of the page from the accessibility tree.
+    const cell = () =>
+      screen.getByRole('button', { name: /^Trip: /, hidden: true });
+
+    it('opens on the start field and keeps the menu open while picking days', async () => {
+      const onWrite = renderTrip(
+        '2026-03-02T00:00:00.000Z/2026-03-03T00:00:00.000Z'
+      );
+      cell().focus();
+      await userEvent.keyboard('{Enter}');
+      await waitFor(() => expect(document.activeElement).toBe(field('start')));
+
+      await userEvent.click(field('end'));
+      await userEvent.click(day('20')!);
+      expect(onWrite).toHaveBeenLastCalledWith(
+        '2026-03-02T00:00:00.000Z/2026-03-20T00:00:00.000Z'
+      );
+      expect(cell().getAttribute('aria-expanded')).toBe('true');
+
+      // A new start carries the end along, keeping the range's days.
+      await userEvent.click(field('start'));
+      await userEvent.click(day('10')!);
+      expect(onWrite).toHaveBeenLastCalledWith(
+        '2026-03-10T00:00:00.000Z/2026-03-28T00:00:00.000Z'
+      );
+      expect(cell().getAttribute('aria-expanded')).toBe('true');
+    });
+
+    it('turns off All day at the next full hour, then picks and types times', async () => {
+      vi.useFakeTimers({ toFake: ['Date'], now: new Date(2026, 2, 1, 14, 20) });
+      const onWrite = renderTrip(
+        '2026-03-02T00:00:00.000Z/2026-03-03T00:00:00.000Z'
+      );
+      await userEvent.click(cell());
+      await userEvent.click(
+        await screen.findByRole('switch', { name: 'All day' })
+      );
+      expect(onWrite).toHaveBeenLastCalledWith(
+        `${new Date(2026, 2, 2, 15).toISOString()}/${new Date(2026, 2, 3, 16).toISOString()}`
+      );
+
+      await userEvent.click(time('end'));
+      await userEvent.click(screen.getByRole('option', { name: '6:30 PM' }));
+      expect(onWrite).toHaveBeenLastCalledWith(
+        `${new Date(2026, 2, 2, 15).toISOString()}/${new Date(2026, 2, 3, 18, 30).toISOString()}`
+      );
+
+      // A typed start keeps the range's length.
+      await userEvent.click(time('start'));
+      await userEvent.keyboard('9a{Enter}');
+      expect(onWrite).toHaveBeenLastCalledWith(
+        `${new Date(2026, 2, 2, 9).toISOString()}/${new Date(2026, 2, 3, 12, 30).toISOString()}`
+      );
+      expect((time('start') as HTMLInputElement).value).toBe('9:00 AM');
+      expect(cell().getAttribute('aria-expanded')).toBe('true');
+      vi.useRealTimers();
+    });
+
+    it('shows an end before the start without saving it', async () => {
+      const onWrite = renderTrip(
+        '2026-03-10T00:00:00.000Z/2026-03-12T00:00:00.000Z'
+      );
+      await userEvent.click(screen.getByRole('button', { name: /^Trip: Mar/ }));
+      await userEvent.click(field('end'));
+      await userEvent.click(day('4')!);
+      expect(screen.getByRole('alert').textContent).toBe(
+        'The end can’t be before the start.'
+      );
+      expect(onWrite).not.toHaveBeenCalled();
+    });
+
+    it('starts an empty range on the first day picked, and clears a range', async () => {
+      vi.useFakeTimers({ toFake: ['Date'], now: new Date(2026, 2, 1, 9) });
+      const onWrite = renderTrip(null);
+      await userEvent.click(cell());
+      expect(field('start').textContent).toContain('Start date');
+      await userEvent.click(field('start'));
+      await userEvent.click(day('16')!);
+      expect(onWrite).toHaveBeenLastCalledWith(
+        '2026-03-16T00:00:00.000Z/2026-03-16T00:00:00.000Z'
+      );
+
+      await userEvent.click(screen.getByRole('button', { name: 'Clear Trip' }));
+      expect(onWrite).toHaveBeenLastCalledWith(null);
+      await waitFor(() =>
+        expect(cell().getAttribute('aria-expanded')).toBe('false')
+      );
+      vi.useRealTimers();
+    });
+
+    it('closes a date list on Escape, then the menu', async () => {
+      renderTrip('2026-03-02T00:00:00.000Z/2026-03-03T00:00:00.000Z');
+      await userEvent.click(cell());
+      await userEvent.click(field('end'));
+      await userEvent.keyboard('{Escape}');
+      await waitFor(() =>
+        expect(field('end').getAttribute('aria-expanded')).toBe('false')
+      );
+      expect(cell().getAttribute('aria-expanded')).toBe('true');
+      await userEvent.keyboard('{Escape}');
+      await waitFor(() =>
+        expect(cell().getAttribute('aria-expanded')).toBe('false')
+      );
+    });
   });
 
   describe('date cells', () => {

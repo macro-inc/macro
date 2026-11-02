@@ -3,7 +3,7 @@ import { createSearchParams, useRouteParams } from '@app/lib/split-router';
 import { callsCallRoute } from '@app/routes/routes';
 import { callDetailSearch } from '@block-call/call-route';
 import { CallDetailView } from '@block-call/views/CallDetailView';
-import PhoneCallIcon from '@phosphor/phone-call.svg';
+import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 
 export function CallsCallDetail() {
   const params = useRouteParams(callsCallRoute);

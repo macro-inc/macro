@@ -1,11 +1,11 @@
 import { MintCredential } from '@channel/Bots/MintCredential';
-import Key from '@phosphor-icons/core/regular/key.svg';
-import Link from '@phosphor-icons/core/regular/link.svg';
-import List from '@phosphor-icons/core/regular/list.svg';
-import PlugsConnected from '@phosphor-icons/core/regular/plugs-connected.svg';
-import Robot from '@phosphor-icons/core/regular/robot.svg';
-import SlidersHorizontal from '@phosphor-icons/core/regular/sliders-horizontal.svg';
-import Trash from '@phosphor-icons/core/regular/trash.svg';
+import Key from '@icon/system/regular/key.svg';
+import Link from '@icon/system/regular/link.svg';
+import List from '@icon/system/regular/list.svg';
+import PlugsConnected from '@icon/system/regular/plugs-connected.svg';
+import Robot from '@icon/system/regular/robot.svg';
+import SlidersHorizontal from '@icon/system/regular/sliders-horizontal.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import type {
   BotOwnerSummary,

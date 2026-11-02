@@ -152,3 +152,24 @@ describe('decodeImportDraft', () => {
     expect(decodeImportDraft({ subject: 'Hi' })).toBeUndefined();
   });
 });
+
+it('decodes tracker tasks and projects while isolating review ids', () => {
+  expect(decodeImportDraft({ source: 'linear' })?.source).toBe('linear');
+  expect(decodeImportDraft({ source: 'jira' })?.source).toBe('jira');
+  const decoded = decodePlanEntries(
+    [
+      { ...row, id: 'l', source: 'linear', kind: 'issue' },
+      { ...row, id: 'j', source: 'jira', kind: 'jira_issue' },
+      { ...row, id: 'p', source: 'jira', kind: 'jira_project' },
+      { ...row, id: 'e', source: 'jira', kind: 'jira_epic' },
+      { ...row, source: 'jira', review_id: 'other' },
+    ],
+    'review'
+  );
+  expect(decoded.map(({ id, kind }) => ({ id, kind }))).toEqual([
+    { id: 'l', kind: 'task' },
+    { id: 'j', kind: 'task' },
+    { id: 'p', kind: 'project' },
+    { id: 'e', kind: 'project' },
+  ]);
+});

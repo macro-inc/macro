@@ -107,6 +107,12 @@ impl SearchText {
                     self.push(&entry.content);
                 }
             }
+            MessagePart::TaskNotification { summary, event, .. } => {
+                self.push(summary);
+                if let Some(event) = event {
+                    self.push(event);
+                }
+            }
             MessagePart::Elicitation {
                 message,
                 request,

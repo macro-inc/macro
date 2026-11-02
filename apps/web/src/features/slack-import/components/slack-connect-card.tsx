@@ -1,5 +1,5 @@
 import SlackIcon from '@icon/mcp-slack.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 
 export function SlackConnectCard(props: { onConnect(): void }) {
   return (

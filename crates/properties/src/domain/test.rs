@@ -23,6 +23,7 @@ use entity_access::domain::models::{
 };
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
+use models_properties::service::property_change_source::{GithubAccount, PropertyChangeSource};
 use models_properties::{
     DataType, EntityType, PropertyOwner,
     api::{
@@ -936,7 +937,7 @@ async fn property_option_event_delete_publishes_one_pre_delete_snapshot_with_exa
     repo.expect_get_property_option()
         .return_once(move |_| Box::pin(async move { Ok(Some(option)) }));
     repo.expect_delete_property_option()
-        .return_once(|_, _| Box::pin(async { Ok(true) }));
+        .return_once(|_, _| Box::pin(async { Ok(Some(Vec::new())) }));
     let event_broker = RecordingEventBroker::default();
     let service = service_with_event_broker(repo, event_broker.clone());
 
@@ -957,6 +958,90 @@ async fn property_option_event_delete_publishes_one_pre_delete_snapshot_with_exa
             "actor_user_id": caller_user_id().to_string(),
             "value": { "type": "number", "value": 21.5 },
         })
+    );
+}
+
+#[tokio::test]
+async fn property_option_event_delete_publishes_every_stripped_entity() {
+    let property_definition_id = Uuid::from_u128(0xC9);
+    let option_id = Uuid::from_u128(0xCA);
+    let kept_option_id = Uuid::from_u128(0xCB);
+    let definition =
+        property_definition_for_event(property_definition_id, "Tags", DataType::Tag, true);
+    let option = property_option_for_event(
+        option_id,
+        property_definition_id,
+        0,
+        PropertyOptionValue::String("Retired".to_string()),
+        Some("#ff0000"),
+    );
+
+    let mut repo = MockPropertiesRepo::new();
+    expect_owned_modifiable_definition(&mut repo, definition);
+    repo.expect_get_property_option()
+        .return_once(move |_| Box::pin(async move { Ok(Some(option)) }));
+    repo.expect_delete_property_option()
+        .return_once(move |_, _| {
+            Box::pin(async move {
+                Ok(Some(vec![
+                    entity_property_mutation(
+                        "doc1",
+                        EntityType::Document,
+                        property_definition_id,
+                        Some(PropertyValue::SelectOption(vec![kept_option_id])),
+                    ),
+                    entity_property_mutation(
+                        "thread1",
+                        EntityType::Thread,
+                        property_definition_id,
+                        Some(PropertyValue::SelectOption(vec![])),
+                    ),
+                ]))
+            })
+        });
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    service
+        .delete_property_option(&caller_user_id(), None, property_definition_id, option_id)
+        .await
+        .unwrap();
+
+    let events: Vec<_> = event_broker
+        .events()
+        .iter()
+        .map(|event| {
+            (
+                event.envelope["event_type"].as_str().unwrap().to_string(),
+                event.key.clone(),
+                event.envelope["metadata"]["value"].clone(),
+                event.envelope["metadata"]["actor_user_id"].clone(),
+            )
+        })
+        .collect();
+    let actor = serde_json::json!(caller_user_id().to_string());
+    assert_eq!(
+        events,
+        vec![
+            (
+                "property_option.deleted".to_string(),
+                property_definition_id.to_string(),
+                serde_json::json!({ "type": "string", "value": "Retired" }),
+                actor.clone(),
+            ),
+            (
+                "entity_property.updated".to_string(),
+                "doc1".to_string(),
+                serde_json::json!({ "type": "SelectOption", "value": [kept_option_id] }),
+                actor.clone(),
+            ),
+            (
+                "entity_property.updated".to_string(),
+                "thread1".to_string(),
+                serde_json::json!({ "type": "SelectOption", "value": [] }),
+                actor,
+            ),
+        ]
     );
 }
 
@@ -983,7 +1068,7 @@ async fn property_option_event_delete_not_found_outcome_publishes_nothing() {
     repo.expect_get_property_option()
         .return_once(move |_| Box::pin(async move { Ok(Some(option)) }));
     repo.expect_delete_property_option()
-        .return_once(|_, _| Box::pin(async { Ok(false) }));
+        .return_once(|_, _| Box::pin(async { Ok(None) }));
     let event_broker = RecordingEventBroker::default();
     let service = service_with_event_broker(repo, event_broker.clone());
 
@@ -1258,6 +1343,62 @@ async fn entity_property_event_attributes_team_bot_but_not_system_access() {
         );
         assert!(published.envelope["metadata"]["on_behalf_of"].is_null());
     }
+}
+
+#[tokio::test]
+async fn entity_property_event_records_the_outside_source_of_an_internal_write() {
+    let access = EditReceipt::dangerously_assert_internal_user("doc1", AccessEntityType::Document);
+    let property_definition_id = Uuid::from_u128(0xE70A);
+    let assignment = entity_property_for_event(
+        Uuid::from_u128(0xE70B),
+        "doc1",
+        EntityType::Document,
+        property_definition_id,
+        event_timestamp(),
+    );
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_get_property_definition().return_once(move |_| {
+        Box::pin(async move { Ok(Some(multi_select_definition(property_definition_id, false))) })
+    });
+    repo.expect_upsert_entity_property()
+        .return_once(move |_, _, _, _| {
+            Box::pin(async move {
+                Ok(EntityPropertyMutationSnapshot {
+                    property: assignment,
+                    value: None,
+                    previous_value: None,
+                })
+            })
+        });
+    let event_broker = RecordingEventBroker::default();
+    let service = service_with_event_broker(repo, event_broker.clone());
+
+    service
+        .set_entity_property_with_source(
+            &access,
+            property_definition_id,
+            None,
+            Some(PropertyChangeSource::GithubPullRequest {
+                url: "https://github.com/my-org/my-repo/pull/42".to_string(),
+                account: GithubAccount {
+                    id: "444".to_string(),
+                    login: "someone-else".to_string(),
+                },
+            }),
+        )
+        .await
+        .unwrap();
+
+    let published = only_published_property_event(&event_broker);
+    assert_eq!(
+        published.envelope["metadata"]["source"],
+        serde_json::json!({
+            "type": "github_pull_request",
+            "url": "https://github.com/my-org/my-repo/pull/42",
+            "account": { "id": "444", "login": "someone-else" },
+        })
+    );
+    assert!(published.envelope["metadata"]["actor_user_id"].is_null());
 }
 
 #[tokio::test]

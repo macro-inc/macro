@@ -55,6 +55,9 @@ ledger decisions, plus a flexible admin query API.
   directly: it applies `ai_pricing_discount`, a per-model input and output
   percent off (input's also covers cache and audio rates). Gemini 3.8 Flash
   is discounted to DeepSeek V4.1 Flash's $0.30 / $1.20.
+- `UsageContext::with_agent_api_key` marks usage an agent's own API key paid
+  for: it is stored with `agent_api_key_id` and never counted. Set it only
+  on calls that actually authenticate with that key.
 
 ## Related
 

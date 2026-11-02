@@ -145,13 +145,15 @@ function importedDate(text: string): string | undefined {
 /**
  * CSV text as the grid value `cellValue` writes, or undefined when it does
  * not fit the column. The service refuses a whole batch over one bad value,
- * so dates, links, and people are checked here.
+ * so dates, date ranges, links, and people are checked here.
  */
 function gridValue(
   column: DatabaseViewColumn,
   text: string
 ): DatabaseCellValue | undefined {
   if (column.dataType === 'DATE') return importedDate(text);
+  if (column.dataType === 'DATE_RANGE')
+    return cellValue(column, text).isOk() ? text : undefined;
   if (column.dataType === 'LINK')
     return /^https?:\/\/\S+$/i.test(text) ? text : undefined;
   if (!column.isMultiSelect && !isPersonColumn(column)) return text;

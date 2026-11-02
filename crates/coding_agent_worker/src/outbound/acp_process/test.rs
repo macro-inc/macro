@@ -114,10 +114,11 @@ async fn stderr_drain_stops_after_read_error() {
     let (callback, recorded) = recording_debug_callback();
 
     let result = drain_stderr(
-        ErrorAfterData {
+        &mut ErrorAfterData {
             polls: polls.clone(),
         },
         Some(callback),
+        std::future::pending(),
     )
     .await;
 
@@ -256,8 +257,12 @@ async fn large_unterminated_stderr_is_fully_drained() {
     drop(stdin);
     drop(stdout);
 
+    let mut stderr = stderr.compat();
     let (drained, status) = tokio::time::timeout(Duration::from_secs(10), async {
-        futures::join!(drain_stderr(stderr.compat(), None), guard.wait())
+        futures::join!(
+            drain_stderr(&mut stderr, None, std::future::pending()),
+            guard.wait()
+        )
     })
     .await
     .expect("stderr drain should not block after its retained tail is full");

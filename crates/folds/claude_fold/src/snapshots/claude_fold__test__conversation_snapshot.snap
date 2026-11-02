@@ -86,5 +86,31 @@ expression: events
   },
   {
     "TurnEnded": "max_tokens"
+  },
+  {
+    "Update": {
+      "sessionUpdate": "user_message_chunk",
+      "content": {
+        "type": "text",
+        "text": "<task-notification>\n<task-id>b1</task-id>\n<tool-use-id>t9</tool-use-id>\n<output-file>/tmp/tasks/b1.output</output-file>\n<status>failed</status>\n<summary>Background command \"Run tests\" failed with exit code 1</summary>\n</task-notification>"
+      },
+      "_meta": {
+        "claudeCode": {
+          "origin": "task-notification"
+        }
+      }
+    }
+  },
+  {
+    "Update": {
+      "sessionUpdate": "agent_message_chunk",
+      "content": {
+        "type": "text",
+        "text": "The tests failed."
+      }
+    }
+  },
+  {
+    "TurnEnded": "end_turn"
   }
 ]

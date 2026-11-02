@@ -1,5 +1,5 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
-import FolderIcon from '@phosphor/folder-simple.svg';
+import FolderIcon from '@icon/system/regular/folder-simple.svg';
 import { useProjectPreviewQuery } from '@queries/storage/project-preview';
 import { cn, Tooltip } from '@ui';
 import { Show, Suspense } from 'solid-js';

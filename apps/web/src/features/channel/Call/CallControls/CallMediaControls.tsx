@@ -3,9 +3,9 @@ import { MediaDeviceRadioItems } from '@core/component/media/media-device-picker
 import type { BackgroundEffect } from '@core/media/background-effect';
 import { readBackgroundImage } from '@core/media/read-background-image';
 import { fireAndForget } from '@core/util/fireAndForget';
-import Image from '@phosphor/image.svg';
-import Prohibit from '@phosphor/prohibit.svg';
-import Upload from '@phosphor/upload-simple.svg';
+import Image from '@icon/system/regular/image.svg';
+import Prohibit from '@icon/system/regular/prohibit.svg';
+import Upload from '@icon/system/regular/upload-simple.svg';
 import { Dropdown } from '@ui';
 import { createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import type { CallState } from '../CallContext';

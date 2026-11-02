@@ -782,32 +782,6 @@ input_file: crates/folds/agent_fold/fixtures/real/real_multi_turn.jsonl
         },
         request_id: Some(
             AgentActionId(
-                27e3ed1d-3814-4805-abd6-92bbc9bcf3cc,
-            ),
-        ),
-        parts: NonEmpty {
-            inner: [
-                Control {
-                    control: SetModel {
-                        model: "opus[1m]",
-                    },
-                    outcome: Accepted,
-                },
-            ],
-        },
-        stop: None,
-        pending: false,
-        posted_at: None,
-    },
-    FoldedMessage {
-        id: TurnId(
-            4,
-        ),
-        author: User {
-            user_id: None,
-        },
-        request_id: Some(
-            AgentActionId(
                 cfe33ce9-7db9-4865-9e67-dea14b35f54d,
             ),
         ),
@@ -828,7 +802,7 @@ input_file: crates/folds/agent_fold/fixtures/real/real_multi_turn.jsonl
     },
     FoldedMessage {
         id: TurnId(
-            5,
+            4,
         ),
         author: User {
             user_id: Some(
@@ -853,7 +827,7 @@ input_file: crates/folds/agent_fold/fixtures/real/real_multi_turn.jsonl
     },
     FoldedMessage {
         id: TurnId(
-            5,
+            4,
         ),
         author: Agent,
         request_id: None,

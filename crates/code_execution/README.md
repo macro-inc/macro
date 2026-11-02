@@ -46,7 +46,8 @@ for a user to submit those reviews.
 | Additional queued executions | 16 (public MCP: 8 more) |
 | Total execution lifetime, including queueing and API calls | 30 seconds |
 | JavaScript source | 64 KiB |
-| Final result / child frame | 256 KiB |
+| Model-facing result (larger `data` is summarized) | 64 KiB |
+| Child frame | 256 KiB |
 | Combined program stdout/stderr | 2 MiB |
 | Additional bounded SDK progress frames | 64 KiB |
 | Regular / advisory progress events | 1024 each |

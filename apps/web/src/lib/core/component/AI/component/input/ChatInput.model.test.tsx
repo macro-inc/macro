@@ -215,9 +215,12 @@ it('preserves a real soup composer selection when creating and opening its first
   fireEvent.click(
     screen.getByRole('button', { name: 'Choose model, Sonnet 5.5' })
   );
-  const dialog = await screen.findByRole('dialog', { name: 'Select model' });
-  fireEvent.click(within(dialog).getByRole('button', { name: 'GPT-5.6' }));
-  fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+  const dialog = await screen.findByRole('dialog', { name: 'Choose a model' });
+  fireEvent.input(
+    within(dialog).getByRole('textbox', { name: 'Search models' }),
+    { target: { value: 'GPT-5.6' } }
+  );
+  fireEvent.click(within(dialog).getByRole('radio', { name: 'GPT-5.6' }));
   await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
   expect(
     screen.getByRole('button', { name: 'Choose model, GPT-5.6' })
@@ -318,23 +321,31 @@ it.each([true, false])(
         <ChatInput variant="default" editor={editor} onSend={onSend} />
       </ChatInputProvider>
     ));
-    const trigger = mobile
-      ? screen.getByRole('button', { name: 'Choose model, Sonnet 5.5' })
-      : screen.getByRole('button', { name: 'Sonnet 5.5' });
+    const trigger = screen.getByRole('button', {
+      name: 'Choose model, Sonnet 5.5',
+    });
     if (mobile) fireEvent.click(trigger);
     else fireEvent.keyDown(trigger, { key: 'ArrowDown' });
     if (mobile) {
       const dialog = await screen.findByRole('dialog', {
-        name: 'Select model',
+        name: 'Choose a model',
       });
-      fireEvent.click(within(dialog).getByRole('button', { name: 'GPT-5.6' }));
-      expect(screen.getByTestId('model').textContent).toBe(Model.gpt56);
-      fireEvent.click(within(dialog).getByRole('button', { name: 'Done' }));
+      fireEvent.input(
+        within(dialog).getByRole('textbox', { name: 'Search models' }),
+        { target: { value: 'GPT-5.6' } }
+      );
+      fireEvent.click(within(dialog).getByRole('radio', { name: 'GPT-5.6' }));
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull());
     } else {
+      fireEvent.input(
+        await screen.findByRole('textbox', { name: 'Search models' }),
+        { target: { value: 'GPT-5.6' } }
+      );
       fireEvent.keyDown(
-        await screen.findByRole('menuitem', { name: 'GPT-5.6' }),
-        { key: 'Enter' }
+        screen.getByRole('menuitem', { name: /^GPT-5\.6 OpenAI$/ }),
+        {
+          key: 'Enter',
+        }
       );
       await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     }

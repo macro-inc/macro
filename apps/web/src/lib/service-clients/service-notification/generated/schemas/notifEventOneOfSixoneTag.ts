@@ -10,5 +10,5 @@ export type NotifEventOneOfSixoneTag =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const NotifEventOneOfSixoneTag = {
-  calendar_event_join_request: 'calendar_event_join_request',
+  channel_message_reaction: 'channel_message_reaction',
 } as const;

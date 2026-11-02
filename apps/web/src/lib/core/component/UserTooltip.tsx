@@ -1,4 +1,4 @@
-import IconCheck from '@phosphor/check.svg';
+import IconCheck from '@icon/system/regular/check.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { Surface } from '@ui';
 import { createSignal, For, Show } from 'solid-js';

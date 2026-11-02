@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE whatsapp_event_buffer\n            SET nonce = NULL, value = NULL\n            WHERE account_id = $1 AND ciphertext_hash = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c0d3a430b9508b91d4313d85d5e50e02c89048231acb431fecd09ebc69c97c45"
+}

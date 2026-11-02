@@ -17,6 +17,7 @@ export const SqlOutcomeKind = {
   number: 'number',
   boolean: 'boolean',
   date: 'date',
+  dateRange: 'dateRange',
   select: 'select',
   entity: 'entity',
   row: 'row',

@@ -44,9 +44,11 @@ agent-client-protocol = { workspace = true }
 agent_runtime_protocol = { path = "../../agent_runtime_protocol", default-features = false }
 chrono = { workspace = true }
 clap = { workspace = true, optional = true }
+html-escape = { workspace = true }
 lazy-regex = { workspace = true }
 macro_user_id = { path = "../../macro_user_id" }
 macro_uuid = { path = "../../macro_uuid" }
+nom = { workspace = true }
 non_empty = { path = "../../non_empty" }
 rootcause = { workspace = true }
 serde = { workspace = true }

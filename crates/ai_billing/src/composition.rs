@@ -86,6 +86,30 @@ pub fn pg_admission_service(
     )
 }
 
+/// Postgres-backed [`crate::domain::EntitlementSource`]: plans from roles,
+/// seats from team membership.
+#[cfg(feature = "pg-admission")]
+pub type PgEntitlementSource = RolesTeamsEntitlementSource<
+    roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl<
+        roles_and_permissions::outbound::pgpool::MacroDB,
+        roles_and_permissions::outbound::pgpool::MacroDB,
+    >,
+    teams::outbound::team_repo::TeamRepositoryImpl,
+>;
+
+/// Compose [`PgEntitlementSource`] over one database pool, for hosts that
+/// only read plans.
+#[cfg(feature = "pg-admission")]
+pub fn pg_entitlement_source(pool: PgPool) -> PgEntitlementSource {
+    RolesTeamsEntitlementSource::new(
+        roles_and_permissions::domain::service::UserRolesAndPermissionsServiceImpl::new(
+            roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
+            roles_and_permissions::outbound::pgpool::MacroDB::new(pool.clone()),
+        ),
+        teams::outbound::team_repo::TeamRepositoryImpl::new(pool),
+    )
+}
+
 /// Postgres-backed [`CreditGrantService`] for operator tools.
 #[cfg(feature = "pg-admission")]
 pub type PgCreditGrantService = crate::domain::CreditGrantService<

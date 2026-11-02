@@ -30,6 +30,7 @@ For every changed file:
 | Changed | Check |
 | --- | --- |
 | Any | `just check` |
+| Any commit or PR | `just pr-privacy`, with `PR_TITLE` and the PR body file when a PR exists or is about to be opened; then reread them against the git skill's Privacy section (names are not machine-checked) |
 | Rust in a package | `cargo test -p <package>` (SQLX_OFFLINE unset), `cargo fmt --all -- --check`, `just clippy` |
 | `sqlx::query!` or migrations | `.sqlx/` regenerated and committed; migration works with the code already deployed |
 | `Cargo.toml` | `cargo x deps --check` |

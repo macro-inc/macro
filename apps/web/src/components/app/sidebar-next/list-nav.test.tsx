@@ -25,6 +25,7 @@ const mocks = vi.hoisted(() => ({
   activeContent: (): { type: 'component'; id: string } | undefined => undefined,
   activePane: (): PaneId | undefined => undefined,
   navigate: vi.fn(),
+  goToLeaderActive: (): boolean => false,
 }));
 
 vi.mock('@app/lib/analytics/analytics-context', () => ({
@@ -40,6 +41,7 @@ vi.mock('@app/signal/splitLayout', () => ({
   }),
 }));
 vi.mock('@components/app/app-sidebar/sidebar', () => ({
+  isGoToLeaderActive: () => mocks.goToLeaderActive(),
   navigateToSidebarView: mocks.navigate,
   sidebarContent: (id: string) => ({ type: 'component', id }),
   SidebarOpenInSplitMenu: (props: ParentProps) => props.children,
@@ -58,12 +60,25 @@ vi.mock('@ui', async () => ({
     const [local, rest] = splitProps(props, ['label']);
     return <button type="button" aria-label={local.label} {...rest} />;
   },
+  Hotkey: (props: { token: string }) => <span>{props.token}</span>,
 }));
 
 const home = SIDEBAR_NEXT_NAV_ITEMS.find((item) => item.id === 'home')!;
 const agents = SIDEBAR_NEXT_NAV_ITEMS.find((item) => item.id === 'agents')!;
 
-function setup(initial = '/home', agentsPreload?: () => Promise<void>) {
+function setup(
+  initial = '/home',
+  agentsPreload?: () => Promise<void>,
+  navs: () => JSX.Element = () => (
+    <>
+      <ListNav item={home} />
+      <ListNav item={agents} />
+      <ListNav
+        item={SIDEBAR_NEXT_NAV_ITEMS.find((item) => item.id === 'calendar')!}
+      />
+    </>
+  )
+) {
   const history = createMemoryHistory(initial);
   let router!: ReturnType<typeof createSplitRouter>;
   let focus!: (pane: PaneId) => void;
@@ -148,15 +163,7 @@ function setup(initial = '/home', agentsPreload?: () => Promise<void>) {
     onCleanup(() => router.dispose());
     return (
       <SplitRouter.Root router={router}>
-        <SidebarPrefsProvider>
-          <ListNav item={home} />
-          <ListNav item={agents} />
-          <ListNav
-            item={
-              SIDEBAR_NEXT_NAV_ITEMS.find((item) => item.id === 'calendar')!
-            }
-          />
-        </SidebarPrefsProvider>
+        <SidebarPrefsProvider>{navs()}</SidebarPrefsProvider>
       </SplitRouter.Root>
     );
   });
@@ -185,6 +192,7 @@ function press(label: string) {
 afterEach(() => {
   cleanup();
   mocks.navigate.mockReset();
+  mocks.goToLeaderActive = () => false;
 });
 
 describe('ListNav', () => {
@@ -487,5 +495,41 @@ describe('ListNav', () => {
     await router.navigatePane(router.panes()[0]!, '/settings');
     expect(history.read().path).toBe('/settings');
     expectSelection();
+  });
+
+  it('shows each destination key while the g leader awaits one', () => {
+    const [leaderActive, setLeaderActive] = createSignal(false);
+    mocks.goToLeaderActive = leaderActive;
+    const scheduling = SIDEBAR_NEXT_NAV_ITEMS.find(
+      (item) => item.id === 'booking-links'
+    )!;
+    setup('/home', undefined, () => (
+      <>
+        <ListNav item={home} badge="12m" />
+        <ListNav item={scheduling} />
+      </>
+    ));
+    const hint = (label: string) =>
+      screen
+        .getByRole('button', { name: label })
+        .querySelector('[data-sidebar-goto-hint]');
+    const badge = () =>
+      screen
+        .getByRole('button', { name: 'Home' })
+        .querySelector('[data-sidebar-badge]');
+
+    expect(hint('Home')).toBeNull();
+    expect(badge()).not.toBeNull();
+
+    setLeaderActive(true);
+    expect(hint('Home')).not.toBeNull();
+    // Scheduling has no GoTo shortcut, so it gets no hint.
+    expect(hint('Scheduling')).toBeNull();
+    // The hint takes the meeting badge's place rather than overlapping it.
+    expect(badge()).toBeNull();
+
+    setLeaderActive(false);
+    expect(hint('Home')).toBeNull();
+    expect(badge()).not.toBeNull();
   });
 });

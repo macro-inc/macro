@@ -1,5 +1,5 @@
-import ArrowDown from '@phosphor-icons/core/regular/arrow-down.svg?component-solid';
-import ArrowUp from '@phosphor-icons/core/regular/arrow-up.svg?component-solid';
+import ArrowDown from '@icon/system/regular/arrow-down.svg?component-solid';
+import ArrowUp from '@icon/system/regular/arrow-up.svg?component-solid';
 import { cn, Layer } from '@ui';
 import { Show } from 'solid-js';
 

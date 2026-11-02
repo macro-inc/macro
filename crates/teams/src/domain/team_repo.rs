@@ -8,10 +8,10 @@ use entity_access::domain::models::{
 use macro_user_id::{email::Email, lowercased::Lowercase, user_id::MacroUserIdStr};
 
 use crate::domain::model::{
-    AcceptedTeamInvite, CreateTeamError, DeleteTeamError, InviteUsersToTeamError,
-    JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome, JoinTeamDirectlyError, JoinTeamError,
-    ManageTeamInviteLinkError, PatchTeamCrmSettingsResponse, PatchTeamRequest,
-    RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError,
+    AcceptedTeamInvite, CreateTeamError, DeleteTeamError, DueInviteReminder,
+    InviteUsersToTeamError, JoinTeamByInviteLinkError, JoinTeamByInviteLinkOutcome,
+    JoinTeamDirectlyError, JoinTeamError, ManageTeamInviteLinkError, PatchTeamCrmSettingsResponse,
+    PatchTeamRequest, RemoveTeamInviteError, RemoveUserFromAllTeamsError, RemoveUserFromTeamError,
     RestorePermissionsForTeamMembersError, RevokePermissionsForTeamMembersError, SeatPlan,
     SetTeamMemberPlanError, Team, TeamError, TeamInvite, TeamInviteDetails, TeamInviteLinkTeam,
     TeamInviteLinkToken, TeamMember, TeamMembers, TeamPlan, TeamRole, TeamWithMembers,
@@ -101,6 +101,13 @@ pub trait TeamRepository: Clone + Send + Sync + 'static {
         &self,
         invite_ids: &[uuid::Uuid],
     ) -> impl Future<Output = Result<(), TeamError>> + Send;
+
+    /// Claims up to `limit` unanswered invites whose next reminder is due,
+    /// counting the reminder as sent. Concurrent callers claim disjoint invites.
+    fn claim_due_invite_reminders(
+        &self,
+        limit: i64,
+    ) -> impl Future<Output = Result<Vec<DueInviteReminder>, TeamError>> + Send;
 
     /// Removes user from a team.
     fn remove_user_from_team(

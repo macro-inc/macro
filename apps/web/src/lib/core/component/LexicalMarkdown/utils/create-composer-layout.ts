@@ -1,5 +1,5 @@
 import { createResizeObserver } from '@solid-primitives/resize-observer';
-import type { LexicalEditor } from 'lexical';
+import { $getRoot, type LexicalEditor } from 'lexical';
 import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
 import { match } from 'ts-pattern';
 import { createHasMultilineStructure } from './create-has-multiline-structure';
@@ -39,6 +39,14 @@ export function createComposerLayout(
     const container = options.container();
     if (!element || !container?.parentElement || !container.contains(element))
       return;
+    // An empty draft cannot wrap. The probe below clones the composer into the
+    // page and forces a layout, which on mount delays the surface's first paint.
+    if (
+      editor.getEditorState().read(() => $getRoot().getTextContentSize() === 0)
+    ) {
+      setHasWrappedLines(false);
+      return;
+    }
     const containerWidth = container.getBoundingClientRect().width;
     if (containerWidth <= 0) return;
 

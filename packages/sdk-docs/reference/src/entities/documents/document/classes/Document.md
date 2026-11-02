@@ -221,7 +221,7 @@ GitHub pull requests associated with the document.
 
 > **meetingNotes**(): `Promise`\<\{ `eventTitle`: `string`; `note`: [`CalendarNote`](../../../calendar/note/classes/CalendarNote.md); \}[]\>
 
-Owner-only meeting grants, including unavailable meetings. Unlink a returned note to revoke its meeting/team access.
+Meeting links visible to the reader. Owners also receive unavailable grants and may unlink them to revoke meeting/team access.
 
 #### Returns
 

@@ -274,7 +274,7 @@ impl<R: CalendarTeamRepository, N: CalendarTeamNotifier> CalendarTeamService
     }
 }
 
-fn project(
+pub(crate) fn project(
     source: &TeamSourceOccurrence,
     sharing: TeamCalendarSharing,
     viewer_emails: &[String],

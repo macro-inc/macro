@@ -7,8 +7,10 @@
 import type { CellValueOneOfOnesevenType } from './cellValueOneOfOnesevenType';
 
 /**
- * No value: the cell is emptied.
+ * Rows of the table a relation column points at.
  */
 export type CellValueOneOfOneseven = {
   type: CellValueOneOfOnesevenType;
+  /** Rows of the table a relation column points at. */
+  value: string[];
 };

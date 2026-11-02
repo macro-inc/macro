@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat_attachment a SET state = 'failed', claimed_until = NULL, locator = NULL\n        FROM external_chat_message m, external_chat b\n        WHERE a.chat_id = $1 AND a.person_id = $2 AND a.source_id = $3 AND a.ordinal = $4\n          AND a.state IN ('pending', 'downloaded')\n          AND m.chat_id = a.chat_id AND m.person_id = a.person_id AND m.source_id = a.source_id\n          AND b.id = a.chat_id\n        RETURNING a.blob_id, a.filename, m.message_id, b.id AS chat_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "blob_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "filename",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 3,
+        "name": "chat_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Int2"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "15564aa76e436c3163571c98ac4776a0750146fa7351dffd5ec0f1c60171f735"
+}

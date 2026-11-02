@@ -14,8 +14,8 @@ import { CommentsContext, ThreadBody } from '@core/comments/Thread';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { createTheme } from '@core/component/LexicalMarkdown/theme';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import { usePostTypingUpdateMutation } from '@queries/messages/typing';
 import { Button } from '@ui';
 import { $setSelection } from 'lexical';
@@ -230,7 +230,6 @@ export function CommentThreadDrawer() {
             <div class="flex shrink-0 items-center justify-center gap-2 pb-1">
               <Button
                 size="icon-sm"
-                depth={3}
                 variant="ghost"
                 aria-label="Previous comment thread"
                 disabled={pagerIndex() <= 0}
@@ -243,7 +242,6 @@ export function CommentThreadDrawer() {
               </span>
               <Button
                 size="icon-sm"
-                depth={3}
                 variant="ghost"
                 aria-label="Next comment thread"
                 disabled={pagerIndex() >= orderedThreadIds().length - 1}

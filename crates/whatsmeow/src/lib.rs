@@ -44,6 +44,7 @@ pub mod signal;
 pub mod socket;
 pub mod store;
 mod tctoken;
+mod telemetry;
 #[cfg(any(test, feature = "testing"))]
 pub mod testing;
 pub mod types;
