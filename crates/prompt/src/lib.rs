@@ -326,6 +326,8 @@ mod tests {
                 "A form for a channel is a poll.",
                 "exactly one required single- or multi-select question",
                 "`tallyVisible: true`",
+                "`widget: \"choice\"`",
+                "`channelGrants: []`",
                 r#"<m-document-card>{"documentId":"{form_id}","documentName":"{question}","blockName":"form","previewData":{"poll":{"optionCount":2}}}</m-document-card>"#,
                 "never post a second copy",
             ] {
