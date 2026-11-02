@@ -38,7 +38,7 @@ pub struct ListFormsQuery {
     responses((status = 201, body = FormDetail), (status = 400, body = FormErrorResponse),
         (status = 401, body = FormErrorResponse), (status = 403, body = FormErrorResponse),
         (status = 404, body = FormErrorResponse), (status = 500, body = FormErrorResponse)))]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err, skip_all, fields(acting_bot = tracing::field::Empty))]
 pub async fn create_form_handler<Service, EntityAccess, Authorization>(
     State(state): State<FormsRouterState<Service, EntityAccess, Authorization>>,
     user: SignedIn<Authorization>,
@@ -53,8 +53,15 @@ where
     // An agent's SDK token (code mode) creates as its user, attributed to the
     // agent like the native tool's creations, so channel delivery can share
     // what it made for the request.
+    let acting_bot = user.user.authorization.user.agent_id;
+    tracing::Span::current().record(
+        "acting_bot",
+        tracing::field::display(
+            acting_bot.map_or_else(|| "none".to_owned(), |bot| bot.to_string()),
+        ),
+    );
     let attributed_creator = Viewer {
-        acting_bot: user.user.authorization.user.agent_id,
+        acting_bot,
         ..creator.clone()
     };
     let source = match request.source {
