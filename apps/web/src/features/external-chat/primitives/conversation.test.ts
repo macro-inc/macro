@@ -148,6 +148,25 @@ describe('sending to an external chat', () => {
     state.dispose();
   });
 
+  it('tells the sender the recipient is not on WhatsApp', async () => {
+    const state = mountConversation();
+    await state.conversation
+      .submit({ markdown: 'Hello', attachments: [] })
+      ._unsafeUnwrap();
+    const key = state.fake.capabilities.send.mock.calls[0]?.[1];
+    state.fake.setDelivery([
+      {
+        id: `send-${key}`,
+        state: 'failed',
+        errorCode: 'recipient_not_on_provider',
+      },
+    ]);
+    expect(state.notify).toHaveBeenCalledWith(
+      "This person isn't on WhatsApp, so this wasn't sent."
+    );
+    state.dispose();
+  });
+
   it('keeps a draft WhatsApp could not take, without sending', () => {
     const state = mountConversation(
       createFakeChat({

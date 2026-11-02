@@ -54,6 +54,14 @@ tools — hexagonal, heavily feature-gated.
 
 ## Gotchas
 
+- Treat DATE property literals as non-matches; apply ordinary boolean negation and keep non-date email filtering unchanged.
+- All Mail excludes present messages in spam/junk or trash before pagination;
+  canonical cached previews and non-draft baselines use the same rule for Gmail
+  labels and Outlook mailbox facts. Mixed threads show their latest eligible message.
+  Synced Macro drafts in junk/trash must not advance All Mail timestamps.
+  Filtered and unfiltered All Mail share the dynamic builder and its per-inbox
+  ordered, limited scans; do not add a separate whole-mailbox sort.
+
 - Reconcile deferred message deletion before claiming scheduled work; unresolved sends retain their message, attachments, and delivery job.
 - Durable send admission supports Gmail and Outlook; Outlook delivery stays with its provider coordinator.
 - Carry the captured `draft_generation` through every draft mutation; advance it on send acceptance/cancellation under the message lock and preserve attempt tombstones after message deletion.
@@ -62,6 +70,9 @@ tools — hexagonal, heavily feature-gated.
   provider write per inbox holding only the messages whose labels changed
   (`stage_thread_labels` / `commit_thread_label_write` in
   `domain/service/thread_labels.rs`); route new label actions through them.
+- `.eml` downloads go through `domain/message_source.rs`, which authorizes like
+  attachment reads and fetches the provider's original RFC 822 bytes (Gmail
+  `format=raw`, Graph `$value`); drafts and unsynced messages have no source.
 - Forwarded attachments register through `domain/draft_attachments.rs` and resolve
   bytes through `domain/attachment_access.rs`; scheduled delivery also rechecks
   source inbox access in `domain/forwarded_attachments.rs`, including legacy jobs.
@@ -95,6 +106,11 @@ tools — hexagonal, heavily feature-gated.
 - Outlook links have no system label rows. Move a thread in or out of the inbox
   through `set_thread_inbox`, and read Outlook inbox, trash, and junk state from
   `email_message_mailbox_facts`, never from labels.
+- Read receipts (`domain/read_receipts.rs`) own pixel policy for every send
+  path: strip existing Macro pixels, track only HTML bodies, never block
+  delivery on a tracking failure, and count opens only for sent messages.
+  Tokens are stored per message, so a retried send or Outlook draft revision
+  rebuilds the same URL; keep it that way or the draft fingerprints drift.
 - Outlook organization commands only run in their link's current
   `sync_generation`. Anything that bumps it must rebind unfinished commands as
   `pending`, since claims skip `confirming` ones while those still block later

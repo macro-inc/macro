@@ -56,12 +56,12 @@ fn indices(message: &PlannedMessage) -> Vec<u32> {
 }
 
 #[test]
-fn each_passage_opens_a_message_that_carries_the_steps_after_it() {
+fn each_passage_closes_a_message_that_carries_the_steps_before_it() {
     let planned = plan_messages(&[
-        prose(0, Some("Checking first.")),
-        activity(1, true, 2),
-        prose(2, Some("Found it.")),
-        activity(3, false, 1),
+        activity(0, true, 2),
+        prose(1, Some("Checking first.")),
+        activity(2, true, 1),
+        prose(3, Some("Found it.")),
     ]);
     assert_eq!(planned.len(), 2);
     assert_eq!(indices(&planned[0]), [0, 1]);
@@ -70,47 +70,52 @@ fn each_passage_opens_a_message_that_carries_the_steps_after_it() {
 }
 
 #[test]
-fn steps_before_any_passage_are_a_message_of_their_own_ready_at_once() {
-    let planned = plan_messages(&[activity(0, false, 1)]);
-    assert_eq!(planned.len(), 1);
-    assert!(planned[0].ready);
+fn steps_wait_for_the_passage_they_lead_to() {
+    let working = plan_messages(&[prose(0, Some("Narration.")), activity(1, false, 1)]);
+    assert_eq!(working.len(), 2);
+    assert!(working[0].ready);
+    assert!(!working[1].ready, "the typing row shows a run in progress");
+
+    let writing = plan_messages(&[activity(0, true, 1), prose(1, None)]);
+    assert_eq!(writing.len(), 1);
+    assert!(!writing[0].ready, "an unfinished passage is not posted");
 }
 
 #[test]
-fn a_passage_still_being_written_waits_but_keeps_its_place() {
-    let planned = plan_messages(&[
-        prose(0, Some("Narration.")),
-        activity(1, true, 1),
-        prose(2, None),
-    ]);
+fn steps_the_turn_ends_on_are_a_message_of_their_own() {
+    let planned = plan_messages(&closed(vec![
+        prose(0, Some("Checking.")),
+        activity(1, false, 2),
+    ]));
     assert_eq!(planned.len(), 2);
-    assert!(planned[0].ready);
-    assert!(
-        !planned[1].ready,
-        "an unfinished passage streams live instead"
-    );
+    assert_eq!(indices(&planned[1]), [1]);
 }
 
 #[test]
 fn requests_for_the_user_belong_to_no_message() {
     let planned = plan_messages(&[
-        prose(0, Some("May I?")),
+        activity(0, true, 1),
         interaction(1),
         activity(2, true, 1),
+        prose(3, Some("Done.")),
     ]);
     assert_eq!(planned.len(), 1);
-    assert_eq!(indices(&planned[0]), [0, 2]);
+    assert_eq!(indices(&planned[0]), [0, 2, 3]);
 }
 
 #[test]
 fn a_growing_reply_never_renumbers_its_earlier_messages() {
-    let early = plan_messages(&[prose(0, Some("A.")), activity(1, false, 1)]);
+    let early = plan_messages(&[activity(0, false, 1)]);
+    let writing = plan_messages(&[activity(0, true, 1), prose(1, None)]);
     let later = plan_messages(&[
-        prose(0, Some("A.")),
-        activity(1, true, 3),
-        prose(2, Some("B.")),
+        activity(0, true, 1),
+        prose(1, Some("A.")),
+        activity(2, false, 1),
     ]);
-    assert_eq!(indices(&early[0]), indices(&later[0]));
+    assert_eq!(indices(&early[0]), [0]);
+    assert_eq!(indices(&writing[0]), [0, 1]);
+    assert_eq!(indices(&later[0]), [0, 1]);
+    assert_eq!(indices(&later[1]), [2]);
 }
 
 #[test]

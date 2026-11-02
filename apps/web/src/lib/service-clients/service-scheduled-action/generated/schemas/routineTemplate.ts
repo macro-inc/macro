@@ -11,7 +11,7 @@ import type { RoutineTemplateTask } from './routineTemplateTask';
 import type { TemplateVariable } from './templateVariable';
 
 /**
- * A shared routine's snapshot, readable by any signed-in user with its ID.
+ * A shared routine's snapshot, readable by signed-in users with sharing enabled.
  */
 export interface RoutineTemplate {
   /**

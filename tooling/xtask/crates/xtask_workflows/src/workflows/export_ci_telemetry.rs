@@ -50,6 +50,7 @@ const OBSERVED_WORKFLOWS: &[&str] = &[
     "cloud storage code check",
     "conventions code check",
     "deploy pulumi service",
+    "iOS App Store Publish",
     "iOS Preview",
     "infra code check",
 ];

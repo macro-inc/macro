@@ -40,6 +40,64 @@ describe('clearRegisteredCaches', () => {
     expect(localStorage.getItem('unrelated')).toBe('keep');
   });
 
+  it('rotates the scope when no cache host is registered', async () => {
+    localStorage.setItem('graphql-cache:scope', 'current-scope');
+    localStorage.setItem('graphql-soup-backfill:v7:user-1:email', '{}');
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue(
+      '00000000-0000-4000-8000-000000000003'
+    );
+    const { clearRegisteredCaches } = await import('./lifecycle');
+
+    await clearRegisteredCaches();
+
+    expect(localStorage.getItem('graphql-cache:scope')).toBe(
+      '00000000-0000-4000-8000-000000000003'
+    );
+    expect(localStorage.getItem('graphql-soup-backfill:v7:user-1:email')).toBe(
+      null
+    );
+  });
+
+  it('rotates the scope once the last host unregisters', async () => {
+    localStorage.setItem('graphql-cache:scope', 'current-scope');
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue(
+      '00000000-0000-4000-8000-000000000004'
+    );
+    const clear = vi.fn().mockResolvedValue(undefined);
+    const { clearRegisteredCaches, registerCacheHost } = await import(
+      './lifecycle'
+    );
+    const unregister = registerCacheHost(hostWithClear(clear));
+    unregister();
+
+    await clearRegisteredCaches();
+
+    expect(clear).not.toHaveBeenCalled();
+    expect(localStorage.getItem('graphql-cache:scope')).toBe(
+      '00000000-0000-4000-8000-000000000004'
+    );
+  });
+
+  it('rotates the scope when only a storage-free host is registered', async () => {
+    localStorage.setItem('graphql-cache:scope', 'current-scope');
+    vi.spyOn(crypto, 'randomUUID').mockReturnValue(
+      '00000000-0000-4000-8000-000000000005'
+    );
+    const { clearRegisteredCaches, registerCacheHost } = await import(
+      './lifecycle'
+    );
+    registerCacheHost({
+      clear: vi.fn().mockResolvedValue(undefined),
+      disabled: true,
+    } as unknown as CacheHost);
+
+    await clearRegisteredCaches();
+
+    expect(localStorage.getItem('graphql-cache:scope')).toBe(
+      '00000000-0000-4000-8000-000000000005'
+    );
+  });
+
   it('awaits the serialized scope rotation before logout clearing resolves', async () => {
     localStorage.setItem('graphql-cache:scope', 'current-scope');
     vi.spyOn(crypto, 'randomUUID').mockReturnValue(

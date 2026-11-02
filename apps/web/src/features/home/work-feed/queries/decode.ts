@@ -107,6 +107,7 @@ const toGraphqlItemType = (type: WorkFeedItemType): GraphqlWorkFeedItemType =>
     .with('task', () => 'TASK' as const)
     .with('chat', () => 'CHAT' as const)
     .with('project', () => 'PROJECT' as const)
+    .with('initiative', () => 'INITIATIVE' as const)
     .with('email', () => 'EMAIL' as const)
     .with('channel', () => 'CHANNEL' as const)
     .with('channel_thread', () => 'CHANNEL_THREAD' as const)

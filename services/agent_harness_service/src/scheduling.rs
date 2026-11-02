@@ -7,6 +7,7 @@ use connection_gateway_client::client::ConnectionGatewayClient;
 use entity_access::{domain::service::EntityAccessServiceImpl, outbound::PgAccessRepository};
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
+use github::outbound::pg_installation_claims::PgGithubInstallationClaims;
 use jev::{domain::JevClassifier, outbound::SystemOneJev};
 use macro_auth::middleware::decode_jwt::JwtValidationArgs;
 use macro_authorization::{
@@ -110,7 +111,10 @@ pub async fn build(
     let access = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
         db.clone(),
     )));
-    let event_access = Arc::new(EventAccessAdapter::new(access.as_ref().clone()));
+    let event_access = Arc::new(EventAccessAdapter::new(
+        access.as_ref().clone(),
+        PgGithubInstallationClaims::new(db.clone()),
+    ));
     let ai_admission = ai_billing::composition::pg_admission_service(
         db.clone(),
         config.enable_ai_usage_enforcement,
@@ -263,12 +267,29 @@ pub async fn build(
         .with_target_validation(TargetValidation::new(
             sessions,
             config.routine_agents_enabled,
-        )),
+        ))
+        .with_github_links(PgGithubInstallationClaims::new(db.clone())),
     );
+    let template_flags = config
+        .posthog_api_key
+        .value()
+        .map(|key| {
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config
+                    .posthog_host
+                    .value()
+                    .unwrap_or("https://us.i.posthog.com"),
+                key.to_owned(),
+                Duration::from_secs(3),
+            )
+        })
+        .transpose()
+        .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
     let template_state = RoutineTemplateRouterState {
         service: Arc::new(RoutineTemplateServiceImpl::new(
             Arc::clone(&service),
             Arc::new(PgRoutineTemplateRepo::new(db.clone())),
+            template_flags,
         )),
         access_service: Arc::clone(&access),
         authorization_state: authorization_state.clone(),

@@ -1,4 +1,3 @@
-import CodeIcon from '@icon/system/regular/code.svg';
 import type {
   ExecutionActivity,
   ExecutionRecord,
@@ -39,7 +38,6 @@ export function CodeExecutionToolCall(props: {
       <Show when={activity().length === 0 || errorVisible()}>
         <ToolCard
           title="Workspace activity"
-          icon={<CodeIcon />}
           status={props.common.status}
           muted={props.common.muted}
           trailing={

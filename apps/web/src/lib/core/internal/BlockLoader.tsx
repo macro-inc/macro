@@ -1,8 +1,5 @@
 import { useSharedAccessUpdates } from '@app/features/access-requests/access-requests';
-import {
-  matchesConfirmedAccess,
-  shareEntity,
-} from '@app/features/access-requests/core/types';
+import { shareEntity } from '@app/features/access-requests/core/types';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useIsAuthenticated } from '@core/context/user';
 import type { OwnedBlockHandle } from '@core/orchestrator';
@@ -88,7 +85,7 @@ export function BlockLoader<
       // Lightweight loaders (e.g. email) supply no permissions. Their initial
       // fallback is not a confirmed access change that requires a remount.
       const accessChanged = hasLoadedPermissions
-        ? !matchesConfirmedAccess(blockUserAccessSignal.get(), level)
+        ? blockUserAccessSignal.get() !== level
         : previous !== undefined && previous !== level;
       if (
         (data != null && accessChanged) ||

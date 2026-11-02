@@ -108,7 +108,7 @@ fn all_allowlisted_human_events_normalize_to_minimal_context() {
     ] {
         let event = incoming(name, metadata()).normalize().unwrap();
         assert_eq!(event.event_name().as_str(), name);
-        assert_eq!(event.entity_id().to_string(), ENTITY_ID);
+        assert_eq!(event.entity_id().unwrap().to_string(), ENTITY_ID);
         assert_eq!(
             event.message_id().is_some(),
             name.starts_with("channel.") && name != "channel.created"
@@ -497,11 +497,11 @@ fn task_changes_match_specific_and_any_property_selectors() {
             let event = property_event(source, data.clone()).normalize().unwrap();
             assert_eq!(event.event_name(), name);
             let any = EventFilter::new(vec![EventName::TaskPropertyChanged], None).unwrap();
-            assert!(any.accepts(event.event_name(), event.entity_id()));
+            assert!(any.accepts(&event));
             let other_task =
                 EventFilter::new(vec![name], Some(vec![Uuid::parse_str(OTHER_ID).unwrap()]))
                     .unwrap();
-            assert!(!other_task.accepts(name, event.entity_id()));
+            assert!(!other_task.accepts(&event));
             let stored = serde_json::to_value(&event).unwrap();
             assert_eq!(stored.as_object().unwrap().len(), 4);
             assert_eq!(
@@ -536,6 +536,76 @@ fn property_changes_ignore_other_entities_noops_and_bot_writes() {
     for field in ["actor", "on_behalf_of"] {
         let mut data = original.clone();
         data[field] = json!(if field == "actor" { BOT } else { HUMAN });
+        assert_eq!(
+            property_event("entity_property.updated", data).normalize(),
+            Err(EventRejection::UnsafeAttribution)
+        );
+    }
+}
+
+fn unattributed_status_change() -> Value {
+    let mut data = property_metadata();
+    data["actor"] = json!(null);
+    data["actor_user_id"] = json!(null);
+    data
+}
+
+fn github_source() -> Value {
+    json!({
+        "type": "github_pull_request",
+        "url": "https://github.com/my-org/my-repo/pull/42",
+        "account": {"id": "444", "login": "someone-else"}
+    })
+}
+
+#[test]
+fn a_status_change_from_github_needs_no_macro_actor() {
+    let mut data = unattributed_status_change();
+    data["source"] = github_source();
+
+    let event = property_event("entity_property.updated", data)
+        .normalize()
+        .unwrap();
+
+    assert_eq!(event.event_name(), EventName::TaskStatusChanged);
+    assert_eq!(
+        event.change_source(),
+        Some(&serde_json::from_value(github_source()).unwrap())
+    );
+    let stored = serde_json::to_value(&event).unwrap();
+    assert_eq!(
+        serde_json::from_value::<EventReference>(stored).unwrap(),
+        event
+    );
+}
+
+#[test]
+fn an_unattributed_status_change_with_no_source_stays_ignored() {
+    assert_eq!(
+        property_event("entity_property.updated", unattributed_status_change()).normalize(),
+        Err(EventRejection::UnsafeAttribution)
+    );
+}
+
+#[test]
+fn a_github_source_only_opens_status_changes() {
+    let mut data = unattributed_status_change();
+    data["source"] = github_source();
+    data["property_definition_id"] = json!(SystemPropertyKey::PRIORITY_UUID);
+
+    assert_eq!(
+        property_event("entity_property.updated", data).normalize(),
+        Err(EventRejection::UnsafeAttribution)
+    );
+}
+
+#[test]
+fn a_source_does_not_admit_a_change_made_by_a_bot_or_for_someone_else() {
+    for (field, value) in [("actor", BOT), ("on_behalf_of", HUMAN)] {
+        let mut data = unattributed_status_change();
+        data["source"] = github_source();
+        data[field] = json!(value);
+
         assert_eq!(
             property_event("entity_property.updated", data).normalize(),
             Err(EventRejection::UnsafeAttribution)
@@ -584,7 +654,7 @@ fn started_calls_keep_only_ids_and_belong_to_who_created_them() {
     let normalized = event.normalize().unwrap();
     assert_eq!(normalized.event_name(), EventName::CallStarted);
     assert_eq!(normalized.entity_type(), EventEntityType::Call);
-    assert_eq!(normalized.entity_id().to_string(), ENTITY_ID);
+    assert_eq!(normalized.entity_id().unwrap().to_string(), ENTITY_ID);
     assert_eq!(normalized.message_id(), None);
     let stored = serde_json::to_string(&normalized).unwrap();
     assert!(!stored.contains("example.com"));
@@ -602,7 +672,7 @@ fn ended_calls_keep_only_ids_and_belong_to_the_people_who_joined() {
     let normalized = event.normalize().unwrap();
     assert_eq!(normalized.event_name(), EventName::CallEnded);
     assert_eq!(normalized.entity_type(), EventEntityType::Call);
-    assert_eq!(normalized.entity_id().to_string(), ENTITY_ID);
+    assert_eq!(normalized.entity_id().unwrap().to_string(), ENTITY_ID);
     assert_eq!(normalized.message_id(), None);
     let stored = serde_json::to_string(&normalized).unwrap();
     assert!(!stored.contains("example.com"));
@@ -666,4 +736,63 @@ fn email_receipts_keep_only_ids_and_exclude_spam_and_backfills() {
         },
     ));
     assert_eq!(event.normalize(), Err(EventRejection::UnsupportedEvent));
+}
+
+#[test]
+fn github_stands_alone_and_only_it_takes_a_payload_match() {
+    let parse = |filter: serde_json::Value| serde_json::from_value::<EventFilter>(filter);
+
+    assert!(parse(json!({ "events": ["github"], "github": {} })).is_ok());
+    assert!(
+        parse(json!({
+            "events": ["github"],
+            "github": {},
+            "match": [{ "path": ["status"], "equals": "failed" }],
+        }))
+        .is_ok()
+    );
+    // Generic webhooks are not a trigger.
+    assert!(parse(json!({ "events": ["webhook.received"] })).is_err());
+    // A github filter names which deliveries; nothing else takes a selector.
+    assert!(parse(json!({ "events": ["github"] })).is_err());
+    // GitHub does not combine with Macro events or entity ids.
+    assert!(parse(json!({ "events": ["github", "document.created"], "github": {} })).is_err());
+    assert!(parse(json!({ "events": ["github"], "github": {}, "ids": [] })).is_err());
+    // Macro events are read again at dispatch; they have no payload to match.
+    assert!(
+        parse(json!({
+            "events": ["document.created"],
+            "match": [{ "path": ["name"], "equals": "x" }],
+        }))
+        .is_err()
+    );
+}
+
+#[test]
+fn github_deliveries_normalize_with_their_payload_and_reject_odd_names() {
+    let incoming = |event: &str| IncomingEvent {
+        event_id: macro_uuid::generate_uuid_v7(),
+        schema_version: 1,
+        payload: EventPayload::Github(github::broker::GithubWebhookTopicEvent::Received(
+            serde_json::from_value(json!({
+                "event": event,
+                "installation_id": 5,
+                "payload": { "ref": "refs/heads/main" },
+            }))
+            .unwrap(),
+        )),
+    };
+
+    let event = incoming("push").normalize().unwrap();
+    assert_eq!(event.event_name(), EventName::Github);
+    assert_eq!(event.entity_id(), None);
+    let stored = serde_json::to_value(&event).unwrap();
+    assert_eq!(
+        serde_json::from_value::<EventReference>(stored).unwrap(),
+        event
+    );
+    assert_eq!(
+        incoming("Not-An-Event").normalize(),
+        Err(EventRejection::UnsupportedEvent)
+    );
 }

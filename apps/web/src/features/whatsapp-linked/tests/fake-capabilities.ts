@@ -11,6 +11,7 @@ import type {
 import type { WhatsAppAccount } from '../core/account';
 import type { AddFailure } from '../core/add';
 import type { WhatsAppChat } from '../core/chat';
+import type { NewChatFailure } from '../core/new-chat';
 import type { PairingStep } from '../core/pairing';
 import { createOpenSections } from '../primitives/open-sections';
 
@@ -118,6 +119,10 @@ export function createFakeWhatsApp(initial: {
         _chat: Pick<WhatsAppChat, 'jid' | 'kind'>
       ): ResultAsync<{ chatId: string }, AddFailure> =>
         okAsync({ chatId: 'chat-new' })
+    ),
+    startChat: vi.fn(
+      (_phoneNumber: string): ResultAsync<{ chatId: string }, NewChatFailure> =>
+        okAsync({ chatId: 'chat-started' })
     ),
     isConnecting: () => false,
     isDisconnecting: () => false,

@@ -222,7 +222,7 @@ describe('GraphQL favorites queries', () => {
     ]);
   });
 
-  it('returns the add payload consistently without any mounted query', async () => {
+  it('reports a committed add consistently without any mounted query', async () => {
     const context = { rollback: vi.fn() };
     const onSuccess = vi.fn();
     const onSettled = vi.fn();
@@ -235,31 +235,10 @@ describe('GraphQL favorites queries', () => {
     );
     const input = { entityType: 'document' as const, entityId: 'document-1' };
     const result = await mutation.mutateAsync(input);
-    expect(result).toMatchObject({
-      entityId: 'document-1',
-      sortOrder: 1,
-      fileType: 'md',
-      createdAt: '2026-01-01T00:00:00Z',
-    });
+    expect(result).toEqual({ kind: 'committed' });
     expect(onSuccess).toHaveBeenCalledWith(result, input, context);
     expect(onSettled).toHaveBeenCalledWith(result, null, input, context);
     expect(executeQuery).not.toHaveBeenCalled();
-  });
-
-  it('does not replace an add response with a stale mounted query record', async () => {
-    executeQuery.mockImplementation(() =>
-      fromValue(favoritesResult([graphqlFavorite('document-1', 99)]))
-    );
-    const hooks = renderHook(() => ({
-      query: createGraphqlFavoritesQuery(),
-      mutation: useAddFavoriteMutation(),
-    }));
-    const result = await hooks.mutation.mutateAsync({
-      entityType: 'document',
-      entityId: 'document-1',
-    });
-    expect(result?.sortOrder).toBe(1);
-    expect(hooks.query.data?.favorites[0].sortOrder).toBe(99);
   });
 
   it('accepts superseded toggles without an error or stale-data refetch', async () => {
@@ -281,9 +260,10 @@ describe('GraphQL favorites queries', () => {
       mutation: createGraphqlAddFavoriteMutation({ onError, onSuccess }),
     }));
     const input = { entityType: 'document' as const, entityId: 'document-1' };
-    await expect(hooks.mutation.mutateAsync(input)).resolves.toBeUndefined();
+    const queued = { kind: 'queued', transactionId: 'new' };
+    await expect(hooks.mutation.mutateAsync(input)).resolves.toEqual(queued);
     expect(onError).not.toHaveBeenCalled();
-    expect(onSuccess).toHaveBeenCalledWith(undefined, input, undefined);
+    expect(onSuccess).toHaveBeenCalledWith(queued, input, undefined);
     expect(executeQuery).toHaveBeenCalledOnce();
   });
 
@@ -506,10 +486,7 @@ describe('GraphQL favorites queries', () => {
       requestPolicy: 'cache-and-network',
     });
     expect(onSuccess).toHaveBeenCalledWith(
-      expect.objectContaining({
-        entityType: 'document',
-        entityId: 'document-1',
-      }),
+      { kind: 'committed' },
       { entityType: 'document', entityId: 'document-1' },
       undefined
     );
@@ -544,7 +521,7 @@ describe('GraphQL favorites queries', () => {
       entityId: 'document-3',
     });
 
-    expect(result?.entityId).toBe('document-3');
+    expect(result).toEqual({ kind: 'queued', transactionId: 'transaction-1' });
     expect(executeQuery).toHaveBeenCalledOnce();
   });
 
@@ -573,7 +550,7 @@ describe('GraphQL favorites queries', () => {
       entityId: 'document-3',
     });
 
-    expect(result?.entityId).toBe('document-3');
+    expect(result).toEqual({ kind: 'queued', transactionId: 'transaction-1' });
     expect(executeQuery).not.toHaveBeenCalled();
     expect(executeMutation.mock.calls[0]?.[2]).toEqual({
       normalizedCacheOptimistic: expect.objectContaining({

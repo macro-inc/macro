@@ -23,6 +23,9 @@ vi.mock('@entity', () => ({
 }));
 vi.mock('@ui', async () => ({
   ...(await import('../../../components/ui/components/Avatar')),
+  Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
+    <button {...props} />
+  ),
   EmptyStatePanel: (props: {
     title?: string;
     primaryAction?: { label: string; onClick: () => void };

@@ -1,10 +1,16 @@
 import {
+  finishNotificationNavigation,
   pendingNotificationNavigation,
+  receiveNotificationTap,
   setPendingNotificationNavigationId,
 } from '@notifications/notification-navigation-intent';
 import { endNotificationOpen } from '@notifications/notification-open-trace';
-import { afterEach, beforeEach, expect, it, vi } from 'vitest';
-import { prepareNotificationLaunch } from './notification-launch';
+import { createRoot } from 'solid-js';
+import { afterEach, beforeEach, expect, it, onTestFinished, vi } from 'vitest';
+import {
+  prepareNotificationLaunch,
+  useNotificationCoverTimeout,
+} from './notification-launch';
 import type { PushEvent } from './push-api';
 
 const bridge = vi.hoisted(() => ({
@@ -107,6 +113,151 @@ it.each(['watch', 'pending'] as const)(
     );
     expect(window.location.hash).toBe('#/channels/current-channel');
     expect(bridge.acknowledge).not.toHaveBeenCalled();
+  }
+);
+
+function mountCoverTimeout() {
+  return createRoot((dispose) => {
+    useNotificationCoverTimeout();
+    onTestFinished(dispose);
+    return dispose;
+  });
+}
+
+it('releases a stalled warm tap without consuming it or extending the deadline on redelivery', async () => {
+  mountCoverTimeout();
+  await vi.advanceTimersByTimeAsync(10_000);
+  expect(bridge.releaseCover).toHaveBeenCalledOnce();
+  bridge.releaseCover.mockClear();
+
+  const tap = {
+    type: 'BACKGROUND_TAP',
+    payload: { notificationId: 'notification' },
+    deliveryId: 'warm-tap',
+  };
+  receiveNotificationTap(tap, bridge.acknowledge);
+  const intent = pendingNotificationNavigation();
+  await vi.advanceTimersByTimeAsync(7000);
+  receiveNotificationTap(tap, bridge.acknowledge);
+  await vi.advanceTimersByTimeAsync(999);
+  expect(bridge.releaseCover).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(1);
+  expect(bridge.releaseCover).toHaveBeenCalledOnce();
+  expect(pendingNotificationNavigation()).toBe(intent);
+  expect(bridge.acknowledge).not.toHaveBeenCalled();
+});
+
+it('reveals the app while an acknowledgment is stalled and still accepts its late completion', async () => {
+  mountCoverTimeout();
+  const acknowledgment = Promise.withResolvers<void>();
+  bridge.acknowledge.mockReturnValue(acknowledgment.promise);
+  receiveNotificationTap(
+    {
+      type: 'BACKGROUND_TAP',
+      payload: { notificationId: 'notification' },
+      deliveryId: 'stalled-ack',
+    },
+    bridge.acknowledge
+  );
+  const intent = pendingNotificationNavigation()!;
+  finishNotificationNavigation(intent);
+  await vi.advanceTimersByTimeAsync(8000);
+  expect(bridge.releaseCover).toHaveBeenCalledOnce();
+  expect(pendingNotificationNavigation()).toBe(intent);
+
+  acknowledgment.resolve();
+  await vi.advanceTimersByTimeAsync(0);
+  expect(pendingNotificationNavigation()).toBeUndefined();
+});
+
+it('gives a newer tap its own deadline instead of releasing it on the previous timer', async () => {
+  mountCoverTimeout();
+  receiveNotificationTap(
+    {
+      type: 'BACKGROUND_TAP',
+      payload: { notificationId: 'first' },
+      deliveryId: 'first',
+    },
+    bridge.acknowledge
+  );
+  await vi.advanceTimersByTimeAsync(7000);
+  receiveNotificationTap(
+    {
+      type: 'BACKGROUND_TAP',
+      payload: { notificationId: 'second' },
+      deliveryId: 'second',
+    },
+    bridge.acknowledge
+  );
+  const intent = pendingNotificationNavigation();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(bridge.releaseCover).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(7000);
+  expect(bridge.releaseCover).toHaveBeenCalledOnce();
+  expect(pendingNotificationNavigation()).toBe(intent);
+});
+
+it.each(['completed', 'disposed'] as const)(
+  'cancels the cover deadline when the navigation is %s',
+  async (outcome) => {
+    const dispose = mountCoverTimeout();
+    await vi.advanceTimersByTimeAsync(10_000);
+    bridge.releaseCover.mockClear();
+    receiveNotificationTap(
+      {
+        type: 'BACKGROUND_TAP',
+        payload: { notificationId: 'notification' },
+        deliveryId: 'tap',
+      },
+      bridge.acknowledge
+    );
+    await vi.advanceTimersByTimeAsync(1000);
+    if (outcome === 'completed') {
+      finishNotificationNavigation(pendingNotificationNavigation()!);
+    } else {
+      dispose();
+    }
+    await vi.advanceTimersByTimeAsync(8000);
+    expect(bridge.releaseCover).not.toHaveBeenCalled();
+  }
+);
+
+it('lets a tap received during startup keep its own cover deadline', async () => {
+  mountCoverTimeout();
+  await vi.advanceTimersByTimeAsync(7000);
+  receiveNotificationTap(
+    {
+      type: 'BACKGROUND_TAP',
+      payload: { notificationId: 'notification' },
+      deliveryId: 'startup-tap',
+    },
+    bridge.acknowledge
+  );
+  const intent = pendingNotificationNavigation();
+  await vi.advanceTimersByTimeAsync(1000);
+  expect(bridge.releaseCover).not.toHaveBeenCalled();
+  await vi.advanceTimersByTimeAsync(7000);
+  expect(bridge.releaseCover).toHaveBeenCalledOnce();
+  expect(pendingNotificationNavigation()).toBe(intent);
+});
+
+it.each(['unsupported', 'legacy'] as const)(
+  'does not release a cover for %s notifications',
+  async (kind) => {
+    bridge.supported = kind !== 'unsupported';
+    mountCoverTimeout();
+    await vi.advanceTimersByTimeAsync(10_000);
+    bridge.releaseCover.mockClear();
+    receiveNotificationTap(
+      {
+        type: 'BACKGROUND_TAP',
+        payload: { notificationId: 'notification' },
+        ...(kind === 'unsupported' ? { deliveryId: 'tap' } : {}),
+      },
+      bridge.acknowledge
+    );
+    await vi.advanceTimersByTimeAsync(8000);
+    expect(bridge.releaseCover).not.toHaveBeenCalled();
   }
 );
 

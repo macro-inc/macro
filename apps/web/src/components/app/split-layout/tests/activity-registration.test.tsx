@@ -155,7 +155,7 @@ vi.mock('@app/signal/splitLayout', () => {
 vi.mock('@block-calendar/components/EventComposerSplit', () => ({}));
 vi.mock('@block-channel/component/Compose', () => ({}));
 vi.mock('@block-md/component/ComposeSkill', () => ({}));
-vi.mock('@block-md/component/ComposeTask', () => ({
+vi.mock('@app/features/task-composer/compose-task', () => ({
   ComposeTask: (props: {
     composerContext?: {
       key: string;

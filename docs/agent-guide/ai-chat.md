@@ -76,6 +76,10 @@ before the first prompt; settings the runtime already reports do not need
 another control request.
 A model the user picks mid-session is a line between turns. Work from before
 the change stays above it; anything the agent says after appears below it.
+With `enable-first-prompt-on-create` on, the default agent's first prompt rides
+on the create (`prompt` + `promptActionId`) and no `/control` request follows;
+a persona, effort, or speed keeps the control request. Either way the prompt
+shows as one bubble that the logged row confirms in place.
 
 Macro's in-process agent opens each reply with a line from a fast model
 (`gpt-5.4-mini`), usually within half a second of Enter. Small talk
@@ -285,22 +289,33 @@ Refused prompts, provider failures, and hosts without a Google Generative AI key
 display a failed tool call; the error tells the agent whether to rephrase, retry,
 or stop.
 
+Code-mode agents (`ExecuteCode`) and SDK callers reach the same flow through
+`macro.images.generate()` (`POST /cognition/images/generate`), which checks the
+acting user's AI allowance first (402 when exhausted). Post the result with
+`channel.send(text, { images: [image] })`: it arrives as a sized `static/image`
+attachment in the attachment grid, not as message markdown.
+
 ## Ask AI entry points
 
 **Ask AI** in desktop search (including Tab) and the command menu opens
 an agent session. A nonempty search query is sent as the first prompt once the
-session is ready; an empty search opens an empty composer. Desktop search replaces
-its current split into the Agents workspace, while command-menu actions open a new split.
+session is ready. With the Agents workspace enabled, an empty search replaces its
+split with the Agents workspace's new-conversation composer; otherwise it opens an
+empty session there. Command-menu actions open a new split.
 
 **Ask Macro** and **Chat with Agent** on documents, tasks, PDFs, DOCX files,
-code files, images, canvases, spreadsheets, email, channels, calls, and projects
-also open agent sessions. Like command-menu Ask AI, they open the bare session in
-a new split, without the Agents workspace's conversation sidebar. Their entity mention stays
-in the composer as an unsent draft. Spreadsheet mentions retain the current sheet
-and selected range; channel-message actions retain the referenced message. On
+code files, images, canvases, spreadsheets, email, channels, calls, and projects,
+and the channel message hover menu, open the Agents workspace's new-conversation
+composer in a new split, the same centered composer as Home and **Create → Agent**,
+with its Auto/Chat/Code switch and agent, model, and effort pickers. Their entity
+mention fills the composer as an unsent draft; an Agents split that is already open
+returns to its composer with that draft. Spreadsheet mentions retain the current
+sheet and selected range; channel-message actions retain the referenced message. On
 phones, the channel message long-press drawer offers the same action as **Ask Macro**.
-Add a question and press Send to submit that context. These actions do not create
-legacy cognition chats, regardless of the Agents workspace feature flag.
+Add a question and press Send to start the conversation. Handoffs that carry hidden
+instructions or a fixed model (database chat, booking-link setup, connector import)
+still open a bare session directly, as does every action while the Agents workspace
+flag is off. These actions do not create legacy cognition chats.
 
 ## Dispatching coding agents from chat
 
@@ -654,6 +669,10 @@ the shimmer.
   TUI. The session page streams its tool calls and replies, and its permission
   prompts appear as approvals. Other runtimes started inside herdr get a live
   view tab per session that can prompt and interrupt it; approvals stay in Macro.
+  This works in herdr 0.9 and in the herdr app (herdr-core, with `hc` on `PATH`),
+  where session tabs open in macrod's space. Under herdr-core, Codex reports no
+  status, so its permission prompts must be answered in Herdr; see "Herdr
+  versions" in `crates/coding_agent_worker/README.md`.
   Native Herdr sessions offer `/compact`, `/init`, and `/fast` in the slash menu;
   Codex also offers `/ultrafast`. Macro confirms delivery of speed commands;
   check their result and any confirmation in Herdr. For Claude, use `/fast on`
@@ -1113,18 +1132,22 @@ provider usage and completed writes may remain after cancellation.
 
 The public workspace MCP (`mcp-server[-dev].macro.com`) evaluates the same
 `ai-code-mode` flag for the OAuth user on `initialize`, `tools/list` and
-`tools/call`, cached per user for a minute. Enabled users see `ExecuteCode`,
-`DescribeCodeTools` and `ReadCodeDocs` in place of the SDK-covered native tools,
-and the server instructions tell the client to call `DescribeCodeTools` with a
-`task`, then `ReadCodeDocs` for the symbols it uses, before writing a program. Programs export `async function main({macro})` and return
-exactly `{data}` (an empty `reviews: []` is dropped). There is no session,
-execution journal, review stack or `execution_id`; the receipt carries status,
-observed SDK activity, result and error. Runs act as the user with no agent
-attribution and no owner approval card: the MCP client asks before each tool
-call. SDK writes, including email sends, take effect immediately. Every native
-tool stays callable; MCP clients cache tool lists, so a flag change appears after
-reconnecting. Public runs use their own Deno budget (four running, eight queued
-per replica) so external traffic cannot take agent sessions' slots.
+`tools/call`, cached per user for a minute. Enabled users see only
+`ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs` on `tools/list` — not the
+individual Macro tools — and the server instructions tell the client to call
+`DescribeCodeTools` with a `task`, then `ReadCodeDocs` for the symbols it uses,
+before writing a program. Programs export `async function main({macro})` and
+return exactly `{data}` (an empty `reviews: []` is dropped). There is no
+session, execution journal, review stack or `execution_id`; the receipt carries
+status, observed SDK activity, result and error. Runs act as the user with no
+agent attribution and no owner approval card: the MCP client asks before each
+tool call. SDK writes, including email sends, take effect immediately. Hidden
+native tools stay callable if a client already knows their names; MCP clients
+cache tool lists, so a flag change appears after reconnecting. Public runs use
+their own Deno budget (four running, eight queued per replica) so external
+traffic cannot take agent sessions' slots. Agent-session code mode is
+unchanged: it still keeps a reduced direct toolset for search, document
+editing, and other work outside the SDK.
 
 To verify locally, run Claude Code against the stack's MCP with
 `tooling/scripts/claude-local-mcp.sh --instance <name> --email <email>`. It mints
@@ -1475,21 +1498,28 @@ chip is a GitHub link instead. The icon and status word follow open /
 merged / closed. Merging happens from the PR entity's top bar or from a channel
 Magic Chip's PR row, not from this header chip.
 
-Tool rows show the tool's own name without an MCP server or workspace prefix.
-Chat MCP rows retain their service icon.
+Agent prose sets the documents, sessions, pull requests, and contacts it
+mentions in the accent color, as people mentions already are.
 
-Individual tools appear as bare rows with an icon, tool name, optional detail,
-and a right-aligned result summary. The caret on the right opens the results;
-it points right when collapsed and down when expanded. Individual results start
-collapsed. Existing rich result views retain their own content and controls;
+Tool rows show the tool's own name without an MCP server or workspace prefix.
+
+Individual tools appear as bare rows with no icon or indent, in the group
+header's tone: the tool name, then any detail and result summary in a dimmer
+tone. A successful call shows no outcome. The caret after them appears on hover
+or keyboard focus, and always on touch, and the whole row opens the results; it
+points right when collapsed and down when expanded. Macro tools such as
+**Search** read the same way: the query in the detail tone, the result count
+right after it, and found items listed flush below in the row's tone, without
+icons. Code search output and read paths open as plain text, not a boxed block.
+Individual results start collapsed. Existing rich result views retain their own content and controls;
 when a result view provides its own disclosure, use that control rather than
 adding a second nested disclosure. Counts come from structured responses,
 edits show additions/deletions, and other tools show their outcome. A Macro
-tool call keeps the same label and icon as its successful row in every state,
+tool call keeps the same label as its successful row in every state,
 never the tool's code name: while it runs its text shimmers; a call cut off when
-its turn ends reads **Stopped**; a failed call is faded with **Failed** on the
-right (for example **Add to calendar · Failed**), and when the tool gave a
-reason, **Failed** carries a caret that opens it. Only a call whose arguments do
+its turn ends reads **Stopped**; a failed call is faded with **Failed** in the failure
+color after its label (for example **Add to calendar Failed**), and when the
+tool gave a reason, the row's caret opens it. Only a call whose arguments do
 not fit the tool (still arriving, or malformed) keeps the summary row with the
 tool's name. Labels stay in the present tense (**Fetch**, **Load tools**) until
 a result arrives.
@@ -1512,8 +1542,8 @@ and tools requiring user input remain outside these groups so they stay visible
 during other tool bursts. Nested agent activity and code-mode SDK operations each
 use the same peek window.
 
-The group caret sits immediately after its label and appears on hover or keyboard
-focus. Expand an edit row to view its diffs. Result bodies load only when their
+The group and thought carets sit immediately after their labels and appear on
+hover or keyboard focus, and always on touch. Expand an edit row to view its diffs. Result bodies load only when their
 row opens; syntax highlighting may appear after the diff text. Opening a session
 or expanding a group should leave the app responsive, even when the session
 contains many file edits.
@@ -1537,7 +1567,9 @@ Its carets should still expand the results, and reduced motion disables animatio
 Check that rich result controls still work and `DisplayResults` stays visible
 between surrounding groups. In **AgentMessage (end-to-end)**, expand the group
 and confirm unknown tools have no individual disclosure or JSON payload. Repeat
-at a narrow viewport width.
+at a narrow viewport width. `/app/debug/agent-progress` renders the same replies
+in a DM, as a channel mention, and in the session, one tab each; **Expand all**
+opens every group and tool result at once.
 
 A thought row reads **Thinking** and shimmers only while it is the last part
 of the turn the session is working on. Earlier thoughts settle to **Thought**
@@ -1550,9 +1582,13 @@ tool title, and working row settles — earlier turns never shimmer, even ones
 the runtime cut off mid-call. Shimmer identifies current activity: an active
 tool and its containing group can shimmer together; completed rows stay still.
 Working and Thinking use the same text shimmer and keep its phase when the
-status changes. Check both labels in light and dark themes at desktop and phone
-widths: one highlight should sweep evenly across the whole label, with no
-highlight returning at the opposite edge. With reduced motion, labels stay still.
+status changes; both lead with the working dots, a small plus of five dots
+that turns to an × and back in 45° steps while its dots brighten one at a time
+in a scattered order, so the label stays put when Working becomes Thinking. Check both
+labels in light and dark themes at desktop and phone widths: each pass should
+lift the whole label quickly from dim, fade it back, and rest dim before the
+next, with no highlight returning at the opposite edge. With reduced motion,
+labels and dots stay still.
 
 ### Sharing a session
 
@@ -1580,6 +1616,7 @@ Saved sessions have **Share** and **Copy Share Link** in the desktop header;
 on mobile, open the session title menu and choose **Share**. The owner can
 select people or channels, choose their access level, and send the session with
 an optional message using the same Share dialog and mobile drawer as tasks.
+Like other Share composers, it supports pasted images without a paperclip button.
 Sessions also support **Share** from entity list menus and the entity sharing
 shortcut. **People with access** lists the owner and shared conversations;
 the owner can change or remove a conversation's access. When that list holds

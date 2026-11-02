@@ -17,7 +17,15 @@ export function RecordFilesSection(props: { scope?: CrmRecordScope }) {
   const crm = useCrmContext();
   const files = crm.createRecordFiles(() => props.scope);
   return (
-    <RecordSection title="Files" search={search()} onSearchChange={setSearch}>
+    <RecordSection
+      title="Files"
+      search={search()}
+      onSearchChange={setSearch}
+      createAction={{
+        label: 'New note',
+        onClick: () => crm.openCreateItem('notes'),
+      }}
+    >
       <RecordItemList
         source={files}
         search={search()}
@@ -48,7 +56,15 @@ export function RecordCallsSection(props: { scope?: CrmRecordScope }) {
   const crm = useCrmContext();
   const calls = crm.createRecordCalls(() => props.scope);
   return (
-    <RecordSection title="Calls" search={search()} onSearchChange={setSearch}>
+    <RecordSection
+      title="Calls"
+      search={search()}
+      onSearchChange={setSearch}
+      createAction={{
+        label: 'New call',
+        onClick: () => crm.openCreateItem('calls'),
+      }}
+    >
       <RecordItemList
         source={calls}
         search={search()}

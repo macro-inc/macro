@@ -161,7 +161,7 @@ local resources.
 | Trigger | What runs |
 | --- | --- |
 | Push to `main` | `deploy_on_push.yml`: builds nix binaries and Lambdas, runs migrations on the in-VPC runner, then `pulumi up` on dev for every service in `.github/services-config.json` |
-| Published GitHub release | `release-production.yml`: the same flow against prod, then workers, website, and web app |
+| Published GitHub release | `release-production.yml`: the same flow against prod, then workers, website, and web app; once the web app is deployed, `ios-app-store-publish.yml` releases the held iOS App Store version |
 | Pull request touching a mapped stack | `pulumi_preview_pr.yml` previews against dev and comments; `code_check_infra.yml` runs Biome and `tsc` |
 | Manual | `deploy-pulumi-stack.yml`, `deploy-service-generic.yml`, `migrate-macro-db.yml` |
 
