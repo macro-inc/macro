@@ -1160,6 +1160,17 @@ loads those settings before further edits. While running, configuration is locke
 but cannot resume until the run ends. Completed one-offs remain visible with
 their history and do not repeat.
 
+Plans limit active routines: 10 on Free, 100 on Pro, and 10,000 on Max
+(enterprise teams count as Max). A routine is active while it is enabled and
+either watches events or has a next run; paused routines and completed one-offs
+don't count. At the limit, creating, duplicating, or activating a template with
+**Start enabled**, enabling a paused routine, or giving a completed one-off a new
+time fails with **You've reached your plan's limit of N active routines. Pause or
+delete a routine to activate another.** On Free and Pro the **Routine limit
+reached** paywall opens as well. Saving a routine paused always works. An owner
+over the limit after a downgrade keeps their active routines but can't activate
+more until under it.
+
 An `m-document-mention` with `blockName: "routine"`, the returned routine ID,
 and the saved name renders as a clickable mention in an agent reply. Once the
 routine is deleted the mention reads `Deleted` and clicking it shows a card
