@@ -5,7 +5,7 @@ mod test;
 
 use std::sync::Arc;
 
-use entity_access::domain::models::{AnyEntityPermission, EntityAccessReceipt};
+use entity_access::domain::models::{AnyEntityPermission, EntityAccessAuth, EntityAccessReceipt};
 use macro_sync_service_jwt::DocumentPermissionToken;
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
@@ -103,15 +103,20 @@ impl<Repository, Initializer, Documents, Forms>
 /// The receipt is the only source of the parent — a caller cannot name an
 /// entity it has not proven access to, because there is nowhere else to put
 /// the id. The receipt must also have been minted for this caller, or one
-/// user could act using another's receipt.
+/// user could act using another's receipt; `None` is a caller with no
+/// account, whose receipt must say so.
 fn resolve_parent(
-    user_id: &MacroUserIdStr<'_>,
+    viewer: Option<&MacroUserIdStr<'_>>,
     receipt: &EntityAccessReceipt<AnyEntityPermission>,
 ) -> Result<Entity<'static>, CollabSurfaceError> {
-    let receipt_user = receipt
-        .get_authenticated_user()
-        .map_err(|_| CollabSurfaceError::AccessDenied)?;
-    if receipt_user.as_ref() != user_id.as_ref() {
+    let minted_for_caller = match (viewer, receipt.auth()) {
+        (Some(user_id), EntityAccessAuth::Authenticated(receipt_user)) => {
+            receipt_user.as_ref() == user_id.as_ref()
+        }
+        (None, EntityAccessAuth::Unauthenticated) => true,
+        _ => false,
+    };
+    if !minted_for_caller {
         return Err(CollabSurfaceError::AccessDenied);
     }
     let entity = receipt.entity();
@@ -162,7 +167,7 @@ where
         id: Uuid,
         initial_markdown: String,
     ) -> Result<CollabSurface, CollabSurfaceError> {
-        let parent = resolve_parent(user_id, &parent_receipt)?;
+        let parent = resolve_parent(Some(user_id), &parent_receipt)?;
         if !caller_owned(&parent) {
             return Err(CollabSurfaceError::AccessDenied);
         }
@@ -183,7 +188,7 @@ where
         parent_receipt: EntityAccessReceipt<AnyEntityPermission>,
         id: Uuid,
     ) -> Result<CollabSurface, CollabSurfaceError> {
-        let parent = resolve_parent(user_id, &parent_receipt)?;
+        let parent = resolve_parent(Some(user_id), &parent_receipt)?;
         let surface = self.get_live(id).await?;
         verify_receipt_matches_parent(&surface, &parent)?;
         Ok(surface)
@@ -200,14 +205,14 @@ where
         Ok(parent)
     }
 
-    #[tracing::instrument(err, skip(self, user_id, parent_receipt))]
+    #[tracing::instrument(err, skip(self, viewer, parent_receipt))]
     async fn mint_token(
         &self,
-        user_id: &MacroUserIdStr<'_>,
+        viewer: Option<&MacroUserIdStr<'_>>,
         parent_receipt: EntityAccessReceipt<AnyEntityPermission>,
         id: Uuid,
     ) -> Result<DocumentPermissionToken, CollabSurfaceError> {
-        let parent = resolve_parent(user_id, &parent_receipt)?;
+        let parent = resolve_parent(viewer, &parent_receipt)?;
         let surface = self.get_live(id).await?;
         verify_receipt_matches_parent(&surface, &parent)?;
         // A pending row has not proven that its session is the surface's own
@@ -222,10 +227,7 @@ where
         let access_level =
             surface_access_level(parent.entity_type, parent_receipt.entity_permission())?;
         encode_surface_token(
-            parent_receipt
-                .get_authenticated_user()
-                .map_err(|_| CollabSurfaceError::AccessDenied)?
-                .clone(),
+            parent_receipt.get_authenticated_user().ok().cloned(),
             surface.id.to_string(),
             access_level,
             &self.jwt_secret,
@@ -239,7 +241,7 @@ where
         parent_receipt: EntityAccessReceipt<AnyEntityPermission>,
         id: Uuid,
     ) -> Result<(), CollabSurfaceError> {
-        let parent = resolve_parent(user_id, &parent_receipt)?;
+        let parent = resolve_parent(Some(user_id), &parent_receipt)?;
         let surface = self.get_live(id).await?;
         verify_receipt_matches_parent(&surface, &parent)?;
         // A deleted id never comes back, so a surface its parent's domain owns

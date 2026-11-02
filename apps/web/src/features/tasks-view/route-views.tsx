@@ -1,3 +1,5 @@
+import { ViewBreadcrumbs } from '@app/components/view-shell';
+import type { ProjectSection } from '@app/features/projects/core/project';
 import {
   ProjectBreadcrumb,
   ProjectDetail,
@@ -15,21 +17,24 @@ import {
 import {
   projectDetailRoute,
   projectTaskRoute,
+  taskDetailRoute,
   tasksSplitRoute,
 } from '@app/routes/routes';
 import { SidePanel } from '@components/app/side-panel';
 import {
   AppView,
   RedirectSplit,
-  withAuth,
+  SignedOutRoute,
+  VisitorDetail,
+  withVisitor,
 } from '@components/app/split-layout/split-router/app-route-shell';
 import { useViewRestoration } from '@components/app/split-layout/view-restoration';
 import { LoadingBlock } from '@core/component/LoadingBlock';
 import { enableProjects } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { onMount, Show } from 'solid-js';
-import { TasksDetailView } from './components/TasksDetailView';
+import { Match, onMount, Show, Switch } from 'solid-js';
+import { TaskDetailPanel, TasksDetailView } from './components/TasksDetailView';
 import { projectDetailSearch } from './project-detail-search';
 import { TasksView } from './tasks-view';
 import { TasksViewSkeleton } from './tasks-view-skeleton';
@@ -43,22 +48,103 @@ function TasksLegacyRouteView() {
   );
 }
 
-export const TasksRouteView = withAuth(() => {
-  useViewRestoration();
-  const params = useParams<{ taskId?: string; projectId?: string }>();
+/**
+ * Tasks for a caller with no account: the project or task a link opens, alone
+ * and read at its own access. The Tasks list itself offers sign-in.
+ */
+function TasksVisitorView() {
+  const params = useParams<{
+    projectId?: string;
+    section?: ProjectSection;
+    taskId?: string;
+  }>();
+  const navigate = useNavigate();
+  const openTask = (taskId: string) =>
+    fireAndForget(
+      navigate({ route: taskDetailRoute, params: { taskId } }),
+      'tasks-view'
+    );
+  const closeTask = () =>
+    fireAndForget(
+      params.projectId
+        ? navigate({
+            route: projectDetailRoute,
+            params: {
+              projectId: params.projectId,
+              section: params.section ?? 'tasks',
+            },
+          })
+        : navigate({ route: tasksSplitRoute, params: {} }),
+      'tasks-view'
+    );
+  const value = () =>
+    params.taskId
+      ? `task:${params.taskId}`
+      : params.projectId
+        ? `initiative:${params.projectId}`
+        : '';
   return (
-    <AppView
-      id="tasks"
-      detailDesktopOnly
-      detailRequested={() =>
-        typeof params.taskId === 'string' && !params.projectId
-      }
-      detailFallback={<TasksLegacyRouteView />}
+    <ViewBreadcrumbs.Root
+      value={value()}
+      onChange={(next) => {
+        if (params.projectId && next === `initiative:${params.projectId}`)
+          closeTask();
+      }}
     >
-      <TasksView />
-    </AppView>
+      <VisitorDetail>
+        <Switch fallback={<SignedOutRoute />}>
+          <Match when={params.taskId}>
+            {(taskId) => (
+              <>
+                <Show when={params.projectId}>
+                  {(projectId) => (
+                    <ProjectBreadcrumb
+                      entry={{
+                        value: `initiative:${projectId()}`,
+                        data: { type: 'initiative', id: projectId() },
+                      }}
+                      order={1}
+                    />
+                  )}
+                </Show>
+                <TaskDetailPanel
+                  task={{ id: taskId() }}
+                  breadcrumbOrder={params.projectId ? 2 : 1}
+                  onClose={closeTask}
+                  onDuplicate={openTask}
+                />
+              </>
+            )}
+          </Match>
+          <Match when={params.projectId}>
+            <SplitRouter.Outlet />
+          </Match>
+        </Switch>
+      </VisitorDetail>
+    </ViewBreadcrumbs.Root>
   );
-}, TasksViewSkeleton);
+}
+
+export const TasksRouteView = withVisitor(
+  () => {
+    useViewRestoration();
+    const params = useParams<{ taskId?: string; projectId?: string }>();
+    return (
+      <AppView
+        id="tasks"
+        detailDesktopOnly
+        detailRequested={() =>
+          typeof params.taskId === 'string' && !params.projectId
+        }
+        detailFallback={<TasksLegacyRouteView />}
+      >
+        <TasksView />
+      </AppView>
+    );
+  },
+  TasksVisitorView,
+  TasksViewSkeleton
+);
 
 function DisabledProjectRoute() {
   const navigate = useNavigate();

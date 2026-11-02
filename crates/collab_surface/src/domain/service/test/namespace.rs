@@ -124,7 +124,7 @@ async fn mint_token_refuses_a_ready_surface_whose_id_names_a_document() {
     let svc = service_with(repo, MockSurfaceInitializer::new());
 
     let err = svc
-        .mint_token(&user("macro|a@b.c"), channel_receipt(), id)
+        .mint_token(Some(&user("macro|a@b.c")), channel_receipt(), id)
         .await
         .unwrap_err();
 

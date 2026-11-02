@@ -45,8 +45,16 @@ impl InitiativeResources for FakeResources {
     fn purge(&self, _receipt: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
         Box::pin(async { Ok(()) })
     }
-    fn project_tasks(&self, _id: InitiativeId) -> ResourceFuture<'_, Vec<String>> {
-        Box::pin(async { Ok(self.tasks.clone()) })
+    fn project_task_list(&self, _id: InitiativeId) -> ResourceFuture<'_, Vec<ProjectTask>> {
+        let tasks = self
+            .tasks
+            .iter()
+            .map(|id| ProjectTask {
+                id: id.clone(),
+                completed: self.values.get(id).is_some_and(|value| value.completed),
+            })
+            .collect();
+        Box::pin(async { Ok(tasks) })
     }
     fn view(
         &self,
@@ -100,7 +108,7 @@ fn summary(id: u128, name: &str) -> InitiativeSummary {
 }
 
 #[tokio::test]
-async fn single_summary_counts_only_visible_tasks_and_uses_canonical_properties() {
+async fn single_summary_counts_every_listed_task_and_uses_canonical_properties() {
     let mut repo = MockInitiativeRepo::new();
     repo.expect_get_detail()
         .times(1)
@@ -141,10 +149,16 @@ async fn single_summary_counts_only_visible_tasks_and_uses_canonical_properties(
         },
     );
     let summary = svc.summary(view_receipt()).await.unwrap();
-    assert_eq!(summary.task_count, 2);
-    assert_eq!(summary.completed_task_count, 1);
+    assert_eq!(
+        summary.task_count, 3,
+        "a task the viewer can't open still counts"
+    );
+    assert_eq!(summary.completed_task_count, 2);
     assert_eq!(summary.properties.status, Some(status));
-    assert_eq!(*checked.lock().unwrap(), ["open", "done", "hidden"]);
+    assert!(
+        checked.lock().unwrap().is_empty(),
+        "listing checks no task's own access"
+    );
 }
 
 fn mixed_permission_tasks() -> FakeResources {
@@ -171,7 +185,7 @@ fn mixed_permission_tasks() -> FakeResources {
 }
 
 #[tokio::test]
-async fn summarized_read_counts_exactly_the_visible_task_set_after_one_access_check_each() {
+async fn summarized_read_lists_every_task_without_checking_any() {
     let mut repo = MockInitiativeRepo::new();
     repo.expect_get_detail()
         .times(1)
@@ -184,34 +198,33 @@ async fn summarized_read_counts_exactly_the_visible_task_set_after_one_access_ch
     let read = svc.read(view_receipt()).await.unwrap();
     let summary = svc.summarize(&read).await.unwrap();
 
-    let visible = &read.detail().task_ids;
-    assert_eq!(visible, &["open", "done", "done-too"]);
-    assert_eq!(summary.task_count as usize, visible.len());
-    assert_eq!(summary.completed_task_count, 2);
+    let listed = &read.detail().task_ids;
     assert_eq!(
-        *checked.lock().unwrap(),
-        ["hidden-done", "open", "done", "hidden-open", "done-too"],
-        "each associated task is checked exactly once"
+        listed,
+        &["hidden-done", "open", "done", "hidden-open", "done-too"],
+        "tasks the viewer can't open are listed too"
+    );
+    assert_eq!(summary.task_count as usize, listed.len());
+    assert_eq!(summary.completed_task_count, 3);
+    assert!(
+        checked.lock().unwrap().is_empty(),
+        "listing checks no task's own access"
     );
     let project_id = detail(Vec::new()).id.to_string();
     assert_eq!(
         *read_properties.lock().unwrap(),
-        [project_id.as_str(), "open", "done", "done-too"],
-        "properties are read only through the project and visible task receipts"
+        [project_id.as_str()],
+        "only the project's own properties are read through a receipt"
     );
 }
 
 #[tokio::test]
-async fn summarized_read_with_no_visible_tasks_reports_zero_progress() {
+async fn summarized_read_of_a_project_with_no_tasks_reports_zero_progress() {
     let mut repo = MockInitiativeRepo::new();
     repo.expect_get_detail()
         .times(1)
         .return_once(|_| Box::pin(async { Ok(Some(detail(Vec::new()))) }));
-    let mut resources = mixed_permission_tasks();
-    resources
-        .denied
-        .extend(["open".into(), "done".into(), "done-too".into()]);
-    let svc = service_with_resources(repo, resources);
+    let svc = service_with_resources(repo, FakeResources::default());
 
     let read = svc.read(view_receipt()).await.unwrap();
     let summary = svc.summarize(&read).await.unwrap();
@@ -299,7 +312,7 @@ async fn failed_initialization_compensation_does_not_purge_a_remaining_project()
 }
 
 #[tokio::test]
-async fn task_paging_filters_visibility_before_counting_and_page_boundaries() {
+async fn task_paging_lists_every_task_before_counting_and_page_boundaries() {
     let mut repo = MockInitiativeRepo::new();
     repo.expect_get_detail()
         .times(2)
@@ -323,24 +336,24 @@ async fn task_paging_filters_visibility_before_counting_and_page_boundaries() {
         .await
         .unwrap();
     assert_eq!(first.task_ids, ["a"]);
-    assert_eq!(first.total, 2);
+    assert_eq!(first.total, 3, "a task the viewer can't open still counts");
     assert_eq!(first.next_cursor.as_deref(), Some("a"));
     let last = svc
         .tasks_page(
             view_receipt(),
             InitiativeTasksRequest {
-                limit: Some(1),
+                limit: Some(2),
                 cursor: first.next_cursor,
             },
         )
         .await
         .unwrap();
-    assert_eq!(last.task_ids, ["z"]);
+    assert_eq!(last.task_ids, ["hidden", "z"]);
     assert!(last.next_cursor.is_none());
 }
 
 #[tokio::test]
-async fn collection_filters_properties_before_paging_and_counts_only_visible_tasks() {
+async fn collection_filters_properties_before_paging_and_counts_every_listed_task() {
     let status = uuid::Uuid::from_u128(50);
     let mut repo = MockInitiativeRepo::new();
     repo.expect_list_accessible().times(2).returning(|_| {
@@ -381,7 +394,7 @@ async fn collection_filters_properties_before_paging_and_counts_only_visible_tas
     };
     let first = svc.page(&user(OWNER), request.clone()).await.unwrap();
     assert_eq!(first.initiatives[0].initiative.name, "Alpha");
-    assert_eq!(first.initiatives[0].task_count, 1);
+    assert_eq!(first.initiatives[0].task_count, 2);
     assert_eq!(first.initiatives[0].completed_task_count, 1);
     let last = svc
         .page(

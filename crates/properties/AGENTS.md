@@ -49,6 +49,13 @@ events to the `macro.properties` Kafka topic.
 
 - AI property/tag adapters omit legacy chat targets; this does not change persisted property entity types.
 
+## Gotchas
+
+- `get_project_task_properties` reads tasks' properties with a project's View
+  receipt, for the tasks that project lists (`task_listing_projects`: live,
+  with exactly one Project reference). It never opens a task; property writes
+  still need the task's own receipt.
+
 ## Checks
 
 - `cargo test -p properties` (`SQLX_OFFLINE` unset; requires local MacroDB).

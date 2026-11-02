@@ -82,6 +82,7 @@ function setup(path: string) {
         toContent: splitContentFromLocation,
         defaultLocation: routineLocation,
         stacked: () => false,
+        singlePane: () => false,
       }),
     });
     const orchestrator = {

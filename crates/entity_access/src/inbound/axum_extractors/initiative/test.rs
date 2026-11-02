@@ -187,6 +187,17 @@ async fn anonymous_caller_without_public_link_is_unauthorized() {
 }
 
 #[tokio::test]
+async fn a_signed_out_caller_cannot_edit_a_public_edit_initiative() {
+    let state = TestState::new(Some(AccessLevel::Edit));
+    let response = edit_router(state.clone())
+        .oneshot(request().body(Body::empty()).unwrap())
+        .await
+        .unwrap();
+
+    assert_eq!(response.status(), StatusCode::UNAUTHORIZED);
+}
+
+#[tokio::test]
 async fn authenticated_user_uses_acl() {
     let state = TestState::new(Some(AccessLevel::Edit));
     let response = edit_router(state.clone())

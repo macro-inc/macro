@@ -185,7 +185,7 @@ export function createInitiativeClient(client: () => Client) {
     get: (id: string, signal?: AbortSignal) =>
       catchToResult(async () =>
         mapInitiativeDetail(
-          (await query(InitiativeDocument, { initiativeId: id }, signal)).user
+          (await query(InitiativeDocument, { initiativeId: id }, signal))
             .initiative
         )
       ),

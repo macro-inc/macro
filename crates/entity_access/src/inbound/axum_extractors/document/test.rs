@@ -271,6 +271,29 @@ async fn anonymous_link_share_access_returns_unauthenticated_receipt() {
 }
 
 #[tokio::test]
+async fn a_public_edit_link_gives_a_signed_out_caller_view() {
+    let state = TestState::new(Some(AccessLevel::Edit));
+    let extracted = extract::<ViewAccessLevel>(request(None, document(false)), &state)
+        .await
+        .expect("public link access should be allowed");
+
+    assert_eq!(
+        extracted.entity_access_receipt.entity_permission(),
+        &EntityPermission::AccessLevel {
+            access_level: AccessLevel::View
+        }
+    );
+}
+
+#[tokio::test]
+async fn a_public_edit_link_refuses_a_signed_out_caller_on_edit_routes() {
+    let state = TestState::new(Some(AccessLevel::Edit));
+    let result = extract::<EditAccessLevel>(request(None, document(false)), &state).await;
+
+    assert!(matches!(result, Err(ExtractorError::Unauthorized)));
+}
+
+#[tokio::test]
 async fn authenticated_owner_bypasses_access_lookup() {
     let state = TestState::new(None);
     let extracted = extract::<EditAccessLevel>(request(Some("owner"), document(false)), &state)

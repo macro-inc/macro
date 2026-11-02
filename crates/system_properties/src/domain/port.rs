@@ -5,7 +5,10 @@
 
 use uuid::Uuid;
 
-use crate::{StatusOption, domain::model::SystemPropertyError};
+use crate::{
+    StatusOption,
+    domain::model::{ProjectTask, SystemPropertyError},
+};
 
 /// Repository trait for system property database operations.
 ///
@@ -43,6 +46,13 @@ pub trait SystemPropertiesRepository: Clone + Send + Sync + 'static {
         &self,
         project_id: Uuid,
     ) -> impl Future<Output = Result<Vec<String>, SystemPropertyError>> + Send;
+
+    /// Live tasks whose Project property names exactly `project_id`, with
+    /// their status, in id order.
+    fn live_project_tasks(
+        &self,
+        project_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<ProjectTask>, SystemPropertyError>> + Send;
 
     /// The project each listed task's Project property names, as raw ids;
     /// tasks without a project are absent.

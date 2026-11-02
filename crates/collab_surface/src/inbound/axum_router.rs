@@ -10,11 +10,12 @@ use axum::{
     routing::{delete, get, post, put},
 };
 use entity_access::domain::{
-    models::{AccessError, AnyEntityPermission, EntityAccessReceipt},
+    models::{AccessError, AnyEntityPermission, Entity as AccessEntity, EntityAccessReceipt},
     ports::EntityAccessService,
 };
 use macro_authorization::{
-    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState, UserOrInternal,
+    MacroAuthorizationExtractor, MacroAuthorizationService, MacroAuthorizationState,
+    OptionalMacroAuthorizationExtractor, UserOrInternal, UserOrInternalAuthorization,
 };
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::{Entity, EntityType};
@@ -182,39 +183,53 @@ fn build_parent(
 /// The requirement is [`AnyEntityPermission`], not a leveled one: a channel
 /// resolves to `ChannelRole`/`ChannelViewOnly`, which a leveled receipt never
 /// matches. The domain service decides what each permission may do.
+///
+/// `viewer` is `None` for a caller with no account, whose receipt holds at
+/// most View.
 async fn mint_parent_receipt<Eas: EntityAccessService>(
     entity_access_service: &Eas,
-    user_id: &MacroUserIdStr<'_>,
+    viewer: Option<&MacroUserIdStr<'static>>,
     user_org_id: Option<i64>,
     parent: &Entity<'_>,
 ) -> Result<EntityAccessReceipt<AnyEntityPermission>, CollabSurfaceError> {
-    entity_access_service
-        .generate_entity_access_receipt::<AnyEntityPermission>(
-            user_id,
-            user_org_id,
-            parent.entity_id.as_ref(),
-            parent.entity_type,
+    async {
+        let permission = entity_access_service
+            .get_entity_permission(
+                viewer.map(|user| &**user),
+                parent.entity_id.as_ref(),
+                parent.entity_type,
+                user_org_id,
+            )
+            .await?;
+        EntityAccessReceipt::try_new_for_user(
+            viewer.cloned(),
+            AccessEntity {
+                entity_id: parent.entity_id.to_string(),
+                entity_type: parent.entity_type,
+            },
+            permission,
         )
-        .await
-        .map_err(|e| match e {
-            AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_) => {
-                CollabSurfaceError::AccessDenied
-            }
-            AccessError::NotFound(_) => CollabSurfaceError::ParentNotFound,
-            AccessError::BadRequest(msg) => CollabSurfaceError::BadRequest(msg.to_string()),
-            other => CollabSurfaceError::Internal(rootcause::Report::new(other).into_dynamic()),
-        })
+    }
+    .await
+    .map_err(|e| match e {
+        AccessError::Unauthorized | AccessError::UnauthorizedWithMessage(_) => {
+            CollabSurfaceError::AccessDenied
+        }
+        AccessError::NotFound(_) => CollabSurfaceError::ParentNotFound,
+        AccessError::BadRequest(msg) => CollabSurfaceError::BadRequest(msg.to_string()),
+        other => CollabSurfaceError::Internal(rootcause::Report::new(other).into_dynamic()),
+    })
 }
 
 /// The caller's identity and org, as the receipt-minting path needs them.
-fn caller_identity<Auth: MacroAuthorizationService>(
-    user: &MacroAuthorizationExtractor<Auth, UserOrInternal>,
+fn caller_identity(
+    authorization: &UserOrInternalAuthorization,
 ) -> (&MacroUserIdStr<'static>, Option<i64>) {
     (
-        &user.authorization.user.macro_user_id,
+        &authorization.user.macro_user_id,
         // Organization channels grant access by matching org, so the org must
         // be carried through or a member of one reads as a non-participant.
-        user.authorization
+        authorization
             .user
             .user_context
             .organization_id
@@ -227,7 +242,7 @@ fn caller_identity<Auth: MacroAuthorizationService>(
 async fn receipt_for_surface<S, Eas>(
     service: &S,
     entity_access_service: &Eas,
-    user_id: &MacroUserIdStr<'_>,
+    viewer: Option<&MacroUserIdStr<'static>>,
     user_org_id: Option<i64>,
     id: Uuid,
 ) -> Result<EntityAccessReceipt<AnyEntityPermission>, CollabSurfaceError>
@@ -236,7 +251,7 @@ where
     Eas: EntityAccessService,
 {
     let parent = service.get_parent(id).await?;
-    mint_parent_receipt(entity_access_service, user_id, user_org_id, &parent).await
+    mint_parent_receipt(entity_access_service, viewer, user_org_id, &parent).await
 }
 
 /// Idempotently ensure a collab surface exists (load-or-create).
@@ -276,11 +291,11 @@ where
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let (user_id, user_org_id) = caller_identity(&user);
+    let (user_id, user_org_id) = caller_identity(&user.authorization);
     let parent = build_parent(req.parent_entity_type, &req.parent_entity_id)?;
     let receipt = mint_parent_receipt(
         state.entity_access_service.as_ref(),
-        user_id,
+        Some(user_id),
         user_org_id,
         &parent,
     )
@@ -319,11 +334,11 @@ where
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let (user_id, user_org_id) = caller_identity(&user);
+    let (user_id, user_org_id) = caller_identity(&user.authorization);
     let receipt = receipt_for_surface(
         state.service.as_ref(),
         state.entity_access_service.as_ref(),
-        user_id,
+        Some(user_id),
         user_org_id,
         id,
     )
@@ -341,7 +356,7 @@ where
     params(SurfaceIdParams),
     responses(
         (status = 200, body = CollabSurfaceTokenResponse),
-        (status = 401, description = "Missing or invalid credentials", body = ErrorResponse),
+        (status = 401, description = "Invalid credentials", body = ErrorResponse),
         (status = 403, body = ErrorResponse),
         (status = 404, body = ErrorResponse),
         (status = 409, description = "The surface is not initialized yet, or its id is in use", body = ErrorResponse),
@@ -351,7 +366,7 @@ where
 #[tracing::instrument(err, skip_all)]
 pub async fn mint_token_handler<S, Eas, Auth>(
     State(state): State<CollabSurfaceRouterState<S, Eas, Auth>>,
-    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    caller: OptionalMacroAuthorizationExtractor<Auth, UserOrInternal>,
     Path(SurfaceIdParams { id }): Path<SurfaceIdParams>,
 ) -> Result<Json<CollabSurfaceTokenResponse>, CollabSurfaceError>
 where
@@ -359,16 +374,21 @@ where
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let (user_id, user_org_id) = caller_identity(&user);
+    // A caller with no account reads a surface whose parent a public link
+    // opens, with a View token.
+    let (viewer, user_org_id) = match caller.authorization.as_ref().map(caller_identity) {
+        Some((user_id, user_org_id)) => (Some(user_id), user_org_id),
+        None => (None, None),
+    };
     let receipt = receipt_for_surface(
         state.service.as_ref(),
         state.entity_access_service.as_ref(),
-        user_id,
+        viewer,
         user_org_id,
         id,
     )
     .await?;
-    let token = state.service.mint_token(user_id, receipt, id).await?;
+    let token = state.service.mint_token(viewer, receipt, id).await?;
     Ok(Json(CollabSurfaceTokenResponse {
         token: token.into_inner(),
     }))
@@ -400,11 +420,11 @@ where
     Eas: EntityAccessService,
     Auth: MacroAuthorizationService,
 {
-    let (user_id, user_org_id) = caller_identity(&user);
+    let (user_id, user_org_id) = caller_identity(&user.authorization);
     let receipt = receipt_for_surface(
         state.service.as_ref(),
         state.entity_access_service.as_ref(),
-        user_id,
+        Some(user_id),
         user_org_id,
         id,
     )

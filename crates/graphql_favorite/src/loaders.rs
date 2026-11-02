@@ -59,15 +59,16 @@ impl EntityFavoriteEdgeReader for NoOpEntityFavoriteEdgeReader {
 
 /// Request-scoped DataLoader for current-viewer favorite state.
 pub struct EntityFavoriteLoader<R> {
-    /// Authenticated viewer whose favorite state is requested.
-    user_id: MacroUserIdStr<'static>,
+    /// Viewer whose favorite state is requested; a caller with no account
+    /// has no favorites.
+    user_id: Option<MacroUserIdStr<'static>>,
     /// Domain-facing reader that resolves favorite state.
     reader: R,
 }
 
 impl<R> EntityFavoriteLoader<R> {
-    /// Construct a favorite loader for one authenticated viewer.
-    pub fn new(user_id: MacroUserIdStr<'static>, reader: R) -> Self {
+    /// Construct a favorite loader for one viewer, signed in or not.
+    pub fn new(user_id: Option<MacroUserIdStr<'static>>, reader: R) -> Self {
         Self { user_id, reader }
     }
 }
@@ -83,12 +84,11 @@ where
         &self,
         keys: &[OwnedEntity],
     ) -> Result<HashMap<OwnedEntity, Self::Value>, Self::Error> {
+        let Some(user_id) = &self.user_id else {
+            return Ok(keys.iter().cloned().map(|key| (key, false)).collect());
+        };
         let entities = keys.iter().map(|key| key.as_entity().clone()).collect();
-        match self
-            .reader
-            .get_entity_favorites(&self.user_id, entities)
-            .await
-        {
+        match self.reader.get_entity_favorites(user_id, entities).await {
             Ok(favorites) => Ok(favorites
                 .into_iter()
                 .map(|(entity, is_favorited)| (OwnedEntity::from(entity), is_favorited))
@@ -104,9 +104,9 @@ where
     }
 }
 
-/// Build a favorite DataLoader scoped to the authenticated viewer.
+/// Build a favorite DataLoader scoped to one viewer, signed in or not.
 pub fn entity_favorite_loader<R>(
-    user_id: MacroUserIdStr<'static>,
+    user_id: Option<MacroUserIdStr<'static>>,
     reader: R,
 ) -> DataLoader<EntityFavoriteLoader<R>>
 where

@@ -62,9 +62,10 @@ pub fn surface_access_level(
     }
 }
 
-/// Sign a sync-service connection token for `surface_id`.
+/// Sign a sync-service connection token for `surface_id`; `user_id` is
+/// `None` for a caller with no account, as on a public document's token.
 pub fn encode_surface_token(
-    user_id: MacroUserIdStr<'static>,
+    user_id: Option<MacroUserIdStr<'static>>,
     surface_id: String,
     access_level: AccessLevel,
     jwt_secret: &str,
@@ -76,7 +77,7 @@ pub fn encode_surface_token(
 
     macro_sync_service_jwt::encode(
         &DocumentPermissionsToken {
-            user_id: Some(user_id),
+            user_id,
             document_id: surface_id,
             access_level,
             exp: now + TOKEN_TTL_SECS,

@@ -31,6 +31,7 @@ import {
 import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
+  graphqlSoupSessionActive,
 } from '@service-storage/graphql-soup';
 import { type OperationResult, stringifyDocument } from '@urql/core';
 import { pipe, subscribe } from 'wonka';
@@ -119,7 +120,7 @@ function isDirection(value: string): value is LogDirectionDto {
   return DIRECTIONS.has(value);
 }
 
-type LogData = NonNullable<AgentSessionLogQuery['user']['agentSession']>['log'];
+type LogData = NonNullable<AgentSessionLogQuery['agentSession']>['log'];
 type LogEntry = LogData['entries'][number];
 
 /** One GraphQL entry in the wire shape the fold reads. */
@@ -216,7 +217,7 @@ export function watchAgentSessionLog(
       );
       return;
     }
-    const log = result.data?.user.agentSession?.log;
+    const log = result.data?.agentSession?.log;
     if (!log) {
       rejectFetched(new AgentSessionLogUnavailable(sessionId, 'inaccessible'));
       return;
@@ -240,7 +241,11 @@ export function watchAgentSessionLog(
     getGraphqlSoupClient().query<
       AgentSessionLogQuery,
       AgentSessionLogQueryVariables
-    >(AgentSessionLogDocument, { sessionId }, { requestPolicy: policy }),
+    >(
+      AgentSessionLogDocument,
+      { sessionId, signedIn: graphqlSoupSessionActive() },
+      { requestPolicy: policy }
+    ),
     subscribe((result) => {
       const source = normalizedCacheResultMetadata(result)?.source;
       const fromCache =
@@ -248,7 +253,7 @@ export function watchAgentSessionLog(
         source === 'affected-cache-reread' ||
         result.stale;
       if (fromCache) {
-        const log = result.data?.user.agentSession?.log;
+        const log = result.data?.agentSession?.log;
         // A cached miss or a cached refusal is not worth folding; the
         // network answer settles both.
         if (log && !result.error) {
@@ -416,13 +421,17 @@ async function appendAgentSessionLogRows(
   const args = {
     query: LOG_QUERY,
     operationName: LOG_OPERATION,
-    variables: { sessionId } satisfies AgentSessionLogQueryVariables,
+    // The cache exists only for a signed-in session, whose reads select its id.
+    variables: {
+      sessionId,
+      signedIn: true,
+    } satisfies AgentSessionLogQueryVariables,
   };
   const read = await host.readQuery({ ...args, priority: 'user-visible' });
   if (read.kind !== 'hit') return;
   // The generated document defines the normalized cache result's shape.
   const data = read.data as AgentSessionLogQuery;
-  const log = data.user.agentSession?.log;
+  const log = data.agentSession?.log;
   if (!log) return;
   const known = new Set(log.entries.map((entry) => entry.id));
   const appended = rows
@@ -438,12 +447,10 @@ async function appendAgentSessionLogRows(
   await host.writeQuery({
     ...args,
     data: {
-      user: {
-        id: data.user.id,
-        agentSession: {
-          id: sessionId,
-          log: { bot: log.bot, entries: [...log.entries, ...appended] },
-        },
+      user: data.user,
+      agentSession: {
+        id: sessionId,
+        log: { bot: log.bot, entries: [...log.entries, ...appended] },
       },
     } satisfies AgentSessionLogQuery,
   });

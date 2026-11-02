@@ -45,11 +45,11 @@ pub mod domain;
 pub mod outbound;
 
 // Re-export commonly used types for convenience
-pub use domain::model::PropertyRow;
 pub use domain::model::{
     CrmRecordLink, EffortOption, EmailAttachmentInput, EmailAttachmentProperty, PriorityOption,
     SourceEntity, StageOption, StatusOption, SystemPropertyError, SystemPropertyKey,
 };
+pub use domain::model::{ProjectTask, PropertyRow};
 pub use domain::port::SystemPropertiesRepository;
 
 /// Name of a team's CRM stage definition. Written by the CRM crate, read by the property loaders.

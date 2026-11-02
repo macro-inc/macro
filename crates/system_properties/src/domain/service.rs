@@ -12,7 +12,7 @@ use crate::{
     StatusOption,
     domain::{
         model::{
-            CrmRecordLink, EmailAttachmentInput, EmailAttachmentProperty, PropertyRow,
+            CrmRecordLink, EmailAttachmentInput, EmailAttachmentProperty, ProjectTask, PropertyRow,
             SystemPropertyError, SystemPropertyKey,
         },
         port::SystemPropertiesRepository,
@@ -81,6 +81,14 @@ pub trait SystemPropertiesService: Clone + Send + Sync + 'static {
         &self,
         project_id: Uuid,
     ) -> impl Future<Output = Result<Vec<String>, SystemPropertyError>> + Send;
+
+    /// Live tasks whose Project property names exactly `project_id`, with
+    /// their status, in id order. A caller that may view the project may list
+    /// them; opening one still needs the task's own access.
+    fn live_project_tasks(
+        &self,
+        project_id: Uuid,
+    ) -> impl Future<Output = Result<Vec<ProjectTask>, SystemPropertyError>> + Send;
 
     /// The project each listed task belongs to, from its Project property.
     /// Tasks without a project are absent. Callers authorize both ends before
@@ -183,6 +191,14 @@ where
     #[tracing::instrument(err, skip(self))]
     async fn project_task_ids(&self, project_id: Uuid) -> Result<Vec<String>, SystemPropertyError> {
         self.repository.project_task_ids(project_id).await
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn live_project_tasks(
+        &self,
+        project_id: Uuid,
+    ) -> Result<Vec<ProjectTask>, SystemPropertyError> {
+        self.repository.live_project_tasks(project_id).await
     }
 
     #[tracing::instrument(err, skip(self, task_ids))]

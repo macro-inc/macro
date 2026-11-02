@@ -138,7 +138,7 @@ where
 {
     let loader = ctx.data::<SoupItemDataLoader>()?;
     let entity = EntityType::EmailThread.with_entity_string(thread_id.to_string());
-    let Some(item) = loader.load_one((user_id, entity)).await? else {
+    let Some(item) = loader.load_one((Some(user_id), entity)).await? else {
         return Ok(None);
     };
 
@@ -164,7 +164,7 @@ where
     // Concurrent loads coalesce into one batched Soup request per user.
     let items = futures::future::try_join_all(thread_ids.into_iter().map(|thread_id| {
         loader.load_one((
-            user_id.clone(),
+            Some(user_id.clone()),
             EntityType::EmailThread.with_entity_string(thread_id.to_string()),
         ))
     }))
@@ -183,13 +183,13 @@ where
     Ok(threads)
 }
 
-/// Fetch one agent session the viewer can see, through the same access
-/// filter the Soup list uses, so a session outside their grants reads as
-/// absent rather than as an error. Reads the primary: see
-/// [`AgentSessionEntityLoader`].
+/// Fetch one agent session the viewer may view, authorized through entity
+/// access: a public link opens it for a caller with no account, and a session
+/// they may not view reads as absent rather than as an error. Reads the
+/// primary: see [`AgentSessionEntityLoader`].
 pub async fn resolve_soup_agent_session<Edges>(
     ctx: &Context<'_>,
-    user_id: MacroUserIdStr<'static>,
+    viewer: Option<MacroUserIdStr<'static>>,
     session_id: uuid::Uuid,
 ) -> async_graphql::Result<Option<GraphqlSoupAgentSession<Edges>>>
 where
@@ -197,7 +197,7 @@ where
 {
     let loader = &ctx.data::<AgentSessionEntityLoader>()?.0;
     let entity = EntityType::AgentSession.with_entity_string(session_id.to_string());
-    let Some(item) = loader.load_one((user_id, entity)).await? else {
+    let Some(item) = loader.load_one((viewer, entity)).await? else {
         return Ok(None);
     };
 
@@ -221,7 +221,7 @@ where
     Edges: SoupEntityEdges,
 {
     let loader = &ctx.data::<PrimarySoupItemLoader>()?.0;
-    let item = loader.load_one((user_id, entity)).await?;
+    let item = loader.load_one((Some(user_id), entity)).await?;
     Ok(item.map(GraphqlSoupEntity::<Edges>::new_with_projection))
 }
 

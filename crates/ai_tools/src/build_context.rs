@@ -289,6 +289,9 @@ pub async fn build_tool_service_context_from_env(
         ForeignEntityServiceImpl::new(PgForeignEntityRepo::new(pool.clone())),
         PgGithubPullRequestRepo::new(pool.clone()),
     );
+    let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
+        pool.clone(),
+    )));
     let favorites_service = crate::tool_context::build_favorites_service(pool.clone());
     let soup_service = Arc::new(
         SoupImpl::new(
@@ -302,7 +305,8 @@ pub async fn build_tool_service_context_from_env(
             crm::domain::service::NoOpCrmService,
             github_pull_request_service,
         )
-        .with_favorites(favorites_service.clone()),
+        .with_favorites(favorites_service.clone())
+        .with_project_access(entity_access_service.clone()),
     );
 
     let s3_client = macro_aws_config::s3_client().await;
@@ -330,9 +334,6 @@ pub async fn build_tool_service_context_from_env(
         presigned_url_expiry_seconds: 3600,
         browser_cache_expiry_seconds: 86400,
     };
-    let entity_access_service = Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
-        pool.clone(),
-    )));
     let macro_event_broker = macro_event_broker::MacroEventBrokerService::new(
         macro_event_broker::KafkaEventPublisher::new(env.kafka_brokers.as_ref())
             .context("failed to create kafka event publisher")?,

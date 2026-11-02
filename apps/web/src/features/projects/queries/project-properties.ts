@@ -17,17 +17,21 @@ export const PROJECT_PROPERTY_IDS: string[] = [
   SYSTEM_PROPERTY_IDS.DUE_DATE,
 ];
 
-/** A project's values for those properties, in composer order. */
-export function projectProperties(properties: SoupProperty[]): Property[] {
+/** A task's values for those properties, in composer order. */
+export function taskProperties(properties: SoupProperty[]): Property[] {
   return properties
     .filter((property) => PROJECT_PROPERTY_IDS.includes(property.definition.id))
     .map(soupPropertyToProperty)
-    .map(withProjectStatusOptions)
     .sort(
       (left, right) =>
         PROJECT_PROPERTY_IDS.indexOf(left.propertyDefinitionId) -
         PROJECT_PROPERTY_IDS.indexOf(right.propertyDefinitionId)
     );
+}
+
+/** A project's values for those properties, in composer order. */
+export function projectProperties(properties: SoupProperty[]): Property[] {
+  return taskProperties(properties).map(withProjectStatusOptions);
 }
 
 export function projectDefinitionProperties(

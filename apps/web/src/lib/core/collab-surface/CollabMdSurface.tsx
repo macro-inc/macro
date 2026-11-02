@@ -1,3 +1,4 @@
+import { useUserId } from '@core/context/user';
 import { onCleanup } from 'solid-js';
 import { useBlockCollabParent } from './blockParent';
 import {
@@ -19,8 +20,10 @@ export type CollabMdSurfaceProps = Omit<
 
 /** Existing block adapter: derive the parent, then pass explicit state to the editor. */
 export function CollabMdSurface(props: CollabMdSurfaceProps) {
+  const userId = useUserId();
   const session = createCollabSurfaceSession(props.surfaceId, {
     parent: useBlockCollabParent(),
+    viewer: () => userId() ?? null,
     initialMarkdown: props.initialMarkdown,
     optimisticSnapshot: props.optimisticSnapshot,
   });

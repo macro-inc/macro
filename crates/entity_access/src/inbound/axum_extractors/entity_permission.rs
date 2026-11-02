@@ -19,8 +19,7 @@ use tracing::Level;
 use super::{ExtractorError, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
     models::{
-        AccessLevel, AnyEntityPermission, Entity, EntityAccessAuth, EntityAccessReceipt,
-        EntityPermission, EntityType,
+        AccessLevel, AnyEntityPermission, Entity, EntityAccessReceipt, EntityPermission, EntityType,
     },
     ports::EntityAccessService,
 };
@@ -102,17 +101,15 @@ where
 
         if is_internal_access && macro_user_id.is_none() {
             return Ok(Self {
-                entity_access_receipt: EntityAccessReceipt {
-                    entity: Entity {
+                entity_access_receipt: EntityAccessReceipt::trusted_internal(
+                    Entity {
                         entity_id,
                         entity_type: parsed_type,
                     },
-                    auth: EntityAccessAuth::Internal,
-                    entity_permission: EntityPermission::AccessLevel {
+                    EntityPermission::AccessLevel {
                         access_level: internal_access_level(parsed_type),
                     },
-                    _marker: PhantomData,
-                },
+                ),
                 _marker: PhantomData,
             });
         }
@@ -135,17 +132,14 @@ where
         };
 
         Ok(Self {
-            entity_access_receipt: EntityAccessReceipt {
-                entity: Entity {
+            entity_access_receipt: EntityAccessReceipt::try_new_for_user(
+                macro_user_id,
+                Entity {
                     entity_id,
                     entity_type: parsed_type,
                 },
-                auth: macro_user_id
-                    .map(EntityAccessAuth::Authenticated)
-                    .unwrap_or(EntityAccessAuth::Unauthenticated),
-                entity_permission: permission,
-                _marker: PhantomData,
-            },
+                permission,
+            )?,
             _marker: PhantomData,
         })
     }

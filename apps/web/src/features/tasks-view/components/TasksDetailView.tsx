@@ -42,6 +42,7 @@ function TaskDetailTopBar(props: { documentId: string }) {
   );
 }
 
+/** A task's detail beside the Tasks list, whose rows it pages through. */
 export function TasksDetailView(props: {
   task: TaskDetailTarget;
   onClose?: () => void;
@@ -69,6 +70,24 @@ export function TasksDetailView(props: {
       panel.isPanelActive() && selectedTask()?.id === props.task.id,
     navigation: listNavigation,
   });
+
+  return (
+    <TaskDetailPanel
+      task={props.task}
+      breadcrumbOrder={props.breadcrumbOrder}
+      onClose={props.onClose ?? closeTask}
+      onDuplicate={(id, name) => openTask({ id, fallbackName: name })}
+    />
+  );
+}
+
+/** A task's detail on its own: its top bar, document, and breadcrumb. */
+export function TaskDetailPanel(props: {
+  task: TaskDetailTarget;
+  breadcrumbOrder?: number;
+  onClose: () => void;
+  onDuplicate: (id: string, name: string) => void;
+}) {
   const breadcrumbValue = () => `task:${props.task.id}`;
   const metadata = (): EntityDetailTarget => ({
     type: 'document',
@@ -94,8 +113,8 @@ export function TasksDetailView(props: {
                 fallbackName={props.task.fallbackName}
                 ownerId={context.data.metadata.owner}
                 projectId={context.data.metadata.projectId ?? undefined}
-                onClose={props.onClose ?? closeTask}
-                onDuplicate={(id, name) => openTask({ id, fallbackName: name })}
+                onClose={props.onClose}
+                onDuplicate={props.onDuplicate}
               />
             )}
           </TaskDetail>

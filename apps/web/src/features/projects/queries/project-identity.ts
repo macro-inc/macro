@@ -38,10 +38,8 @@ export async function seedProjectDetail(
   // The create response already normalized the complete record. Establish its
   // query edges without copying a second snapshot over those live fields.
   const data = {
-    user: {
-      id: userId,
-      initiative: { __typename: 'GraphqlSoupInitiative', id: project.id },
-    },
+    user: { id: userId },
+    initiative: { __typename: 'GraphqlSoupInitiative', id: project.id },
   } satisfies OptimisticResponse<InitiativeQuery> &
     OptimisticResponse<InitiativeIdentityQuery>;
   try {
@@ -56,7 +54,7 @@ export async function seedProjectDetail(
         host.writeQuery({
           query: stringifyDocument(document),
           operationName,
-          variables: { initiativeId: project.id },
+          variables: { initiativeId: project.id, signedIn: true },
           data,
         })
       )
@@ -69,8 +67,13 @@ export async function seedProjectDetail(
   }
 }
 
+/**
+ * Reads a project for the viewer, signed in or not: a public or team link
+ * opens it with no account. A signed-in read carries the viewer's id, and a
+ * result read for another account never counts.
+ */
 function createAuthorizedProjectQuery<
-  QueryData extends { user: { id: string } },
+  QueryData extends { user?: { id: string } | null },
   Result,
 >(
   document: DocumentInput<QueryData, InitiativeQueryVariables>,
@@ -80,19 +83,22 @@ function createAuthorizedProjectQuery<
   projectId: Accessor<string>,
   enabled: Accessor<boolean>
 ) {
-  const active = () => enabled() && Boolean(userId() && projectId());
+  const active = () => enabled() && Boolean(projectId());
   const authorization = createQueryAuthorization(() =>
     JSON.stringify([userId(), projectId()])
   );
   const query = createLiveQuery(
     document,
-    () => (active() ? { initiativeId: projectId() } : undefined),
+    () =>
+      active()
+        ? { initiativeId: projectId(), signedIn: Boolean(userId()) }
+        : undefined,
     () => ({
       client: client(),
       requestPolicy: 'cache-and-network',
       keepPreviousData: false,
       onResult: authorization.onResult,
-      select: (data) => ({ viewerId: data.user.id, value: select(data) }),
+      select: (data) => ({ viewerId: data.user?.id, value: select(data) }),
     })
   );
   registerProjectRevalidation(client, active, () =>
@@ -143,7 +149,7 @@ export function createProjectDetailQuery(
 ) {
   return createAuthorizedProjectQuery(
     InitiativeDocument,
-    (data) => projectDetailData(mapInitiativeDetail(data.user.initiative)),
+    (data) => projectDetailData(mapInitiativeDetail(data.initiative)),
     client,
     userId,
     projectId,
@@ -161,7 +167,7 @@ export function createProjectIdentityQuery(
   return createAuthorizedProjectQuery(
     InitiativeIdentityDocument,
     (data): ProjectIdentity => {
-      const project = mapInitiativeIdentity(data.user.initiative);
+      const project = mapInitiativeIdentity(data.initiative);
       return {
         id: project.id,
         name: project.name,

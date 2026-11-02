@@ -18,6 +18,8 @@ import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { SignedOutRoute } from '@components/app/split-layout/split-router/app-route-shell';
+import { useIsAuthenticated } from '@core/auth';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
@@ -207,6 +209,8 @@ function ProjectTitleMenu(props: {
 
 function ProjectDetailHost(props: ProjectDetailProps) {
   const context = useProjectsContext();
+  // A project a visitor cannot read may open once they sign in.
+  const authenticated = useIsAuthenticated();
   const source = context.createProjectSource(() => props.route.id);
   useSplitDisplayName(() => source.project()?.name ?? 'Project');
   const commands = context.createCommands();
@@ -353,6 +357,9 @@ function ProjectDetailHost(props: ProjectDetailProps) {
                   }
                 />
               )}
+            </Match>
+            <Match when={authenticated() === false}>
+              <SignedOutRoute />
             </Match>
             <Match when={true}>
               <ProjectUnavailable

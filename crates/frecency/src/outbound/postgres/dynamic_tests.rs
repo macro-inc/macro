@@ -1032,6 +1032,7 @@ async fn test_dynamic_filter_document_date_created_at_gt(pool: PgPool) {
     let filter = EntityFilterAst {
         favorites_only: None,
         crm_association: None,
+        viewable_project: None,
         document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::CreatedAt(
             DateLiteral::GreaterThan(cutoff),
         )))),
@@ -1134,6 +1135,7 @@ async fn test_dynamic_filter_document_date_created_at_lt(pool: PgPool) {
     let filter = EntityFilterAst {
         favorites_only: None,
         crm_association: None,
+        viewable_project: None,
         document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::CreatedAt(
             DateLiteral::LessThan(cutoff),
         )))),
@@ -1232,6 +1234,7 @@ async fn test_dynamic_filter_document_date_updated_at_gt(pool: PgPool) {
     let filter = EntityFilterAst {
         favorites_only: None,
         crm_association: None,
+        viewable_project: None,
         document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::UpdatedAt(
             DateLiteral::GreaterThan(cutoff),
         )))),
@@ -1335,6 +1338,7 @@ async fn test_dynamic_filter_document_date_updated_at_lt(pool: PgPool) {
     let filter = EntityFilterAst {
         favorites_only: None,
         crm_association: None,
+        viewable_project: None,
         document_filter: Some(Arc::new(Expr::Literal(DocumentLiteral::UpdatedAt(
             DateLiteral::LessThan(cutoff),
         )))),

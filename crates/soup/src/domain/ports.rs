@@ -7,8 +7,9 @@ use crate::domain::models::{
     SoupPropertiesField, SoupRequest, TouchedEntity, TouchedSoupRequest, WorkFeedCandidate,
     WorkFeedCandidateRequest, WorkFeedSoupPage, WorkFeedSoupRequest, grouping::ItemGroupingInfo,
 };
-use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole};
+use entity_access::domain::models::{EntityAccessReceipt, MemberTeamRole, ViewAccessLevel};
 use macro_user_id::user_id::MacroUserIdStr;
+use model_entity::Entity;
 use models_pagination::{
     Frecency, NotifiedAt, PaginatedCursor, PaginatedOpaqueCursor, SimpleSortMethod, TouchedByMe,
     TypeEraseCursor,
@@ -62,6 +63,24 @@ pub trait SoupRepo: Send + Sync + 'static {
         &self,
         req: AdvancedSortParams<'a>,
     ) -> impl Future<Output = Result<Vec<SoupProjectionHydration>, Self::Err>> + Send;
+
+    /// Fetch expanded items by id with no listing policy: the caller already
+    /// holds an entity access receipt for every id. `viewer` scopes per-viewer
+    /// columns such as view history, and is `None` for a caller with no
+    /// account. Documents, chats, initiatives and agent sessions hydrate
+    /// here; other types are omitted.
+    fn expanded_viewable_by_ids<'a>(
+        &self,
+        viewer: Option<MacroUserIdStr<'a>>,
+        entities: &'a [Entity<'a>],
+    ) -> impl Future<Output = Result<Vec<SoupProjectionHydration>, Self::Err>> + Send;
+
+    /// The live tasks whose Project property names exactly `project`, in id
+    /// order, as documents. Applies no access predicate.
+    fn project_task_entities(
+        &self,
+        project: uuid::Uuid,
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, Self::Err>> + Send;
 
     /// Fetch unexpanded soup items for an explicit list of entity ids.
     fn unexpanded_soup_by_ids<'a>(
@@ -360,6 +379,48 @@ pub trait SoupService: Send + Sync + 'static {
         user_id: MacroUserIdStr<'a>,
     ) -> impl Future<Output = Result<Vec<PropertyDefinitionWithOptions>, SoupErr>> + Send;
 
+    /// Hydrate the entities `receipts` prove the viewer may view. A
+    /// single-item read authorizes through entity access, so an item a public
+    /// or team link opens resolves although Soup's listings never enumerate
+    /// it. Every receipt belongs to the same viewer, signed in or not;
+    /// `team_receipt` is that viewer's team, which scopes agent sessions' pull
+    /// request facts. Documents, chats, initiatives and agent sessions
+    /// hydrate; other types are omitted.
+    ///
+    /// Services without single-item hydration reject the request. The
+    /// production service overrides this method.
+    fn get_viewable_items(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> impl Future<Output = Result<Vec<SoupProjectionHydration>, SoupErr>> + Send {
+        let _ = (receipts, team_receipt);
+        async move {
+            Err(SoupErr::SoupDbErr(anyhow::anyhow!(
+                "this soup service does not hydrate single items"
+            )))
+        }
+    }
+
+    /// Hydrate every live task `project` lists, to the viewer who holds its
+    /// View receipt. Viewing a project lets the viewer list its tasks, like a
+    /// folder lists its documents; opening a task still needs the task's own
+    /// access. Soup finds the tasks itself, so a caller cannot widen the set.
+    ///
+    /// Services without project task listing reject the request. The
+    /// production service overrides this method.
+    fn get_project_tasks(
+        &self,
+        project: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<Vec<SoupProjectionHydration>, SoupErr>> + Send {
+        let _ = project;
+        async move {
+            Err(SoupErr::SoupDbErr(anyhow::anyhow!(
+                "this soup service does not list project tasks"
+            )))
+        }
+    }
+
     /// Fetch one hydrated page of the viewer's work feed: entities with live
     /// attention or own work, newest `sort_at` first, each with its reason
     /// timestamps and authoritative server facts.
@@ -495,6 +556,21 @@ where
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
     ) -> Result<WorkFeedSoupPage, SoupErr> {
         (**self).get_work_feed_page(req, team_receipt).await
+    }
+
+    async fn get_viewable_items(
+        &self,
+        receipts: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<Vec<SoupProjectionHydration>, SoupErr> {
+        (**self).get_viewable_items(receipts, team_receipt).await
+    }
+
+    async fn get_project_tasks(
+        &self,
+        project: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<SoupProjectionHydration>, SoupErr> {
+        (**self).get_project_tasks(project).await
     }
 }
 

@@ -13,6 +13,8 @@ type AppPanePolicyOptions = {
   defaultLocation: () => SplitLocation;
   /** Panes stack, as on native mobile: a new pane always goes in front, whatever fits on screen. */
   stacked: () => boolean;
+  /** A caller with no account browses in one pane: every open replaces what it shows. */
+  singlePane: () => boolean;
 };
 
 /** A component view other than an agent conversation, which is an entity. */
@@ -45,10 +47,12 @@ export function createAppPanePolicy(
       const duplicatesShell = allowDuplicate && isShellComponent(content);
       const reuses = holder !== undefined && !duplicatesShell;
       if (reuses) return { pane: holder };
+
+      const fallback = source ?? panes.at(-1);
+      if (options.singlePane() && fallback) return { pane: fallback };
       if (options.stacked()) return { insertAt: panes.length };
 
       // Opens the manager already placed skip the capacity check.
-      const fallback = source ?? panes.at(-1);
       const full =
         intent.direct !== true && !options.manager()?.canAppendSplit();
       if (full && fallback) return { pane: fallback };

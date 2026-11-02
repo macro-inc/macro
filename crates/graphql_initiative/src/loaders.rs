@@ -6,6 +6,7 @@ use async_graphql::{
     Context,
     dataloader::{DataLoader, Loader},
 };
+use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
 use futures::{StreamExt, stream};
 use initiative::domain::{
     models::InitiativeDetail,
@@ -20,17 +21,18 @@ use crate::{InitiativeGraphqlContext, graphql_error};
 /// Bound concurrent domain reads until the domain exposes bulk detail/summary reads.
 const MAX_CONCURRENT_READS: usize = 16;
 
-/// One viewer-scoped read shared by detail and progress fields, so task access is checked once.
+/// One viewer-scoped read shared by detail, task and progress fields, so they list the same tasks.
 pub struct LoadedInitiative {
     read: InitiativeRead,
     pub(crate) detail: Arc<InitiativeDetail>,
     summary: OnceCell<Arc<InitiativePageRow>>,
 }
 
-/// Viewer-scoped initiative reader; authorization remains in the capability bridge.
+/// Viewer-scoped initiative reader; authorization remains in the capability
+/// bridge. `viewer` is `None` for a caller with no account.
 pub struct InitiativeLoader {
     context: InitiativeGraphqlContext,
-    user: MacroUserIdStr<'static>,
+    viewer: Option<MacroUserIdStr<'static>>,
 }
 
 impl Loader<Uuid> for InitiativeLoader {
@@ -42,7 +44,7 @@ impl Loader<Uuid> for InitiativeLoader {
             let result = self
                 .context
                 .0
-                .read(self.user.clone(), id)
+                .read(self.viewer.clone(), id)
                 .await
                 .map(|read| {
                     Arc::new(LoadedInitiative {
@@ -63,9 +65,9 @@ impl Loader<Uuid> for InitiativeLoader {
 /// Coalesce concurrent initiative fields without retaining data across mutations or subscription events.
 pub fn initiative_loader(
     context: InitiativeGraphqlContext,
-    user: MacroUserIdStr<'static>,
+    viewer: Option<MacroUserIdStr<'static>>,
 ) -> DataLoader<InitiativeLoader> {
-    DataLoader::new(InitiativeLoader { context, user }, tokio::spawn)
+    DataLoader::new(InitiativeLoader { context, viewer }, tokio::spawn)
 }
 
 async fn load_initiative(
@@ -88,7 +90,28 @@ pub async fn load_initiative_detail(
     Ok(load_initiative(loader, id).await?.detail.clone())
 }
 
-/// Load task progress only when a count field is requested, from the same visible tasks as detail.
+/// The tasks a project lists, from the same read as detail.
+pub struct InitiativeTaskListing {
+    /// The project's View receipt, which authorizes listing its tasks.
+    pub project: EntityAccessReceipt<ViewAccessLevel>,
+    /// The listed task ids, in `taskIds` order.
+    pub task_ids: Vec<String>,
+}
+
+/// Load the project's View receipt and the ids of the tasks it lists.
+pub async fn load_initiative_task_listing(
+    ctx: &Context<'_>,
+    id: Uuid,
+) -> async_graphql::Result<InitiativeTaskListing> {
+    let loader = ctx.data::<DataLoader<InitiativeLoader>>()?;
+    let loaded = load_initiative(loader, id).await?;
+    Ok(InitiativeTaskListing {
+        project: loaded.read.receipt().clone(),
+        task_ids: loaded.detail.task_ids.clone(),
+    })
+}
+
+/// Load task progress only when a count field is requested, from the same listed tasks as detail.
 pub async fn load_initiative_summary(
     ctx: &Context<'_>,
     id: Uuid,

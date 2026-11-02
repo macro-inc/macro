@@ -117,7 +117,7 @@ describe('initiative GraphQL transport', () => {
   });
   it('preserves project identity and sharing levels on detail reads', async () => {
     const { client, requests } = clientWith(() => ({
-      data: { user: { initiative: project } },
+      data: { initiative: project },
     }));
     const signal = new AbortController().signal;
     const result = await client.get('project-1', signal);
@@ -146,7 +146,7 @@ describe('initiative GraphQL transport', () => {
 
   it('keeps detail controls read-only when no viewer permission is returned', async () => {
     const { client } = clientWith(() => ({
-      data: { user: { initiative: { ...project, viewerPermission: null } } },
+      data: { initiative: { ...project, viewerPermission: null } },
     }));
     const result = await client.get('project-1');
     expect(result.isOk() && result.value.userAccessLevel).toBe('view');
@@ -173,7 +173,7 @@ describe('initiative GraphQL transport', () => {
 
   it('preserves authorization codes and rejects partial cached identity on access loss', async () => {
     const { client } = clientWith(() => ({
-      data: { user: { initiative: project } },
+      data: { initiative: project },
       error: new CombinedError({
         graphQLErrors: [
           { message: 'Access revoked', extensions: { code: 'FORBIDDEN' } },
@@ -190,7 +190,7 @@ describe('initiative GraphQL transport', () => {
     const controller = new AbortController();
     const { client } = clientWith(() => {
       controller.abort();
-      return { data: { user: { initiative: project } } };
+      return { data: { initiative: project } };
     });
     const result = await client.get('project-1', controller.signal);
     expect(result.isErr()).toBe(true);

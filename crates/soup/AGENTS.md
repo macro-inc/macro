@@ -100,6 +100,24 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 - Materialize grouped `TopItems` only for property sorts so the sort key is computed before multi-value group expansion; leave timestamp CTEs inlineable.
 - `candidate_gates.rs` encodes access-gate SQL shared across repo queries;
   changing it changes what every entity kind can return.
+- `get_viewable_items` (`*/viewable_by_ids*`, and `ByIdAccess::Receipted` in
+  `expanded/by_ids.rs` for documents and chats) is the one by-id read with no
+  access predicate: its callers pass entity access receipts, which already
+  grant public and team links that listings leave out. Keep viewer columns
+  (view history, task importance) nullable there; the viewer may have no
+  account.
+- Viewing a project lets the caller list its tasks, like a folder lists its
+  documents; opening a task still needs the task's own access. When a
+  request's property filter requires one project and the caller can view it
+  (`domain/service/project_scope.rs`, checked through entity access), Soup
+  sets the server-only `EntityFilterAst::viewable_project`, and the expanded
+  document listing gates documents on that project's task set alone
+  (`document_access_gate`): the filter admits nothing else, and a union with
+  the viewer's grants costs heavy users hundreds of milliseconds. Clients
+  can't set the field; inbound adapters leave it `None`.
+  `get_project_tasks` lists the same set from the project's View receipt
+  (`initiative/project_task_ids.sql`): Soup finds the tasks, so a caller
+  can't widen it. Realtime patches still reach only a task's own grantees.
 - Keep the notified feed's notification lookup behind a lateral `OFFSET 0`
   fence so the caller's `user_notification` rows drive the join; aggregate the
   latest notification before applying the cursor or notification-state gates.

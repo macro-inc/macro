@@ -160,6 +160,7 @@ function setup(
         toContent: splitContentFromLocation,
         defaultLocation: () => ({ route: routes.defaultRoute() }),
         stacked: () => options.stacked ?? false,
+        singlePane: () => false,
       }),
     });
     const orchestrator = {

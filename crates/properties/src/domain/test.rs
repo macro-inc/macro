@@ -18,8 +18,8 @@ use crate::domain::{
 use anyhow::anyhow;
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
-    AccessLevel, BotId, BotReceiptScope, Entity, EntityAccessAuth, EntityAccessReceipt,
-    EntityPermission, EntityType as AccessEntityType, ViewAccessLevel,
+    BotId, BotReceiptScope, EntityAccessAuth, EntityAccessReceipt, EntityType as AccessEntityType,
+    ViewAccessLevel,
 };
 use macro_event_broker::{EventBrokerError, MacroEvent, MacroEventBroker};
 use macro_user_id::{cowlike::CowLike, user_id::MacroUserIdStr};
@@ -1279,23 +1279,11 @@ async fn entity_property_event_attributes_team_bot_but_not_system_access() {
         "doc1",
         AccessEntityType::Document,
     );
-    let unauthenticated_access = EditReceipt::try_new(
-        EntityAccessAuth::Unauthenticated,
-        Entity {
-            entity_id: "doc1".to_string(),
-            entity_type: AccessEntityType::Document,
-        },
-        EntityPermission::AccessLevel {
-            access_level: AccessLevel::Owner,
-        },
-    )
-    .unwrap();
     let internal_access =
         EditReceipt::dangerously_assert_internal_user("doc1", AccessEntityType::Document);
 
     for (access, expected_actor) in [
         (bot_access, Some(bot_id.into_storage_id().to_string())),
-        (unauthenticated_access, None),
         (internal_access, None),
     ] {
         let property_definition_id = Uuid::from_u128(0xE704);
@@ -1918,7 +1906,7 @@ async fn test_link_parent_task_requires_edit_on_parent() {
 }
 
 #[tokio::test]
-async fn test_link_parent_task_rejects_bot_and_unauthenticated_callers() {
+async fn test_link_parent_task_rejects_team_bot_callers() {
     let task_id = Uuid::from_u128(0x12345678_1234_1234_1234_123456789abc);
     let bot_id = BotId::new_from_uuid(uuid::uuid!("00000000-0000-0000-0000-000000000123"));
     let bot_access = EditReceipt::dangerously_assert_bot(
@@ -1929,41 +1917,28 @@ async fn test_link_parent_task_rejects_bot_and_unauthenticated_callers() {
         &task_id.to_string(),
         AccessEntityType::Document,
     );
-    let unauthenticated_access = EditReceipt::try_new(
-        EntityAccessAuth::Unauthenticated,
-        Entity {
-            entity_id: task_id.to_string(),
-            entity_type: AccessEntityType::Document,
-        },
-        EntityPermission::AccessLevel {
-            access_level: AccessLevel::Owner,
-        },
-    )
-    .unwrap();
 
-    for access in [bot_access, unauthenticated_access] {
-        let mut repo = MockPropertiesRepo::new();
-        repo.expect_link_parent_task().times(0);
-        let service = PropertiesServiceImpl::new(
-            repo,
-            None::<MockPermissionService>,
-            None::<MockNotificationService>,
-        );
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_link_parent_task().times(0);
+    let service = PropertiesServiceImpl::new(
+        repo,
+        None::<MockPermissionService>,
+        None::<MockNotificationService>,
+    );
 
-        let err = service
-            .handle_task_relationship_property(
-                &access,
-                SystemPropertyKey::PARENT_TASK_UUID,
-                Some(parent_task_value(Uuid::from_u128(0xF00D))),
-            )
-            .await
-            .unwrap_err();
+    let err = service
+        .handle_task_relationship_property(
+            &bot_access,
+            SystemPropertyKey::PARENT_TASK_UUID,
+            Some(parent_task_value(Uuid::from_u128(0xF00D))),
+        )
+        .await
+        .unwrap_err();
 
-        assert!(matches!(
-            err,
-            crate::domain::error::PropertiesErr::PermissionDenied
-        ));
-    }
+    assert!(matches!(
+        err,
+        crate::domain::error::PropertiesErr::PermissionDenied
+    ));
 }
 
 #[tokio::test]
@@ -4745,4 +4720,96 @@ async fn get_or_create_option_rejects_unowned_definition() {
         )
         .await;
     assert!(matches!(result, Err(PropertiesErr::NotFound)));
+}
+
+fn project_view_receipt(project: Uuid) -> ViewReceipt {
+    ViewReceipt::try_new_for_user(
+        None,
+        entity_access::domain::models::Entity {
+            entity_id: project.to_string(),
+            entity_type: AccessEntityType::Initiative,
+        },
+        entity_access::domain::models::EntityPermission::AccessLevel {
+            access_level: entity_access::domain::models::AccessLevel::View,
+        },
+    )
+    .unwrap()
+}
+
+#[tokio::test]
+async fn a_project_receipt_reads_the_properties_of_only_the_tasks_it_lists() {
+    let project = Uuid::from_u128(0xB0);
+    let listed = Uuid::from_u128(0xB1);
+    let elsewhere = Uuid::from_u128(0xB2);
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_task_listing_projects().returning(move |_| {
+        Box::pin(async move {
+            Ok(HashMap::from([
+                (listed.to_string(), project),
+                (elsewhere.to_string(), Uuid::from_u128(0xB9)),
+            ]))
+        })
+    });
+    repo.expect_get_document_sub_types()
+        .withf(move |ids| ids == [listed])
+        .returning(move |_| {
+            Box::pin(async move { Ok(HashMap::from([(listed, DocumentSubType::Task)])) })
+        });
+    repo.expect_get_entity_properties_batch()
+        .withf(move |refs| {
+            refs.len() == 1
+                && refs[0].entity_id == listed.to_string()
+                && refs[0].entity_type == EntityType::Task
+        })
+        .returning(|_| Box::pin(async { Ok(HashMap::new()) }));
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
+
+    let properties = service
+        .get_project_task_properties(
+            &project_view_receipt(project),
+            &[listed.to_string(), elsewhere.to_string()],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        properties
+            .keys()
+            .map(|key| key.entity_id.clone())
+            .collect::<Vec<_>>(),
+        [listed.to_string()],
+        "another project's task is not read"
+    );
+}
+
+#[tokio::test]
+async fn only_a_project_receipt_reads_listed_task_properties() {
+    let mut repo = MockPropertiesRepo::new();
+    repo.expect_task_listing_projects().never();
+    let service = PropertiesServiceImpl::new(
+        repo,
+        Some(create_mock_permission_service()),
+        None::<MockNotificationService>,
+    );
+    let document = ViewReceipt::try_new_for_user(
+        None,
+        entity_access::domain::models::Entity {
+            entity_id: Uuid::from_u128(0xB3).to_string(),
+            entity_type: AccessEntityType::Document,
+        },
+        entity_access::domain::models::EntityPermission::AccessLevel {
+            access_level: entity_access::domain::models::AccessLevel::View,
+        },
+    )
+    .unwrap();
+
+    let result = service
+        .get_project_task_properties(&document, &[Uuid::from_u128(0xB4).to_string()])
+        .await;
+
+    assert!(matches!(result, Err(PropertiesErr::Validation(_))));
 }

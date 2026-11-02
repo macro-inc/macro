@@ -21,8 +21,7 @@ mod test;
 use super::{ExtractorError, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
     models::{
-        AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
-        RequiredPermission,
+        AccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission,
     },
     ports::EntityAccessService,
 };
@@ -102,17 +101,15 @@ where
         // own machinery, not a person whose grants we could look up.
         if macro_user_id.is_none() && is_internal_access {
             return Ok(Self {
-                entity_access_receipt: EntityAccessReceipt {
-                    entity: Entity {
+                entity_access_receipt: EntityAccessReceipt::trusted_internal(
+                    Entity {
                         entity_id: chat_id,
                         entity_type: EntityType::ExternalChat,
                     },
-                    auth: EntityAccessAuth::Internal,
-                    entity_permission: EntityPermission::AccessLevel {
+                    EntityPermission::AccessLevel {
                         access_level: AccessLevel::Owner,
                     },
-                    _marker: PhantomData,
-                },
+                ),
                 _marker: PhantomData,
             });
         }
@@ -136,15 +133,15 @@ where
         }
 
         Ok(Self {
-            entity_access_receipt: EntityAccessReceipt {
-                entity: Entity {
+            entity_access_receipt: EntityAccessReceipt::try_new_authenticated_user(
+                macro_user_id,
+                Entity {
                     entity_id: chat_id,
                     entity_type: EntityType::ExternalChat,
                 },
-                auth: EntityAccessAuth::Authenticated(macro_user_id),
-                entity_permission: permission,
-                _marker: PhantomData,
-            },
+                permission,
+            )
+            .map_err(ExtractorError::from)?,
             _marker: PhantomData,
         })
     }

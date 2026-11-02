@@ -17,7 +17,7 @@ import { storageServiceClient } from '@service-storage/client';
 import type { CollabSurfaceResponse } from '@service-storage/service';
 import { createCollabSurfaceSource } from '@service-sync/source';
 import { type Accessor, createSignal } from 'solid-js';
-import { getCollabSurfaceToken } from './token';
+import { getCollabSurfaceToken, type SurfaceTokenViewer } from './token';
 
 export type CollabSurfaceLoroManager = LoroManager<typeof MARKDOWN_LORO_SCHEMA>;
 
@@ -44,6 +44,8 @@ export type CollabSurfaceSessionOptions = {
    * Loses the seed race gracefully if local or remote state lands first.
    */
   optimisticSnapshot?: Uint8Array;
+  /** The signed-in account the session's connection tokens are minted for. */
+  viewer: Accessor<SurfaceTokenViewer>;
 };
 
 export type CollabSurfaceSession = {
@@ -153,7 +155,7 @@ export function createCollabSurfaceSession(
       return;
     }
 
-    const token = await getCollabSurfaceToken(surfaceId);
+    const token = await getCollabSurfaceToken(surfaceId, opts.viewer());
     if (disposed) return;
     if (!token) {
       setConnectionError('failed to mint a sync connection token');
@@ -163,7 +165,7 @@ export function createCollabSurfaceSession(
     const { source, doInitialSync } = createCollabSurfaceSource(
       surfaceId,
       token,
-      () => getCollabSurfaceToken(surfaceId)
+      () => getCollabSurfaceToken(surfaceId, opts.viewer())
     );
     if (disposed) {
       source.cleanup();

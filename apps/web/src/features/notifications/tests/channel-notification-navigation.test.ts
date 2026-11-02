@@ -214,7 +214,9 @@ it('returns to Home from a channel opened by a cold push launch', async () => {
   } as unknown as BlockOrchestrator;
   const { layout, stack } = createRoot((dispose) => {
     onTestFinished(dispose);
-    const layout = createRoutedSplitLayout(orchestrator, path, true);
+    const layout = createRoutedSplitLayout(orchestrator, path, {
+      stacked: true,
+    });
     return { layout, stack: createMobilePaneStack(layout) };
   });
 

@@ -1,6 +1,6 @@
-import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
+import { ViewBreadcrumbs } from '@app/components/view-shell';
 import { SplitRouter } from '@app/lib/split-router';
-import { SplitPanel } from '@components/app/split-panel';
+import { VisitorDetail } from '@components/app/split-layout/split-router/app-route-shell';
 import { LoginButton } from '@core/component/TopBar/LoginButton';
 import { EmptyStatePanel } from '@ui';
 import { Show, Suspense } from 'solid-js';
@@ -14,30 +14,24 @@ export function SignedOutDriveWorkspace() {
       value={navigation.active()?.value ?? ''}
       onChange={navigation.popTo}
     >
-      <SplitPanel.Root>
-        <SplitPanel.Body>
-          <ViewShell.Root>
-            <ViewShell.Main>
-              <Show
-                when={navigation.active()}
-                fallback={
-                  <EmptyStatePanel
-                    centered
-                    title="Sign in to view your files"
-                    description="Your files and folders are available after you sign in."
-                  >
-                    <LoginButton />
-                  </EmptyStatePanel>
-                }
-              >
-                <Suspense fallback={<DriveLoading />}>
-                  <SplitRouter.Outlet />
-                </Suspense>
-              </Show>
-            </ViewShell.Main>
-          </ViewShell.Root>
-        </SplitPanel.Body>
-      </SplitPanel.Root>
+      <VisitorDetail>
+        <Show
+          when={navigation.active()}
+          fallback={
+            <EmptyStatePanel
+              centered
+              title="Sign in to view your files"
+              description="Your files and folders are available after you sign in."
+            >
+              <LoginButton />
+            </EmptyStatePanel>
+          }
+        >
+          <Suspense fallback={<DriveLoading />}>
+            <SplitRouter.Outlet />
+          </Suspense>
+        </Show>
+      </VisitorDetail>
     </ViewBreadcrumbs.Root>
   );
 }

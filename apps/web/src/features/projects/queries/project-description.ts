@@ -17,11 +17,18 @@ import {
 } from '@macro-inc/collaboration/collab/wal';
 import { MARKDOWN_LORO_SCHEMA } from '@macro-inc/lexical-core/markdown-loro-schema';
 import type { ResultAsync } from 'neverthrow';
-import { createSignal, getOwner, runWithOwner } from 'solid-js';
+import { type Accessor, createSignal, getOwner, runWithOwner } from 'solid-js';
 
 export type ProjectDescriptionTransport<Access> = {
-  /** Ensure the surface exists and mint connection access for it; stop once `signal` aborts. */
-  authorize(surfaceId: string, signal: AbortSignal): Promise<Access>;
+  /**
+   * Ensure the surface exists and mint connection access for it; stop once
+   * `signal` aborts. Undefined when the surface was never started and this
+   * viewer may not start it, so the description is empty.
+   */
+  authorize(
+    surfaceId: string,
+    signal: AbortSignal
+  ): Promise<Access | undefined>;
   connect(
     surfaceId: string,
     access: Access
@@ -35,19 +42,28 @@ export type ProjectDescriptionTransport<Access> = {
 export function createProjectDescriptionSession<Access>(
   surfaceId: string,
   transport: ProjectDescriptionTransport<Access>
-): CollabMarkdownSession & { dispose(): void; loaded: Promise<void> } {
+): CollabMarkdownSession & {
+  dispose(): void;
+  loaded: Promise<void>;
+  absent: Accessor<boolean>;
+} {
   const owner = getOwner();
   const loroManager = createLoroManager(MARKDOWN_LORO_SCHEMA, {
     documentId: surfaceId,
   });
   const [syncSource, setSyncSource] = createSignal<LiveSyncSource>();
   const [connectionError, setConnectionError] = createSignal<string>();
+  const [absent, setAbsent] = createSignal(false);
   let disposed = false;
   const authorization = new AbortController();
   const loaded = (async () => {
     try {
       const access = await transport.authorize(surfaceId, authorization.signal);
       if (disposed) return;
+      if (access === undefined) {
+        setAbsent(true);
+        return;
+      }
       // Local cache failures must not prevent a fresh server snapshot.
       void ingestLocalSnapshot(
         loroManager,
@@ -81,6 +97,7 @@ export function createProjectDescriptionSession<Access>(
     syncSource,
     connectionError,
     loaded,
+    absent,
     dispose: () => {
       if (disposed) return;
       disposed = true;

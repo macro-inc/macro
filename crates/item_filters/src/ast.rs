@@ -207,6 +207,11 @@ pub struct EntityFilterAst {
     /// before pagination. Soup authorizes and resolves the record first.
     #[serde(default, rename = "crma", skip_serializing_if = "Option::is_none")]
     pub crm_association: Option<CrmAssociation>,
+    /// A project Soup has confirmed the viewer can view, after finding that
+    /// this filter requires it. Its tasks are listed even when the viewer
+    /// holds no grant on them. Never read from or sent to a client.
+    #[serde(skip)]
+    pub viewable_project: Option<uuid::Uuid>,
     /// filters applied to canonical calendar events
     #[serde(default, rename = "calf")]
     #[cfg_attr(feature = "schema", schema(value_type = serde_json::Value))]
@@ -293,6 +298,7 @@ impl EntityFilterAst {
         Ok(Some(EntityFilterAst {
             favorites_only: entity_filter.favorites_only,
             crm_association: None,
+            viewable_project: None,
             calendar_event_filter: CalendarEventFilters::expand_ast(
                 entity_filter.calendar_event_filters,
             )?
@@ -373,6 +379,7 @@ impl EntityFilterAst {
         Self {
             favorites_only: None,
             crm_association: None,
+            viewable_project: None,
             calendar_event_filter: None,
             document_filter: None,
             project_filter: None,
@@ -413,6 +420,8 @@ impl IsEmpty for EntityFilterAst {
         let EntityFilterAst {
             favorites_only,
             crm_association,
+            // Set only beside the property filter that requires the project.
+            viewable_project: _,
             calendar_event_filter,
             document_filter,
             project_filter,

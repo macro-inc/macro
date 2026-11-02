@@ -6,7 +6,7 @@
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
-| <a id="property-401"></a> `401` | [`ErrorResponse`](ErrorResponse.md) | Missing or invalid credentials |
+| <a id="property-401"></a> `401` | [`ErrorResponse`](ErrorResponse.md) | Invalid credentials |
 | <a id="property-403"></a> `403` | [`ErrorResponse`](ErrorResponse.md) | - |
 | <a id="property-404"></a> `404` | [`ErrorResponse`](ErrorResponse.md) | - |
 | <a id="property-409"></a> `409` | [`ErrorResponse`](ErrorResponse.md) | The surface is not initialized yet, or its id is in use |

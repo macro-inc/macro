@@ -11,8 +11,8 @@ use activity::Actor;
 use bot_id::BotIdStr;
 use document_sub_type::DocumentSubType;
 use entity_access::domain::models::{
-    BotReceiptScope, EntityAccessAuth, EntityAccessReceipt, EntityType as AccessEntityType,
-    RequiredPermission,
+    AccessLevel, BotReceiptScope, Entity as AccessEntity, EntityAccessAuth, EntityAccessReceipt,
+    EntityPermission, EntityType as AccessEntityType, RequiredPermission,
 };
 use macro_event_broker::{MacroEventBroker, NoopMacroEventBroker};
 use macro_user_id::cowlike::CowLike;
@@ -1882,6 +1882,59 @@ where
         }
 
         Ok(result)
+    }
+
+    #[tracing::instrument(skip_all, fields(task_count = task_ids.len()), err)]
+    async fn task_listing_projects(
+        &self,
+        task_ids: &[String],
+    ) -> Result<HashMap<String, Uuid>, PropertiesErr> {
+        Ok(self
+            .repository
+            .task_listing_projects(task_ids)
+            .await
+            .map_err(anyhow::Error::from)?)
+    }
+
+    #[tracing::instrument(skip_all, fields(project_id = %project.entity_id(), task_count = task_ids.len()), err)]
+    async fn get_project_task_properties(
+        &self,
+        project: &ViewReceipt,
+        task_ids: &[String],
+    ) -> Result<HashMap<PropertyTargetKey, Vec<EntityPropertyWithDefinition>>, PropertiesErr> {
+        if project.entity_type() != AccessEntityType::Initiative {
+            return Err(PropertiesErr::Validation(format!(
+                "project task properties were requested for a {}",
+                project.entity_type()
+            )));
+        }
+        let project_id = Uuid::parse_str(project.entity_id())
+            .map_err(|_| PropertiesErr::Validation("Invalid project id".to_string()))?;
+        // Only the tasks this project lists; the project's receipt says
+        // nothing about any other task.
+        let listed = self
+            .task_listing_projects(task_ids)
+            .await?
+            .into_iter()
+            .filter(|(_, listed_in)| *listed_in == project_id)
+            .map(|(task_id, _)| {
+                ViewReceipt::try_new(
+                    project.auth().clone(),
+                    AccessEntity {
+                        entity_id: task_id,
+                        entity_type: AccessEntityType::Document,
+                    },
+                    EntityPermission::AccessLevel {
+                        access_level: AccessLevel::View,
+                    },
+                )
+                .map_err(|_| PropertiesErr::PermissionDenied)
+            })
+            .collect::<Result<Vec<_>, _>>()?;
+        if listed.is_empty() {
+            return Ok(HashMap::new());
+        }
+        self.get_bulk_entity_properties(&listed, Vec::new()).await
     }
 
     #[tracing::instrument(skip(self, access), fields(entity_id = %access.entity_id(), entity_type = ?access.entity_type()), err)]

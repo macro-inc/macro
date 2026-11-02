@@ -21,9 +21,7 @@ use tracing::Level;
 
 use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
-    models::{
-        AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
-    },
+    models::{AccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType},
     ports::EntityAccessService,
 };
 use model::project::BasicProject;
@@ -77,12 +75,9 @@ where
             Some(MacroAuthorization::Internal(None))
         ) {
             return Ok(Self {
-                entity_access_receipt: project_access_receipt(
+                entity_access_receipt: EntityAccessReceipt::dangerously_assert_internal_user(
                     &project_context.id,
-                    EntityAccessAuth::Internal,
-                    EntityPermission::AccessLevel {
-                        access_level: AccessLevel::Owner,
-                    },
+                    EntityType::Project,
                 ),
                 _marker: PhantomData,
             });
@@ -101,13 +96,16 @@ where
             && project_context.user_id.is_user(user_id)
         {
             return Ok(Self {
-                entity_access_receipt: project_access_receipt(
-                    &project_context.id,
-                    EntityAccessAuth::Authenticated(user_id.clone()),
+                entity_access_receipt: EntityAccessReceipt::try_new_authenticated_user(
+                    user_id.clone(),
+                    Entity {
+                        entity_id: project_context.id.clone(),
+                        entity_type: EntityType::Project,
+                    },
                     EntityPermission::AccessLevel {
                         access_level: AccessLevel::Owner,
                     },
-                ),
+                )?,
                 _marker: PhantomData,
             });
         }
@@ -328,13 +326,9 @@ where
     }
 
     let entity_access_receipt = match authorization {
-        Some(MacroAuthorization::Internal(None)) => project_access_receipt(
-            project.id(),
-            EntityAccessAuth::Internal,
-            EntityPermission::AccessLevel {
-                access_level: AccessLevel::Owner,
-            },
-        ),
+        Some(MacroAuthorization::Internal(None)) => {
+            EntityAccessReceipt::dangerously_assert_internal_user(project.id(), EntityType::Project)
+        }
         Some(MacroAuthorization::Bot(bot)) => {
             generate_bot_entity_access_receipt::<T>(
                 service.as_ref(),
@@ -369,33 +363,17 @@ async fn get_project_access_receipt<T: RequiredPermission>(
         .await
         .map_err(ExtractorError::from)?
         .ok_or(ExtractorError::Unauthorized)?;
-    let permission = EntityPermission::AccessLevel { access_level };
-    if !permission.satisfies::<T>() {
-        return Err(ExtractorError::Unauthorized);
-    }
-    let auth = macro_user_id
-        .map(EntityAccessAuth::Authenticated)
-        .unwrap_or(EntityAccessAuth::Unauthenticated);
 
-    Ok(project_access_receipt(project_id, auth, permission))
+    Ok(EntityAccessReceipt::try_new_for_user(
+        macro_user_id,
+        Entity {
+            entity_id: project_id.to_owned(),
+            entity_type: EntityType::Project,
+        },
+        EntityPermission::AccessLevel { access_level },
+    )?)
 }
 
 fn deserialize_body<V: DeserializeOwned>(json: serde_json::Value) -> Result<V, ExtractorError> {
     serde_json::from_value(json).map_err(|_| ExtractorError::BadRequest("Invalid request body"))
-}
-
-fn project_access_receipt<T: RequiredPermission>(
-    project_id: &str,
-    auth: EntityAccessAuth,
-    entity_permission: EntityPermission,
-) -> EntityAccessReceipt<T> {
-    EntityAccessReceipt {
-        entity: Entity {
-            entity_id: project_id.to_owned(),
-            entity_type: EntityType::Project,
-        },
-        auth,
-        entity_permission,
-        _marker: PhantomData,
-    }
 }
