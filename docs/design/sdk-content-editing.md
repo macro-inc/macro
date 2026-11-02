@@ -182,13 +182,26 @@ by id inside the op, since it is node data, not an SDK call.
   `document-editing`, so its roughly 100 methods don't crowd the documents
   index; alias families (`bold`/`unbold`/...) share one summary. Spreadsheet,
   Word, PowerPoint and canvas handles share one `office` topic if they fit,
-  which keeps the count at 32. Each PR measures its index and adds worked
-  examples to the topic's TSDoc and the code-mode examples guide.
+  which keeps the count at 32. Each PR measures its index.
+
+## Documentation
+
+The SDK reference is where agents learn these methods; the system prompt no
+longer carries tool-usage guidance. So every new method, including each builder
+method, documents how to use it in its TSDoc:
+
+- The first sentence states the rule an agent must follow, since the index
+  shows only that sentence (at most 160 characters).
+- A short worked `@example`: read, edit, and handle the conflict error where the
+  method has one.
+- The method appears in a code-mode docs topic (`document-editing`, `documents`
+  or `office`), checked by the documentation tests.
 
 ## PR plan
 
-Each PR is independently mergeable, adds tests first, and regenerates the SDK
-reference, the code-mode bundle and `documentation.json`.
+Each PR is independently mergeable, adds tests first, documents every new
+method as above, and regenerates the SDK reference, the code-mode bundle and
+`documentation.json`.
 
 1. **This design** (docs only).
 2. **Documents and tasks** (MACRO-4588), stacked on #9333 for its database
