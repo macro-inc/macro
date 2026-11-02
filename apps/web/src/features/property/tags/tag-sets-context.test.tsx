@@ -153,7 +153,6 @@ describe('TagSetsContext', () => {
       'first-tag',
       'second-tag',
       'third-tag',
-      'fourth-tag',
     ]);
     const properties = () => [
       {
@@ -180,12 +179,16 @@ describe('TagSetsContext', () => {
 
     expect(view.getByRole('button', { name: 'Third' })).toBeTruthy();
     expect(view.queryByRole('button', { name: 'Fourth' })).toBeNull();
-    expect(view.getByRole('button', { name: '+1 tag' })).toBeTruthy();
+    expect(view.queryByRole('button', { name: '+1 tag' })).toBeNull();
     const first = view.getByRole('button', { name: 'First' });
     await fireEvent.click(first);
     expect(registrations.size).toBe(0);
     expect(view.getByRole('button', { name: 'First' })).toBe(first);
     expect(mocks.useSoupDocTags).toHaveBeenCalledOnce();
+
+    setTagIds(['first-tag', 'second-tag', 'third-tag', 'fourth-tag']);
+    expect(view.getByRole('button', { name: 'First' })).toBe(first);
+    expect(registrations.size).toBe(0);
 
     await fireEvent.click(first);
     for (const registration of registrations.values()) {

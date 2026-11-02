@@ -7,6 +7,7 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import { useInFlightEntityPropertyOptions } from '@queries/properties/in-flight-options';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
+import { Key } from '@solid-primitives/keyed';
 import {
   type BadgeSize,
   type BadgeVariant,
@@ -359,10 +360,10 @@ export function EntityRowTags(props: {
         )}
         onClick={(event) => event.stopPropagation()}
       >
-        <For each={visible()}>
+        <Key each={visible()} by="optionId">
           {(tag) => (
             <TagChip
-              tag={tag}
+              tag={tag()}
               createDocTags={createDocTags}
               onFilterByTag={props.onFilterByTag}
               onEdit={setEditingTag}
@@ -370,7 +371,7 @@ export function EntityRowTags(props: {
               withClickBlock
             />
           )}
-        </For>
+        </Key>
         <Show when={hidden().length > 0}>
           <TagOverflow
             tags={hidden()}
