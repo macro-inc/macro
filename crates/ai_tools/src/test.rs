@@ -678,11 +678,11 @@ fn code_mode_retains_direct_lifecycles_and_hides_sdk_methods_from_lazy_discovery
     assert!(!prompt.contains("you MUST use the `SendEmail` tool"));
     assert!(prompt.contains("Do not wait for the user to act on a saved review"));
     assert!(!prompt.contains("- ReadMetadata:"));
-    let routing = prompt::tool_usage::CODE_MODE_ROUTING.to_string();
-    assert!(prompt.contains(&routing));
-    assert!(!standard.prompt.to_string().contains(&routing));
+    let code_mode = prompt::code_mode::PROMPT.to_string();
+    assert!(prompt.contains(&code_mode));
+    assert!(!standard.prompt.to_string().contains(&code_mode));
     for host in [AiHost::Chat, AiHost::ChannelBot, AiHost::Mcp] {
-        assert!(!tools_for(host).prompt.to_string().contains(&routing));
+        assert!(!tools_for(host).prompt.to_string().contains(&code_mode));
     }
 }
 

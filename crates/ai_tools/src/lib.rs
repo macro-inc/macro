@@ -375,11 +375,6 @@ fn tools_for_inner(host: AiHost, code_mode_direct: bool) -> ToolSetWithPrompt {
             Box::new(prompt::DIRECT_TOOL_USE_PROMPT.compose(&prompt::coding_agents::PROMPT))
         }
     };
-    let prompt: Box<dyn std::fmt::Display + Send + Sync> = if code_mode_direct {
-        Box::new(format!("{prompt}{}", prompt::tool_usage::CODE_MODE_ROUTING))
-    } else {
-        prompt
-    };
     let catalog: Vec<(&str, &str)> = deferred
         .iter()
         .map(|tool| (tool.name.as_str(), tool.description.as_str()))
