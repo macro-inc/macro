@@ -48,8 +48,6 @@ export type ProfileBinding<Action extends string> = {
   target: ProfileTarget<Action>;
   /** The Macro shortcut on the same keys in this view, which this replaces. */
   replaces?: () => string;
-  /** Runs while typing, for composer keys. */
-  whileTyping?: true;
 };
 
 export type HotkeyProfile<Action extends string> = {
@@ -159,13 +157,6 @@ export const SUPERHUMAN = {
       replaces: () => t('hotkeyProfiles.replacedGoToHome'),
     },
     {
-      section: () => t('hotkeyProfiles.sectionCompose'),
-      keys: ['shift+cmd+a'],
-      description: () => t('hotkeyProfiles.attachFile'),
-      target: { tokens: [TOKENS.email.attach], contexts: ['view'] },
-      whileTyping: true,
-    },
-    {
       section: () => t('hotkeyProfiles.sectionNavigation'),
       keys: DIGITS.map((digit) => `ctrl+${digit}` as const),
       description: () => t('hotkeyProfiles.showAccount'),
@@ -213,6 +204,7 @@ export const SUPERHUMAN = {
     'shift+cmd+b',
     'shift+cmd+s',
     'shift+cmd+m',
+    'shift+cmd+u',
     'shift+cmd+,',
     'cmd+enter',
     'shift+cmd+enter',

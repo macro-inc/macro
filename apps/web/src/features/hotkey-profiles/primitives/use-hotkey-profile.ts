@@ -95,7 +95,6 @@ export function useHotkeyProfile<Action extends string>(
         hide: 'tokens' in target,
         registrationType: 'add',
         sheetSection: 'view',
-        runWithInputFocused: binding.whileTyping,
       }).withGroup(group);
     });
   }

@@ -74,9 +74,8 @@ while Email is focused: `C` composes instead of opening the Create menu,
 (Macro's `R` replies to all), `U` toggles read, `Shift+U` shows unread only,
 `Shift+S`/`Shift+I` go to Favorites/Signal, `Shift+R` shows Focus follow-ups,
 `L` edits tags, `V` moves to a folder, `g h` goes to Reminders, `Ctrl+1`–`9`
-shows one account, `Ctrl+/` copies the link and `Cmd+Shift+A` attaches in a
-reply. `?` labels the profile's keys and lists what they replaced. Turn it off
-and every key is Macro's again.
+shows one account and `Ctrl+/` copies the link. `?` labels the profile's keys
+and lists what they replaced. Turn it off and every key is Macro's again.
 In every composer `Cmd+Shift+.`, `Cmd+Shift+,` and `Cmd+Shift+D` discard the
 draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 `Cmd+Shift+X`, `7`, `8` and `9` apply strikethrough, numbered list, bulleted
