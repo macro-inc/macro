@@ -135,7 +135,7 @@ export function BrandingPanel(props: {
             aria-label="Pick an accent color"
             value={props.branding.accentColor ?? '#000000'}
             disabled={disabled()}
-            class="size-full cursor-pointer border-0 bg-transparent p-0 disabled:cursor-default"
+            class="size-full border-0 bg-transparent p-0"
             onChange={(event) => changeAccent(event.currentTarget.value)}
           />
         }

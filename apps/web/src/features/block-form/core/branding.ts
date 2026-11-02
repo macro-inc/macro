@@ -1,7 +1,5 @@
 /** A form's accent color, applied to the respond page it brands. */
 
-import type { JSX } from 'solid-js';
-
 /** WCAG relative luminance of one sRGB channel, 0–255. */
 function linear(channel: number): number {
   const value = channel / 255;
@@ -27,7 +25,7 @@ export function accentContrast(accent: string): '#000000' | '#ffffff' {
  */
 export function brandingStyle(
   accent: string | null
-): JSX.CSSProperties | undefined {
+): Record<'--form-accent' | '--form-accent-contrast', string> | undefined {
   if (!accent) return undefined;
   return {
     '--form-accent': accent,
