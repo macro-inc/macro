@@ -8,7 +8,7 @@ grants in Connect's own Postgres database.
 
 ## Start here
 
-- `src/main.rs`: router, customer auth middleware, catalog response, OpenAPI, CLI, and startup. Customer-facing wire types come from `connect_client::wire`.
+- `src/main.rs`: router, customer auth middleware, catalog response, OpenAPI, CLI, and startup. Customer-facing wire types come from `connect_client::wire`; catalog OAuth labels derive from registry registration.
 - `src/mcp.rs`: customer-authenticated MCP gateway, streaming response, and retry handling.
 - `src/domain.rs` and `src/domain/oauth.rs`: connection and OAuth use cases,
   redirect-origin policy, grant cipher, and repository ports.

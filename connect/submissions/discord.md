@@ -1,13 +1,13 @@
 ---
 vendor: discord
 apps: [discord]
-state: blocked
+state: needs-human
 portal: https://discord.com/developers
 account: connect@macro.com
 submitted:
 last_contact:
-next_action: Agent sends the draft question (below) to Discord developer support from connect@macro.com, once browser sign-in is set up, asking whether mcp.discord.com is open to third-party clients and how to get the personal.* scopes
-next_action_owner: agent
+next_action: Human passes the Cloudflare check on the Developer Support sign-up (support-dev.discord.com, open in the Connect browser); the agent then creates the support account and sends the question
+next_action_owner: human
 due: 2026-11-02
 ---
 
@@ -78,7 +78,7 @@ from `connect@macro.com` only):
 >    Discord pre-registers MCP clients.
 >
 > Thank you,
-> NEEDS-HUMAN: sender name and title
+> Eric Hayes, Macro (eric.hayes@macro.com)
 
 | Field (if Discord says yes) | Value |
 | --- | --- |
@@ -95,3 +95,6 @@ from `connect@macro.com` only):
 - 2026-10-30: Re-probed: still no DCR or CIMD, still undocumented `personal.*`
   scopes, no public announcement found. Kept blocked; drafted the question to
   Discord developer support. Nothing sent.
+- 2026-11-02: The request form needs a Developer Support (Zendesk) account;
+  its sign-up page sits behind a Cloudflare bot check the agent does not
+  pass. Left open in the Connect browser for Eric. Sender set to Eric Hayes.
