@@ -300,6 +300,7 @@ describe('database page actions', () => {
       onToggleFavorite: vi.fn(),
       onCopyLink: vi.fn(),
       onCopyId: vi.fn(),
+      duplicating: false,
       onDuplicate: vi.fn(),
     };
     setup('view', undefined, entityActions);
@@ -314,6 +315,23 @@ describe('database page actions', () => {
       expect(handler).toHaveBeenCalledOnce();
       await waitFor(() => expect(screen.queryByRole('menu')).toBeNull());
     }
+  });
+  it('disables Duplicate while a copy is being made', async () => {
+    const onDuplicate = vi.fn();
+    setup('view', undefined, {
+      favorited: false,
+      onToggleFavorite: vi.fn(),
+      onCopyLink: vi.fn(),
+      onCopyId: vi.fn(),
+      duplicating: true,
+      onDuplicate,
+    });
+    await openMenu();
+    const item = screen.getByRole('menuitem', { name: 'Duplicate' });
+    expect(item.getAttribute('aria-disabled')).toBe('true');
+    item.focus();
+    fireEvent.keyDown(item, { key: 'Enter' });
+    expect(onDuplicate).not.toHaveBeenCalled();
   });
   it('confirms deletion and retains a failed dialog for retry', async () => {
     const remove = vi

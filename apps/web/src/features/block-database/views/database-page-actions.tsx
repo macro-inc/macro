@@ -48,6 +48,8 @@ export type DatabaseEntityActions = {
   onToggleFavorite: () => void;
   onCopyLink: () => void;
   onCopyId: () => void;
+  /** Whether a copy is being made; Duplicate waits for it. */
+  duplicating: boolean;
   /** Copy the database into a new one the viewer owns, and open it. */
   onDuplicate: () => void;
 };
@@ -215,7 +217,10 @@ export function DatabasePageActions(props: {
               </Show>
               <Show when={props.entityActions}>
                 {(actions) => (
-                  <Dropdown.Item onSelect={actions().onDuplicate}>
+                  <Dropdown.Item
+                    disabled={actions().duplicating}
+                    onSelect={actions().onDuplicate}
+                  >
                     <DuplicateIcon class="size-4 shrink-0" />
                     {t('entityActions.duplicate')}
                   </Dropdown.Item>
