@@ -28,6 +28,7 @@ import {
   removeSoupEntitiesFromQueriesReferencing,
 } from '@queries/soup/cache';
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
+import { soupEntityKey } from '@queries/soup/graphql/entity-input';
 import {
   createGraphqlSoupDeletion,
   GRAPHQL_SOUP_DELETE_MUTATION_KEY,
@@ -98,6 +99,31 @@ async function settleGraphqlDeletes(
   return results;
 }
 
+function removeDssEntityCaches(entities: EntityData[], typeScoped: boolean) {
+  const ids = new Set(entities.map((entity) => entity.id));
+  const keys = new Set(
+    entities.flatMap((entity) => {
+      const key = soupEntityKey(entity);
+      return key ? [key] : [];
+    })
+  );
+  if (!typeScoped)
+    return {
+      keys,
+      soupSnapshot: removeSoupEntities(ids),
+      searchSnapshot: removeSearchEntities(ids),
+    };
+  return {
+    keys,
+    soupSnapshot: removeSoupEntities(ids, (item, id) =>
+      keys.has(soupEntityKey({ type: item.tag, id }) ?? '')
+    ),
+    searchSnapshot: removeSearchEntities(ids, (item, id) =>
+      keys.has(soupEntityKey({ type: item.type, id }) ?? '')
+    ),
+  };
+}
+
 export function createBulkDeleteDssItemsMutation() {
   const graphqlSoupEnabled = isFeatureEnabled(enableGraphqlSoup);
   const isDeletable = (entity: EntityData) => {
@@ -166,14 +192,14 @@ export function createBulkDeleteDssItemsMutation() {
     },
     onMutate: async (entities: EntityData[]) => {
       const deletable = entities.filter(isDeletable);
-      const ids = new Set(deletable.map((e) => e.id));
-      const soupSnapshot = removeSoupEntities(ids);
-      const searchSnapshot = removeSearchEntities(ids);
+      const { keys, ...snapshots } = removeDssEntityCaches(
+        deletable,
+        graphqlSoupEnabled
+      );
       return {
-        soupSnapshot,
-        searchSnapshot,
+        ...snapshots,
         ...(graphqlSoupEnabled
-          ? { graphqlDeletion: createGraphqlSoupDeletion([...ids]) }
+          ? { graphqlDeletion: createGraphqlSoupDeletion([...keys]) }
           : {}),
       };
     },
@@ -188,14 +214,15 @@ export function createBulkDeleteDssItemsMutation() {
           }
           const outcomes =
             error instanceof BulkDeleteFailure ? error.results : results;
-          const deletedIds = entities
+          const deletedKeys = entities
             .filter(isDeletable)
-            .flatMap((entity, index) =>
-              outcomes?.[index] === true ? [entity.id] : []
-            );
+            .flatMap((entity, index) => {
+              const key = soupEntityKey(entity);
+              return outcomes?.[index] === true && key ? [key] : [];
+            });
           // API completion closes the mutation; display state survives it and
-          // independently retries revalidation. Failed ids are restored now.
-          context?.graphqlDeletion?.settle(deletedIds);
+          // independently retries revalidation. Failed keys are restored now.
+          context?.graphqlDeletion?.settle(deletedKeys);
         }
       : undefined,
     onError: (error, entities, context) => {
@@ -208,17 +235,13 @@ export function createBulkDeleteDssItemsMutation() {
         error instanceof BulkDeleteFailure &&
         error.deletedEntities.length > 0;
       if (partialFailure) {
-        const deletedIds = new Set(
-          error.deletedEntities.map((entity) => entity.id)
-        );
         // The legacy transactions hold whole snapshots. Restore failed rows,
         // then reapply confirmed removals in one reactive batch so successes
         // never reappear in REST fallback lists or search results.
         batch(() => {
           context?.soupSnapshot.rollback();
           context?.searchSnapshot.rollback();
-          removeSoupEntities(deletedIds);
-          removeSearchEntities(deletedIds);
+          removeDssEntityCaches(error.deletedEntities, true);
         });
       } else {
         context?.soupSnapshot.rollback();

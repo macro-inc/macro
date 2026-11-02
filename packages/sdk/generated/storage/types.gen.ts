@@ -2780,6 +2780,11 @@ export type ChannelLabelRule = {
 };
 
 /**
+ * Requested label namespace. Omission retains the deployed automatic selection.
+ */
+export type ChannelLabelScopeSelection = 'personal' | 'team';
+
+/**
  * The authorized scope's labels in manual order.
  */
 export type ChannelLabelsList = {
@@ -2787,6 +2792,10 @@ export type ChannelLabelsList = {
      * Every label of the scope, whether or not the caller sees channels in it.
      */
     labels: Array<ChannelLabel>;
+    /**
+     * Resolved label namespace.
+     */
+    scope: ChannelLabelScopeSelection;
     /**
      * Team scope, or `None` for private labels.
      */
@@ -18250,7 +18259,12 @@ export type IngestTranscriptResponses = {
 export type ListChannelLabelsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels';
 };
 
@@ -18271,7 +18285,12 @@ export type ListChannelLabelsResponse = ListChannelLabelsResponses[keyof ListCha
 export type CreateChannelLabelData = {
     body: CreateChannelLabelRequest;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels';
 };
 
@@ -18300,7 +18319,12 @@ export type SetChannelLabelData = {
          */
         channel_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/channels/{channel_id}';
 };
 
@@ -18323,7 +18347,12 @@ export type SetChannelLabelResponse = SetChannelLabelResponses[keyof SetChannelL
 export type PreviewSmartTagData = {
     body: ChannelLabelRule;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/preview';
 };
 
@@ -18350,7 +18379,12 @@ export type DeleteChannelLabelData = {
          */
         label_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/{label_id}';
 };
 
@@ -18377,7 +18411,12 @@ export type RenameChannelLabelData = {
          */
         label_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/{label_id}';
 };
 
