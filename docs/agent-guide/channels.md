@@ -917,9 +917,12 @@ channel picture when set; otherwise all non-DM channels use a hashtag, including
 team channels. Favorites, regular rows, and headers share the same channel/DM
 icon renderer, including participant avatars, self-DMs, and bot personas. Channel favorites open
 in the shared channel detail. Shift-clicking a favorite, channel, or DM opens that
-conversation in a new split instead. Shift-click refreshes the notification
-selection and opens at latest. Split opens mark top-level notifications seen,
-including mentions and reactions, only after the split is opened or reused.
+conversation in a new split instead. Shift-click and the row menu's
+`Open in new split` open at latest without waiting for notifications; hold the
+`SoupNotifications` request and the split must still appear at once. Split opens
+then load the full notification edge and mark top-level notifications seen,
+including mentions and reactions, only after the split is opened or reused. A
+failed load leaves the split open and the conversation unread.
 Deferred navigation waits until the destination is applied; an unavailable split
 must leave unread state unchanged. Join-only channels remain
 blocked after hydration, including on mobile.

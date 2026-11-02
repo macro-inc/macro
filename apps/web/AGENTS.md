@@ -510,6 +510,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   [dragging rows into a folder](../../docs/agent-guide/navigation.md#dragging-rows-into-a-folder).
 - Keep channel rail and title menus on `CHANNEL_ACTION_VIEW_CONTEXT`, including
   the shared desktop `Open in new split` action and its mobile/capacity guards.
+  Rail splits open at latest before notifications load; only rows that stand
+  for a notification (Home, Inbox) wait for it to choose a target.
 - Route supported move, trash, restore, permanent-delete, duplicate, and share-policy
   writes through `queries/storage/entity-mutations` when GraphQL Soup is enabled;
   never retry failed GraphQL writes through REST. Preserve non-owner history removal
