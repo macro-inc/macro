@@ -81,10 +81,6 @@ import {
   executeCodeHandler,
   readCodeDocsHandler,
 } from './CodeMode';
-import {
-  dispatchCodingAgentHandler,
-  listCodingAgentsHandler,
-} from './CodingAgents';
 import { decideHandler, generateObjectHandler } from './Cognition';
 import {
   commentHandler,
@@ -218,8 +214,6 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   ExecuteCode: executeCodeHandler,
   DescribeCodeTools: describeCodeToolsHandler,
   ReadCodeDocs: readCodeDocsHandler,
-  DispatchCodingAgent: dispatchCodingAgentHandler,
-  ListCodingAgents: listCodingAgentsHandler,
   ReadSpreadsheet: readSpreadsheetHandler,
   CalculateSpreadsheet: calculateSpreadsheetHandler,
   EditSpreadsheet: editSpreadsheetHandler,
