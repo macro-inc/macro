@@ -5,6 +5,11 @@ export type ClientOptions = {
 };
 
 /**
+ * A color as `#rrggbb`, kept in lowercase.
+ */
+export type AccentColor = string;
+
+/**
  * Ordered from least to most access top -> bottom
  */
 export type AccessLevel = 'view' | 'comment' | 'edit' | 'owner';
@@ -7783,6 +7788,10 @@ export type Form = {
      */
     audience: Audience;
     /**
+     * Its logo, cover image and accent color.
+     */
+    branding: FormBranding;
+    /**
      * When it stops taking responses, if it does.
      */
     closesAt: string | null;
@@ -7855,6 +7864,21 @@ export type Form = {
 export type FormAccess = 'view' | 'edit' | 'owner';
 
 /**
+ * A form's logo, cover image and accent color, each unset by default.
+ */
+export type FormBranding = {
+    accentColor: null | AccentColor;
+    /**
+     * The static file shown as a banner across the top of the page.
+     */
+    coverFileId: string | null;
+    /**
+     * The static file shown as the logo above the title.
+     */
+    logoFileId: string | null;
+};
+
+/**
  * A ready collaborative form and the result of publishing its latest draft.
  */
 export type FormCollaboration = {
@@ -7895,7 +7919,7 @@ export type FormDetail = {
 /**
  * What went wrong with a forms request.
  */
-export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'tallyHidden' | 'conflict' | 'internal';
+export type FormErrorCode = 'tableAlreadyHasForm' | 'notFound' | 'forbidden' | 'ownerOnly' | 'signInRequired' | 'closed' | 'tableGone' | 'alreadyResponded' | 'noResponse' | 'unknownQuestion' | 'repeatedAnswer' | 'missingAnswer' | 'invalidAnswer' | 'widgetMismatch' | 'fileUploadNeedsSignIn' | 'invalidLayout' | 'invalidName' | 'invalidSharing' | 'tallyHidden' | 'invalidBranding' | 'conflict' | 'internal';
 
 /**
  * Why a forms request was refused or failed.
@@ -15909,11 +15933,15 @@ export type UpdateCrmTeamSettingsRequest = {
 };
 
 /**
- * A change to a form's facts; what is left out stays. The description and
- * confirmation message take edit, the rest owner. A form is renamed
+ * A change to a form's facts; what is left out stays. The description,
+ * confirmation message and branding take edit, the rest owner. A form is renamed
  * through the entity mutation router.
  */
 export type UpdateForm = {
+    /**
+     * A new accent color, or `null` for the default.
+     */
+    accentColor?: string | null;
     /**
      * Who may respond from now on.
      */
@@ -15927,9 +15955,17 @@ export type UpdateForm = {
      */
     confirmationMessage?: string;
     /**
+     * A new cover image, or `null` to remove it.
+     */
+    coverFileId?: string | null;
+    /**
      * Its new description.
      */
     description?: string;
+    /**
+     * A new logo, or `null` to remove it.
+     */
+    logoFileId?: string | null;
     /**
      * Open or close it.
      */

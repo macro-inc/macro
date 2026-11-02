@@ -20,7 +20,9 @@ use crate::domain::models::{
     FormAccess, FormError, FormSection, FormSectionId, FormTally, QuestionOption, QuestionTally,
     ResponseSummary, SectionCount, TallyBucket, TallyValue,
 };
-use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, FormsRepo};
+use crate::domain::ports::{
+    Clock, FormAccessDirectory, FormEventPublisher, FormImageFiles, FormsRepo,
+};
 
 /// One column's tally from its cells.
 fn tally_of(
@@ -76,8 +78,8 @@ fn tallied(kind: ColumnKind) -> bool {
     }
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker, Drafts>
-    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
+    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
 where
     Repository: FormsRepo + FormDraftRepository,
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
@@ -86,6 +88,7 @@ where
     Now: Clock,
     Broker: MacroEventBroker,
     Drafts: FormDraftStore,
+    Images: FormImageFiles,
 {
     pub(super) async fn summary(
         &self,

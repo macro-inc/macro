@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE forms SET name = $2, updated_at = $3\n            WHERE id = $1 AND trashed_at IS NULL\n            RETURNING id, name, description, owner_id, database_id, table_id,\n                      submitted_column_id, respondent_column_id, audience, tally_visible,\n                      status, closes_at, confirmation_message, created_at, updated_at, trashed_at,\n                   name_follows_database, is_hidden_in_drive\n            ",
+  "query": "\n            UPDATE forms SET name = $2, updated_at = $3\n            WHERE id = $1 AND trashed_at IS NULL\n            RETURNING id, name, description, owner_id, database_id, table_id,\n                      submitted_column_id, respondent_column_id, audience, tally_visible,\n                      status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,\n                   created_at, updated_at, trashed_at,\n                   name_follows_database, is_hidden_in_drive\n            ",
   "describe": {
     "columns": [
       {
@@ -70,26 +70,41 @@
       },
       {
         "ordinal": 13,
+        "name": "logo_file_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 14,
+        "name": "cover_file_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 15,
+        "name": "accent_color",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 16,
         "name": "created_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 14,
+        "ordinal": 17,
         "name": "updated_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 15,
+        "ordinal": 18,
         "name": "trashed_at",
         "type_info": "Timestamptz"
       },
       {
-        "ordinal": 16,
+        "ordinal": 19,
         "name": "name_follows_database",
         "type_info": "Bool"
       },
       {
-        "ordinal": 17,
+        "ordinal": 20,
         "name": "is_hidden_in_drive",
         "type_info": "Bool"
       }
@@ -115,6 +130,9 @@
       false,
       true,
       false,
+      true,
+      true,
+      true,
       false,
       false,
       true,
@@ -122,5 +140,5 @@
       false
     ]
   },
-  "hash": "0324782b3a73b0449ea096091d52edf33cf128bb77eee4bf09032e7b4785fe9b"
+  "hash": "ef9fd96657a6b0d5e101362ea2b6551efb6368d1add53d977df6f0b48f6ef178"
 }
