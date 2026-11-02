@@ -24,8 +24,7 @@ function fileBlob(bytes: Uint8Array) {
   return { size: bytes.length, arrayBuffer: async () => bytes.buffer };
 }
 
-function renderPreview(fileType: string | null) {
-  const client = new QueryClient();
+function renderPreview(fileType: string | null, client = new QueryClient()) {
   return render(() => (
     <QueryClientProvider client={client}>
       <UnknownFilePreview
@@ -110,6 +109,21 @@ it('offers the file when its download link fails', async () => {
   renderPreview(null);
 
   await waitFor(() => screen.getByText(/No preview available/));
+});
+
+it('tries again when a file that failed to load is opened again', async () => {
+  const client = new QueryClient();
+  mocks.getFileDocumentUrl.mockRejectedValueOnce(new Error('offline'));
+  mocks.fetchPresignedBlobWithProgress.mockResolvedValue(
+    ok(fileBlob(new TextEncoder().encode('back online\n')))
+  );
+
+  const firstOpen = renderPreview(null, client);
+  await waitFor(() => screen.getByText(/No preview available/));
+  firstOpen.unmount();
+
+  renderPreview(null, client);
+  await waitFor(() => screen.getByText('back online'));
 });
 
 it('never downloads a known binary type', async () => {

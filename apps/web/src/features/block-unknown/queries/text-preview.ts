@@ -1,8 +1,8 @@
+import { throwOnErr } from '@core/util/result';
 import { type Span, Telemetry } from '@macro-inc/observability';
 import { getFileDocumentUrl } from '@queries/storage/file-document';
 import { fetchPresignedBlobWithProgress } from '@service-storage/util/fetchPresigned';
 import { queryOptions, skipToken } from '@tanstack/solid-query';
-import { ResultAsync } from 'neverthrow';
 import {
   decodeTextPreview,
   mayContainText,
@@ -29,28 +29,20 @@ function fetchTextFile(url: string, signal: AbortSignal, parent: Span) {
   });
 }
 
-/** Resolves to null when the file has no preview; the original stays downloadable. */
+/**
+ * Resolves to null when the file holds no previewable text, which is final for
+ * this version. A failed read rejects instead, so it is not cached and opening
+ * the file again retries.
+ */
 function loadTextPreview(file: TextPreviewFile, signal: AbortSignal) {
   return Telemetry.span('file.text_preview', async (span) => {
     span.setAttr('document.id', file.documentId);
     span.setAttr('document.version_id', file.documentVersionId);
-    const url = await ResultAsync.fromPromise(
-      getFileDocumentUrl(file, span),
-      (error) => error
-    );
-    if (url.isErr()) {
-      span.setAttr('file.text_preview.outcome', 'unavailable');
-      return null;
-    }
+    span.setAttr('file.text_preview.outcome', 'unavailable');
+    const url = await getFileDocumentUrl(file, span);
     signal.throwIfAborted();
-    const blob = await fetchTextFile(url.value, signal, span);
-    if (blob.isErr()) {
-      span.setAttr('file.text_preview.outcome', 'unavailable');
-      return null;
-    }
-    const text = decodeTextPreview(
-      new Uint8Array(await blob.value.arrayBuffer())
-    );
+    const blob = await throwOnErr(() => fetchTextFile(url, signal, span));
+    const text = decodeTextPreview(new Uint8Array(await blob.arrayBuffer()));
     span.setAttr('file.text_preview.outcome', text ? 'text' : 'no_preview');
     return text;
   });
