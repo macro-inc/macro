@@ -17,9 +17,9 @@ export interface ChatFilters {
   importance?: ChatFiltersImportance;
   /** Filter by chat notification state. */
   notification_filters?: NotificationFilters;
-  /** Filter by chat owner principal — a user ('macro|user1@user.com'), a bot
+  /** Filter by chat owner principal — a user ('macro|user1@example.com'), a bot
 ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
+['macro|user1@example.com'], ['macro|user1@example.com', 'bot|0199...']. Empty to
 search all owners. */
   owners?: string[];
   /** A list of project ids to search within. Examples: ['project1']. Empty to ignore project filtering. */

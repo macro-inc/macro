@@ -15,7 +15,6 @@ import {
   hasPermissions,
   Permissions,
 } from '@core/component/SharePermissions';
-import { createLoadOwner } from '@core/util/createLoadOwner';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { Span } from '@macro-inc/observability';
@@ -28,6 +27,7 @@ import {
   ErrorBoundary,
   type JSX,
   Match,
+  onCleanup,
   type ParentProps,
   Suspense,
   Switch,
@@ -100,37 +100,73 @@ function FileDetailBodyState(props: {
 }
 
 export function FileDetailLoadGate<
-  T extends { userAccessLevel: AccessLevel; source?: { cleanup: () => void } },
+  T extends { userAccessLevel: AccessLevel },
 >(props: {
   documentId: string;
   /** The block the document opens as, reported on `open_entity`. */
   entityType: string;
   label: string;
   load: (documentId: string, parentSpan?: Span) => Promise<T>;
+  /**
+   * Releases what a load opened, such as a markdown document's sync source,
+   * once its result can no longer be shown: its content replaced or removed,
+   * superseded by a newer load, resolved after the gate unmounted, or on
+   * unmount.
+   */
+  dispose?: (data: T) => void;
   children: (data: T) => JSX.Element;
 }) {
   const analytics = useAnalytics();
   const flow = useFlow();
-  const loadOwner = createLoadOwner();
+  // Shown results are released when their content is disposed (after the
+  // editor it rendered); the rest here. Each result is released once.
+  const released = new WeakSet<T>();
+  const release = (data: T | undefined) => {
+    if (data === undefined || released.has(data)) return;
+    released.add(data);
+    props.dispose?.(data);
+  };
+  let unmounted = false;
+  let latestLoad = 0;
+  let current: T | undefined;
+  const load = async (documentId: string): Promise<T | undefined> => {
+    const request = ++latestLoad;
+    const data = await flow.task('document.load', (span) => {
+      span.setAttr('doc.type', props.entityType);
+      span.setAttr('document.id', documentId);
+      return props.load(documentId, span);
+    });
+    // The resource ignores a superseded result; one unloaded while pending
+    // (access revoked) must not become current either, so a later grant finds
+    // nothing loaded and reloads. Nothing will show it, so release it now.
+    if (unmounted || request !== latestLoad) {
+      release(data);
+      return undefined;
+    }
+    current = data;
+    return data;
+  };
+  const unload = () => {
+    latestLoad++;
+    const previous = current;
+    current = undefined;
+    mutate(undefined);
+    release(previous);
+  };
+  onCleanup(() => {
+    unmounted = true;
+    release(current);
+  });
   const [document, { refetch, mutate }] = createResource(
     () => props.documentId,
-    (documentId) => {
-      return flow.task('document.load', (span) => {
-        span.setAttr('doc.type', props.entityType);
-        span.setAttr('document.id', documentId);
-        return loadOwner.run(
-          () => props.load(documentId, span),
-          (data) => data.source?.cleanup()
-        );
-      });
-    }
+    load
   );
   usePending('document.resource', () => document.loading);
   // Counts the open once per document, as BlockLoader does for blocks; access
   // changes and retries reload the same document without reopening it.
   let trackedDocumentId: string | undefined;
   createEffect(() => {
-    if (document.state !== 'ready' || !document.latest?.value) return;
+    if (document.state !== 'ready') return;
     const documentId = props.documentId;
     if (trackedDocumentId === documentId) return;
     trackedDocumentId = documentId;
@@ -142,19 +178,17 @@ export function FileDetailLoadGate<
   });
   const reload = () => {
     // Dispose the old editor and its sync source before loading a new token.
-    mutate(undefined);
+    unload();
     fireAndForget(refetch(), 'drive-view');
   };
   const sharedAccess = useSharedAccessUpdates(
     () => shareEntity('document', props.documentId),
     (level) => {
       if (level === null) {
-        loadOwner.invalidate();
-        mutate(undefined);
+        unload();
         return;
       }
-      const loaded =
-        document.state === 'ready' ? document.latest?.value : undefined;
+      const loaded = document.state === 'ready' ? document.latest : undefined;
       if (loaded?.userAccessLevel !== level) reload();
     }
   );
@@ -185,9 +219,10 @@ export function FileDetailLoadGate<
             />
           )}
         </Match>
-        <Match keyed when={document()?.value}>
+        <Match when={document()} keyed>
           {(data) => {
-            document()?.adopt();
+            // Runs after this content, and the editor it renders, is disposed.
+            onCleanup(() => release(data));
             return (
               <ErrorBoundary
                 fallback={(error, reset) => (

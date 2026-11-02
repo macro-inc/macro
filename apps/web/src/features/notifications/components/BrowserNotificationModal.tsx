@@ -57,13 +57,6 @@ function NotificationToastTrigger(props: {
         ),
         actions: [
           {
-            label: 'Hide',
-            onClick: () => {
-              props.settings.dismissPrompt();
-              toast.dismiss(toastId);
-            },
-          },
-          {
             label: 'Enable',
             onClick: async () => {
               try {
@@ -82,6 +75,8 @@ function NotificationToastTrigger(props: {
       {
         persistent: true,
         region: isMobile() ? 'mobile-prompt-region' : 'prompt-region',
+        // Closing the prompt is a decline, so don't ask again on the next load.
+        onUserDismiss: () => props.settings.dismissPrompt(),
       }
     );
   });

@@ -127,31 +127,49 @@ state, and exclude conversation reservations; genuine
 speculative sessions still expire normally.
 
 Send normally: no `@` mention is needed. Attachments, references, and quoted
-messages use the channel composer. While the agent works, a typing row with its
-avatar sits under the newest message: `<name> is thinking`, `is typing`,
-`is working`, or `is waiting for an answer`. Below that row, the owner sees the
-passage being written as it streams. They also see any live question or
-permission request and **Stop**, which cancels the active turn. Answer those
-controls to continue. If **Stop** fails, a failure toast appears and the control
-becomes available again so you can retry.
+messages use the channel composer. While the agent works, a typing row sits
+under the newest message: the agent's avatar beside the working line, which
+names the step the agent is on, or says what the turn is doing (`Thinking`,
+`Writing`, `Working`, or `Waiting for an answer`) between steps and to anyone
+who cannot read the session. The owner also gets **Stop** on that row, which
+cancels the active turn, and any live question or permission request beneath
+it. Answer those controls to continue. If **Stop** fails, a failure toast
+appears and the control becomes available again so you can retry.
 
 The reply is posted as ordinary messages while the turn runs. Each finished
-passage becomes a message. The steps taken between passages show inside the
-message as compact rows: a status icon (spinner, check, cross, or warning for
-interrupted), a label such as `Ran`, `Read`, `Edited`, or `Searching`, and a
-short detail like the command or file name for readers with session access.
+passage becomes a message, led by the steps the agent took to get to it, so
+nothing is posted until the agent has written something and no message shows
+a step running. Steps a turn ends on, with no passage after them (Stop, a
+failure), are posted with how it ended. The working line is one shimmering
+line, led by the working dots, naming the step in progress by its label alone,
+such as `Ran`, `Read`, `Edited`, or `Searching`; the command, query, or file
+stays in the session. The next step slides in as it starts, and steps running
+at the same time take turns every two seconds. In a DM it is the typing row.
+A channel mention's reply in its thread is one message, so the line sits in
+it, and reads `Thinking` whenever the turn is running with no open run, before
+the first step or while the agent writes after one.
+Once a run closes, it folds to a `Used N tools` summary (with
+`· N failed` when a step failed), with a caret after it on hover, that opens
+to compact rows like the session's tool rows: the label, and **Failed** or
+**Interrupted** when a step did not finish.
+Documents, sessions, pull requests, and contacts an agent's reply mentions are
+set in the accent color.
 Stored activity snapshots keep the status and label but omit commands and tool
-input details, in both shared threads and DMs. A long run shows its latest six
-steps behind an `N earlier steps` control. Rows tick live while the run is
-open, then freeze
-into the snapshot saved in the message. Readers without session access always
-see that snapshot. Only the turn's last message notifies. Previews and search
+input details, in both shared threads and DMs. The line follows the session
+live while the run is open; the summary shows the snapshot saved in the
+message. Readers without session access always see that snapshot. Only the
+turn's last message notifies. Previews and search
 quote the passages, not the steps. Typing refreshes every 3 seconds and clears
 on its own if the agent's replica dies. Follow-up messages queue in order, and
 the bar above the composer counts them (`1 queued`). Editing a sent message
 does not invoke the agent again. A reply inside a thread is not part of the
 conversation: the agent answers it only when mentioned there, in the thread,
 as in any channel.
+
+The local playground at `/app/debug/agent-progress` shows each of these states
+in three tabs: **DM**, **Channel mention** (the reply in its thread), and
+**Agent session**, with theme, viewer, and phone-width toggles and a looping
+replay of one turn.
 
 Each failed, stopped, or interrupted source message has its own **Retry message**
 action in the current context. Retry is explicit because an interrupted attempt
@@ -690,6 +708,9 @@ Very long flings or slow responses can still exhaust the available scroll range.
 In the iOS app, fling repeatedly through a long channel, starting each fling before
 the previous one's momentum ends, then let it settle. The messages must not jump when
 scrolling comes to rest, nor when it bounces or is held against the top of loaded history.
+In a channel opened for the first time, fling up through unmeasured history and
+straight back down: scrolling must stop at the latest message, never in blank space
+below it.
 
 Inline document mentions should show their stored title before entering the viewport
 and while preview requests are pending. With a slow preview response, check that a
@@ -862,9 +883,14 @@ response must not switch back or mark that earlier channel read.
 A transient notification-fetch failure keeps the conversation and composer mounted
 while notifications are unavailable. Recovery marks top-level message notifications
 seen without moving the conversation. No notification read marking runs
-from an abbreviated list result, even if that result is empty. Access failures
+from an abbreviated list result, even if that result is empty. Access failures and server-confirmed missing channels
 show **Conversation unavailable** and stay hidden during retry until access is
-confirmed. A route without cached channel metadata shows **Loading conversation**
+confirmed. With GraphQL caching enabled, an empty local projection cannot hide a
+server-confirmed conversation; a stale positive row cannot undo a fresh denial or
+deletion. Contradictory cache membership triggers a bounded server confirmation.
+An initially empty cache result waits for that confirmation before declaring the
+channel unavailable. Unavailable routes still recover from invite notifications
+and reconnect without mounting a message view first. A route without cached channel metadata shows **Loading conversation**
 until its channel arrives. On mobile, opening from the Recent conversation list
 also navigates immediately: a slow or failed notification lookup must not prevent
 messages and the composer from loading. Full-edge notification hydration runs
@@ -1185,10 +1211,20 @@ an opened unread conversation, so mark-read and message targeting retain their
 complete top-level inputs in Chat and thread-scoped inputs in Inbox. Reopening
 a conversation must refresh that full
 edge even within 30 seconds; mark-read waits for the refresh rather than using
-older cached notifications. Failed lookups and successful lookups with no matching
+older cached notifications. Failed server lookups and successful server lookups with no matching
 channel show **Conversation unavailable** with **Retry**, never permanent loading.
 Retry rather than marking just the one unread witness. Repeated mobile taps must
 open the last selected conversation, not a slower earlier request.
+
+A backend-free cache regression runs on desktop and phone viewports:
+`bunx playwright test --config src/lib/queries/channel/browser-test/playwright.config.ts`.
+It uses the production normalized exchange, query adapter, and detail state with a
+controlled transport. Confirm a channel, type a draft, then deliver repeated empty
+cache projections: the composer must remain mounted. A fresh server absence must
+hide it, a cached positive row must leave it hidden, and a fresh grant must recover
+it. See the [desktop fixture](assets/channel-access-cache-desktop.png) and
+[phone fixture](assets/channel-access-cache-phone.png); these show synthetic data,
+not a full app session.
 
 Opening also refreshes that channel's bounded unread edge in the same request.
 Read a DM on another device while its web sidebar retains an unread dot (for

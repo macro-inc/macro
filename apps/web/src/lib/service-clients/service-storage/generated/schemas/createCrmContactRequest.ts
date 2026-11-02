@@ -9,7 +9,7 @@
  * Request body for `POST /crm/companies/{company_id}/contacts`.
  */
 export interface CreateCrmContactRequest {
-  /** The contact's email address, e.g. "jane@acme.com". Its domain
+  /** The contact's email address, e.g. "jane@example.com". Its domain
 must be one of the company's domains (400 otherwise). */
   email: string;
   /** Display name for the contact. */

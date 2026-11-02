@@ -232,7 +232,7 @@ export function Header(props: {
     const Control = compact ? ButtonGroup.Button : Button;
     const size = () => {
       if (compact) return mobile ? 'icon-sm' : 'sm';
-      return mobile ? 'icon-lg' : 'lg';
+      return mobile ? 'icon-md' : 'lg';
     };
     return (
       <Control
