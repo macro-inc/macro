@@ -84,9 +84,12 @@ impl RoutineClient {
         path: &str,
         body: Option<Value>,
     ) -> Result<Vec<u8>> {
+        let mut trace_headers = reqwest::header::HeaderMap::new();
+        macro_tower_layers::inject_trace_headers(&mut trace_headers);
         let mut request = self
             .client
             .request(method, self.base.join(path)?)
+            .headers(trace_headers)
             .header(INTERNAL_API_KEY_HEADER, self.key.clone())
             .header(INTERNAL_MACRO_USER_ID_HEADER, user.as_ref());
         if let Some(body) = body {

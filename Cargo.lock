@@ -16937,6 +16937,7 @@ dependencies = [
  "chrono-tz",
  "cron",
  "macro_authorization",
+ "macro_tower_layers",
  "macro_user_id",
  "reqwest 0.13.4",
  "schemars 1.2.1",
