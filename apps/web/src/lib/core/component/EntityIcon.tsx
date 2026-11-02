@@ -89,6 +89,7 @@ import GlobeIcon from '@icon/system/regular/globe.svg';
 import HashStraight from '@icon/system/regular/hash-straight.svg';
 import FileImage from '@icon/system/regular/image.svg';
 import ListChecks from '@icon/system/regular/list-checks.svg';
+import LockSimple from '@icon/system/regular/lock-simple.svg';
 import PaintBrushBroad from '@icon/system/regular/paint-brush-broad.svg';
 import PenNib from '@icon/system/regular/pen-nib.svg';
 import PhoneCall from '@icon/system/regular/phone-call.svg';
@@ -265,8 +266,8 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'Organization',
   },
   private: {
-    icon: HashStraight,
-    boldIcon: HashStraightBold,
+    icon: LockSimple,
+    boldIcon: LockSimple,
     foreground: 'text-communication',
     background: 'bg-communication/20',
     prettyName: 'Private Channel',
@@ -705,7 +706,11 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
       { type: 'channel' },
       { type: 'channel_message' },
       { type: 'channel_thread' },
-      (e) => (e.channelType === 'direct_message' ? 'direct_message' : 'channel')
+      (e) => {
+        if (e.channelType === 'direct_message') return 'direct_message';
+        if (e.channelType === 'private') return 'private';
+        return 'channel';
+      }
     )
     .with({ type: 'email' }, (e) =>
       e.hasIcsAttachment ? 'emailInvite' : e.isRead ? 'emailRead' : 'email'
