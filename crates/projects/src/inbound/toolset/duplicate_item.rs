@@ -72,7 +72,7 @@ pub struct DuplicateItemResponse {
 #[serde(rename_all = "camelCase")]
 #[schemars(
     title = "DuplicateItem",
-    description = "Make a copy of a document (including a task) or a database, owned by the user, as the Duplicate action in the app does. A database copy has every table, column, view and row; its sharing, forms and history stay with the original. Requires view access to the original. Returns the copy's id."
+    description = "Make a copy of a document (including a task) or a database, owned by the user, as the Duplicate action in the app does. A database copy has every table, column, view and row, except relation columns into other databases the user cannot view, which it leaves out; its sharing, forms and history stay with the original. Requires view access to the original. Returns the copy's id."
 )]
 pub struct DuplicateItem {
     /// The kind of item to duplicate.

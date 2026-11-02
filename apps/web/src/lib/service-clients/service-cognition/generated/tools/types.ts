@@ -8957,7 +8957,7 @@ export interface DisplayResultsResponse {
   message: string;
 }
 /**
- * Make a copy of a document (including a task) or a database, owned by the user, as the Duplicate action in the app does. A database copy has every table, column, view and row; its sharing, forms and history stay with the original. Requires view access to the original. Returns the copy's id.
+ * Make a copy of a document (including a task) or a database, owned by the user, as the Duplicate action in the app does. A database copy has every table, column, view and row, except relation columns into other databases the user cannot view, which it leaves out; its sharing, forms and history stay with the original. Requires view access to the original. Returns the copy's id.
  */
 export interface DuplicateItem {
   entityType: DuplicableEntityType;
