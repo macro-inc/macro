@@ -3633,6 +3633,10 @@ export type AvailabilityUnknownReason =
   | 'invalid_interval'
   | 'conflicting_copies';
 /**
+ * Fixed calendar granularity, always in UTC, with Monday-start weeks.
+ */
+export type Granularity = 'day' | 'week' | 'month' | 'summary';
+/**
  * What the tool is asked to do.
  */
 export type NotionImportAction = 'plan' | 'status' | 'cancel';
@@ -4824,6 +4828,25 @@ export type ProjectShareAccess = 'off' | 'view' | 'comment' | 'edit';
  * Scope admitted by a project's share link.
  */
 export type ProjectLinkScope = 'off' | 'public' | 'team';
+/**
+ * An edit to one one-based line. A revision is required to prevent replay
+ * or concurrent edits from inserting twice or deleting a different line.
+ */
+export type MemoryEdit =
+  | {
+      line: number;
+      content: string;
+      action: 'insert';
+    }
+  | {
+      line: number;
+      content: string;
+      action: 'replace';
+    }
+  | {
+      line: number;
+      action: 'delete';
+    };
 /**
  * Exactly one update intention avoids partially-applied configuration/activation changes.
  */
@@ -10829,6 +10852,35 @@ export interface ToolContact {
   name?: string | null;
 }
 /**
+ * Read privacy-reviewed professional activity for yourself or a current teammate. Reports use UTC calendar days, Monday-start weeks, and calendar months. Empty results mean no stored activity, not no work. At most 366 days per request.
+ */
+export interface GetUserActivity {
+  /**
+   * A macro| user id, or omit for yourself.
+   */
+  userId?: string | null;
+  /**
+   * Inclusive first UTC date (YYYY-MM-DD).
+   */
+  start: string;
+  /**
+   * Inclusive last UTC date (YYYY-MM-DD).
+   */
+  end: string;
+}
+export interface ActivityReports {
+  reports: Activity[];
+}
+/**
+ * A privacy-reviewed activity report; period_end is inclusive.
+ */
+export interface Activity {
+  granularity: Granularity;
+  periodStart: string;
+  periodEnd: string;
+  content: string;
+}
+/**
  * Import companies into the team CRM from a CSV, such as a Macro companies export or a list from another CRM. Each row needs a domain (a Domain, Domains or Website column) and may name the company (Company or Name); a row takes its first valid domain, and companies the team already has are left as they are. Stage, Owner and Revenue live on pipeline entries rather than companies: when the CSV has them, they go on entries of pipelineId, or of a new pipeline (private unless shareNewPipeline) named after the file. Give the CSV as text in csv, or as documentId for a CSV file in Macro. Returns counts and the rows that could not be imported. To add rows to a pipeline without this, use ImportPipelineCsv.
  */
 export interface ImportCompaniesCsv {
@@ -14524,6 +14576,17 @@ export interface InitiativeActivityRecord {
   occurredAt: string;
 }
 /**
+ * Read your private explicit memory and revision before a remember/forget edit. Content is one-based lines; use the returned revision for UpdateMemory. Generated activity and profiles are separate.
+ */
+export type ReadMemory = {};
+/**
+ * A private explicit memory document and its optimistic concurrency token.
+ */
+export interface ExplicitMemory {
+  content: string;
+  revision: number;
+}
+/**
  * Retrieve a documents metadata
  */
 export interface ReadMetadata {
@@ -15955,6 +16018,16 @@ export interface ProjectChannelSharing {
   access: ProjectShareAccess;
 }
 /**
+ * Change your private explicit memory only when you explicitly ask to remember, correct, or forget something. ReadMemory first. Never save inferred preferences automatically. Private/sensitive information is rejected. A stale revision makes no change: reread and reconcile before another edit.
+ */
+export interface UpdateMemory {
+  /**
+   * The exact revision returned by ReadMemory or the last successful edit.
+   */
+  revision: number;
+  edit: MemoryEdit;
+}
+/**
  * Move deals to another stage or change their fields in a CRM pipeline: "move Acme to Negotiation", "set the revenue on the Globex deal", "assign these deals to Sam". Address each entry by entryId (from FindPipelineEntries) or by the company or contact id it tracks, and set fields by name with text values: stages and other options by label, people as "me", an email or a macro| user id, numbers, true/false, or dates. Several entries change in one call, all or nothing. Returns each field before and after. This changes the entry in the pipeline, not the company's own properties.
  */
 export interface UpdatePipelineEntries {
@@ -16353,7 +16426,7 @@ export interface CodeGuide {
  *
  * For editable email/calendar drafts, persist them with execution.reviews.create({kind, title, drafts}), then return reviews: [await review.reference()]. This does not send emails or create calendar events. Creation immediately presents a completed PresentReview ACP tool call, even while main continues. "Presented to the user" means saved in the conversation, not approved or sent. The saved cards remain usable after this execution and chat continues. User decisions arrive as typed system events referring to the same review ID. Use GetReview to read final drafts and confirmed outcomes; notifications never authorize repeating an action. Use the direct EditDocument tool for AI document edits. Direct human-interactive tools, subagents and unsupported SDK operations remain available.
  *
- * Use nested SDK entities, e.g. macro.documents.search(query) is an async iterator and document.content() is a promise. Use for await...of, break, conditions and ordinary JavaScript freely. Batch useful independent work with Promise.all or Promise.allSettled; inspect partial failures and await every started operation. Use bounded concurrency for large inputs. Preserve user source scope on every search and retry: macro.documents.search searches documents; macro.email.search searches emails. Read names in batches: macro.initiatives.summaries() and macro.tasks.summaries(tasks) each take one request, while name() on every handle loads each entity separately. Create a task with its initiative, assignees and dueDate in one macro.tasks.create call. Return compact evidence with source IDs, explicit failures and coverage limits; do not return SDK objects, raw large batches, or claim a stopped iterator is exhaustive.
+ * Do the whole job in as few executions as possible, ideally one: every execution costs a model turn. Put control flow in the program instead of checking in one execution and acting in the next, e.g. if macro.tasks.findSimilar finds no likely duplicate, create the task and return it, else return the matches without creating. Use nested SDK entities, e.g. macro.documents.search(query) is an async iterator and document.content() is a promise. Use for await...of, break, conditions and ordinary JavaScript freely. Batch useful independent work with Promise.all or Promise.allSettled; inspect partial failures and await every started operation. Use bounded concurrency for large inputs. Preserve user source scope on every search and retry: macro.documents.search searches documents; macro.email.search searches emails. Read names in batches: macro.initiatives.summaries() and macro.tasks.summaries(tasks) each take one request, while name() on every handle loads each entity separately. Create a task with its initiative, assignees and dueDate in one macro.tasks.create call. Return compact evidence with source IDs, URLs, explicit failures and coverage limits, enough to answer without a follow-up execution; do not return SDK objects, raw large batches, or claim a stopped iterator is exhaustive.
  *
  * For a workspace overview, fetch small pages for the relevant categories concurrently in one execution with macro.workspace.page({includeTypes:[type], limit:3}). A single mixed page can be dominated by one category; each page is a sample, not a category total. Return selected metadata and hasMore per category, not whole items or snapshots. Exact workspace types include calendar_event, ai_chat and channel_thread. Tasks are documents: use includeTypes:["document"], df:{l:{dst:"task"}}. AST & and | combine exactly two expressions; do not wrap a single filter.
  *

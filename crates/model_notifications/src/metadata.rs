@@ -1896,9 +1896,12 @@ impl Notification for AgentSessionMentionedMetadata {
     const TYPE_NAME: &'static str = "agent_session_mentioned";
 }
 
-/// The first `AGENT_EXCERPT_MAX_CHARS` of an agent's prose, on one line.
+/// The first `AGENT_EXCERPT_MAX_CHARS` of an agent's prose, on one line, with
+/// its Macro mention tags replaced by the names they show, as channel alerts
+/// do for messages.
 fn agent_excerpt(text: &str) -> String {
-    let flat = text.split_whitespace().collect::<Vec<_>>().join(" ");
+    let plain = PlainTextFormatter::format_xml_text(ParsedXmlText::parse_lenient(text)).0;
+    let flat = plain.split_whitespace().collect::<Vec<_>>().join(" ");
     if flat.chars().count() <= AGENT_EXCERPT_MAX_CHARS {
         return flat;
     }
@@ -1919,10 +1922,12 @@ impl NotificationTitle for AgentSessionSettledMetadata {
         &self,
         _sender_id: Option<MacroUserIdStr<'_>>,
     ) -> Result<String, rootcause::Report> {
-        Ok(match self.excerpt.as_deref().map(str::trim) {
-            Some(excerpt) if !excerpt.is_empty() => agent_excerpt(excerpt),
-            _ => self.session.session_name.clone(),
-        })
+        Ok(self
+            .excerpt
+            .as_deref()
+            .map(agent_excerpt)
+            .filter(|excerpt| !excerpt.is_empty())
+            .unwrap_or_else(|| self.session.session_name.clone()))
     }
 }
 

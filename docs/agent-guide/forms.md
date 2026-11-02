@@ -30,6 +30,9 @@ decides who may respond.
   card in the message and sends it. Closing the dialog while it posts sends
   nothing and trashes the poll. With results hidden, respondents answer
   without counts and editors review votes in the Responses tab.
+- Asked for a poll, or for a form for a channel, the Macro agent makes a poll
+  and posts it as its card in one message (its channel reply), the same card
+  `/poll` posts.
 
 ## The form page
 
@@ -222,7 +225,9 @@ once, in the card header. Newly posted poll cards
 store their option count in Lexical preview metadata to reserve their height
 before loading. Choices have fixed-height rows; large polls and expanded
 results scroll inside the card. Older cards without that metadata keep their
-content-sized layout.
+content-sized layout. A viewer without access to the card's item sees "You
+don’t have access to this poll" (or form/item), and a deleted item reads "This
+poll was deleted", never an empty card.
 
 ## Reading responses as an agent
 
