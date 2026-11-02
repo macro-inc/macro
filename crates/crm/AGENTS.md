@@ -70,6 +70,9 @@ tools/HTTP/GraphQL surfaces over them.
   contact creation accepts any valid email, including personal providers.
   Email population still infers companies by domain. Do not apply manual
   creation rules to capture/consent; see `docs/design/crm-contact-creation.md`.
+- Keep CRM write locks ordered: domain advisory locks, parent team `KEY SHARE`,
+  settings `SHARE`, then company/contact rows. Hold them through commit so
+  disable/purge and team deletion cannot race creation.
 
 - Company names/logos live in the global `crm_domain_directory`. Only the
   email pubsub workers carry a real `CompanyMetadataResolver`; every other

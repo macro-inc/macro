@@ -80,25 +80,39 @@ impl CompaniesRepositoryImpl {
         Ok(())
     }
 
-    /// Team killswitch, read inside the tx (after the advisory lock) so
-    /// a concurrent disable+purge can't race past us. Missing row =
-    /// default false.
+    /// Keep the parent team alive before locking its settings, so team deletion
+    /// cannot deadlock with a later company insert's foreign-key check. The
+    /// shared settings lock serializes writers with disable+purge while allowing
+    /// other writers through. Acquire these after any domain advisory lock and
+    /// before company/contact rows. Missing parent or settings means disabled.
     async fn team_crm_enabled(
         tx: &mut sqlx::Transaction<'_, sqlx::Postgres>,
         team_id: &uuid::Uuid,
     ) -> Result<bool, CrmError> {
-        sqlx::query_scalar!(
+        let team = sqlx::query_scalar!(
+            r#"SELECT id FROM team WHERE id = $1 FOR KEY SHARE"#,
+            team_id,
+        )
+        .fetch_optional(&mut **tx)
+        .await
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        if team.is_none() {
+            return Ok(false);
+        }
+
+        let enabled = sqlx::query_scalar!(
             r#"
-            SELECT COALESCE(
-                (SELECT crm_enabled FROM team_crm_settings WHERE team_id = $1),
-                FALSE
-            ) AS "crm_enabled!"
+            SELECT crm_enabled
+            FROM team_crm_settings
+            WHERE team_id = $1
+            FOR SHARE
             "#,
             team_id,
         )
-        .fetch_one(&mut **tx)
+        .fetch_optional(&mut **tx)
         .await
-        .map_err(|e| CrmError::StorageLayerError(e.into()))
+        .map_err(|e| CrmError::StorageLayerError(e.into()))?;
+        Ok(enabled.unwrap_or(false))
     }
 
     /// Look up the company owning `(team, lower(domain))`. Returns
