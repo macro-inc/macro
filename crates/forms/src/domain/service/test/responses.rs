@@ -461,6 +461,8 @@ async fn the_tally_counts_every_option_and_checkbox_in_layout_order() {
     seed_rsvp(&world, Audience::Members);
     let forms = service(&world);
     respond(&forms, VIEWER, answers(EMPLOYEE, None)).await;
+    // Voters list in submission order, so the second response lands later.
+    world.lock().unwrap().now = Utc.with_ymd_and_hms(2026, 9, 3, 8, 0, 0).unwrap();
     let mut with_plus_one = answers(EMPLOYEE, None);
     with_plus_one.push(Answer {
         question: PLUS_ONE_QUESTION,
