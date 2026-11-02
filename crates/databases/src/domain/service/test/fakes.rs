@@ -57,6 +57,8 @@ pub(super) struct World {
     pub(super) positions: HashMap<ViewId, Vec<CardPosition>>,
     /// The change journal, oldest first.
     pub(super) journal: Vec<JournaledChange>,
+    /// Shared definitions nobody may bind into a database.
+    pub(super) unbindable: Vec<PropertyDefinitionId>,
 }
 
 /// One change the fake cell store journaled.
@@ -598,13 +600,8 @@ impl ColumnDefinitionStore for FakeDefinitions {
         _viewer: &Viewer,
         id: PropertyDefinitionId,
     ) -> Result<Option<PropertyDefinitionId>, FakeError> {
-        Ok(self
-            .0
-            .lock()
-            .unwrap()
-            .definitions
-            .contains_key(&id)
-            .then_some(id))
+        let world = self.0.lock().unwrap();
+        Ok((world.definitions.contains_key(&id) && !world.unbindable.contains(&id)).then_some(id))
     }
     async fn create_typed_definition(
         &self,

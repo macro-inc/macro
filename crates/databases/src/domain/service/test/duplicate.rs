@@ -617,3 +617,182 @@ async fn relations_into_other_databases_follow_what_the_duplicator_can_see() {
         })]
     );
 }
+
+#[tokio::test]
+async fn a_name_at_the_limit_is_cut_short_to_fit_its_copy_suffix() {
+    let seeded = seeded().await;
+    let long = "a".repeat(200);
+    seeded.world.lock().unwrap().databases[0].name = long.clone();
+
+    let copy = seeded
+        .service
+        .duplicate_database(view_receipt(seeded.database_id, VIEWER), user(VIEWER), None)
+        .await
+        .unwrap();
+
+    assert_eq!(copy.name, format!("{} copy", "a".repeat(195)));
+}
+
+/// A relation cell can still name a row that was removed; the copy keeps
+/// only the rows that are there instead of refusing the whole duplicate.
+#[tokio::test]
+async fn a_relation_naming_a_removed_row_is_copied_without_it() {
+    let Source {
+        seeded,
+        sessions_table,
+        keynote_row,
+        relation_column,
+        ..
+    } = source().await;
+    seeded
+        .world
+        .lock()
+        .unwrap()
+        .rows
+        .get_mut(&sessions_table)
+        .unwrap()
+        .retain(|row| row.id != keynote_row);
+
+    let copy = seeded
+        .service
+        .duplicate_database(view_receipt(seeded.database_id, VIEWER), user(VIEWER), None)
+        .await
+        .unwrap();
+
+    let w = seeded.world.lock().unwrap();
+    let guests = w
+        .tables
+        .iter()
+        .find(|t| t.database_id == copy.id)
+        .unwrap()
+        .id;
+    let source_relation = w.columns.iter().find(|c| c.id == relation_column).unwrap();
+    let relation = w
+        .columns
+        .iter()
+        .find(|c| {
+            c.table_id == guests
+                && w.definitions[&c.property_definition_id]
+                    .definition
+                    .display_name
+                    == w.definitions[&source_relation.property_definition_id]
+                        .definition
+                        .display_name
+        })
+        .unwrap();
+    let sam = w.rows[&guests][0].id;
+    assert_eq!(
+        w.cells
+            .get(&sam)
+            .and_then(|cells| cells.get(&relation.property_definition_id)),
+        None
+    );
+}
+
+/// A column bound to a property shared beyond the database (a person's or
+/// a team's) stays bound to it when the duplicator may bind it; otherwise
+/// the copy gets a property of its own with the same options and values.
+#[tokio::test]
+async fn a_shared_property_the_duplicator_cannot_bind_is_copied_into_one_the_copy_owns() {
+    let seeded = seeded().await;
+    let mut shared = definition(
+        "Priority",
+        DataType::SelectString,
+        false,
+        PropertyOwner::User {
+            user_id: OWNER.into(),
+        },
+    );
+    let high = Uuid::now_v7();
+    shared.property_options = vec![PropertyOption {
+        id: high,
+        property_definition_id: shared.definition.id,
+        display_order: 0,
+        value: PropertyOptionValue::String("High".into()),
+        color: Some("#FF0000".into()),
+        created_at: Utc::now(),
+        updated_at: Utc::now(),
+    }];
+    let shared_id = shared.definition.id;
+    {
+        let mut w = seeded.world.lock().unwrap();
+        let last = w
+            .columns
+            .iter()
+            .filter(|c| c.table_id == seeded.table_id)
+            .map(|c| c.position.clone())
+            .max()
+            .unwrap();
+        w.definitions.insert(shared_id, shared);
+        w.columns.push(Column {
+            protections: vec![],
+            nullable: true,
+            id: ColumnId::new(),
+            table_id: seeded.table_id,
+            property_definition_id: shared_id,
+            display_name: None,
+            position: models_databases::position::key_between(Some(&last), None).unwrap(),
+            infer_type: false,
+            config: None,
+        });
+        w.cells
+            .entry(seeded.row_id)
+            .or_default()
+            .insert(shared_id, PropertyValue::SelectOption(vec![high]));
+    }
+    let priority = |copy: &Database| {
+        let w = seeded.world.lock().unwrap();
+        let guests = w
+            .tables
+            .iter()
+            .find(|t| t.database_id == copy.id)
+            .unwrap()
+            .id;
+        let column = w
+            .columns
+            .iter()
+            .find(|c| {
+                c.table_id == guests
+                    && w.definitions[&c.property_definition_id]
+                        .definition
+                        .display_name
+                        == "Priority"
+            })
+            .unwrap()
+            .clone();
+        let definition = w.definitions[&column.property_definition_id].clone();
+        let sam = w.rows[&guests][0].id;
+        (
+            definition,
+            w.cells[&sam].get(&column.property_definition_id).cloned(),
+        )
+    };
+
+    let bound = seeded
+        .service
+        .duplicate_database(view_receipt(seeded.database_id, VIEWER), user(VIEWER), None)
+        .await
+        .unwrap();
+    let (definition, value) = priority(&bound);
+    assert_eq!(definition.definition.id, shared_id);
+    assert_eq!(value, Some(PropertyValue::SelectOption(vec![high])));
+
+    seeded.world.lock().unwrap().unbindable.push(shared_id);
+    let owned = seeded
+        .service
+        .duplicate_database(view_receipt(seeded.database_id, VIEWER), user(VIEWER), None)
+        .await
+        .unwrap();
+    let (definition, value) = priority(&owned);
+    assert_ne!(definition.definition.id, shared_id);
+    assert_eq!(
+        definition.definition.owner,
+        PropertyOwner::Database {
+            database_id: owned.id.into_uuid()
+        }
+    );
+    let option = &definition.property_options[0];
+    assert_eq!(option.value, PropertyOptionValue::String("High".into()));
+    assert_eq!(option.color.as_deref(), Some("#FF0000"));
+    assert_eq!(value, Some(PropertyValue::SelectOption(vec![option.id])));
+}

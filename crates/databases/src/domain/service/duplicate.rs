@@ -31,6 +31,11 @@ struct Source {
     cells: HashMap<RowId, HashMap<PropertyDefinitionId, PropertyValue>>,
     /// Other databases relation columns point at that the duplicator can see.
     visible_targets: HashSet<DatabaseId>,
+    /// The rows of those databases' tables the relations point at.
+    target_rows: HashMap<TableId, HashSet<RowId>>,
+    /// The definitions the source shares with something beyond it (a
+    /// person's, a team's) that the duplicator may bind too.
+    bindable: HashSet<PropertyDefinitionId>,
 }
 
 /// Old ids to new ones. Every id the source holds is a UUIDv7, so a value
@@ -94,6 +99,17 @@ impl Remap {
     }
 }
 
+/// "<name> copy", the source's name cut short when the suffix would push
+/// it past the longest name allowed.
+fn copy_name(name: &str) -> String {
+    const SUFFIX: &str = " copy";
+    let base: String = name
+        .chars()
+        .take(MAX_NAME_LEN.saturating_sub(SUFFIX.chars().count()))
+        .collect();
+    format!("{}{SUFFIX}", base.trim_end())
+}
+
 /// The batch that writes `copy` from `source`: its tables, columns with
 /// their definitions and options, rows with their cells, views and card
 /// places, in that order, so each write names only what came before it.
@@ -124,11 +140,14 @@ fn plan(
         .iter()
         .filter(|column| !dropped.contains(&column.id))
         .collect();
+    // The copy gets its own definition for each the source owns, and for
+    // each shared one the duplicator may not bind, keeping its values.
     let owned = |definition: &PropertyDefinitionWithOptions| {
         definition.definition.owner
             == models_properties::shared::PropertyOwner::Database {
                 database_id: source.database.id.into_uuid(),
             }
+            || !source.bindable.contains(&definition.definition.id)
     };
     for table in &source.tables {
         remap.insert(table.id.into_uuid());
@@ -257,20 +276,46 @@ fn plan(
                 else {
                     continue;
                 };
-                let value = remap.cell(value);
-                if let (
-                    Some(ColumnConfig::Link {
-                        table_id: target, ..
-                    }),
-                    PropertyValue::EntityRef(references),
-                ) = (&column.config, &value)
-                {
-                    for reference in references {
-                        if let Ok(related) = reference.entity_id.parse::<RowId>() {
-                            related_rows.push((table_id(*target), related));
+                let value = match (&column.config, value) {
+                    // A removed row can still be named by a relation cell;
+                    // the copy names only rows that are there.
+                    (
+                        Some(ColumnConfig::Link {
+                            table_id: target, ..
+                        }),
+                        PropertyValue::EntityRef(references),
+                    ) => {
+                        let live = source
+                            .rows
+                            .get(target)
+                            .map(|rows| rows.iter().map(|row| row.id).collect::<HashSet<_>>())
+                            .or_else(|| source.target_rows.get(target).cloned())
+                            .unwrap_or_default();
+                        let references: Vec<_> = references
+                            .iter()
+                            .filter(|reference| {
+                                reference
+                                    .entity_id
+                                    .parse::<RowId>()
+                                    .is_ok_and(|row| live.contains(&row))
+                            })
+                            .cloned()
+                            .collect();
+                        if references.is_empty() {
+                            continue;
                         }
+                        let value = remap.cell(&PropertyValue::EntityRef(references));
+                        if let PropertyValue::EntityRef(references) = &value {
+                            for reference in references {
+                                if let Ok(related) = reference.entity_id.parse::<RowId>() {
+                                    related_rows.push((table_id(*target), related));
+                                }
+                            }
+                        }
+                        value
                     }
-                }
+                    (_, value) => remap.cell(value),
+                };
                 row_cells.push((definition_id(column.property_definition_id), value));
             }
             cells.push(row_cells);
@@ -444,7 +489,7 @@ where
             .collect();
         definition_ids.sort();
         definition_ids.dedup();
-        let definitions = self
+        let definitions: HashMap<PropertyDefinitionId, PropertyDefinitionWithOptions> = self
             .definitions
             .definitions(&definition_ids)
             .await
@@ -467,6 +512,40 @@ where
                 visible_targets.insert(*database_id);
             }
         }
+        let mut target_rows: HashMap<TableId, HashSet<RowId>> = HashMap::new();
+        for column in &columns {
+            if let Some(ColumnConfig::Link {
+                database_id,
+                table_id,
+            }) = &column.config
+                && visible_targets.contains(database_id)
+                && !target_rows.contains_key(table_id)
+            {
+                let refs = self
+                    .repository
+                    .row_refs(*table_id)
+                    .await
+                    .map_err(repository_error)?;
+                target_rows.insert(*table_id, refs.into_iter().map(|row| row.id).collect());
+            }
+        }
+        let mut bindable = HashSet::new();
+        for definition in definitions.values() {
+            let shared = definition.definition.owner
+                != models_properties::shared::PropertyOwner::Database {
+                    database_id: database.id.into_uuid(),
+                };
+            if shared
+                && self
+                    .definitions
+                    .bindable_definition(database.id, viewer, definition.definition.id)
+                    .await
+                    .map_err(repository_error)?
+                    .is_some()
+            {
+                bindable.insert(definition.definition.id);
+            }
+        }
         Ok(Source {
             database,
             tables,
@@ -477,6 +556,8 @@ where
             rows,
             cells,
             visible_targets,
+            target_rows,
+            bindable,
         })
     }
 }
@@ -508,7 +589,7 @@ where
         if database.trashed_at.is_some() {
             return Err(DatabaseError::NotFound);
         }
-        let name = validate_name(&name.unwrap_or_else(|| format!("{} copy", database.name)))?;
+        let name = validate_name(&name.unwrap_or_else(|| copy_name(&database.name)))?;
         let viewer = Viewer {
             user_id: owner.clone(),
             acting_bot: None,

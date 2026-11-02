@@ -124,7 +124,10 @@ and cells. The core storage adapter purges its journal in the same transaction.
    writes the copy as one batch through `DatabaseDuplicateRepo`, in the same
    transaction that creates the database and its owner's grant. Relations into
    another database stay when the duplicator can see it and are dropped, with
-   their view references, when they cannot. Grants, the team share, forms,
+   their view references, when they cannot. A column bound to a property shared
+   beyond the database stays bound to it when the duplicator may bind it, and
+   otherwise gets a property of the copy's own with the same options and
+   values. Relation cells naming rows that are gone are left out. Grants, the team share, forms,
    webhooks, saved queries, column protections and the journal stay behind; the
    copy's history starts empty.
 
