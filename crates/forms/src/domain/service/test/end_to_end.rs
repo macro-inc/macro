@@ -82,6 +82,7 @@ async fn a_form_over_a_new_database_writes_a_passing_response_as_a_row_and_stops
                 branding: FormBranding::default(),
                 created_at: Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap(),
                 updated_at: Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap(),
+                project_id: None,
                 is_hidden_in_drive: false,
             },
             access: FormAccess::Owner,

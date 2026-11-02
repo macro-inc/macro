@@ -158,7 +158,10 @@ rows stay.
 ## Finding forms
 
 Drive lists forms you can open (type facet **Form**) and opens them inline at
-`/app/drive/form/<uuid>`, and Quick Access has a
+`/app/drive/form/<uuid>`. The owner can file a form in a folder by dragging its
+row onto the folder or with **Move to folder** in the form's title menu; it
+then appears in that folder's contents and inherits the folder's sharing, while
+its database stays where it was. Quick Access has a
 Forms bucket. Both come from `/forms/accessible`, so a form shared with you
 appears without access to its database. Deleting a database table warns which
 forms it deletes; deleting a column warns which forms ask it (both say so
@@ -219,12 +222,13 @@ choice; removing a choice focuses its replacement. Duplicate choice names
 (ignore case and surrounding spaces) show an inline error and disable Post
 until corrected. Poll cards omit permission badges and display the question
 once, in the card header. Newly posted poll cards
-store their option count in Lexical preview metadata to reserve their height
-before loading. Choices have fixed-height rows; large polls and expanded
-results scroll inside the card. Older cards without that metadata keep their
-content-sized layout. A viewer without access to the card's item sees "You
-don’t have access to this poll" (or form/item), and a deleted item reads "This
-poll was deleted", never an empty card.
+store their option count in Lexical preview metadata to reserve a minimum
+height before loading, which matches a one-line poll. The card then grows to
+its content (wrapped text, many options, expanded results); nothing scrolls or
+clips inside it. Older cards without that metadata size to their content. A
+viewer without access to the card's item sees "You don’t have access to this
+poll" (or form/item), and a deleted item reads "This poll was deleted", never
+an empty card.
 
 ## Reading responses as an agent
 

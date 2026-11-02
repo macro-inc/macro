@@ -163,7 +163,6 @@ fn start(
     expression: &StartExpression,
     input: &ExtractInputRequest,
     reference: DateTime<Tz>,
-    date_only: bool,
 ) -> Result<ResolvedStart, InputError> {
     match expression {
         StartExpression::Relative { span, minutes } => {
@@ -205,13 +204,23 @@ fn start(
                         .ok_or(InputError::Extraction)?,
                 );
             }
+            // A clock without a date is its next occurrence: today, or tomorrow
+            // once that clock has passed.
+            if let (None, Some((t, _))) = (day, time) {
+                let today = reference.date_naive();
+                day = Some(if t < reference.time() {
+                    today
+                        .checked_add_days(Days::new(1))
+                        .ok_or(InputError::Extraction)?
+                } else {
+                    today
+                });
+            }
             let value = match (day, time) {
                 (Some(d), Some((t, _))) => Some(instant(d, t, reference.timezone())?),
                 _ => None,
             };
-            if (date_only && day.is_none())
-                || (expression_date.is_none() && expression_clock.is_none())
-            {
+            if expression_date.is_none() && expression_clock.is_none() {
                 return Err(InputError::Extraction);
             }
             let assumption = expression_clock
@@ -251,7 +260,7 @@ pub(super) fn apply(
         (InputSuggestions::Task(fields), TemporalExpressions::Task(expressions)) => {
             fields.due_date = None;
             if let Some(expression) = expressions.due {
-                let resolved = start(&expression, input, reference, true)?;
+                let resolved = start(&expression, input, reference)?;
                 fields.due_date = resolved
                     .instant
                     .map(|d| d.format("%Y-%m-%dT%H:%M").to_string())
@@ -278,7 +287,7 @@ pub(super) fn apply(
             let resolved = expressions
                 .start
                 .as_ref()
-                .map(|e| start(e, input, reference, false))
+                .map(|e| start(e, input, reference))
                 .transpose()?;
             let starts_at = resolved.as_ref().and_then(|r| r.instant);
             fields.start = starts_at.map(|d| d.format("%Y-%m-%dT%H:%M").to_string());

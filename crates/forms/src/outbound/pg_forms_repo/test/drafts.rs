@@ -22,6 +22,7 @@ async fn a_projection_commits_its_layout_and_revision_together(pool: PgPool) {
         branding: FormBranding::default(),
         created_at: at(9),
         updated_at: at(9),
+        project_id: None,
         is_hidden_in_drive: false,
     };
     let layout = FormLayout {

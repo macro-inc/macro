@@ -412,7 +412,10 @@ beside the buttons and collapse when it fits again, without flickering between
 layouts. Also add and remove a line break or attachment and
 confirm the draft and caret position survive. The attachment and send controls
 should remain usable in both layouts. Existing message and reply edit inputs show
-only the send control, with no format or discard button; Escape cancels the edit.
+Attach files, Discard Edit, and Send, with no format toggle; Escape also cancels
+an edit. The iOS app uses its native media picker. Check inline and unified edits
+on desktop and touch: attach a file and save, then edit again and discard changes
+without changing the original message or attachments.
 The iOS share sheet keeps its editor above the attachment and formatting controls.
 Check this arrangement at both phone and tablet widths.
 
@@ -1184,6 +1187,11 @@ links still open their target. Each accepted click marks top-level notifications
 from the full loaded edge seen; an abbreviated list edge is never sufficient.
 A rejected selection or unavailable split must not mark the conversation read.
 Non-participant rows retain their membership status and do not mark notifications.
+Shift-click and the row menu's `Open in new split` open a loaded row without
+waiting for notifications: hold the single-channel `SoupNotifications` request
+(`UPDATED_AT`, limit 1) and the split must still appear at once. Its full edge
+loads after the open. A failed load leaves the split open and skips that marking;
+messages on screen still mark themselves read as they become visible.
 Shift-click a favorite whose channel is not loaded in the rail: its membership
 and full notification edge load before the split opens with the same top-level
 read policy. Selecting another channel while that request is pending must cancel

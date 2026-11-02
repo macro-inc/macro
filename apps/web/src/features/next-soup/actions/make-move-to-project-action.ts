@@ -22,7 +22,9 @@ export const makeMoveToProjectAction = (options: MakeMoveToProjectOptions) => {
     entity.type === 'document' ||
     entity.type === 'chat' ||
     entity.type === 'project' ||
-    entity.type === 'email';
+    entity.type === 'email' ||
+    entity.type === 'database' ||
+    entity.type === 'form';
 
   const canExecute = (entity: EntityData): boolean =>
     canMoveType(entity) && entity.ownerId === options.userId();

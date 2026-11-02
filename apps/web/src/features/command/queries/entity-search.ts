@@ -18,7 +18,7 @@ export type EntitySearchCategory =
 const QUICK_ACCESS_BUCKETS_BY_CATEGORY: Partial<
   Record<EntitySearchCategory, Bucket[]>
 > = {
-  all: exclude('person', 'initiative', 'crm_contact'),
+  all: exclude('person', 'initiative', 'crm_contact', 'routine'),
   email: ['email'],
   channels: ['channel'],
   dms: ['dm'],
@@ -66,10 +66,11 @@ export function useEntitySearch(
     if ((category === 'all' || category === 'dms') && hasQuery()) {
       buckets = [...buckets, 'person'];
     }
-    // Like people, projects join All only for typed searches; the empty
-    // recency list leaves them to the Projects category.
+    // Like people, projects and routines join All only for typed searches;
+    // the empty recency list leaves projects to the Projects category, and
+    // routines have no view history to rank them among recent items.
     if (category === 'all' && hasQuery()) {
-      buckets = [...buckets, 'initiative'];
+      buckets = [...buckets, 'initiative', 'routine'];
     }
     return quickAccess.useList({
       buckets: options.excludeEmails

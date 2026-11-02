@@ -14,6 +14,7 @@ export function documentDatabaseDetail(): DatabaseDetail {
       owner_id: 'macro|fixture@example.com',
       created_at: '2026-10-09T00:00:00Z',
       trashed_at: null,
+      project_id: null,
     },
     grant: 'owner',
     tables: [

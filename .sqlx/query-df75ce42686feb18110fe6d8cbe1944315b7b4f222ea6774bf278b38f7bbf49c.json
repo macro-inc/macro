@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT\n            entity_id,\n            source_id,\n            source_type as \"source_type:EntityAccessSourceType\",\n            access_level as \"access_level:AccessLevel\"\n            FROM entity_access\n            WHERE entity_id = ANY($1) AND entity_type = 'project' AND granted_from_project_id IS NULL\n            ",
+  "query": "\n        SELECT\n        entity_id,\n        source_id,\n        source_type as \"source_type:EntityAccessSourceType\",\n        access_level as \"access_level:AccessLevel\"\n        FROM entity_access\n        WHERE entity_id = ANY($1) AND entity_type = 'project' AND granted_from_project_id IS NULL\n        ",
   "describe": {
     "columns": [
       {
@@ -60,5 +60,5 @@
       false
     ]
   },
-  "hash": "5b17a30f841372cce9989af409baf993e24bfe90d3a3553f6851b3e92c8540eb"
+  "hash": "df75ce42686feb18110fe6d8cbe1944315b7b4f222ea6774bf278b38f7bbf49c"
 }
