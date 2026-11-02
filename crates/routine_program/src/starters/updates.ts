@@ -1,14 +1,11 @@
-// The channel completed tasks are announced in.
-const CHANNEL = 'updates';
-
-export async function main({ macro, trigger }: StepContext) {
+export async function main({ macro, trigger, knobs }: StepContext) {
   if (trigger.kind !== 'event') return { posted: false };
   const name = trigger.item.item?.name ?? 'A task';
   for (const channel of await macro.channels.list()) {
-    if ((await channel.name()) === CHANNEL) {
+    if ((await channel.name()) === knobs.channel) {
       await channel.send(`Done: ${name}`);
       return { posted: true };
     }
   }
-  throw new Error(`There's no channel named "${CHANNEL}". Ask AI to change this routine to post in yours.`);
+  throw new Error(`There's no channel named "${knobs.channel}". Change the channel this routine posts in.`);
 }
