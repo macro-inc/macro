@@ -4,6 +4,7 @@ import { authServiceClient } from '@service-auth/client';
 import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
+import { queryReadyGate } from '../gate';
 import { authKeys } from './keys';
 
 /** OAuth transport stays in the auth client, shared query orchestration here. */
@@ -52,5 +53,6 @@ export function useOutlookAvailable(
     ...emailConnectionProvidersQuery(),
     enabled: enabled(),
   }));
-  return () => query.data?.outlook === true;
+  // Gate the read: a pending query's data suspends the caller's boundary.
+  return () => queryReadyGate(query) && query.data.outlook;
 }
