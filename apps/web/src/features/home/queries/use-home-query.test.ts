@@ -411,6 +411,72 @@ describe('Home data source', () => {
     expect(ids(source)).toEqual(['same']);
   });
 
+  it('uses the row unread state for mobile channel status filtering', () => {
+    touch.device = true;
+    const invite: UnifiedNotification = {
+      id: 'invite',
+      entity_id: 'channel',
+      entity_type: 'channel',
+      sender_id: 'test-user',
+      state: 'unseen',
+      created_at: '2026-09-09T12:00:00Z',
+      updated_at: '2026-09-09T12:00:00Z',
+      viewed_at: null,
+      sent: true,
+      notification_event_type: 'channel_invite',
+      notification_metadata: {
+        tag: 'channel_invite',
+        content: { channelName: 'Channel', invitedBy: 'test-user' },
+      },
+    };
+    const channel = {
+      type: 'channel' as const,
+      id: 'channel',
+      name: 'Channel',
+      ownerId: 'test-user',
+      channelType: 'public' as const,
+      notifications: () => [invite],
+    };
+    const { source, setState } = mount(
+      makeQuery([channel], false),
+      makeQuery([], false)
+    );
+    expect(unreadFilterFn(rows(source)[0])).toBe(false);
+    setState('facets', { read: ['unread'] });
+    expect(ids(source)).toEqual([]);
+    setState('facets', { read: ['read'] });
+    expect(ids(source)).toEqual(['channel']);
+  });
+
+  it.each(['signal', 'noise'] as const)(
+    'removes read rows from mobile %s while Unread is selected',
+    (tab) => {
+      touch.device = true;
+      const notifications = makeQuery(
+        [email('unread', 9), { ...email('read', 8), isRead: true }],
+        false
+      );
+      const { source, setState } = mount(notifications, makeQuery([], false));
+      setState('tab', tab);
+      setState('facets', { read: ['unread'] });
+      expect(ids(source)).toEqual(['unread']);
+
+      notifications.setEntities([
+        { ...email('unread', 9), isRead: true },
+        { ...email('read', 8), isRead: true },
+      ]);
+      expect(ids(source)).toEqual([]);
+
+      notifications.setEntities([
+        email('unread', 9),
+        { ...email('read', 8), isRead: true },
+      ]);
+      expect(ids(source)).toEqual(['unread']);
+      setState('facets', { read: [] });
+      expect(ids(source)).toEqual(['unread', 'read']);
+    }
+  );
+
   it('does not buffer the Noise tab behind Home activity', async () => {
     const notifications = makeQuery([email('n9', 9)]);
     const activity = makeQuery([email('a10', 10)]);

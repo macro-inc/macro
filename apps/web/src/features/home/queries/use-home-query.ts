@@ -402,6 +402,8 @@ function useSoupHomeDataSource(
       tab: context.tab,
       facets: context.facets,
       facetContext: context.facetContext,
+      retainReadRows: !isTouchDevice(),
+      isUnread: unreadFilterFn,
     });
   }, emptyHomeAdmission());
 
