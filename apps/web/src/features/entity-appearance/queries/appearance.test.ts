@@ -1,12 +1,38 @@
 import type { CacheHost } from '@graphql-cache/index';
 import { INITIAL_CACHE_REVISION } from '@graphql-cache/index';
 import { entityKeys, formsKeys } from '@queries/storage/keys';
+import type { EntityAppearanceCacheWriteSubscription } from '@service-storage/graphql/generated/graphql';
 import { QueryClient } from '@tanstack/solid-query';
+import { buildSchema, execute, parse } from 'graphql';
 import { err, ok } from 'neverthrow';
 import { beforeEach, expect, it, vi } from 'vitest';
+import schemaSdl from '../../../../../../static_assets/schema.graphql?raw';
 import type { DocumentEntity, FormEntity } from '../../entity/types/entity';
-import type { EntityAppearance } from '../core/appearance';
+import {
+  type EntityAppearance,
+  readEntityAppearance,
+  sameAppearance,
+} from '../core/appearance';
 import { createSaveEntityAppearance } from './appearance';
+
+const schema = buildSchema(schemaSdl);
+
+async function writtenAppearance(
+  write: Parameters<CacheHost['writeQuery']>[0]
+) {
+  const result = await execute({
+    schema,
+    document: parse(write.query),
+    operationName: write.operationName,
+    rootValue: write.data,
+  });
+  expect(result.errors).toBeUndefined();
+  const data = result.data as EntityAppearanceCacheWriteSubscription;
+  const change = data.soupUpdates[0];
+  if (change?.__typename !== 'SoupUpdated' || !('appearance' in change.item))
+    throw new Error('Expected an appearance update');
+  return readEntityAppearance(change.item.appearance);
+}
 
 type UpdateAppearance = Parameters<
   typeof createSaveEntityAppearance
@@ -343,11 +369,11 @@ it.each(['document', 'initiative'] as const)(
         })
       ),
       writeQuery: vi.fn<CacheHost['writeQuery']>(async (write) => {
-        const data = write.data as {
-          soupUpdates: { item: { appearance: EntityAppearance | null } };
-        };
-        record.appearance = data.soupUpdates.item.appearance;
-        patched.resolve();
+        try {
+          record.appearance = await writtenAppearance(write);
+        } finally {
+          patched.resolve();
+        }
         return {
           revision: INITIAL_CACHE_REVISION,
           revisionAdvanced: true,
@@ -400,12 +426,9 @@ it('serializes normalized cache rollback when overlapping edits both fail', asyn
       records: [{ recordKey: `GraphqlSoupDocument:${entity.id}`, record }],
     })),
     writeQuery: vi.fn<CacheHost['writeQuery']>(async (write) => {
-      const data = write.data as {
-        soupUpdates: { item: { appearance: EntityAppearance | null } };
-      };
-      record.appearance = data.soupUpdates.item.appearance;
-      if (record.appearance === appearance) firstPatched.resolve();
-      if (record.appearance === second) secondPatched.resolve();
+      record.appearance = await writtenAppearance(write);
+      if (sameAppearance(record.appearance, appearance)) firstPatched.resolve();
+      if (sameAppearance(record.appearance, second)) secondPatched.resolve();
       return {
         revision: INITIAL_CACHE_REVISION,
         revisionAdvanced: true,

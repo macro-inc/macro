@@ -37,6 +37,7 @@ snippets, task projects (initiatives), forms, and databases.
 - Keep unsaved previews inside the picker.
 - Keep mutations account-scoped, update every reader optimistically on Apply, and roll back rejected writes without overwriting newer edits.
 - Read only the normalized appearance fields before optimistic writes; unrelated preview fields can be absent on a loaded entity.
+- Type cache-write payloads with the generated subscription result; `soupUpdates` is a list.
 - Keep pending appearance visible through uncached GraphQL revalidation; retain confirmed intent only for failed readers until fresh data or mutation garbage collection.
 - Serialize server writes per entity, and reconcile confirmed appearance after in-flight initial reads without canceling those reads.
 - Render public metadata without mounting authenticated preview queries.

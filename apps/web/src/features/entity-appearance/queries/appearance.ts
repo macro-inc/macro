@@ -23,7 +23,10 @@ import type { Form } from '@service-storage/generated/schemas/form';
 import type { FormDetail } from '@service-storage/generated/schemas/formDetail';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import type { ListedForm } from '@service-storage/generated/schemas/listedForm';
-import { EntityAppearanceFieldsFragmentDoc } from '@service-storage/graphql/generated/graphql';
+import {
+  type EntityAppearanceCacheWriteSubscription,
+  EntityAppearanceFieldsFragmentDoc,
+} from '@service-storage/graphql/generated/graphql';
 import type { QueryClient, QueryKey } from '@tanstack/solid-query';
 import { err, ok, type Result } from 'neverthrow';
 import { match } from 'ts-pattern';
@@ -219,18 +222,20 @@ function appearanceCacheWrite(
     query: APPEARANCE_CACHE_WRITE,
     operationName: 'EntityAppearanceCacheWrite',
     data: {
-      soupUpdates: {
-        __typename: 'SoupUpdated',
-        item: {
-          __typename:
-            entity.type === 'document'
-              ? 'GraphqlSoupDocument'
-              : 'GraphqlSoupInitiative',
-          id: entity.id,
-          appearance,
+      soupUpdates: [
+        {
+          __typename: 'SoupUpdated',
+          item: {
+            __typename:
+              entity.type === 'document'
+                ? 'GraphqlSoupDocument'
+                : 'GraphqlSoupInitiative',
+            id: entity.id,
+            appearance,
+          },
         },
-      },
-    },
+      ],
+    } satisfies EntityAppearanceCacheWriteSubscription,
   };
 }
 
