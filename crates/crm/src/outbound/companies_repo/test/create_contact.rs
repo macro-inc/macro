@@ -192,14 +192,7 @@ async fn create_contact_without_email(pool: PgPool) -> anyhow::Result<()> {
     // Email-less contacts never conflict with each other.
     for name in ["Jane", "John"] {
         let contact = repo
-            .create_contact_for_company(
-                &team_id,
-                &company_id,
-                None,
-                name,
-                Utc::now(),
-                false,
-            )
+            .create_contact_for_company(&team_id, &company_id, None, name, Utc::now(), false)
             .await?;
         assert_eq!(contact.email, None);
         assert_eq!(contact.name.as_deref(), Some(name));
