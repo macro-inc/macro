@@ -113,10 +113,11 @@ a record independently of the row; additional values use the shared overflow men
 Email still matches visible company domains and contact addresses for feed
 membership, but the row displays only stored properties, not inferred matches.
 No separate CRM association metadata lookup or row footer runs during paging.
-Linked Tasks, Email, Notes, Calls and Databases open through nested Customers item
-routes from workspace activity and record sections. The route stores the item
-name and record trail in entry state; its parent retains the source tab and
-section. `route-adapter.ts` owns item navigation and close/history restoration;
+Linked Tasks, Email, Notes, Calls and Databases open through nested Customers
+routes from workspace activity and record sections, with `<item-type>/<item-id>`
+directly after the source URL. The route stores the item name and record trail
+in entry state; its parent retains the source tab and section. `route-adapter.ts`
+owns item navigation and close/history restoration;
 `views/item-detail.tsx` renders authorized details in the existing CRM shell
 with source, record trail and item breadcrumbs, omitting section labels such as
 Tasks and Files. The current record breadcrumb returns to the captured section

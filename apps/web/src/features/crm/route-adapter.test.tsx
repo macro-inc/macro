@@ -245,9 +245,7 @@ it('keeps an activity item in its source list across close and forward', async (
   await vi.waitFor(() =>
     expect(screen.getByTestId('item').textContent).toBe('Follow up')
   );
-  expect(url()).toBe(
-    '/companies/item/document/task-1/md/task?s0.crm.tab=tasks'
-  );
+  expect(url()).toBe('/companies/document/task-1/md/task?s0.crm.tab=tasks');
   route.closeItem();
   await vi.waitFor(() =>
     expect(screen.getByTestId('item').textContent).toBe('-')
@@ -283,7 +281,7 @@ it('retains a record trail, section and pipeline source for an item', async () =
     expect(screen.getByTestId('item').textContent).toBe('Note')
   );
   expect(url()).toBe(
-    '/companies/pipeline/sales/contact/maya/emails/item/document/note-1/md/task'
+    '/companies/pipeline/sales/contact/maya/emails/document/note-1/md/task'
   );
   await shows(
     'tab:pipeline:sales section:emails records:company:acme:Acme,contact:maya:Maya'
@@ -301,7 +299,7 @@ it('retains a record trail, section and pipeline source for an item', async () =
 
 it('closes a directly loaded item to its record section without a prior entry', async () => {
   const { url, shows, canGo } = renderCustomers(
-    '/companies/company/acme/emails/item/email/thread-1'
+    '/companies/company/acme/emails/email/thread-1'
   );
   await shows('tab:active section:emails records:company:acme:');
   expect(route.item()?.itemId).toBe('thread-1');

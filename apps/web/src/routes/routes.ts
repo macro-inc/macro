@@ -681,7 +681,7 @@ export const crmPipelineRecordRoute = defineRoute({
 /** An item opened from a Customers activity view or record section. */
 export const crmItemRoute = defineRoute({
   id: 'companies-item',
-  path: 'item/:itemType/:itemId/:itemFileType?/:itemSubType?',
+  path: ':itemType/:itemId/:itemFileType?/:itemSubType?',
   params: crmItemParams,
   state: crmItemStateSchema,
   claim: (params) => ({

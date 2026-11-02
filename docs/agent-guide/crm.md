@@ -291,7 +291,7 @@ trail (when present), and selected item, without section labels such as Tasks or
 Files or an extra separator before preview titles. The current record breadcrumb
 returns to the captured section and entry state. The item URL is nested under
 `/app/companies` or `/app/companies/pipeline/<uuid>`; record items also retain
-`/<record-type>/<record-id>/<section>` before `/item/<item-type>/<item-id>`.
+`/<record-type>/<record-id>/<section>` before `/<item-type>/<item-id>`.
 Back and Forward restore the item and source; selecting the source breadcrumb or
 closing the item returns to the source list or record with its entry state.
 Reload keeps the selected item's URL. Shift-click uses the existing separate

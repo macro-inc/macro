@@ -196,23 +196,26 @@ describe('CRM item URLs', () => {
     'references the selected %s item rather than its parent record',
     (item, block) => {
       expect(
-        resolveMention(
-          appUrl(`/companies/company/${companyId}/tasks/item/${item}`)
-        )
+        resolveMention(appUrl(`/companies/company/${companyId}/tasks/${item}`))
       ).toEqual({ id: itemId, block, params: {} });
     }
   );
 
   it.each([
     ['companies', crmItemRoute.id],
+    [`companies/company/${companyId}`, crmRecordItemRoute.id],
     [`companies/company/${companyId}/tasks`, crmRecordItemRoute.id],
     [`companies/pipeline/${pipelineId}`, crmPipelineItemRoute.id],
+    [
+      `companies/pipeline/${pipelineId}/contact/${contactId}`,
+      crmPipelineRecordItemRoute.id,
+    ],
     [
       `companies/pipeline/${pipelineId}/contact/${contactId}/emails`,
       crmPipelineRecordItemRoute.id,
     ],
   ])('retains the source branch of %s', (source, id) => {
-    expect(leafOf(`${source}/item/email/${itemId}`)).toEqual({
+    expect(leafOf(`${source}/email/${itemId}`)).toEqual({
       id,
       params: { itemType: 'email', itemId },
     });
