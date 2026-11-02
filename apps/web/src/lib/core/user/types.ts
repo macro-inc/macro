@@ -10,6 +10,12 @@ export type IUser = {
   name: string;
   photoUrl?: string;
   lastInteraction?: DateValue;
+  /**
+   * Set on agent principals whose runtime is paired but not connected. The
+   * mention menu marks them "Offline" and refuses to insert them, since the
+   * machine that would answer is away.
+   */
+  offline?: boolean;
 };
 
 type BaseUserName = {
