@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT ep.entity_id AS \"task_id!\", ep.values->'value'->0->>'entity_id' AS \"project_id!\"\n        FROM entity_properties ep\n        JOIN \"Document\" task ON task.id = ep.entity_id AND task.\"deletedAt\" IS NULL\n        WHERE ep.property_definition_id = '00000001-0000-0000-0000-000000000014'\n          AND ep.entity_type = 'TASK'\n          AND ep.entity_id = ANY($1)\n          AND ep.values->'value'->0->>'entity_type' = 'INITIATIVE'\n          AND CASE WHEN jsonb_typeof(ep.values->'value') = 'array'\n                   THEN jsonb_array_length(ep.values->'value') END = 1\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "task_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "project_id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "TextArray"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "d76ab6accefbe69bcaacbeab76a05bc654aaa17fc1376fa73ea7eac2c963a3ef"
+}

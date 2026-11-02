@@ -1,4 +1,7 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use async_graphql::dataloader::{DataLoader, Loader};
 use entity_access::domain::models::{
@@ -148,6 +151,92 @@ impl<P, A: EntityAccessService> PropertiesEntityPropertyReader<P, A> {
     }
 }
 
+impl<P, A> PropertiesEntityPropertyReader<P, A>
+where
+    P: properties::PropertiesService,
+    A: EntityAccessService,
+{
+    /// Properties of the tasks among `keys` the viewer can't open but can
+    /// list: a project the viewer may view lists them, and viewing a project
+    /// shows its tasks with their properties. Runs only for refused tasks, so
+    /// a list of items the viewer holds grants on makes no extra queries.
+    async fn listed_task_properties(
+        &self,
+        viewer: Option<&MacroUserIdStr<'static>>,
+        keys: &[model_entity::Entity<'static>],
+        receipts: &[EntityAccessReceipt<ViewAccessLevel>],
+    ) -> Result<
+        HashMap<properties::PropertyTargetKey, Vec<EntityPropertyWithDefinition>>,
+        rootcause::Report,
+    > {
+        let granted = receipts
+            .iter()
+            .filter(|receipt| receipt.entity().entity_type == model_entity::EntityType::Document)
+            .map(|receipt| receipt.entity().entity_id.as_str())
+            .collect::<HashSet<_>>();
+        let refused = keys
+            .iter()
+            .filter(|key| key.entity_type == model_entity::EntityType::Document)
+            .filter(|key| !granted.contains(key.entity_id.as_ref()))
+            .map(|key| key.entity_id.to_string())
+            .collect::<Vec<_>>();
+        if refused.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let mut tasks_by_project = HashMap::<Uuid, Vec<String>>::new();
+        for (task_id, project) in self
+            .properties_service
+            .task_listing_projects(&refused)
+            .await
+            .map_err(|err| rootcause::report!(err))?
+        {
+            tasks_by_project.entry(project).or_default().push(task_id);
+        }
+        let projects = tasks_by_project
+            .keys()
+            .map(|project| {
+                model_entity::EntityType::Initiative.with_entity_string(project.to_string())
+            })
+            .collect::<Vec<_>>();
+        let project_receipts = load_view_receipts(&projects, |key| async move {
+            let permission = self
+                .entity_access_service
+                .get_entity_permission(
+                    viewer.map(|user| &**user),
+                    &key.entity_id,
+                    key.entity_type,
+                    None,
+                )
+                .await?;
+            EntityAccessReceipt::try_new_for_user(
+                viewer.cloned(),
+                Entity {
+                    entity_id: key.entity_id.to_string(),
+                    entity_type: key.entity_type,
+                },
+                permission,
+            )
+        })
+        .await;
+        let mut listed = HashMap::new();
+        for project in project_receipts {
+            let Some(tasks) = Uuid::parse_str(&project.entity().entity_id)
+                .ok()
+                .and_then(|id| tasks_by_project.get(&id))
+            else {
+                continue;
+            };
+            listed.extend(
+                self.properties_service
+                    .get_project_task_properties(&project, tasks)
+                    .await
+                    .map_err(|err| rootcause::report!(err))?,
+            );
+        }
+        Ok(listed)
+    }
+}
+
 impl<P, A> EntityPropertyReader for PropertiesEntityPropertyReader<P, A>
 where
     P: properties::PropertiesService,
@@ -260,19 +349,24 @@ where
         ))
         .await;
 
-        if receipts.is_empty() {
+        let listed = self.listed_task_properties(viewer, keys, &receipts).await?;
+        if receipts.is_empty() && listed.is_empty() {
             return Ok(result);
         }
 
-        let properties_by_entity = self
-            .properties_service
-            .get_bulk_entity_properties(&receipts, Vec::new())
-            .instrument(tracing::info_span!(
-                "graphql_properties.hydrate",
-                entity_count = receipts.len()
-            ))
-            .await
-            .map_err(|err| rootcause::report!(err))?;
+        let mut properties_by_entity = if receipts.is_empty() {
+            HashMap::new()
+        } else {
+            self.properties_service
+                .get_bulk_entity_properties(&receipts, Vec::new())
+                .instrument(tracing::info_span!(
+                    "graphql_properties.hydrate",
+                    entity_count = receipts.len()
+                ))
+                .await
+                .map_err(|err| rootcause::report!(err))?
+        };
+        properties_by_entity.extend(listed);
 
         // Merge back under the original canonical loader keys.
         for key in keys {
