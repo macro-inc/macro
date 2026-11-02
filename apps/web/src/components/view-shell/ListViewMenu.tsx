@@ -184,13 +184,10 @@ export function ListViewMenu<TGroup extends string, TSort extends string>(
             <ViewIcon class="size-4" />
             {t('viewMenus.view')}
           </Dropdown.Trigger>
-          <Dropdown.Content class="min-w-56 max-w-64">
+          <Dropdown.Content class="min-w-80 max-w-96">
             <Show when={props.layout}>
               {(layout) => (
                 <Dropdown.Group>
-                  <Dropdown.GroupLabel>
-                    {t('viewMenus.layout')}
-                  </Dropdown.GroupLabel>
                   <Dropdown.Item
                     role="presentation"
                     closeOnSelect={false}
@@ -267,13 +264,8 @@ export function ListViewMenu<TGroup extends string, TSort extends string>(
             <MobileDrawer.ScrollBody class="gap-4">
               <Show when={props.layout}>
                 {(layout) => (
-                  <div>
-                    <MobileDrawer.Label>
-                      {t('viewMenus.layout')}
-                    </MobileDrawer.Label>
-                    <div class="px-6">
-                      <LayoutTabs selection={layout()} />
-                    </div>
+                  <div class="px-6">
+                    <LayoutTabs selection={layout()} />
                   </div>
                 )}
               </Show>

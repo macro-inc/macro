@@ -83,7 +83,8 @@ The sidebar has no Tags section: filter by tag from the `Tags` group of the `Fil
 and switching tabs clears it like any other filter. On mobile, the tabs
 are pills, with separate leading Filters and Display controls. Filters contains only
 filter facets (including Tags); Display opens a sheet with Group by, Sort, and Properties choices.
-On desktop, Display opens a compact menu with Layout tabs, Group by, Sort, and Properties.
+On desktop, Display opens a menu wide enough for full layout tab labels, followed by
+Group by, Sort, and Properties. Layout tabs have no separate subheading.
 In Properties, compact icon pills use a wrapping row on desktop and touch.
 Shown properties have a filled pill, Hide when empty uses a dashed outline,
 and hidden properties have a muted, unframed pill. Tags, Updated, and Created by
