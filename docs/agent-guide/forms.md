@@ -263,7 +263,11 @@ Required means an answer must be present; it does not mean the answer qualifies.
 Use nonempty AND/OR gates for qualification. Rules must refer to questions in
 earlier sections and options belonging to those questions. Empty answers pass
 only an `isEmpty` presence check, including for negative comparisons. Zero and
-false are answers. Put at most one booking section last. Select a saved accessible
+false are answers. To branch, give a questions section `showWhen` rules
+(`CreateForm`) or change them with `setShowWhen` (`EditForm`, `null` clears);
+they follow the same rules as a gate but name only questions of earlier
+sections, never the section's own. A skipped section's questions are not
+required and their answers are not saved. Put at most one booking section last. Select a saved accessible
 profile/event identity from the scheduling UI or available booking tools. Booking
 gates reveal a link after an accepted response; the independent booking URL
 remains usable. Requests for strict booking enforcement are refused.

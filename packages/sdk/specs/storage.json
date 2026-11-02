@@ -32037,6 +32037,10 @@
                 },
                 "description": "Its questions, in order."
               },
+              "showWhen": {
+                "$ref": "#/components/schemas/FilterGroup",
+                "description": "When to show it: the rules answers of earlier shown sections must\npass, naming only their columns. A section whose rules fail is\nskipped: its questions are not required and their answers are\nnot written. Absent, it is always shown."
+              },
               "title": {
                 "type": "string",
                 "description": "Its title; may be empty."
@@ -32139,6 +32143,10 @@
                   "$ref": "#/components/schemas/FormQuestionDetail"
                 },
                 "description": "Its questions, in order."
+              },
+              "showWhen": {
+                "$ref": "#/components/schemas/FilterGroup",
+                "description": "When to show it, from earlier shown sections' answers; absent,\nit is always shown. Sent to every caller so a respondent's page\ncan skip it."
               },
               "title": {
                 "type": "string",
@@ -34665,6 +34673,37 @@
               "kind": {
                 "type": "string",
                 "enum": ["gateRule"]
+              },
+              "reason": {
+                "type": "string",
+                "description": "Why."
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A section's show-when rules test a column no earlier section asks.",
+            "required": ["column", "kind"],
+            "properties": {
+              "column": {
+                "type": "string",
+                "format": "uuid",
+                "description": "The column."
+              },
+              "kind": {
+                "type": "string",
+                "enum": ["conditionNamesLaterColumn"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "A section's show-when rule does not fit its column.",
+            "required": ["reason", "kind"],
+            "properties": {
+              "kind": {
+                "type": "string",
+                "enum": ["conditionRule"]
               },
               "reason": {
                 "type": "string",

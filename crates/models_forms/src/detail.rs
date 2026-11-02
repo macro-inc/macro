@@ -49,7 +49,8 @@ pub enum FormSectionDetail {
         /// When to show it, from earlier shown sections' answers; absent,
         /// it is always shown. Sent to every caller so a respondent's page
         /// can skip it.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
+        // utoipa does not apply `rename_all_fields`, so the wire name is explicit.
+        #[serde(rename = "showWhen", default, skip_serializing_if = "Option::is_none")]
         #[schema(nullable = false)]
         #[specta(optional)]
         show_when: Option<FilterGroup>,

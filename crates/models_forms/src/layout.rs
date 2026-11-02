@@ -68,7 +68,8 @@ pub enum FormSection {
         /// pass, naming only their columns. A section whose rules fail is
         /// skipped: its questions are not required and their answers are
         /// not written. Absent, it is always shown.
-        #[serde(default, skip_serializing_if = "Option::is_none")]
+        // utoipa does not apply `rename_all_fields`, so the wire name is explicit.
+        #[serde(rename = "showWhen", default, skip_serializing_if = "Option::is_none")]
         #[schema(nullable = false)]
         #[specta(optional)]
         show_when: Option<FilterGroup>,
