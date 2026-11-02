@@ -91,6 +91,8 @@ The Project column shows the linked project's name when one project is assigned,
 and `Project` when empty. Multiple linked projects show an item count.
 Long assignee and project names truncate within their columns; hover the cell
 to read the full value.
+The Projects collection reuses a single Due date column and hides Updated in compact panes.
+Property controls retain their selected values in accessible names when compact styles hide the text.
 The project pill beneath a task title shows the project icon and name without
 a `Project:` prefix. It and the Project row in the Properties side panel split in
 two once a project is set: the name opens the project (shift-click for a new
@@ -134,6 +136,45 @@ should appear immediately and stay visible through both responses in the list,
 task header, side panel, and a reopened picker. A rejected save should remove only
 the optimistic tag. Repeat with an existing assignment and with removal.
 
+## Due dates
+
+Tasks lists and boards offer **Status**, **Priority**, **Due soonest**, and
+**Due furthest away** sorting alongside Viewed, Updated, and Created. Status
+follows stored option order; Priority puts urgent tasks first. Missing values
+stay last. Property-sort ties use newest update, then descending task ID.
+Text search retains its existing ordering and flat list results; clear search to sort.
+Boards group the loaded search results as before, without complete counts or grouped-search requests.
+
+**Filter → Due date** offers Overdue, Today, Tomorrow, Next 7 days, Later,
+Has due date, No due date, and Custom range. **Any due date** removes only the date
+filter. Custom range includes both selected calendar dates; either endpoint can be
+empty. Cancel leaves the previous filter unchanged. Status remains independent:
+select Completed or Canceled explicitly to include closed tasks in a date filter.
+The mobile controls use the same options and date-range dialog in the sliders drawer.
+
+**Group → Due date** puts No due date first, then uses non-overlapping viewer-local calendar buckets:
+Overdue is before today's midnight; Today and Tomorrow cover those entire days;
+Next 7 days covers D+2 through D+7; Later starts at D+8; No due date includes
+missing and cleared dates. Relative filters and groups refresh at local midnight,
+timezone changes, and app resume. Changed boundaries start fresh continuation pages.
+Task lists show an editable **Due date** property column with a calendar icon
+only when a date is set; click its header to switch between Due soonest and Due
+furthest away. Phones and narrow panes show only the urgency-colored icon for
+dated tasks. Empty date cells remain editable without a calendar icon. The
+dropdown shows the current date, or **No due date** when unset, above the date
+choices. Due dates stay outside the title.
+Board cards show due dates in property pills. Overdue dates
+on open tasks use the danger color; only dates due today or tomorrow use the
+warning color. Later dates, completed tasks, and canceled tasks have neutral due
+dates. Urgency refreshes at local midnight, on timezone changes, and app resume.
+Date selections persist with the navigation entry and round-trip through
+`tasks.dueDate`, `tasks.dueStart`, and `tasks.dueEnd` URL parameters.
+
+Verify dates around midnight and a daylight-saving transition. Check both sort
+directions with tied and undated tasks. Filter during local and service search,
+then edit or clear a due date: loaded rows move between buckets immediately,
+and refetches correct complete counts and previously absent tasks. Gantt's
+saved-date semantics do not change.
 ## Saved views
 
 Saved views are available on main Tasks, not inside Project or CRM task lists.
@@ -143,14 +184,14 @@ Saved views are available on main Tasks, not inside Project or CRM task lists.
 - The empty sidebar and mobile picker show **Your go-to views**, the muted description **Save your setup for next time.**, and a secondary **Create view** button with a leading plus icon in a rounded container with a subtle border, 12px padding, the surrounding background, and no shadow or illustration. It starts the same unsaved draft as desktop **+**; on mobile, the picker closes first. Configure the draft in Filters, then choose **Save view**.
 - Desktop **+** starts an unsaved view without person restrictions and with explicit open-status filters. It expands the section and adds a selected, italic **New view** row labeled **Draft** in the sidebar and mobile picker. Configure filters, then choose **Save view**; the name defaults to **New view** and can be edited before saving. A confirmed save replaces the draft with the named view; **Cancel** in the desktop toolbar or mobile filter drawer, another selection, or leaving Tasks removes the unsaved row. Canceling only the name dialog keeps the draft for later.
 - Desktop **Save view** and draft **Cancel** are separate standalone buttons with a gap, not segments of a button group.
-- When filters, layout, grouping, or sort differ from the built-in tab defaults, the filled **Save view** button appears immediately left of Filters on desktop and in an edge-to-edge mobile banner above the filter drawer footer. The borderless banner overlays content on a drawer-colored backing and has a leading bookmark icon on its button. Base settings and search alone do not show the banner. It captures current filters, layout, grouping, and ordered sort directions, but excludes text search and scroll state. My Tasks adds **Me** to Assignee; Created by me adds it to Created by. Additional people in the same filter use OR matching.
+- When filters, due date, layout, grouping, or sort differ from the built-in tab defaults, the filled **Save view** button appears immediately left of Filters on desktop and in an edge-to-edge mobile banner above the filter drawer footer. The borderless banner overlays content on a drawer-colored backing and has a leading bookmark icon on its button. Base settings and search alone do not show the banner. It captures current filters, relative due-date presets or custom calendar bounds, layout, grouping, and ordered sort directions, but excludes text search and scroll state. My Tasks adds **Me** to Assignee; Created by me adds it to Created by. Additional people in the same filter use OR matching.
 - Saved views use the normal Assignee and Created by filters, not a separate Scope control. **Me** stays relative; its tooltip says “Matches whoever opens this saved view.” A named person stays fixed. Removing Me removes that restriction.
-- Temporary filter, layout, grouping, or sort edits show a filled **Save changes** button and **Reset**. Opening or resetting a saved view restores all four. Mobile still displays a list without replacing the stored desktop layout. Right-click a sidebar view or use its **…** button for **Edit**, **Duplicate**, **Copy link**, and confirmed **Delete view**. On desktop, the selected view's topbar shows a bookmark icon before its name and an unframed ghost overflow button immediately after it. On mobile, the picker shows the name and contains row menus; creation and draft cancellation appear in the filter drawer's overlay banner above the footer; Save changes and Reset sit on the footer's right, opposite Clear all, not below the tabs. Non-owners cannot rename, share, overwrite, or delete a shared view.
+- Temporary filter, due-date, layout, grouping, or sort edits show a filled **Save changes** button and **Reset**. Opening or resetting a saved view restores all five, including due-date grouping and property sorts. Older definitions without a due-date filter remain unrestricted. Mobile still displays a list without replacing the stored desktop layout. Right-click a sidebar view or use its **…** button for **Edit**, **Duplicate**, **Copy link**, and confirmed **Delete view**. On desktop, the selected view's topbar shows a bookmark icon before its name and an unframed ghost overflow button immediately after it. On mobile, the picker shows the name and contains row menus; creation and draft cancellation appear in the filter drawer's overlay banner above the footer; Save changes and Reset sit on the footer's right, opposite Clear all, not below the tabs. Non-owners cannot rename, share, overwrite, or delete a shared view.
 - **Edit** opens the shared create/edit dialog with the saved name and team-sharing checkbox prefilled, without saving temporary filter, layout, grouping, or sort changes. Edit and delete dialog titles identify the saved view by name and wrap long names. Both create and edit modes use a 600px-wide dialog that stays within narrow viewports. **Duplicate** opens a private copy with a prefilled “(copy)” name; duplicating the selected view includes its temporary settings. If the original has unsupported or invalid settings, the dialog warns that the copy omits them and leaves the original unchanged. Sidebar actions on another view do not change the current selection unless a duplicate is saved.
 - The optional **Share with team** checkbox shares only the view definition. Its adjacent info icon shows the explanation on hover; click, tap, or keyboard activation opens it without changing the checkbox. Each teammate still sees only permitted items. Both the owner and viewer must currently belong to that team; leaving disables access and rejoining restores it.
 - Leaving the view or opening task detail discards temporary edits. The return breadcrumb retains the saved-view identity and reloads its saved filters, layout, grouping, and sort.
 - An unavailable or deleted view shows an explicit unavailable state, not All Tasks under the old name. Unsupported or malformed filters are skipped while supported filters apply immediately. A danger-colored banner above the results names affected filters or view settings without an extra description. If no filters apply, the list shows all permitted tasks, including closed tasks. Loading never changes the saved definition. Unknown tag/person labels retain their filters until deliberately removed. Ordinary **Save changes** is disabled until the app understands every setting or the owner explicitly removes unsupported settings; Edit remains available.
-- Owners can choose **Remove & save** at the right edge of that banner. It removes only skipped settings from the stored definition, preserves supported filters, layout, grouping, sort, and sharing, and leaves temporary edits unsaved. The banner disappears only after a confirmed save; failures retain it for retry, and revision conflicts offer **Reload saved view**.
+- Owners can choose **Remove & save** at the right edge of that banner. It removes only skipped settings from the stored definition, preserves supported filters, due date, layout, grouping, sort, and sharing, and leaves temporary edits unsaved. The banner disappears only after a confirmed save; failures retain it for retry, and revision conflicts offer **Reload saved view**.
 - A conflicting save retains the draft and offers **Reload saved view** or **Duplicate**. A network failure also retains the name and sharing inputs.
 - Copy links use the existing split search codec, for example `/app/component/tasks?s0.tasks.savedView=<uuid>`.
 
@@ -308,20 +349,26 @@ Gantt persists in `tasks.layout` or `projectTasks.layout`, just like List and Bo
 
 Choose **Board** in the **Task layout** group in the toolbar
 (or **List** to switch back). One icon is selected at a time; hover or focus shows
-its label. **Group by**
-offers Status, Priority, Assignee, and (when Projects is enabled) Project.
+its label. **Group by** offers Status, Priority, Assignee, Due date,
+and (when Projects is enabled) Project.
 Both layouts share one grouping, which restores with the Tasks navigation entry.
 List-only None and Date groupings display Status columns in Board; switching
 back to List retains those selections and collapsed groups until grouping changes.
 
-Each column header has an icon-only **Add task** plus button. It opens the task
-composer with that column's Status, Priority, Assignee, or Project preselected,
-while preserving the originating pane's other creation presets. **Unassigned**
+Status, Priority, Assignee, Project, and Due date column headers have an icon-only
+**Add task** plus button. The button opens the task composer with that column's
+property preselected, while preserving the originating pane's other creation
+presets. Due-date columns prefill yesterday for Overdue, today or tomorrow for
+their named columns, D+2 for Next 7 days, and D+8 for Later. No due date clears any
+inherited date preset. The draft's due date remains editable. **Unassigned**
 and **No priority** start with that property empty. **No project** starts empty
 outside project boards; project boards always retain the current project.
 **No status** starts with **Not started**, because new tasks require a status.
-Each pane or project scope and column keeps a separate composer draft. Project
-boards hide creation actions when the project is read-only.
+Each pane or project scope and column keeps a separate composer draft. Dated
+column drafts are also scoped to the current local day and timezone, so reopening
+after midnight or a timezone change starts with the new date preset. Undated and
+non-date columns keep their existing draft scope. Normal draft expiration still
+applies. Project boards hide creation actions when the project is read-only.
 
 Click a card's body or title to open the task. Right-click a card, or press
 Shift+F10 on its focused title, for the List row's task menu; it acts on that
@@ -331,9 +378,9 @@ mouse button held to start dragging to another column; holding still does not
 start a drag. Property pills remain interactive and do not start a drag.
 A new destination column highlights once movement slows
 or pauses for about 100 ms. Fast travel suppresses activation of new columns.
-A valid hover shows **Board sorted by Updated**, **Created**, or **Viewed**
-using the active sort label. The drop does not choose a pointer insertion slot:
-its card takes its place in the current sort (or search relevance order).
+A valid hover shows **Board sorted by Updated**, **Created**, **Viewed**,
+**Status**, **Priority**, or the active due-date sort label. The drop does not choose a pointer insertion slot:
+its card takes its place in the current sort (or existing text-search order).
 Same-column moves and column reordering remain disabled.
 Layout, primary sort, sort direction, and grouping are reflected in `tasks.layout`,
 `tasks.sort`, `tasks.sortReversed`, and `tasks.groupBy` search parameters.
@@ -376,9 +423,10 @@ a drop target.
 
 An icon-only status pill appears before the task title, and an icon-only assignee
 pill appears to its right in every grouping. The lower row omits status, assignee,
-and the grouping property. The remaining properties use standard pill controls
-and icons. Priority uses a compact icon-only pill; due date and project appear
-when set. Metadata properties stay read-only, and pending writes disable editing.
+and the grouping property, except that the exact due-date pill stays visible in
+Due date grouping. The remaining properties use standard pill controls and icons.
+Priority uses a compact icon-only pill; due date and project appear when set.
+Metadata properties stay read-only, and pending writes disable editing.
 A task assigned to multiple people appears in each person's column. Moving it
 from Alice to Bob replaces Alice while keeping the other assignees. Moving to
 **Unassigned** clears all assignees. Project moves change the task's Project
@@ -407,7 +455,15 @@ Filters remain active: completing a task or removing yourself as assignee can
 hide the card from the current view. Click its title to open the task; modified
 clicks can open a separate split.
 
-Due-date columns and priority/due-date sorting are not in this version.
+Due-date drops reschedule the task: Today and Tomorrow assign those dates;
+No due date clears the value. Overdue, Next 7 days, and Later open a date picker
+restricted to that bucket, with explicit Apply and Cancel. The source placement
+stays unchanged until Apply; Cancel, Escape, dismissal, or a scope change makes no
+write. A failed save restores the prior placement and counts. Existing property
+permissions and pending states apply, and the destination uses the active sort.
+A due-date filter also hides buckets that cannot contain a matching date;
+**Reveal hidden columns** removes only that date filter.
+Priority and Status use the same sort choices as the task list.
 The shared board primitives remain independent of Tasks queries and mutations.
 
 ## Cached grouped lists
