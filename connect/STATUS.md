@@ -9,16 +9,17 @@ for catalog apps by 2026-11-06 ([plan](docs/plan.md#week-one)).
 
 Eric. Each item is ready for one sitting; agents prepare the rest.
 
-- [ ] **Review PR #9231** (Connect as an independent backend; touches none of
-      Macro's deployed services).
-- [ ] **Review the demo PR** (stacked on #9231): the demo app, its optional
-      infra, and the CDP driver.
-- [ ] **Review the dashboard PR #9272** (stacked on the demo PR):
-      `/v1/connections`, `/v1/users`, `/v1/connections/summary`, and
-      `/demo/dashboard`.
+- [ ] **Review the dashboard PR #9272** (now against main; #9231 and the
+      demo PR are merged): `/v1/connections`, `/v1/users`,
+      `/v1/connections/summary`, and `/demo/dashboard`.
 - [ ] **Review the catalog PR #9278** (stacked on #9272): `oauth_client`
       labels, 28 live DCR/CIMD apps, the per-app acceptance probe, and the
       conformance table in [catalog.md](docs/catalog.md).
+- [ ] Netlify: click Authorize on the consent page (open in the Connect
+      browser, noVNC port 6081; restart from `/demo` if it expired), or OK an
+      agent clicking vendor consent
+      screens for the `connect@macro.com` test accounts. The Netlify grant is
+      the remaining check for its "Authorize stalls" note.
 - [ ] Stripe: finish the `connect@macro.com` Stripe signup (it shows a
       CAPTCHA) in the browser via noVNC (port 6081), so an agent can complete
       Stripe's consent and tool check.
