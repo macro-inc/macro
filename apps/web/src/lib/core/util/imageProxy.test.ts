@@ -53,6 +53,18 @@ describe('displayImageUrl', () => {
     expect(displayImageUrl(src)).toBe(src);
   });
 
+  it('loads public Klipy GIFs directly without proxy authentication', () => {
+    const src = 'https://static.klipy.com/media/example/medium.gif';
+    expect(displayImageUrl(src)).toBe(src);
+  });
+
+  it('does not bypass the proxy for a host impersonating Klipy', () => {
+    const src = 'https://static.klipy.com.example.com/medium.gif';
+    expect(displayImageUrl(src)).toBe(
+      `${SERVER_HOSTS['image-proxy-service']}/proxy?url=${encodeURIComponent(src)}`
+    );
+  });
+
   it('proxies a host that only begins like the static file host', () => {
     const src = `${SERVER_HOSTS['static-file']}.example.com/shot.png`;
     expect(displayImageUrl(src)).toBe(

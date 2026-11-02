@@ -55,6 +55,23 @@ describe('markdown media loading', () => {
     );
   });
 
+  it('loads a selected GIF directly with CORS instead of proxy authentication', () => {
+    const src = 'https://static.klipy.com/media/example/medium.gif';
+    const view = render(() => (
+      <MarkdownImage
+        {...unsetMedia}
+        key="selected-gif"
+        url={src}
+        alt="Selected GIF"
+        width={320}
+        height={240}
+      />
+    ));
+    const image = view.container.querySelector('img')!;
+    expect(image.getAttribute('src')).toBe(src);
+    expect(image.crossOrigin).toBe('anonymous');
+  });
+
   it('shows a reserved image card while the file has no size yet', () => {
     render(() => (
       <MarkdownImage
