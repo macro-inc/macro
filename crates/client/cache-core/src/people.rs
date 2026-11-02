@@ -99,7 +99,9 @@ pub enum PeopleMode {
     Mention,
 }
 
-/// Cursorless top-K query over the current cached directory, not a corpus-completeness claim.
+/// A ranked window over the current cached directory, not a completeness claim.
+/// Continuations pin the ranking clock and context epoch; concurrent row updates
+/// have ordinary keyset semantics, not a transactional snapshot guarantee.
 #[derive(Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase", deny_unknown_fields)]
 #[cfg_attr(any(test, feature = "schema"), derive(schemars::JsonSchema))]
@@ -120,6 +122,8 @@ pub struct PeopleSearch {
     pub limit: usize,
     /// Injected wall clock for reproducible scoring.
     pub now_ms: i64,
+    /// Opaque continuation from this same account, generation and search policy.
+    pub cursor: Option<String>,
 }
 
 /// Fully materialized winning person; neither the cache key nor DM id replaces user_id.
@@ -160,8 +164,12 @@ pub enum PeopleSearchResult {
     Page {
         /// Fully materialized winners only.
         people: Vec<PersonHit>,
-        /// Additional matches were seen; refining the query may reveal them.
+        /// Additional matches were seen.
         truncated: bool,
+        /// Continue after this ranked window. A window may be short when prior
+        /// conversation duplicates were skipped; only null proves exhaustion.
+        #[serde(rename = "nextCursor")]
+        next_cursor: Option<String>,
     },
 }
 
@@ -174,6 +182,9 @@ pub enum PeopleError {
     /// The update belongs to a superseded context snapshot.
     #[error("contact search context changed")]
     StaleContext,
+    /// A continuation belongs to another scope, query, policy or context epoch.
+    #[error("contact search cursor changed")]
+    StaleCursor,
     /// Private metadata must decode rather than silently weaken exclusions.
     #[error("invalid contact context encoding: {0}")]
     Encoding(#[from] serde_json::Error),
@@ -220,6 +231,7 @@ pub(crate) fn contact_key(viewer: &str, user: &str) -> EntityKey<'static> {
     )
 }
 
+mod cursor;
 pub(crate) mod ranking;
 
 #[cfg(any(test, feature = "schema"))]

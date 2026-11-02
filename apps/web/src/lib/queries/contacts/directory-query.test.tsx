@@ -1,5 +1,9 @@
 import { render } from '@solidjs/testing-library';
-import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
+import {
+  hashKey,
+  QueryClient,
+  QueryClientProvider,
+} from '@tanstack/solid-query';
 import { createEffect, createSignal } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
@@ -66,6 +70,70 @@ it('keeps one result window and removes query history after replacement and disp
   mounted.unmount();
   await vi.runOnlyPendingTimersAsync();
   expect(client.getQueryCache().getAll()).toHaveLength(0);
+  client.clear();
+});
+
+it('accepts external menu queries and resets ranked continuation when policy changes', async () => {
+  vi.useFakeTimers();
+  const client = new QueryClient();
+  const [search, setSearch] = createSignal('first');
+  const [excluded, setExcluded] = createSignal<string[]>([]);
+  let committed = Promise.withResolvers<void>();
+  let window: ReturnType<typeof createContactDirectoryWindow> | undefined;
+  const reader = vi
+    .fn<typeof readContactDirectory>()
+    .mockImplementation(async (user, _host, request) => ({
+      ...result(user, request.query),
+      nextCursor: {
+        source: 'people',
+        userId: user,
+        query: request.query,
+        generation: 'generation',
+        after: 'rank-position',
+        policyKey: hashKey([request.policy]),
+      },
+    }));
+  function Harness() {
+    const directory = createContactDirectoryWindow(
+      () => ({ userId: 'viewer' }),
+      reader,
+      () => true,
+      {
+        search,
+        policy: () => ({ mode: 'command', excluded: excluded() }),
+      }
+    );
+    window = directory;
+    createEffect(() => {
+      if (directory.data()) committed.resolve();
+    });
+    return null;
+  }
+  const mounted = render(() => (
+    <QueryClientProvider client={client}>
+      <Harness />
+    </QueryClientProvider>
+  ));
+  await vi.advanceTimersByTimeAsync(200);
+  await committed.promise;
+  committed = Promise.withResolvers<void>();
+  window!.next();
+  await vi.runOnlyPendingTimersAsync();
+  await committed.promise;
+  expect(reader.mock.calls.at(-1)?.[2].cursor?.source).toBe('people');
+  committed = Promise.withResolvers<void>();
+  setExcluded(['viewer']);
+  await vi.runOnlyPendingTimersAsync();
+  await committed.promise;
+  expect(reader.mock.calls.at(-1)?.[2].cursor).toBeUndefined();
+  committed = Promise.withResolvers<void>();
+  setSearch('next');
+  await vi.advanceTimersByTimeAsync(200);
+  await committed.promise;
+  expect(reader.mock.calls.at(-1)?.[2].query).toBe('next');
+  await vi.runOnlyPendingTimersAsync();
+  expect(client.getQueryCache().getAll()).toHaveLength(1);
+  mounted.unmount();
   client.clear();
 });
 

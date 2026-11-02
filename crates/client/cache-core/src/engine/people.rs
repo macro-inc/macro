@@ -160,11 +160,17 @@ impl<S: Storage> Engine<S> {
             return Ok(PeopleSearchResult::ContextPending);
         };
         let query = SearchQuery::new(&request.query);
-        let mut ranker = people::ranking::PeopleRanker::new(request, epoch);
+        let mut ranker = people::ranking::PeopleRanker::new(request, epoch)?;
         self.storage
             .visit_contact_records(&query, |key, record| ranker.push(key, record))
             .await
             .map_err(EngineError::Storage)?;
-        Ok(ranker.finish())
+        if ranker.scan_prior_conversations() {
+            self.storage
+                .visit_contact_records(&query, |key, record| ranker.push(key, record))
+                .await
+                .map_err(EngineError::Storage)?;
+        }
+        ranker.finish().map_err(EngineError::from)
     }
 }

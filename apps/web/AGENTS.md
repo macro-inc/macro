@@ -1,11 +1,11 @@
 ## Development Commands
 
 - Use `bun` as the package manager and script runner (`bun run build`, `bunx tsc`).
-- `bun run test`: run tests 
+- `bun run test`: run tests
 - `bun run check`: check typescript changes
-- `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write. 
-- `bun run lint`: lint with biome 
-- `bun run format`: format changes with biome 
+- `CacheHost.people` contracts come from cache-core models: `bun run gen-cache-people-schema --rust` regenerates Rust JSON plus Zod/types; `--check --rust` verifies both. `bun run check` verifies JSON-to-frontend generation, while cache-core tests verify Rust-to-JSON drift. Missing native person commands mean unsupported, never permission to issue an unscoped write.
+- `bun run lint`: lint with biome
+- `bun run format`: format changes with biome
 - `bun run knip`: to check for dead code
 - Run Linux native cache-plugin tests from the repository root with `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin`; the [Tauri platform shell](../../docs/development/running-locally.md) supplies the required desktop libraries.
 - Refresh `nix-support/node_modules-hashes.json` for Linux and Darwin when dependency manifests, the lockfile, or dependency patches change.
@@ -40,6 +40,10 @@ than publishing an empty snapshot. `context-publisher.ts` caps pending IDs and
 write batches at 500, replaces overflowing/uncertain snapshots with a new epoch,
 and never writes directory names or membership. `useContactContextPublisher`
 shares Soup's leader, rollout and generation lifecycle; do not add another leader.
+The bounded directory window accepts external search/policy inputs. Ranked person
+cursors require coordinator protocol 13; they bind scope/policy/epoch and retain
+only a scoring position/clock, not previous result IDs. Honor continuations on
+short/empty pages and keep server fallback explicitly source-ordered.
 
 ## Verifying a change in a real browser
 

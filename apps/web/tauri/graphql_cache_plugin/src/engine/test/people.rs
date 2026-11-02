@@ -48,6 +48,7 @@ fn native_person_policy_preserves_scope_and_publication() {
             sender_domain: None,
             limit: 1,
             now_ms: 0,
+            cursor: None,
         };
         assert!(matches!(
             handle.people_search(request.clone()).await.unwrap(),

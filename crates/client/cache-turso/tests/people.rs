@@ -60,6 +60,7 @@ fn people_policy_100k() {
                     sender_domain: None,
                     limit: 50,
                     now_ms: 2_000,
+                    cursor: None,
                 })
                 .await
                 .unwrap();

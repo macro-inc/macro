@@ -321,7 +321,12 @@ hosts now expose state/update/search through dedicated commands. Rust-derived
 transport schemas are checked in `src/people/schema.json` and regenerated from
 `apps/web` with `bun run gen-cache-people-schema --rust`. The frontend now publishes
 channel/inbox context under Soup's leader in bounded snapshot/delta batches;
-Quick Access/recipient reader migration is still pending.
+Quick Access/recipient reader migration is still pending. Ranked person windows
+now continue with opaque scope/policy/epoch-bound cursors and a pinned scoring
+clock. Continuing command searches may make a second streamed pass to omit DM
+aliases already emitted on previous pages, without retaining page history or a
+corpus-sized seen set. Such pages can be short/empty with a continuation; ordinary
+record updates have keyset semantics, not transactional snapshot guarantees.
 
 ## Browser OPFS writes
 

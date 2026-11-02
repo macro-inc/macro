@@ -42,7 +42,9 @@ export function isPeopleSearch(value: unknown): value is PeopleSearch {
     result.data.excluded.every((id) => UTF8.encode(id).length <= 1024) &&
     (result.data.senderDomain == null ||
       UTF8.encode(result.data.senderDomain).length <= 255) &&
-    Number.isSafeInteger(result.data.nowMs)
+    Number.isSafeInteger(result.data.nowMs) &&
+    (result.data.cursor == null ||
+      UTF8.encode(result.data.cursor).length <= 4096)
   );
 }
 export function isPeopleScope(value: unknown): value is PeopleScope {
@@ -86,6 +88,14 @@ export function parsePeopleContext(value: unknown): PeopleContextState {
   return result.data;
 }
 export function parsePeopleSearchResult(value: unknown): PeopleSearchResult {
+  if (
+    value &&
+    typeof value === 'object' &&
+    'kind' in value &&
+    value.kind === 'page' &&
+    !('nextCursor' in value)
+  )
+    throw new Error('Invalid contact search response');
   if (
     value &&
     typeof value === 'object' &&

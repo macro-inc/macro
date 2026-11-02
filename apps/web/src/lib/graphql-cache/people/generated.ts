@@ -76,6 +76,7 @@ export type PeopleScope = z.infer<typeof PeopleScopeSchema>;
 
 export const PeopleSearchSchema = z
   .object({
+    cursor: z.union([z.string(), z.null()]).optional(),
     excluded: z.array(z.string()).max(500),
     limit: z.number().int().gte(1).lte(500),
     mode: z.union([
@@ -98,6 +99,7 @@ export const PeopleSearchResultSchema = z.union([
   z.object({ kind: z.literal('contextPending') }),
   z.object({
     kind: z.literal('page'),
+    nextCursor: z.union([z.string(), z.null()]).optional(),
     people: z.array(
       z.object({
         directMessage: z

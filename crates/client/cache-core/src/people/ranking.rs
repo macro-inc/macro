@@ -1,3 +1,4 @@
+use super::cursor::{Cursor, Position, fingerprint};
 use super::*;
 use crate::value::{CacheValue, Record};
 use macro_user_id::cowlike::CowLike;
@@ -53,28 +54,58 @@ pub(crate) struct PeopleRanker<'a> {
     excluded: HashSet<&'a str>,
     best: BinaryHeap<Ranked>,
     conversations: HashSet<Uuid>,
+    prior_conversations: HashSet<Uuid>,
+    prior_scan: bool,
+    after: Option<Position>,
+    now_ms: i64,
+    fingerprint: String,
 }
 impl<'a> PeopleRanker<'a> {
-    pub(crate) fn new(request: &'a PeopleSearch, epoch: Uuid) -> Self {
-        Self {
+    pub(crate) fn new(request: &'a PeopleSearch, epoch: Uuid) -> Result<Self, PeopleError> {
+        let fingerprint = fingerprint(request, epoch)?;
+        let cursor = request
+            .cursor
+            .as_deref()
+            .map(|value| Cursor::decode(value, &fingerprint))
+            .transpose()?;
+        let now_ms = cursor
+            .as_ref()
+            .map_or(request.now_ms, |cursor| cursor.now_ms);
+        Ok(Self {
             request,
             epoch,
             query: normalize_text(&request.query),
             excluded: request.excluded.iter().map(|id| id.as_ref()).collect(),
             best: BinaryHeap::with_capacity(request.limit + 1),
             conversations: HashSet::with_capacity(request.limit + 1),
-        }
+            prior_conversations: HashSet::new(),
+            prior_scan: false,
+            after: cursor.map(|cursor| cursor.after),
+            now_ms,
+            fingerprint,
+        })
+    }
+    /// A second bounded-memory scan removes conversations already emitted by an
+    /// earlier window, even when another contact alias gives that DM a lower score.
+    pub(crate) fn scan_prior_conversations(&mut self) -> bool {
+        self.prior_scan = self.after.is_some() && !self.conversations.is_empty();
+        self.prior_conversations.clear();
+        self.prior_scan
     }
     pub(crate) fn push(&mut self, key: &EntityKey<'_>, record: &Record) {
         let Some(user) = string(record, "userId") else {
             return;
         };
+        if user.len() > 1024 {
+            return;
+        }
         let Ok(user_id) = MacroUserIdStr::parse_from_str(user) else {
             return;
         };
         if self.excluded.contains(user_id.as_ref()) {
             return;
         }
+        let user = user_id.as_ref();
         let Some(email) = string(record, "email") else {
             return;
         };
@@ -177,7 +208,7 @@ impl<'a> PeopleRanker<'a> {
                 quality,
                 text_length,
                 timestamp,
-                self.request.now_ms,
+                self.now_ms,
                 Weights {
                     fuzzy,
                     time,
@@ -190,6 +221,22 @@ impl<'a> PeopleRanker<'a> {
             )
         };
         let timestamp_ms = timestamp.unwrap_or(0);
+        if self
+            .after
+            .as_ref()
+            .is_some_and(|after| !after.compare(match_rank, score, timestamp_ms, user).is_gt())
+        {
+            if self.prior_scan
+                && let Some(dm) = dm
+                && self.conversations.contains(&dm.id)
+            {
+                self.prior_conversations.insert(dm.id);
+            }
+            return;
+        }
+        if self.prior_scan {
+            return;
+        }
         if let Some(dm) = dm
             && self.conversations.contains(&dm.id)
         {
@@ -261,17 +308,34 @@ impl<'a> PeopleRanker<'a> {
         }
         self.best.push(hit);
     }
-    pub(crate) fn finish(self) -> PeopleSearchResult {
+    pub(crate) fn finish(self) -> Result<PeopleSearchResult, PeopleError> {
         let truncated = self.best.len() > self.request.limit;
-        PeopleSearchResult::Page {
-            people: self
-                .best
-                .into_sorted_vec()
+        let mut hits = self.best.into_sorted_vec();
+        hits.truncate(self.request.limit);
+        // Advance over the whole inspected rank window, including duplicates of
+        // prior conversations, without retaining previous pages or their IDs.
+        let next_cursor = if truncated {
+            hits.last()
+                .map(|hit| {
+                    Cursor::encode(self.fingerprint, self.now_ms, Position::from_hit(&hit.0))
+                })
+                .transpose()?
+        } else {
+            None
+        };
+        Ok(PeopleSearchResult::Page {
+            people: hits
                 .into_iter()
-                .take(self.request.limit)
-                .map(|item| item.0)
+                .filter(|hit| {
+                    !hit.0
+                        .direct_message
+                        .as_ref()
+                        .is_some_and(|dm| self.prior_conversations.contains(&dm.id))
+                })
+                .map(|hit| hit.0)
                 .collect(),
             truncated,
-        }
+            next_cursor,
+        })
     }
 }

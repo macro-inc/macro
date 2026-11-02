@@ -107,6 +107,9 @@ Host transport and scoped context publishing are implemented; Quick Access reade
 wiring is not yet enabled. Publisher batches/pending IDs cap at 500, while its input
 maps scale with existing DM peers/inboxes, not directory contacts. These engine
 timings do not measure that frontend derivation or the remaining channel catalogs.
+They also measure first windows only: ranked command continuations can perform a
+second full streamed pass to suppress earlier conversation aliases. The winner
+heap and suppression sets remain bounded by the requested window, not page count.
 
 ## What ships
 

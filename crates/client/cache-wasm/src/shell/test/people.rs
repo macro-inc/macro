@@ -35,6 +35,7 @@ async fn people_abi_preserves_scope_publication_and_winning_identity() {
     resolved(engine.people_update(js(commit.clone()))).await;
     let page: serde_json::Value =
         from_js(resolved(engine.people_search(js(request.clone()))).await);
+    assert_eq!(page.get("nextCursor"), Some(&serde_json::Value::Null));
     assert_eq!(page["people"][0]["userId"], user);
     assert_eq!(page["people"][0]["name"], "Private label");
     assert_eq!(

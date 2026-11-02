@@ -95,6 +95,7 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
         sender_domain: None,
         limit: 1,
         now_ms: 2_000,
+        cursor: None,
     };
     assert!(matches!(
         engine.search_people(&request).await.unwrap(),
@@ -162,8 +163,11 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
         })
         .await
         .unwrap();
-    let PeopleSearchResult::Page { people, truncated } =
-        engine.search_people(&request).await.unwrap()
+    let PeopleSearchResult::Page {
+        people,
+        truncated,
+        next_cursor,
+    } = engine.search_people(&request).await.unwrap()
     else {
         panic!("published context must be ready")
     };
@@ -175,6 +179,71 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
         "DM ranking and exclusions must happen before LIMIT"
     );
     assert!(people[0].score > 5.0);
+    let first_cursor = next_cursor.unwrap();
+    request.cursor = Some(first_cursor.clone());
+    let PeopleSearchResult::Page {
+        people,
+        next_cursor,
+        ..
+    } = engine.search_people(&request).await.unwrap()
+    else {
+        panic!("ready")
+    };
+    assert!(
+        people.is_empty(),
+        "a lower-scoring alias of the prior conversation cannot appear twice"
+    );
+    request.cursor = next_cursor;
+    assert!(
+        request.cursor.is_some(),
+        "an empty window still advances past old conversation aliases"
+    );
+    let before = serde_json::to_value(engine.search_people(&request).await.unwrap()).unwrap();
+    request.now_ms = 50_000_000;
+    assert_eq!(
+        before,
+        serde_json::to_value(engine.search_people(&request).await.unwrap()).unwrap(),
+        "the cursor pins the scoring clock"
+    );
+    request.query = "other".into();
+    assert!(engine.search_people(&request).await.is_err());
+    request.query = "alpha".into();
+    request.cursor = None;
+    request.now_ms = 2_000;
+    request.limit = 200;
+    let PeopleSearchResult::Page {
+        people: expected, ..
+    } = engine.search_people(&request).await.unwrap()
+    else {
+        panic!("ready")
+    };
+    let expected: Vec<_> = expected
+        .into_iter()
+        .map(|person| person.user_id.to_string())
+        .collect();
+    request.limit = 17;
+    let mut paged = Vec::new();
+    while paged.len() < expected.len() {
+        let PeopleSearchResult::Page {
+            people,
+            next_cursor,
+            ..
+        } = engine.search_people(&request).await.unwrap()
+        else {
+            panic!("ready")
+        };
+        paged.extend(people.into_iter().map(|person| person.user_id.to_string()));
+        let Some(cursor) = next_cursor else {
+            break;
+        };
+        request.cursor = Some(cursor);
+    }
+    assert_eq!(
+        &paged[..expected.len()],
+        expected.as_slice(),
+        "small ranked windows preserve the global order and stable ties"
+    );
+    request.cursor = None;
     request.limit = 2;
     let PeopleSearchResult::Page { people, .. } = engine.search_people(&request).await.unwrap()
     else {
@@ -274,6 +343,12 @@ pub async fn assert_policy<S: Storage>(storage: S) -> S {
     else {
         panic!("ready")
     };
+    request.cursor = Some(first_cursor);
+    assert!(
+        engine.search_people(&request).await.is_err(),
+        "a new context epoch invalidates earlier continuations"
+    );
+    request.cursor = None;
     assert_eq!(
         people[0].user_id.as_ref(),
         BLOCKED,

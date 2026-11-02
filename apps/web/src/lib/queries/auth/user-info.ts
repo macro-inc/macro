@@ -7,8 +7,8 @@ import {
 import { hasLoginCookie } from '@core/util/cookies';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { catchToResult, type ResultType, throwOnErr } from '@core/util/result';
-import { Telemetry } from '@macro-inc/observability';
 import { replaceCacheWriteSession } from '@graphql-cache/lifecycle';
+import { Telemetry } from '@macro-inc/observability';
 import { authServiceClient } from '@service-auth/client';
 import { resetGraphqlPresenceRequests } from '@service-storage/graphql-soup';
 import { queryOptions, useQuery } from '@tanstack/solid-query';

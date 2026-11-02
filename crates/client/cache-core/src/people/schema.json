@@ -320,8 +320,15 @@
       },
       "$schema": "https://json-schema.org/draft/2020-12/schema",
       "additionalProperties": false,
-      "description": "Cursorless top-K query over the current cached directory, not a corpus-completeness claim.",
+      "description": "A ranked window over the current cached directory, not a completeness claim.\nContinuations pin the ranking clock and context epoch; concurrent row updates\nhave ordinary keyset semantics, not a transactional snapshot guarantee.",
       "properties": {
+        "cursor": {
+          "description": "Opaque continuation from this same account, generation and search policy.",
+          "type": [
+            "string",
+            "null"
+          ]
+        },
         "excluded": {
           "description": "Explicit exclusions, applied before ranking (for example self).",
           "items": {
@@ -492,6 +499,13 @@
               "const": "page",
               "type": "string"
             },
+            "nextCursor": {
+              "description": "Continue after this ranked window. A window may be short when prior\nconversation duplicates were skipped; only null proves exhaustion.",
+              "type": [
+                "string",
+                "null"
+              ]
+            },
             "people": {
               "description": "Fully materialized winners only.",
               "items": {
@@ -500,7 +514,7 @@
               "type": "array"
             },
             "truncated": {
-              "description": "Additional matches were seen; refining the query may reveal them.",
+              "description": "Additional matches were seen.",
               "type": "boolean"
             }
           },
