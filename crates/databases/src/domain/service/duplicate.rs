@@ -491,7 +491,7 @@ where
     Access: AccessDirectory,
     Broker: MacroEventBroker,
 {
-    #[tracing::instrument(skip(self, receipt, owner, name), fields(database_id = %receipt.entity().entity_id, copy_id = tracing::field::Empty), err)]
+    #[tracing::instrument(skip(self, receipt, owner, name), fields(database_id = %receipt.entity().entity_id, copy_id = tracing::field::Empty, tables = tracing::field::Empty, rows = tracing::field::Empty), err)]
     async fn duplicate_database(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
@@ -514,6 +514,9 @@ where
             acting_bot: None,
         };
         let source = self.duplicate_source(database, tables, &viewer).await?;
+        let span = tracing::Span::current();
+        span.record("tables", source.tables.len());
+        span.record("rows", source.rows.values().map(Vec::len).sum::<usize>());
         let copy = Database {
             id: DatabaseId::new(),
             name,
@@ -522,7 +525,7 @@ where
             trashed_at: None,
         };
         let writes = plan(&source, &copy, owner.clone())?;
-        tracing::Span::current().record("copy_id", tracing::field::display(copy.id));
+        span.record("copy_id", tracing::field::display(copy.id));
         let table_versions = match self
             .cells
             .duplicate_database(&copy, &writes)
