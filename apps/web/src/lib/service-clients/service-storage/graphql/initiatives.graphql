@@ -12,6 +12,19 @@ fragment InitiativeIdentityFields on GraphqlSoupInitiative {
   }
 }
 
+# Quick Access reads cached projects by key after a cache search hit. Select
+# only fields every initiative write includes (create and update replies carry
+# no viewedAt), so a new or renamed project stays complete.
+fragment InitiativeQuickAccessFields on GraphqlSoupInitiative {
+  __typename
+  displayName
+  metadata {
+    ownerId
+    createdAt
+    updatedAt
+  }
+}
+
 fragment InitiativeDetailFields on GraphqlSoupInitiative {
   __typename
   id

@@ -6,7 +6,6 @@ import type { CommandMenuItem } from './useCommandItems';
 function displayName(item: CommandMenuItem): string {
   return match(item)
     .with({ kind: 'entity' }, { kind: 'user' }, (row) => row.data.name)
-    .with({ kind: 'initiative' }, (row) => row.name)
     .with({ kind: 'command' }, ({ data }) =>
       typeof data.description === 'function'
         ? data.description()
@@ -88,8 +87,7 @@ export function rankCommandSearchItems<T extends CommandMenuItem>(
     .map(({ item }) => item);
   const preserved = (item: CommandMenuItem) =>
     options.preservedIds?.has(item.id) ||
-    (options.preserveAdditionalEntityMatches &&
-      (item.kind === 'entity' || item.kind === 'initiative'));
+    (options.preserveAdditionalEntityMatches && item.kind === 'entity');
   if (!options.preserveAdditionalEntityMatches && !options.preservedIds?.size)
     return prioritizeInternalPeople(ranked);
 

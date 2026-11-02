@@ -10,6 +10,8 @@ use anyhow::Result;
 use chrono::{DateTime, Utc};
 use chrono_tz::Tz;
 use entity_access::domain::models::{EntityAccessReceipt, EntityType, OwnerAccessLevel};
+use feature_flags::FeatureFlags;
+use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 use model_owner::{CreationPrincipal, Owner};
 use serde::{Deserialize, Serialize};
@@ -27,6 +29,8 @@ mod test;
 pub const MAX_DESCRIPTION_CHARS: usize = 1_000;
 /// Most variables a template can mark.
 pub const MAX_VARIABLES: usize = 100;
+/// PostHog rollout shared with the web app; missing or failed evaluations stay off.
+pub const ROUTINE_SHARING_FLAG: &str = "enable-routine-sharing";
 
 /// How a variable is filled when someone activates the template.
 #[derive(Serialize, Deserialize, Debug, Clone, Copy, PartialEq, Eq, ToSchema)]
@@ -75,7 +79,7 @@ pub struct ShareRoutineTemplate {
     pub variables: Vec<TemplateVariable>,
 }
 
-/// A shared routine's snapshot, readable by any signed-in user with its ID.
+/// A shared routine's snapshot, readable by signed-in users with sharing enabled.
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 pub struct RoutineTemplate {
     /// The routine it was shared from.
@@ -135,18 +139,48 @@ impl ShareRoutineTemplate {
     }
 }
 
-pub struct RoutineTemplateServiceImpl<Actions, Templates> {
+pub struct RoutineTemplateServiceImpl<Actions, Templates, Flags> {
     actions: Arc<Actions>,
     templates: Arc<Templates>,
+    flags: Option<Flags>,
 }
 
-impl<Actions, Templates> RoutineTemplateServiceImpl<Actions, Templates> {
-    pub fn new(actions: Arc<Actions>, templates: Arc<Templates>) -> Self {
-        Self { actions, templates }
+impl<Actions, Templates, Flags: FeatureFlags>
+    RoutineTemplateServiceImpl<Actions, Templates, Flags>
+{
+    pub fn new(actions: Arc<Actions>, templates: Arc<Templates>, flags: Option<Flags>) -> Self {
+        Self {
+            actions,
+            templates,
+            flags,
+        }
+    }
+
+    #[tracing::instrument(name = "routine.sharing_flag", err, skip_all)]
+    async fn require_sharing(&self, user: Option<&MacroUserIdStr<'_>>) -> Result<()> {
+        let (Some(flags), Some(user)) = (&self.flags, user) else {
+            anyhow::bail!(ActionPolicyError::NotFound);
+        };
+        let enabled = flags
+            .load(user)
+            .await
+            .inspect_err(|error| {
+                tracing::warn!(
+                    ?error,
+                    "feature flags unavailable; routine sharing stays off"
+                );
+            })
+            .is_ok_and(|snapshot| snapshot.is_enabled(ROUTINE_SHARING_FLAG));
+        if !enabled {
+            anyhow::bail!(ActionPolicyError::NotFound);
+        }
+        Ok(())
     }
 }
 
-impl<Actions: ScheduledActionService, Templates> RoutineTemplateServiceImpl<Actions, Templates> {
+impl<Actions: ScheduledActionService, Templates, Flags>
+    RoutineTemplateServiceImpl<Actions, Templates, Flags>
+{
     /// The routine behind an owner receipt, while the receipt's user still owns it.
     async fn owned_action(
         &self,
@@ -171,10 +205,12 @@ impl<Actions: ScheduledActionService, Templates> RoutineTemplateServiceImpl<Acti
     }
 }
 
-impl<Actions, Templates> RoutineTemplateService for RoutineTemplateServiceImpl<Actions, Templates>
+impl<Actions, Templates, Flags> RoutineTemplateService
+    for RoutineTemplateServiceImpl<Actions, Templates, Flags>
 where
     Actions: ScheduledActionService,
     Templates: RoutineTemplateRepo,
+    Flags: FeatureFlags + 'static,
 {
     #[tracing::instrument(err, skip_all, fields(action_id = %receipt.entity().entity_id, variables = input.variables.len()))]
     async fn share_template(
@@ -182,6 +218,7 @@ where
         receipt: EntityAccessReceipt<OwnerAccessLevel>,
         input: ShareRoutineTemplate,
     ) -> Result<RoutineTemplate> {
+        self.require_sharing(receipt.acting_user_id()).await?;
         let (id, action) = self.owned_action(&receipt).await?;
         action.owner_user()?;
         let snapshot = input.into_snapshot(&action, id)?;
@@ -194,7 +231,9 @@ where
         self.templates.delete_template(&id).await
     }
 
-    async fn get_template(&self, id: Uuid) -> Result<RoutineTemplate> {
+    #[tracing::instrument(err, skip_all, fields(template_id = %id))]
+    async fn get_template(&self, user: &MacroUserIdStr<'_>, id: Uuid) -> Result<RoutineTemplate> {
+        self.require_sharing(Some(user)).await?;
         self.templates
             .get_template(&id)
             .await?
@@ -208,6 +247,7 @@ where
         template_id: Uuid,
         input: CreateScheduledAction,
     ) -> Result<ScheduledAction> {
+        self.require_sharing(principal.user()).await?;
         if self.templates.get_template(&template_id).await?.is_none() {
             return Err(ActionPolicyError::NotFound.into());
         }

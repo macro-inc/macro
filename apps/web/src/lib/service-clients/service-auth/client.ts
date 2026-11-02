@@ -321,6 +321,16 @@ const githubErrorResponseHandler: ErrorResponseHandler<GithubReauthenticationErr
         return { code: 'GONE', message: 'Resource deleted' };
       case 500:
         return { code: 'SERVER_ERROR', message: 'Internal server error' };
+      // GitHub, Google, or the sign-in service is down or throttling. The
+      // body names which and says to retry later, in words for the user.
+      case 502:
+      case 503:
+        return {
+          code: 'HTTP_ERROR',
+          message:
+            (await readErrorMessage(response)) ??
+            `HTTP error! status: ${response.status}`,
+        };
       default:
         return {
           code: 'HTTP_ERROR',
@@ -1210,7 +1220,16 @@ export const authServiceClient = {
     return authServiceClient.initGithubLink(originalUrl);
   },
 
-  async sendMobileWelcomeEmail(email: string) {
+  async sendMobileWelcomeEmail(
+    email: string,
+    attribution?: Record<string, string>
+  ) {
+    const body: { email: string; attribution?: Record<string, string> } = {
+      email,
+    };
+    if (attribution && Object.keys(attribution).length > 0) {
+      body.attribution = attribution;
+    }
     return safeFetch<
       SendMobileWelcomeEmailResponse,
       'RATE_LIMITED' | 'INVALID_EMAIL'
@@ -1218,7 +1237,7 @@ export const authServiceClient = {
       `${authHost}/mobile-welcome-email`,
       {
         method: 'POST',
-        body: JSON.stringify({ email }),
+        body: JSON.stringify(body),
         credentials: 'include',
       },
       async (response) => {

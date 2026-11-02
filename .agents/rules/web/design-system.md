@@ -19,7 +19,7 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
 | Tabs that own panels or a dynamic collection (tables, form pages, rename, add) | `TabSelector` (`Root`, `List`, `Tab`, `Panel`, `AddMenu`) | `@kobalte/core/tabs` in a feature |
 | Related header actions (filters, view options, sharing, navigation) | `HeaderActionGroup` | A hand-built bordered row |
 | One on/off toggle, or an icon-only layout choice | `Button` with `aria-pressed` | A custom active tint |
-| Many options, or header tabs that no longer fit | `Dropdown` / `Select`, or `Tabs iconOnly` first | Scrolling or wrapping a header tab row |
+| Many options, or header tabs that no longer fit | `Dropdown` / `Select`, `MobileDrawer` on touch, or `Tabs iconOnly` first | Scrolling or wrapping a header tab row |
 | Create, search in a collection header | `ViewCreateButton`, `ListHeaderSearch` | One-off New or search buttons |
 | Text entry, search fields | `Input`, `InputGroup`, `SearchBar`, `settings-input` | A raw `<input>` with its own border, radius, or focus color |
 | Menu, popover, floating toolbar or editor panel | `Dropdown`, `Toolbar`, or `menu-surface` on the overlay root | A hand-built fill, border, and shadow, or `bg-menu-glass` |
@@ -68,9 +68,9 @@ construction. Browse them at `/app/component/ui` (Foundations → Controls).
   buttons as tabs. The agent composer's Auto/Chat/Code switch remains
   `Tabs variant="track"`, a flat pill sliding along the composer's tray. Keep all
   tab treatments flat: use borders and selected fills, not raised edges, gradients, or shadows.
-- **FE-65** Components own their touch treatment. Never branch on
-  `isTouchDevice()` to choose a tab component or variant; set `Tabs`' `touch`
-  to the style that surface already uses on touch.
+- **FE-65** Let `Tabs` own its touch styling: set its `touch` prop instead of
+  swapping tab components or variants. For overflowing touch header sections,
+  use a shared `MobileDrawer` selector instead of a scrolling tab strip.
 - **FE-66** Single-line inputs are pills at the control heights, like Buttons:
   build them from `Input`, `InputGroup`, or `SearchBar` (`settings-input` in
   settings rows). Filter chips use the same frame (pill, `edge-button` border,

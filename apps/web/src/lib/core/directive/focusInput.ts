@@ -3,6 +3,17 @@ import { isPlatform } from '@core/util/platform';
 import { isIOS } from '@solid-primitives/platform';
 import { type Accessor, onCleanup } from 'solid-js';
 
+const STAND_IN_ATTRIBUTE = 'data-focus-stand-in';
+
+/**
+ * Whether focus is on `triggerFocusInput`'s stand-in, holding the phone
+ * keyboard for an input still mounting. Overlays opening meanwhile leave focus
+ * there rather than taking it and dropping the keyboard.
+ */
+export function focusStandInActive() {
+  return document.activeElement?.hasAttribute(STAND_IN_ATTRIBUTE) ?? false;
+}
+
 type FocusInputOptions = {
   getTarget: () => HTMLElement | null | undefined;
   positionNear?: HTMLElement;
@@ -63,6 +74,7 @@ export function triggerFocusInput(
     // click gesture so the virtual keyboard opens, then transfer focus to
     // the real target once it appears in the DOM.
     tempEl = document.createElement('input');
+    tempEl.setAttribute(STAND_IN_ATTRIBUTE, '');
     // Use fixed positioning (viewport-relative) so focusing the temp element
     // doesn't cause the page to scroll.
     const anchorRect = anchor?.getBoundingClientRect();

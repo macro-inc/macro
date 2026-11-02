@@ -421,3 +421,53 @@ pub fn query_param(url: &str, name: &str) -> Option<String> {
         .find_map(|pair| pair.strip_prefix(&prefix))
         .map(str::to_owned)
 }
+
+#[cfg(feature = "outbound")]
+pub use fake_kms::FakeKms;
+
+#[cfg(feature = "outbound")]
+mod fake_kms {
+    use std::{collections::HashMap, sync::Mutex};
+
+    use cursor_api_key::cipher::{KmsCiphertexts, KmsCiphertextsError};
+    use zeroize::Zeroizing;
+
+    /// A ciphertext, the context it was encrypted under, and its plaintext.
+    type Encryption = (Vec<u8>, HashMap<String, String>, Vec<u8>);
+
+    /// A KMS that, like the real one, refuses a decrypt whose context differs
+    /// from the one the ciphertext was encrypted under.
+    #[derive(Default)]
+    pub struct FakeKms {
+        stored: Mutex<Vec<Encryption>>,
+    }
+
+    #[async_trait::async_trait]
+    impl KmsCiphertexts for FakeKms {
+        async fn encrypt(
+            &self,
+            encryption_context: HashMap<String, String>,
+            plaintext: &[u8],
+        ) -> Result<(Vec<u8>, String), KmsCiphertextsError> {
+            let mut stored = self.stored.lock().expect("lock");
+            let ciphertext = format!("ciphertext-{}", stored.len()).into_bytes();
+            stored.push((ciphertext.clone(), encryption_context, plaintext.to_vec()));
+            Ok((ciphertext, "fake-kms-key".to_owned()))
+        }
+
+        async fn decrypt(
+            &self,
+            _kms_key_id: &str,
+            ciphertext: &[u8],
+            encryption_context: HashMap<String, String>,
+        ) -> Result<Zeroizing<Vec<u8>>, KmsCiphertextsError> {
+            self.stored
+                .lock()
+                .expect("lock")
+                .iter()
+                .find(|(stored, context, _)| stored == ciphertext && *context == encryption_context)
+                .map(|(_, _, plaintext)| Zeroizing::new(plaintext.clone()))
+                .ok_or(KmsCiphertextsError)
+        }
+    }
+}

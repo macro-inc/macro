@@ -32,6 +32,7 @@ use graphql_channel::{
 use graphql_common::{GraphqlSoupEntityType, parse_id, require_authorized_user};
 use graphql_email::{
     GraphqlEmailMutation, GraphqlEmailQuery, NoOpSoupEmailContentEdgeReader, SoupEmailEdgeReader,
+    load_email_focus_thread_ids,
 };
 use graphql_entity_mutation::EntityMutationRoot;
 use graphql_favorite::{
@@ -58,8 +59,8 @@ use graphql_soup::{
     GraphqlSoupAgentSession, GraphqlSoupEmailThread, GraphqlSoupEntity, GraphqlSoupInitiative,
     GraphqlSoupProject, GroupedSoup, GroupedSoupInput, SoupEmailThreadMutationOutput,
     SoupEntityEdges, SoupInput, SoupPage, SoupPatch, resolve_folders, resolve_grouped_soup,
-    resolve_soup, resolve_soup_agent_session, resolve_soup_email_thread, resolve_soup_entity,
-    resolve_soup_updates,
+    resolve_soup, resolve_soup_agent_session, resolve_soup_email_thread,
+    resolve_soup_email_threads, resolve_soup_entity, resolve_soup_updates,
 };
 use graphql_work_feed::{
     GraphqlWorkFeedPage, WorkFeedInput, WorkFeedMutationRoot, WorkFeedSubscriptionRoot,
@@ -921,6 +922,26 @@ where
             ctx,
             self.user_id.clone(),
             thread_id,
+        )
+        .await
+    }
+
+    /// The viewer's Focus: signal threads in their own inboxes worth their
+    /// attention, highest priority first (importance, halved for every 2 days
+    /// since the latest inbound mail), with mail in the last `days` days
+    /// (default 30, at most 90). Each thread's `focus` field explains why.
+    async fn email_focus(
+        &self,
+        ctx: &Context<'_>,
+        days: Option<i32>,
+    ) -> async_graphql::Result<Vec<GraphqlSoupEmailThread<SoupEdges<NR, PR, ER, FR, AR, AcR>>>>
+    {
+        let days = u16::try_from(days.unwrap_or(30).clamp(1, 90)).unwrap_or(30);
+        let thread_ids = load_email_focus_thread_ids(ctx, &self.user_id, days).await?;
+        resolve_soup_email_threads::<SoupEdges<NR, PR, ER, FR, AR, AcR>>(
+            ctx,
+            self.user_id.clone(),
+            thread_ids,
         )
         .await
     }

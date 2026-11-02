@@ -48,7 +48,7 @@ export function ConnectedCalendars(props: {
     >
       <SettingsCard>
         <SettingsRow
-          label="Google Calendar"
+          label="Calendar accounts"
           description={
             <Show
               when={accountNeedingPermission()}

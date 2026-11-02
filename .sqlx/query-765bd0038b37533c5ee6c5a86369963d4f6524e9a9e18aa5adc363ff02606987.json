@@ -1,0 +1,52 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT m.thread_id, m.link_id, m.provider_id AS \"provider_id!\", m.subject,\n                l.sync_generation, l.grant_generation\n            FROM email_messages m JOIN email_links l ON l.id = m.link_id\n            WHERE m.id = $1 AND NOT m.is_draft AND m.provider_id IS NOT NULL",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "provider_id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "subject",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "sync_generation",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 5,
+        "name": "grant_generation",
+        "type_info": "Int8"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      true,
+      false,
+      false
+    ]
+  },
+  "hash": "765bd0038b37533c5ee6c5a86369963d4f6524e9a9e18aa5adc363ff02606987"
+}

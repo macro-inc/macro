@@ -139,7 +139,6 @@ async fn a_phone_scanning_the_qr_links_the_account_through_the_encrypted_store(p
             tick_every: Duration::from_secs(600),
             groups_refresh_interval: crate::domain::account::GROUPS_REFRESH_INTERVAL,
             backfill_timeout: crate::domain::account::BACKFILL_TIMEOUT,
-            backfill_retry: crate::domain::account::BACKFILL_RETRY,
         },
     ));
     let (_signals, signal_receiver) = mpsc::channel(8);
@@ -550,4 +549,22 @@ fn session_errors_never_show_the_jids_of_an_iq_response() {
         );
         assert!(!message.contains(phone), "{message}");
     }
+}
+
+#[test]
+fn a_recipient_not_on_whatsapp_or_a_rate_limited_lookup_is_rejected_not_unknown() {
+    use whatsmeow::errors::{ClientError, IqError};
+
+    assert_eq!(
+        super::rejected(&ClientError::RecipientNotOnWhatsApp),
+        Some("recipient_not_on_provider")
+    );
+    let rate_limited = ClientError::from(IqError::from_status(IqError::RATE_OVER_LIMIT))
+        .wrap("failed to send usync query")
+        .wrap("failed to get user info to fill LID cache");
+    assert_eq!(super::rejected(&rate_limited), Some("rate_limited"));
+    assert_eq!(
+        super::rejected(&ClientError::Other("anything else".to_owned())),
+        None
+    );
 }

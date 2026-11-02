@@ -1,9 +1,12 @@
 import type {
   ActionTrigger,
+  RoutineTemplate,
+  ShareRoutineTemplate,
   TemplateVariable,
   VariableFill,
 } from '@service-scheduled-action/generated/schemas';
 import { match } from 'ts-pattern';
+import type { ScheduleDraft } from './draft';
 
 const MENTION_PATTERN =
   /<m-(user|document)-mention>([\s\S]*?)<\/m-\1-mention>/g;
@@ -101,6 +104,43 @@ export function extractTemplateVariables(args: {
     });
   }
   return [...variables.values()];
+}
+
+/** The time zone a routine's schedules run in; absent for event-only routines. */
+function routineTimezone(draft: ScheduleDraft | undefined) {
+  const schedule = draft?.triggers?.find(
+    (trigger) => trigger.kind === 'schedule'
+  );
+  if (schedule?.kind === 'schedule') return schedule.timezone;
+  return draft?.triggers ? undefined : draft?.timezone;
+}
+
+/**
+ * What sharing a routine publishes: its current references, each filled the
+ * way the template already shared fills it, else by the defaults.
+ */
+export function templateShareBody(args: {
+  draft: ScheduleDraft | undefined;
+  authorId: string;
+  shared: RoutineTemplate | null;
+}): ShareRoutineTemplate {
+  const previous = new Map(
+    (args.shared?.variables ?? []).map((variable) => [
+      variableKey(variable),
+      variable.fill,
+    ])
+  );
+  return {
+    description: args.shared?.description ?? '',
+    variables: extractTemplateVariables({
+      prompt: args.draft?.prompt ?? '',
+      timezone: routineTimezone(args.draft),
+      authorId: args.authorId,
+    }).map((variable) => ({
+      ...variable,
+      fill: previous.get(variableKey(variable)) ?? variable.fill,
+    })),
+  };
 }
 
 /** Keep the referenced item, or drop it and leave its name as plain text. */

@@ -7,9 +7,13 @@ android-dev *ARGS:
 android-build *ARGS:
     bash scripts/android.sh build "$@"
 
-# Increment and commit before preparing the next native APK or Play AAB release.
-android-bump:
-    bun scripts/android-release.ts bump
+# Increment the versionCode and commit before preparing the next native APK or
+# Play AAB release. Also raises the Android floor in min-native-build.json to
+# the new versionCode, so the next prod web deploy stops serving shared JS to
+# older Android installs and prompts them to update. --no-min keeps the floor
+# for a release older installs don't need.
+android-bump *ARGS:
+    bun scripts/android-release.ts bump {{ARGS}}
 
 # iOS: dev-facing, for testing in Simulator. Honors PORT like the web dev
 # server (`PORT=3001 just ios-dev`): the vite server picks PORT up through
@@ -155,7 +159,8 @@ build-staging: build-wasm
 
 # Production bundles carry the native build floors checked in at
 # min-native-build.json (schema 3 manifest, see scripts/write-bundle-manifest.mjs);
-# `just ios-bump` raises the iOS one. Explicit MIN_NATIVE_BUILD_* env still wins.
+# `just ios-bump` raises the iOS one and `just android-bump` the Android one.
+# Explicit MIN_NATIVE_BUILD_* env still wins.
 build-prod: build-wasm
     #!/usr/bin/env bash
     set -euo pipefail

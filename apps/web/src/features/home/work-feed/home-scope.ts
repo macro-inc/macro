@@ -12,7 +12,8 @@ const ITEM_TYPES: Record<HomeTypeFilter, WorkFeedItemType[]> = {
   email: ['email'],
   channels: ['channel', 'channel_thread'],
   agents: ['agent_session', 'chat'],
-  projects: ['project'],
+  folders: ['project'],
+  initiatives: ['initiative'],
   github: ['pull_request'],
   calendar: ['calendar_event'],
 };
@@ -22,6 +23,7 @@ const ALL_ITEM_TYPES: WorkFeedItemType[] = [
   'task',
   'chat',
   'project',
+  'initiative',
   'email',
   'channel',
   'channel_thread',

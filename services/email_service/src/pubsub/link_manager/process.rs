@@ -9,7 +9,7 @@ use email::domain::events::{
 use email_api_client::domain::models::AccessToken;
 #[cfg(test)]
 use email_api_client::domain::models::EmailApiError;
-use email_db_client::links::delete::PurgeBatchSizes;
+use email_db_client::links::delete::PurgePacing;
 use model_entity::EntityType;
 use model_notifications::InboxReauthRequiredMetadata;
 use models_email::api::refresh::RefreshEmailEvent;
@@ -202,7 +202,7 @@ async fn handle_delete(
 
     // finally, delete the link and all of its email data in bounded batches; a redelivered
     // message resumes the purge where an interrupted one stopped
-    email_db_client::links::delete::purge_link(&ctx.db, link.id, PurgeBatchSizes::default())
+    email_db_client::links::delete::purge_link(&ctx.db, link.id, PurgePacing::default())
         .await
         .context("Failed to purge link in background task")?;
 

@@ -15,7 +15,7 @@ use crate::domain::event_runs::{
     ClaimedEventRun, ConfigurationRevision, EventActionConfiguration, EventRunKey, EventRunOutcome,
     EventRunRepository, FinalizationResult, FinalizeEventRun, PageSize, PendingEventRun,
 };
-use crate::domain::event_trigger::{ActionTrigger, EventReference};
+use crate::domain::event_trigger::{ActionTrigger, EventReference, EventSource};
 use crate::domain::models::{ActionExecutionRecord, MAX_ACTION_TIME, ScheduledAction};
 
 #[cfg(test)]
@@ -97,6 +97,14 @@ impl TryFrom<PendingRow> for PendingEventRun {
     }
 }
 
+/// The GitHub event name a delivery's filters narrow on, if it is one.
+fn github_event(event: &EventReference) -> Option<&str> {
+    match event.source() {
+        EventSource::Github(delivery) => Some(delivery.event.as_str()),
+        EventSource::Entity { .. } => None,
+    }
+}
+
 /// All paths use this lock order, including cancellation and maintenance. Skip
 /// locked actions rather than holding a worker behind another routine's work.
 async fn lock_action(tx: &mut Transaction<'_, Postgres>, action_id: Uuid) -> Result<bool, Report> {
@@ -128,17 +136,18 @@ impl EventRunRepository for PgEventRunRepo {
               AND (event_filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($3::text)))
                 OR ($6::text IS NOT NULL AND event_filters @> jsonb_build_array(jsonb_build_object('events', jsonb_build_array($6::text)))))
               AND jsonb_path_exists(event_filters,
-                  '$[*] ? ((@.events[*] == $event || @.events[*] == $general) && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',
-                  jsonb_build_object('event', $3::text, 'general', $6::text, 'id', $4::text))
+                  '$[*] ? ((@.events[*] == $event || @.events[*] == $general) && (!exists (@.ids) || @.ids == null || @.ids[*] == $id) && (!exists (@.github.events) || @.github.events[*] == $github_event))',
+                  jsonb_build_object('event', $3::text, 'general', $6::text, 'id', $4::text, 'github_event', $7::text))
             ORDER BY id
             LIMIT $5
             "#,
             after,
             event.published_at(),
             event.event_name().as_str(),
-            event.entity_id().to_string(),
+            event.entity_id().map(|id| id.to_string()),
             i64::from(limit.get()),
             event.event_name().general_event().map(|name| name.as_str()),
+            github_event(event),
         )
         .fetch_all(&self.pool)
         .await?;
@@ -195,27 +204,28 @@ impl EventRunRepository for PgEventRunRepo {
             WHERE id = $1 AND enabled AND event_filters IS NOT NULL
               AND configuration_revision = $2 AND event_activated_at <= $3
               AND jsonb_path_exists(event_filters,
-                  '$[*] ? ((@.events[*] == $event || @.events[*] == $general) && (!exists (@.ids) || @.ids == null || @.ids[*] == $id))',
-                  jsonb_build_object('event', $4::text, 'general', $6::text, 'id', $5::text))
+                  '$[*] ? ((@.events[*] == $event || @.events[*] == $general) && (!exists (@.ids) || @.ids == null || @.ids[*] == $id) && (!exists (@.github.events) || @.github.events[*] == $github_event))',
+                  jsonb_build_object('event', $4::text, 'general', $6::text, 'id', $5::text, 'github_event', $7::text))
             FOR UPDATE
             "#,
             action_id,
             revision.get(),
             event.published_at(),
             event.event_name().as_str(),
-            event.entity_id().to_string(),
+            event.entity_id().map(|id| id.to_string()),
             event.event_name().general_event().map(|name| name.as_str()),
+            github_event(event),
         )
         .fetch_optional(&mut *tx)
         .await?;
         if eligible.is_none() {
             return Ok(AdmissionResult::Ineligible);
         }
-        let context = json!({
-            "event_name": event.event_name(),
-            "entity_id": event.entity_id(),
-            "message_id": event.message_id(),
-        });
+        // The event id is the row's key, not part of its context.
+        let mut context = serde_json::to_value(event)?;
+        if let Value::Object(fields) = &mut context {
+            fields.remove("event_id");
+        }
         let inserted = sqlx::query!(
             r#"
             INSERT INTO scheduled_action_event_run (action_id, event_id, configuration_revision, event_context)
@@ -463,7 +473,8 @@ impl EventRunRepository for PgEventRunRepo {
         sqlx::query!(
             r#"
             UPDATE scheduled_action_event_run
-            SET state = 'finished', finished_at = $3, outcome = $4, execution_record_id = $5
+            SET state = 'finished', finished_at = $3, outcome = $4, execution_record_id = $5,
+                event_context = event_context #- '{github,payload}'
             WHERE action_id = $1 AND event_id = $2
             "#,
             run.key.action_id,
@@ -494,7 +505,8 @@ impl EventRunRepository for PgEventRunRepo {
         .await?;
         sqlx::query!(
             r#"
-            UPDATE scheduled_action_event_run SET state = 'finished', finished_at = now(), outcome = $4
+            UPDATE scheduled_action_event_run SET state = 'finished', finished_at = now(), outcome = $4,
+                event_context = event_context #- '{github,payload}'
             WHERE action_id = $1 AND event_id = $2 AND configuration_revision = $3 AND state = 'pending'
             "#,
             key.action_id,
@@ -527,7 +539,8 @@ impl EventRunRepository for PgEventRunRepo {
         .await?;
         let skipped = sqlx::query_scalar!(
             r#"
-            UPDATE scheduled_action_event_run SET state = 'finished', finished_at = now(), outcome = $4
+            UPDATE scheduled_action_event_run SET state = 'finished', finished_at = now(), outcome = $4,
+                event_context = event_context #- '{github,payload}'
             WHERE action_id = $1 AND event_id = $2 AND configuration_revision = $3 AND state = 'pending'
             RETURNING event_id
             "#,
@@ -602,6 +615,7 @@ impl EventRunRepository for PgEventRunRepo {
                 r#"
                 UPDATE scheduled_action_event_run r
                 SET state = 'finished', finished_at = $3,
+                    event_context = r.event_context #- '{github,payload}',
                     outcome = CASE WHEN r.state = 'started' THEN $4::jsonb
                         WHEN NOT a.enabled THEN $5::jsonb ELSE $6::jsonb END
                 FROM scheduled_action a

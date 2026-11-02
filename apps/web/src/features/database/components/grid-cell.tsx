@@ -203,7 +203,7 @@ export function GridCell(props: GridCellProps) {
     setSelectedMention(undefined);
     if (isEntity()) {
       setMentionSearch(seed?.replace(/^@/, '') ?? '');
-      setDraft(seed?.replace(/^@/, '') ?? '');
+      setDraft(`@${seed?.replace(/^@/, '') ?? ''}`);
       setSelectAll(false);
       setEditing(true);
       setMentionOpen(true);
@@ -413,9 +413,7 @@ export function GridCell(props: GridCellProps) {
             <div
               class="grid"
               inert={isEntity() && editing()}
-              classList={{
-                invisible: isEntity() && editing() && draft() !== '',
-              }}
+              classList={{ invisible: isEntity() && editing() }}
             >
               <TextCell
                 column={props.column}
@@ -714,10 +712,6 @@ function InlineEditor(props: {
   const [focused, setFocused] = createSignal(false);
   const errorId = createUniqueId();
   let finishing = false;
-  const showingReference = () =>
-    props.column.dataType === 'ENTITY' &&
-    props.originalValue !== null &&
-    props.draft === '';
   // An earlier row's save can settle this column's type while this editor is
   // focused. Keep its DOM for this edit; use the latest type when committing.
   const renderTextEditor =
@@ -816,7 +810,7 @@ function InlineEditor(props: {
               }}
               type="text"
               data-cell-text-editor
-              placeholder={showingReference() ? undefined : props.emptyLabel}
+              placeholder={props.emptyLabel}
               inputmode={
                 props.column.dataType === 'NUMBER' ? 'decimal' : undefined
               }
@@ -838,11 +832,7 @@ function InlineEditor(props: {
                 if (!props.mentionOpen) commit(false);
               }}
               onKeyDown={onKeyDown}
-              class="min-h-9 w-full min-w-0 px-2.5 py-1.5 text-[13px] text-ink outline-none"
-              classList={{
-                'bg-transparent': !showingReference(),
-                'bg-transparent caret-transparent': showingReference(),
-              }}
+              class="min-h-9 w-full min-w-0 bg-transparent px-2.5 py-1.5 text-[13px] text-ink outline-none"
             />
           }
         >

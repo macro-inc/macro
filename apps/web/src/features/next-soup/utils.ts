@@ -17,7 +17,7 @@ import {
 } from '@app/features/calendar-view/types';
 import { callsHostedContent } from '@app/features/calls-view/calls-hosted-content';
 import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
-import { projectRouteId } from '@app/features/projects/core/route';
+import { projectHostedContent } from '@app/features/projects/open-project';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
 import { withListNavigationSource } from '@app/features/soup/collection/list-navigation-source';
 import {
@@ -964,10 +964,12 @@ export function calendarViewTargetForEntity(
 function getEntitySplitContent(entity: EntityData) {
   return (
     match(entity)
-      .with({ type: 'initiative' }, (entity) => ({
-        type: 'component' as const,
-        id: projectRouteId({ id: entity.id, section: 'overview' }),
-      }))
+      // The Tasks-hosted route carries the project's own identity, so an open
+      // project split is reused; the legacy component would mount a redirect
+      // shim beside it.
+      .with({ type: 'initiative' }, (entity) =>
+        projectHostedContent(entity.id, 'overview')
+      )
       .with({ type: 'document' }, (entity) => {
         const { id, fileType, subType } = entity;
         const blockName = fileTypeToBlockName(subType?.type ?? fileType);

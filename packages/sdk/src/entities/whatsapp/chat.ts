@@ -54,7 +54,10 @@ export class WhatsAppChat extends MacroEntity<WhatsAppChatRecord> {
   /** Group subject (or member names), or the other person's name or number. */
   readonly name = this.field('name');
 
-  /** Newest activity WhatsApp reported, when known. */
+  /** The other person's phone number (`+<digits>`) of a direct chat, when known. */
+  readonly phoneNumber = this.field('phoneNumber');
+
+  /** Newest activity WhatsApp reported; unknown for saved contacts never written to. */
   readonly lastActivityAt = this.field('lastActivityAt');
 
   /** Archived in WhatsApp. */

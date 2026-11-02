@@ -1,0 +1,19 @@
+id: plist-media-usage-strings
+language: html
+# .plist files parse as HTML through sgconfig.yml `languageGlobs`.
+severity: error
+message: This Info.plist needs a non-empty NSCameraUsageDescription and NSMicrophoneUsageDescription.
+note: |-
+  macOS and iOS refuse camera and microphone access to an app without these
+  usage strings, so the webview never exposes `navigator.mediaDevices` and
+  meetings and dictation can't capture. The macOS file is the `infoPlist` in
+  apps/web/tauri/desktop-cef/tauri.conf.json; update `files` here if that moves.
+files:
+  - apps/web/tauri/src-tauri/Info.ios.plist
+  - apps/web/tauri/src-tauri/icons/macos/Info.plist
+rule:
+  kind: document
+  not:
+    all:
+      - regex: <key>NSCameraUsageDescription</key>\s*<string>\s*[^<\s][^<]*</string>
+      - regex: <key>NSMicrophoneUsageDescription</key>\s*<string>\s*[^<\s][^<]*</string>

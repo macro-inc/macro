@@ -1,5 +1,6 @@
 import './MobileCreateMenu.css';
 import { t } from '@app/lib/i18n';
+import { focusStandInActive } from '@core/directive/focusInput';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { Layer } from '@ui/components/Layer';
@@ -18,7 +19,13 @@ import { MobileDockIsland } from './MobileDockIsland';
 export type MobileCreateMenuItem = {
   label: string;
   icon: Component<JSX.SvgSVGAttributes<SVGSVGElement>>;
+  /** Runs once the menu has closed, after the tap. */
   onSelect: () => void;
+  /**
+   * Runs in the tap, for an action that opens a field to type in: iOS only
+   * raises the keyboard inside the tap (see `raiseKeyboardForNewTaskTitle`).
+   */
+  raiseKeyboard?: () => void;
   disabled?: boolean;
 };
 
@@ -71,6 +78,7 @@ export function MobileCreateMenu(props: {
   const select = (item: MobileCreateMenuItem) => {
     selectedAction = item.onSelect;
     setOpen(false);
+    item.raiseKeyboard?.();
   };
 
   return (
@@ -95,9 +103,12 @@ export function MobileCreateMenu(props: {
               bottom: `${position().bottom}px`,
               'max-height': `calc(100dvh - ${position().bottom}px - var(--safe-top) - 12px)`,
             }}
-            onCloseAutoFocus={() => {
-              // Let the dialog restore New first, then hand focus to the next
-              // composer/menu after its focus trap has been removed.
+            onCloseAutoFocus={(event) => {
+              // A stand-in raised in the tap keeps the keyboard for the next
+              // composer; otherwise let the dialog restore New first, then
+              // hand focus to the next composer/menu after its focus trap
+              // has been removed.
+              if (focusStandInActive()) event.preventDefault();
               const action = selectedAction;
               selectedAction = undefined;
               if (action) queueMicrotask(action);

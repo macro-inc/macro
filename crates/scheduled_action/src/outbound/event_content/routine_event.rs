@@ -12,7 +12,8 @@ use macro_uuid::Uuid;
 use messages::domain::models::{Message, MessageThread};
 use model::document::DocumentBasic;
 use models_properties::service::{
-    property_option::PropertyOptionValue, property_value::PropertyValue,
+    property_change_source::PropertyChangeSource, property_option::PropertyOptionValue,
+    property_value::PropertyValue,
 };
 use properties::EntityPropertyInfo;
 use rootcause::Report;
@@ -20,7 +21,8 @@ use system_properties::SystemPropertyKey;
 use trigger_context::{
     CallSnapshot, CallStartedSnapshot, ChannelType, ContextAttachment, ContextMessage,
     ContextPerson, ContextThread, DiscussionContext, DiscussionSurface, DocumentSnapshot,
-    EmailSnapshot, ReplyTarget, RoutineEvent, TaskSnapshot, TranscriptLine,
+    EmailSnapshot, GithubDelivery, PullRequestChange, ReplyTarget, RoutineEvent, TaskSnapshot,
+    TranscriptLine,
 };
 
 use super::{
@@ -41,15 +43,22 @@ pub(super) fn routine_event(
     content: EventContent,
 ) -> Result<RoutineEvent, Report> {
     let name = event.event_name();
+    let entity_id = || super::entity_id(event);
     match content {
         EventContent::Document {
             document,
             properties,
             markdown,
-        } => document_event(name, document, &properties, markdown.as_deref()),
+        } => document_event(
+            name,
+            document,
+            &properties,
+            markdown.as_deref(),
+            event.change_source(),
+        ),
         EventContent::Email(message) => match (name, message) {
             (EventName::EmailMessageReceived, Some(message)) => Ok(RoutineEvent::EmailReceived {
-                email: email_snapshot(event.entity_id(), &message),
+                email: email_snapshot(entity_id()?, &message),
             }),
             (EventName::EmailMessageReceived, None) => {
                 Err(rootcause::report!("the email is no longer available"))
@@ -57,20 +66,29 @@ pub(super) fn routine_event(
             (name, _) => Err(mismatch(name)),
         },
         EventContent::Channel { channel, message } => {
-            channel_event(name, event.entity_id(), channel, message)
+            channel_event(name, entity_id()?, channel, message)
         }
         EventContent::Call(record) => match (name, record) {
             (EventName::CallStarted, Some(record)) => Ok(RoutineEvent::CallStarted {
-                call: call_started_snapshot(event.entity_id(), record)?,
+                call: call_started_snapshot(entity_id()?, record)?,
             }),
             (EventName::CallEnded, Some(record)) => Ok(RoutineEvent::CallEnded {
-                call: call_snapshot(event.entity_id(), record)?,
+                call: call_snapshot(entity_id()?, record)?,
             }),
             (EventName::CallStarted | EventName::CallEnded, None) => {
                 Err(rootcause::report!("the call record is no longer available"))
             }
             (name, _) => Err(mismatch(name)),
         },
+        EventContent::Github(delivery) => Ok(RoutineEvent::Github {
+            delivery: GithubDelivery {
+                event: delivery.event,
+                action: delivery.action,
+                repository: delivery.repository.map(|repository| repository.full_name),
+                sender: delivery.sender.map(|sender| sender.login),
+                payload: delivery.payload,
+            },
+        }),
     }
 }
 
@@ -86,6 +104,7 @@ fn document_event(
     document: DocumentBasic,
     properties: &[EntityPropertyInfo],
     markdown: Option<&str>,
+    source: Option<&PropertyChangeSource>,
 ) -> Result<RoutineEvent, Report> {
     Ok(match name {
         EventName::DocumentCreated => RoutineEvent::DocumentCreated {
@@ -103,6 +122,7 @@ fn document_event(
         },
         EventName::TaskStatusChanged => RoutineEvent::TaskStatusChanged {
             task: task_snapshot(document, properties, markdown),
+            pull_request: source.map(pull_request_change),
         },
         EventName::TaskPriorityChanged => RoutineEvent::TaskPriorityChanged {
             task: task_snapshot(document, properties, markdown),
@@ -112,6 +132,15 @@ fn document_event(
         },
         name => return Err(mismatch(name)),
     })
+}
+
+fn pull_request_change(source: &PropertyChangeSource) -> PullRequestChange {
+    match source {
+        PropertyChangeSource::GithubPullRequest { url, account } => PullRequestChange {
+            url: url.clone(),
+            github_login: account.login.clone(),
+        },
+    }
 }
 
 fn channel_event(
@@ -335,6 +364,7 @@ fn discussion(
     let prompt_message_id = message.id;
     match message.thread_id.filter(|root| *root != message.id) {
         Some(root_id) => DiscussionContext {
+            agent_request: None,
             surface,
             prompt_message_id,
             sender,
@@ -343,6 +373,7 @@ fn discussion(
             channel: Vec::new(),
         },
         None => DiscussionContext {
+            agent_request: None,
             surface,
             prompt_message_id,
             sender,

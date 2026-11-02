@@ -4,6 +4,32 @@ use tauri::{AppHandle, Manager, Runtime, ipc::Channel, plugin::PluginHandle};
 
 pub(crate) struct Calls<R: Runtime>(pub PluginHandle<R>);
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+struct TracingArgs {
+    traces_url: Option<String>,
+    environment: String,
+}
+
+#[tauri::command]
+pub(crate) async fn configure_tracing<R: Runtime>(
+    app: AppHandle<R>,
+    traces_url: Option<String>,
+    environment: String,
+) -> Result<(), String> {
+    app.state::<Calls<R>>()
+        .0
+        .run_mobile_plugin_async(
+            "configureTracing",
+            TracingArgs {
+                traces_url,
+                environment,
+            },
+        )
+        .await
+        .map_err(|e| e.to_string())
+}
+
 macro_rules! command {
     ($name:ident, $native:literal) => {
         #[tauri::command]

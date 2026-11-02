@@ -73,10 +73,21 @@ const FILTER_ICONS = new Map<string, () => JSX.Element>([
     ),
   ],
   [
-    'projects',
+    'folders',
     () => (
       <EntityIcon
         targetType="project"
+        size="xs"
+        theme="monochrome"
+        class="text-ink-muted"
+      />
+    ),
+  ],
+  [
+    'initiatives',
+    () => (
+      <EntityIcon
+        targetType="initiative"
         size="xs"
         theme="monochrome"
         class="text-ink-muted"

@@ -887,6 +887,7 @@ fn build_thread_property_predicate(lit: &PropertiesLiteral, thread_alias: &str) 
     ));
     f.extend(SqlFragment::bind_uuid(lit.property_definition_id));
     match &lit.value {
+        PropertyMatchValue::DateRange(_) => return SqlFragment::raw("FALSE"),
         PropertyMatchValue::SelectOption(option_id) => {
             f.push_raw(" AND ep_prop.values->'value' ? ");
             f.extend(SqlFragment::bind_string(option_id.to_string()));
@@ -934,8 +935,10 @@ pub(super) fn build_view_thread_filter(view: &PreviewView) -> SqlFragment {
 /// Builds message-level WHERE conditions based on the view type
 pub(super) fn build_view_message_filter(view: &PreviewView) -> SqlFragment {
     match view {
-        PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox)
-        | PreviewView::StandardLabel(PreviewViewStandardLabel::All) => SqlFragment::empty(),
+        PreviewView::StandardLabel(PreviewViewStandardLabel::Inbox) => SqlFragment::empty(),
+        PreviewView::StandardLabel(PreviewViewStandardLabel::All) => SqlFragment::raw(
+            " AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND NOT mf.in_junk)",
+        ),
         PreviewView::StandardLabel(PreviewViewStandardLabel::Sent) => {
             SqlFragment::raw(" AND m.is_sent = TRUE")
         }

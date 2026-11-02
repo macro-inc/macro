@@ -25,6 +25,9 @@ import type {
   DocumentTextPart,
   ErrorBody,
   ErrorResponse,
+  GenerateImageErrorBody,
+  GenerateImageRequest,
+  GenerateImageResponse,
   GetBatchPreviewRequest,
   GetBatchPreviewResponse,
   GetChatPermissionsResponse,
@@ -1398,6 +1401,100 @@ export const healthHandler = async (
     status: res.status,
     headers: res.headers,
   } as healthHandlerResponse;
+};
+
+/**
+ * @summary Generate an image with Nano Banana and store it as a static file owned by
+the caller. Charged to the acting user's AI allowance.
+ */
+export type generateImageResponse200 = {
+  data: GenerateImageResponse;
+  status: 200;
+};
+
+export type generateImageResponse400 = {
+  data: GenerateImageErrorBody;
+  status: 400;
+};
+
+export type generateImageResponse401 = {
+  data: void;
+  status: 401;
+};
+
+export type generateImageResponse402 = {
+  data: GenerateImageErrorBody;
+  status: 402;
+};
+
+export type generateImageResponse403 = {
+  data: GenerateImageErrorBody;
+  status: 403;
+};
+
+export type generateImageResponse422 = {
+  data: GenerateImageErrorBody;
+  status: 422;
+};
+
+export type generateImageResponse500 = {
+  data: GenerateImageErrorBody;
+  status: 500;
+};
+
+export type generateImageResponse502 = {
+  data: GenerateImageErrorBody;
+  status: 502;
+};
+
+export type generateImageResponse503 = {
+  data: GenerateImageErrorBody;
+  status: 503;
+};
+
+export type generateImageResponseSuccess = generateImageResponse200 & {
+  headers: Headers;
+};
+export type generateImageResponseError = (
+  | generateImageResponse400
+  | generateImageResponse401
+  | generateImageResponse402
+  | generateImageResponse403
+  | generateImageResponse422
+  | generateImageResponse500
+  | generateImageResponse502
+  | generateImageResponse503
+) & {
+  headers: Headers;
+};
+
+export type generateImageResponse =
+  | generateImageResponseSuccess
+  | generateImageResponseError;
+
+export const getGenerateImageUrl = () => {
+  return `/images/generate`;
+};
+
+export const generateImage = async (
+  generateImageRequest: GenerateImageRequest,
+  options?: RequestInit
+): Promise<generateImageResponse> => {
+  const res = await fetch(getGenerateImageUrl(), {
+    ...options,
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', ...options?.headers },
+    body: JSON.stringify(generateImageRequest),
+  });
+
+  const body = [204, 205, 304].includes(res.status) ? null : await res.text();
+
+  const data: generateImageResponse['data'] = body ? JSON.parse(body) : {};
+  return {
+    data,
+    status: res.status,
+    headers: res.headers,
+  } as generateImageResponse;
 };
 
 /**

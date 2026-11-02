@@ -13,8 +13,10 @@ use tokio_tungstenite::tungstenite;
 use tokio_util::task::AbortOnDropHandle;
 
 use crate::config::{Harness, HarnessCredentials, MacroApi};
-use crate::harness::{self, LineTap};
+use crate::harness::{self, BridgeEnd, Handoffs, LineTap};
+use crate::outbound::acp_process::RunningAgent;
 use crate::outbound::link;
+use crate::turns::ActiveTurns;
 
 #[cfg(test)]
 mod test;
@@ -35,12 +37,16 @@ pub struct Runtime {
 impl Runtime {
     /// Start connecting with the given credentials and keep the harness
     /// available for model discovery and agent sessions until dropped.
+    #[expect(clippy::too_many_arguments, reason = "the supervisor's whole input")]
     pub fn start(
         macro_api: &MacroApi,
         credentials: &HarnessCredentials,
         harness: Harness,
         cwd: &Path,
         tap: Option<LineTap>,
+        turns: ActiveTurns,
+        adopted: Option<RunningAgent>,
+        handoffs: Handoffs,
     ) -> Self {
         let (connected_tx, connected) = watch::channel(false);
         let task = tokio::spawn(serve(
@@ -49,7 +55,10 @@ impl Runtime {
             harness,
             cwd.to_owned(),
             tap,
+            turns,
             connected_tx,
+            adopted,
+            handoffs,
         ));
         Self {
             connected,
@@ -75,23 +84,55 @@ impl Runtime {
 /// Reconnect even after a clean close or a long outage: model discovery must
 /// recover without requiring an agent mention. Authentication failures stop
 /// the supervisor until the user re-pairs or restarts the daemon.
+///
+/// An `adopted` agent (handed over by the previous process image) serves the
+/// first connection instead of a fresh spawn. A handoff request ends the
+/// supervisor: the bridge answers it with its agent, and between bridges it
+/// is answered with whatever agent is still waiting for a connection.
+#[expect(clippy::too_many_arguments, reason = "the supervisor's whole input")]
 async fn serve(
     gateway_url: String,
     token: String,
     harness: Harness,
     cwd: PathBuf,
     tap: Option<LineTap>,
+    turns: ActiveTurns,
     connected: watch::Sender<bool>,
+    mut adopted: Option<RunningAgent>,
+    mut handoffs: Handoffs,
 ) {
     let mut backoff = reconnect_strategy();
     loop {
-        match tokio::time::timeout(CONNECT_TIMEOUT, link::dial(&gateway_url, &token)).await {
+        let dialed = tokio::select! {
+            dialed = tokio::time::timeout(CONNECT_TIMEOUT, link::dial(&gateway_url, &token)) => dialed,
+            request = handoffs.next() => {
+                answer_between_bridges(request, adopted.take(), &turns);
+                return;
+            }
+        };
+        match dialed {
             Ok(Ok(channel)) => {
                 connected.send_replace(true);
-                tracing::info!("harness bridge starting");
+                tracing::info!(adopted = adopted.is_some(), "harness bridge starting");
                 let started = Instant::now();
-                match harness::bridge(&harness, &cwd, channel, tap.clone()).await {
-                    Ok(()) => tracing::info!("harness bridge ended; reconnecting"),
+                match harness::bridge(
+                    &harness,
+                    &cwd,
+                    channel,
+                    tap.clone(),
+                    &turns,
+                    adopted.take(),
+                    &mut handoffs,
+                )
+                .await
+                {
+                    Ok(BridgeEnd::Closed) => tracing::info!("harness bridge ended; reconnecting"),
+                    #[cfg(unix)]
+                    Ok(BridgeEnd::HandedOff) => {
+                        tracing::info!("harness bridge handed its agent off");
+                        connected.send_replace(false);
+                        return;
+                    }
                     Err(error) => {
                         tracing::warn!(error = ?error, "harness bridge ended; reconnecting");
                     }
@@ -110,8 +151,40 @@ async fn serve(
             }
             Err(_) => tracing::warn!("runtime connection timed out; reconnecting"),
         }
-        tokio::time::sleep(backoff.next().unwrap_or(MAX_RECONNECT_DELAY)).await;
+        tokio::select! {
+            () = tokio::time::sleep(backoff.next().unwrap_or(MAX_RECONNECT_DELAY)) => {}
+            request = handoffs.next() => {
+                answer_between_bridges(request, adopted.take(), &turns);
+                return;
+            }
+        }
     }
+}
+
+/// Answer a handoff that arrived while no bridge was relaying: only an agent
+/// adopted and not yet connected is running.
+#[cfg(unix)]
+fn answer_between_bridges(
+    reply: harness::HandoffRequest,
+    adopted: Option<RunningAgent>,
+    turns: &ActiveTurns,
+) {
+    let handed = adopted.and_then(|agent| {
+        agent
+            .hand_off(turns.snapshot())
+            .inspect_err(|error| tracing::warn!(error = %error, "could not hand the agent off"))
+            .ok()
+    });
+    let _ = reply.send(handed);
+}
+
+#[cfg(not(unix))]
+fn answer_between_bridges(
+    request: std::convert::Infallible,
+    _adopted: Option<RunningAgent>,
+    _turns: &ActiveTurns,
+) {
+    match request {}
 }
 
 /// Retry transport failures, server errors, and temporary HTTP refusals.

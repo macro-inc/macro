@@ -51,6 +51,11 @@ session that results.
 
 - A new trigger variant must also be taught to `crates/webhook` ingestion
   and the SSE fan-out, or it will be silently dropped end to end.
+- Attributed bot messages (`MessagePostedMetadata::invoking_user`) trigger
+  exactly like human ones: explicit, reply-target and inferred. The agent hop
+  limit (`messages::domain::agent_hops`) is the loop guard and runs before any
+  routing or judge call; a bot's message never targets its own bot's session.
+  Unattributed bot posts trigger nothing.
 
 ## Related
 
