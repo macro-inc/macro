@@ -190,7 +190,8 @@ projects use its corner-dashed counterpart. Not started stays a neutral hollow
 ring without shadows or highlights; In progress and In review add counterclockwise
 half and three-quarter pies from 12 o'clock. Current status colors and icon
 dimensions stay unchanged.
-The property edit menus use the shared 12px status and priority icons on desktop and mobile.
+The property edit menus use 16px status and priority icons on desktop and mobile,
+including empty-value options.
 Each status has its own `task-status-*` theme color, shared by task icons and
 group-header tints. Completed defaults to accent; explicit Completed theme overrides
 remain available. In the theme editor's **Task statuses** section, change a status

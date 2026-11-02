@@ -100,6 +100,12 @@ function SelectEditorBody() {
             id: opt.id,
             label: formatOptionValue(opt),
           }))}
+          optionIconClass={
+            property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.STATUS ||
+            property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PRIORITY
+              ? 'size-4'
+              : undefined
+          }
           isLoading={false}
           error={null}
           selectedOptions={editor.selectedOptions}
@@ -112,12 +118,7 @@ function SelectEditorBody() {
                   icon: (
                     <PropertyEmptyIcon
                       propertyDefinitionId={property.propertyDefinitionId}
-                      class={
-                        property.propertyDefinitionId ===
-                        SYSTEM_PROPERTY_IDS.PRIORITY
-                          ? 'text-ink-extra-muted'
-                          : 'size-4 text-ink-extra-muted'
-                      }
+                      class="size-4 text-ink-extra-muted"
                     />
                   ),
                   onClear: editor.clearOptions,

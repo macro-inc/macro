@@ -157,6 +157,7 @@ export const DropdownSelectableRow: ParentComponent<
 type SelectOptionsProps = {
   config: OptionSelectorConfig;
   options: SelectableOption[];
+  optionIconClass?: string;
   isLoading: boolean;
   error: string | null;
   selectedOptions: () => Set<string>;
@@ -461,6 +462,7 @@ export const PropertyOptionSelector = (props: SelectOptionsProps) => {
                               >
                                 <PropertyValueIcon
                                   optionId={optionItem().option.id}
+                                  class={props.optionIconClass}
                                 />
                                 <div class="flex-1 min-w-0 text-left">
                                   <p class="truncate">

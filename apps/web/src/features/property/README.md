@@ -37,6 +37,8 @@ static and readable in compact rows. When composing a project icon separately,
 pass `hideIcon` to `Property.Text` to avoid duplicate glyphs.
 Status, Priority, and Date icons share a 12px default. List date icons use the
 existing 16px compact-column override instead of stretching to the cell width.
+Status and Priority selector dropdowns use 16px icons on desktop and touch,
+including empty-value options.
 Inline task and document title pills use 12px non-avatar icons on desktop and
 16px on touch; assignee avatars retain their own sizing. Task title pills omit
 the `Due date:` prefix and order Due date before Project and Assignees.

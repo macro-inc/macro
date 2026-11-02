@@ -90,8 +90,9 @@ amber, violet, accent, and muted gray respectively. In Progress mixes amber with
 `content-0` in sRGB: 80% amber in dark mode and 50% in light mode, improving contrast
 without rotating amber toward a tinted foreground's hue. Authored overrides stay
 unchanged.
-Status and Priority option glyphs share a 12 px default, including edit menus
-and title property pills. Explicit caller sizing takes precedence: leading task
+Status and Priority option glyphs share a 12 px default, including title property
+pills. Status and Priority selector dropdowns use 16 px icons on desktop and touch,
+including empty-value options. Explicit caller sizing takes precedence: leading task
 status controls use 18 px, leading priority controls use 16 px on desktop and
 20 px on phones, and side-panel values use 16 px. Leading priority glyphs never
 flex-shrink. Group-header carets use 16 px; hit targets stay unchanged.
