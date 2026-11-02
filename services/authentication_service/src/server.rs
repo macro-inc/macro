@@ -78,6 +78,13 @@ use referral::{
     domain::service::ReferralServiceImpl,
     outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
 };
+use system_status::{
+    domain::service::SystemStatusServiceImpl,
+    outbound::{
+        connection_gateway_broadcaster::ConnectionGatewayStatusBroadcaster,
+        pg_system_status_repo::PgSystemStatusRepo,
+    },
+};
 use user_language::{
     domain::service::UserLanguageServiceImpl, outbound::pg_user_language_repo::PgUserLanguageRepo,
 };
@@ -477,7 +484,7 @@ pub async fn run() -> anyhow::Result<()> {
                         entity_access_service_impl.clone(),
                     ),
                     messages::outbound::connection_gateway::ConnectionGatewayMessages(
-                        connection_gateway_client,
+                        connection_gateway_client.clone(),
                     ),
                     channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
                 ),
@@ -537,6 +544,10 @@ pub async fn run() -> anyhow::Result<()> {
         repo: PgGtmInviteRepo::new(db.clone()),
         config: gtm_invite_config,
     };
+    let system_status_service = Arc::new(SystemStatusServiceImpl::new(
+        PgSystemStatusRepo::new(db.clone()),
+        ConnectionGatewayStatusBroadcaster::new(connection_gateway_client.clone()),
+    ));
 
     let codex_connection = if let Some(key_id) = config.codex_oauth_kms_key_id() {
         let cipher = Arc::new(codex_connection::outbound::cipher::EnvelopeCipher::new(
@@ -787,6 +798,7 @@ pub async fn run() -> anyhow::Result<()> {
             referral_service: Arc::new(referral_service),
             user_language_service,
             gtm_invite_service,
+            system_status_service,
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::new(
                     AppServiceUrl::new_for_environment(config.environment)

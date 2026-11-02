@@ -13,6 +13,8 @@ use gtm_invite::inbound::axum_router::dto::{
     GtmInviteOffer, GtmInviteOfferStatus, PublicGtmInviteLink, RedeemGtmInviteLinkRequest,
 };
 use model::authentication::login::request::{AppleLoginRequest, PasswordRequest};
+use system_status::domain::models::{CurrentSystemStatus, StatusUpdate, SystemStatus};
+use system_status::inbound::axum_router::SystemStatusHistory;
 use teams::domain::model::{
     PatchTeamCrmSettingsRequest, PatchTeamCrmSettingsResponse, PatchTeamMemberPlanRequest,
     PatchTeamRequest, PatchTeamUserRole, Team, TeamInviteDetails, TeamInviteLinkTeam,
@@ -218,6 +220,11 @@ use model::user::{
                 gtm_invite::inbound::axum_router::redeem_link::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
                 gtm_invite::inbound::axum_router::get_offer::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
 
+                /// /system-status
+                system_status::inbound::axum_router::get_current::handler::<crate::api::context::SystemStatusServiceType, crate::api::context::AuthorizationService>,
+                system_status::inbound::axum_router::set_status::handler::<crate::api::context::SystemStatusServiceType, crate::api::context::AuthorizationService>,
+                system_status::inbound::axum_router::list_history::handler::<crate::api::context::SystemStatusServiceType, crate::api::context::AuthorizationService>,
+
                 /// /mobile-welcome-email
                 mobile_welcome_email::handler,
 
@@ -272,6 +279,12 @@ use model::user::{
                         RedeemGtmInviteLinkRequest,
                         GtmInviteOffer,
                         GtmInviteOfferStatus,
+
+                        // System status
+                        SystemStatus,
+                        CurrentSystemStatus,
+                        StatusUpdate,
+                        SystemStatusHistory,
 
                         // Plans and AI billing
                         PaidPlan,

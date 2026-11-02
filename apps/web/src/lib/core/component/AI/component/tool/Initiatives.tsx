@@ -9,7 +9,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { enableProjects, isFeatureEnabled } from '@core/constant/featureFlags';
-import Stack from '@icon/system/regular/stack.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import type { NamedTool } from '@service-cognition/generated/tools/tool';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
@@ -68,7 +68,7 @@ function ProjectToolCard(props: {
   return (
     <BaseTool
       type="call"
-      icon={Stack}
+      icon={ProjectIcon}
       renderContext={props.renderContext}
       response={
         props.hasResult && expanded() ? (
