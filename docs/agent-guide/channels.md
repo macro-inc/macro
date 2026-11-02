@@ -412,7 +412,10 @@ beside the buttons and collapse when it fits again, without flickering between
 layouts. Also add and remove a line break or attachment and
 confirm the draft and caret position survive. The attachment and send controls
 should remain usable in both layouts. Existing message and reply edit inputs show
-only the send control, with no format or discard button; Escape cancels the edit.
+Attach files, Discard Edit, and Send, with no format toggle; Escape also cancels
+an edit. The iOS app uses its native media picker. Check inline and unified edits
+on desktop and touch: attach a file and save, then edit again and discard changes
+without changing the original message or attachments.
 The iOS share sheet keeps its editor above the attachment and formatting controls.
 Check this arrangement at both phone and tablet widths.
 
