@@ -11,7 +11,8 @@ the gateway `/email` prefix.
 - `src/main.rs` / `src/lib.rs`: entrypoint and `run()`.
 - `src/api.rs` + `src/api/context.rs`: HTTP surface and `ApiContext`.
 - `src/pubsub/`: SQS pubsub workers, one module per concern — `inbox_sync`,
-  `link_manager` (Gmail re-subscribe), `scheduled` (scheduled sends),
+  `link_manager` (Gmail re-subscribe, health checks, inbox deletion),
+  `scheduled` (scheduled sends),
   `sfs_uploader`/`sfs_deleter` (attachment storage), `gmail_ops`, `backfill`,
   `crm_cleanup`, `worker_lifecycle`.
 - `src/backfill_outbox.rs`, `src/backfill_init_service.rs`,
@@ -153,6 +154,10 @@ the gateway `/email` prefix.
 - Header addresses that Gmail accepts can fail `MacroUserIdStr::try_from_email`.
   Skip the bad address with a WARN that omits it (the parse error echoes it)
   instead of failing the step; see `pubsub::util::build_contact_connections`.
+- The `link_manager` worker receives one message at a time and renews its
+  visibility while processing. Don't raise its receive batch: messages queued
+  behind a long mailbox purge would be redelivered and purged twice.
+  `PurgePacing` (`email_db_client::links::delete`) sets the purge's write rate.
 
 ## Related
 

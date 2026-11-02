@@ -68,12 +68,20 @@ rows, initiatives, ...) and get back a single unified, paginated result.
 
 - Project grouping uses the system Project property (initiative membership),
   including canonical TASK assignments, rather than legacy folder `project_id`.
+  `SoupService::group_labels` names the groups a grouping field leaves
+  unlabeled (today, project groups, from the initiative names the caller can
+  read); REST group meta and GraphQL bins carry the result as `GroupLabels`,
+  and a key it leaves out keeps itself as its label.
 
 - `crm_association.rs` resolves CRM scope before filtering, sorting, and paging.
   Activity uses property edges rather than references and matches email within
   the caller's mailbox. Keep browser requests bounded; never expand every CRM
   record into client-side filters or raise ingress limits to fit them.
 
+- Agent sessions named by id (an `Id` literal in `cursor_soup`, which GraphQL
+  `agentSession` and its log use, and `by_ids`) also accept a grant on the
+  document or call whose live thread the session runs in, matching
+  `entity_access`. Broad lists use session grants only.
 - `expanded/` vs `unexpanded/` queries exist because hydrating full entities
   is expensive — don't widen `unexpanded` to return hydrated data; add a new
   `expanded` path instead.

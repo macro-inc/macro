@@ -14,7 +14,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 
 ## Gotchas
 
-- Group task lists by the Project property, matching the Project column and Board; resolve project headers through the authorized project identity query.
+- Group task lists by the Project property, matching the Project column and Board. The server labels project groups with the initiative name the viewer can read, and the cache's local grouping projection carries that label; a header resolves the name through the authorized project identity query only while its group is still labeled by its key. Projects sort by name with No Project last in every layout.
 - Keep project navigation in a separate Projects section above Saved views, with assigned-to-me, all-accessible, and created-by-me views; replace individual-project shortcuts and use one mobile Projects picker.
 - Preserve project scope through detail navigation, history, pagination, and editable-filter clearing; keep project views out of task queries and saved-task-view capture.
 

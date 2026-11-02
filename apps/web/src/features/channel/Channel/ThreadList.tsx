@@ -3,6 +3,7 @@ import {
   createScrollIntentTracker,
   type ScrollDirection,
 } from '@core/util/scroll-intent';
+import { MessageReadVisibilityProvider } from '@notifications/components/MessageReadVisibility';
 import { Key } from '@solid-primitives/keyed';
 import { isIOS, isSafari } from '@solid-primitives/platform';
 import {
@@ -145,6 +146,9 @@ export function ThreadList(props: ThreadListProps) {
     snapshot?.measurements?.map(({ key, size }) => [key, size])
   );
   let programmaticOffset: number | undefined;
+  // A scroll event dispatched while our own scrollTo runs is ours as well.
+  // Native scrolling activates gesture compensation, so it must not be mistaken.
+  let writingScroll = false;
   let stateQueued = false;
   let nearTopKey: string | undefined;
   let nearBottomFired = false;
@@ -173,7 +177,12 @@ export function ThreadList(props: ThreadListProps) {
           writeOffset: (offset) => {
             const element = scrollEl();
             if (!element) return;
-            element.scrollTo({ top: offset });
+            writingScroll = true;
+            try {
+              element.scrollTo({ top: offset });
+            } finally {
+              writingScroll = false;
+            }
             programmaticOffset = element.scrollTop;
             scheduleScrollState();
           },
@@ -321,8 +330,9 @@ export function ThreadList(props: ThreadListProps) {
       const reportOffset = (offset: number, isScrolling: boolean) => {
         // An instant navigation/correction must not extend gesture compensation.
         const isOwnScroll =
-          programmaticOffset !== undefined &&
-          Math.abs(offset - programmaticOffset) < 1.5;
+          writingScroll ||
+          (programmaticOffset !== undefined &&
+            Math.abs(offset - programmaticOffset) < 1.5);
         programmaticOffset = undefined;
         if (isScrolling && !isOwnScroll) scrollIntent.observeScroll();
         const logicalOffset =
@@ -386,7 +396,12 @@ export function ThreadList(props: ThreadListProps) {
     ) {
       return;
     }
-    elementScroll(offset, options, instance);
+    writingScroll = true;
+    try {
+      elementScroll(offset, options, instance);
+    } finally {
+      writingScroll = false;
+    }
     programmaticOffset =
       options.behavior === 'smooth'
         ? undefined
@@ -619,7 +634,7 @@ export function ThreadList(props: ThreadListProps) {
   });
 
   return (
-    <>
+    <MessageReadVisibilityProvider root={scrollEl} insets={insets}>
       <div
         ref={scrollRef}
         data-channel-scroll
@@ -681,6 +696,6 @@ export function ThreadList(props: ThreadListProps) {
           scrollIntent.markUserIntent(delta > 0 ? 'down' : 'up');
         }}
       />
-    </>
+    </MessageReadVisibilityProvider>
   );
 }

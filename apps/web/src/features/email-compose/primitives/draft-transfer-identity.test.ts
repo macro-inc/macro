@@ -166,6 +166,47 @@ it.each(directions)(
 );
 
 it.each(directions)(
+  'keeps a draft moved from %s to %s when the host cannot show it',
+  async (_from, _to, source, destination) => {
+    const { context, moved } = createDeviceContext(source, destination);
+    const navigation = new Error('Could not open the moved thread');
+    const root = mountEmailComposer(
+      context,
+      {
+        showMovedDraft: () => {
+          throw navigation;
+        },
+      },
+      {
+        draft: message('draft', {
+          is_draft: true,
+          link_id: 'inbox',
+          from: { email: source.email_address },
+        }),
+      }
+    );
+    try {
+      root.edit('Moving draft');
+      await root.state.flushLocal();
+      root.state.context.onSelectInbox?.('other');
+      expect(await moved).toEqual({
+        saved: expect.objectContaining({
+          inboxId: 'other',
+          draft: expect.objectContaining({
+            db_id: 'moved-draft',
+            sender_email: destination.email_address,
+          }),
+        }),
+      });
+      expect(context.notices.feedback.failure).not.toHaveBeenCalled();
+      expect(context.notices.reportError).toHaveBeenCalledWith(navigation);
+    } finally {
+      root.dispose();
+    }
+  }
+);
+
+it.each(directions)(
   'keeps saving a reply locally after its sender moves it from %s to %s',
   async (_from, _to, source, destination) => {
     const { context, moved, forgotten } = createDeviceContext(

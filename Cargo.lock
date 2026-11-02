@@ -590,6 +590,7 @@ dependencies = [
  "harnesses",
  "http 1.4.0",
  "http-body-util",
+ "image_generation",
  "import",
  "import_jira",
  "import_linear",
@@ -2247,6 +2248,7 @@ dependencies = [
  "tower-cookies",
  "tower-http",
  "tracing",
+ "upstream_error",
  "url",
  "urlencoding",
  "user_language",
@@ -3718,7 +3720,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.52"
+version = "0.6.53"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -4583,6 +4585,7 @@ dependencies = [
  "agent_session",
  "agent_trigger",
  "arboard",
+ "base64 0.22.1",
  "bot_id",
  "channel_sender",
  "channels",
@@ -4902,6 +4905,7 @@ dependencies = [
  "dashmap",
  "doppler-config",
  "ensure_exists",
+ "entity_access",
  "frecency",
  "futures",
  "http-body-util",
@@ -6584,6 +6588,7 @@ dependencies = [
  "macro_config",
  "macro_cors",
  "macro_db_client",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -6614,6 +6619,7 @@ dependencies = [
  "notification",
  "opensearch_client",
  "opentelemetry",
+ "opentelemetry_sdk",
  "ordered-float",
  "projects",
  "properties",
@@ -6659,6 +6665,7 @@ dependencies = [
  "tower-http",
  "tracing",
  "tracing-opentelemetry",
+ "tracing-subscriber",
  "tungstenite 0.27.0",
  "unicode-segmentation",
  "urlencoding",
@@ -6668,6 +6675,7 @@ dependencies = [
  "uuid",
  "webhook",
  "whatsapp_linked",
+ "wiremock",
  "work_feed",
  "workspace-hack",
  "zip 9.0.5",
@@ -7324,6 +7332,7 @@ dependencies = [
  "sqlx",
  "tokio",
  "tracing",
+ "tracing-subscriber",
  "workspace-hack",
 ]
 
@@ -8447,6 +8456,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "upstream_error",
  "urlencoding",
  "uuid",
  "wiremock",
@@ -8874,6 +8884,8 @@ dependencies = [
  "macro_db_migrator",
  "macro_env",
  "macro_env_var",
+ "macro_event_broker",
+ "macro_event_topics",
  "macro_service_urls",
  "macro_user_id",
  "macro_uuid",
@@ -8885,6 +8897,7 @@ dependencies = [
  "model_owner",
  "model_user",
  "models_permissions",
+ "models_properties",
  "notification",
  "redis",
  "regex",
@@ -8899,6 +8912,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "upstream_error",
  "url",
  "urlencoding",
  "utoipa",
@@ -10498,19 +10512,25 @@ dependencies = [
 name = "image_generation"
 version = "0.1.0"
 dependencies = [
+ "ai_billing",
  "ai_toolset",
  "ai_usage",
  "anyhow",
  "async-trait",
  "attachment",
+ "axum",
  "base64 0.22.1",
  "bot_id",
+ "entity_registry",
+ "http-body-util",
  "image",
  "lexical_client",
+ "macro_authorization",
  "macro_user_id",
  "model",
  "model-entity",
  "model_owner",
+ "model_user",
  "non_empty",
  "reqwest 0.13.4",
  "rootcause",
@@ -10520,7 +10540,9 @@ dependencies = [
  "static_file_service_client",
  "thiserror 2.0.18",
  "tokio",
+ "tower 0.5.3",
  "tracing",
+ "utoipa",
  "uuid",
  "wiremock",
  "workspace-hack",
@@ -12610,16 +12632,21 @@ version = "0.1.0"
 dependencies = [
  "ai_toolset",
  "anyhow",
+ "async-trait",
  "axum",
  "base64 0.22.1",
  "bot_id",
+ "chrono",
+ "cursor_api_key",
  "fusionauth",
  "macro_auth",
+ "macro_db_migrator",
  "macro_user_id",
  "redis",
  "serde",
  "serde_json",
  "sha2 0.10.9",
+ "sqlx",
  "thiserror 2.0.18",
  "tokio",
  "tower 0.5.3",
@@ -12629,6 +12656,7 @@ dependencies = [
  "urlencoding",
  "uuid",
  "workspace-hack",
+ "zeroize",
 ]
 
 [[package]]
@@ -17355,6 +17383,8 @@ dependencies = [
  "feature_flags",
  "frecency",
  "futures",
+ "github",
+ "glob",
  "jev",
  "kafka_util",
  "lexical_client",
@@ -17591,6 +17621,7 @@ dependencies = [
  "anyhow",
  "aws-sdk-secretsmanager",
  "axum",
+ "calendar_events",
  "channels",
  "chrono",
  "comms_db_client",
@@ -21148,6 +21179,23 @@ dependencies = [
  "sqs_client",
  "tokio",
  "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "upstream_error"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "http 1.4.0",
+ "http-body-util",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "utoipa",
+ "wiremock",
  "workspace-hack",
 ]
 

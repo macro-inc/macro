@@ -27,7 +27,7 @@ import { EmailHeader, EmailViewBreadcrumbItem } from './components/EmailHeader';
 import { EmailList } from './components/EmailList';
 import { EmailReader } from './components/EmailReader';
 import { EmailSidebar } from './components/EmailSidebar';
-import { EMAIL_FOCUS_TAB, EMAIL_TABS } from './constants';
+import { EMAIL_TABS } from './constants';
 import { EmailViewProvider, useEmailView } from './email-view-context';
 import type { EmailListPane } from './reader-pane';
 import { emailTour } from './tour';
@@ -171,12 +171,9 @@ function EmailDesktopLayout(props: {
 
 // Focus leads, as it does in the desktop Inbox tabs.
 const MOBILE_EMAIL_TABS: PillTabItem<EmailTab>[] = [
-  EMAIL_FOCUS_TAB,
-  ...EMAIL_TABS.filter((tab) => tab.id !== EMAIL_FOCUS_TAB.id),
-].map((tab) => ({
-  value: tab.id,
-  label: tab.badge ? `${tab.label} · ${tab.badge}` : tab.label,
-}));
+  ...EMAIL_TABS.filter((tab) => tab.id === 'focus'),
+  ...EMAIL_TABS.filter((tab) => tab.id !== 'focus'),
+].map((tab) => ({ value: tab.id, label: tab.label }));
 
 function EmailMobileLayout(props: ParentProps) {
   const isVisible = useVisibleEmailTab();

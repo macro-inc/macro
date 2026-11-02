@@ -744,14 +744,24 @@ type menu afterward to convert it. The limit is 8 MB, 100 columns, and 10,000 ro
 A failed response offers **Retry import** with the same request, so retrying a
 completed import does not create a second table.
 
-**Webhooks** (editors only) opens a dialog for the current table. **Create
-webhook** shows its URL once, with a copy button and a `curl` example built from
-the table's columns; the list below shows each webhook's token prefix and a
-delete button. POSTing a JSON object to the URL inserts one row (an array inserts
+**Webhooks** (editors only) opens a dialog for the current table (a drawer on
+phones). After a fresh list response confirms the table has no webhooks,
+opening it creates the first webhook and shows its URL directly, with a copy
+button and a `curl` example built from the table's columns. Automatic creation
+waits while the list request is paused offline. If webhooks already exist, it
+opens management without creating another. Changing the active table resets
+the dialog to that table. **Create webhook** creates another URL or retries a
+failed creation. The dialog stays open while creation is pending. Each new URL is
+shown only once; copy it before closing. The list
+below shows each webhook's token prefix and a delete button. Deleting the last
+webhook does not create a replacement until the dialog is reopened. POSTing a JSON object to the URL inserts one row (an array inserts
 one per object, up to 100). Keys name columns, ignoring case; `null` leaves a
 cell empty; unknown keys or values that do not fit refuse the whole call with a
 400 listing every problem. The row is written as the webhook's creator, and the
 webhook stops working if they lose edit access.
+
+Browser examples: [desktop](media/database-webhooks/desktop.png) and
+[phone](media/database-webhooks/phone.png).
 
 ## Side panel and activity
 

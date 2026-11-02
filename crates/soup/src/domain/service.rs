@@ -1,3 +1,4 @@
+use crate::domain::models::grouping::{GroupByField, GroupLabels};
 use crate::domain::{
     models::{
         AdvancedSortParams, EnrichedSoupItem, FrecencyQueryInner, GetCrmCompaniesRequest,
@@ -1922,6 +1923,45 @@ where
     Crm: CrmService,
     F: GithubPullRequestListing,
 {
+    #[tracing::instrument(err, skip(self, keys), fields(key_count = keys.len()))]
+    async fn group_labels<'a>(
+        &'a self,
+        user_id: MacroUserIdStr<'a>,
+        group_by: &'a GroupByField,
+        keys: &'a [String],
+    ) -> Result<GroupLabels, SoupErr> {
+        let entities: Vec<Entity<'static>> = match group_by {
+            // Project keys are initiative ids; the client has no name for them.
+            GroupByField::Project => keys
+                .iter()
+                .filter(|key| Uuid::parse_str(key).is_ok())
+                .map(|key| EntityType::Initiative.with_entity_string(key.clone()))
+                .collect(),
+            _ => Vec::new(),
+        };
+        if entities.is_empty() {
+            return Ok(Default::default());
+        }
+        let items = self
+            .soup_storage
+            .unexpanded_soup_by_ids(AdvancedSortParams {
+                entities: &entities,
+                user_id: user_id.copied(),
+            })
+            .await
+            .map_err(anyhow::Error::from)
+            .map_err(SoupErr::SoupDbErr)?;
+        Ok(items
+            .into_iter()
+            .filter_map(|item| match item {
+                SoupItem::Initiative(initiative) => {
+                    Some((initiative.id.to_string(), initiative.name))
+                }
+                _ => None,
+            })
+            .collect())
+    }
+
     #[tracing::instrument(err, skip(self, req, team_receipt))]
     async fn get_user_soup<R>(
         &self,

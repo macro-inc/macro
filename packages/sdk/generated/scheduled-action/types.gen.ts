@@ -155,6 +155,11 @@ export type EmptyResponse = {
 /**
  * An event name AND an entity ID must match within the same filter. A
  * condition further requires the event's content to answer it with yes.
+ *
+ * `github` comes from outside Macro and carries its payload: it stands
+ * alone in its filter, takes no ids, and may require
+ * exact payload values with `match`. A `github` filter narrows deliveries
+ * with its `github` selector.
  */
 export type EventFilter = {
     /**
@@ -163,7 +168,12 @@ export type EventFilter = {
      */
     condition?: string | null;
     events: Array<EventName>;
+    github?: null | GithubSelector;
     ids?: Array<string> | null;
+    /**
+     * Exact tests on the payload, all of which must pass.
+     */
+    match?: Array<PayloadCondition> | null;
 };
 
 /**
@@ -175,7 +185,7 @@ export type EventFilters = Array<EventFilter>;
  * Closed allowlist: unknown names, deletions and ambiguous attribution are not
  * selectors. Adding a broker variant does not automatically enable routines.
  */
-export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended';
+export type EventName = 'document.created' | 'document.updated' | 'document.deleted' | 'task.created' | 'task.status_changed' | 'task.priority_changed' | 'task.property_changed' | 'email.message_received' | 'channel.created' | 'channel.message_posted' | 'channel.mentioned' | 'channel.message_patched' | 'channel.message_attachment_created' | 'call.started' | 'call.ended' | 'github';
 
 /**
  * Transcript resource created by a run. Never infer this from current task configuration.
@@ -201,6 +211,30 @@ export type ExecutionResult = {
     version: number;
 };
 
+/**
+ * Which GitHub deliveries match.
+ */
+export type GithubSelector = {
+    /**
+     * Payload actions, such as `completed` or `opened`; any when empty.
+     */
+    actions?: Array<string>;
+    /**
+     * GitHub event names, such as `workflow_run` or `pull_request`; any when empty.
+     */
+    events?: Array<string>;
+    /**
+     * Also run for deliveries caused by bots and apps, including Macro's own.
+     */
+    includeBots?: boolean;
+    /**
+     * Repositories as `owner/name`, matched without regard to case; every
+     * repository the owner's installations cover when empty. A renamed
+     * repository stops matching until it is chosen again.
+     */
+    repositories?: Array<string>;
+};
+
 export type InProgressExecution = {
     action_id: string;
     chat_id?: string | null;
@@ -220,6 +254,40 @@ export type LegacyActionConfiguration = {
     };
     timezone: string;
 };
+
+/**
+ * `path` walks objects by key; `*` steps into every element of an array and
+ * a number into one. Give exactly one test. `notIn` also passes when the
+ * path finds nothing.
+ */
+export type PayloadCondition = {
+    equals?: null | PayloadScalar;
+    /**
+     * Whether the path finds a non-null value.
+     */
+    exists?: boolean | null;
+    /**
+     * Some text found matches this glob; `*` matches any run of characters.
+     */
+    glob?: string | null;
+    /**
+     * Some value found is one of these.
+     */
+    in?: Array<PayloadScalar> | null;
+    /**
+     * No value found is one of these.
+     */
+    notIn?: Array<PayloadScalar> | null;
+    /**
+     * Keys from the payload's root, e.g. `["workflow_run", "conclusion"]`.
+     */
+    path: Array<string>;
+};
+
+/**
+ * A JSON text, number, boolean or null that payload values are compared with.
+ */
+export type PayloadScalar = null | boolean | number | string;
 
 /**
  * A nonblank model identifier. Runtime catalogs, not the scheduler, own availability.

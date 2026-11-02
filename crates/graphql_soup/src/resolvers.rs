@@ -91,13 +91,22 @@ where
     Edges: SoupEntityEdges,
 {
     let macro_user_id = require_authorized_user::<Auth, St>(ctx).await?;
+    let viewer = macro_user_id.clone();
     let request = input.into_request(macro_user_id)?;
     let sort_method = *request.cursor.sort_method();
     let filters = request.cursor.filter().clone();
+    let group_by = request.grouping.field.clone();
     let items = service.get_user_soup_grouped(request).await?;
     let groups: NestedSoupGroups<_, _> = items.collect();
+    let keys: Vec<String> = groups
+        .keys()
+        .filter(|key| !key.is_empty())
+        .cloned()
+        .collect();
+    let labels = service.group_labels(viewer, &group_by, &keys).await?;
     Ok(GroupedSoup::new(
         groups.with_next_cursors(sort_method, filters),
+        &labels,
     ))
 }
 

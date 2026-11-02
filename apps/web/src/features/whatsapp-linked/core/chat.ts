@@ -32,7 +32,9 @@ export type WhatsAppChat = {
   kind: 'group' | 'direct';
   /** WhatsApp's subject or contact name, or DSS's fallback; never empty. */
   name: string;
-  /** Newest message WhatsApp reported, when known. */
+  /** The other person's number (`+<digits>`) of a direct chat, when known. */
+  phoneNumber: string | undefined;
+  /** Newest message WhatsApp reported; unknown for contacts never written to. */
   lastActivityAt: string | undefined;
   archived: boolean;
   inMacro: InMacro | undefined;
@@ -45,11 +47,16 @@ export type WhatsAppChat = {
   community?: ChatCommunity;
 };
 
+/** A saved contact (or looked-up number) nobody has written to yet. */
+const isUnwrittenContact = (chat: WhatsAppChat) =>
+  chat.kind === 'direct' && !chat.lastActivityAt && !chat.inMacro;
+
 /**
  * The WhatsApp page's lists, in DSS's recent-activity order. `listed` holds
  * the chats to add and those shared with the viewer, plus (while searching)
  * the viewer's own added chats, which otherwise live in External's sidebar.
- * `query` keeps the chats whose name matches.
+ * `contacts` holds people to start a chat with: saved contacts nobody wrote
+ * to yet. `query` keeps the chats whose name or number matches.
  */
 export function chatSections(chats: WhatsAppChat[], query = '') {
   const searching = query.trim() !== '';
@@ -58,8 +65,10 @@ export function chatSections(chats: WhatsAppChat[], query = '') {
     listed: visible.filter((chat) =>
       chat.inMacro?.kind === 'own'
         ? searching
-        : chat.canAdd || chat.inMacro?.kind === 'shared'
+        : !isUnwrittenContact(chat) &&
+          (chat.canAdd || chat.inMacro?.kind === 'shared')
     ),
+    contacts: visible.filter((chat) => isUnwrittenContact(chat) && chat.canAdd),
     unsupported: visible.filter(
       (chat) => !chat.inMacro && !chat.canAdd && !!chat.cannotAddReason
     ),
@@ -130,7 +139,12 @@ export function matchesChatQuery(chat: WhatsAppChat, query: string): boolean {
   if (fold(communityTitle(chat.name, chat.community)).includes(wanted))
     return true;
   const digits = wanted.replace(/[\s()+-]/g, '');
-  return /^\d+$/.test(digits) && chat.name.replace(/\D/g, '').includes(digits);
+  return (
+    /^\d+$/.test(digits) &&
+    [chat.name, chat.phoneNumber ?? ''].some((text) =>
+      text.replace(/\D/g, '').includes(digits)
+    )
+  );
 }
 
 /** Why a chat can't be added to Macro, as DSS reports it. */
@@ -163,7 +177,10 @@ export function cannotAddLabel(chat: WhatsAppChat): string | undefined {
     : undefined;
 }
 
-/** "Group", "Direct chat · Archived"; the row shows last activity apart. */
+/**
+ * "Group", "Direct chat · +351 …" (the number when the name isn't it),
+ * "Direct chat · Archived"; the row shows last activity apart.
+ */
 export function chatMetadata(chat: WhatsAppChat): string {
   return [
     chat.kind === 'direct'
@@ -173,6 +190,7 @@ export function chatMetadata(chat: WhatsAppChat): string {
         : chat.community
           ? 'Community group'
           : 'Group',
+    chat.phoneNumber !== chat.name ? chat.phoneNumber : undefined,
     chat.archived ? 'Archived' : undefined,
   ]
     .filter(Boolean)

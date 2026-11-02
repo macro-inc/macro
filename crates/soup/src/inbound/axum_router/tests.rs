@@ -211,6 +211,15 @@ impl SoupService for MockSoup {
         ))
     }
 
+    async fn group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _group_by: &'a crate::domain::models::grouping::GroupByField,
+        _keys: &'a [String],
+    ) -> Result<crate::domain::models::grouping::GroupLabels, SoupErr> {
+        Ok(Default::default())
+    }
+
     async fn caller_tag_sets<'a>(
         &self,
         _user_id: MacroUserIdStr<'a>,

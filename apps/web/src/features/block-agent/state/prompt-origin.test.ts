@@ -87,6 +87,61 @@ describe('promptOrigin', () => {
     });
   });
 
+  it('names the agent that started the session and the person it asked for', () => {
+    const discussion = {
+      surface: {
+        type: 'channel' as const,
+        id: 'c1',
+        name: 'eng',
+        channel_type: 'public' as const,
+      },
+      prompt_message_id: 'm2',
+      sender: agent,
+      agent_request: { on_behalf_of: julia, hops: 1 },
+      reply_target: { kind: 'thread' as const, root_id: 'm1' },
+      thread: {
+        root_id: 'm1',
+        messages: [
+          {
+            id: 'm2',
+            author: agent,
+            content: '@Cursor fix the flaky snapshot test',
+            posted_at: '2026-10-15T14:02:00Z',
+          },
+        ],
+        messages_omitted: false,
+      },
+    };
+    const destination = {
+      kind: 'channel_message',
+      channelId: 'c1',
+      messageId: 'm2',
+      threadId: 'm1',
+    };
+    expect(
+      originOf({
+        promptMarkdown: 'fix the flaky snapshot test',
+        trigger: { kind: 'mentioned', ...discussion },
+      })
+    ).toEqual({
+      lead: 'Started by Macro for Julia in',
+      place: '#eng',
+      tail: undefined,
+      destination,
+    });
+    expect(
+      originOf({
+        promptMarkdown: 'one more change',
+        trigger: { kind: 'follow_up', addressed_by: 'mention', discussion },
+      })
+    ).toEqual({
+      lead: 'Asked by Macro for Julia in',
+      place: '#eng',
+      tail: undefined,
+      destination,
+    });
+  });
+
   it('names a direct message by its sender and points at the top-level message', () => {
     expect(
       originOf({
@@ -500,6 +555,25 @@ describe('promptOrigin', () => {
       place: 'Watcher',
       tail: '· Acme renewal ended',
       destination: { kind: 'call', callId: 'call-1' },
+    });
+
+    expect(
+      routine({
+        type: 'event',
+        event: {
+          event: 'github',
+          delivery: {
+            event: 'workflow_run',
+            action: 'completed',
+            repository: 'macro-inc/macro',
+          },
+        },
+      })
+    ).toEqual({
+      lead: 'via routine',
+      place: 'Watcher',
+      tail: '· GitHub workflow_run completed in macro-inc/macro',
+      destination: { kind: 'routine', routineId: 'r-2' },
     });
   });
 

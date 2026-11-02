@@ -9,6 +9,7 @@ use models_permissions::{
     sharing::{SharingFacts, SharingTeamRole},
 };
 use std::sync::Arc;
+use tracing::Level;
 use uuid::Uuid;
 
 #[cfg(test)]
@@ -173,7 +174,7 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
     }
 
     /// Read current request state; non-reviewers never receive other people's requests.
-    #[tracing::instrument(name = "access_requests.state", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err)]
+    #[tracing::instrument(name = "access_requests.state", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err(level = Level::DEBUG))]
     pub async fn state(
         &self,
         user: MacroUserIdStr<'static>,
@@ -215,7 +216,7 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
     }
 
     /// Submit or change one pending access request. Identical pending replays are harmless.
-    #[tracing::instrument(name = "access_requests.submit", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err)]
+    #[tracing::instrument(name = "access_requests.submit", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err(level = Level::DEBUG))]
     pub async fn submit(
         &self,
         user: MacroUserIdStr<'static>,
@@ -280,7 +281,7 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
     }
 
     /// Cancel only the caller's current revision.
-    #[tracing::instrument(name = "access_requests.cancel", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err)]
+    #[tracing::instrument(name = "access_requests.cancel", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err(level = Level::DEBUG))]
     pub async fn cancel(
         &self,
         user: MacroUserIdStr<'static>,
@@ -304,7 +305,7 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
     }
 
     /// Resolve a pending revision and atomically grant access or begin the denial cooldown.
-    #[tracing::instrument(name = "access_requests.resolve", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err)]
+    #[tracing::instrument(name = "access_requests.resolve", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err(level = Level::DEBUG))]
     pub async fn resolve(
         &self,
         user: MacroUserIdStr<'static>,
@@ -347,7 +348,7 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
     }
 
     /// Direct grants are visible to reviewers and their recipient only.
-    #[tracing::instrument(name = "access_requests.direct_access", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err)]
+    #[tracing::instrument(name = "access_requests.direct_access", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err(level = Level::DEBUG))]
     pub async fn direct_access(
         &self,
         user: MacroUserIdStr<'static>,
@@ -364,7 +365,7 @@ impl<R: RequestRepository, A: EntityAccessService, C: Clock> AccessRequestServic
     }
 
     /// Explicit owner management can reduce a direct grant, preserving other access paths.
-    #[tracing::instrument(name = "access_requests.set_direct_access", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err)]
+    #[tracing::instrument(name = "access_requests.set_direct_access", skip_all, fields(entity_id = %entity.entity_id, entity_type = ?entity.entity_type), err(level = Level::DEBUG))]
     pub async fn set_direct_access(
         &self,
         user: MacroUserIdStr<'static>,

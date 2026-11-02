@@ -83,7 +83,7 @@ impl Daemon {
             Some(crate::herdr::repositories::Workspaces::new(
                 config.workspace.path.clone(),
                 config.herdr.storage_path.clone().unwrap_or(root),
-                crate::herdr::cli::HerdrCli::new(herdr.bin, herdr.workspace_id),
+                herdr.cli(),
             ))
         } else {
             None

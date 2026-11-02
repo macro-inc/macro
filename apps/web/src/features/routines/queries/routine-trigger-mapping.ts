@@ -1,18 +1,70 @@
 import { parseCron } from '@core/util/cron';
 import { TZDate } from '@date-fns/tz';
-import type { ActionTrigger } from '@service-scheduled-action/generated/schemas';
+import type {
+  ActionTrigger,
+  EventFilter,
+  PayloadCondition,
+  PayloadScalar,
+} from '@service-scheduled-action/generated/schemas';
 import { match } from 'ts-pattern';
 import {
   type EventTriggerDraft,
   newScheduleTrigger,
+  type PayloadTestDraft,
+  payloadTestValues,
   type RoutineTriggerDraft,
 } from '../core/routine-triggers';
 
-function serializeFilter(trigger: EventTriggerDraft) {
+/** Typed text as the JSON scalar it names; anything else stays text. */
+function scalar(text: string): PayloadScalar {
+  const value = text.trim();
+  if (value === 'true') return true;
+  if (value === 'false') return false;
+  if (value === 'null') return null;
+  if (/^-?\d+(\.\d+)?$/.test(value)) return Number(value);
+  return value;
+}
+
+function serializePayloadTest(test: PayloadTestDraft): PayloadCondition {
+  const path = test.path.split('.').map((segment) => segment.trim());
+  return match(test.op)
+    .with('equals', () => ({ path, equals: scalar(test.value) }))
+    .with('in', () => ({ path, in: payloadTestValues(test).map(scalar) }))
+    .with('notIn', () => ({
+      path,
+      notIn: payloadTestValues(test).map(scalar),
+    }))
+    .with('glob', () => ({ path, glob: test.value.trim() }))
+    .with('exists', () => ({ path, exists: true }))
+    .with('missing', () => ({ path, exists: false }))
+    .exhaustive(() => {
+      throw new Error('Choose how to test the payload field.');
+    });
+}
+
+function parsePayloadTest(condition: PayloadCondition): PayloadTestDraft {
+  const path = condition.path.join('.');
+  const list = (values: PayloadScalar[]) => values.map(String).join(', ');
+  if (condition.in != null)
+    return { path, op: 'in', value: list(condition.in) };
+  if (condition.notIn != null)
+    return { path, op: 'notIn', value: list(condition.notIn) };
+  if (condition.glob != null)
+    return { path, op: 'glob', value: condition.glob };
+  if (condition.exists != null)
+    return { path, op: condition.exists ? 'exists' : 'missing', value: '' };
+  return { path, op: 'equals', value: String(condition.equals ?? null) };
+}
+
+function serializeFilter(trigger: EventTriggerDraft): EventFilter {
   const condition = trigger.condition?.trim();
   return {
     events: trigger.events,
     ...(trigger.ids === undefined ? {} : { ids: trigger.ids }),
+    ...(trigger.github ? { github: trigger.github } : {}),
+    ...(trigger.match?.length
+      ? { match: trigger.match.map(serializePayloadTest) }
+      : {}),
     ...(condition ? { condition } : {}),
   };
 }
@@ -79,6 +131,15 @@ export function parseRoutineTriggers(
         kind: 'event',
         events: filter.events,
         ids: filter.ids ?? undefined,
+        github: filter.github
+          ? {
+              events: filter.github.events ?? [],
+              actions: filter.github.actions ?? [],
+              repositories: filter.github.repositories ?? [],
+              includeBots: filter.github.includeBots ?? false,
+            }
+          : undefined,
+        match: filter.match?.map(parsePayloadTest),
         condition: filter.condition ?? undefined,
       }));
     const draft = {
