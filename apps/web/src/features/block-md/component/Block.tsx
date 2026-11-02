@@ -1,3 +1,4 @@
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import {
   CollaborationStatusIndicator,
@@ -18,6 +19,7 @@ import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import {
   blockErrorSignal,
   blockHandleSignal,
+  blockMetadataSignal,
   blockSourceSignal,
 } from '@core/signal/load';
 import {
@@ -26,6 +28,7 @@ import {
   useIsDocumentOwner,
 } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
+import type { DocumentEntity } from '@entity';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { Show, Suspense } from 'solid-js';
 import { createMarkdownDocumentState } from '../context/markdown-document-state';
@@ -116,11 +119,34 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
   const canEdit = useCanEdit();
   const isOwner = useIsDocumentOwner();
 
+  const appearanceEntity = (): DocumentEntity | undefined => {
+    const metadata = blockMetadataSignal();
+    if (
+      (kind !== 'document' && kind !== 'snippet') ||
+      !metadata ||
+      metadata.documentId !== documentId ||
+      metadata.fileType !== 'md' ||
+      (metadata.subType != null && metadata.subType !== 'snippet')
+    )
+      return;
+    return {
+      type: 'document',
+      id: documentId,
+      name: persistedName() ?? metadata.documentName ?? '',
+      ownerId: metadata.owner,
+      fileType: 'md',
+      subType: metadata.subType === 'snippet' ? { type: 'snippet' } : null,
+      appearance: readEntityAppearance(
+        'appearance' in metadata ? metadata.appearance : undefined
+      ),
+    };
+  };
   return (
     <DocumentBlockContainer>
       <MarkdownDocument
         documentId={documentId}
         kind={kind}
+        appearanceEntity={appearanceEntity()}
         state={markdownState}
         documentSource={documentSource()}
         permissions={{

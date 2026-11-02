@@ -52,20 +52,25 @@ Inline calendar-invitation text actions remove the transparent border to keep al
 
 Ordinary Markdown, snippets, routines, task projects, forms, and databases support
 shared entity appearance. Users with edit access click the header icon or choose
-**Change icon** in an entity menu. Row icons still navigate; sidebar category
-icons do not change. Drive folders, tasks, skills, and internal descriptions do
-not have appearance editing.
-Home and Drive document headers keep icon editing separate from title navigation,
-including when the header is rendered as a breadcrumb.
+**Change icon…** after Rename in an entity menu. Row and breadcrumb icons still
+navigate; sidebar category icons do not change. Drive folders, tasks, skills, and
+internal descriptions do not have appearance editing.
+Document titles show a custom icon inline with a 40px edit target; without a
+custom icon, **Add icon** appears before the other title pills for editors.
 
-Desktop uses a compact popover; phones use the shared dialog sheet. Search
-Macro icons or emoji. Colors use a fixed theme-aware palette on the Icons tab;
-the Emoji tab hides color controls and emoji keep their native colors.
-**Default icon** and **Default color** reset independently; **Reset all** resets
-both. Draft choices preview only inside the picker.
-**Apply** updates visible icons immediately while saving both fields together,
-then closes on success. A failed save restores the previous icons and keeps the
-draft available to retry; Cancel or dismiss discards only the unsaved draft.
+Desktop uses a compact 344px anchored popover; phones use a bottom sheet with
+**Remove**, Icons/Emoji tabs, and **Done**. Picks save immediately and the picker
+stays open. Escape, outside clicks, and Done close without undoing saved choices.
+There is no draft, preview header, or Apply/Cancel footer. Failed saves roll back
+the rejected choice without replacing a newer edit.
+
+The Icons tab shows ten color swatches: Default (a ring in the entity's type
+color) and nine theme-aware colors. The Emoji tab hides the row; emoji retain
+native colors. **Remove** clears only the icon, while Default clears only color.
+Recent picks are stored per account. The catalog is grouped and excludes layout
+and editing glyphs from the picker without invalidating existing stored icons.
+Icon search also includes matching emoji. Arrow keys move through the grid,
+Enter picks, and typing focuses search. The Emoji category bar stays pinned.
 Opening the editor must not blank or remount the surrounding app.
 
 Readers, including public viewers, see saved appearance wherever an entity icon

@@ -31,16 +31,24 @@ wire types from the Rust schemas, not hand-written frontend DTOs.
 ## Editing
 
 Header icons and existing entity menus open the same lazy editor. Desktop uses
-an anchored compact popover; mobile uses the existing sheet primitives. Row icons
-retain navigation behavior. Popup loading stays inside the dialog's Suspense
-boundary without suspending the surrounding app.
+a 344px anchored popover; mobile uses a bottom sheet. Document titles place a
+custom icon inline, or show Add icon before the other title pills for editors.
+Row and breadcrumb icons retain navigation behavior. Popup loading stays inside
+the dialog's Suspense boundary without suspending the surrounding app.
 
-The editor offers Icons/Emoji tabs, search, a grid, palette swatches, independent
-icon/color defaults, and Reset all. Preview stays inside the picker. Cancel
-before Apply discards the draft. Apply updates visible readers optimistically
-while saving both choices together. A failed save restores the previous appearance
-and retains the draft for retry. Async completion stays scoped to the opening
-account and never overwrites a newer edit.
+Each icon, emoji, color, or Remove pick saves immediately through the existing
+optimistic, per-entity serialized path. The picker stays open; dismissal does
+not undo picks. A failed save restores the last successful choice unless a newer
+choice is pending. Async completion stays scoped to the opening account.
+
+Icons are grouped, with up to nine account-scoped recent picks first. Picker-only
+curation excludes layout/editing glyphs without changing the stored catalog.
+Icon search also matches emoji; the Emoji tab groups the shared emoji catalog
+and pins category navigation. Arrow keys move between cells and Enter selects.
+
+Colors appear only on Icons. Default is a ring in the entity type color, followed
+by the nine palette colors. Remove clears only the icon. There is no draft,
+preview header, Reset all, or Apply/Cancel footer.
 
 ## History
 

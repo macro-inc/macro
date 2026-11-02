@@ -1,6 +1,10 @@
+import { useChangeEntityIcon } from '@app/features/entity-appearance/entity-appearance';
+import { useDocumentAppearance } from '@app/features/entity-appearance/queries/document-appearance';
+import { t } from '@app/lib/i18n';
 import { createSizeBreakpoints } from '@app/util/create-size-breakpoints';
 import { CommentMargin } from '@block-md/comments/CommentMargin';
 import { useMacroMentionLinkResolver } from '@components/app/split-layout/split-router/mention-links';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { editorFocusSignal } from '@core/component/LexicalMarkdown/utils';
 import { ParamsProvider } from '@core/component/ParamsProvider';
 import {
@@ -9,6 +13,7 @@ import {
   LOCAL_ONLY,
 } from '@core/constant/featureFlags';
 import { useIsMacroTeam } from '@core/context/team';
+import { useUserId } from '@core/context/user';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
@@ -17,9 +22,13 @@ import {
   restoreScrollAnchor,
   type ScrollAnchor,
 } from '@core/util/scrollAnchor';
+import type { DocumentEntity } from '@entity';
+import Smiley from '@icon/system/regular/smiley.svg';
 import type { LoroManager } from '@macro-inc/collaboration/collab/manager';
 import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { makePersisted } from '@solid-primitives/storage';
+import { Button, badgeTriggerClasses } from '@ui';
+import type { DialogHandle } from '@ui/components/ImperativeDialog';
 import {
   createComputed,
   createEffect,
@@ -93,10 +102,29 @@ export function Notebook(props: {
   hotkeyScope: string | undefined;
   autoFocus: boolean;
 }) {
-  const { element: blockElement, state } = useMarkdownDocument();
+  const {
+    element: blockElement,
+    state,
+    appearanceEntity,
+    permissions,
+  } = useMarkdownDocument();
   const { comments: commentState, params } = state;
   const { md, setMd } = state.editor;
   const { displayName: documentName } = useMarkdownName();
+  const userId = useUserId();
+  const changeIcon = useChangeEntityIcon();
+  const [appearanceDialog, setAppearanceDialog] = createSignal<DialogHandle>();
+  const openIconEditor = (entity: DocumentEntity, anchor: HTMLElement) => {
+    setAppearanceDialog(changeIcon(entity, anchor));
+  };
+  const appearance = useDocumentAppearance(
+    () => appearanceEntity?.(),
+    () => Boolean(userId())
+  );
+  const titleEntity = () => {
+    const entity = appearanceEntity?.();
+    return entity && { ...entity, appearance: appearance() };
+  };
   const scopeId = () => props.hotkeyScope;
   const resolveAppLink = useMacroMentionLinkResolver();
 
@@ -367,9 +395,75 @@ export function Notebook(props: {
         ref={contentRef}
         classList={{ relative: true }}
       >
-        <TitleEditor autoFocusOnMount={props.autoFocus} />
+        <div class="flex items-center gap-1">
+          <Show when={titleEntity()?.appearance?.icon && titleEntity()}>
+            {(entity) => (
+              <Show
+                when={permissions.canEdit()}
+                fallback={
+                  <span class="size-[26px] shrink-0">
+                    <EntityIcon
+                      targetType="md"
+                      appearance={entity().appearance}
+                      size="fill"
+                    />
+                  </span>
+                }
+              >
+                <Button
+                  variant="ghost"
+                  appearance="bare"
+                  size="icon-lg"
+                  aria-label={t('appearance.title')}
+                  aria-haspopup="dialog"
+                  aria-expanded={appearanceDialog()?.isOpen() ?? false}
+                  class="rounded-[10px] not-touch:hover:bg-hover aria-expanded:bg-hover focus-visible:bg-hover"
+                  onClick={(event) =>
+                    openIconEditor(entity(), event.currentTarget)
+                  }
+                >
+                  <span class="size-[26px]">
+                    <EntityIcon
+                      targetType="md"
+                      appearance={entity().appearance}
+                      size="fill"
+                    />
+                  </span>
+                </Button>
+              </Show>
+            )}
+          </Show>
+          <div class="min-w-0 flex-1">
+            <TitleEditor autoFocusOnMount={props.autoFocus} />
+          </div>
+        </div>
         <div class="spacer h-3" />
         <div class="mb-6 flex flex-row flex-wrap items-center gap-2 text-sm empty:hidden">
+          <Show
+            when={
+              titleEntity() &&
+              !titleEntity()?.appearance?.icon &&
+              permissions.canEdit()
+            }
+          >
+            <button
+              type="button"
+              aria-haspopup="dialog"
+              aria-expanded={appearanceDialog()?.isOpen() ?? false}
+              class={badgeTriggerClasses({
+                variant: 'secondary',
+                size: 'xs',
+                class: 'gap-1.5',
+              })}
+              onClick={(event) => {
+                const entity = titleEntity();
+                if (entity) openIconEditor(entity, event.currentTarget);
+              }}
+            >
+              <Smiley class="size-3.5" />
+              {t('appearance.addIcon')}
+            </button>
+          </Show>
           <InlineTaskProperties />
           <InlineTaskGithubPullRequests />
           <TaskDuplicateMatchPill />

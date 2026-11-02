@@ -1,3 +1,4 @@
+import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { FindAndReplace } from '@block-md/component/FindAndReplace';
 import {
   MarkdownDocument,
@@ -22,6 +23,7 @@ import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { ENABLE_MARKDOWN_SIDE_PANEL } from '@core/constant/featureFlags';
 import { createMethodRegistration } from '@core/orchestrator';
+import type { DocumentEntity } from '@entity';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { DocumentDebouncedNotificationReadMarker } from '@notifications';
 import { useItemRawName } from '@queries/preview';
@@ -104,10 +106,29 @@ function MarkdownDetailContent(props: {
     });
   });
 
+  const appearanceEntity = (): DocumentEntity | undefined => {
+    const metadata = props.data.metadata;
+    if (
+      (props.kind !== 'document' && props.kind !== 'snippet') ||
+      metadata.documentId !== props.documentId ||
+      (metadata.subType != null && metadata.subType !== 'snippet')
+    )
+      return;
+    return {
+      type: 'document',
+      id: props.documentId,
+      name: persistedName(),
+      ownerId: props.data.metadata.owner,
+      fileType: 'md',
+      subType: metadata.subType === 'snippet' ? { type: 'snippet' } : null,
+      appearance: readEntityAppearance(props.data.metadata.appearance),
+    };
+  };
   return (
     <MarkdownDocument
       documentId={props.documentId}
       kind={props.kind}
+      appearanceEntity={appearanceEntity()}
       state={state}
       documentSource={{ type: 'sync', source: props.data.source }}
       permissions={props.data.permissions}

@@ -44,8 +44,8 @@ import Clock from '@icon/system/regular/clock.svg';
 import Copy from '@icon/system/regular/copy.svg';
 import DotsThree from '@icon/system/regular/dots-three.svg';
 import Link from '@icon/system/regular/link.svg';
-import PaletteIcon from '@icon/system/regular/palette.svg';
 import Rename from '@icon/system/regular/pencil-line.svg';
+import Smiley from '@icon/system/regular/smiley.svg';
 import Stack from '@icon/system/regular/stack.svg';
 import Star from '@icon/system/regular/star.svg';
 import Tag from '@icon/system/regular/tag.svg';
@@ -407,7 +407,7 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
       return;
     return {
       label: t('appearance.title'),
-      icon: PaletteIcon,
+      icon: Smiley,
       group: 'file',
       action: () => {
         setOpen(false);
@@ -673,13 +673,21 @@ export function SplitFileMenu(props: SplitFileMenuProps) {
         }
       })
       .filter((op) => !!op);
+    const appearance = appearanceOp();
+    if (appearance) {
+      const renameIndex = mapped.findIndex((op) => op.icon === Rename);
+      mapped.splice(
+        renameIndex < 0 ? mapped.length : renameIndex + 1,
+        0,
+        appearance
+      );
+    }
     return [
       favoriteOp(),
       snoozeOp(),
       muteOp(),
       reminderOp(),
       addTagOp(),
-      appearanceOp(),
       ...(props.entityKind === 'task' &&
       projectsFlag().enabled &&
       (props.permissions === Permissions.OWNER ||

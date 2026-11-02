@@ -17,6 +17,7 @@ import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { EntityIcon } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -25,10 +26,7 @@ import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { Button, Tabs } from '@ui';
 import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
-import {
-  EntityAppearanceTrigger,
-  useChangeEntityIcon,
-} from '../entity-appearance/entity-appearance';
+import { useChangeEntityIcon } from '../entity-appearance/entity-appearance';
 import type { TaskCreateOptions } from '../tasks-view/types';
 import { DeleteProjectsDialog } from './components/delete-projects-dialog';
 import { ProjectMenuDropdown } from './components/project-row-menu';
@@ -75,26 +73,17 @@ function ProjectBreadcrumbContent(props: ProjectBreadcrumbProps) {
     >
       {(item) => (
         <div class="flex min-w-0 items-center">
-          <Show when={source.project()}>
-            {(project) => (
-              <EntityAppearanceTrigger
-                entity={{
-                  type: 'initiative',
-                  id: project().id,
-                  name: project().name,
-                  ownerId: project().ownerId,
-                  appearance: project().appearance,
-                }}
-                editable={canEditProject(project())}
-              />
-            )}
-          </Show>
           <ViewBreadcrumbs.Button
             class="gap-1.5"
             isActive={item.isActive()}
             onClick={item.onSelect}
             tooltip={name()}
           >
+            <EntityIcon
+              targetType="initiative"
+              appearance={source.project()?.appearance}
+              size="xs"
+            />
             <span class="truncate">{name()}</span>
           </ViewBreadcrumbs.Button>
         </div>

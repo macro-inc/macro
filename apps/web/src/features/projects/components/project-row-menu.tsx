@@ -14,6 +14,7 @@ import { touchHandler } from '@core/directive/touchHandler';
 import { isMobile } from '@core/mobile/isMobile';
 import type { InitiativeEntity } from '@entity';
 import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
+import Smiley from '@icon/system/regular/smiley.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import type { Property } from '@property/types';
@@ -311,6 +312,7 @@ function ProjectMenuItems(props: ProjectMenuProps) {
                 .with({ kind: 'action' }, (action) => (
                   <MenuItem
                     text={action.label}
+                    icon={action.id === 'change-icon' ? Smiley : undefined}
                     shortcut={action.shortcut}
                     disabled={action.disabled}
                     class={action.destructive ? 'text-failure-ink' : undefined}
