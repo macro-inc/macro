@@ -200,6 +200,9 @@ call without gaining access to the channel.
 
 The join screen, in-call participant tiles, and incoming direct-call badges use
 profile pictures; initials are the fallback when no photo is available.
+In-call participant tiles fill their grid cell but are never wider than 16:9,
+so a wide window centers them instead of cropping cameras; check a single remote
+participant in a wide window and at phone width.
 The join screen has microphone, camera, and background effects buttons over the
 preview, with pill selectors below for microphone, speaker, camera, and
 backgrounds. The background button over the preview toggles the selected effect
@@ -220,8 +223,13 @@ toggles the device (pressed while on), and the caret opens a settings menu above
 the toolbar on click only; hovering opens nothing. **Audio settings** lists
 microphones, speakers (when the browser can choose one), and noise suppression.
 **Video settings** lists cameras and the background effects as tiles: None,
-Light blur, Strong blur, a selected custom image, and Upload. Screen share and
-Leave call are separate buttons. Click outside or press Escape to close a menu.
+Light blur, Strong blur, a selected custom image, and Upload. Screen share is
+the same kind of split button: the left half starts or stops sharing (pressed
+while sharing), and **Screen share settings** holds **Share audio**, off by
+default, saved per device, and locked while sharing. With it on, the browser
+picker offers tab audio (and system audio where Chromium supports it), and other
+participants hear it alongside microphones, even away from the Call tab. Leave
+call is a separate button. Click outside or press Escape to close a menu.
 The controls also work by keyboard and touch.
 
 ### Browser call diagnostics

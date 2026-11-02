@@ -1,4 +1,4 @@
-import StackIcon from '@icon/system/regular/stack.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import { Show } from 'solid-js';
 import type { TaskProjectReference } from '../core/project';
 
@@ -30,7 +30,7 @@ export function ProjectChip(props: {
             props.onOpen(project().id, event);
           }}
         >
-          <StackIcon class="size-3 shrink-0" />
+          <ProjectIcon class="size-3 shrink-0" />
           <span class="truncate">{project().name}</span>
         </button>
       )}

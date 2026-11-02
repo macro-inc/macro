@@ -1,7 +1,7 @@
 import {
   createPriorityCollapseController,
   PriorityCollapseOverflowSensor,
-} from '@components/app/split-layout/components/PriorityCollapseOverflowSensor';
+} from '@app/components/priority-collapse/PriorityCollapseOverflowSensor';
 import {
   type SplitFileMenuActionGroups,
   SplitPanelContext,
