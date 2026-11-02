@@ -953,6 +953,10 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
       optionSelection
     );
     expect(bulkUpdateEntityPropertyOptionsMock).not.toHaveBeenCalled();
+    expect(refreshPropertyQueriesMock).toHaveBeenCalledWith('status-def', {
+      unmaintainedOnly: true,
+    });
+    expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
   });
 
   it('rolls back and reports a failed GraphQL option selection', async () => {
@@ -965,6 +969,9 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     ).rejects.toThrow('options failed');
 
     expect(bulkUpdateEntityPropertyOptionsMock).not.toHaveBeenCalled();
+    expect(rollbackMock).toHaveBeenCalledOnce();
+    expect(refreshPropertyQueriesMock).not.toHaveBeenCalled();
+    expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
     expect(toastFailureMock).toHaveBeenCalledOnce();
   });
 
@@ -979,5 +986,9 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
 
     expect(bulkUpdateEntityPropertyOptionsMock).toHaveBeenCalledOnce();
     expect(updateGraphqlEntityPropertyOptionsMock).not.toHaveBeenCalled();
+    expect(refreshPropertyQueriesMock).toHaveBeenCalledWith('status-def', {
+      unmaintainedOnly: false,
+    });
+    expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
   });
 });

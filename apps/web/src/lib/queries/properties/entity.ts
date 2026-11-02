@@ -845,7 +845,11 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
           invalidateSoupEntity(variables.entityId);
           for (const selection of selections) {
             fireAndForget(
-              refreshPropertyQueries(selection.propertyDefinitionId),
+              refreshPropertyQueries(selection.propertyDefinitionId, {
+                unmaintainedOnly:
+                  variables.entityType === 'INITIATIVE' ||
+                  isFeatureEnabled(enableGraphqlSoup),
+              }),
               'entity-properties'
             );
           }

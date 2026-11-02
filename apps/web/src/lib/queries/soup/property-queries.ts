@@ -57,7 +57,11 @@ function dependsOnProperty(input: unknown, definitionId?: string): boolean {
 
 /** Property edits can reorder pages, admit filtered items, and change group counts. */
 export async function refreshPropertyQueries(
-  propertyDefinitionId?: string
+  propertyDefinitionId?: string,
+  options: {
+    /** Skip GraphQL readers maintained by a confirmed cache write; REST still refreshes. */
+    unmaintainedOnly?: boolean;
+  } = {}
 ): Promise<void> {
   const prefixes = [
     soupKeys.items._def,
@@ -72,6 +76,6 @@ export async function refreshPropertyQueries(
     where(query.queryKey);
   await Promise.all([
     queryClient.invalidateQueries({ predicate }),
-    refreshActiveGraphqlSoupQueries({ where }),
+    refreshActiveGraphqlSoupQueries({ where, ...options }),
   ]);
 }
