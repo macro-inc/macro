@@ -20,6 +20,8 @@ export interface EmailMessageBodyProps {
   setFocusedMessageId: (messageId: string | undefined) => void;
   showFullContent?: boolean;
   isFocused: boolean;
+  /** Load Macro read-receipt pixels, so viewing this copy counts as an open. */
+  showReadReceiptPixel?: boolean;
 }
 
 /** Solid only translates reactive inputs and owns the renderer's lifetime. */
@@ -28,6 +30,17 @@ export function createEmailMessageBody(
   renderingContext: EmailRenderingContextValue
 ) {
   const [showFullHTML, setShowFullHTML] = createSignal(false);
+  const pixels = renderingContext.readReceiptPixels ?? [];
+  // Pixels stay hidden while ownership is unknown. Only a body that carries one
+  // re-renders when it may show, so other bodies keep their image resources.
+  const hiddenPixels = () => {
+    const { body_html_sanitized: html, body_replyless: replyless } =
+      props.message;
+    const carriesPixel = pixels.some(
+      (prefix) => html?.includes(prefix) || replyless?.includes(prefix)
+    );
+    return props.showReadReceiptPixel && carriesPixel ? [] : pixels;
+  };
   // Thread refreshes replace message objects after every draft save. Only
   // changes to rendering inputs should dispose the body and its image resources.
   const content = createMemo(
@@ -43,17 +56,22 @@ export function createEmailMessageBody(
       normalizeFonts:
         props.isPersonal &&
         !props.message.from?.email?.toLowerCase().endsWith('@macro.com'),
+      hiddenPixels: hiddenPixels(),
     }),
     undefined,
     { equals: deepEqual }
   );
-  const prepared = createMemo(() =>
-    prepareEmailBody(content(), {
+  const prepared = createMemo(() => {
+    const images = renderingContext.images;
+    return prepareEmailBody(content(), {
       showQuotedContent: showFullHTML(),
       showFullContent: content().showFullContent,
-      images: renderingContext.images,
-    })
-  );
+      images: images && {
+        ...images,
+        hiddenUrlPrefixes: content().hiddenPixels,
+      },
+    });
+  });
   const rendered = createMemo(() => {
     // Preserve the app's existing Markdown paths without starting hidden HTML
     // resources behind them. Their Lexical semantics stay at the app boundary.

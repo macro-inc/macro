@@ -4,6 +4,9 @@ export interface ImagePolicy {
   /** Proxy for img[src], matching native authenticated-image support.
    * CSS/background images retain direct URLs under the remote policy. */
   proxyUrl?: string;
+  /** HTTP(S) img[src] values starting with one of these are dropped before
+   * proxying, so a host can withhold its own tracking pixels. */
+  hiddenUrlPrefixes?: readonly string[];
 }
 
 function cleanUrl(value: string): string {
@@ -32,8 +35,10 @@ export function imageUrl(
   if (policy.remote === 'block') return;
   if (!hasScheme(url)) return url;
   if (!/^https?:\/\//i.test(url)) return;
-  if (!policy.proxyUrl)
-    return url.replace(/^https?:/i, (scheme) => scheme.toLowerCase());
+  const direct = url.replace(/^https?:/i, (scheme) => scheme.toLowerCase());
+  if (policy.hiddenUrlPrefixes?.some((prefix) => direct.startsWith(prefix)))
+    return;
+  if (!policy.proxyUrl) return direct;
   if (!/^https?:\/\//i.test(policy.proxyUrl)) return;
   return `${policy.proxyUrl}${policy.proxyUrl.includes('?') ? '&' : '?'}url=${encodeURIComponent(url)}`;
 }
