@@ -6087,7 +6087,6 @@
       "crates/workspace-hack"
     ],
     "email_focus_worker": [
-      "crates/access_requests",
       "crates/activity",
       "crates/agent",
       "crates/agent_runtime_protocol",
@@ -10478,7 +10477,6 @@
       "crates/workspace-hack"
     ],
     "memory": [
-      "crates/access_requests",
       "crates/activity",
       "crates/agent",
       "crates/agent_runtime_protocol",
