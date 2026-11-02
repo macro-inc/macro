@@ -189,7 +189,6 @@ pub async fn build(
             Arc::new(TargetRunner::new(Arc::clone(&sessions))),
             Arc::new(tools),
             Arc::clone(&event_content),
-            classifier.clone(),
         )
         .with_code(Arc::clone(&code), Arc::clone(&upgrades)),
     );

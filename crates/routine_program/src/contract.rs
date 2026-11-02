@@ -149,8 +149,7 @@ impl RoutineProgram {
     }
 
     /// Every code step's check file, in program order. Each declares
-    /// `steps` with the outputs of the steps that always run before it:
-    /// earlier in the same list, or before the decision it sits in.
+    /// `steps` with the outputs of the steps before it.
     pub fn check_files(&self) -> Vec<CheckFile> {
         let mut walk = Walk::default();
         walk.steps(&self.steps);
@@ -163,13 +162,10 @@ fn collect_ids(steps: &[Step], taken: &mut HashSet<String>) {
         let id = match step {
             Step::Code(code) => code.id.as_ref(),
             Step::Tool(tool) => tool.id.as_ref(),
-            Step::If(_) | Step::Choose(_) | Step::Agent(_) => None,
+            Step::Agent(_) => None,
         };
         if let Some(id) = id {
             taken.insert(id.as_str().to_owned());
-        }
-        for branch in step.branches() {
-            collect_ids(branch, taken);
         }
     }
 }
@@ -180,16 +176,6 @@ fn assign(steps: &mut [Step], taken: &mut HashSet<String>) {
             Step::Code(code) if code.id.is_none() => code.id = Some(unique(&code.title, taken)),
             Step::Tool(tool) if tool.id.is_none() => {
                 tool.id = Some(unique(tool.tool.name(), taken));
-            }
-            Step::If(branch) => {
-                assign(&mut branch.then, taken);
-                assign(&mut branch.otherwise, taken);
-            }
-            Step::Choose(choose) => {
-                for option in &mut choose.options {
-                    assign(&mut option.steps, taken);
-                }
-                assign(&mut choose.otherwise, taken);
             }
             Step::Code(_) | Step::Tool(_) | Step::Agent(_) => {}
         }
@@ -285,12 +271,7 @@ impl Walk {
                         self.visible.push((id.clone(), Output::Tool(tool.tool)));
                     }
                 }
-                Step::If(_) | Step::Choose(_) | Step::Agent(_) => {}
-            }
-            for branch in step.branches() {
-                let scope = self.visible.len();
-                self.steps(branch);
-                self.visible.truncate(scope);
+                Step::Agent(_) => {}
             }
         }
     }

@@ -3,7 +3,6 @@
 use std::fmt;
 
 use bots::domain::models::AgentMcpServer;
-use jev::domain::YesNoQuestion;
 use serde::{Deserialize, Serialize};
 use serde_json::{Map, Value};
 use uuid::Uuid;
@@ -41,11 +40,6 @@ pub enum Step {
     Code(CodeStep),
     /// Call one Macro tool with fixed arguments, as the routine owner.
     Tool(ToolStep),
-    /// Ask a yes/no question about the triggering item, then run one branch.
-    If(IfStep),
-    /// Pick the option that best describes the triggering item, or every
-    /// option that fits it, then run their steps.
-    Choose(ChooseStep),
     /// Hand the run to a model or agent with instructions.
     Agent(AgentStep),
 }
@@ -310,53 +304,6 @@ impl fmt::Display for StepId {
 )]
 pub struct InvalidStepId(String);
 
-/// Branch on a yes/no question about the triggering item.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct IfStep {
-    /// A yes/no question about the triggering item, e.g. "Is this email an invoice?"
-    pub condition: YesNoQuestion,
-    /// Steps to run when the answer is yes.
-    #[serde(default)]
-    pub then: Vec<Step>,
-    /// Steps to run when the answer is no.
-    #[serde(default, rename = "else", skip_serializing_if = "Vec::is_empty")]
-    pub otherwise: Vec<Step>,
-}
-
-/// Run the steps of the option that best describes the triggering item, or
-/// of every option that fits it.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ChooseStep {
-    /// What is being decided, e.g. "What kind of email is this?"
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub question: Option<String>,
-    /// Two to eight distinct options. The best fitting option runs.
-    pub options: Vec<ChoiceOption>,
-    /// Run every option that fits, in order, instead of only the best one:
-    /// e.g. apply each label that matches an email.
-    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
-    pub multiple: bool,
-    /// Steps to run when no option fits.
-    #[serde(default, skip_serializing_if = "Vec::is_empty")]
-    pub otherwise: Vec<Step>,
-}
-
-/// One answer a choose step can pick.
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-#[serde(deny_unknown_fields)]
-pub struct ChoiceOption {
-    /// Short name, e.g. "Invoice".
-    pub label: String,
-    /// What fits this option, e.g. "Bills, receipts and payment requests".
-    #[serde(default, skip_serializing_if = "Option::is_none")]
-    pub description: Option<String>,
-    /// Steps to run when this option is chosen.
-    #[serde(default)]
-    pub steps: Vec<Step>,
-}
-
 /// Hand the run to a model running as Macro, or to an agent.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 #[serde(deny_unknown_fields)]
@@ -468,51 +415,37 @@ impl RoutineProgram {
         })
     }
 
-    /// Every code step, mutably, in program order, including untaken branches.
+    /// Every code step, mutably, in program order.
     pub fn code_steps_mut(&mut self) -> Vec<&mut CodeStep> {
-        fn collect<'a>(steps: &'a mut [Step], code: &mut Vec<&'a mut CodeStep>) {
-            for step in steps {
-                match step {
-                    Step::Code(step) => code.push(step),
-                    Step::Tool(_) | Step::Agent(_) => {}
-                    Step::If(step) => {
-                        collect(&mut step.then, code);
-                        collect(&mut step.otherwise, code);
-                    }
-                    Step::Choose(step) => {
-                        for option in &mut step.options {
-                            collect(&mut option.steps, code);
-                        }
-                        collect(&mut step.otherwise, code);
-                    }
-                }
-            }
-        }
-        let mut code = Vec::new();
-        collect(&mut self.steps, &mut code);
-        code
+        self.steps
+            .iter_mut()
+            .filter_map(|step| match step {
+                Step::Code(step) => Some(step),
+                Step::Tool(_) | Step::Agent(_) => None,
+            })
+            .collect()
     }
 
-    /// Every code step, in program order, including untaken branches.
+    /// Every code step, in program order.
     pub fn code_steps(&self) -> Vec<&CodeStep> {
-        let mut code = Vec::new();
-        visit(&self.steps, &mut |step| {
-            if let Step::Code(step) = step {
-                code.push(step);
-            }
-        });
-        code
+        self.steps
+            .iter()
+            .filter_map(|step| match step {
+                Step::Code(step) => Some(step),
+                Step::Tool(_) | Step::Agent(_) => None,
+            })
+            .collect()
     }
 
-    /// Every agent step, in program order, including untaken branches.
+    /// Every agent step, in program order.
     pub fn agent_steps(&self) -> Vec<&AgentStep> {
-        let mut agents = Vec::new();
-        visit(&self.steps, &mut |step| {
-            if let Step::Agent(agent) = step {
-                agents.push(agent);
-            }
-        });
-        agents
+        self.steps
+            .iter()
+            .filter_map(|step| match step {
+                Step::Agent(agent) => Some(agent),
+                Step::Code(_) | Step::Tool(_) => None,
+            })
+            .collect()
     }
 
     /// The agent the run starts with, when its first step is one. Such a run
@@ -521,32 +454,6 @@ impl RoutineProgram {
         match self.steps.first() {
             Some(Step::Agent(agent)) => Some(agent),
             _ => None,
-        }
-    }
-}
-
-impl Step {
-    /// Nested step lists, in program order.
-    pub fn branches(&self) -> Vec<&[Step]> {
-        match self {
-            Self::Code(_) | Self::Tool(_) | Self::Agent(_) => Vec::new(),
-            Self::If(step) => vec![&step.then, &step.otherwise],
-            Self::Choose(step) => step
-                .options
-                .iter()
-                .map(|option| option.steps.as_slice())
-                .chain([step.otherwise.as_slice()])
-                .collect(),
-        }
-    }
-}
-
-/// Visit every step in pre-order, including untaken branches.
-pub(crate) fn visit<'a>(steps: &'a [Step], f: &mut impl FnMut(&'a Step)) {
-    for step in steps {
-        f(step);
-        for branch in step.branches() {
-            visit(branch, f);
         }
     }
 }

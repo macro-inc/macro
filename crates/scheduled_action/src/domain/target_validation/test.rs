@@ -264,9 +264,7 @@ async fn every_agent_step_is_authorized_and_structural_errors_name_the_rule() {
     let owner = MacroUserIdStr::parse_from_str(OWNER).unwrap();
     let program = json!({ "steps": [
         { "type": "tool", "tool": "UpdateThreadLabels", "arguments": {} },
-        { "type": "if", "condition": "Is it urgent?",
-          "then": [{ "type": "agent", "agent": { "bot_id": BOT }, "instructions": "Escalate" }],
-          "else": [{ "type": "agent", "model": "runtime/model", "instructions": "Summarize" }] }
+        { "type": "agent", "agent": { "bot_id": BOT }, "instructions": "Escalate" }
     ] });
     TargetValidation::new(sessions.clone(), true)
         .validate_task(&program, &owner)
@@ -274,9 +272,8 @@ async fn every_agent_step_is_authorized_and_structural_errors_name_the_rule() {
         .unwrap();
     {
         let validations = sessions.validations.lock().unwrap();
-        assert_eq!(validations.len(), 2);
+        assert_eq!(validations.len(), 1);
         assert_eq!(validations[0].bot_id.to_string(), BOT);
-        assert_eq!(validations[1].bot_id, bot_id::MACRO_NEW_BOT_ID);
     }
 
     let error = ModelOnlyTargets
@@ -298,9 +295,10 @@ async fn every_agent_step_is_authorized_and_structural_errors_name_the_rule() {
         .unwrap_err();
     assert_eq!(
         error.to_string(),
-        "a run can hand off to at most one agent; put agents in different branches"
+        "a routine can hand off to at most one agent"
     );
-    assert_eq!(sessions.validations.lock().unwrap().len(), 2);
+    // Structural errors stop it before any agent is authorized.
+    assert_eq!(sessions.validations.lock().unwrap().len(), 1);
 }
 
 #[test]

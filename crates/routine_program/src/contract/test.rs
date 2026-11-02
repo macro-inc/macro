@@ -16,23 +16,16 @@ fn code(title: &str, id: Option<&str>) -> serde_json::Value {
 }
 
 fn ids(program: &RoutineProgram) -> Vec<String> {
-    let mut found = Vec::new();
-    crate::model::visit(&program.steps, &mut |step| match step {
-        Step::Code(step) => found.push(
-            step.id
-                .as_ref()
-                .map(|id| id.to_string())
-                .unwrap_or_default(),
-        ),
-        Step::Tool(step) => found.push(
-            step.id
-                .as_ref()
-                .map(|id| id.to_string())
-                .unwrap_or_default(),
-        ),
-        _ => {}
-    });
-    found
+    program
+        .steps
+        .iter()
+        .filter_map(|step| match step {
+            Step::Code(step) => Some(step.id.as_ref()),
+            Step::Tool(step) => Some(step.id.as_ref()),
+            Step::Agent(_) => None,
+        })
+        .map(|id| id.map(ToString::to_string).unwrap_or_default())
+        .collect()
 }
 
 #[test]
@@ -42,9 +35,7 @@ fn steps_get_ids_from_their_titles_unique_in_the_routine() {
         code("filter important notifications", None),
         { "type": "tool", "tool": "CreateDocument", "arguments": {} },
         code("2nd pass", Some("kept")),
-        { "type": "if", "condition": "Urgent?", "then": [
-            { "type": "tool", "tool": "SendChannelMessage", "arguments": {} }
-        ] },
+        { "type": "tool", "tool": "SendChannelMessage", "arguments": {} },
     ]));
     routine.assign_step_ids();
     assert_eq!(
@@ -64,33 +55,26 @@ fn steps_get_ids_from_their_titles_unique_in_the_routine() {
 }
 
 #[test]
-fn each_code_step_sees_the_outputs_that_always_come_before_it() {
+fn each_code_step_sees_the_outputs_of_the_steps_before_it() {
     let mut routine = program(json!([
         code("Read", Some("read")),
         { "type": "tool", "id": "task", "tool": "CreateDocument", "arguments": {} },
-        { "type": "if", "condition": "Urgent?", "then": [
-            code("Inside", Some("inside")),
-            code("After inside", None),
-        ] },
         code("Last", None),
     ]));
     routine.assign_step_ids();
     let files = routine.check_files();
     let names: Vec<_> = files.iter().map(|file| file.name.as_str()).collect();
-    assert_eq!(names, ["step_0.ts", "step_1.ts", "step_2.ts", "step_3.ts"]);
+    assert_eq!(names, ["step_0.ts", "step_1.ts"]);
     let context = |file: &CheckFile| file.source.lines().last().unwrap().to_owned();
     assert_eq!(
         context(&files[0]),
         "type StepContext = RoutineStepContext<{  }>;"
     );
     assert_eq!(
-        context(&files[2]),
-        "type StepContext = RoutineStepContext<{ read: StepOutput<Awaited<ReturnType<typeof import('./step_0.ts')['main']>>>; task: RoutineToolOutput<'CreateDocument'>; inside: StepOutput<Awaited<ReturnType<typeof import('./step_1.ts')['main']>>> }>;"
+        context(&files[1]),
+        "type StepContext = RoutineStepContext<{ read: StepOutput<Awaited<ReturnType<typeof import('./step_0.ts')['main']>>>; task: RoutineToolOutput<'CreateDocument'> }>;"
     );
-    // A branch's outputs stay in the branch.
-    assert!(!context(&files[3]).contains("inside"));
-    assert!(context(&files[3]).contains("read:"));
-    assert_eq!(files[3].title, "Last");
+    assert_eq!(files[1].title, "Last");
     // The source's own lines come first, unchanged.
     assert!(
         files[0]

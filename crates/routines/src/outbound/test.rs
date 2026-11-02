@@ -72,7 +72,9 @@ fn schedules_and_activity_combine_into_one_scheduler_trigger() {
 
 #[test]
 fn invalid_steps_and_trigger_mismatches_explain_themselves_before_any_request() {
-    let triage = serde_json::json!([{ "type": "if", "condition": "Urgent?", "then": [] }]);
+    let triage = serde_json::json!([{ "type": "tool", "tool": "Comment", "arguments": {
+        "entityType": "document", "entityId": "{{trigger.entity_id}}", "content": "Seen"
+    } }]);
     for (triggers, steps, expected) in [
         (
             serde_json::json!([]),
@@ -308,7 +310,7 @@ fn the_documented_example_is_a_valid_event_routine() {
     }))
     .unwrap();
     let body = configuration_body(&config, Utc::now(), None).unwrap();
-    assert_eq!(body["task"]["steps"][0]["type"], "choose");
+    assert_eq!(body["task"]["steps"][0]["type"], "tool");
 }
 
 #[test]

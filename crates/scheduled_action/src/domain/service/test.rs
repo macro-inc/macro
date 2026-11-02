@@ -1508,14 +1508,13 @@ fn github_configuration(enabled: bool) -> ActionConfiguration {
 }
 
 #[tokio::test]
-async fn programs_that_read_their_trigger_need_activity_triggers_and_decisions_need_a_classifier() {
+async fn programs_that_read_their_trigger_need_activity_triggers() {
     let cron = json!({"type": "cron", "schedule": "0 0 9 * * *", "timezone": "UTC"});
     let email = json!({"type": "events", "filters": [{"events": ["email.message_received"]}]});
     let mixed = json!({"type": "multiple", "triggers": [cron.clone(), email.clone()]});
     let archive = json!([{ "type": "tool", "tool": "UpdateThreadLabels", "arguments": {
         "thread_id": "{{trigger.entity_id}}", "label_id": "inbox", "add": false
     } }]);
-    let triage = json!([{ "type": "if", "condition": "Is this a newsletter?", "then": archive }]);
     let digest = json!([{ "type": "tool", "tool": "SendChannelMessage", "arguments": {
         "channel_id": "c", "content": "Daily reminder"
     } }]);
@@ -1535,18 +1534,6 @@ async fn programs_that_read_their_trigger_need_activity_triggers_and_decisions_n
             ActionPolicyError::ProgramNeedsEvent,
         );
     }
-    assert_policy(
-        without
-            .create_action(
-                &user_principal(),
-                CreateScheduledAction::Canonical(program_configuration(
-                    email.clone(),
-                    triage.clone(),
-                )),
-            )
-            .await,
-        ActionPolicyError::ConditionsDisabled,
-    );
     // Steps that don't read a trigger run on any schedule.
     without
         .create_action(
@@ -1558,43 +1545,24 @@ async fn programs_that_read_their_trigger_need_activity_triggers_and_decisions_n
     let archived = without
         .create_action(
             &user_principal(),
-            CreateScheduledAction::Canonical(program_configuration(email.clone(), archive)),
+            CreateScheduledAction::Canonical(program_configuration(email, archive.clone())),
         )
         .await
         .unwrap();
+    // Saving names the tool step, so its output can reach later steps.
+    let mut named = archive.clone();
+    named[0]["id"] = json!("update_thread_labels");
+    assert_eq!(archived.task, json!({ "steps": named }));
     // Updates are held to the same rule.
     assert_policy(
         without
             .update_action(
                 edit_receipt(archived.id.unwrap()),
-                update(program_configuration(
-                    cron,
-                    json!([{ "type": "if", "condition": "Urgent?" }]),
-                )),
+                update(program_configuration(cron, archive)),
             )
             .await,
-        ActionPolicyError::ConditionsDisabled,
+        ActionPolicyError::ProgramNeedsEvent,
     );
-
-    let with = TestService::new(
-        without.repo.clone(),
-        without.executor.clone(),
-        without.dispatcher_tx.clone(),
-        grants(&without.repo),
-    )
-    .with_event_management_enabled(true)
-    .with_conditions_enabled(true);
-    let created = with
-        .create_action(
-            &user_principal(),
-            CreateScheduledAction::Canonical(program_configuration(email, triage.clone())),
-        )
-        .await
-        .unwrap();
-    // Saving names the tool step, so its output can reach later steps.
-    let mut named = triage.clone();
-    named[0]["then"][0]["id"] = json!("update_thread_labels");
-    assert_eq!(created.task, json!({ "steps": named }));
 }
 
 #[tokio::test]
@@ -1641,7 +1609,10 @@ async fn structurally_invalid_programs_are_rejected_with_the_broken_rule() {
             &user_principal(),
             CreateScheduledAction::Canonical(program_configuration(
                 json!({"type": "events", "filters": [{"events": ["email.message_received"]}]}),
-                json!([{ "type": "choose", "options": [{ "label": "Only one" }] }]),
+                json!([
+                    { "type": "agent", "model": "m", "instructions": "One" },
+                    { "type": "agent", "model": "m", "instructions": "Two" }
+                ]),
             )),
         )
         .await
@@ -1650,7 +1621,7 @@ async fn structurally_invalid_programs_are_rejected_with_the_broken_rule() {
         error
             .downcast_ref::<TargetValidationError>()
             .map(ToString::to_string),
-        Some("a choice needs between 2 and 8 options".to_owned())
+        Some("a routine can hand off to at most one agent".to_owned())
     );
 }
 

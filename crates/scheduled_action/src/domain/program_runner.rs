@@ -1,21 +1,17 @@
-//! Run a routine's program: answer its decisions, run its code, call its
-//! tools, hand off to its agent.
+//! Run a routine's program: its steps in order, running code, calling tools
+//! and handing off to its agent.
 //!
-//! Every decision is asked about the triggering content in one classifier
-//! call before any step runs; tool outputs never change which steps run. A
-//! failed step stops the run. Each step's result is recorded on the run's
+//! A failed step stops the run. Each step's result is recorded on the run's
 //! handle as it happens, so history survives a failure or a deadline.
 
 use std::sync::Arc;
 
-use ai_usage::{AiFeature, UsageContext};
 use anyhow::{Context, Result, anyhow, bail};
 use chrono_tz::Tz;
-use jev::domain::{Probability, YesNoClassifier};
 use macro_user_id::user_id::MacroUserIdStr;
 use routine_program::{
-    AgentStep, AgentTask, CodeStep, PlannedStep, RoutineProgram, StepRecord, StepResult, ToolStep,
-    template,
+    AgentStep, AgentTask, CodeStep, RoutineProgram, Step, StepPath, StepRecord, StepResult,
+    ToolStep, template,
 };
 use serde_json::{Map, Value, json};
 use trigger_context::{
@@ -43,72 +39,53 @@ pub(crate) mod test;
 const SCHEDULED_GUIDANCE: &str = "You are executing a user routine that has already been triggered. Do not schedule it again or wait for its requested time or event. Follow your configured persona instructions while carrying out this routine.";
 
 /// Interprets every routine's program. `content` reads the triggering item,
-/// as data for decisions and templates and as the agent's account of it.
-/// `classifier` is `None` on hosts without one; programs with decisions then
-/// fail instead of guessing. Code steps fail unless a [`RoutineCode`] is
-/// added with [`ProgramRunner::with_code`].
-pub struct ProgramRunner<
-    Agents,
-    Tools,
-    Content,
-    Classifier,
-    Code = NoRoutineCode,
-    Upgrades = NoCodeUpgrades,
-> {
+/// as data for code and templates and as the agent's account of it. Code
+/// steps fail unless a [`RoutineCode`] is added with
+/// [`ProgramRunner::with_code`].
+pub struct ProgramRunner<Agents, Tools, Content, Code = NoRoutineCode, Upgrades = NoCodeUpgrades> {
     agents: Arc<Agents>,
     tools: Arc<Tools>,
     content: Arc<Content>,
-    classifier: Option<Arc<Classifier>>,
     code: Arc<Code>,
     upgrades: Arc<Upgrades>,
 }
 
-impl<Agents, Tools, Content, Classifier> ProgramRunner<Agents, Tools, Content, Classifier> {
-    pub fn new(
-        agents: Arc<Agents>,
-        tools: Arc<Tools>,
-        content: Arc<Content>,
-        classifier: Option<Arc<Classifier>>,
-    ) -> Self {
+impl<Agents, Tools, Content> ProgramRunner<Agents, Tools, Content> {
+    pub fn new(agents: Arc<Agents>, tools: Arc<Tools>, content: Arc<Content>) -> Self {
         Self {
             agents,
             tools,
             content,
-            classifier,
             code: Arc::new(NoRoutineCode),
             upgrades: Arc::new(NoCodeUpgrades),
         }
     }
 }
 
-impl<Agents, Tools, Content, Classifier, Code, Upgrades>
-    ProgramRunner<Agents, Tools, Content, Classifier, Code, Upgrades>
-{
+impl<Agents, Tools, Content, Code, Upgrades> ProgramRunner<Agents, Tools, Content, Code, Upgrades> {
     /// Run code steps with `code`, bringing them to its SDK first and
     /// recording that in `upgrades`.
     pub fn with_code<NextCode, NextUpgrades>(
         self,
         code: Arc<NextCode>,
         upgrades: Arc<NextUpgrades>,
-    ) -> ProgramRunner<Agents, Tools, Content, Classifier, NextCode, NextUpgrades> {
+    ) -> ProgramRunner<Agents, Tools, Content, NextCode, NextUpgrades> {
         ProgramRunner {
             agents: self.agents,
             tools: self.tools,
             content: self.content,
-            classifier: self.classifier,
             code,
             upgrades,
         }
     }
 }
 
-impl<Agents, Tools, Content, Classifier, Code, Upgrades> ScheduledAgentRunner
-    for ProgramRunner<Agents, Tools, Content, Classifier, Code, Upgrades>
+impl<Agents, Tools, Content, Code, Upgrades> ScheduledAgentRunner
+    for ProgramRunner<Agents, Tools, Content, Code, Upgrades>
 where
     Agents: RoutineAgents,
     Tools: RoutineTools,
     Content: EventContentReader + RoutineEventReader,
-    Classifier: YesNoClassifier,
     Code: RoutineCode,
     Upgrades: CodeUpgrades,
 {
@@ -162,19 +139,15 @@ where
         .await?;
         if summary.needs_event() && trigger.is_none() {
             bail!(
-                "This routine decides about or reads the item that triggered it, so it only runs when an activity event triggers it."
+                "This routine reads the item that triggered it, so it only runs when an activity event triggers it."
             );
         }
-        let answers = self
-            .decide(owner, action, &program, trigger.as_ref())
-            .await?;
-        let plan = program.resolve(&answers)?;
-        tracing::Span::current().record("steps", plan.len());
+        tracing::Span::current().record("steps", program.steps.len());
         let mut context = json!({ "trigger": trigger, "steps": {} });
-        for planned in plan {
-            match planned {
-                PlannedStep::Decided(record) => handle.steps.push(record),
-                PlannedStep::Tool { path, step } => {
+        for (index, step) in program.steps.iter().enumerate() {
+            let path = StepPath::root(index);
+            match step {
+                Step::Tool(step) => {
                     let result = self.tool(owner, step, &mut context).await;
                     handle.steps.push(StepRecord {
                         path,
@@ -190,7 +163,7 @@ where
                     });
                     result.with_context(|| format!("{} failed", step.tool))?;
                 }
-                PlannedStep::Code { path, step } => {
+                Step::Code(step) => {
                     let outcome = self.code(owner, step, &code_context, &mut context).await;
                     let (output, error) = match outcome.result {
                         Ok(output) => (Some(output), None),
@@ -209,7 +182,7 @@ where
                         bail!("{} failed: {error}", step.title.trim());
                     }
                 }
-                PlannedStep::Agent { path, step } => {
+                Step::Agent(step) => {
                     let result = self
                         .agent(action, &program, step, firing, handle, &context["steps"])
                         .await;
@@ -231,17 +204,15 @@ where
     }
 }
 
-impl<Agents, Tools, Content, Classifier, Code, Upgrades>
-    ProgramRunner<Agents, Tools, Content, Classifier, Code, Upgrades>
+impl<Agents, Tools, Content, Code, Upgrades> ProgramRunner<Agents, Tools, Content, Code, Upgrades>
 where
     Agents: RoutineAgents,
     Tools: RoutineTools,
     Content: EventContentReader + RoutineEventReader,
-    Classifier: YesNoClassifier,
     Code: RoutineCode,
 {
-    /// The triggering item as decisions and templates see it: its content,
-    /// plus the ids tools need to act on it.
+    /// The triggering item as code and templates see it: its content, plus
+    /// the ids tools need to act on it.
     async fn trigger(
         &self,
         owner: &MacroUserIdStr<'static>,
@@ -260,30 +231,6 @@ where
             }
         }
         Ok(content)
-    }
-
-    /// One classifier call answers every decision in the program.
-    async fn decide(
-        &self,
-        owner: &MacroUserIdStr<'static>,
-        action: &ScheduledAction,
-        program: &RoutineProgram,
-        trigger: Option<&Value>,
-    ) -> Result<Vec<Probability>> {
-        let questions = program.questions()?;
-        if questions.is_empty() {
-            return Ok(Vec::new());
-        }
-        let trigger = trigger.context("decisions need the triggering item")?;
-        let classifier = self
-            .classifier
-            .as_ref()
-            .context("Decisions can't be answered here: no classifier is configured.")?;
-        let usage = UsageContext::new(AiFeature::Automation, owner.clone()).with_entity(action.id);
-        classifier
-            .classify(usage, trigger, &questions)
-            .await
-            .map_err(|error| anyhow!("Couldn't answer this routine's questions: {error}"))
     }
 
     #[tracing::instrument(name = "routine.step", skip_all, fields(tool = %step.tool.name()))]

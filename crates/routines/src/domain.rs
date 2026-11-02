@@ -161,8 +161,7 @@ pub struct RoutineConfiguration {
     pub triggers: Vec<RoutineTrigger>,
     /// What it does each run, in order: a JSON array of steps, encoded as a
     /// string (see the tool description for the step format). Steps that
-    /// decide about or read the triggering item (`if`, `choose`,
-    /// `{{trigger.…}}`) need activity triggers only.
+    /// read the triggering item (`{{trigger.…}}`) need activity triggers only.
     #[serde(with = "steps_json")]
     #[schemars(with = "String")]
     pub steps: Vec<Step>,
@@ -299,7 +298,7 @@ impl RoutineConfiguration {
                     .triggers
                     .iter()
                     .all(|trigger| matches!(trigger, RoutineTrigger::Event { .. })),
-            "Steps that decide about or read the triggering item need activity triggers only."
+            "Steps that read the triggering item need activity triggers only."
         );
         Ok(())
     }

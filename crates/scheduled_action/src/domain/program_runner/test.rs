@@ -1,11 +1,9 @@
 use std::collections::VecDeque;
 use std::sync::Mutex;
 
-use ai_usage::UsageContext;
 use bots::domain::models::AgentMcpServer;
 use chrono::{TimeZone, Utc};
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel};
-use jev::domain::{JevError, YesNoQuestion};
 use macro_uuid::{Uuid, generate_uuid_v7};
 use model_entity::EntityType;
 use model_owner::Owner;
@@ -146,69 +144,34 @@ impl RoutineEventReader for Content {
     }
 }
 
-#[derive(Default)]
-pub(crate) struct Classifier {
-    pub answers: Vec<f32>,
-    pub calls: Mutex<Vec<(Value, Vec<YesNoQuestion>)>>,
-    pub error: Option<JevError>,
-}
-
-impl YesNoClassifier for Classifier {
-    async fn classify(
-        &self,
-        _: UsageContext,
-        input: &Value,
-        questions: &[YesNoQuestion],
-    ) -> std::result::Result<Vec<Probability>, JevError> {
-        self.calls
-            .lock()
-            .unwrap()
-            .push((input.clone(), questions.to_vec()));
-        if let Some(error) = self.error {
-            return Err(error);
-        }
-        Ok(self
-            .answers
-            .iter()
-            .map(|p| Probability::new(*p).unwrap())
-            .collect())
-    }
-}
-
-pub(crate) type Runner = ProgramRunner<Agents, Tools, Content, Classifier>;
+pub(crate) type Runner = ProgramRunner<Agents, Tools, Content>;
 
 pub(crate) struct Fixture {
     pub agents: Arc<Agents>,
     pub tools: Arc<Tools>,
-    pub classifier: Arc<Classifier>,
     pub runner: Runner,
 }
 
 impl Fixture {
-    pub fn new(agents: Agents, tools: Tools, classifier: Option<Classifier>) -> Self {
-        Self::with_content(agents, tools, classifier, Ok(email()))
+    pub fn new(agents: Agents, tools: Tools) -> Self {
+        Self::with_content(agents, tools, Ok(email()))
     }
 
     pub fn with_content(
         agents: Agents,
         tools: Tools,
-        classifier: Option<Classifier>,
         content: std::result::Result<Value, &'static str>,
     ) -> Self {
         let agents = Arc::new(agents);
         let tools = Arc::new(tools);
-        let configured = classifier.is_some();
-        let classifier = Arc::new(classifier.unwrap_or_default());
         let runner = ProgramRunner::new(
             Arc::clone(&agents),
             Arc::clone(&tools),
             Arc::new(Content(content, None)),
-            configured.then(|| Arc::clone(&classifier)),
         );
         Self {
             agents,
             tools,
-            classifier,
             runner,
         }
     }
@@ -276,31 +239,18 @@ pub(crate) fn email_run(action: &ScheduledAction) -> AuthorizedEventRun {
 
 fn triage() -> Value {
     json!({ "steps": [
-        {
-            "type": "choose",
-            "question": "What kind of email is this?",
-            "options": [
-                { "label": "Invoice", "steps": [
-                    { "type": "tool", "tool": "UpdateThreadLabels", "arguments": {
-                        "thread_id": "{{trigger.entity_id}}", "label_id": "finance", "add": true
-                    } },
-                    { "type": "tool", "id": "task", "tool": "CreateDocument", "arguments": {
-                        "documentName": "Pay {{trigger.email.subject}}", "fileContent": "",
-                        "fileExtension": "md", "isTask": true
-                    } },
-                    { "type": "tool", "tool": "SetEntityProperty", "arguments": {
-                        "entity_id": "{{steps.task.documentId}}", "entity_type": "document",
-                        "property_definition_id": "00000001-0000-0000-0000-000000000003",
-                        "option_id": "00000001-0000-0000-0003-000000000003"
-                    } }
-                ] },
-                { "label": "Newsletter", "steps": [
-                    { "type": "tool", "tool": "SetSenderPolicy", "arguments": {
-                        "sender_email": "{{trigger.email.from.email}}", "policy": "noise"
-                    } }
-                ] }
-            ]
-        }
+        { "type": "tool", "tool": "UpdateThreadLabels", "arguments": {
+            "thread_id": "{{trigger.entity_id}}", "label_id": "finance", "add": true
+        } },
+        { "type": "tool", "id": "task", "tool": "CreateDocument", "arguments": {
+            "documentName": "Pay {{trigger.email.subject}}", "fileContent": "",
+            "fileExtension": "md", "isTask": true
+        } },
+        { "type": "tool", "tool": "SetEntityProperty", "arguments": {
+            "entity_id": "{{steps.task.documentId}}", "entity_type": "document",
+            "property_definition_id": "00000001-0000-0000-0000-000000000003",
+            "option_id": "00000001-0000-0000-0003-000000000003"
+        } }
     ] })
 }
 
@@ -310,11 +260,7 @@ fn arguments(call: &ToolCall) -> Value {
 
 #[tokio::test]
 async fn legacy_agent_routines_open_up_front_and_prompt_with_event_ids_when_it_is_unreadable() {
-    let fixture = Fixture::new(
-        Agents::default(),
-        Tools::default(),
-        Some(Classifier::default()),
-    );
+    let fixture = Fixture::new(Agents::default(), Tools::default());
     let action = action(json!({ "model": "m", "prompt": "", "user_prompt": "Summarize it" }));
     let run = email_run(&action);
     let mut handle = ExecutionHandle::default();
@@ -338,7 +284,6 @@ async fn legacy_agent_routines_open_up_front_and_prompt_with_event_ids_when_it_i
     assert!(prompts[0].contains(&run.pending.event.message_id().unwrap().to_string()));
     assert!(!prompts[0].contains("Earlier steps"));
     assert_eq!(*fixture.agents.contexts.lock().unwrap(), [None]);
-    assert!(fixture.classifier.calls.lock().unwrap().is_empty());
     assert_eq!(
         serde_json::to_value(&handle.steps).unwrap(),
         json!([{ "path": "0", "kind": "agent" }])
@@ -346,7 +291,7 @@ async fn legacy_agent_routines_open_up_front_and_prompt_with_event_ids_when_it_i
 }
 
 #[tokio::test]
-async fn one_classifier_call_picks_a_branch_and_tools_read_the_trigger_and_earlier_outputs() {
+async fn tools_read_the_trigger_and_earlier_outputs() {
     let fixture = Fixture::new(
         Agents::default(),
         Tools::answering([
@@ -357,10 +302,6 @@ async fn one_classifier_call_picks_a_branch_and_tools_read_the_trigger_and_earli
                 output: json!({ "documentId": "doc-7" }),
             },
         ]),
-        Some(Classifier {
-            answers: vec![0.92, 0.1],
-            ..Default::default()
-        }),
     );
     let action = action(triage());
     let run = email_run(&action);
@@ -372,11 +313,6 @@ async fn one_classifier_call_picks_a_branch_and_tools_read_the_trigger_and_earli
         .run(&action, &mut handle, RoutineRun::Event(&run))
         .await
         .unwrap();
-
-    let decisions = fixture.classifier.calls.lock().unwrap();
-    assert_eq!(decisions.len(), 1);
-    assert_eq!(decisions[0].0["email"]["subject"], "Invoice #42");
-    assert_eq!(decisions[0].1.len(), 2);
 
     let thread = run.pending.event.entity_id().unwrap().to_string();
     let calls = fixture.tools.calls.lock().unwrap();
@@ -393,11 +329,10 @@ async fn one_classifier_call_picks_a_branch_and_tools_read_the_trigger_and_earli
     assert_eq!(
         serde_json::to_value(&handle.steps).unwrap(),
         json!([
-            { "path": "0", "kind": "choose", "choices": ["Invoice"], "probability": 0.92f32 },
             // Each tool's output is kept for the run's page.
-            { "path": "0.options.0.0", "kind": "tool", "tool": "UpdateThreadLabels", "output": { "summary": "1 updated" } },
-            { "path": "0.options.0.1", "kind": "tool", "tool": "CreateDocument", "output": { "documentId": "doc-7" } },
-            { "path": "0.options.0.2", "kind": "tool", "tool": "SetEntityProperty", "output": {} },
+            { "path": "0", "kind": "tool", "tool": "UpdateThreadLabels", "output": { "summary": "1 updated" } },
+            { "path": "1", "kind": "tool", "tool": "CreateDocument", "output": { "documentId": "doc-7" } },
+            { "path": "2", "kind": "tool", "tool": "SetEntityProperty", "output": {} },
         ])
     );
     assert!(fixture.agents.prepared.lock().unwrap().is_empty());
@@ -408,14 +343,7 @@ async fn a_failed_tool_stops_the_run_and_its_reason_is_recorded() {
     for outcome in [RoutineToolOutcome::Failed {
         message: "Label not found".into(),
     }] {
-        let fixture = Fixture::new(
-            Agents::default(),
-            Tools::answering([outcome]),
-            Some(Classifier {
-                answers: vec![0.92, 0.1],
-                ..Default::default()
-            }),
-        );
+        let fixture = Fixture::new(Agents::default(), Tools::answering([outcome]));
         let action = action(triage());
         let run = email_run(&action);
         let mut handle = ExecutionHandle::default();
@@ -426,12 +354,12 @@ async fn a_failed_tool_stops_the_run_and_its_reason_is_recorded() {
             .unwrap_err();
         assert!(error.to_string().starts_with("UpdateThreadLabels failed"));
         assert_eq!(fixture.tools.calls.lock().unwrap().len(), 1);
-        let StepResult::Tool { tool, error, .. } = &handle.steps[1].result else {
+        let StepResult::Tool { tool, error, .. } = &handle.steps[0].result else {
             panic!("expected the failed tool's record");
         };
         assert_eq!(*tool, RoutineTool::UpdateThreadLabels);
         assert!(error.is_some());
-        assert_eq!(handle.steps.len(), 2);
+        assert_eq!(handle.steps.len(), 1);
     }
 }
 
@@ -442,7 +370,6 @@ async fn an_agent_after_tools_opens_its_session_late_and_sees_what_they_did() {
         Tools::answering([RoutineToolOutcome::Completed {
             output: json!({ "documentId": "doc-9" }),
         }]),
-        None,
     );
     let action = action(json!({ "steps": [
         { "type": "tool", "id": "task", "tool": "CreateDocument", "arguments": {
@@ -477,7 +404,6 @@ async fn a_failed_agent_is_recorded_and_fails_the_run() {
             ..Default::default()
         },
         Tools::default(),
-        None,
     );
     let action =
         action(json!({ "steps": [{ "type": "agent", "model": "m", "instructions": "Go" }] }));
@@ -500,14 +426,7 @@ async fn a_failed_agent_is_recorded_and_fails_the_run() {
 
 #[tokio::test]
 async fn programs_that_read_their_trigger_never_run_without_one() {
-    let fixture = Fixture::new(
-        Agents::default(),
-        Tools::default(),
-        Some(Classifier {
-            answers: vec![0.9, 0.1],
-            ..Default::default()
-        }),
-    );
+    let fixture = Fixture::new(Agents::default(), Tools::default());
     let action = action(triage());
     let mut handle = ExecutionHandle::default();
     let error = fixture
@@ -520,47 +439,30 @@ async fn programs_that_read_their_trigger_never_run_without_one() {
             .to_string()
             .contains("only runs when an activity event triggers it")
     );
-    assert!(fixture.classifier.calls.lock().unwrap().is_empty());
     assert!(fixture.tools.calls.lock().unwrap().is_empty());
     assert!(handle.steps.is_empty());
 }
 
 #[tokio::test]
-async fn unanswerable_decisions_and_unreadable_triggers_fail_before_any_step() {
-    let unconfigured = Fixture::new(Agents::default(), Tools::default(), None);
-    let failing = Fixture::new(
+async fn an_unreadable_trigger_fails_before_any_step() {
+    let fixture = Fixture::with_content(
         Agents::default(),
         Tools::default(),
-        Some(Classifier {
-            error: Some(JevError::Unavailable),
-            ..Default::default()
-        }),
-    );
-    let unreadable = Fixture::with_content(
-        Agents::default(),
-        Tools::default(),
-        Some(Classifier::default()),
         Err("secret content in a database error"),
     );
-    for (fixture, expected) in [
-        (unconfigured, "no classifier is configured"),
-        (failing, "Couldn't answer this routine's questions"),
-        (unreadable, "couldn't be read"),
-    ] {
-        let action = action(triage());
-        let run = email_run(&action);
-        let mut handle = ExecutionHandle::default();
-        let error = fixture
-            .runner
-            .run(&action, &mut handle, RoutineRun::Event(&run))
-            .await
-            .unwrap_err()
-            .to_string();
-        assert!(error.contains(expected), "{error}");
-        assert!(!error.contains("secret"));
-        assert!(fixture.tools.calls.lock().unwrap().is_empty());
-        assert!(handle.steps.is_empty());
-    }
+    let action = action(triage());
+    let run = email_run(&action);
+    let mut handle = ExecutionHandle::default();
+    let error = fixture
+        .runner
+        .run(&action, &mut handle, RoutineRun::Event(&run))
+        .await
+        .unwrap_err()
+        .to_string();
+    assert!(error.contains("couldn't be read"), "{error}");
+    assert!(!error.contains("secret"));
+    assert!(fixture.tools.calls.lock().unwrap().is_empty());
+    assert!(handle.steps.is_empty());
 }
 
 fn dana() -> MacroUserIdStr<'static> {
@@ -577,7 +479,7 @@ fn dana_in_context() -> ContextPerson {
 
 #[tokio::test]
 async fn a_scheduled_run_tells_the_agent_which_routine_fired_and_on_what_schedule() {
-    let fixture = Fixture::new(Agents::default(), Tools::default(), None);
+    let fixture = Fixture::new(Agents::default(), Tools::default());
     let routine_id = Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-0123456789ab").unwrap();
     let scheduled_for = Utc.with_ymd_and_hms(2026, 10, 8, 13, 0, 0).unwrap();
     let action = ScheduledAction {
@@ -668,7 +570,6 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
         Arc::clone(&agents),
         Arc::new(Tools::default()),
         Arc::new(Content(Ok(json!({})), Some(task_status_changed.clone()))),
-        None,
     );
     let routine_id = Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-0123456789ab").unwrap();
     let at = Utc.with_ymd_and_hms(2026, 10, 8, 13, 0, 0).unwrap();
@@ -780,7 +681,7 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
 
 #[tokio::test]
 async fn a_manual_run_tells_the_agent_its_owner_started_it_and_hands_it_the_routine_apps() {
-    let fixture = Fixture::new(Agents::default(), Tools::default(), None);
+    let fixture = Fixture::new(Agents::default(), Tools::default());
     let routine_id = Uuid::parse_str("01928f3e-6a2b-7c3d-8e4f-0123456789ab").unwrap();
     let requested_at = Utc.with_ymd_and_hms(2026, 10, 8, 15, 30, 0).unwrap();
     let action = ScheduledAction {
@@ -952,7 +853,7 @@ async fn code_steps_get_the_trigger_and_hand_their_output_to_later_steps() {
         )],
         calls_truncated: false,
     }]));
-    let fixture = Fixture::new(Agents::default(), Tools::default(), None);
+    let fixture = Fixture::new(Agents::default(), Tools::default());
     let runner = fixture
         .runner
         .with_code(Arc::clone(&code), Arc::new(NoCodeUpgrades));
@@ -1023,7 +924,7 @@ async fn a_failed_code_step_stops_the_run_and_keeps_its_calls() {
         )],
         calls_truncated: true,
     }]));
-    let fixture = Fixture::new(Agents::default(), Tools::default(), None);
+    let fixture = Fixture::new(Agents::default(), Tools::default());
     let runner = fixture
         .runner
         .with_code(Arc::clone(&code), Arc::new(NoCodeUpgrades));
@@ -1065,7 +966,7 @@ async fn a_failed_code_step_stops_the_run_and_keeps_its_calls() {
 
 #[tokio::test]
 async fn hosts_without_a_code_executor_fail_code_steps() {
-    let fixture = Fixture::new(Agents::default(), Tools::default(), None);
+    let fixture = Fixture::new(Agents::default(), Tools::default());
     let action = action(json!({ "steps": [code_step("label", "Label it")] }));
     let mut handle = ExecutionHandle::default();
     let error = fixture

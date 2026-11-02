@@ -197,9 +197,7 @@ async fn lists_cron_and_event_routines_for_the_authenticated_user() {
                 ActionTrigger::Events { filters },
                 json!({"steps": [
                     { "type": "tool", "tool": "UpdateThreadLabels", "arguments": {} },
-                    { "type": "if", "condition": "Is it urgent?", "then": [
-                        { "type": "agent", "model": "fast", "instructions": "Escalate it" }
-                    ] }
+                    { "type": "agent", "model": "fast", "instructions": "Escalate it" }
                 ]}),
                 None,
                 None,

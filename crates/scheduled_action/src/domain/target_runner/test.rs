@@ -232,8 +232,7 @@ fn runner(sessions: Sessions) -> TargetRunner<Sessions> {
 
 /// What the executor runs: the program runner, handing agent steps to the
 /// target runner under test.
-type Program =
-    ProgramRunner<TargetRunner<Sessions>, program::Tools, program::Content, program::Classifier>;
+type Program = ProgramRunner<TargetRunner<Sessions>, program::Tools, program::Content>;
 
 fn program_runner(sessions: Sessions) -> (Arc<Sessions>, Arc<Program>) {
     let sessions = Arc::new(sessions);
@@ -241,7 +240,6 @@ fn program_runner(sessions: Sessions) -> (Arc<Sessions>, Arc<Program>) {
         Arc::new(TargetRunner::new(Arc::clone(&sessions))),
         Arc::new(program::Tools::default()),
         Arc::new(program::Content(Ok(json!({})), None)),
-        None,
     );
     (sessions, Arc::new(runner))
 }

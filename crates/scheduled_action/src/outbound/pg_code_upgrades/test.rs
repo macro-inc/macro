@@ -217,9 +217,10 @@ async fn a_sweep_brings_enabled_routines_with_code_to_the_current_sdk(pool: PgPo
     };
     let nested = repo
         .create_action(create(
-            json!({ "steps": [{ "type": "if", "condition": "Invoice?", "then": [
+            json!({ "steps": [
+                { "type": "agent", "model": "m", "instructions": "Read" },
                 { "type": "code", "title": "File", "source": "old" }
-            ] }], "sdk": "0.2.0+old" }),
+            ], "sdk": "0.2.0+old" }),
             true,
         ))
         .await

@@ -59,38 +59,20 @@ fn a_legacy_system_prompt_is_kept_ahead_of_the_task() {
 }
 
 #[test]
-fn programs_round_trip_with_nested_branches() {
+fn programs_round_trip() {
     let task = json!({
         "steps": [
             {
-                "type": "choose",
-                "question": "What kind of email is this?",
-                "options": [
-                    {
-                        "label": "Invoice",
-                        "steps": [{
-                            "type": "tool",
-                            "tool": "UpdateThreadLabels",
-                            "arguments": { "thread_id": "{{trigger.entity_id}}", "label_id": "x", "add": true }
-                        }]
-                    },
-                    { "label": "Newsletter", "description": "Marketing", "steps": [] }
-                ],
-                "otherwise": [{ "type": "agent", "model": "m", "instructions": "Triage it" }]
+                "type": "tool",
+                "tool": "UpdateThreadLabels",
+                "arguments": { "thread_id": "{{trigger.entity_id}}", "label_id": "x", "add": true }
             },
-            {
-                "type": "if",
-                "condition": "Is it urgent?",
-                "then": [{ "type": "tool", "id": "task", "tool": "CreateDocument", "arguments": {} }],
-                "else": []
-            }
+            { "type": "tool", "id": "task", "tool": "CreateDocument", "arguments": {} },
+            { "type": "agent", "model": "m", "instructions": "Triage it" }
         ]
     });
     let program = RoutineProgram::from_task(&task).unwrap();
-    let mut expected = task.clone();
-    // Empty else branches are omitted when written back.
-    expected["steps"][1].as_object_mut().unwrap().remove("else");
-    assert_eq!(serde_json::to_value(&program).unwrap(), expected);
+    assert_eq!(serde_json::to_value(&program).unwrap(), task);
     assert_eq!(program.agent_steps().len(), 1);
     assert!(program.leading_agent().is_none());
 }
@@ -102,7 +84,8 @@ fn unknown_fields_tools_and_step_ids_are_rejected() {
         json!({ "steps": [{ "type": "tool", "tool": "DeleteDocument", "arguments": {} }] }),
         json!({ "steps": [{ "type": "tool", "tool": "CreateDocument", "arguments": {}, "oops": 1 }] }),
         json!({ "steps": [{ "type": "tool", "id": "Task", "tool": "CreateDocument", "arguments": {} }] }),
-        json!({ "steps": [{ "type": "if", "condition": " ", "then": [] }] }),
+        json!({ "steps": [{ "type": "if", "condition": "Urgent?", "then": [] }] }),
+        json!({ "steps": [{ "type": "choose", "options": [] }] }),
         json!({ "steps": [{ "type": "wait" }] }),
         json!({ "user_prompt": "missing prompt" }),
     ] {

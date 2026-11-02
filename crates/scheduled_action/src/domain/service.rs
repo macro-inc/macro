@@ -207,17 +207,13 @@ impl<Rpo: ScheduledActionRepo, Exe, Grants, Targets, Github, Code, Upgrades>
         Ok(())
     }
 
-    /// A program's decisions and trigger reads need an event to be about, and
-    /// its decisions need the classifier behind trigger conditions. Call after
-    /// target validation, which reports malformed programs.
+    /// A program's trigger reads need an event to be about. Call after target
+    /// validation, which reports malformed programs.
     fn check_program(&self, trigger: &ActionTrigger, task: &serde_json::Value) -> Result<()> {
         let Ok(Ok(summary)) = RoutineProgram::from_task(task).map(|program| program.validate())
         else {
             return Ok(());
         };
-        if summary.questions > 0 && !self.conditions_enabled {
-            return Err(ActionPolicyError::ConditionsDisabled.into());
-        }
         if summary.needs_event() && (trigger.has_schedule() || trigger.event_filters().is_none()) {
             return Err(ActionPolicyError::ProgramNeedsEvent.into());
         }
