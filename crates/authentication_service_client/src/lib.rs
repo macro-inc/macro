@@ -1,6 +1,7 @@
 pub mod ai_billing;
 pub mod delete_inbox_grant_user;
 pub mod error;
+pub mod github_access_token;
 pub mod google_access_token;
 pub mod microsoft_access_token;
 pub mod relocate_inbox_grant;
