@@ -655,6 +655,11 @@ export class Form extends MacroEntity<FormDetail> {
     return `${this.client.webAppUrl}/app/form/${this.id}`;
   }
 
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
   /** The respondent page, which public forms also expose without signing in. */
   respondUrl(): string {
     return `${this.client.webAppUrl}/app/form/${this.id}/respond`;

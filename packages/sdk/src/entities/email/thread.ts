@@ -145,6 +145,16 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
     return thread;
   }
 
+  /** The thread's URL in the Macro web app; hand it to users as the link. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/mail/${this.id}`;
+  }
+
+  /** Identity, loaded detail and {@link webUrl}, so serialized handles carry their link. */
+  override toJSON() {
+    return { ...super.toJSON(), url: this.webUrl() };
+  }
+
   /** A handle to a thread by id. Details load on first access. */
   static byId(client: MacroClient, id: string): EmailThread {
     return new EmailThread(client, id);
