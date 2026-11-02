@@ -170,7 +170,6 @@ describe('desktop focus handoff', () => {
     mocks.mobile = false;
   });
 
-
   it('returns focus to the event on ordinary dismissal and reopening', async () => {
     const user = userEvent.setup();
     const anchor = showDetails(event());
