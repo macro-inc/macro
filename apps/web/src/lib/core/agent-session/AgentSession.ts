@@ -181,6 +181,12 @@ export class AgentSession {
     AgentSession.open.set(id, session);
     session.references += 1;
     traceAcquire(id, open === undefined, session.references);
+    // A surface opening a session that is already folded waits for nothing;
+    // its render is measured from now, not from the load long ago.
+    if (session.loaded) {
+      session.trace = new SessionLoadTrace(id);
+      session.trace.end('reused');
+    }
     return session;
   }
 
@@ -263,6 +269,11 @@ export class AgentSession {
   private turn: TurnState = 'idle';
   /** Prompts issued here still waiting for their first output. */
   private readonly prompts = new Set<PromptTrace>();
+
+  /** The fetched log is folded and live rows go straight in. */
+  get loaded(): boolean {
+    return this.ready && !this.loadFailed;
+  }
 
   private setTurn(turn: TurnState | undefined): void {
     const next = turn ?? 'idle';

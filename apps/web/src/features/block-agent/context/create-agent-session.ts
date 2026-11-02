@@ -14,6 +14,10 @@ import {
   type AgentSessionRecord,
   type IssueResult,
 } from '@core/agent-session/AgentSession';
+import {
+  isRecentlyViewed,
+  retainRecentlyViewed,
+} from '@core/agent-session/recently-viewed';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { AgentSessionRenamedEvent } from '@queries/agent-session/realtime-protocol';
 import {
@@ -253,6 +257,7 @@ export function createAgentSession(
     const record = await session.load();
     if (superseded(session)) return record.session;
     await show(session, record, 'fetched');
+    retainRecentlyViewed(session.id);
     return renameRefresh > renameRefreshAtStart &&
       latestRename?.agentSessionId === session.id
       ? { ...record.session, name: latestRename.name }
@@ -263,6 +268,7 @@ export function createAgentSession(
     live,
     async (session) => {
       const renameRefreshAtStart = renameRefresh;
+      const reused = isRecentlyViewed(session.id);
 
       batch(() => {
         setList(reconcile([]));
@@ -272,6 +278,9 @@ export function createAgentSession(
       });
 
       const cached = await session.warm();
+      // Held open since an earlier view: the fold is current, but the row
+      // is from that load, so it is read again behind the transcript.
+      if (reused) refreshRow(session.id);
       if (!cached || superseded(session)) {
         return settle(session, renameRefreshAtStart);
       }
@@ -325,26 +334,23 @@ export function createAgentSession(
   );
 
   let updateRefresh = 0;
+  function refreshRow(id: string) {
+    const run = ++updateRefresh;
+    fireAndForget(
+      (async () => {
+        const session = await agentHarnessServiceClient.get(id);
+        if (session.isErr() || run !== updateRefresh || id !== sessionId()) {
+          return;
+        }
+        mutate((current) => (current ? session.value : current));
+      })(),
+      'agent-session'
+    );
+  }
   onCleanup(
     subscribeAgentSessionUpdated((event) => {
-      if (event.agentSessionId !== sessionId()) return;
-      const run = ++updateRefresh;
-      fireAndForget(
-        (async () => {
-          const session = await agentHarnessServiceClient.get(
-            event.agentSessionId
-          );
-          if (
-            session.isErr() ||
-            run !== updateRefresh ||
-            event.agentSessionId !== sessionId()
-          ) {
-            return;
-          }
-          mutate((current) => (current ? session.value : current));
-        })(),
-        'agent-session'
-      );
+      if (event.agentSessionId === sessionId())
+        refreshRow(event.agentSessionId);
     })
   );
 
