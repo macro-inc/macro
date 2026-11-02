@@ -14,7 +14,7 @@ pub trait ChannelLabelsRepo: Send + Sync + 'static {
     type Err: Send + std::fmt::Debug;
 
     /// Every label of the scope in manual order. `channel_ids` on each label
-    /// is restricted to eligible team channels `viewer` participates in. Shared
+    /// is restricted to eligible channels `viewer` participates in. Shared
     /// labels include only their own team's channels. Manual counts include all
     /// eligible assignments; smart counts include only the viewer's active matches.
     /// Smart memberships are evaluated from current attributes, including matches

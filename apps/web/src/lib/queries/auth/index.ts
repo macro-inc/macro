@@ -12,6 +12,7 @@ export {
   useChangePlanMutation,
   useCreateAiCreditCheckoutMutation,
   useIncludedAiCentsByTier,
+  usePurchaseAiCreditsMutation,
   useSubscriptionStatusQuery,
   useUpdateAiAutoReloadMutation,
   useUpdateAiOverageMutation,

@@ -16,7 +16,7 @@ inbound = [
   "ports",
 ]
 outbound = ["ports"]
-ports = ["dep:tokio", "dep:tracing"]
+ports = ["dep:tokio"]
 postgres = ["dep:sqlx", "outbound"]
 
 [dependencies]
@@ -33,7 +33,7 @@ serde = { workspace = true }
 sqlx = { workspace = true, optional = true }
 thiserror = { workspace = true }
 tokio = { workspace = true, optional = true }
-tracing = { workspace = true, optional = true }
+tracing = { workspace = true }
 utoipa = { workspace = true, optional = true }
 uuid = { workspace = true, features = ["serde", "v7"] }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }

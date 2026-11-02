@@ -3,10 +3,10 @@ import { t } from '@app/lib/i18n';
 import { UserIcon } from '@core/component/UserIcon';
 import { hasValidHotkey } from '@core/hotkey/utils';
 import { type CrmContactEntity, Entity, type EntityData } from '@entity';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import WideStar from '@icon/system/regular/sparkle.svg';
-import ProjectIcon from '@icon/system/regular/stack.svg';
 import Terminal from '@icon/system/regular/terminal.svg?component-solid';
 import {
   BULK_DOCUMENT_WAKEUP_FEATURE_FLAG,

@@ -49,7 +49,7 @@ use crate::contacts::get_self_connection;
 use crate::messages::{get_message, get_message_label_ids, list_messages};
 use crate::threads::get_thread;
 pub use error::GmailApiHttpError;
-use models_email::gmail::contacts::PersonResource;
+use models_email::gmail::contacts::{ConnectionsResponse, OtherContactsResponse, PersonResource};
 pub use models_email::gmail::filters::Filter;
 use models_email::gmail::inbox_sync::{
     GoogleJwtClaims, GooglePublicKeys, JwtVerificationError, KeyMap,
@@ -181,15 +181,17 @@ impl GmailClient {
         get_thread(self, access_token, thread_id).await
     }
 
-    /// Gets the changes to a user's inbox that have occurred since start_history_id.
-    /// Returns raw HistoryListResponse - callers should map to InboxChanges using convert module.
-    #[tracing::instrument(skip(self, access_token), err)]
-    pub async fn get_history(
+    /// Gets one page of the changes to a user's inbox since `start_history_id`.
+    /// Pass the previous page's `next_page_token` to continue. Returns the raw
+    /// HistoryListResponse; callers map it to inbox changes.
+    #[tracing::instrument(skip(self, access_token, page_token), err)]
+    pub async fn get_history_page(
         &self,
         access_token: &str,
         start_history_id: &str,
+        page_token: Option<&str>,
     ) -> Result<HistoryListResponse, GmailApiHttpError> {
-        history::get_history(self, access_token, start_history_id).await
+        history::get_history_page(self, access_token, start_history_id, page_token).await
     }
 
     /// Fetches the user's raw Gmail profile.
@@ -383,31 +385,31 @@ impl GmailClient {
         get_self_connection(self, access_token).await
     }
 
-    /// Fetches all of the user's main contacts, handling pagination.
-    /// Returns raw Gmail PersonResource objects and a sync token for future incremental updates.
-    /// Callers should map PersonResource to service layer Contact.
+    /// Fetches one page of the user's main contacts. Pass the previous page's
+    /// `next_page_token` to continue; the last page carries the sync token for
+    /// future incremental updates. Callers map the people to service contacts.
     /// Failures log at WARN: expired sync tokens and missing contacts scopes are routine.
-    #[tracing::instrument(skip(self, access_token, sync_token), err(level = "warn"))]
-    pub async fn get_contacts(
+    #[tracing::instrument(skip(self, access_token, sync_token, page_token), err(level = "warn"))]
+    pub async fn get_contacts_page(
         &self,
         access_token: &str,
         sync_token: Option<&str>,
-    ) -> Result<(Vec<PersonResource>, String), GmailApiHttpError> {
-        contacts::list_connections(self, access_token, sync_token).await
+        page_token: Option<&str>,
+    ) -> Result<ConnectionsResponse, GmailApiHttpError> {
+        contacts::get_connections_page(self, access_token, sync_token, page_token).await
     }
 
-    /// Fetches all of the user's "Other Contacts", handling pagination.
-    /// These are typically contacts auto-created from interactions.
-    /// Returns raw Gmail PersonResource objects and a sync token.
-    /// Callers should map PersonResource to service layer Contact.
+    /// Fetches one page of the user's "Other Contacts", typically created from
+    /// interactions. Paging and sync tokens work as in [`Self::get_contacts_page`].
     /// Failures log at WARN: expired sync tokens and missing contacts scopes are routine.
-    #[tracing::instrument(skip(self, access_token, sync_token), err(level = "warn"))]
-    pub async fn get_other_contacts(
+    #[tracing::instrument(skip(self, access_token, sync_token, page_token), err(level = "warn"))]
+    pub async fn get_other_contacts_page(
         &self,
         access_token: &str,
         sync_token: Option<&str>,
-    ) -> Result<(Vec<PersonResource>, String), GmailApiHttpError> {
-        contacts::list_other_contacts(self, access_token, sync_token).await
+        page_token: Option<&str>,
+    ) -> Result<OtherContactsResponse, GmailApiHttpError> {
+        contacts::get_other_contacts_page(self, access_token, sync_token, page_token).await
     }
 
     /// Creates a new Gmail filter.

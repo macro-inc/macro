@@ -3,7 +3,7 @@ import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import ArrowUpRightIcon from '@icon/system/regular/arrow-up-right.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
-import ProjectIcon from '@icon/system/regular/stack.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import { ButtonGroup, cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import { useProperty } from '../core/context';
@@ -22,6 +22,7 @@ export function ProjectLinkPill(props: {
   property: PropertyValue;
   fallback: JSX.Element;
   class?: string;
+  iconClass?: string;
   variant?: 'secondary' | 'ghost';
 }) {
   const ctx = useProperty();
@@ -56,7 +57,12 @@ export function ProjectLinkPill(props: {
           class="group/project-link min-w-0 shrink justify-start"
           onClick={open}
         >
-          <ProjectIcon class="size-3 shrink-0 not-touch:group-hover/project-link:hidden not-touch:group-focus-visible/project-link:hidden" />
+          <ProjectIcon
+            class={cn(
+              'size-3 shrink-0 not-touch:group-hover/project-link:hidden not-touch:group-focus-visible/project-link:hidden',
+              props.iconClass
+            )}
+          />
           <ArrowUpRightIcon class="hidden size-3 shrink-0 not-touch:group-hover/project-link:block not-touch:group-focus-visible/project-link:block" />
           <span class="min-w-0 max-w-60 truncate">{name()}</span>
         </ButtonGroup.Button>
