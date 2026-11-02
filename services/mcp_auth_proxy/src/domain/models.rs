@@ -161,6 +161,40 @@ pub struct PendingAuthorization {
     pub client_state: String,
     /// Where to redirect back to the client with the authorization code.
     pub client_redirect_uri: String,
+    /// Digest of the `BrowserBinding` held by the browser that started the
+    /// flow; only that browser may complete it. `None` only on a flow started
+    /// by a build that predates the binding, which could only have used a
+    /// trusted redirect URI.
+    pub browser_binding_digest: Option<String>,
+}
+
+/// Whether the user has approved the client on the consent screen.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+pub enum UserConsent {
+    /// The user has not been asked yet.
+    NotAsked,
+    /// The user approved the client on the consent screen.
+    Approved,
+}
+
+/// What the consent screen shows the user about the client asking for access.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub struct ConsentPrompt {
+    /// The name the client registered with. Self-reported, so it is shown as
+    /// unverified.
+    pub client_name: String,
+    /// The host the authorization code will be sent to: the identity the user
+    /// is actually approving.
+    pub redirect_host: String,
+}
+
+/// How an authorize request proceeds.
+#[derive(Clone, Debug, Eq, PartialEq)]
+pub enum AuthorizationStart {
+    /// Send the browser to the upstream sign-in at this URL.
+    SignIn(String),
+    /// Ask the user to approve the client before signing in.
+    ConsentRequired(ConsentPrompt),
 }
 
 /// An authorization code issued by this broker and backed by an upstream token.
@@ -183,13 +217,13 @@ pub struct IssuedAuthorizationCode {
 }
 
 /// OAuth authorize request from the MCP client.
-#[derive(Deserialize)]
+#[derive(Clone, Deserialize)]
 pub struct AuthorizeRequest {
     /// Expected to be `code`.
     pub response_type: String,
     /// Dynamically registered client id.
     pub client_id: String,
-    /// Loopback callback URI owned by the MCP client.
+    /// Callback URI owned by the MCP client.
     pub redirect_uri: String,
     /// Opaque state from the client.
     pub state: String,
@@ -199,7 +233,6 @@ pub struct AuthorizeRequest {
     pub code_challenge_method: String,
     /// Optional requested scopes.
     #[serde(default)]
-    #[allow(dead_code)]
     pub scope: Option<String>,
 }
 

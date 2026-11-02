@@ -11,10 +11,11 @@ use base64::{Engine, engine::general_purpose::URL_SAFE_NO_PAD};
 use sha2::{Digest, Sha256};
 
 use crate::domain::{
+    browser_binding::BrowserBinding,
     models::{
         AccessToken, AuthorizeRequest, CallbackRequest, ClientRegistrationRequest,
         IssuedAuthorizationCode, PendingAuthorization, RefreshToken, RefreshTokenBinding,
-        RegisteredClient, UpstreamTokens,
+        RegisteredClient, UpstreamTokens, UserConsent,
     },
     ports::{
         ClientRegistrationStore, GrantRevokedFuture, OAuthProvider, RefreshTokenBindingFuture,
@@ -41,6 +42,9 @@ pub const LOOPBACK_REDIRECT_URI: &str = "http://127.0.0.1:51000/oauth/callback";
 pub const TRUSTED_REDIRECT_URI: &str = "https://claude.ai/api/mcp/auth_callback";
 /// Callback under an attacker's control.
 pub const ATTACKER_REDIRECT_URI: &str = "https://attacker.example/steal";
+/// An `https` callback on a host outside the trusted list, such as a
+/// self-hosted MCP gateway's.
+pub const GATEWAY_REDIRECT_URI: &str = "https://gateway.example/oauth/callback";
 /// Access token the fake upstream provider returns for a refresh.
 pub const REFRESHED_ACCESS_TOKEN: &str = "refreshed-access-token";
 /// Upstream access token lifetime the fake provider reports, matching the one
@@ -76,6 +80,11 @@ impl FakeInflightAuth {
     /// Returns whether a broker code is still redeemable.
     pub fn holds_issued_code(&self, code: &str) -> bool {
         self.issued.lock().expect("issued lock").contains_key(code)
+    }
+
+    /// Returns whether any broker code has been issued.
+    pub fn holds_any_issued_code(&self) -> bool {
+        !self.issued.lock().expect("issued lock").is_empty()
     }
 
     /// Returns the recorded upstream expiry of the only issued code, panicking
@@ -319,6 +328,8 @@ pub struct Harness {
     pub registry: Arc<FakeClientRegistry>,
     /// The upstream provider the service was built with.
     pub provider: Arc<FakeOAuthProvider>,
+    /// The secret cookie of the browser the tests drive flows from.
+    pub browser: BrowserBinding,
 }
 
 impl Harness {
@@ -346,6 +357,7 @@ impl Harness {
             inflight,
             registry,
             provider,
+            browser: BrowserBinding::generate(),
         }
     }
 
@@ -388,23 +400,26 @@ impl Harness {
         code_verifier: &str,
     ) -> String {
         self.service
-            .start_authorization(self.authorize_request(
-                client_id,
-                redirect_uri,
-                &code_challenge_for(code_verifier),
-            ))
+            .start_authorization(
+                self.authorize_request(client_id, redirect_uri, &code_challenge_for(code_verifier)),
+                self.browser.clone(),
+                UserConsent::NotAsked,
+            )
             .await
             .expect("authorize should succeed");
 
         let session_id = self.inflight.only_pending_session_id();
         let redirect = self
             .service
-            .complete_callback(CallbackRequest {
-                code: Some("upstream-code".to_owned()),
-                state: Some(session_id),
-                error: None,
-                error_description: None,
-            })
+            .complete_callback(
+                CallbackRequest {
+                    code: Some("upstream-code".to_owned()),
+                    state: Some(session_id),
+                    error: None,
+                    error_description: None,
+                },
+                Some(self.browser.clone()),
+            )
             .await
             .expect("callback should succeed");
 
