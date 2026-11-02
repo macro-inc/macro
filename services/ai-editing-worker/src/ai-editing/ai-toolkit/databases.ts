@@ -4,12 +4,12 @@ import {
   type DatabaseQueryNode,
   parseDatabaseQueryJson,
 } from '@macro-inc/lexical-core/nodes/DatabaseQueryNode';
+import { $isDocumentCardNode } from '@macro-inc/lexical-core/nodes/DocumentCardNode';
 import {
   type DatabaseQueryData,
   isDatabaseQueryChartMode,
   parseDatabaseQueryData,
 } from '@macro-inc/lexical-core/nodes/databaseQueryData';
-import { $isDocumentCardNode } from '@macro-inc/lexical-core/nodes/DocumentCardNode';
 import type { LexicalNode } from 'lexical';
 import { EditError } from '../editor/errors';
 import type { DatabaseQueryView } from '../editor/ops';
