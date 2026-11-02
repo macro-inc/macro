@@ -72,7 +72,7 @@ function EditableAppearanceTrigger(props: { entity: EntityData }) {
   return (
     <Button
       variant="ghost"
-      size="icon-sm"
+      size="icon-xs"
       aria-label={t('appearance.title')}
       tooltip={t('appearance.title')}
       onClick={(event) => {

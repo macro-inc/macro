@@ -53,7 +53,8 @@ Inline calendar-invitation text actions remove the transparent border to keep al
 Ordinary Markdown, snippets, routines, task projects, forms, and databases support
 shared entity appearance. Users with edit access click the header icon or choose
 **Change icon…** after Rename in an entity menu. Document header icons open the
-picker separately from their breadcrumb name's navigation button; row icons
+picker separately from their breadcrumb name's navigation button. Header buttons
+are 24px with unchanged 16px glyphs and the shared larger touch targets. Row icons
 still navigate. Sidebar category icons do not change. Drive folders, tasks,
 skills, and internal descriptions do not have appearance editing.
 Document content titles have no leading icon. Without a custom icon, **Add icon**
