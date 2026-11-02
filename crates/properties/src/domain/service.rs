@@ -364,6 +364,29 @@ pub trait PropertiesService: Send + Sync + 'static {
         >,
     > + Send;
 
+    /// The project each live task lists in: its Project property, when it
+    /// names exactly one project. Other tasks are absent.
+    fn task_listing_projects(
+        &self,
+        task_ids: &[String],
+    ) -> impl Future<Output = Result<HashMap<String, Uuid>, PropertiesErr>> + Send;
+
+    /// Properties of the tasks among `task_ids` that `project` lists, read
+    /// with the project's View receipt. Viewing a project lists its tasks
+    /// with their properties, like a folder lists its documents, without
+    /// opening them; tasks the project doesn't list are absent. Personal tag
+    /// properties of other users are filtered out as for the project's viewer.
+    fn get_project_task_properties(
+        &self,
+        project: &ViewReceipt,
+        task_ids: &[String],
+    ) -> impl Future<
+        Output = Result<
+            HashMap<PropertyTargetKey, Vec<EntityPropertyWithDefinition>>,
+            PropertiesErr,
+        >,
+    > + Send;
+
     /// Delete all properties attached to an entity.
     fn delete_entity_properties(
         &self,

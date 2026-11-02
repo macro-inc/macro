@@ -39,6 +39,15 @@ edge.
 - Add a field to property definitions: `src/definitions.rs` →
   `load_property_definitions`.
 
+## Gotchas
+
+- The entity property edge reads properties only for entities the viewer may
+  view, with one exception: a task the viewer can't open still shows its
+  properties when a project the viewer can view lists it
+  (`listed_task_properties`, then `PropertiesService::get_project_task_properties`).
+  Viewing a project lists its tasks with their properties. The fallback runs
+  only for refused tasks.
+
 ## Checks
 
 - `cargo test -p graphql_properties` (`SQLX_OFFLINE` unset).
