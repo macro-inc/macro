@@ -257,6 +257,7 @@ async fn notification_inbox_pages_groups_with_their_rows() {
                         limit: 10
                     }) {
                         nextCursor
+                        nextPosition { sortAt entityId }
                         entries {
                             groupId sortAt
                             entity { __typename id }
@@ -301,6 +302,8 @@ async fn notification_inbox_pages_groups_with_their_rows() {
     assert_eq!(revision.attention_through, Some(at(7)));
     assert_eq!(row["notifications"].as_array().unwrap().len(), 1);
     assert!(page["nextCursor"].is_string());
+    assert_eq!(page["nextPosition"]["entityId"], DOC_ID.to_string());
+    assert_eq!(page["nextPosition"]["sortAt"], at(7).to_rfc3339());
 
     let pages = service.pages.lock().unwrap();
     assert_eq!(

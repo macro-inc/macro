@@ -10332,12 +10332,34 @@ type NotificationInboxPage {
 	Cursor for the next page; absent once the inbox is exhausted.
 	"""
 	nextCursor: String
+	"""
+	Where this page's read stopped, the position `nextCursor` resumes
+	after; absent once the inbox is exhausted. A filtered page can read
+	past its last entry, so a live change placed after that entry but not
+	after this position belongs to this page rather than a later one.
+	"""
+	nextPosition: NotificationInboxPosition
 }
 
 """
 One change to an inbox's membership, placement or rows.
 """
 union NotificationInboxPatch = NotificationInboxEntryUpserted | NotificationInboxEntryRemoved | NotificationInboxInvalidated
+
+"""
+A place in the inbox's order: newest `sortAt` first, then entity id
+descending.
+"""
+type NotificationInboxPosition {
+	"""
+	The sort time, RFC 3339.
+	"""
+	sortAt: String!
+	"""
+	The entity id that breaks ties at `sortAt`.
+	"""
+	entityId: String!
+}
 
 """
 One inbox row: the notifications shown together for one thread, a
