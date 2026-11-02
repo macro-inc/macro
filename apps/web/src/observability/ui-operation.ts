@@ -23,6 +23,11 @@ export function setActiveRoute(route: string): void {
   activeRoute = route;
 }
 
+/** The route of the view that opened most recently. */
+export function currentRoute(): string | undefined {
+  return activeRoute;
+}
+
 export interface UiOperationOptions {
   /** Defaults to `interaction`. */
   kind?: FlowKind;

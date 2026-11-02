@@ -260,8 +260,8 @@ content in a name. In Datadog the span name is `resource_name` (the
 
 | Root | `flow.kind` | Started by | `route.id` |
 | --- | --- | --- | --- |
-| `app.boot` | `boot` | `observability/boot.ts` | The first view it opens |
-| `navigation` | `navigation` | split-router commit (`runner.ts`) | The first view it opens |
+| `app.boot` | `boot` | `observability/boot.ts` | The innermost view it opened |
+| `navigation` | `navigation` | split-router commit (`runner.ts`) | The innermost view it opened; none when it opened no view |
 | `view.<route id>` | `view` | `RouteView` in `split-router/solid/outlet.tsx`; a root only when no navigation is open, otherwise a phase of it | Its route |
 | Other `<TraceFlow>` roots (`quick_access.results`, `doc.editor` after the view settled) | `view` | `TraceFlow` | Last opened view |
 | `quick_access.open`, `quick_access.input`, `channel.tab`, `form.tab` | `interaction` | `beginInteraction` | Last opened view |
@@ -278,7 +278,7 @@ Attributes every perf trace carries, set by the owners (`ui-operation.ts`,
 | Every span in a perf trace, including HTTP client spans started in it | `macro.trace.class=perf` |
 | Roots | `flow.kind`, `route.id` (when known), `ui.operation`, `ui.outcome` (`success`, `cancelled`, `hidden`, `timeout`), `ui.elapsed_ms`, `ui.work_to_ready_ms` (success only), `ui.long_task_count`, `ui.long_task_overlap_ms`, `ui.long_animation_frame_count`, `ui.long_animation_frame_overlap_ms`, `ui.long_animation_frame_blocking_ms`, `ui.visibility`; with an input event, `ui.input_to_ready_ms`, `ui.input_to_paint_opportunity_ms` and `ui.event_*` |
 | Flow roots | `flow.phase_count` (child spans opened), `flow.ready_phase_count` (`usePending` phases already loaded when reached) |
-| Phases | `flow.root` (the root's name), `route.id` (the root's), `flow.outcome` (`success` or `cancelled`) |
+| Phases | `flow.root` (the root's name), `route.id` (the nearest view's), `flow.outcome` (`success` or `cancelled`) |
 | A phase's parent | `<phase>.waited`: `false` when it was already loaded (cache or an earlier load), `true` when the flow waited for it |
 | Resource (Datadog tags and facets) | `service.name=web-app`, `service.version` (Datadog `version`), `deployment.environment` (Datadog `env`), `app.runtime` (`browser`, `tauri`), `app.platform` (`web`, `desktop`, `ios`, `android`), `os.type` (`darwin`, `windows`, `linux`, `ios`, `android`, `chromeos`, `unknown`), `frontend_instance_id` |
 
@@ -286,13 +286,15 @@ Entity context is opaque ids and categories only, on the phase that loads the
 entity (`block.type` and `document.id` on `block.data`, `channel.id`,
 `entity.type` and `entity.id`); never titles, text, queries or addresses.
 
-Requests join the flow that started them. urql queries (`traceParentExchange`)
-and TanStack queries (`lib/queries/flow-trace.ts`) created inside a flow send
-their request in that flow's context while it loads, so `graphql.transport`
-and `http <method> <path>` spans are descendants of the flow node and carry
-`traceparent` to the backend. They hang under the flow (`view.*` or a nested
-`TraceFlow`), not under the `usePending` phase that watches the query. A
-refetch after the flow settled starts its own trace.
+Requests join the flow that started them. urql query bindings and TanStack
+queries (`lib/queries/flow-trace.ts`) created inside a flow send their request
+in that flow's context while it loads; an imperative `client.query` sends its
+first request in the span it was called in (`captureTraceParentExchange`). So
+`graphql.transport` and `http <method> <path>` spans are descendants of the
+flow node and carry `traceparent` to the backend. They hang under the flow
+(`view.*` or a nested `TraceFlow`), not under the `usePending` phase that
+watches the query. A refetch after the flow settled, and global background
+queries (pending sends, Command-K sources), start their own traces.
 
 ### Boot (`app.boot`)
 
@@ -301,7 +303,8 @@ navigation or reload. `app.boot` is an interaction (`beginInteraction` with
 `startTime: 0` and `closeOnJoin`) that starts at browser navigation time,
 including work before JavaScript evaluated. The router's initial `navigation`
 and the first view join it even when the lazy view mounts after the navigation
-commits. It finishes at that view's paint opportunity; otherwise `ui.outcome` is
+commits; a first view that unmounts before loading (a redirect) leaves it open
+for the next. It finishes at that view's paint opportunity; otherwise `ui.outcome` is
 `hidden`, `cancelled` or `timeout` (30 seconds), also copied to `boot.outcome`.
 
 When it finishes, `observability/boot.ts` reconstructs from the Performance API:

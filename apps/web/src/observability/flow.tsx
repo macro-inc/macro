@@ -16,6 +16,7 @@ import {
   useContext,
 } from 'solid-js';
 import {
+  currentRoute,
   type FlowKind,
   setActiveRoute,
   startUiOperation,
@@ -26,14 +27,13 @@ type Attributes = Record<string, string | number | boolean>;
 type Outcome = 'success' | 'cancelled';
 
 /**
- * What every node of one perf trace shares: the root's name and route, stamped
- * on each phase so Datadog can aggregate phases per root without trace
- * queries, and how many phases it opened versus found already loaded.
+ * What every node of one perf trace shares: the root's name, stamped on each
+ * phase so Datadog can aggregate phases per root without trace queries, and
+ * how many phases it opened versus found already loaded.
  */
 interface FlowRoot {
   readonly span: Span;
   readonly name: string;
-  route: string | undefined;
   phaseCount: number;
   readyPhases: number;
 }
@@ -47,6 +47,8 @@ const ROUTE_ID = 'route.id';
 interface FlowNode {
   readonly span: Span;
   readonly root: FlowRoot;
+  /** The route of the nearest view at or above this node. */
+  readonly route: string | undefined;
   readonly settled: boolean;
   /** Keep the node open until the returned release runs. Idempotent. */
   hold(): () => void;
@@ -57,6 +59,7 @@ interface FlowNode {
 function createNode(
   span: Span,
   root: FlowRoot,
+  route: string | undefined,
   finish: (outcome: Outcome) => void,
   expired: () => boolean = () => false
 ): FlowNode {
@@ -65,6 +68,7 @@ function createNode(
   return {
     span,
     root,
+    route,
     get settled() {
       return settled || expired();
     },
@@ -97,18 +101,25 @@ function rootNode(
   options: UiOperationOptions = {}
 ): FlowNode {
   const operation = startUiOperation(name, { ...options, kind });
-  const route = options.attributes?.[ROUTE_ID];
-  if (typeof route === 'string') setActiveRoute(route);
+  const own = options.attributes?.[ROUTE_ID];
+  if (typeof own === 'string') setActiveRoute(own);
+  // Mirrors startUiOperation: a navigation's route comes from its views.
+  const route =
+    typeof own === 'string'
+      ? own
+      : kind === 'boot' || kind === 'navigation'
+        ? undefined
+        : currentRoute();
   const root: FlowRoot = {
     span: operation.span,
     name,
-    route: typeof route === 'string' ? route : undefined,
     phaseCount: 0,
     readyPhases: 0,
   };
   return createNode(
     operation.span,
     root,
+    route,
     (outcome) => {
       operation.span.setAttr('flow.phase_count', root.phaseCount);
       operation.span.setAttr('flow.ready_phase_count', root.readyPhases);
@@ -123,28 +134,29 @@ function rootNode(
 function childNode(
   parent: FlowNode,
   name: string,
-  attributes?: Attributes
+  attributes?: Attributes,
+  onSettle?: (outcome: Outcome) => void
 ): FlowNode {
   const release = parent.hold();
   const span = parent.span.span(name);
   const root = parent.root;
-  const route = attributes?.[ROUTE_ID];
-  if (typeof route === 'string') {
-    setActiveRoute(route);
-    // A navigation or boot is about the first view it opens.
-    if (root.route === undefined) {
-      root.route = route;
-      root.span.setAttr(ROUTE_ID, route);
-    }
+  const own = attributes?.[ROUTE_ID];
+  if (typeof own === 'string') {
+    setActiveRoute(own);
+    // The root is about the most specific view it opened: the last to join,
+    // which for nested routes is the innermost.
+    root.span.setAttr(ROUTE_ID, own);
   }
+  const route = typeof own === 'string' ? own : parent.route;
   span.setAttr('flow.root', root.name);
-  if (root.route !== undefined) span.setAttr(ROUTE_ID, root.route);
+  if (route !== undefined) span.setAttr(ROUTE_ID, route);
   for (const [key, value] of Object.entries(attributes ?? {}))
     span.setAttr(key, value);
   root.phaseCount++;
-  return createNode(span, root, (outcome) => {
+  return createNode(span, root, route, (outcome) => {
     span.setAttr('flow.outcome', outcome);
     span.end();
+    onSettle?.(outcome);
     // Solid disposes children before parents: when the parent is unmounting
     // too, it must abandon before this release can settle it as a success.
     if (outcome === 'cancelled') queueMicrotask(release);
@@ -165,13 +177,20 @@ const FlowContext = createContext<FlowScope>();
 interface OpenInteraction {
   readonly node: FlowNode;
   readonly closeOnJoin: boolean;
+  /** The interaction that was open when this one began. */
+  readonly enclosing: OpenInteraction | undefined;
+  readonly closed: boolean;
   close(): void;
+  /** Open the window again, while the interaction itself is still open. */
+  reopen(): void;
 }
 
 let openInteraction: OpenInteraction | undefined;
 
 function activeInteraction(): OpenInteraction | undefined {
-  if (openInteraction && !openInteraction.node.settled) return openInteraction;
+  let open = openInteraction;
+  while (open && (open.closed || open.node.settled)) open = open.enclosing;
+  return open;
 }
 
 export interface Interaction {
@@ -199,19 +218,31 @@ export function beginInteraction(
   options: InteractionOptions = {}
 ): Interaction {
   const enclosing = activeInteraction();
+  // A nested interaction is not the view a closeOnJoin interaction waits for:
+  // the router's first navigation must leave app.boot open for its view.
   const node = enclosing
-    ? joinInteraction(enclosing, name, options.attributes)
+    ? childNode(enclosing.node, name, options.attributes)
     : rootNode(name, options.kind ?? 'interaction', options);
-  const release = node.hold();
+  let release = node.hold();
   let closed = false;
   const interaction: OpenInteraction = {
     node,
     closeOnJoin: options.closeOnJoin ?? false,
+    enclosing,
+    get closed() {
+      return closed;
+    },
     close() {
       if (closed) return;
       closed = true;
       if (openInteraction === interaction) openInteraction = enclosing;
       release();
+    },
+    reopen() {
+      if (!closed || node.settled) return;
+      closed = false;
+      release = node.hold();
+      if (!activeInteraction()) openInteraction = interaction;
     },
   };
   openInteraction = interaction;
@@ -223,8 +254,20 @@ function joinInteraction(
   name: string,
   attributes: Attributes | undefined
 ): FlowNode {
-  const node = childNode(interaction.node, name, attributes);
-  if (interaction.closeOnJoin) interaction.close();
+  const waiting: OpenInteraction[] = [];
+  for (
+    let open: OpenInteraction | undefined = interaction;
+    open;
+    open = open.enclosing
+  )
+    if (open.closeOnJoin && !open.closed) waiting.push(open);
+  const node = childNode(interaction.node, name, attributes, (outcome) => {
+    // A view that unmounted before loading (a redirect) is not the view they
+    // waited for: the next view joins instead.
+    if (outcome === 'cancelled') for (const open of waiting) open.reopen();
+  });
+  // The first view closes every interaction waiting for one, at any depth.
+  for (const open of waiting) open.close();
   return node;
 }
 

@@ -51,6 +51,7 @@ vi.mock('./ui-operation', () => {
   }
   return {
     setActiveRoute: () => {},
+    currentRoute: () => undefined,
     startUiOperation: (
       name: string,
       options: { kind?: string; attributes?: Record<string, unknown> } = {}
@@ -340,8 +341,10 @@ describe('TraceFlow', () => {
     }
     const navigation = beginInteraction('navigation', { kind: 'navigation' });
     render(() => (
-      <TraceFlow name="view.doc" attributes={{ 'route.id': 'doc' }}>
-        <Content />
+      <TraceFlow name="view.app" attributes={{ 'route.id': 'app' }}>
+        <TraceFlow name="view.doc" attributes={{ 'route.id': 'doc' }}>
+          <Content />
+        </TraceFlow>
       </TraceFlow>
     ));
     navigation.end();
@@ -352,8 +355,12 @@ describe('TraceFlow', () => {
     expect(span('navigation')?.attrs).toMatchObject({
       'flow.kind': 'navigation',
       'route.id': 'doc',
-      'flow.phase_count': 2,
+      'flow.phase_count': 3,
       'flow.ready_phase_count': 0,
+    });
+    expect(span('view.app')?.attrs).toMatchObject({
+      'flow.root': 'navigation',
+      'route.id': 'app',
     });
     expect(span('view.doc')?.attrs).toMatchObject({
       'flow.root': 'navigation',
@@ -401,5 +408,72 @@ describe('TraceFlow', () => {
       parent = contexts.at(-1);
     });
     expect(parent).toBeUndefined();
+  });
+
+  it('keeps boot open for the view a navigation commits before it mounts', async () => {
+    const boot = beginInteraction('app.boot', {
+      kind: 'boot',
+      closeOnJoin: true,
+    });
+    beginInteraction('navigation', { kind: 'navigation' }).end();
+    render(() => (
+      <TraceFlow name="view.home" attributes={{ 'route.id': 'home' }}>
+        {null}
+      </TraceFlow>
+    ));
+    render(() => <TraceFlow name="view.later">{null}</TraceFlow>);
+    await flush();
+    expect(spans.find((span) => span.name === 'view.home')?.parent).toBe(
+      'app.boot'
+    );
+    expect(operations.map((operation) => operation.name)).toEqual([
+      'app.boot',
+      'view.later',
+    ]);
+    expect(operations[0].outcome).toBe('painted');
+    expect(spans[0].attrs['route.id']).toBe('home');
+    boot.end();
+  });
+
+  it('closes boot when its navigation opens the first view', async () => {
+    beginInteraction('app.boot', { kind: 'boot', closeOnJoin: true });
+    const navigation = beginInteraction('navigation', { kind: 'navigation' });
+    render(() => <TraceFlow name="view.home">{null}</TraceFlow>);
+    navigation.end();
+    render(() => <TraceFlow name="view.later">{null}</TraceFlow>);
+    await flush();
+    expect(spans.find((span) => span.name === 'view.home')?.parent).toBe(
+      'navigation'
+    );
+    expect(operations.map((operation) => operation.name)).toEqual([
+      'app.boot',
+      'view.later',
+    ]);
+    expect(operations[0].outcome).toBe('painted');
+  });
+
+  it('lets the next view join boot when the first one unmounts before loading', async () => {
+    const [redirected, setRedirected] = createSignal(false);
+    beginInteraction('app.boot', { kind: 'boot', closeOnJoin: true });
+    render(() => (
+      <Show
+        when={redirected()}
+        fallback={<TraceFlow name="view.base">{null}</TraceFlow>}
+      >
+        <TraceFlow name="view.home">{null}</TraceFlow>
+      </Show>
+    ));
+    setRedirected(true);
+    await flush();
+    await flush();
+    expect(
+      spans
+        .filter((span) => span.parent === 'app.boot')
+        .map((span) => [span.name, span.attrs['flow.outcome']])
+    ).toEqual([
+      ['view.base', 'cancelled'],
+      ['view.home', 'success'],
+    ]);
+    expect(operations).toEqual([{ name: 'app.boot', outcome: 'painted' }]);
   });
 });
