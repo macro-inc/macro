@@ -1076,10 +1076,11 @@ WebView so it keeps its size; from the drawer, the drawer enters PiP and
 reopens when Macro returns. PiP uses the same layout as iOS, its menu offers
 Mute and Leave, and expanding it reopens the drawer. A tap on a system PiP
 always shows Android's menu first. Audio continues in the foreground service
-(`phoneCall|microphone|camera`) while backgrounded; the app manifest removes
-LiveKit's unused screen-share service and its media-projection permission, so
-Play sees no `mediaProjection` foreground service; camera capture stops once neither the drawer, the thumbnail
-nor PiP is visible. The web call controls can also reopen the drawer.
+(`phoneCall|microphone|camera`) while backgrounded; camera capture stops once
+neither the drawer, the thumbnail nor PiP is visible. The web call controls can
+also reopen the drawer. The app manifest removes LiveKit's unused screen-share
+service and its media-projection permission, so Play sees no `mediaProjection`
+foreground service.
 
 After a debug build generates Tauri's Gradle includes, run the plugin unit tests
 from `tauri/src-tauri/gen/android` with
