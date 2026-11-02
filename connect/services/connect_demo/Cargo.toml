@@ -6,6 +6,7 @@ publish = false
 
 [dependencies]
 axum = { workspace = true }
+chrono = { workspace = true }
 connect_client = { path = "../../crates/connect_client" }
 connect_platform = { path = "../../crates/connect_platform" }
 futures = { workspace = true }

@@ -381,6 +381,8 @@ Shift+Enter adds a line to the draft; Enter sends. The composer spaces its
 paragraphs the way the sent message does, so a multi-line draft reads as what
 it will send. Check a multi-line message against the draft that wrote it: the
 spacing must not change on send.
+Typing `6.` then Enter (or `6. `) starts an ordered list at 6; the marker is
+not rewritten to `1.`
 Both the expanded and collapsed composers start with a `+` button (`Add`). It
 opens a menu on desktop and a bottom drawer on mobile: `Mention` (opens the `@` typeahead), `Attach files` (the file
 picker; the iOS media picker on iOS), `GIF` (the same picker as `/gif`), then under `Create` the same actions as
@@ -488,7 +490,9 @@ event is created — no invitation goes out from the initial request. It cannot 
 email at all. A bot or agent reply posted for a person shares, as that person, the linked items
 (chips or attachments) that the replying bot created for them while answering: those with a
 `created` activity row by that bot on the person's behalf since the person's latest message in
-the thread before the reply. Activity arrives asynchronously, so missing rows are re-checked
+the thread before the reply, or, for a bot message that starts its own thread (a poll card
+posted top-level), their latest message in the channel. Forms an agent creates through code
+mode (its SDK token) are attributed to its bot like native tool creations. Activity arrives asynchronously, so missing rows are re-checked
 after 5 and 30 seconds. Existing items it links, plain URLs, and bot posts with no person
 behind them share nothing. The bot never asks whether to share; it calls `ShareWithChannel` when asked to
 share an existing item. Private and confidential calendar events stay unshared, and a

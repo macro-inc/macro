@@ -26,41 +26,62 @@ import { makeInputValuePersistenceKey } from '../utils/persistence';
 const CHANNEL_ID = 'mention-fixture-channel';
 // Render the stored chip without a backend preview or app navigation host.
 setDecorator(DocumentMentionNode, DocumentMentionStatic);
-const ITEMS: EntityItem[] = [
-  ...Array.from(
-    { length: 500 },
-    (_, index): EntityItem => ({
-      id: `task-${index}`,
-      kind: 'entity',
-      bucket: 'task',
-      searchText: `Track task changes ${index}`,
-      sortTimestamp: Date.now(),
-      timestamps: { viewedAt: new Date() },
-      data: {
-        type: 'document',
-        id: `task-${index}`,
-        name: `Track task changes ${index}`,
-        ownerId: 'owner',
-        fileType: 'md',
-        subType: { type: 'task' },
+const CRM_SCENARIO = new URLSearchParams(location.search).has('crm');
+const ITEMS: EntityItem[] = CRM_SCENARIO
+  ? [
+      {
+        id: 'company',
+        kind: 'entity',
+        bucket: 'crm_company',
+        searchText: 'Acme company',
+        sortTimestamp: 0,
+        timestamps: {},
+        data: {
+          type: 'crm_company',
+          id: 'company',
+          name: 'Acme company',
+          teamId: 'team',
+          hidden: false,
+          ownerId: 'owner',
+          domains: [],
+        },
       },
-    })
-  ),
-  {
-    id: 'project',
-    kind: 'entity',
-    bucket: 'initiative',
-    searchText: 'Task planning',
-    sortTimestamp: 0,
-    timestamps: {},
-    data: {
-      type: 'initiative',
-      id: 'project',
-      name: 'Task planning',
-      ownerId: 'owner',
-    },
-  },
-];
+    ]
+  : [
+      ...Array.from(
+        { length: 500 },
+        (_, index): EntityItem => ({
+          id: `task-${index}`,
+          kind: 'entity',
+          bucket: 'task',
+          searchText: `Track task changes ${index}`,
+          sortTimestamp: Date.now(),
+          timestamps: { viewedAt: new Date() },
+          data: {
+            type: 'document',
+            id: `task-${index}`,
+            name: `Track task changes ${index}`,
+            ownerId: 'owner',
+            fileType: 'md',
+            subType: { type: 'task' },
+          },
+        })
+      ),
+      {
+        id: 'project',
+        kind: 'entity',
+        bucket: 'initiative',
+        searchText: 'Task planning',
+        sortTimestamp: 0,
+        timestamps: {},
+        data: {
+          type: 'initiative',
+          id: 'project',
+          name: 'Task planning',
+          ownerId: 'owner',
+        },
+      },
+    ];
 
 // Reproduce the production merge: cached tasks first, the project appended.
 // Query filtering stays source-owned; the real menu owns all ranking/selection.
@@ -113,7 +134,11 @@ function Fixture() {
                 <ChannelsContextProvider>
                   <QuickAccessContextProvider value={QUICK_ACCESS}>
                     <main class="min-h-screen bg-page p-4 text-ink space-y-4 flex flex-col justify-end">
-                      <h1>Project mention ranking</h1>
+                      <h1>
+                        {CRM_SCENARIO
+                          ? 'CRM mentions'
+                          : 'Project mention ranking'}
+                      </h1>
                       <output data-testid="draft" hidden>
                         {draft()}
                       </output>
@@ -126,7 +151,17 @@ function Fixture() {
                           id: `channel-input-${CHANNEL_ID}`,
                           placeholder: 'Message #planning',
                         }}
-                        participants={() => []}
+                        participants={() =>
+                          CRM_SCENARIO
+                            ? [
+                                {
+                                  id: 'macro|member@example.com',
+                                  email: 'member@example.com',
+                                  name: 'Acme member',
+                                },
+                              ]
+                            : []
+                        }
                         bots={() => []}
                         persistenceKey={makeInputValuePersistenceKey({
                           channelId: CHANNEL_ID,

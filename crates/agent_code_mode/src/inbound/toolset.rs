@@ -236,7 +236,7 @@ pub enum CodeGuideTopic {
     Ai,
     /// Local Handlebars rendering.
     Templates,
-    /// Worked examples, including email triage and structured extraction.
+    /// Worked examples: check-then-create in one execution, email triage, extraction.
     Examples,
 }
 

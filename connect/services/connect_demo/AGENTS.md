@@ -2,13 +2,14 @@
 
 ## What it is
 
-A standalone customer app for exercising Connect's catalog, OAuth flow, and MCP gateway from one page.
+A standalone customer app for exercising Connect's catalog, OAuth flow, MCP gateway, and customer dashboard.
 
 ## Start here
 
 - `src/main.rs`: browser routes, cookie identity, rendering, and startup.
 - `src/mcp.rs`: MCP initialization, session handling, JSON/SSE parsing, and tool calls.
 - `src/app.js`: loads tool forms and results into the catalog page.
+- Catalog cards show the access method and, when present, the OAuth client type.
 - `src/test.rs` and `src/mcp/test.rs`: fake Connect and held-open SSE tests.
 
 ## Scope
@@ -20,6 +21,10 @@ A standalone customer app for exercising Connect's catalog, OAuth flow, and MCP 
 
 - Connect access goes through `connect_client`; the demo never exports vendor tokens.
 - The configured public URL ends in `/demo` and is the OAuth redirect target base.
+- `/demo/dashboard` uses the public client to show customer summary counts,
+  catalog app totals, and up to 500 complete users per page.
+  App and status filters are server-rendered query parameters; `cursor` moves
+  to the next user page.
 
 ## Checks
 
