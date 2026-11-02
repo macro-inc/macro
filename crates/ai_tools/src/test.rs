@@ -194,8 +194,8 @@ fn app_item_actions_are_available_in_every_host() {
     }
 }
 
-/// Every host reads the design files the native engines open, and its
-/// prompt says which tool reads which format.
+/// Every host reads the design files the native engines open, and each
+/// reader's description says the file is read-only to tools.
 #[test]
 fn design_file_readers_are_available_in_every_host_with_their_guidance() {
     for host in [
@@ -205,14 +205,17 @@ fn design_file_readers_are_available_in_every_host_with_their_guidance() {
         AiHost::Mcp,
     ] {
         let tools = tools_for(host);
-        let prompt = tools.prompt.to_string();
         for name in [
             "ReadDesign",
             "ReadPhotoshopDocument",
             "ReadIllustratorDocument",
         ] {
-            assert!(tools.toolset.tools.contains_key(name), "{host:?}: {name}");
-            assert!(prompt.contains(name), "{host:?}: {name}");
+            let tool = &tools.toolset.tools[name];
+            assert!(
+                tool.description
+                    .contains("describe changes for the user to make"),
+                "{host:?}: {name}"
+            );
         }
     }
     assert!(
