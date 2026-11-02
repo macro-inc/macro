@@ -731,9 +731,10 @@ edited, so a provider failure cannot silently broaden the search.
 
 Click a result or message snippet to open its actual location, or use **Up/Down**
 and then **Enter**. Keyboard selection scrolls into view while the editor keeps
-focus. **Shift+Enter** always inserts a newline in the Command K main input,
-including before Universal Input activates and when Shift is released before
-Enter; neither key release opens the selected result. Multiline input hides the
+focus. **Shift+Enter** inserts a newline in the composer's main input, including
+when Shift is released before Enter; neither key release opens the selected
+result. Before Universal Input activates, Shift+Enter in the Command K search
+input opens the selected result in a new split. Multiline input hides the
 Macro logo and removes its reserved spacing so text uses the full width. **Escape** exits
 result navigation; a second Escape closes the menu. The content type selector
 uses the shared styled dropdown with a selection checkmark and platform-specific
@@ -1254,7 +1255,9 @@ Shorter edits keep the composer open; clearing the input returns to ordinary
 Command K search. IME composition finishes before the transition. This applies to
 ordinary search, including a selected category; nested command scopes, entity
 actions, and the onboarding sandbox retain their existing behavior.
-In composer mode, Enter inserts a newline and Cmd/Ctrl+Enter performs the displayed
+Before the composer opens, Shift+Enter opens the selected result in a new split
+(the footer shows the hint when a split fits). In composer mode, Enter and
+Shift+Enter insert a newline and Cmd/Ctrl+Enter performs the displayed
 action; Tab moves through form controls. Escape closes the menu (or first leaves
 active inline search navigation). Successful actions close the menu and open their
 result when available; errors keep the form available for correction. Command K
@@ -1358,7 +1361,7 @@ still order results within each group; other result types keep their positions.
 Verify this in both People and All with a recent CRM contact and a matching DM last
 viewed more than 30 days ago, including when server contacts arrive after the DM.
 Other contacts show their email and open the contact page; Enter and
-click open in place; Shift+Enter inserts a newline in the query. A server match that arrives after
+click open in place, Shift+Enter in a new split. A server match that arrives after
 typing takes the default selection from the Search for… row. Global Search does not
 list CRM contacts; Search for… from People still opens the Channels search. Verify
 a contact outside the cached rows, an email-only query, rapid query changes (rows

@@ -233,7 +233,7 @@ test('the Macro logo hides for explicit newlines and wrapping, then returns for 
 });
 
 for (const eligible of [false, true]) {
-  test(`Shift+Enter inserts a newline in normal search (Universal Input access: ${eligible})`, async ({
+  test(`Shift+Enter opens the selected result in a new split from normal search (Universal Input access: ${eligible})`, async ({
     page,
   }) => {
     const dialog = await openMenu(page, eligible);
@@ -242,22 +242,11 @@ for (const eligible of [false, true]) {
     await expect(
       dialog.getByRole('option', { name: 'Investor update', exact: true })
     ).toBeVisible();
-    await search.press('End');
     await search.press('Shift+Enter');
-    await expect(search).toHaveValue('investor\n');
-    await expect(search).toBeFocused();
-    await expect(dialog).toBeVisible();
-    await expect(page.getByTestId('opened-search-result')).toHaveText('');
-    await expect(dialog.getByTestId('command-input-logo')).toBeHidden();
-    await page.keyboard.type('update');
-    await expect(search).toHaveValue('investor\nupdate');
-    await page.keyboard.down('Shift');
-    await page.keyboard.down('Enter');
-    await page.keyboard.up('Shift');
-    await page.keyboard.up('Enter');
-    await expect(search).toHaveValue('investor\nupdate\n');
-    await expect(dialog).toBeVisible();
-    await expect(page.getByTestId('opened-search-result')).toHaveText('');
+    await expect(dialog).not.toBeVisible();
+    const opened = page.getByTestId('opened-search-result');
+    await expect(opened).toContainText('search-document-0');
+    await expect(opened).toContainText('"preferNewSplit":true');
   });
 }
 
