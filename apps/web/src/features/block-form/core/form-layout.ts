@@ -103,7 +103,7 @@ function replaceSection(
 }
 
 /** A section's rules: a gate's, or the condition a questions section is shown on. */
-export function sectionRules(section: FormSection): GateRules | null {
+function sectionRules(section: FormSection): GateRules | null {
   return match(section.kind)
     .with('gate', () => section.gateRules)
     .with('questions', () => section.showWhen)

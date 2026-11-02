@@ -131,7 +131,7 @@ export function sectionProblems(
  * pass it, as strictly as a gate. Answers typed into a section skipped since
  * stay in memory, but nothing reads or sends them.
  */
-export function skippedSections(
+function skippedSections(
   layout: FormLayout,
   answers: FormAnswers
 ): Set<string> {
