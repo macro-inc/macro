@@ -6,7 +6,7 @@ use crate::api::user::stripe::PaidPlan;
 
 use ai_billing::BillingService;
 use ai_billing::outbound::stripe_gateway::{
-    PURPOSE_AI_CREDIT_RELOAD, PURPOSE_AI_OVERAGE, PURPOSE_METADATA_KEY,
+    PURPOSE_AI_CREDIT_RELOAD, PURPOSE_AI_OVERAGE, PURPOSE_METADATA_KEY, RELOAD_METADATA_KEY,
 };
 use analytics_client::{AnalyticsClient, MetaActionSource, MetaUserData};
 use anyhow::Context;
@@ -18,11 +18,10 @@ use axum::{
 };
 use gtm_invite::domain::ports::GtmInviteService;
 use macro_user_id::email::Email;
+use macro_user_id::lowercased::Lowercase;
 use macro_user_id::user_id::MacroUserIdStr;
-use macro_user_id::{cowlike::CowLike, lowercased::Lowercase};
 use miniserde::json::Value as JsonValue;
 use model::response::ErrorResponse;
-use referral::domain::ports::ReferralService;
 use roles_and_permissions::domain::{
     model::{ProductTier, SubscriptionStatus},
     port::UserRolesAndPermissionsService,
@@ -261,8 +260,15 @@ async fn handle_payment_event(
                         paid,
                         "processing ai credit reload invoice event"
                     );
+                    // The reload id finds a paid invoice whose id never
+                    // reached its row.
+                    let reload_id = invoice
+                        .metadata
+                        .as_ref()
+                        .and_then(|m| m.get(RELOAD_METADATA_KEY))
+                        .and_then(|id| macro_uuid::string_to_uuid(id).ok());
                     ctx.ai_billing_service
-                        .mark_credit_reload_invoice(invoice_id.as_str(), paid)
+                        .mark_credit_reload_invoice(invoice_id.as_str(), reload_id, paid)
                         .await
                         .context("failed to record ai credit reload invoice outcome")?;
                     return Ok(());
@@ -686,13 +692,6 @@ async fn handle_customer_subscription_event(
         );
     }
 
-    // Check if this user was referred and process the referral
-    if subscription_status == "active"
-        && let Err(e) = check_and_process_referral(ctx, &email).await
-    {
-        tracing::error!(error=?e, "failed to process referral on subscription created");
-    }
-
     // Unknown prices (legacy or manually created subscriptions) keep the
     // Premium entitlements.
     let product_tier = plan
@@ -763,38 +762,6 @@ async fn mark_gtm_invite_converted(
         Ok(false) => {}
         Err(e) => tracing::error!(error=?e, "failed to mark GTM invite link as converted"),
     }
-}
-
-/// Checks if the subscribing user was referred and, if so, processes the referral
-/// to credit the referrer.
-#[tracing::instrument(skip(ctx, email), err)]
-async fn check_and_process_referral(
-    ctx: &ApiContext,
-    email: &Email<macro_user_id::lowercased::Lowercase<'_>>,
-) -> anyhow::Result<()> {
-    let (macro_user_id, user_id_str) =
-        macro_db_client::user::get::get_user_macro_user_id_and_id_by_email(&ctx.db, email.as_ref())
-            .await?;
-
-    let Some(referral_code) = ctx
-        .referral_service
-        .get_referred_by(&macro_user_id)
-        .await
-        .map_err(|e| anyhow::anyhow!(e))?
-    else {
-        return Ok(());
-    };
-
-    let user_id = macro_user_id::user_id::MacroUserIdStr::parse_from_str(&user_id_str)
-        .expect("user id from db should be valid")
-        .into_owned();
-
-    ctx.referral_service
-        .process_referral(&user_id.0, &referral_code)
-        .await
-        .map_err(|e| anyhow::anyhow!(e))?;
-
-    Ok(())
 }
 
 /// Handles team subscription events.

@@ -2,13 +2,21 @@
  * @vitest-environment jsdom
  */
 
+import type { CustomToastConfig } from '@core/component/Toast/Toast';
 import { cleanup, render } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { BrowserNotificationModal } from './BrowserNotificationModal';
 
+type PromptOptions = {
+  persistent?: boolean;
+  region?: string;
+  onUserDismiss?: () => void;
+};
+
 const mocks = vi.hoisted(() => ({
-  custom: vi.fn(() => 1),
+  custom: vi.fn((_config: CustomToastConfig, _options?: PromptOptions) => 1),
   mobile: false,
+  dismissPrompt: vi.fn(),
 }));
 
 vi.mock('@core/component/Toast/Toast', () => ({
@@ -24,7 +32,7 @@ vi.mock('../notification-settings', () => ({
   useNotificationSettings: () => ({
     isSupported: true,
     shouldPrompt: () => true,
-    dismissPrompt: vi.fn(),
+    dismissPrompt: mocks.dismissPrompt,
     toggle: vi.fn(),
   }),
 }));
@@ -43,7 +51,10 @@ describe('browser notification prompt', () => {
 
     expect(mocks.custom).toHaveBeenCalledWith(
       expect.objectContaining({ title: 'Enable Browser Notifications' }),
-      { persistent: true, region: 'mobile-prompt-region' }
+      expect.objectContaining({
+        persistent: true,
+        region: 'mobile-prompt-region',
+      })
     );
   });
 
@@ -51,9 +62,25 @@ describe('browser notification prompt', () => {
     mocks.mobile = false;
     render(() => <BrowserNotificationModal />);
 
-    expect(mocks.custom).toHaveBeenCalledWith(expect.anything(), {
-      persistent: true,
-      region: 'prompt-region',
-    });
+    expect(mocks.custom).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.objectContaining({ persistent: true, region: 'prompt-region' })
+    );
+  });
+
+  it('offers Enable as its only action', () => {
+    render(() => <BrowserNotificationModal />);
+
+    const [config] = mocks.custom.mock.calls[0]!;
+    expect(config.actions?.map((action) => action.label)).toEqual(['Enable']);
+  });
+
+  it('stops asking once the user closes it', () => {
+    render(() => <BrowserNotificationModal />);
+
+    const [, options] = mocks.custom.mock.calls[0]!;
+    options?.onUserDismiss?.();
+
+    expect(mocks.dismissPrompt).toHaveBeenCalledOnce();
   });
 });

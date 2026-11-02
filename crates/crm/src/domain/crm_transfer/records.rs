@@ -64,9 +64,6 @@ fn refusal(error: CrmError) -> Result<Created, TransferError> {
             Ok(Created::Exists)
         }
         CrmError::InvalidRequest(reason) => Ok(Created::Refused(reason)),
-        CrmError::ContactEmailDomainMismatch => Ok(Created::Refused(
-            "the email's domain is not one of its company's domains".into(),
-        )),
         CrmError::CompanyHidden => Ok(Created::Refused("its company is hidden".into())),
         other => Err(other.into()),
     }
@@ -119,7 +116,7 @@ impl<Crm: CrmService, Access: EntityAccessService> TransferRecords
         domain: &str,
     ) -> Result<Created, TransferError> {
         let team = self.team(viewer).await?;
-        match self.crm.create_company(&team, name, domain).await {
+        match self.crm.create_company(&team, name, Some(domain)).await {
             Ok(company) => Ok(Created::New(company.company.id)),
             Err(error) => refusal(error),
         }

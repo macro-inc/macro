@@ -23,8 +23,8 @@ import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
-import StackIcon from '@icon/system/regular/stack.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
 import { Tabs } from '@ui';
@@ -81,7 +81,7 @@ function ProjectBreadcrumbContent(props: ProjectBreadcrumbProps) {
           onClick={item.onSelect}
           tooltip={name()}
         >
-          <StackIcon class="size-3 shrink-0" />
+          <ProjectIcon class="size-3 shrink-0" />
           <span class="truncate">{name()}</span>
         </ViewBreadcrumbs.Button>
       )}

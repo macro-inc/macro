@@ -57,8 +57,9 @@ export type AutoReloadDefaults = {
  */
 export type AutoReloadMonthlyBudget = {
     /**
-     * Reloads paid, pending, or failed with an invoice that can still collect.
-     * Customer cents; manual credit purchases do not count.
+     * Reloads and one-time card purchases paid, pending, or failed with an
+     * invoice that can still collect. Customer cents; Checkout purchases do
+     * not count.
      */
     committed_cents: number;
     /**
@@ -334,6 +335,11 @@ export type CreatePortalSessionRequest = {
  */
 export type CreateTeamRequest = {
     /**
+     * Whether colleagues who sign up with the owner's work email domain join
+     * the team automatically. Ignored for generic email providers.
+     */
+    allow_domain_join?: boolean;
+    /**
      * The name of the team
      */
     name: string;
@@ -376,6 +382,68 @@ export type CreditCheckoutResponse = {
      * The hosted Checkout URL to redirect to.
      */
     url: string;
+};
+
+/**
+ * Request body for [`purchase_credits_handler`].
+ */
+export type CreditPurchaseRequestBody = {
+    /**
+     * One of the catalog's credit packs, cents.
+     */
+    amountCents: number;
+};
+
+/**
+ * Response for [`purchase_credits_handler`].
+ */
+export type CreditPurchaseResponse = {
+    /**
+     * Amount charged, cents: the requested pack, unless an earlier declined
+     * purchase that Stripe collected in the meantime was booked instead.
+     */
+    amountCents: number;
+    snapshot?: null | UsageSnapshot;
+    /**
+     * Whether the card on file paid.
+     */
+    status: CreditPurchaseStatus;
+};
+
+/**
+ * The monthly credit limit that applies to this user's one-time purchases.
+ */
+export type CreditPurchaseSnapshot = {
+    /**
+     * Charged this month so far, including charges that may still collect.
+     */
+    committed_cents: number;
+    /**
+     * Most credits charged to the card on file per UTC calendar month, from
+     * automatic reloads and one-time purchases together, in customer cents.
+     * `null` when the payer set no limit; team members always have one.
+     */
+    monthly_limit_cents?: number | null;
+    /**
+     * Start of the next UTC calendar month.
+     */
+    resets_at: string;
+};
+
+/**
+ * How a one-time credit purchase charged to the card on file ended.
+ */
+export type CreditPurchaseStatus = 'paid' | 'declined' | 'payment_method_required' | 'authentication_required';
+
+/**
+ * The status every user sees, without who set it.
+ */
+export type CurrentSystemStatus = SystemStatus & {
+    /**
+     * When it was set; absent when no status was ever set. Clients keep the
+     * newest status they have seen, whether fetched or pushed.
+     */
+    updatedAt?: string | null;
 };
 
 /**
@@ -1374,6 +1442,11 @@ export type Permission = {
  */
 export type PlanCatalogEntry = {
     /**
+     * Monthly automatic reload limit a payer on this plan starts from,
+     * cents. Absent for plans that cannot reload.
+     */
+    auto_reload_default_monthly_limit_cents?: number | null;
+    /**
      * Included AI per seat per period, in cents at provider cost. For the
      * free plan this is its monthly hard cap.
      */
@@ -1554,6 +1627,16 @@ export type ScheduledSeatPlan = {
 export type SeatPlan = 'premium' | 'max';
 
 /**
+ * Response for the domain notice endpoint.
+ */
+export type SendDomainNoticeResponse = {
+    /**
+     * How many colleagues were emailed by this call.
+     */
+    sent: number;
+};
+
+/**
  * The body which is used to describe the recipient email
  */
 export type SendInviteBody = {
@@ -1652,6 +1735,24 @@ export type SsoRequiredResponse = {
 };
 
 /**
+ * One status a staff member set. The newest is the current status.
+ */
+export type StatusUpdate = SystemStatus & {
+    /**
+     * When it was set.
+     */
+    createdAt: string;
+    /**
+     * UUIDv7, so ids sort by creation.
+     */
+    id: string;
+    /**
+     * The staff member who set it.
+     */
+    userId: string;
+};
+
+/**
  * Response containing the Stripe session URL
  */
 export type StripeSessionResponse = {
@@ -1670,6 +1771,35 @@ export type SubscriptionStatus = {
      */
     renewalDate?: string | null;
     scheduledChange?: null | ScheduledSeatPlan;
+};
+
+/**
+ * The platform status. Only the non-operational statuses carry a message.
+ */
+export type SystemStatus = {
+    status: 'operational';
+} | {
+    /**
+     * What users should know.
+     */
+    message: string;
+    status: 'degraded';
+} | {
+    /**
+     * What users should know.
+     */
+    message: string;
+    status: 'major_outage';
+};
+
+/**
+ * Recent status updates, newest first.
+ */
+export type SystemStatusHistory = {
+    /**
+     * The updates.
+     */
+    updates: Array<StatusUpdate>;
 };
 
 /**
@@ -1957,6 +2087,7 @@ export type UsageSnapshot = {
      * Shared prepaid credit balance, in customer cents.
      */
     credit_balance_cents: number;
+    credit_purchase?: null | CreditPurchaseSnapshot;
     /**
      * Shared payer credits already applied to this period, in customer cents.
      */
@@ -2253,6 +2384,47 @@ export type CreateAiCreditCheckoutResponses = {
 };
 
 export type CreateAiCreditCheckoutResponse = CreateAiCreditCheckoutResponses[keyof CreateAiCreditCheckoutResponses];
+
+export type PurchaseAiCreditsData = {
+    body: CreditPurchaseRequestBody;
+    path?: never;
+    query?: never;
+    url: '/ai-billing/credits/purchase';
+};
+
+export type PurchaseAiCreditsErrors = {
+    /**
+     * Invalid pack or no payment account
+     */
+    400: AiBillingErrorBody;
+    /**
+     * Unauthorized
+     */
+    401: unknown;
+    /**
+     * A paid plan is required
+     */
+    402: AiBillingErrorBody;
+    /**
+     * Over the monthly credit limit, or an earlier purchase is still processing
+     */
+    409: AiBillingErrorBody;
+    /**
+     * Internal server error
+     */
+    500: AiBillingErrorBody;
+};
+
+export type PurchaseAiCreditsError = PurchaseAiCreditsErrors[keyof PurchaseAiCreditsErrors];
+
+export type PurchaseAiCreditsResponses = {
+    /**
+     * Purchase outcome and updated position
+     */
+    200: CreditPurchaseResponse;
+};
+
+export type PurchaseAiCreditsResponse = PurchaseAiCreditsResponses[keyof PurchaseAiCreditsResponses];
 
 export type UpdateAiBillingOverageData = {
     body: UpdateOverageRequest;
@@ -3606,6 +3778,71 @@ export type SessionLoginResponses = {
 
 export type SessionLoginResponse = SessionLoginResponses[keyof SessionLoginResponses];
 
+export type GetSystemStatusData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/system-status';
+};
+
+export type GetSystemStatusErrors = {
+    500: ErrorResponse;
+};
+
+export type GetSystemStatusError = GetSystemStatusErrors[keyof GetSystemStatusErrors];
+
+export type GetSystemStatusResponses = {
+    200: CurrentSystemStatus;
+};
+
+export type GetSystemStatusResponse = GetSystemStatusResponses[keyof GetSystemStatusResponses];
+
+export type SetSystemStatusData = {
+    body: SystemStatus;
+    path?: never;
+    query?: never;
+    url: '/system-status';
+};
+
+export type SetSystemStatusErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    /**
+     * The body is not a valid status
+     */
+    422: unknown;
+    500: ErrorResponse;
+};
+
+export type SetSystemStatusError = SetSystemStatusErrors[keyof SetSystemStatusErrors];
+
+export type SetSystemStatusResponses = {
+    200: StatusUpdate;
+};
+
+export type SetSystemStatusResponse = SetSystemStatusResponses[keyof SetSystemStatusResponses];
+
+export type ListSystemStatusHistoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/system-status/history';
+};
+
+export type ListSystemStatusHistoryErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type ListSystemStatusHistoryError = ListSystemStatusHistoryErrors[keyof ListSystemStatusHistoryErrors];
+
+export type ListSystemStatusHistoryResponses = {
+    200: SystemStatusHistory;
+};
+
+export type ListSystemStatusHistoryResponse = ListSystemStatusHistoryResponses[keyof ListSystemStatusHistoryResponses];
+
 export type DeleteTeamData = {
     body?: never;
     path?: never;
@@ -3734,6 +3971,27 @@ export type PatchTeamCrmSettingsResponses = {
 };
 
 export type PatchTeamCrmSettingsResponse2 = PatchTeamCrmSettingsResponses[keyof PatchTeamCrmSettingsResponses];
+
+export type SendTeamDomainNoticeData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/team/domain-notice';
+};
+
+export type SendTeamDomainNoticeErrors = {
+    401: ErrorResponse;
+    403: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type SendTeamDomainNoticeError = SendTeamDomainNoticeErrors[keyof SendTeamDomainNoticeErrors];
+
+export type SendTeamDomainNoticeResponses = {
+    200: SendDomainNoticeResponse;
+};
+
+export type SendTeamDomainNoticeResponse = SendTeamDomainNoticeResponses[keyof SendTeamDomainNoticeResponses];
 
 export type InviteToTeamData = {
     body: InviteToTeamRequest;

@@ -30,6 +30,9 @@ decides who may respond.
   card in the message and sends it. Closing the dialog while it posts sends
   nothing and trashes the poll. With results hidden, respondents answer
   without counts and editors review votes in the Responses tab.
+- Asked for a poll, or for a form for a channel, the Macro agent makes a poll
+  and posts it as its card in one message (its channel reply), the same card
+  `/poll` posts.
 
 ## The form page
 
@@ -135,8 +138,14 @@ submitting are not recorded; answers stay in the browser until Submit.
 **Who can respond**: Invited people (sign in, one response each, editable
 while open) or Anyone with the link (anonymous; no file questions). The
 respond link with Copy, Accepting responses, Close automatically, Show results
-to respondents, Confirmation message, and **Manage access** (the share dialog,
-which also shows the audience panel). Anyone with the link: visitors who aren't signed in respond anonymously;
+to respondents, Confirmation message, **Branding**, and **Manage access** (the
+share dialog, which also shows the audience panel). Branding (editors) sets a
+logo (**Upload**/**Replace**/**Remove**, shown above the title), a cover image
+(a banner across the top of the respond page) and an accent color (color
+swatch or `#rrggbb` field, **Reset** for Macro's accent) that colors the
+respond page's buttons and selected answers. Images must be PNG, JPEG,
+WebP or GIF uploaded by the person setting them; nothing set keeps Macro's
+look, and inline form cards in channels never show branding. Anyone with the link: visitors who aren't signed in respond anonymously;
 people signed in to Macro respond as themselves. Roles: View can respond; Edit can change
 questions and also edits the linked database (its response rows and columns)
 through derived access; Owner can also change the audience, close and trash.
@@ -162,7 +171,8 @@ it inside the app shell (sidebar, command menu); anonymous visitors get a
 focused page, so a public form never hits login. Signed in, a respondent
 keeps their identity on either audience and can edit their response while the
 form is open; anonymous visitors cannot. The response page has no top bar:
-it uses the builder’s centered 768px content column, plain title and description,
+it uses the builder’s centered 768px content column, the form's cover image and
+logo when set, plain title and description,
 and questions grouped within a single section card. Public sign-in guidance
 sits below the form. One section per screen with
 **Back / Next**, **Submit** on the last. Required fields keep their asterisks;
@@ -209,10 +219,13 @@ choice; removing a choice focuses its replacement. Duplicate choice names
 (ignore case and surrounding spaces) show an inline error and disable Post
 until corrected. Poll cards omit permission badges and display the question
 once, in the card header. Newly posted poll cards
-store their option count in Lexical preview metadata to reserve their height
-before loading. Choices have fixed-height rows; large polls and expanded
-results scroll inside the card. Older cards without that metadata keep their
-content-sized layout.
+store their option count in Lexical preview metadata to reserve a minimum
+height before loading, which matches a one-line poll. The card then grows to
+its content (wrapped text, many options, expanded results); nothing scrolls or
+clips inside it. Older cards without that metadata size to their content. A
+viewer without access to the card's item sees "You don’t have access to this
+poll" (or form/item), and a deleted item reads "This poll was deleted", never
+an empty card.
 
 ## Reading responses as an agent
 

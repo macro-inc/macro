@@ -9,7 +9,7 @@ import {
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import type {
-  CreateScheduledAction,
+  ActionConfiguration,
   RoutineTemplate,
   ScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
@@ -108,11 +108,11 @@ export function useActivateTemplateMutation(
   callbacks?: MutationCallbacks<
     ScheduledAction,
     Error,
-    { templateId: string; body: CreateScheduledAction }
+    { templateId: string; body: ActionConfiguration }
   >
 ) {
   return useMutation(() => ({
-    mutationFn: (args: { templateId: string; body: CreateScheduledAction }) =>
+    mutationFn: (args: { templateId: string; body: ActionConfiguration }) =>
       throwOnErr(() => scheduledActionClient.activateTemplate(args)),
     ...withCallbacks(
       {

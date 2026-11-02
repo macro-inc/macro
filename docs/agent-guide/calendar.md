@@ -1,102 +1,5 @@
 # Calendar
 
-## Meeting notes
-
-Meeting notes require `enable-calendar-meeting-notes`. It is on automatically in
-dev; production uses PostHog, enabled for `@macro.com` users. `VITE_ENABLE_CALENDAR_MEETING_NOTES=true` or `false` overrides it locally.
-With the flag off, event notes and document Share meeting-link controls do not
-mount or request note data, on desktop or phone. The flag does not revoke saved
-meeting/team grants or change API permissions.
-
-Open a live meeting's details and choose **Create** beside **Meeting notes**.
-This creates a Markdown document named after the meeting, links it with meeting
-viewer access, and opens it immediately. Team access starts off. A meeting can
-have multiple notes; **Create** and **Link** remain on the section title row
-so you can keep creating notes or linking existing documents.
-Both actions are available while notes load. Reopening a recently viewed event
-uses cached notes immediately while stale data refreshes in the background.
-The picker can open while existing links load, but submission waits for that
-check so selecting an already-linked note cannot change its sharing.
-
-Choose **Link** to search the titles of Markdown documents you own, select one, review
-the sharing explanation, and optionally include your existing team before
-**Link note**. Team access starts off for each note. Recurring meetings link only
-the displayed occurrence. Notes on a
-one-time meeting follow it when its date or time changes.
-Existing document editors and other sharing keep their access.
-Notes use the event details' existing row layout and controls. Team choices come
-from current Macro team memberships; they do not introduce departments or subteams.
-
-Linked meetings also appear in the note’s side-panel **References** section.
-Only readers with meeting-detail access see those references; owners retain safe
-unavailable-meeting entries.
-Click a meeting reference to reopen that exact occurrence. If the calendar
-backend has not yet deployed embedded reference previews, the dialog reports
-that meeting details are temporarily unavailable and offers **Retry**. Missing
-fields must not be described as removed meeting access.
-
-Open the linked title to read the original document. On desktop it opens in a
-new split; on mobile it replaces the calendar pane and closes event details.
-Opening a note leaves focus available to the document as it mounts; dismissing
-desktop details normally returns focus to the calendar event.
-Meeting access and occurrence scope are explained in the linking dialog;
-each note shows any additional team audience. **Options → Share** opens the same
-document Share dialog as the note toolbar. Its **Meeting links** section lets the
-owner change each link’s optional team access. **Options → Unlink from meeting**
-removes this meeting’s grants without deleting the document. Keep the labeled
-Options button visible beside long titles; truncate the title without widening
-the event details. Labeled note controls do not need extra hover tooltips.
-The linking dialog uses a wider desktop layout and a phone sheet. Only the
-document results scroll. The picker starts with owned Markdown matches from
-Quick Access's local cache, then adds the calendar notes endpoint's title
-results (up to 30 per query), not full-text search. Matching results stay visible
-while typing and searches are cached across opens. The meeting context,
-sharing controls, and action buttons stay visible, including in a short viewport.
-A former team’s grant can be removed in Share while the meeting is still visible;
-unlinking remains available even if the meeting is no longer accessible.
-Failed saves retain the selection and audience for retry; dismissing starts fresh.
-If creation succeeds but linking fails, **Retry linking** reuses the saved document;
-**Open saved note** lets you continue editing before the link is confirmed. Closing
-details never deletes that document; it remains in Drive. Changing the selected
-meeting or account prevents a late creation result from navigating away from the
-new selection.
-
-Owners can also open the markdown document's **Share** panel and find **Meeting
-links** (inside **Link** on mobile). Every saved link remains removable here even
-if the meeting was cancelled, fell outside the sync window, or stopped being
-shared with the owner. **Unlink** asks before removing its meeting/team grants.
-Unavailable meetings use a safe label rather than revealing private details.
-Checking **Also share with Macro** also updates **Team access** to **View via
-meeting** when there is no direct team grant. The dropdown's **Use meeting
-access** option removes only additional direct sharing; uncheck the meeting's
-checkbox to remove its team grant. Unlink stays in place while a team save runs.
-
-Full-detail team events expose the same note controls; provider actions such as
-editing the event or RSVPing stay unavailable. Busy-only team entries and
-imported snapshots have no meeting-note controls.
-Inherited access follows current meeting details and requires a synced live
-occurrence. If the provider hides its guest list, some guests need a direct
-document share. Independent team sharing lasts until the link is removed or the
-viewer leaves that team; it does not make the calendar event visible to that team.
-
-Verify on desktop and phone: create and open notes, add a second note, retry a failed
-link without duplicating the new document, link an existing note with team unchecked,
-add/remove a team in Share, and unlink while keeping the document. Link a long
-title and verify its Options menu opens without horizontal scrolling. The
-backend-free browser suite mounts the real event popover and mobile drawer with
-sample data and preview service adapters. It previews the real meeting-access
-controls inside a sample Share shell; verify the full Share dialog in the app
-as well. It is
-`apps/web/src/features/calendar-notes/browser-test/playwright.config.ts`.
-API permission cases are covered in `crates/calendar_events/src/outbound/pg/test/notes.rs`.
-The fixture accepts `?notes=off` to check the event details without notes.
-Use `?team=details` or `?team=busy` to check team visibility boundaries.
-
-Browser fixture screenshots: [desktop](media/calendar-notes/desktop.png) ·
-[phone](media/calendar-notes/phone.png) ·
-[desktop picker](media/calendar-notes/link-desktop.png) ·
-[phone picker](media/calendar-notes/link-phone.png).
-
 ## Calendar — `/app/calendar/<month-or-week-or-day>`
 
 Microsoft calendars use the same editor and calendar views after calendar consent.
@@ -164,6 +67,7 @@ If metadata fails, events remain usable with the default calendar presentation.
 Provider backfill shows a persistent `Syncing your calendar…` banner above the
 grid, explaining that events will appear automatically and Macro remains usable.
 The banner stays visible as partial results arrive and disappears when sync finishes.
+A routine sync of an already imported account never shows it.
 Errors retain the separate retry state. Verify delayed occurrence
 responses: switch Month/Week/Day rapidly and navigate without blanking the grid.
 Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Retry.
@@ -584,7 +488,7 @@ shrink to fit the pane; long details scroll while the RSVP row stays visible.
 As in Google Calendar, the popover opens beside the event, aligned with its top,
 and switches only between the right and left side; when it doesn't fit below,
 it slides up to stay in the window instead of opening above the event. Sections
-that load after it opens (join requests, meeting notes) therefore never move it
+that load after it opens (join requests) therefore never move it
 from below the event to above it. Check placement with an event low in a tall
 window, a short window, and a pending join request; the backend-free regression
 is `apps/web/src/features/calendar-view/browser-test/playwright.config.ts`.
@@ -839,7 +743,7 @@ in that list without a marker, as documents shared that way sit beside your own;
 names the shared event, so it opens for whoever can already see it. Posting it elsewhere does
 not share it on (only someone holding the event on their own calendar can), so people without
 access see `No Access`, like any other mention they cannot open; clicking it (a tap on a phone,
-which opens a sheet) shows `You don't have access to this event`.
+which opens an opaque sheet) shows `You don't have access to this event`.
 A calendar event mentioned in a channel message opens the calendar focused on the viewer's
 own copy of the meeting. When a person holds the event on their own calendar and posts the
 mention, it is shared read-only with the channel's current members: a member without a copy of
