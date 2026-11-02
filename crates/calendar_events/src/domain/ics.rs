@@ -112,32 +112,44 @@ pub struct EventSnapshot {
 }
 
 impl EventSnapshot {
-    /// The snapshot without the Macro call join link
-    /// [`attach_macro_call`](super::meeting_links::attach_macro_call) wrote
-    /// into its description and location: it shares the meeting, not a way
-    /// into its call. A description holding the link is reduced to plain
-    /// text to take its join line out; one without it is left as written.
+    /// The snapshot without its Macro call ([`content_without_macro_call`]).
     pub fn without_macro_call(self) -> Self {
-        let Some(url) = first_macro_call_url(self.location.as_deref(), self.description.as_deref())
-        else {
-            return self;
-        };
-        let description = self
-            .description
-            .as_deref()
-            .and_then(plain_text)
-            .unwrap_or_default();
-        let (description, location) = strip_macro_call(
-            &description,
-            self.location.as_deref().unwrap_or_default(),
-            &url,
-        );
+        let (description, location) = content_without_macro_call(self.description, self.location);
         Self {
-            description: (!description.is_empty()).then_some(description),
-            location: (!location.is_empty()).then_some(location),
+            description,
+            location,
             ..self
         }
     }
+}
+
+/// A channel share's view of an event's description and location, without the
+/// Macro call join link
+/// [`attach_macro_call`](super::meeting_links::attach_macro_call) wrote into
+/// them: it shares the meeting, not a way into its call. A description holding
+/// the link is reduced to plain text to take its join line out; one without it
+/// is left as written.
+pub fn content_without_macro_call(
+    description: Option<String>,
+    location: Option<String>,
+) -> (Option<String>, Option<String>) {
+    let Some(url) = first_macro_call_url(location.as_deref(), description.as_deref()) else {
+        return (description, location);
+    };
+    let holds_link = first_macro_call_url(None, description.as_deref()).is_some();
+    let text = description
+        .as_deref()
+        .and_then(plain_text)
+        .unwrap_or_default();
+    let (text, location) = strip_macro_call(&text, location.as_deref().unwrap_or_default(), &url);
+    (
+        if holds_link {
+            (!text.is_empty()).then_some(text)
+        } else {
+            description
+        },
+        (!location.is_empty()).then_some(location),
+    )
 }
 
 /// One event rendered as an iCalendar document.

@@ -1,7 +1,9 @@
 //! Calendar business policy.
 
+use std::collections::HashMap;
+
 use chrono::Utc;
-use futures::future::{Either, select};
+use futures::future::{BoxFuture, Either, select};
 use rootcause::Report;
 use uuid::Uuid;
 
@@ -13,6 +15,7 @@ use super::{
         CalendarEventExportAccess, CalendarEventForward, CalendarEventForwardKind,
         CalendarEventIcs, IcsParticipant, IcsPurpose, render_event_ics,
     },
+    labels::{CalendarLabels, EventLabels},
     models::{
         ActorInboxes, AppliedGoogleGrant, CalendarBackfillClaim,
         CalendarBackfillFailureDisposition, CalendarBackfillFailureOutcome, CalendarBackfillJobKey,
@@ -21,10 +24,10 @@ use super::{
     },
     ports::{
         CalendarBackfillRepository, CalendarEventChange, CalendarEventForwardSource,
-        CalendarEventWrite, CalendarEventWriteOutcome, CalendarOccurrenceService,
-        CalendarProviderError, CalendarProviderErrorKind, CalendarReauthNotifier,
-        CalendarRepository, GoogleCalendarProvider, GoogleCalendarSyncRepository,
-        GoogleEventSyncContext, RetiredCalendarEvent,
+        CalendarEventLabelReader, CalendarEventWrite, CalendarEventWriteOutcome,
+        CalendarOccurrenceService, CalendarProviderError, CalendarProviderErrorKind,
+        CalendarReauthNotifier, CalendarRepository, GoogleCalendarProvider,
+        GoogleCalendarSyncRepository, GoogleEventSyncContext, RetiredCalendarEvent,
     },
 };
 
@@ -120,6 +123,40 @@ where
             }
         }
         Ok(rows)
+    }
+
+    /// Label events for a reader outside the calendar: one read of the
+    /// requester's calendars and inboxes, whatever the number of events.
+    #[tracing::instrument(
+        name = "calendar.event_labels",
+        skip(self, requester_id, event_ids),
+        fields(event_count = event_ids.len()),
+        err
+    )]
+    pub async fn event_labels(
+        &self,
+        requester_id: &str,
+        event_ids: &[Uuid],
+    ) -> Result<HashMap<Uuid, EventLabels>, Report> {
+        if event_ids.is_empty() {
+            return Ok(HashMap::new());
+        }
+        // One read at a time: search runs this on every keystroke with calendar
+        // hits, and a burst of searches must not fan out across the read pool.
+        let copies = self.repository.event_copies(event_ids).await?;
+        let calendars = CalendarLabels::from_calendars(
+            self.repository.list_visible_calendars(requester_id).await?,
+        );
+        let viewer = ActorInboxes::from_owned(self.repository.owned_inboxes(requester_id).await?);
+        Ok(copies
+            .into_iter()
+            .map(|copy| {
+                (
+                    copy.event_id,
+                    EventLabels::of(copy, viewer.as_ref(), &calendars),
+                )
+            })
+            .collect())
     }
 
     /// Query teammates' out-of-office occurrences in a bounded viewport.
@@ -337,6 +374,19 @@ where
         invitees: &[IcsParticipant],
     ) -> impl Future<Output = Result<Option<CalendarEventForward>, Report>> + Send {
         CalendarService::event_forward(self, requester_id, event_id, invitees)
+    }
+}
+
+impl<R> CalendarEventLabelReader for CalendarService<R>
+where
+    R: CalendarRepository,
+{
+    fn event_labels<'a>(
+        &'a self,
+        requester_id: &'a str,
+        event_ids: &'a [Uuid],
+    ) -> BoxFuture<'a, Result<HashMap<Uuid, EventLabels>, Report>> {
+        Box::pin(CalendarService::event_labels(self, requester_id, event_ids))
     }
 }
 

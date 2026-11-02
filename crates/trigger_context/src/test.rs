@@ -8,6 +8,7 @@ fn a_channel_follow_up_has_a_stable_wire_shape() {
     let context = TriggerContext::FollowUp(FollowUpContext {
         addressed_by: AddressedBy::ExplicitReply,
         discussion: DiscussionContext {
+            agent_request: None,
             surface: DiscussionSurface::Channel {
                 id: Uuid::parse_str("00000000-0000-0000-0000-0000000000c1").unwrap(),
                 name: Some("eng".to_owned()),
@@ -313,6 +314,7 @@ fn prompt_thread_attachments_put_the_prompt_message_first() {
     let prompt = image("prompt-file");
     let later = image("later-file");
     let discussion = DiscussionContext {
+        agent_request: None,
         surface: DiscussionSurface::Channel {
             id: Uuid::from_u128(0xc1),
             name: Some("eng".to_owned()),

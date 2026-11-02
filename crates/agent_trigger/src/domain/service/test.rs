@@ -315,7 +315,7 @@ async fn a_private_global_agent_is_unavailable_to_another_user() {
 }
 
 #[tokio::test]
-async fn a_bot_authored_mention_cannot_trigger_an_agent() {
+async fn an_unattributed_bot_mention_cannot_trigger_an_agent() {
     let mut posted = message(vec![mention_of(BotId::TEST_A)]);
     posted.sender = ChannelSender::new_from_bot(BotId::TEST_B);
     let (replies, judge) = no_implicit();
@@ -1307,4 +1307,274 @@ async fn a_crm_discussion_cannot_invoke_another_users_private_agent() {
             .return_once(|id| Box::pin(async move { Ok(Some(private_agent(id))) }));
         assert!(!mention_yields_event(&posted, bots).await);
     }
+}
+
+#[tokio::test]
+async fn attributed_bot_mentions_open_or_resume_the_target_session() {
+    for (source, target) in [
+        (bot_id::MACRO_NEW_BOT_ID, bot_id::CURSOR_BOT_ID),
+        (bot_id::CURSOR_BOT_ID, bot_id::MACRO_NEW_BOT_ID),
+        (BotId::TEST_A, bot_id::MACRO_NEW_BOT_ID),
+    ] {
+        for existing in [false, true] {
+            let mut posted = message(vec![mention_of(target)]);
+            posted.sender = ChannelSender::new_from_bot(source);
+            posted.triggered_by = Some(user().to_string());
+            let mut sessions = MockAgentSessionRepo::new();
+            let id = AgentSessionId::TEST_A;
+            sessions
+                .expect_find_for_thread()
+                .once()
+                .returning(move |thread, bot| {
+                    assert_eq!(thread, Some(Uuid::from_u128(3)));
+                    assert_eq!(bot, Some(target));
+                    Box::pin(async move {
+                        Ok(if existing {
+                            ThreadSession::CreatedFromThread(thread_session(id, target))
+                        } else {
+                            ThreadSession::None
+                        })
+                    })
+                });
+            let mut bots = MockAgentBotLookup::new();
+            bots.expect_get_agent()
+                .returning(|_| Box::pin(async { Ok(None) }));
+            bots.expect_get_bot()
+                .returning(|bot| Box::pin(async move { Ok(Some(system_bot(bot))) }));
+            let mut history = MockThreadHistory::new();
+            history
+                .expect_authorize_invocation()
+                .once()
+                .returning(|actor, parent, root| {
+                    assert_eq!(actor, &user());
+                    allow_invocation(actor, parent, root)
+                });
+            history
+                .expect_thread_messages()
+                .once()
+                .returning(|_| Box::pin(async { Ok(vec![]) }));
+            let (replies, judge) = no_implicit();
+            let events = service_reading(sessions, bots, replies, judge, history)
+                .evaluate(&posted)
+                .await
+                .unwrap();
+            assert_eq!(
+                events,
+                vec![if existing {
+                    TriggerDecision::Existing {
+                        bot_id: target,
+                        session_id: id,
+                        kind: ThreadMessageKind::MentionThread,
+                        message: posted,
+                    }
+                } else {
+                    TriggerDecision::Open {
+                        bot_id: target,
+                        message: posted,
+                    }
+                }]
+            );
+        }
+    }
+}
+
+#[tokio::test]
+async fn attributed_bots_cannot_bypass_access_or_trigger_themselves() {
+    let mut posted = message(vec![mention_of(BotId::TEST_A)]);
+    posted.sender = ChannelSender::new_from_bot(BotId::TEST_B);
+    posted.triggered_by = Some(user().to_string());
+    let mut history = MockThreadHistory::new();
+    history
+        .expect_authorize_invocation()
+        .once()
+        .returning(|_, _, _| Box::pin(async { Ok(None) }));
+    let (replies, judge) = no_implicit();
+    assert!(
+        service_reading(
+            MockAgentSessionRepo::new(),
+            MockAgentBotLookup::new(),
+            replies,
+            judge,
+            history
+        )
+        .evaluate(&posted)
+        .await
+        .unwrap()
+        .is_empty()
+    );
+
+    for (source, actor) in [
+        (BotId::TEST_A, user().to_string()),
+        (BotId::TEST_B, "macro|outsider@example.com".into()),
+    ] {
+        posted.sender = ChannelSender::new_from_bot(source);
+        posted.triggered_by = Some(actor);
+        let mut bots = MockAgentBotLookup::new();
+        bots.expect_get_agent()
+            .once()
+            .returning(|bot| Box::pin(async move { Ok(Some(private_agent(bot))) }));
+        assert!(!mention_yields_event(&posted, bots).await);
+    }
+}
+
+#[tokio::test]
+async fn unattributed_bot_messages_do_not_trigger() {
+    for (attribution, mentions) in [
+        (None, vec![mention_of(BotId::TEST_A)]),
+        (None, vec![]),
+        (Some("invalid".to_owned()), vec![mention_of(BotId::TEST_A)]),
+    ] {
+        let mut posted = message(mentions);
+        posted.sender = ChannelSender::new_from_bot(BotId::TEST_B);
+        posted.triggered_by = attribution;
+        let (replies, judge) = no_implicit();
+        assert!(
+            service_reading(
+                MockAgentSessionRepo::new(),
+                MockAgentBotLookup::new(),
+                replies,
+                judge,
+                MockThreadHistory::new()
+            )
+            .evaluate(&posted)
+            .await
+            .unwrap()
+            .is_empty()
+        );
+    }
+}
+
+#[tokio::test]
+async fn agents_mentioning_each_other_stop_at_the_hop_limit_without_a_person() {
+    let macro_ai = ChannelSender::new_from_bot(bot_id::MACRO_NEW_BOT_ID);
+    let cursor = ChannelSender::new_from_bot(bot_id::CURSOR_BOT_ID);
+    // The agent posting hop `n`, alternating from Macro's first handoff.
+    let agent = |n: usize| {
+        if n % 2 == 1 {
+            (macro_ai.clone(), bot_id::CURSOR_BOT_ID)
+        } else {
+            (cursor.clone(), bot_id::MACRO_NEW_BOT_ID)
+        }
+    };
+    let thread: Vec<ThreadMessage> = std::iter::once(thread_message(
+        100,
+        ChannelSender::new_from_user(user()),
+        "@macro go",
+    ))
+    .chain((1..=MAX_AGENT_HOPS).map(|n| thread_message(100 + n as u128, agent(n).0, "over to you")))
+    .collect();
+    for (hop, triggers) in [(MAX_AGENT_HOPS, true), (MAX_AGENT_HOPS + 1, false)] {
+        let (sender, target) = agent(hop);
+        let read = hop;
+        let mut posted = message(vec![mention_of(target)]);
+        posted.sender = sender;
+        posted.triggered_by = Some(user().to_string());
+        let mut bots = MockAgentBotLookup::new();
+        bots.expect_get_agent()
+            .returning(|_| Box::pin(async { Ok(None) }));
+        bots.expect_get_bot()
+            .returning(|bot| Box::pin(async move { Ok(Some(system_bot(bot))) }));
+        let (replies, judge) = no_implicit();
+        let sessions = if triggers {
+            sessions_without_existing()
+        } else {
+            MockAgentSessionRepo::new()
+        };
+        let events = service_reading(
+            sessions,
+            bots,
+            replies,
+            judge,
+            thread_of(thread[..read].to_vec()),
+        )
+        .evaluate(&posted)
+        .await
+        .unwrap();
+        assert_eq!(!events.is_empty(), triggers, "hop {hop}");
+    }
+}
+
+#[tokio::test]
+async fn an_agents_unmentioned_follow_up_reaches_another_agents_session() {
+    for (replies, judge, kind) in [
+        (
+            extractor(Ok(None)),
+            judge_saying(Ok(true)),
+            ThreadMessageKind::Inferred,
+        ),
+        (
+            extractor(Ok(Some(reply_to_bot(BotId::TEST_A)))),
+            MockImplicitTriggerJudge::new(),
+            ThreadMessageKind::ExplicitReply,
+        ),
+    ] {
+        let mut posted = message(vec![]);
+        posted.sender = ChannelSender::new_from_bot(BotId::TEST_B);
+        posted.triggered_by = Some(user().to_string());
+        let sessions = implicit_sessions(vec![
+            thread_session(AgentSessionId::TEST_A, BotId::TEST_A),
+            thread_session(AgentSessionId::TEST_B, BotId::TEST_B),
+        ]);
+
+        let events = service(sessions, agent_bots(), replies, judge)
+            .evaluate(&posted)
+            .await
+            .unwrap();
+
+        let metadata = existing_channel_metadata(&events);
+        assert_eq!(metadata.bot_id, BotId::TEST_A);
+        assert_eq!(metadata.session_id, AgentSessionId::TEST_A);
+        assert_eq!(metadata.kind, kind);
+    }
+}
+
+#[tokio::test]
+async fn an_agent_never_infers_into_its_own_session() {
+    let mut posted = message(vec![]);
+    posted.sender = ChannelSender::new_from_bot(BotId::TEST_A);
+    posted.triggered_by = Some(user().to_string());
+    let sessions = implicit_sessions(vec![thread_session(AgentSessionId::TEST_A, BotId::TEST_A)]);
+    let (replies, judge) = no_implicit();
+
+    let events = service(sessions, agent_bots(), replies, judge)
+        .evaluate(&posted)
+        .await
+        .unwrap();
+
+    assert!(events.is_empty());
+}
+
+#[tokio::test]
+async fn an_inferred_agent_chain_stops_at_the_hop_limit_before_judging() {
+    let agent = |n: usize| {
+        ChannelSender::new_from_bot(if n % 2 == 1 {
+            BotId::TEST_A
+        } else {
+            BotId::TEST_B
+        })
+    };
+    let thread: Vec<ThreadMessage> = std::iter::once(thread_message(
+        100,
+        ChannelSender::new_from_user(user()),
+        "work it out between you",
+    ))
+    .chain((1..=MAX_AGENT_HOPS).map(|n| thread_message(100 + n as u128, agent(n), "your turn")))
+    .collect();
+    let mut posted = message(vec![]);
+    posted.sender = agent(MAX_AGENT_HOPS + 1);
+    posted.triggered_by = Some(user().to_string());
+    let (replies, judge) = no_implicit();
+
+    let events = service_reading(
+        MockAgentSessionRepo::new(),
+        MockAgentBotLookup::new(),
+        replies,
+        judge,
+        thread_of(thread),
+    )
+    .evaluate(&posted)
+    .await
+    .unwrap();
+
+    assert!(events.is_empty());
 }

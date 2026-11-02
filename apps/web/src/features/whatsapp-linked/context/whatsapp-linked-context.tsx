@@ -8,6 +8,7 @@ import {
 import type { WhatsAppAccount } from '../core/account';
 import type { AddFailure } from '../core/add';
 import type { WhatsAppChat } from '../core/chat';
+import type { NewChatFailure } from '../core/new-chat';
 import type { PairingStep, PasskeyChallenge } from '../core/pairing';
 
 /** Which collapsible sections of a list are open; unknown ones start open. */
@@ -97,6 +98,13 @@ export type WhatsAppLinkedCapabilities = {
   add: (
     chat: Pick<WhatsAppChat, 'jid' | 'kind'>
   ) => ResultAsync<{ chatId: string }, AddFailure>;
+  /**
+   * Start a direct chat with someone not in the chat list: ask WhatsApp
+   * whether the number (E.164) has an account, then add that chat.
+   */
+  startChat: (
+    phoneNumber: string
+  ) => ResultAsync<{ chatId: string }, NewChatFailure>;
   isConnecting: Accessor<boolean>;
   isDisconnecting: Accessor<boolean>;
   /** Host action: open a chat in Macro. */
