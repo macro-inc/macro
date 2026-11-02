@@ -385,6 +385,8 @@ export function createAgentSession(
             issueSessionAction(current, action, { userId: options.userId() }),
           snapshot: () => current.snapshot(),
           subscribe: (listener) => current.subscribe(listener),
+          refresh: () => current.refresh(),
+          retract: (actionId) => current.retract(actionId),
         },
         model,
         effort

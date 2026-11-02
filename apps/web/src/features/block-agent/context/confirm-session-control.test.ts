@@ -16,11 +16,25 @@ function session() {
       listener = callback;
       return unsubscribe;
     }),
+    refresh: vi.fn(async () => {}),
+    retract: vi.fn(),
   };
   return {
     value: value as unknown as AgentSession,
     issue: value.issue,
+    refresh: value.refresh,
+    retract: value.retract,
     unsubscribe,
+    /** Settle the control in the snapshot without a fold event. */
+    settleQuietly(kind: string) {
+      snapshot.messages = [
+        {
+          requestId: 'action',
+          pending: false,
+          parts: [{ kind: 'control', outcome: { kind } }],
+        },
+      ];
+    },
     outcome(kind: string, requestId = 'action') {
       snapshot.messages = [
         {
@@ -73,14 +87,32 @@ describe('confirmed session controls', () => {
     await assertion;
     expect(test.unsubscribe).toHaveBeenCalledOnce();
   });
-  it('times out without treating silence as acceptance', async () => {
+  it('times out without treating silence as acceptance, and takes the control back', async () => {
     vi.useFakeTimers();
     const test = session();
     const result = confirmSessionControl(test.value, action);
     const assertion = expect(result).rejects.toThrow('did not confirm');
     await vi.advanceTimersByTimeAsync(60_000);
     await assertion;
+    expect(test.refresh).toHaveBeenCalledTimes(2);
+    expect(test.retract).toHaveBeenCalledExactlyOnceWith('action');
     expect(test.unsubscribe).toHaveBeenCalledOnce();
+  });
+  it('confirms from the refetched log when the live feed missed the answer', async () => {
+    vi.useFakeTimers();
+    const test = session();
+    const done = vi.fn();
+    test.refresh.mockImplementation(async () => test.settleQuietly('accepted'));
+    const result = confirmSessionControl(test.value, action).then(done);
+    await vi.advanceTimersByTimeAsync(9_999);
+    expect(test.refresh).not.toHaveBeenCalled();
+    expect(done).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(1);
+    await result;
+    expect(done).toHaveBeenCalledOnce();
+    expect(test.retract).not.toHaveBeenCalled();
+    await vi.advanceTimersByTimeAsync(60_000);
+    expect(test.refresh).toHaveBeenCalledOnce();
   });
   it('fails immediately on HTTP rejection', async () => {
     const test = session();
