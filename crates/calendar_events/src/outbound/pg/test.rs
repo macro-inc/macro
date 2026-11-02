@@ -7266,8 +7266,6 @@ mod join_requests;
 mod meeting_copies;
 mod meeting_uid;
 mod mention_join_link;
-#[cfg(feature = "notes")]
-mod notes;
 mod organizer_calendar;
 mod source_access;
 

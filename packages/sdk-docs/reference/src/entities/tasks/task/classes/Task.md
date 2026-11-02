@@ -259,22 +259,6 @@ GitHub pull requests associated with the document.
 
 ***
 
-### meetingNotes()
-
-> **meetingNotes**(): `Promise`\<\{ `eventTitle`: `string`; `note`: [`CalendarNote`](../../../calendar/note/classes/CalendarNote.md); \}[]\>
-
-Owner-only meeting grants, including unavailable meetings. Unlink a returned note to revoke its meeting/team access.
-
-#### Returns
-
-`Promise`\<\{ `eventTitle`: `string`; `note`: [`CalendarNote`](../../../calendar/note/classes/CalendarNote.md); \}[]\>
-
-#### Inherited from
-
-[`Document`](../../../documents/document/classes/Document.md).[`meetingNotes`](../../../documents/document/classes/Document.md#meetingnotes)
-
-***
-
 ### messageThreadById()
 
 > **messageThreadById**(`id`): [`MessageThread`](../../../messages/thread/classes/MessageThread.md)

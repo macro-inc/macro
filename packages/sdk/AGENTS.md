@@ -74,18 +74,12 @@ the existing gateway prefixes.
   (`isReadOnly` false): Outlook names the mailbox owner as organizer on every
   event of a read-only calendar. `eventRole` and `EventRole::of` must stay
   in step.
-- Calendar notes accept a document handle and the occurrence returned by calendar
-  reads. `CalendarNote` owns optional team sharing and unlinking; clearing its team
-  sends explicit null and never changes the document's other permissions.
-  `Document.meetingNotes()` discovers durable grants for revocation after losing
-  meeting access.
 - Regenerate Rust OpenAPI and web service clients before `bun run sync-specs &&
   bun run generate`; do not copy deployed schemas over a local API change.
 - Regenerate `../sdk-docs/reference` after SDK source or generated type changes;
   run that package's checks because web CI verifies the reference is current.
-- Run `bun run generate` and the checks in `../code-mode-sdk` after SDK changes
-  to keep the embedded Deno bundle, agent documentation, and operation catalog current.
-  Commit `crates/agent_code_mode/src/domain/documentation.json`; CI's Typecheck
+  Also run `bun packages/code-mode-sdk/scripts/generate.ts` from the root and
+  commit `crates/agent_code_mode/src/domain/documentation.json`; CI's Typecheck
   fails when it is stale.
 - `generated/agent-fold/` is not from OpenAPI: `cargo run -p agent_fold --bin
   export_types` writes it, and `foldedLog()` casts the opaque wire schema to it.

@@ -26,17 +26,6 @@ horizontally and removal remains available without hover. Composer fixture
 screenshots: [desktop](media/share-images/desktop.png) and
 [phone](media/share-images/mobile.png).
 
-With `enable-calendar-meeting-notes` enabled, owned markdown documents' Share
-panel also lists **Meeting links** (under the **Link** tab on mobile).
-Each shows its occurrence and optional team view grant.
-Use **Unlink** and confirm to remove that grant without deleting the document.
-This remains available when the meeting is cancelled or no longer shared with
-you; unavailable meeting details are hidden. See [Calendar meeting notes](calendar.md#meeting-notes).
-Turning the flag off does not revoke saved grants. If meeting access cannot be
-checked, the share status uses **Restricted** instead of claiming **Just me**;
-known public, team, or shared access still appears.
-This status follows the current document and account when navigating with Share open.
-
 Verify **Public → View** links in a fresh signed-out browser context. The
 `/app/drive/md/<id>` route (including folder/tab document links and legacy
 `/app/md/<id>` redirects) must show the document without private Drive lists or

@@ -75,10 +75,6 @@ unreferenced replicas. These additive tables do not change agent-session claims.
 
 ## Gotchas
 
-- `calendar_event_notes` and `calendar_note_event_visible` are shared by calendar
-  note reads and document authorization; keep both consumers on the same policy.
-  The additive migration must precede their service rollout. See
-  [meeting-note access](../../docs/architecture/calendar-meeting-notes.md).
 - Migrations deploy before service code: never drop a column/table in the
   same PR that removes its last usage (see `docs/development/database.md`).
 - Never hand-edit `.sqlx/query-*.json` or invent a migration timestamp.
