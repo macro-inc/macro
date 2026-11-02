@@ -18,7 +18,7 @@ use clap::{Parser, Subcommand};
 use connect_client::wire::{
     AppConnectionsSummary, CatalogEntry, ConnectSessionRequest, ConnectSessionResponse, Connection,
     ConnectionStatus, ConnectionsPage, ConnectionsSummary, DeleteResponse, ErrorResponse,
-    ListedConnection, ListedUser, McpErrorResponse, TokenResponse, UsersPage,
+    ListedConnection, ListedUser, McpErrorResponse, OAuthClient, TokenResponse, UsersPage,
 };
 use connect_platform::{ConfigLoader, Telemetry, http_trace_layer, load_aws_config};
 use connect_registry::{Access, App, ClientRegistration, Status, all_apps};
@@ -206,6 +206,11 @@ async fn catalog(State(state): State<AppState>) -> Json<Vec<CatalogEntry>> {
                         Access::Api => "api".to_owned(),
                     })
                     .collect(),
+                oauth_client: match app.client_registration {
+                    ClientRegistration::OwnApp => Some(OAuthClient::ManagedOauthApp),
+                    ClientRegistration::Cimd | ClientRegistration::Dcr => Some(OAuthClient::Dcr),
+                    ClientRegistration::ApiKey => None,
+                },
                 mcp_url: app.mcp_url.clone(),
                 icon_url: app.icon_svg.map(|_| {
                     format!(
