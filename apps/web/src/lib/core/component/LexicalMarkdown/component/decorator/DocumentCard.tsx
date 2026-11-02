@@ -431,9 +431,14 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   // A form fits its content (a poll is a few rows); other previews keep a
   // resizable box.
   const resizable = () => isPreviewable() && props.blockName !== 'form';
-  // A poll reserves its space before its form loads, then grows to fit.
-  const pollMinHeight = () =>
-    props.blockName === 'form' ? pollCardHeight(props.previewData) : undefined;
+  // A poll reserves its space before its form loads, then grows to fit. A
+  // form the viewer can't open renders no body, so it reserves nothing.
+  const pollMinHeight = () => {
+    if (props.blockName !== 'form') return;
+    const i = item();
+    if (i && !i.loading && !isAccessiblePreviewItem(i)) return;
+    return pollCardHeight(props.previewData);
+  };
 
   const [previewBoxHeight, setPreviewBoxHeight] = createSignal(
     stringifyPreviewBox(props.previewBox || DEFAULT_PREVIEW_BOX)[1]

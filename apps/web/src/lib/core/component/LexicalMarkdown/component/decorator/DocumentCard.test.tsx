@@ -45,6 +45,7 @@ const mocks = vi.hoisted(() => {
     disposed: 0,
     created: [] as string[],
     read: undefined as (() => void) | undefined,
+    accessible: true,
   };
 });
 
@@ -66,7 +67,7 @@ vi.mock('@core/component/ItemPreview', () => ({
 }));
 vi.mock('@queries/preview', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@queries/preview')>()),
-  isAccessiblePreviewItem: () => true,
+  isAccessiblePreviewItem: () => mocks.accessible,
 }));
 vi.mock('@core/orchestrator', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/orchestrator')>()),
@@ -111,6 +112,7 @@ vi.mock('@ui', async (importOriginal) => {
 afterEach(() => {
   cleanup();
   mocks.read = undefined;
+  mocks.accessible = true;
 });
 
 it('mounts a form card’s body in a channel message, with no block and no editor around it, and disposes it with the card', async () => {
@@ -197,6 +199,25 @@ it('reserves a poll’s height across suspended metadata loading', async () => {
   expect(card?.style.minHeight).toBe('20.25rem');
   expect(card?.style.height).toBe('auto');
   expect(screen.queryByRole('status')).toBeNull();
+});
+
+it('reserves no poll height once the form turns out to be unavailable', async () => {
+  mocks.accessible = false;
+  render(() => (
+    <MarkdownHostContext.Provider value="channel">
+      <DocumentCard
+        key="poll-node"
+        documentId="form-1"
+        documentName="Lunch?"
+        blockName="form"
+        blockParams={{}}
+        previewData={{ poll: { optionCount: 3 } }}
+        theme={{}}
+      />
+    </MarkdownHostContext.Provider>
+  ));
+  const card = document.querySelector<HTMLElement>('.rounded-xl');
+  expect(card?.style.minHeight).toBe('');
 });
 
 it.each(['code', 'canvas', 'pdf'] as const)(
