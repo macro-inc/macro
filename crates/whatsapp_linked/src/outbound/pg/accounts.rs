@@ -397,4 +397,8 @@ impl AccountRepository for PgWhatsAppRepository {
     async fn lookup(&self, account: Uuid, lookup: Uuid) -> ExternalChatResult<Lookup> {
         lookups::lookup_of(&self.pool, account, lookup).await
     }
+
+    async fn import_history(&self, account: &Account) -> ExternalChatResult<u32> {
+        chats::import_history(&self.pool, account).await
+    }
 }

@@ -1,0 +1,43 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_settings (link_id, signature_on_replies_forwards, signature, read_receipts_enabled)\n        VALUES ($1, COALESCE($2, FALSE), $3, COALESCE($4, FALSE))\n        ON CONFLICT (link_id)\n        DO UPDATE SET\n            signature_on_replies_forwards = COALESCE($2, email_settings.signature_on_replies_forwards),\n            signature = COALESCE($3, email_settings.signature),\n            read_receipts_enabled = COALESCE($4, email_settings.read_receipts_enabled),\n            updated_at = NOW()\n        RETURNING link_id, signature_on_replies_forwards, signature, read_receipts_enabled\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "signature_on_replies_forwards",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 2,
+        "name": "signature",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "read_receipts_enabled",
+        "type_info": "Bool"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      false
+    ]
+  },
+  "hash": "163fa0170324c974aacef9994a92701fde037a3113321ce78d29804e1276c167"
+}

@@ -131,22 +131,30 @@ added by; history is requested in the chat as the phone keys it (by LID).
 An account paired before the list existed only gets groups and chats with new
 messages: WhatsApp sends the full list once, at pairing.
 
-Adding a group sets `backfill_state = 'pending'` when a message of the chat is
-known to start from (the chat list's anchor, or a stored message the account
-saw), else `waiting_for_message`: nothing to import from until someone posts.
-A direct chat with no known message (a saved contact or looked-up number)
-starts `done`: there is nothing earlier to import, and its first message
-arrives live. If a chat update later brings a message from before the chat
-was added (the phone had history after all), it goes back to `pending` once
-and imports like any chat.
-The chat's first message (live, history sync or chat-list update) makes it
-`pending` and starts the import at once. The owner's account then
-imports the chat's earlier messages from the phone, on demand only: it asks for
-the anchor message itself when it predates adoption (a placeholder resend) and
-for pages of 50 messages before the oldest imported one (history sync on
-demand), until the phone has nothing older (`done`) or 500 messages / 90 days
-(`partial`). An unanswered request (60 s) means `waiting_for_phone`, retried
-every 5 minutes and at once on reconnect. WhatsApp's group info carries no
+Earlier messages come only from the owner's phone, and Macro asks it only
+when the owner presses **Import**. Every request wakes WhatsApp on the phone;
+on iOS one it can't finish in the background shows "Syncing with WhatsApp on
+Other device stopped", so nothing asks on a timer, on reconnect or on adding.
+Adding a group sets `backfill_state = 'waiting_for_phone'` (the import needs the
+phone) when a message of the chat is known to start from (the chat list's
+anchor, or a stored message the account saw), else `waiting_for_message`:
+nothing to import from until someone posts; the chat's first message (live,
+history sync or chat-list update) makes it `waiting_for_phone`. A direct chat
+with no known message (a saved contact or looked-up number) starts `done`:
+there is nothing earlier to import, and its first message arrives live. If a
+chat update later brings a message from before the chat was added (the phone
+had history after all), it becomes `waiting_for_phone`.
+
+The web shows the owner a closable bottom-right prompt while any of their
+chats is `waiting_for_phone` ("open WhatsApp on your phone … **Import**").
+`POST /whatsapp/history-import` (the owner's own session) moves those chats
+to `pending` and signals `whatsapp_history_requested`; the replica holding the
+account then asks for the anchor message itself when it predates adoption (a
+placeholder resend) and for pages of 50 messages before the oldest imported
+one (history sync on demand), each answered page asking for the next, until
+the phone has nothing older (`done`) or 500 messages / 90 days (`partial`). A
+request unanswered for 60 s puts the chat back to `waiting_for_phone`, and the
+prompt returns; it is never retried otherwise. WhatsApp's group info carries no
 message id, so a quiet chat of an account paired before the chat list existed
 has no other anchor. Imported messages are ingested as history (origin
 `history`): no notifications, no unread, deduplicated with live messages by

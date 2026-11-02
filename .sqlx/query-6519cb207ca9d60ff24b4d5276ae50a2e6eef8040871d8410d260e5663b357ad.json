@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE external_chat SET backfill_state = 'pending', backfill_requested_at = NULL\n        WHERE user_id = $1 AND provider = 'whatsapp' AND state = 'active'\n          AND backfill_state IN ('waiting_for_phone', 'waiting_for_message')\n        RETURNING id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "6519cb207ca9d60ff24b4d5276ae50a2e6eef8040871d8410d260e5663b357ad"
+}

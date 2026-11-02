@@ -84,7 +84,8 @@ where
             .route("/pairing/{id}/passkey", post(passkey::<Auth>))
             .route("/chats", get(chats::<Auth>))
             .route("/lookups", post(start_lookup::<Auth>))
-            .route("/lookups/{id}", get(lookup::<Auth>)),
+            .route("/lookups/{id}", get(lookup::<Auth>))
+            .route("/history-import", post(import_history::<Auth>)),
     )
     .with_state(state)
 }
@@ -228,6 +229,24 @@ pub async fn start_lookup<Auth: MacroAuthorizationService>(
             .lookup(
                 &auth.authorization.macro_user_id,
                 &body.phone_number,
+                authority(&auth.authorization),
+            )
+            .await?,
+    ))
+}
+
+/// Import earlier messages of the caller's chats that wait for their phone
+/// (`backfill.state` `waiting_for_phone`). WhatsApp must be open on the phone.
+#[utoipa::path(post, path = "/whatsapp/history-import", operation_id = "whatsapp_import_history", responses((status = 200, body = HistoryImport)))]
+pub async fn import_history<Auth: MacroAuthorizationService>(
+    State(state): State<WhatsAppRouterState<Auth>>,
+    auth: MacroAuthorizationExtractor<Auth, UserOnly>,
+) -> Result<Json<HistoryImport>, ApiError> {
+    Ok(Json(
+        state
+            .service
+            .import_history(
+                &auth.authorization.macro_user_id,
                 authority(&auth.authorization),
             )
             .await?,

@@ -42,12 +42,8 @@ pub const GROUPS_REFRESH_INTERVAL: Duration = Duration::from_secs(30);
 pub const BACKFILL_PAGE: u32 = 50;
 
 /// A page request the phone has not answered after this is unanswered: the
-/// import waits for the phone.
+/// import waits until the owner starts it again.
 pub const BACKFILL_TIMEOUT: Duration = Duration::from_secs(60);
-
-/// How often an import waiting for the phone asks again (reconnecting asks
-/// at once).
-pub const BACKFILL_RETRY: Duration = Duration::from_secs(5 * 60);
 
 /// Timings and batch sizes for one account.
 #[derive(Debug, Clone, Copy)]
@@ -65,8 +61,6 @@ pub struct AccountConfig {
     pub groups_refresh_interval: Duration,
     /// [`BACKFILL_TIMEOUT`] in production.
     pub backfill_timeout: Duration,
-    /// [`BACKFILL_RETRY`] in production.
-    pub backfill_retry: Duration,
 }
 
 /// Runs leased accounts against the linked-devices domain.
@@ -432,18 +426,11 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
                 Next::Exit(AccountExit::Failed)
             }
             SessionEvent::Chats(chats) => {
-                let result = async {
-                    let anchored = survive(
-                        self.sessions.update_chats(self.scope, &chats).await,
-                        "update_chats",
-                    )?;
-                    // A chat waiting for its first message got one: import now.
-                    if anchored == Some(true) {
-                        Box::pin(self.backfill(false)).await?;
-                    }
-                    Ok(())
-                }
-                .await;
+                let result = survive(
+                    self.sessions.update_chats(self.scope, &chats).await,
+                    "update_chats",
+                )
+                .map(drop);
                 self.exit_on(result)
             }
             SessionEvent::HistoryPage(page) => {
@@ -522,6 +509,7 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
                 AccountSignal::Send => self.dispatch_sends().await,
                 AccountSignal::Groups => self.requested_refresh().await,
                 AccountSignal::Lookup => self.answer_lookups().await,
+                AccountSignal::History => Box::pin(self.backfill()).await,
                 AccountSignal::Changed => self.account_changed().await,
                 AccountSignal::Resync => self.resync().await,
             }
@@ -540,7 +528,7 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
             if self.is_connected() {
                 self.dispatch_sends().await?;
                 self.answer_lookups().await?;
-                Box::pin(self.backfill(false)).await?;
+                Box::pin(self.backfill()).await?;
             }
             Ok(())
         }
@@ -592,8 +580,8 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
         self.replay().await?;
         self.dispatch_sends().await?;
         self.answer_lookups().await?;
-        // The phone may have been the reason pages went unanswered.
-        Box::pin(self.backfill(true)).await
+        // An import the owner started while the connection was down.
+        Box::pin(self.backfill()).await
     }
 
     /// The phone shows a code: surface it on the pairing row, then confirm.
@@ -722,8 +710,7 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
             Ok(Some(AccountState::LoggedOut) | None) => Err(AccountExit::Idle),
             Ok(Some(AccountState::Pairing | AccountState::Connected)) => {
                 self.gate.reload().await;
-                // A group added just now starts importing its earlier messages.
-                Box::pin(self.backfill(false)).await
+                Ok(())
             }
             Err(report) => {
                 tracing::warn!(error = %report, "Reading the WhatsApp account state failed");

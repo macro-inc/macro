@@ -14,15 +14,17 @@ The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the
 sharing dialog; copying a link is a separate action.
 
-In the Share dialog's **Optional message**, paste an image with Cmd/Ctrl+V,
-use **Attach files**, or drop a file into the composer. Images show a removable
-preview and are sent inline beside the shared item to each selected person or
-channel. Share (including Cmd/Ctrl+Enter and the phone drawer's Share button)
-waits for uploads; Enter still inserts a newline. Removing an uploading image
+In the Share dialog's **Optional message**, paste an image with Cmd/Ctrl+V
+or drop a file into the composer. Share composers have no paperclip button on
+desktop or mobile. Images show a removable preview and are sent inline beside
+the shared item to each selected person or channel. Share (including
+Cmd/Ctrl+Enter and the phone drawer's Share button) waits for uploads; Enter still inserts a newline. Removing an uploading image
 keeps it removed, and closing the dialog discards its attachment draft.
-Verify paste, file selection, drop, removal during upload, upload failure, and
+Verify paste, drop, removal during upload, upload failure, and
 sending to both a person and a channel. On touch, attachment previews scroll
-horizontally and removal remains available without hover.
+horizontally and removal remains available without hover. Composer fixture
+screenshots: [desktop](media/share-images/desktop.png) and
+[phone](media/share-images/mobile.png).
 
 With `enable-calendar-meeting-notes` enabled, owned markdown documents' Share
 panel also lists **Meeting links** (under the **Link** tab on mobile).
@@ -82,7 +84,10 @@ reloads when it receives the grant update. Signed-out visitors are prompted to
 sign in first; ordinary load failures retain **Try again**.
 An already-open document reloads after a permission upgrade on desktop and touch
 devices. Removing its last grant closes the editor and returns to Request access;
-a failed background refresh must not restore the revoked document.
+a failed background refresh must not restore the revoked document. The denied
+view shows **Loading access requests…** until its own request-state read lands,
+never a request row or **Could not load access requests** left over from before
+the change, and a document deleted while it is open shows the not-found view.
 
 In **People with access**, a non-owner can use **Request access** beneath the
 owner to request a supported upgrade (**Comment** or **Edit**). PDFs offer
@@ -301,6 +306,19 @@ When an editor's selection spans two or more checklist items, the button reads
 **N tasks** and creates one task per item without opening the composer; each
 item is replaced by its task mention and a **Created N tasks** toast appears.
 
+## Images in lists
+
+An image inserted or dropped while the caret is in a list item goes under that
+item's text, left-aligned with it, and stays resizable; the list is not split
+and numbered items keep counting. On the empty item Enter leaves after an item,
+the image goes under the item above and the caret stays on the empty item;
+pressing Enter again leaves the list, and an image inserted then sits below it.
+Enter at the end of an item's text starts the next item below its images.
+Dropped files target the item under the pointer's lower half, or the item
+above. Markdown saves the image as an indented line under its item. Verify
+with `list-images.browser.e2e.ts` in
+`apps/web/src/lib/core/component/LexicalMarkdown/component/core/browser-test`.
+
 ## Markdown outline
 
 On desktop, Markdown documents with at least three headings show a tick rail in
@@ -511,8 +529,10 @@ its days are `gridcell` buttons marked `data-active` (the keyboard's day),
 `data-selected` (the cell's date) and `data-today`.
 
 Images and charts (column, bar, line and area, each clustered, stacked or
-100% stacked, plus pie, doughnut, scatter, combo, radar, bubble, stock and
-surface, drawn as a contour) are drawn over their cells and move with them;
+100% stacked, plus pie, pie of pie, bar of pie, doughnut, scatter, combo,
+radar, bubble, stock, surface drawn as a contour, and Excel 2016's histogram,
+pareto, waterfall, funnel, box and whisker, treemap and sunburst) are drawn
+over their cells and move with them;
 charts redraw as the cells they read change. A 100% stacked chart fills each
 category to 100% of its positive values and to 100% of its negative values.
 Scatter charts plot markers without connecting lines. A combo chart draws
@@ -522,8 +542,15 @@ image description. The toolbar's **Insert chart, image or checkbox** menu (chart
 adds a chart of the selected cells — or, from one cell, of the table around
 it, placed beside it — or an image file (PNG, JPEG, GIF, WebP or BMP up to
 2 MB) at the active cell. Its **More charts** submenu holds Radar, Filled
-radar, Bubble, Stock and Contour. Edit chart's type list also offers 100%
-stacked bar, stacked line, 100% stacked line, 100% stacked area and Combo. A
+radar, Bubble, Stock, Contour, Histogram, Waterfall, Funnel, Box and whisker,
+Treemap and Sunburst. Edit chart's type list also offers 100% stacked bar,
+stacked line, 100% stacked line, 100% stacked area, Combo, Pareto, Pie of pie
+and Bar of pie. A histogram bins one column of numbers (Scott's rule, as
+Excel's automatic bins) or, with labels, sums values by label; a treemap or
+sunburst reads every column before its values as a level, a blank label
+continuing the one above. Excel 2016 charts download as chartEx parts with
+Excel's fallback note for older versions; Excel 2016 maps import as that
+fallback. A
 stock chart needs three or four series (high, low, close, with open first for
 up-down bars), a bubble chart reads x values from the first column, then
 values and sizes in pairs, and a combo chart needs at least two series. Imported shapes, text boxes, lines,
@@ -2417,6 +2444,12 @@ stay text instead of becoming mentions, long pastes do not collapse into a
    the editor is contenteditable and `fill` does not work on it.
 4. The document auto-saves continuously (collaborative CRDT; no save button). The tab title
    and header update to the typed title.
+
+On desktop, opening a document through Cmd/Ctrl+K focuses its body editor after
+the content and title have loaded. Creating a document focuses its empty title;
+if the new document already has a title, it focuses the body. Ordinary clicks
+and Back/Forward do not move focus into the editor. A control the user focused
+while the document loaded keeps focus.
 
 The a11y snapshot exposes the entire body as the contenteditable's `value` and as paragraph
 nodes — use the snapshot itself to verify content. For formatting checks, run

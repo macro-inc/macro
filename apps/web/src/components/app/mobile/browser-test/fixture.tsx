@@ -3,6 +3,8 @@ import '../../../../index.css';
 import { ComposerAddDrawer } from '@app/features/channel/Input/ComposerAddMenu';
 import { MobileSettingsSheet } from '@app/features/settings/MobileSettingsSheet';
 import { SettingsPage, SettingsRow } from '@app/features/settings/primitives';
+import { toast } from '@core/component/Toast/Toast';
+import { ToastRegion } from '@core/component/Toast/ToastRegion';
 import type { SettingsTab } from '@core/constant/SettingsState';
 import { SETTINGS_TAB_GROUPS } from '@core/constant/settingsTabsConfig';
 import { EmailProviderDialog } from '@core/email-link/ProviderDialog';
@@ -18,11 +20,12 @@ import {
   openDialog,
   useImperativeDialog,
 } from '@ui';
-import { createSignal, getOwner, Match, Show, Switch } from 'solid-js';
+import { createSignal, getOwner, Match, onMount, Show, Switch } from 'solid-js';
 import { render } from 'solid-js/web';
 import { macroLightTheme } from '../../../../features/theme/themes/macro-light';
 import { ConfirmDrawer } from '../ConfirmDrawer';
 import { MobileDrawer } from '../MobileDrawer';
+import { PickerSheet } from '../PickerSheet';
 
 for (const [token, value] of Object.entries(macroLightTheme.colorTokens)) {
   document.documentElement.style.setProperty(`--color-${token}`, value);
@@ -31,6 +34,10 @@ document.documentElement.dataset.themeLight = 'true';
 
 const [pressed, setPressed] = createSignal<string[]>([]);
 const press = (control: string) => setPressed((list) => [...list, control]);
+let noticeId: number | undefined;
+const showNotice = () => {
+  noticeId = toast.success('Link copied', { duration: 60_000 });
+};
 
 /** Connect email opens as `selectEmailProvider` opens it, under the sheet's owner. */
 function EmailSettingsPage() {
@@ -341,6 +348,72 @@ function MenuScenario() {
   );
 }
 
+/**
+ * Shaped like a task's Properties sheet: rows down to its bottom edge, where
+ * the phone prompt sits, and a picker stacked on it, searching from the same
+ * place.
+ */
+function PersistentPromptScenario() {
+  const [properties, setProperties] = createSignal(false);
+  const [picker, setPicker] = createSignal(false);
+  onMount(() => {
+    toast.custom(
+      {
+        title: 'Enable Browser Notifications',
+        actions: [{ label: 'Enable', onClick: () => press('Enable') }],
+      },
+      { persistent: true, region: 'mobile-prompt-region' }
+    );
+  });
+  return (
+    <>
+      <Button class="fixed top-20 left-4" onClick={() => setProperties(true)}>
+        Properties
+      </Button>
+      <Button class="fixed top-32 left-4" onClick={showNotice}>
+        Show notice
+      </Button>
+      <Button
+        class="fixed top-44 left-4"
+        onClick={() => {
+          if (noticeId !== undefined) toast.dismiss(noticeId);
+        }}
+      >
+        Dismiss notice
+      </Button>
+      <MobileDrawer
+        side="bottom"
+        open={properties()}
+        onOpenChange={setProperties}
+      >
+        <MobileDrawer.Portal>
+          <MobileDrawer.Overlay />
+          <MobileDrawer.Content aria-label="Properties" targetHeight={92}>
+            <MobileDrawer.Handle />
+            <MobileDrawer.ScrollBody class="justify-end gap-3 px-6 pb-6">
+              <Button onClick={showNotice}>Copy link</Button>
+              <Button onClick={() => setPicker(true)}>Assignee</Button>
+              <Button onClick={() => press('Due date')}>Due date</Button>
+            </MobileDrawer.ScrollBody>
+            <PickerSheet.Root open={picker()} onCancel={() => setPicker(false)}>
+              <PickerSheet.Header
+                title="Assignee"
+                onDone={() => setPicker(false)}
+              />
+              <PickerSheet.Body>
+                <div class="mt-auto px-4 pb-6">
+                  <Input aria-label="Search people" />
+                </div>
+              </PickerSheet.Body>
+            </PickerSheet.Root>
+          </MobileDrawer.Content>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
+      <ToastRegion />
+    </>
+  );
+}
+
 /** Shaped like the repository picker: a sheet opened to type a search into. */
 function TypingScenario() {
   const [open, setOpen] = createSignal(true);
@@ -417,6 +490,9 @@ function Fixture() {
         {pressed().join(', ')}
       </output>
       <Switch fallback={<EventScenario />}>
+        <Match when={scenario === 'prompt'}>
+          <PersistentPromptScenario />
+        </Match>
         <Match when={scenario === 'settings'}>
           <SettingsScenario />
         </Match>

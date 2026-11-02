@@ -244,6 +244,30 @@ impl WhatsAppService {
         Ok(lookup)
     }
 
+    /// Import earlier messages of the owner's chats waiting for the phone.
+    /// Each request wakes WhatsApp on the phone (on iOS, a "syncing stopped"
+    /// notification when it can't finish in the background), so the phone is
+    /// only asked on this deliberate action of the owner's own session.
+    #[tracing::instrument(
+        name = "whatsapp.linked.import_history",
+        skip_all,
+        err,
+        fields(account_id, started)
+    )]
+    pub async fn import_history(
+        &self,
+        user: &MacroUserIdStr<'_>,
+        authority: SendAuthority,
+    ) -> ExternalChatResult<HistoryImport> {
+        human(authority)?;
+        let (account, _) = connected(self.accounts.as_ref(), user).await?;
+        let started = self.accounts.import_history(&account).await?;
+        let span = tracing::Span::current();
+        span.record("account_id", tracing::field::display(account.id));
+        span.record("started", started);
+        Ok(HistoryImport { started })
+    }
+
     /// Poll the owner's lookup.
     pub async fn lookup_state(
         &self,

@@ -119,9 +119,12 @@ export function InlineTaskProperties() {
         )
     );
     if (documentKind !== 'task') return visible;
-    const order = [
-      ...getDefaultPinnedProperties('task'),
+    const order: readonly string[] = [
+      SYSTEM_PROPERTY_IDS.STATUS,
+      SYSTEM_PROPERTY_IDS.PRIORITY,
+      SYSTEM_PROPERTY_IDS.DUE_DATE,
       SYSTEM_PROPERTY_IDS.PROJECT,
+      SYSTEM_PROPERTY_IDS.ASSIGNEES,
     ];
     return [...visible].sort((left, right) => {
       const leftIndex = order.indexOf(left.propertyDefinitionId);
@@ -179,13 +182,22 @@ export function InlineTaskProperties() {
             entityType={entityType}
             variant="secondary"
             size="xs"
+            class={documentKind === 'task' ? 'touch:min-h-9' : undefined}
             showAddButton={documentKind === 'document' && canEdit()}
           />
-          <Key each={inlineProperties()} by="propertyId">
+          {/* A placeholder keeps its chip, and a pick in it, when saving assigns its ID. */}
+          <Key each={inlineProperties()} by="propertyDefinitionId">
             {(property) => (
               <InlinePropertyValue
                 property={property()}
                 entityId={blockId}
+                showLabel={
+                  documentKind === 'task' &&
+                  property().propertyDefinitionId ===
+                    SYSTEM_PROPERTY_IDS.DUE_DATE
+                    ? false
+                    : undefined
+                }
                 canManage={
                   !property().propertyId.startsWith('pending:') ||
                   defaultDefinitionIds().includes(

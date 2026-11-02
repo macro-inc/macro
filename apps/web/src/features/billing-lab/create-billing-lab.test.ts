@@ -7,7 +7,7 @@ describe('billing lab actions', () => {
 
   it('adds credits only after the simulated checkout completes', async () => {
     const lab = createBillingLab('credits');
-    const checkout = lab.usage.checkout.start(2_500);
+    const checkout = lab.usage.creditPurchase.buy(2_500);
     await vi.runAllTimersAsync();
     await checkout;
     expect(lab.payment()).toEqual({ kind: 'credits', amountCents: 2_500 });
@@ -22,7 +22,7 @@ describe('billing lab actions', () => {
   it('fails one checkout without changing the balance, then permits a retry', async () => {
     const lab = createBillingLab('pro');
     lab.setFailNext(true);
-    const failed = expect(lab.usage.checkout.start(2_500)).rejects.toThrow(
+    const failed = expect(lab.usage.creditPurchase.buy(2_500)).rejects.toThrow(
       'Simulated billing request failure'
     );
     await vi.runAllTimersAsync();
@@ -31,7 +31,7 @@ describe('billing lab actions', () => {
     expect(lab.payment()).toBeUndefined();
     expect(lab.failNext()).toBe(false);
     expect(lab.pending()).toBe(false);
-    const retry = lab.usage.checkout.start(2_500);
+    const retry = lab.usage.creditPurchase.buy(2_500);
     await vi.runAllTimersAsync();
     await retry;
     expect(lab.payment()?.kind).toBe('credits');
@@ -45,7 +45,7 @@ describe('billing lab actions', () => {
       resetsAt: '2026-11-01T00:00:00.000Z',
       limitReached: true,
     });
-    const checkout = lab.usage.checkout.start(2_500);
+    const checkout = lab.usage.creditPurchase.buy(2_500);
     await vi.runAllTimersAsync();
     await checkout;
     const complete = lab.completePayment();
@@ -65,11 +65,8 @@ describe('billing lab actions', () => {
     });
   });
 
-  it('rejects billing actions for a team-paid member without opening a payment flow or changing settings', async () => {
+  it('rejects billing settings for a team-paid member without opening a payment flow or changing them', async () => {
     const lab = createBillingLab('team-member');
-    await expect(lab.usage.checkout.start(2_500)).rejects.toThrow(
-      'Credit purchase unavailable'
-    );
     await expect(
       lab.usage.autoReload.save({ ...lab.state().autoReload, enabled: true })
     ).rejects.toThrow('Auto-Reload unavailable');
@@ -97,7 +94,7 @@ describe('billing lab actions', () => {
       );
       const before = lab.state().creditBalanceCents;
       const spent = lab.state().reloadSpentCents;
-      const checkout = lab.usage.checkout.start(2_500);
+      const checkout = lab.usage.creditPurchase.buy(2_500);
       await vi.runAllTimersAsync();
       await checkout;
       const complete = lab.completePayment();

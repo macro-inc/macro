@@ -72,9 +72,11 @@ draft queue runner, or live-update subscriptions. Signing in activates them in
 the same tab, including after a session expiry. Queued draft writes wait for
 authenticated user info; unrelated mutations can continue draining.
 
-Verify expiry followed by signing into a different account without reloading:
-the new account's lists must load and receive live updates, and the previous
-account's cached data must be absent. Logout wipes local caches before retiring
+A confirmed expiry loads `/welcome` as a new page, as logout does, so email
+drafts work after the next sign-in. Verify expiry followed by signing into a
+different account: the new account's lists must load and receive live updates,
+email composers must accept input, and the previous account's cached data must
+be absent. Logout wipes local caches before retiring
 their clients. Mounted query observers must receive the next account's data
 after the wipe. Previous account data must not return through initial data,
 placeholder data, or a later query reset.
@@ -242,12 +244,23 @@ with native preference for known overlapping providers and Slack alias deduplica
 Connection status failures have an explicit retry; they must not prevent
 independent providers such as native GitHub from connecting. Verify unknown
 status never launches a duplicate OAuth flow and continuation remains possible.
-Team setup retains existing membership, invite acceptance, domain suggestions,
-and editable invite recipients; submitting the form sends real invitations.
+Someone already on a team when they leave the tools step (joined by invite
+link or by domain) never sees the team step: Continue goes to the plan step, or
+finishes for a licensed member, and Back from plan returns to tools. Pending
+email invites still show on the team step for acceptance, and a team created
+there shows the **You're on <team>** confirmation. Team setup retains invite
+acceptance, domain suggestions, and editable invite recipients; submitting the
+form sends real invitations.
 On the create-team form, type a workspace name and edit a teammate address,
 then allow onboarding/contacts queries to refresh. The same inputs must retain
 their values and focus as suggestions arrive or a background request fails.
 Pending queries must show local loading states without suspending the flow.
+When the server suggests a work domain, the create form has no Skip button and
+shows an **Allow @domain emails to join** switch, on by default. Creating the
+team with it on sets the team's auto-join domain and, after the invites, emails
+up to 25 of the creator's same-domain contacts who are not on Macro or invited
+yet (`POST /team/domain-notice`). Personal-domain accounts keep Skip and see no
+switch.
 
 Members with an active or trialing license, including a license from their team,
 finish directly from the team step without visiting the plan page. The Continue

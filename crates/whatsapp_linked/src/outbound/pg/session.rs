@@ -469,15 +469,14 @@ impl SessionRepository for PgWhatsAppRepository {
         &self,
         scope: SessionScope,
         chats: &[ChatUpdate],
-    ) -> ExternalChatResult<bool> {
+    ) -> ExternalChatResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         if account.state != AccountState::Connected {
-            return Ok(false);
+            return Ok(());
         }
-        let anchored = chats::update_chats_in(&mut tx, &account, chats).await?;
-        tx.commit().await.map_err(failure)?;
-        Ok(anchored)
+        chats::update_chats_in(&mut tx, &account, chats).await?;
+        tx.commit().await.map_err(failure)
     }
 
     async fn backfill_work(&self, scope: SessionScope) -> ExternalChatResult<Vec<BackfillWork>> {

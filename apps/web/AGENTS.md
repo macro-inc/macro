@@ -8,6 +8,12 @@
 - Run Linux native cache-plugin tests from the repository root with `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin`; the [Tauri platform shell](../../docs/development/running-locally.md) supplies the required desktop libraries.
 - `bun run lint:oxlint` (repository root): type-aware oxlint. `typescript/no-floating-promises` is an error with no suppressions and `ignoreVoid: false` (FE-13), enforced in `just check` and CI; start detached work with `fireAndForget` from `@core/util/fireAndForget`, not `void`. Plain `oxlint` without `--type-aware` skips that rule silently. The ast-grep rule `ts-no-expression-void` covers `() => void p()`, which the lint can't see.
 - Email rendering is isolated in `packages/email-renderer` at the repository root. Run `just test-email-rendering` for its Node and Chromium suites. Add fixtures under `packages/email-renderer/tests/fixtures`, run `just test-email-rendering-update`, and review changed images. These are renderer tests, not inbox e2e.
+- Supported browsers are the `browserslist` in `package.json`. Safari and iOS
+  16.4 is the oldest WebKit the app starts on: startup code, including
+  `@pierre/diffs`, evaluates regex lookbehind. `vite.base.ts` builds to it,
+  and the ast-grep rules `ts-browser-floor-apis` and `tsx-browser-floor-apis`
+  ban APIs that turned out to be newer; add one there when it bites, or raise
+  the floor.
 - The app does not register a service worker. Keep `public/sw.js` as a retirement
   endpoint for existing installations; see the [startup bundle rule](../../.agents/rules/web/startup-bundle.md).
   Loro uses async WASM loading and HTML preloads independently of service workers.
@@ -48,6 +54,12 @@ It uses the real records view with a local source and picker to exercise opening
 replacement, cancellation, keyboard editing, and read-only references. Navigation
 adapter tests separately check file types, access failures, and split selection.
 
+Pinch zoom on opened image files (Drive details and image splits) has a
+backend-free phone and tablet regression:
+`bunx playwright test --config src/features/block-image/browser-test/playwright.config.ts`.
+Keep the zoomed image laid out at its zoomed size, translating only: WebKit
+rasterizes an `<img>` at its layout size, so a `scale()` transform blurs it.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
@@ -57,12 +69,20 @@ browser regression for backdrop taps that must not press what the scrim covers,
 including mixed pointerdown/pointerup dismissal, for taps inside the top
 sheet that must still press its own controls, and for swipes whose owner keeps
 the sheet open (a discard prompt, a pending confirmation, event details under a
-stacked sheet), which must bring it back on screen:
+stacked sheet), which must bring it back on screen. It also keeps a persistent
+prompt under an open sheet and its picker, above a transient notice, and that
+notice on top of the sheet:
 `bunx playwright test --config src/components/app/mobile/browser-test/playwright.config.ts`.
 The same suite covers where a sheet puts focus as it opens: on itself, leaving
 its first row unringed, unless the first tab stop is a text field, the sheet
 focused something itself, or it names its own target; Tab then moves into the
 rows, which do show the ring.
+
+CRM creation has backend-free desktop/phone coverage for name-only companies,
+personal-email contacts and explicit company selection:
+`bunx playwright test --config src/features/crm/browser-test/creation/playwright.config.ts`.
+Nested picker selection must keep its containing drawer open when the option
+unmounts during the tap; drawer dismissal checks the original event path.
 
 Composer typeahead menus choosing the side with room for their full list
 (`floatWithSelection`'s `fullHeight`), above a composer at the bottom of a
@@ -126,11 +146,12 @@ Gate event notes and document Share meeting-link controls with
 on in dev and uses PostHog in production.
 See `docs/agent-guide/calendar.md` at the repo root.
 
-Share message image paste, file selection, drop, removal during upload, and
+Share message image paste, drop, removal during upload, and
 upload failure have desktop, phone, and tablet browser coverage:
 `bunx playwright test --config src/lib/core/component/ForwardMessageComposer/browser-test/playwright.config.ts`.
 Keep the shared uploader from restoring removed attachments or publishing after
 the composer is disposed. The Share button and shortcut use the same upload guard.
+Keep Share composers free of a paperclip button on desktop and mobile; preserve image paste and file drop.
 
 Menus that find entities by typed name (Command-K, mobile name search, @
 mentions) rank with `NAME_MATCH_RANKING` in `@core/util/freshSort`: names equal
@@ -277,6 +298,10 @@ about its groups (labels, order, membership) is computed on the server and
 mirrored by the cache's local grouping projection; never add a side cache in
 feature code to cover a remount.
 
+Resolve server date-group keys through the shared `DATE_GROUP_BUCKETS` metadata
+in `lib/queries/soup/grouped/api.ts` for labels and display order; cached Mail
+uses the same metadata.
+
 Keep persistent list hotkeys free of mounted-view closures, and clear
 virtualizer accessors when their view unmounts.
 Keep editor newline handling local; result-opening handlers must yield
@@ -313,13 +338,35 @@ the user's newest account for that app from the last fifteen minutes.
 
 - Keep model picker triggers bounded with full-name title tooltips; wrap model names in catalog rows, including effort submenus and touch sheets.
 
+- All Mail previews exclude spam/junk and trash. Keep draft edits from restoring
+  an excluded preview or timestamp, including synced Macro drafts; Drafts and
+  Sent retain their own canonical membership.
+
 Agent split headers show live viewers through `BlockLiveIndicators` with the
 resolved session ID; keep the existing `AgentSessionProvider` subscription to
 `agent_session` rather than enabling legacy block tracking of placeholder IDs.
 
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
+- CRM creation accepts name-only companies and full contact email addresses.
+  Company selection is explicit; a matching domain only suggests a company.
+  Keep the standalone and pipeline forms consistent (see
+  `docs/agent-guide/crm.md` at the repository root).
+
 - Empty human DMs use the shared centered conversations graphic and explain email delivery to nonusers; keep this state out of agent DMs, loading/error states, and populated timelines.
-- Keep CRM database discovery row-linked and permission-scoped; use horizontally centered actionable list states raised toward the toolbar and shared skeletons, with separate search-empty and retry states. Company/contact touch headers use a Switch view drawer that honors host collapse and square copy-link islands; keep phone breadcrumbs above the switcher and leave the workspace view strip unchanged. Record search fills the row beside filters with header spacing; section creation replaces the default floating dock action through FloatRegion. See `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
+- Keep CRM database discovery row-linked and permission-scoped; use horizontally
+  centered actionable list states raised toward the toolbar and shared skeletons,
+  with separate search-empty and retry states. Company/contact touch headers use a
+  Switch view drawer that honors host collapse and square copy-link islands; keep
+  phone breadcrumbs above the switcher and leave the workspace view strip unchanged.
+  Open linked items under their Customers source URL; typed record sections append
+  only `<id>` and reject redundant typed URLs. Workspace activity and record
+  Files/overview notes retain item metadata on their own scoped routes. Keep
+  source and record breadcrumbs without section labels or extra preview-title
+  separators, retain entity menus and sharing, and return the current record
+  breadcrumb to its captured section and history entry.
+  Record search fills the row beside filters with header spacing; section creation
+  replaces the default floating dock action through FloatRegion. See
+  `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
 - Main Tasks mounts reusable GraphQL saved views; keep embedded Project/CRM task lists unchanged. Read `src/features/tasks-view/AGENTS.md` for filter, draft, navigation, and browser checks.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.
 - Email draft reads compare server generations before choosing cached delivery state over a restored working copy; only a definitive first-submission rejection permits local send recovery without server cancellation.
@@ -407,7 +454,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab over the router's `layoutSnapshot`/`restoreLayout`; only the active tab is live, and the strip renders in the title bar's center slot. Cmd+click becomes a background tab through `openInNewTabMiddleware`, so tab operations must disarm the intent tracker before navigating. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
 - Show only the Recent conversation feed in mobile Channels, without view tabs or a persisted mobile tab selection; render its rows with Home's touch row (`ChannelCardLayout` and `InboxDivider`) and pin at most six channel favorites above it.
 - Mount the mobile search input before focusing it inside the dock tap; keep navigation in that handler so focus does not trigger a second navigation or lose iOS keyboard activation.
-- Preserve focused chrome editors during deferred split insertion/removal autofocus; explicit return-focus commands may still focus the pane.
+- Preserve focused chrome editors during deferred split insertion/removal/content-change autofocus; explicit return-focus commands may still focus the pane. On desktop, content changes claim focus only for Cmd+K navigation or create-menu arrivals, and only if the destination has not already focused a child. Back/forward and ordinary clicks do not autofocus content.
 - Reconcile global focus when focused DOM subtrees are removed; iOS can omit blur events, otherwise floating creation actions stay hidden after search or editor teardown.
 - Mount the floating mobile AI composer only on the Agents view; other views keep their New action or their own reply/comment composer.
 - Keep desktop New actions on `ViewCreateButton`: full width below the inner
@@ -453,8 +500,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   [calendar walkthrough](../../docs/agent-guide/calendar.md).
 - Mark loaded calendar and agent-session row notifications through the
   notification source (`markRowNotificationsSeenOnOpen`) so read dots update
-  immediately and failed writes roll back; calendar grid selections also mark
-  the canonical event read, excluding team projections.
+  immediately and failed writes roll back; calendar grid selections and links
+  to an event also mark the canonical event read, excluding team projections.
 - Route explicit meeting-page exits using the server's `callEnded` result: ended
   calls open their record; ongoing channel and scheduled calls return to the
   channel and Calendar. Leaving from a channel's Call tab stays in the channel. Preserve the session ID and send the server leave before media
@@ -463,8 +510,12 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   on `meeting.join`; keep provider messages, device labels/IDs, and call-link
   tokens out of telemetry. See [call diagnostics](../../docs/agent-guide/calls.md#browser-call-diagnostics).
 - Diagnose the GraphQL mutation queue with `graphql.mutation_queue.*` spans and logs keyed by `mutation_queue.item_id`; route queue telemetry through `mutation-queue-telemetry.ts`, which dedupes per item and failure class and turns repeats into the periodic summary. Never add per-attempt `console.*` lines or record variables, draft content, or emails.
-- Keep desktop Gmail and Outlook inbox consent in the system browser with a
-  `macro:///inbox-link-callback` return; webview origins are not desktop callbacks.
+- Keep desktop OAuth consent in the system browser with a `macro://` return:
+  `macro:///inbox-link-callback` for Gmail and Outlook inboxes,
+  `macro:///github-link-callback` for GitHub (consumed by the navigation
+  bridge without changing the route). Webview origins are not desktop
+  callbacks. Settings → Integrations refetches connection status on window
+  `focus`, because returning from the browser does not change page visibility.
 - Keep send reservations, leases, and cancellation in the email journal; the general GraphQL queue handles draft autosaves only.
 - Always persist composer sends in account-scoped IndexedDB and dispatch through the fetch-only email client, without a feature flag; cache health and unrelated mutation queues must not gate delivery. See `docs/architecture/email.md` for state and rollout invariants.
 - Retry cache bootstrap on reconnect/foreground or draft Retry only when storage was proven untouched; retain the same scope and block draft sync until the replacement queue is readable.
@@ -486,13 +537,43 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   feature-specific query orchestration with its owning feature.
 - Refresh the channel list's bounded unread edge when opening a conversation,
   including an empty unread result after a read on another device.
+- Decide channel detail access from completed server results; bound confirmations of contradictory cache membership, preserve known unavailable state during retries, and keep unavailable routes registered for notification/reconnect refresh.
+- Read folders for picking or moving through `createFolderList`
+  (`queries/storage/folder-list`): it matches the Drive sidebar's source, so a
+  folder open in Drive, including a team folder, is always in the list. Keep
+  move rules in `folder-destinations.ts` so the picker and drop targets agree.
+  Create one `createFolderDropTargets` per surface, not per row, so a long
+  folder tree shares its folder list and mutation. Rows learn what a drag
+  carries from `EntityDragSelectionContext`,
+  which `SoupEntityContextMenu` provides; see
+  [dragging rows into a folder](../../docs/agent-guide/navigation.md#dragging-rows-into-a-folder).
 - Keep channel rail and title menus on `CHANNEL_ACTION_VIEW_CONTEXT`, including
   the shared desktop `Open in new split` action and its mobile/capacity guards.
+- Gate the Chat redesign with `enable-chat-sidebar-sections`; wait for its result, restore the tabbed rail when off, and keep mobile unchanged.
+  Keep the original rail renderer and label dialogs in `components/rail/`; build the redesigned rail and section dialogs in `components/rail/next/`, with shared controller, context, and row primitives outside `next/`.
+  With the flag on, keep desktop Chat sections in a scrolling stack with Favorites first and DMs directly below; personal and team-shared section assignments remain independent, including when dragging a row out of its originating section.
+  Keep resize grips keyboard-accessible, preserve per-section heights in personal preferences, and route list navigation through the sectioned renderer's scroll handle rather than global virtualizer indexes.
+  Cap section heights at measured list content and available pane space; hide resize grips for two or fewer items, default Favorites and DMs to four rows, and default other sections to their maximum height.
+  Mobile retains the recent feed. Keep New channel and New direct message on their separate existing creation flows, independent of the sidebar flag.
+  Use `--sidebar-gutter` for the outer section, DM, and search containers; shared headings and rows provide their own item padding.
+  Indent all section content by 8px, including Favorites, custom sections, DMs, and empty states; keep unsectioned search results unindented.
+  Reuse shared collapsible section headers and their hidden-caret behavior without leading icons; keep a neutral Shared badge next to the name before the caret, apply focus backgrounds across the full header row, and omit trailing header padding.
+  Space sections with the stack's flex gap, not header padding; wrap each custom section's header and content in one drop target and highlight.
+  Name the team-channel section after the current team, falling back to Team channels while its name is unavailable.
+  Keep available channel rows visible during section hydration and refetches; pass server-returned member IDs to `queries/channel/by-ids`, whose single Soup owner selects cached rows and fetches missing records. Keep entity-ID hydration generic in Soup, with channel identities, batching, and unread refreshes in the channel query layer; append per-section skeletons only while unresolved members load.
+  Show lock icons for private conversations and visible per-section options; keep empty sections usable as drop targets without an all-sections management menu.
+  Create all section types through New → New section in a wider dialog with Smart in the body and Shared in the footer; keep collapse on the header and style deletion as destructive.
+  Keep per-section sorting and unread filters personal, and filter after membership assignment so hidden rows never leak into another section.
+  Default Favorites to Custom order and persist drag reordering through the shared favorites mutation; preserve hidden and non-channel favorite positions, disable dragging under automatic sorts, show an insertion line at the actual destination edge, and keep the original rail unchanged.
+  Share the sliders-icon section menu's Sort, Filter, and actions with a header context menu; use trailing `SingleSelectCheck` marks for sorting, keep the Unread only label left and its switch right, and keep the filter submenu open when toggled.
+  Compose the section click and right-click menus with `ContextMenuContent`, `MenuItem`, `MenuGroup`, and `MenuSeparator`; do not nest padded `Dropdown.Group` elements inside a context-menu surface.
+  Keep all section mute, unmute, and snooze actions personal to the viewer; use the complete current membership, not filtered or hydrated rows, and never apply the change to later additions. Resolve built-in membership through the complete channel list, preserving sidebar assignment exclusions and participant checks; Favorites targets channel favorites only. Reuse notification mutations and the shared snooze picker, preserving successful writes on partial failure.
+  Use checkbox items in Add to section to toggle membership within each scope without changing the other scope.
 - Route supported move, trash, restore, permanent-delete, duplicate, and share-policy
   writes through `queries/storage/entity-mutations` when GraphQL Soup is enabled;
   never retry failed GraphQL writes through REST. Preserve non-owner history removal
   and version-specific markdown forks on their existing paths. Confirmed restores
-  clear earlier deletion markers without clearing a newer delete's intent.
+  clear earlier deletion markers without clearing a newer delete's intent; key markers and restore confirmations by normalized entity type plus ID, never by bare ID.
 - Preserve loaded block content on initial access confirmation when its loader
   supplies no permissions; reload only on a later confirmed permission change.
   Apply shared access in place only after a successful permissionless load.
@@ -536,6 +617,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - When adding or changing a feature flag, follow the `feature-flags` skill.
 - Gate routine template actions, pages, dialogs, and message cards on `enable-routine-sharing`; keep ordinary routines usable while it is off.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
+- Keep Tasks date ranges on view-owned date-bucket boundaries in `features/tasks-view/core/task-due-date.ts`; send `sort_method=property` with the selected definition and direction, use keyed `date_ranges` grouping, and restart pages when midnight/timezone/resume changes the query key; preserve text-search ordering.
+- Render Tasks due dates in an editable list-property column with a calendar icon for set dates and a slashed calendar for no due date; show only the icon on phones and narrow panes, preserve urgency colors for set dates, keep the current date visible in its dropdown, and limit warning urgency to today and tomorrow.
+- Revalidate Soup queries whose selected sort/group property or date predicate matches an edited definition; compute loaded date-group movement in TypeScript, then refetch authoritative counts and unloaded rows. Keep property sorts and date filters out of the timestamp-only WASM projection.
+- Keep REST grouped Soup item pools and `itemIds` keyed by raw entity IDs, matching Tasks readers and the normalized cache.
 
 ## Rules
 
@@ -672,6 +757,20 @@ and keep Pro checkout disabled while eligibility is unknown. Refresh the offer
 on focus/reconnect; route existing subscriptions to billing management. Keep
 known management access through refetch failures, but hide unconfirmed trials.
 Reset rejected checkout offers before refetching eligibility.
+
+## Native commands
+
+Over-the-air bundles reach native apps older than the commands they call.
+`native-commands.json` lists every Tauri command the web code invokes directly,
+through a wrapper such as the cache host's `request`, or by `addPluginListener`.
+`src/lib/tauri/native-commands.test.ts` reads the calls with the TypeScript
+parser and fails when one is missing from that list, is not registered by the
+app (`generate_handler!` or an in-repo plugin's `build.rs`), or names its
+command with a value it cannot read: use a string literal, a constant, or a
+parameter typed as a union of literals. Commands that published plugins' own
+JavaScript packages call are not covered. Before adding a command to the list,
+raise `min-native-build.json` to the first build with it, or handle
+`Command … not found` in the caller (see the src-tauri README).
 
 ## Desktop release builds: generated WASM
 
@@ -826,7 +925,7 @@ phone, and tablet:
 See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files).
 
 ## Interface icons
-- Task rows, document mention pills, and @mention menu rows use `TaskStatusIcon` with the current status property; use the task subtype completion flag only when a recognized status is unavailable. Mention pills show status only in that leading icon, not again among the trailing task badges. Keep generic navigation and creation icons independent of task state.
+- Task rows, property values, document mention pills, and @mention menu rows use `TaskStatusIcon` with the current status property; use the task subtype completion flag only when a recognized status is unavailable. Task lists edit status and priority through leading `TaskPropertyControl` icons before the title, not duplicate columns or trailing pills. Mention pills show status only in that leading icon, not again among the trailing task badges. Keep generic navigation and creation on the custom checked-square task icon, independent of task state.
 - Read [the icon system rules](src/components/icon/system/README.md) before adding or changing interface icons or icon motion. Reuse the original Macro SVG family via individual `@icon/system/...` imports; do not introduce another icon set.
 - If a glyph is missing, author original SVG geometry on the 24-unit grid with round caps/joins, restrained detail, `currentColor`, and the documented theme-aware weight. Never trace or import proprietary symbol paths. Match active/bold variants and review 14/16/20/24 px in light and dark mode.
 - Interactive glyphs use the shared `installIconMotion` behavior; do not add per-button bounce/spin effects. Keep state indicators static, preserve accessible control names, and honor reduced motion. See the icon README for wrapper and opt-out attributes.
@@ -834,8 +933,16 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 ### Creation choices and notifications
 
 - Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
-- Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button.
+- Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
 - Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
+
+### Inline property values
+
+Inline property fields stay `readOnly`, never `disabled`, while they save: a
+browser moves focus off a disabled field, so a failed save would strand it. Enter
+and Escape return focus to the value through `Property.Root`; tabbing or clicking
+away leaves focus where the user put it. The backend-free regression is
+`bunx playwright test --config src/features/property/editors/inline/browser-test/playwright.config.ts`.
 
 ### Sidebar tag dragging
 
@@ -845,6 +952,18 @@ Use the shared scoped drag helpers and overlayIcon for the tag chip.
 The backend-free browser regression is
 `bunx playwright test --config src/features/property/tags/browser-test/playwright.config.ts`.
 
+### Enter on a property pill
+
+A document control owns Enter unless a press focused it, including one given
+focus back when a mouse dismisses its picker. Tab reaches an editable pill
+directly; its hover card keeps a stop only on read-only values. Real focus
+heuristics decide this, so jsdom can't cover it. The backend-free browser
+regression is
+`bunx playwright test --config src/features/property/browser-test/playwright.config.ts`.
+
 Use `features/channel/channel-icon.tsx` for conversation identity in rows,
 favorites, and headers: channel pictures or hashtags, human/self-DM avatars,
 and bot personas share one renderer; keep surface sizing in the caller.
+
+- Advertise Mail v5 capsules only for the current browser engine or a verified supported installed native build; OTA bundle version alone cannot establish native capability.
+- Bound native Mail capability discovery to 1.5 seconds and cache the legacy profile on failure or timeout so stalled IPC cannot block GraphQL transport; record the selected profile and bounded outcome in HTTP and WebSocket setup spans without error text.

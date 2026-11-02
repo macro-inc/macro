@@ -56,6 +56,7 @@ The functional test `apps/web/tests/functional/whatsapp-linked.spec.ts` is the
 reference mock: it answers `whatsapp/account`, `whatsapp/connect`,
 `whatsapp/pairing/<id>` (poll and `DELETE`), `whatsapp/chats` (`GET`),
 `whatsapp/lookups` (`POST {phoneNumber}`) and `whatsapp/lookups/<id>` (poll),
+`whatsapp/history-import` (`POST`),
 `whatsapp/disconnect`, `external-chats` (`GET` the list; `POST` adds, body
 `{provider: "whatsapp", remoteId: <jid>, kind}`), the `external-chats/<id>/…`
 routes and `entities/external_chat/<id>/…`, and flips the pairing to `success`
@@ -134,13 +135,19 @@ The detail's `limits` supplies allowed MIME types, bytes and the edit window.
 The owner may stop syncing (details → **Syncing**, groups and direct chats) with
 `DELETE /external-chats/<id>`; history remains readable.
 
-After adding, DSS imports earlier messages from the owner's phone (up to 500
-messages or 90 days). The detail's `backfill` drives the header's subtitle:
-**WhatsApp · Importing history…** while `pending`/`running`, **WhatsApp · Waiting
-for your phone to import history** (or *the owner's phone* for shared viewers)
-while `waiting_for_phone`; the same line shows above the oldest message.
-`waiting_for_message` (nobody has posted since adding, so nothing to import
-from yet) shows nothing; the first message starts the import. Imported
+After adding, earlier messages (up to 500 messages or 90 days) come from the
+owner's phone only when they press **Import** in the bottom-right prompt
+**Import WhatsApp history** ("Open WhatsApp on your phone and keep it open,
+then import …"), shown app-wide while any of their chats is
+`waiting_for_phone`; closing it hides it until the next load (it is the only
+way to start an import). **Import**
+posts `/whatsapp/history-import`. The detail's `backfill` drives the header's
+subtitle: **WhatsApp · Importing history…** while `pending`/`running`,
+**WhatsApp · Earlier messages not imported. Open WhatsApp on your phone, then
+import them.** (*Earlier messages wait for the owner's phone* for shared
+viewers) while `waiting_for_phone`; the same line shows above the oldest
+message. `waiting_for_message` (nobody has posted since adding, so nothing to
+import from yet) shows nothing; the first message makes it importable. Imported
 messages appear older than what is shown as each page lands (pushed as
 `external_chat_changed`), without moving the viewer's scroll position. `done` is
 silent; `partial` leaves **Earlier messages stay in WhatsApp** above the oldest

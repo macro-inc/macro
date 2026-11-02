@@ -1,8 +1,6 @@
 //! Importing earlier messages of the owner's added chats from the phone, a
 //! page at a time.
 
-use std::time::Duration;
-
 use external_chat::domain::models::BackfillState;
 use tracing::Instrument;
 use whatsapp_linked::domain::events::{BackfillWork, HistoryPage};
@@ -10,12 +8,13 @@ use whatsapp_linked::domain::events::{BackfillWork, HistoryPage};
 use super::{AccountExit, BACKFILL_PAGE, Running, SessionError, WhatsAppSession, survive};
 
 impl<Session: WhatsAppSession> Running<'_, Session> {
-    /// Imports earlier messages of the owner's newly added groups from the
-    /// phone, a page at a time: asks for the next page of every group that
-    /// has none outstanding, marks unanswered requests as waiting for the
-    /// phone, and asks again after [`AccountConfig::backfill_retry`] (at once
-    /// with `retry_now`, after reconnecting).
-    pub(super) async fn backfill(&mut self, retry_now: bool) -> Result<(), AccountExit> {
+    /// Continues imports the owner started: asks for the next page of every
+    /// chat with none outstanding, and marks a request the phone left
+    /// unanswered for [`AccountConfig::backfill_timeout`] as waiting for the
+    /// phone. Never asks the phone on its own: each request wakes WhatsApp on
+    /// the phone (on iOS, a "syncing stopped" notification when it can't
+    /// finish), so only the owner's Import starts one.
+    pub(super) async fn backfill(&mut self) -> Result<(), AccountExit> {
         if !self.is_connected() {
             return Ok(());
         }
@@ -27,30 +26,31 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
             return Ok(());
         };
         let now = chrono::Utc::now();
-        let elapsed = |at: Option<chrono::DateTime<chrono::Utc>>| {
-            at.and_then(|at| (now - at).to_std().ok())
-                .unwrap_or(Duration::MAX)
-        };
         for group in work {
-            match group.state {
-                BackfillState::Running if group.requested_at.is_some() => {
-                    if elapsed(group.requested_at) >= self.config.backfill_timeout {
-                        tracing::info!(
-                            account_id = %self.scope.account_id,
-                            chat_id = %group.chat_id,
-                            "The phone did not answer a history request; waiting for it"
-                        );
-                        survive(
-                            self.sessions
-                                .backfill_unanswered(self.scope, group.chat_id)
-                                .await,
-                            "backfill_unanswered",
-                        )?;
-                    }
+            let unanswered = group.requested_at.map(|at| {
+                (now - at)
+                    .to_std()
+                    .is_ok_and(|elapsed| elapsed >= self.config.backfill_timeout)
+            });
+            match (group.state, unanswered) {
+                (BackfillState::Running, Some(true)) => {
+                    tracing::info!(
+                        account_id = %self.scope.account_id,
+                        chat_id = %group.chat_id,
+                        "The phone did not answer a history request; the owner can start it again"
+                    );
+                    survive(
+                        self.sessions
+                            .backfill_unanswered(self.scope, group.chat_id)
+                            .await,
+                        "backfill_unanswered",
+                    )?;
                 }
-                BackfillState::WaitingForPhone
-                    if !retry_now && elapsed(group.requested_at) < self.config.backfill_retry => {}
-                _ => Box::pin(self.request_page(&group)).await?,
+                (BackfillState::Running, Some(false)) => {}
+                (BackfillState::Pending | BackfillState::Running, None) => {
+                    Box::pin(self.request_page(&group)).await?;
+                }
+                _ => {}
             }
         }
         Ok(())
@@ -127,7 +127,7 @@ impl<Session: WhatsAppSession> Running<'_, Session> {
             .iter()
             .any(|(_, state)| *state == BackfillState::Running)
         {
-            Box::pin(self.backfill(false)).await?;
+            Box::pin(self.backfill()).await?;
         }
         Ok(())
     }

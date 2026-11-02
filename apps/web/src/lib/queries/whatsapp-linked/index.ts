@@ -142,6 +142,20 @@ export function useLookUpWhatsappNumberMutation() {
   }));
 }
 
+/**
+ * Asks the owner's phone for the earlier messages of their chats waiting for
+ * it; the chats show the import as it runs.
+ */
+export function useImportWhatsappHistoryMutation() {
+  return useMutation(() => ({
+    mutationFn: () =>
+      whatsappOperation('import_history', () =>
+        throwOnErr(() => client.importHistory())
+      ),
+    onSettled: invalidateExternalChatList,
+  }));
+}
+
 /** Adds one of the account's WhatsApp chats to Macro as an external chat. */
 export function useAddWhatsappChatMutation() {
   return useMutation(() => ({
