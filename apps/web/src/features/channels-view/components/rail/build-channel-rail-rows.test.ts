@@ -5,6 +5,10 @@ import {
   buildChannelRailRows,
   buildChannelSectionRows,
 } from './build-channel-rail-rows';
+import {
+  buildChannelRailRows as buildSectionedRailRows,
+  groupChannelRailSections,
+} from './next/build-channel-rail-rows';
 
 function channel(
   id: string,
@@ -123,7 +127,7 @@ describe('buildChannelSectionRows', () => {
   });
 
   it.each([true, false])(
-    'keeps non-team channels in the plain list when labels are open=%s, ignoring cached memberships',
+    'excludes non-team channels from team sections when labels are open=%s',
     (isOpen) => {
       const publicChannel = channel('public', 'Public', 'public');
       const privateChannel = channel('private', 'Private', 'private');
@@ -151,10 +155,7 @@ describe('buildChannelSectionRows', () => {
 
       expect(
         rows.filter((row) => row.kind === 'conversation' && !row.labelId)
-      ).toEqual([
-        { kind: 'conversation', channel: publicChannel },
-        { kind: 'conversation', channel: privateChannel },
-      ]);
+      ).toEqual([]);
       expect(
         rows.filter((row) => row.kind === 'conversation' && row.labelId)
       ).toEqual(
@@ -419,4 +420,99 @@ it('renders a channel in every matching smart tag with unique navigation IDs, ex
   expect(collapsed.filter((row) => row.kind === 'conversation')).toEqual([
     { kind: 'conversation', channel: deals },
   ]);
+});
+
+it('keeps saved favorite order unless an automatic sort is selected', () => {
+  const items: Parameters<typeof buildSectionedRailRows>[2] = {
+    favorites: [zeta, deals].map((item, sortOrder) => ({
+      entityId: item.id,
+      entityType: 'channel',
+      sortOrder,
+      createdAt: '2026-01-01',
+    })),
+    team_channels: [],
+    channels: [],
+    direct_messages: [],
+    recents: [],
+    threads: [],
+  };
+  const expanded = {
+    favorites: true,
+    team_channels: false,
+    channels: false,
+    direct_messages: false,
+  };
+  const rows = (sort?: 'manual' | 'name') =>
+    buildSectionedRailRows('browse', expanded, items, [], {
+      preferences: { favorites: { sort } },
+      channelById: (id) => byId.get(id),
+      unreadChannelIds: new Set(),
+    }).flatMap((row) =>
+      row.kind === 'favorite' ? [row.favorite.entityId] : []
+    );
+  expect(rows()).toEqual(['zeta', 'deals']);
+  expect(rows('manual')).toEqual(['zeta', 'deals']);
+  expect(rows('name')).toEqual(['deals', 'zeta']);
+});
+
+it('keeps overlapping section members and loading rows in their own scroll regions', () => {
+  const labels = [
+    label('first', 'First', ['acme']),
+    label('second', 'Second', ['acme']),
+  ];
+  const sections = buildChannelSectionRows({
+    labels,
+    channels: [acme],
+    channelsById: byId,
+    isLabelOpen: (id) => id === 'first',
+  });
+  const rows = buildSectionedRailRows(
+    'browse',
+    {
+      favorites: false,
+      team_channels: true,
+      channels: true,
+      direct_messages: true,
+    },
+    {
+      favorites: [],
+      team_channels: [acme],
+      channels: [],
+      direct_messages: [deals],
+      recents: [],
+      threads: [],
+    },
+    sections,
+    {
+      preferences: {},
+      channelById: (id) => byId.get(id),
+      unreadChannelIds: new Set(),
+      referenceStatuses: { 'label:first': 'loading' },
+    }
+  );
+  const grouped = groupChannelRailSections(rows);
+  expect([...grouped.keys()]).toEqual([
+    'favorites',
+    'direct_messages',
+    'team_channels',
+    'label:first',
+    'label:second',
+  ]);
+  expect(grouped.get('label:first')?.rows.map((row) => row.id)).toEqual([
+    'channel:acme:label:first',
+    'reference-status:label:first',
+  ]);
+  expect(grouped.get('label:second')?.rows).toEqual([]);
+  expect(grouped.get('direct_messages')?.rows.map((row) => row.id)).toEqual([
+    'channel:deals',
+    'status:direct_messages',
+  ]);
+  expect(
+    grouped
+      .get('team_channels')
+      ?.rows.every((row) => row.kind !== 'conversation')
+  ).toBe(true);
+  expect(
+    rows.filter((row) => row.kind === 'conversation').map((row) => row.id)
+  ).toEqual(['channel:deals', 'channel:acme:label:first']);
 });

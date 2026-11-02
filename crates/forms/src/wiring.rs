@@ -1,6 +1,6 @@
 //! The one assembly of the forms service from its Postgres adapters, so
 //! every host runs the same SQL; hosts supply the databases service, entity
-//! access, the liveness publisher and the broker.
+//! access, the liveness publisher, the broker and the static-file client.
 
 use std::sync::Arc;
 
@@ -9,12 +9,14 @@ use databases::domain::ports::{DatabaseMetadataReads, DatabaseRowReads, Database
 use entity_access::domain::ports::AccessibleForms;
 use macro_event_broker::MacroEventBroker;
 use sqlx::PgPool;
+use static_file_service_client::StaticFileServiceClient;
 
 use crate::domain::ports::FormEventPublisher;
 use crate::domain::service::FormsServiceImpl;
 use crate::outbound::collaborative_layout::SurfaceFormDrafts;
 use crate::outbound::entity_access_directory::EntityAccessFormDirectory;
 use crate::outbound::pg_forms_repo::PgFormsRepo;
+use crate::outbound::static_file_images::StaticFileFormImages;
 use crate::outbound::system_clock::SystemClock;
 
 /// The service as every host builds it, over the host's already-built
@@ -27,11 +29,13 @@ pub type PgFormsService<Databases, EntityAccess, Events, Broker, Surfaces> = For
     SystemClock,
     Broker,
     SurfaceFormDrafts<Surfaces>,
+    StaticFileFormImages,
 >;
 
 /// Build the forms service over `pool`, the host's databases service, its
 /// entity access (for the forms catalog), the liveness publisher for open
-/// form pages, and the broker for `macro.forms`.
+/// form pages, the broker for `macro.forms`, and the static-file service
+/// for the images its branding shows.
 pub fn build_service<Databases, EntityAccess, Events, Broker, Surfaces>(
     pool: PgPool,
     databases: Arc<Databases>,
@@ -39,6 +43,7 @@ pub fn build_service<Databases, EntityAccess, Events, Broker, Surfaces>(
     events: Events,
     broker: Broker,
     surfaces: Arc<Surfaces>,
+    static_files: StaticFileServiceClient,
 ) -> PgFormsService<Databases, EntityAccess, Events, Broker, Surfaces>
 where
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
@@ -55,5 +60,6 @@ where
         SystemClock,
         broker,
         SurfaceFormDrafts::new(surfaces),
+        StaticFileFormImages::new(static_files),
     )
 }
