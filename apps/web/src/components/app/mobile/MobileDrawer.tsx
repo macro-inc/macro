@@ -40,6 +40,10 @@ export function scrollToFocusedInput(e: FocusEvent, offset = 40) {
   }, 300);
 }
 
+/** Corvu's focus trap's own selector, to read the stop it would focus. */
+const FOCUSABLE_SELECTOR =
+  'a[href]:not([tabindex="-1"]), button:not([tabindex="-1"]), input:not([tabindex="-1"]), textarea:not([tabindex="-1"]), select:not([tabindex="-1"]), details:not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])';
+
 /**
  * Drop-in replacement for `Drawer.Content` that handles mobile keyboard
  * behaviour automatically:
@@ -287,6 +291,34 @@ function swallowRestOfTap() {
 }
 
 /**
+ * A sheet opens with focus on itself unless its first tab stop is something to
+ * type into. Corvu's focus trap otherwise focuses that stop, and a browser
+ * paints the focus ring for a scripted focus arriving while nothing on the
+ * page is focused — which is every tap, since a tapped button is not focused
+ * on iOS. That ringed the first row of every sheet of rows.
+ *
+ * A text field keeps the focus: a sheet that opens for a search or a name is
+ * opened to type in. So does whatever the sheet focused itself while opening,
+ * such as the heading Settings announces when it drills in. The content
+ * element carries `tabindex="-1"`, so the trap, Escape and the sheet's own
+ * announcement all still work when the sheet holds focus itself. Sheets that
+ * want another control focused name it with `initialFocusEl` or their own
+ * `onInitialFocus`, as the comment composer and the model picker do.
+ */
+function focusSheetOverItsFirstRow(event: Event) {
+  const sheet = event.target as HTMLElement | null;
+  if (!sheet) return;
+  if (sheet.contains(document.activeElement)) {
+    // Corvu would move this to the first tab stop; the sheet chose it.
+    event.preventDefault();
+    return;
+  }
+  if (isEditableInput(sheet.querySelector(FOCUSABLE_SELECTOR))) return;
+  event.preventDefault();
+  sheet.focus();
+}
+
+/**
  * Wrapper around Corvu's Drawer for mobile. Handles styling and input/virtual keyboard behaviour.
  */
 export const MobileDrawer = Object.assign(
@@ -299,6 +331,7 @@ export const MobileDrawer = Object.assign(
     const [local, rest] = splitProps(props, [
       'onOutsidePointer',
       'onOpenChange',
+      'onInitialFocus',
     ]);
     let uncontrolledOpen = props.initialOpen ?? false;
     let disposed = false;
@@ -325,6 +358,11 @@ export const MobileDrawer = Object.assign(
           uncontrolledOpen = open;
           local.onOpenChange?.(open);
           if (!open && !closed()) setActiveSnapPoint(1);
+        }}
+        onInitialFocus={(event) => {
+          local.onInitialFocus?.(event);
+          if (event.defaultPrevented || props.initialFocusEl) return;
+          focusSheetOverItsFirstRow(event);
         }}
         onOutsidePointer={(event) => {
           if (!dismissesDrawer(event)) event.preventDefault();
