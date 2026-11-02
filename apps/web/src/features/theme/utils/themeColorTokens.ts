@@ -108,6 +108,17 @@ export function getDefaultSemanticColorTokens(
     success: tokenReference('green'),
     warning: tokenReference(mode === 'dark' ? 'amber' : 'yellow'),
     failure: tokenReference('red'),
+    'priority-urgent': tokenReference('orange'),
+    'task-status-not-started': tokenReference('content-1'),
+    'task-status-in-progress': mixTokens(
+      'amber',
+      'content-0',
+      mode === 'dark' ? 0.8 : 0.5,
+      'srgb'
+    ),
+    'task-status-in-review': tokenReference('violet'),
+    'task-status-completed': tokenReference('accent'),
+    'task-status-canceled': tokenReference('content-1'),
     chrome: tokenReference('surface-4'),
   };
 }

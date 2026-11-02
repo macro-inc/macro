@@ -5,6 +5,10 @@ import { afterEach, expect, it, vi } from 'vitest';
 import type { CrmContact } from '../core/contact';
 import { CompanyContactsSection } from './company-contacts-section';
 
+const { openCreateContact } = vi.hoisted(() => ({
+  openCreateContact: vi.fn(),
+}));
+
 vi.mock('@entity', () => ({
   ListEntity: (props: {
     entity: { name: string };
@@ -55,12 +59,16 @@ vi.mock('@app/components/view-shell', () => ({
 }));
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
+    openCreateContact,
     createNavigation: () => ({ openWithSplit: vi.fn() }),
     createContactPhoto: (email: string) => () =>
       email === 'avery@example.com' ? '/avery.jpg' : undefined,
   }),
 }));
-afterEach(cleanup);
+afterEach(() => {
+  cleanup();
+  vi.clearAllMocks();
+});
 
 const contacts: CrmContact[] = [
   {
@@ -85,6 +93,31 @@ const contacts: CrmContact[] = [
     lastInteraction: '2026-10-15',
   },
 ];
+
+it('opens contact creation for a company with no domain from either action', () => {
+  render(() => (
+    <CompanyContactsSection
+      company={{
+        id: 'co',
+        type: 'crm_company',
+        name: 'Community group',
+        ownerId: 'owner',
+        teamId: 'team',
+        hidden: false,
+        domains: [],
+      }}
+      contacts={[]}
+    />
+  ));
+  const actions = screen.getAllByRole('button', { name: 'Add contact' });
+  expect(actions).toHaveLength(2);
+  for (const action of actions) {
+    expect(action.hasAttribute('disabled')).toBe(false);
+    fireEvent.click(action);
+  }
+  expect(openCreateContact).toHaveBeenCalledTimes(2);
+  expect(openCreateContact).toHaveBeenLastCalledWith({ companyId: 'co' });
+});
 
 it('shows contact photos or a letter avatar and opens the chosen contact', () => {
   const open = vi.fn();

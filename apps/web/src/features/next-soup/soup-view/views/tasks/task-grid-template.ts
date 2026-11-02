@@ -4,6 +4,16 @@ import { EntityType } from '@service-storage/generated/schemas/entityType';
 
 export const TASK_GRID_COLUMNS = [
   {
+    id: 'priority',
+    label: 'Priority',
+    defId: SYSTEM_PROPERTY_IDS.PRIORITY,
+    dataType: DataType.SELECT_STRING,
+    isMultiSelect: false,
+    specificEntityType: null,
+    sortKey: 'priority',
+    width: 'var(--task-col-priority, 7rem)',
+  },
+  {
     id: 'status',
     label: 'Status',
     defId: SYSTEM_PROPERTY_IDS.STATUS,
@@ -13,16 +23,6 @@ export const TASK_GRID_COLUMNS = [
     sortKey: 'status',
     // CSS variable with fallback - updated by container queries in task-grid.css
     width: 'var(--task-col-status, 7rem)',
-  },
-  {
-    id: 'priority',
-    label: 'Priority',
-    defId: SYSTEM_PROPERTY_IDS.PRIORITY,
-    dataType: DataType.SELECT_STRING,
-    isMultiSelect: false,
-    specificEntityType: null,
-    sortKey: 'priority',
-    width: 'var(--task-col-priority, 7rem)',
   },
   {
     id: 'assignees',
