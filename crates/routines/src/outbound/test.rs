@@ -222,8 +222,14 @@ async fn create_rejections_carry_the_scheduler_reason() {
     let rejections = [
         ("404 Not Found", "selected agent is unavailable"),
         ("403 Forbidden", "routine owner is not authorized"),
-        ("400 Bad Request", "invalid routine task; select a model or agent and provide instructions"),
-        ("422 Unprocessable Entity", "connect every app this routine requires"),
+        (
+            "400 Bad Request",
+            "invalid routine task; select a model or agent and provide instructions",
+        ),
+        (
+            "422 Unprocessable Entity",
+            "connect every app this routine requires",
+        ),
     ];
     let server = serve_responses(
         listener,
