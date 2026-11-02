@@ -569,14 +569,21 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
             }]))
         };
         let reads = "export async function main({ knobs }: StepContext) { return { priority: knobs.priority, days: knobs.days + 1 }; }";
-        assert_eq!(code.check_program(&knobbed(reads)).await.unwrap(), Vec::new());
+        assert_eq!(
+            code.check_program(&knobbed(reads)).await.unwrap(),
+            Vec::new()
+        );
         // A choice is the union of its options, and there are no other knobs.
         for wrong in [
             "export async function main({ knobs }: StepContext) { return knobs.priority === 'Urgent'; }",
             "export async function main({ knobs }: StepContext) { return knobs.color; }",
         ] {
             assert!(
-                !code.check_program(&knobbed(wrong)).await.unwrap().is_empty(),
+                !code
+                    .check_program(&knobbed(wrong))
+                    .await
+                    .unwrap()
+                    .is_empty(),
                 "{wrong}"
             );
         }
