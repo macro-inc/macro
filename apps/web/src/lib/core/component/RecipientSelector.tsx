@@ -59,6 +59,7 @@ function ChipWithUserTooltip(props: {
       open={open()}
       onOpenChange={setOpen}
       triggerAs="div"
+      triggerClass="max-w-full"
       trigger={props.chip}
       content={props.renderTooltip(() => setOpen(false))}
       // Chips mount under the cursor when a recipient is picked via keyboard;
@@ -72,6 +73,7 @@ function RecipientChip(props: {
   icon?: JSX.Element;
   label: string;
   address?: string;
+  showAddress?: boolean;
   onRemove: () => void;
   draggable?: boolean;
   onDragStart?: (e: DragEvent) => void;
@@ -79,18 +81,28 @@ function RecipientChip(props: {
 }) {
   return (
     <div
-      class="flex flex-row shrink-0 py-1 pl-2 gap-1 pr-1 overflow-hidden items-center bg-active rounded-full"
+      class="flex flex-row shrink-0 max-w-full py-1 pl-2 gap-1 pr-1 overflow-hidden items-center bg-active rounded-full"
       draggable={props.draggable}
       onDragStart={props.onDragStart}
       onDragEnd={props.onDragEnd}
     >
       <Show when={props.icon}>{props.icon}</Show>
-      <p class="text-sm whitespace-nowrap">{truncateString(props.label, 20)}</p>
+      <p class="min-w-0 truncate text-sm">{truncateString(props.label, 20)}</p>
       <Show when={props.address}>
-        {(address) => <span class="sr-only">{address()}</span>}
+        {(address) => (
+          <span
+            class={
+              props.showAddress
+                ? 'min-w-0 truncate text-sm text-ink-muted'
+                : 'sr-only'
+            }
+          >
+            {address()}
+          </span>
+        )}
       </Show>
       <XIcon
-        class="size-5 hover:bg-hover hover:text-failure p-1 rounded-full"
+        class="size-5 shrink-0 hover:bg-hover hover:text-failure p-1 rounded-full"
         onClick={props.onRemove}
       />
     </div>
@@ -399,6 +411,8 @@ export type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   /** Open the suggestions dropdown when the input gains focus (default true) */
   openOnFocus?: boolean;
   triggerMode?: ComboboxTriggerMode;
+  /** Retain a typed query when focus moves to an action beside the picker. */
+  noResetInputOnBlur?: boolean;
   hideBorder?: boolean;
   noPadding?: boolean;
   includeSelf?: boolean;
@@ -415,6 +429,8 @@ export type RecipientSelectorProps<K extends CombinedRecipientKind> = {
   inviteExternalEmails?: boolean;
   /** Messages can target only existing users or channels. Defaults to true. */
   allowCustomRecipients?: boolean;
+  /** Show each person's address beside their name on chips, as email does. */
+  showChipAddresses?: boolean;
 };
 
 export function RecipientSelector<K extends CombinedRecipientKind>(
@@ -422,9 +438,6 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 ): JSX.Element {
   const [inputRef, setInputRef] = createSignal<HTMLInputElement>();
   const [inputValue, setInputValue] = createSignal('');
-  const [customUsers, setCustomUsers] = createSignal<WithCustomUserInput<K>[]>(
-    []
-  );
   const [disabled, setDisabled] = createSignal(false);
 
   const [listboxRef, setListboxRef] = createSignal<HTMLElement | undefined>();
@@ -507,7 +520,6 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
   function handleChange(value: CombinedRecipientItem[]) {
     let newestSelection = value.at(-1);
     if (!newestSelection) {
-      setCustomUsers([]);
       props.setSelectedOptions([]);
       return;
     }
@@ -535,14 +547,6 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       newestSelection.kind === 'custom' ||
       newestSelection.kind === 'agent'
     ) {
-      setCustomUsers(
-        value.filter((o) => {
-          if (o.kind === 'custom') {
-            return o.data.invalid === false;
-          }
-          return false;
-        }) as WithCustomUserInput<K>[]
-      );
       props.setSelectedOptions(value as CombinedRecipientItem<K>[]);
       return;
     }
@@ -690,10 +694,12 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
       typed.push(recipientEntityMapper('custom')(customUserInput));
     }
 
-    return [
-      ...rankRecipientMatches([...searched, ...typed], searchTerm),
-      ...customUsers(),
-    ] as CombinedRecipientItem<K>[];
+    // Typed recipients already chosen stay out of the suggestions, where Enter
+    // on text matching nothing would toggle one off and clear the text.
+    return rankRecipientMatches(
+      [...searched, ...typed],
+      searchTerm
+    ) as CombinedRecipientItem<K>[];
   });
 
   const visibleOptionKeys = createMemo(
@@ -724,11 +730,11 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
 
   let contentEl: HTMLElement | undefined;
 
-  // Committing changes the selection, and Kobalte clears the input when it does.
-  const commitSeparatedEmails = (input: string) => {
-    if (!/[,;]\s*$/.test(input)) return false;
-    const emails = input
-      .split(/[,;]/)
+  // Adds each typed address as the known recipient with that address, or as a
+  // typed one. Committing changes the selection, and Kobalte clears the input
+  // when it does.
+  const commitEmails = (parts: string[]) => {
+    const emails = parts
       .map((part) => part.trim())
       .filter(Boolean)
       .filter(
@@ -772,7 +778,21 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
     return true;
   };
 
+  const commitSeparatedEmails = (input: string) =>
+    /[,;]\s*$/.test(input) && commitEmails(input.split(/[,;]/));
+
+  // Contacts and names load after the field opens and reorder the rows, so a
+  // row the pointer rests on can change under it. Enter on a complete address
+  // adds that address unless an arrow key picked another row since the edit.
+  let rowPickedByKey = false;
+  const commitTypedAddressOnEnter = (e: KeyboardEvent) => {
+    if (rowPickedByKey || e.isComposing) return false;
+    if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return false;
+    return commitEmails([inputValue()]);
+  };
+
   const onInputChange = (next: string) => {
+    rowPickedByKey = false;
     props.onInputChange?.(next);
     if (commitSeparatedEmails(next)) {
       setInputValue('');
@@ -819,6 +839,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
         value={props.selectedOptions as CombinedRecipientItem[]}
         onChange={handleChange}
         onInputChange={onInputChange}
+        noResetInputOnBlur={props.noResetInputOnBlur}
         shouldFocusWrap
         placeholder={
           props.selectedOptions?.length === 0 || isMobile()
@@ -883,6 +904,7 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                                           ? undefined
                                           : email
                                       }
+                                      showAddress={props.showChipAddresses}
                                       onRemove={() => state.remove(option)}
                                       draggable={!!props.onChipDragStart}
                                       onDragStart={(e) =>
@@ -1033,6 +1055,20 @@ export function RecipientSelector<K extends CombinedRecipientKind>(
                         }
 
                         inputEl?.blur();
+                        return;
+                      }
+
+                      if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        rowPickedByKey = true;
+                      }
+
+                      if (
+                        e.key === 'Enter' &&
+                        context.isOpen() &&
+                        commitTypedAddressOnEnter(e)
+                      ) {
+                        e.preventDefault();
+                        context.close();
                         return;
                       }
 

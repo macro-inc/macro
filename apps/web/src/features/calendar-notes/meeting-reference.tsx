@@ -126,6 +126,7 @@ export function MeetingReference(props: {
               <CalendarEventPreviewDetails
                 event={current()}
                 mentionedEventId={props.link.eventId}
+                onJoin={() => setDetailsOpen(false)}
                 sharedActions={resolved()?.sharedActions}
               />
             )}

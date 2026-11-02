@@ -58,7 +58,8 @@ use crate::{
     },
 };
 use channel_labels::domain::models::{
-    ChannelLabel, ChannelLabelRule, ChannelLabelsList, SmartTagChannelMatch, SmartTagPreview,
+    ChannelLabel, ChannelLabelRule, ChannelLabelScopeSelection, ChannelLabelsList,
+    SmartTagChannelMatch, SmartTagPreview,
 };
 use channel_labels::inbound::axum_router::{
     CreateChannelLabelRequest, RenameChannelLabelRequest, SetChannelLabelRequest,
@@ -199,8 +200,8 @@ use soup::domain::models::{SoupItemWithProperties, SoupPropertiesField};
 use soup::inbound::axum_router::{
     ApiGroupByField, ApiGroupMeta, GroupedSoupGroupPage, GroupedSoupInitialPage, GroupedSoupPage,
     PostGroupedSoupAstGroupPageRequest, PostGroupedSoupAstInitialRequest,
-    PostGroupedSoupAstRequest, PostSoupAstRequest, PostSoupRequest, SoupApiItem, SoupApiSort,
-    SoupPage,
+    PostGroupedSoupAstRequest, PostSoupAstRequest, PostSoupRequest, PropertyBucketing,
+    PropertyDateRange, PropertyDateRanges, SoupApiItem, SoupApiSort, SoupPage,
 };
 use user_api_key::domain::models::{CreatedUserApiKey, UserApiKeyInfo};
 use user_api_key::inbound::axum_router::{CreateUserApiKeyRequest, UserApiKeysList};
@@ -474,6 +475,9 @@ use utoipa::OpenApi;
         whatsapp_linked::inbound::router::passkey,
         whatsapp_linked::inbound::router::disconnect,
         whatsapp_linked::inbound::router::chats,
+        whatsapp_linked::inbound::router::start_lookup,
+        whatsapp_linked::inbound::router::lookup,
+        whatsapp_linked::inbound::router::import_history,
 
         access_requests::inbound::axum_router::state_handler,
         access_requests::inbound::axum_router::submit_handler,
@@ -712,6 +716,7 @@ use utoipa::OpenApi;
             ChannelLabel,
             ChannelLabelsList,
             ChannelLabelRule,
+            ChannelLabelScopeSelection,
             SmartTagChannelMatch,
             SmartTagPreview,
             CreateChannelLabelRequest,
@@ -820,6 +825,9 @@ use utoipa::OpenApi;
             PostGroupedSoupAstInitialRequest,
             PostGroupedSoupAstGroupPageRequest,
             PostGroupedSoupAstRequest,
+            PropertyBucketing,
+            PropertyDateRange,
+            PropertyDateRanges,
             ApiGroupByField,
             ApiGroupMeta,
             GroupedSoupInitialPage,

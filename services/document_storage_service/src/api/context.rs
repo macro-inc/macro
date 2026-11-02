@@ -13,7 +13,8 @@ use cal::{
     outbound::analytics_client::AnalyticsClientSink,
 };
 use calendar_events::{
-    domain::service::CalendarService, inbound::axum_router::CalendarRouterState,
+    domain::{ports::CalendarEventLabelReader, service::CalendarService},
+    inbound::axum_router::CalendarRouterState,
     outbound::pg::PgCalendarRepository,
 };
 use call::{
@@ -125,6 +126,7 @@ use macro_authorization::{
 };
 use macro_env_var::env_var;
 use macro_sha_count_client::Redis;
+use models_properties::service::property_change_source::PropertyChangeSource;
 use models_properties::service::property_value::PropertyValue;
 use notification::domain::service::SqsNotificationIngress;
 use notification::outbound::queue::SqsQueue;
@@ -308,6 +310,7 @@ pub(crate) type DssCalendarJoinRequestService =
         calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier<
             NotificationIngressType,
         >,
+        crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh,
     >;
 
 /// Calendar join-request router state.
@@ -346,6 +349,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
         &self,
         access: &EntityAccessReceipt<EditAccessLevel>,
         credited_user: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
+        source: Option<&PropertyChangeSource>,
         status: &str,
     ) -> anyhow::Result<()> {
         use properties::PropertiesService as _;
@@ -371,7 +375,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
             matches!(access.auth(), EntityAccessAuth::Authenticated(_)),
         );
         self.properties
-            .set_entity_property(
+            .set_entity_property_with_source(
                 &access,
                 SystemPropertyKey::STATUS_UUID,
                 Some(
@@ -379,6 +383,7 @@ impl TaskPropertiesPort for TaskPropertiesAdapter {
                         option_id: status_option.uuid(),
                     },
                 ),
+                source.cloned(),
             )
             .await
             .map(|_| ())
@@ -1036,6 +1041,9 @@ impl From<&ApiContext> for SearchHandlerState {
             ))
                 as Arc<dyn AgentSessionSearchMetadataService>,
             calendar_search_enabled: ctx.config.calendar_search_enabled,
+            calendar_event_labels: Arc::new(CalendarService::new(PgCalendarRepository::new(
+                ctx.readonly_db.0.clone(),
+            ))) as Arc<dyn CalendarEventLabelReader>,
         }
     }
 }

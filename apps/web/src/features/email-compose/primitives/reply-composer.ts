@@ -626,11 +626,17 @@ export function createReplyComposer(
       );
       return null;
     }
+    const recipients = form.recipients();
     if (
       !hasDraftContent(
         prepared.bodyText,
         form.subject(),
-        form.attachments.list().length
+        form.attachments.list().length,
+        // A forward's recipients are typed in, not derived from the thread,
+        // so they keep a forward with no note of its own alive.
+        form.replyType() === 'forward'
+          ? recipients.to.length + recipients.cc.length + recipients.bcc.length
+          : undefined
       )
     ) {
       return null;

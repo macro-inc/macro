@@ -267,6 +267,22 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     scheduleActiveUpdate();
   };
 
+  const navigateToToday = () => {
+    const now = new Date();
+    gotoDate(now);
+    // Scroll after the active grid renders. A newer navigation clears this job
+    // together with the date update, so it cannot scroll an unrelated period.
+    renderQueue.enqueue('scroll-to-now', () => {
+      activePage()
+        ?.api()
+        ?.scrollToTime({
+          // Keep the current-time marker below the scroller's top fade.
+          minutes: Math.max(0, now.getHours() * 60 + now.getMinutes() - 60),
+        });
+      copyActiveScrollPosition();
+    });
+  };
+
   const finishDateNavigation = async (
     transition: Promise<boolean>,
     date: Date,
@@ -393,7 +409,7 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     updateSize,
     gotoDate,
     navigateToDate,
-    navigateToToday: () => navigateToDate(new Date()),
+    navigateToToday,
     previousPeriod: () => navigatePeriod('previous'),
     nextPeriod: () => navigatePeriod('next'),
     changeView,

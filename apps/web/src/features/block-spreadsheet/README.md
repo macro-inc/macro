@@ -509,7 +509,9 @@ compare formula, error, and formatting behavior before replacing it.
   `core/chart-builder.ts`), an image file, or checkboxes, as one undoable change. Its More
   charts submenu holds radar, filled radar, bubble (x values, then pairs of
   values and sizes), stock (three or four series: high, low and close, with
-  open first for up-down bars) and contour charts. Drawings
+  open first for up-down bars), contour, histogram, waterfall, funnel, box and
+  whisker, treemap and sunburst charts; Edit chart also offers pareto, pie of
+  pie and bar of pie. Drawings
   move by dragging and keyboard arrows and size by their handles;
   `primitives/create-drawing-actions.ts` writes them, and the Edit chart
   dialog changes a chart's type, title, legend and data. Edited charts are
@@ -610,6 +612,19 @@ Import keeps what Excel calculates and shows:
   back with its current ranges and fresh caches; charts without it, or too large
   to keep, are written from what Macro knows, with axes formatted like their
   cells.
+- Excel 2016 charts. Histogram, pareto, waterfall, funnel, box and whisker,
+  treemap and sunburst charts are `cx:` chartEx parts behind
+  `mc:AlternateContent`. `core/xlsx-chartex.ts` reads them (series layout
+  options, bins, totals, quartile method, parent labels and axis gaps), keeps
+  the part for export with fresh caches, and writes parts for charts Macro
+  describes, which drawing parts wrap with Excel's fallback note. Maps and
+  other chartEx kinds import as that fallback. `core/chart-statistics.ts` holds
+  the math (Scott's-rule bins, QUARTILE.INC/EXC and 1.5 IQR whiskers, running
+  waterfall totals, label hierarchies, squarified tiles, sunburst arcs, of-pie
+  splits); `core/chart-axis-scenes.ts` and `core/chart-area-scenes.ts` draw
+  them. Pie of pie and bar of pie are `c:ofPieChart` pies with a split.
+  Automatic colors past the sixth are Office's shades of the accents
+  (`paletteColor` in `core/drawingml-colors.ts`).
 - Shapes, text boxes, lines and groups. `core/xlsx-shapes.ts` reads each
   `xdr:sp`, `xdr:cxnSp` and `xdr:grpSp` into parts placed as fractions of the
   drawing (a group's members in its own coordinates): a preset or custom

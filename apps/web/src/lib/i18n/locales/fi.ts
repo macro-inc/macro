@@ -810,7 +810,6 @@ export default {
     goForward: 'Siirry eteenpäin',
     createNewSplit: 'Luo uusi ruutu',
     close: 'Sulje',
-    returnToList: 'Palaa luetteloon',
     previousItem: 'Edellinen kohde',
     nextItem: 'Seuraava kohde',
     itemNavigation: 'Kohteiden selaus',

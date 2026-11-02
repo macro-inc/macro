@@ -1469,6 +1469,12 @@ export const mentionPreviewsResponse = zod
                   updatedAt: zod.iso
                     .datetime({})
                     .describe('Entity update time of the previewed copy.'),
+                  viewerCalendarIds: zod
+                    .array(zod.uuid())
+                    .optional()
+                    .describe(
+                      "The calendars holding `viewer_event_id`, the canonical copy's first."
+                    ),
                   viewerCopy: zod
                     .union([
                       zod.null(),
@@ -3082,6 +3088,15 @@ export const ingestTranscriptBody = zod
 /**
  * @summary List the caller's shared or private labels.
  */
+export const listChannelLabelsQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
 export const listChannelLabelsResponse = zod
   .object({
     labels: zod
@@ -3145,6 +3160,11 @@ export const listChannelLabelsResponse = zod
       .describe(
         'Every label of the scope, whether or not the caller sees channels in it.'
       ),
+    scope: zod
+      .enum(['personal', 'team'])
+      .describe(
+        'Requested label namespace. Omission retains the deployed automatic selection.'
+      ),
     teamId: zod
       .uuid()
       .nullish()
@@ -3155,6 +3175,15 @@ export const listChannelLabelsResponse = zod
 /**
  * @summary Create a label for the caller's authorized scope.
  */
+export const createChannelLabelQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
 export const createChannelLabelBody = zod
   .object({
     channelIds: zod
@@ -3242,6 +3271,15 @@ export const setChannelLabelParams = zod.object({
   channel_id: zod.uuid().describe('The channel id.'),
 });
 
+export const setChannelLabelQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
 export const setChannelLabelBody = zod
   .object({
     labelId: zod
@@ -3256,6 +3294,15 @@ export const setChannelLabelBody = zod
 /**
  * @summary Preview visible channels matched by a smart tag, without creating it.
  */
+export const previewSmartTagQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
 export const previewSmartTagBody = zod
   .object({
     attribute: zod.enum(['name']),
@@ -3297,11 +3344,29 @@ export const deleteChannelLabelParams = zod.object({
   label_id: zod.uuid().describe('The label id.'),
 });
 
+export const deleteChannelLabelQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
+});
+
 /**
  * @summary Rename a label of the caller's authorized scope.
  */
 export const renameChannelLabelParams = zod.object({
   label_id: zod.uuid().describe('The label id.'),
+});
+
+export const renameChannelLabelQueryParams = zod.object({
+  scope: zod
+    .enum(['personal', 'team'])
+    .optional()
+    .describe(
+      '`personal` selects private labels; `team` requires team membership.'
+    ),
 });
 
 export const renameChannelLabelBody = zod
@@ -4390,8 +4455,9 @@ export const createCrmCompanyBody = zod
   .object({
     domain: zod
       .string()
+      .nullish()
       .describe(
-        'The company\'s email domain, e.g. \"acme.com\". Must be a bare\ndomain (no scheme, path, or email) and not a generic email\nprovider domain.'
+        'Optional company domain, e.g. \"acme.com\". Omit for a name-only\ncompany. When supplied, must be a bare\ndomain (no scheme, path, or email) and not a generic email\nprovider domain.'
       ),
     name: zod
       .string()
@@ -4652,7 +4718,6 @@ export const listCompanyContactsResponse = zod.array(
 [`CrmCompanyAccessLevelExtractor`]: the caller must be on the team
 that owns the company (hidden companies are reachable for
 admin/owner only, and the new contact then inherits `hidden`). The
-email's domain must be one of the company's domains (400), the
 company must not already track the email (409), and the team's CRM
 killswitch must be on (403).
  */
@@ -4665,7 +4730,7 @@ export const createCrmContactBody = zod
     email: zod
       .string()
       .describe(
-        'The contact\'s email address, e.g. \"jane@acme.com\". Its domain\nmust be one of the company\'s domains (400 otherwise).'
+        "The contact's email address, including personal email providers.\nIt need not match a company domain."
       ),
     name: zod.string().describe('Display name for the contact.'),
   })
@@ -4835,7 +4900,8 @@ export const searchContactsResponse = zod
  * @summary Look up a CRM contact by email in the caller's team. Returns a null
 `contact` when no visible contact exists. Any team member may resolve a
 visible contact; admin/owner callers may also resolve hidden contacts and
-contacts under hidden companies.
+contacts under hidden companies. Returns 400 when several visible contacts
+match; callers must choose an explicit contact ID instead.
  */
 export const getContactByEmailQueryParams = zod.object({
   email: zod
@@ -27418,16 +27484,21 @@ export const getItemsSoupQueryParams = zod.object({
       'frecency',
       'touched_by_me',
       'notified_at',
+      'property',
     ])
     .optional()
     .describe(
-      'Sort method. Options are viewed_at, created_at, updated_at,\nviewed_updated, frecency, touched_by_me, notified_at. Defaults to\nviewed_at.'
+      'Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.\nMissing definitions, unsupported types, and mismatched values sort as missing.\nFlat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.\nDefaults to viewed_at.'
     ),
+  sort_property_definition_id: zod
+    .uuid()
+    .optional()
+    .describe('Property definition selected for numeric property sorting.'),
   sort_direction: zod
     .enum(['asc', 'desc'])
     .optional()
     .describe(
-      'Sort direction. Options are asc, desc. Defaults to desc.\n\nRe-send this with every page: it is not carried in the cursor.\n\nApplies to the timestamp sort methods only. `asc` combined with\n`frecency` is rejected rather than ignored: frecency pages are ordered\nby relevance score and the cursor comparison assumes descending, so\nthere is no ascending frecency order to give.'
+      'Sort direction. Options are asc, desc. Defaults to desc.\n\nTimestamp sorts require this parameter again on each page. Property\ncursors preserve their direction and always put missing values last.\nAscending frecency, touched-by-me, and notified-at sorts are unsupported.'
     ),
   cursor: zod.string().optional().describe('Base64 encoded cursor value.'),
 });
@@ -32251,6 +32322,29 @@ export const postItemsSoupBody = zod
       .array(
         zod
           .object({
+            date_range: zod
+              .union([
+                zod.null(),
+                zod
+                  .object({
+                    end: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Exclusive UTC upper bound, omitted for an open end.'
+                      ),
+                    start: zod.iso
+                      .datetime({})
+                      .nullish()
+                      .describe(
+                        'Inclusive UTC lower bound, omitted for an open start.'
+                      ),
+                  })
+                  .describe(
+                    'UTC timestamp interval. Lower bounds are inclusive; upper bounds are exclusive.'
+                  ),
+              ])
+              .optional(),
             entity_ids: zod
               .array(zod.string())
               .optional()
@@ -32262,6 +32356,12 @@ export const postItemsSoupBody = zod
               .nullish()
               .describe(
                 'The entity type for the property lookup (e.g., \"TASK\", \"DOCUMENT\", \"PROJECT\").\nWhen None, matches across all entity types.'
+              ),
+            has_date: zod
+              .boolean()
+              .nullish()
+              .describe(
+                'Flat Soup\/search presence filter: true expands to an open date range, false to its negation.'
               ),
             option_ids: zod
               .array(zod.string())
@@ -32327,12 +32427,19 @@ export const postItemsSoupBody = zod
                 'frecency',
                 'touched_by_me',
                 'notified_at',
+                'property',
               ])
               .describe(
                 'Sort options accepted by non-grouped soup API endpoints.'
               ),
           ])
           .optional(),
+        sort_property_definition_id: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Property definition selected for numeric property sorting.'
+          ),
       })
       .describe('Query parameters shared by soup endpoints.')
   )
@@ -36709,12 +36816,19 @@ export const postItemsSoupAstBody = zod
                 'frecency',
                 'touched_by_me',
                 'notified_at',
+                'property',
               ])
               .describe(
                 'Sort options accepted by non-grouped soup API endpoints.'
               ),
           ])
           .optional(),
+        sort_property_definition_id: zod
+          .uuid()
+          .nullish()
+          .describe(
+            'Property definition selected for numeric property sorting.'
+          ),
       })
       .describe('Query parameters shared by soup endpoints.')
   )
@@ -41085,11 +41199,71 @@ export const postItemsSoupAstGroupedBody = zod
                   .object({
                     property: zod
                       .object({
+                        bucketing: zod
+                          .union([
+                            zod.null(),
+                            zod
+                              .object({
+                                missing_value_bucket_key: zod
+                                  .string()
+                                  .describe(
+                                    'Caller-supplied group key for entities with no date value.'
+                                  ),
+                                ranges: zod
+                                  .array(
+                                    zod
+                                      .object({
+                                        end: zod.iso
+                                          .datetime({})
+                                          .nullish()
+                                          .describe(
+                                            'Exclusive end, or positive infinity.'
+                                          ),
+                                        key: zod
+                                          .string()
+                                          .describe(
+                                            'Unique caller-supplied group key.'
+                                          ),
+                                        start: zod.iso
+                                          .datetime({})
+                                          .nullish()
+                                          .describe(
+                                            'Inclusive start, or negative infinity.'
+                                          ),
+                                      })
+                                      .describe(
+                                        'A half-open UTC interval. An absent start or end extends to infinity.'
+                                      )
+                                  )
+                                  .describe(
+                                    'Ordered, contiguous ranges covering every present date.'
+                                  ),
+                              })
+                              .describe(
+                                'A complete partition of present dates plus one bucket for absent values.'
+                              )
+                              .and(
+                                zod.object({
+                                  type: zod.enum(['date_ranges']),
+                                })
+                              )
+                              .describe(
+                                'Caller-defined, ordered UTC date ranges and a separate missing-value key.'
+                              )
+                              .describe(
+                                "Optional transformation of a selected property's stored value into group keys."
+                              ),
+                          ])
+                          .optional(),
                         entity_type: zod
                           .union([
                             zod.null(),
                             zod
                               .enum([
+                                'CALL_RECORD',
+                                'CALENDAR_EVENT',
+                                'DATABASE_ROW',
+                                'INITIATIVE',
                                 'CHANNEL',
                                 'CHAT',
                                 'COMPANY',
@@ -41124,6 +41298,16 @@ export const postItemsSoupAstGroupedBody = zod
               .describe(
                 'Limit the number of items returned per group. Defaults to 20. Max 500.'
               ),
+            sort_direction: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum(['asc', 'desc'])
+                  .describe(
+                    'Sort direction accepted by non-grouped soup API endpoints.'
+                  ),
+              ])
+              .optional(),
             sort_method: zod
               .union([
                 zod.null(),
@@ -41133,12 +41317,19 @@ export const postItemsSoupAstGroupedBody = zod
                     'created_at',
                     'updated_at',
                     'viewed_updated',
+                    'property',
                   ])
                   .describe(
                     'Sort method for grouped queries (frecency not supported).'
                   ),
               ])
               .optional(),
+            sort_property_definition_id: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Property definition selected for numeric property sorting.'
+              ),
           })
           .describe('Parameters for the initial grouped soup query.')
       )
@@ -41303,11 +41494,71 @@ export const postItemsSoupAstGroupedBody = zod
                   .object({
                     property: zod
                       .object({
+                        bucketing: zod
+                          .union([
+                            zod.null(),
+                            zod
+                              .object({
+                                missing_value_bucket_key: zod
+                                  .string()
+                                  .describe(
+                                    'Caller-supplied group key for entities with no date value.'
+                                  ),
+                                ranges: zod
+                                  .array(
+                                    zod
+                                      .object({
+                                        end: zod.iso
+                                          .datetime({})
+                                          .nullish()
+                                          .describe(
+                                            'Exclusive end, or positive infinity.'
+                                          ),
+                                        key: zod
+                                          .string()
+                                          .describe(
+                                            'Unique caller-supplied group key.'
+                                          ),
+                                        start: zod.iso
+                                          .datetime({})
+                                          .nullish()
+                                          .describe(
+                                            'Inclusive start, or negative infinity.'
+                                          ),
+                                      })
+                                      .describe(
+                                        'A half-open UTC interval. An absent start or end extends to infinity.'
+                                      )
+                                  )
+                                  .describe(
+                                    'Ordered, contiguous ranges covering every present date.'
+                                  ),
+                              })
+                              .describe(
+                                'A complete partition of present dates plus one bucket for absent values.'
+                              )
+                              .and(
+                                zod.object({
+                                  type: zod.enum(['date_ranges']),
+                                })
+                              )
+                              .describe(
+                                'Caller-defined, ordered UTC date ranges and a separate missing-value key.'
+                              )
+                              .describe(
+                                "Optional transformation of a selected property's stored value into group keys."
+                              ),
+                          ])
+                          .optional(),
                         entity_type: zod
                           .union([
                             zod.null(),
                             zod
                               .enum([
+                                'CALL_RECORD',
+                                'CALENDAR_EVENT',
+                                'DATABASE_ROW',
+                                'INITIATIVE',
                                 'CHANNEL',
                                 'CHAT',
                                 'COMPANY',
@@ -41343,6 +41594,16 @@ export const postItemsSoupAstGroupedBody = zod
               .describe(
                 'Limit the number of items returned. Defaults to 20. Max 500.'
               ),
+            sort_direction: zod
+              .union([
+                zod.null(),
+                zod
+                  .enum(['asc', 'desc'])
+                  .describe(
+                    'Sort direction accepted by non-grouped soup API endpoints.'
+                  ),
+              ])
+              .optional(),
             sort_method: zod
               .union([
                 zod.null(),
@@ -41352,12 +41613,19 @@ export const postItemsSoupAstGroupedBody = zod
                     'created_at',
                     'updated_at',
                     'viewed_updated',
+                    'property',
                   ])
                   .describe(
                     'Sort method for grouped queries (frecency not supported).'
                   ),
               ])
               .optional(),
+            sort_property_definition_id: zod
+              .uuid()
+              .nullish()
+              .describe(
+                'Property definition selected for numeric property sorting.'
+              ),
           })
           .describe('Parameters for fetching one page within a specific group.')
       )
@@ -59045,12 +59313,18 @@ export const whatsappChatsResponse = zod
               .datetime({})
               .nullish()
               .describe(
-                'Newest activity WhatsApp reported (message or history sync); `null`\nwhen unknown. The list is sorted by it, newest first, unknown last.'
+                'Newest activity WhatsApp reported (message or history sync); `null`\nwhen unknown, as for saved contacts never messaged. The list is\nsorted by it, newest first, unknown last.'
               ),
             name: zod
               .string()
               .describe(
                 'Group: the subject, or member names for an unnamed group. Direct: the\ncontact or WhatsApp name, else `+<phone>`. Always non-empty.'
+              ),
+            phoneNumber: zod
+              .string()
+              .nullish()
+              .describe(
+                "The other person's phone number (`+<digits>`) of a direct chat, when\nWhatsApp told us it."
               ),
             pinned: zod.boolean().describe('Pinned in WhatsApp.'),
             shared: zod
@@ -59137,6 +59411,85 @@ export const whatsappDisconnectResponse = zod
       ),
   })
   .describe('Result of disconnecting an account.');
+
+/**
+ * @summary Import earlier messages of the caller's chats that wait for their phone
+(`backfill.state` `waiting_for_phone`). WhatsApp must be open on the phone.
+ */
+export const whatsappImportHistoryResponseStartedMin = 0;
+
+export const whatsappImportHistoryResponse = zod
+  .object({
+    started: zod
+      .number()
+      .min(whatsappImportHistoryResponseStartedMin)
+      .describe(
+        'Chats that started importing earlier messages from the phone.'
+      ),
+  })
+  .describe("Result of the owner's Import.");
+
+/**
+ * @summary Ask whether a phone number has a WhatsApp account, to start a direct chat
+with it; poll the lookup until it is no longer `pending`. Found numbers
+join the chat list, so `POST /external-chats` adds them.
+ */
+export const whatsappStartLookupBody = zod
+  .object({
+    phoneNumber: zod
+      .string()
+      .describe(
+        'E.164: `+`, the country code and the number, without spacing.'
+      ),
+  })
+  .describe('A phone number to start a direct chat with.');
+
+export const whatsappStartLookupResponse = zod
+  .object({
+    chatJid: zod
+      .string()
+      .nullish()
+      .describe(
+        "Found: the direct chat's JID, now addable from the chat list."
+      ),
+    id: zod.uuid().describe('Poll `GET \/whatsapp\/lookups\/{id}` with it.'),
+    phoneNumber: zod
+      .string()
+      .describe('The number asked about, E.164 (`+<digits>`).'),
+    state: zod
+      .enum(['pending', 'found', 'not_on_whatsapp', 'failed'])
+      .describe('Where a phone-number lookup is.'),
+  })
+  .describe(
+    'The owner asking whether a phone number has a WhatsApp account, to start\na direct chat with it.'
+  );
+
+/**
+ * @summary Poll the caller's phone-number lookup.
+ */
+export const whatsappLookupParams = zod.object({
+  id: zod.uuid(),
+});
+
+export const whatsappLookupResponse = zod
+  .object({
+    chatJid: zod
+      .string()
+      .nullish()
+      .describe(
+        "Found: the direct chat's JID, now addable from the chat list."
+      ),
+    id: zod.uuid().describe('Poll `GET \/whatsapp\/lookups\/{id}` with it.'),
+    phoneNumber: zod
+      .string()
+      .describe('The number asked about, E.164 (`+<digits>`).'),
+    state: zod
+      .enum(['pending', 'found', 'not_on_whatsapp', 'failed'])
+      .describe('Where a phone-number lookup is.'),
+  })
+  .describe(
+    'The owner asking whether a phone number has a WhatsApp account, to start\na direct chat with it.'
+  );
 
 /**
  * @summary Poll the caller's pairing transaction, including its current QR code.

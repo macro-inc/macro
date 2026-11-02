@@ -6,7 +6,7 @@ import { fileTypeToBlockName } from '@core/constant/allBlocks';
 import { enableProjects } from '@core/constant/featureFlags';
 import { useChannelName } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
-import ProjectIcon from '@icon/system/regular/stack.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import { isAccessiblePreviewItem, useItemPreview } from '@queries/preview';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
 import { createLazyMemo } from '@solid-primitives/memo';
@@ -70,6 +70,8 @@ export function usePropertyEntityDisplay(
     fallbackIcon?: JSX.Element | null;
     /** Specific message ID for THREAD/CHANNEL/CHAT entities */
     specificMessageId?: Accessor<string | null | undefined>;
+    /** Name to show while the entity's own read loads, such as a picker's label. */
+    loadingName?: Accessor<string | undefined>;
   }
 ): PropertyEntityDisplayResult {
   // Callers usually read these from a property value, which every properties
@@ -134,19 +136,21 @@ export function usePropertyEntityDisplay(
     return !previewItem || previewItem.loading;
   });
 
+  const loadingName = () => options?.loadingName?.() || 'Loading...';
+
   const name = createMemo(() =>
     match(entityType())
       .with('INITIATIVE', () => {
         const source = projectSource();
         if (!source) return 'Project';
-        if (source.isPending) return 'Loading...';
+        if (source.isPending) return loadingName();
         return (!source.isError && source.data?.name) || 'Project unavailable';
       })
       .with('USER', () => user.name())
       .with('CHANNEL', () => channelName() || 'Channel')
       .otherwise(() => {
         const item = preview();
-        if (!item || item.loading) return 'Loading...';
+        if (!item || item.loading) return loadingName();
         if (isAccessiblePreviewItem(item)) {
           return item.name;
         }

@@ -3,6 +3,7 @@ import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/S
 import { channelTheme } from '@core/component/LexicalMarkdown/theme';
 import { isEmojiOnly } from '@core/util/string';
 import CaretRight from '@icon/system/regular/caret-right.svg';
+import { isBotSenderId } from '@queries/messages/message-sender';
 import { Button, cn } from '@ui';
 import {
   createMemo,
@@ -42,6 +43,8 @@ export function Content(props: ContentProps) {
   // sender line renders (`Message.AgentSessionLink`), not part of the text.
   const content = createMemo(() => splitMessageContent(message()).body);
   const bigEmoji = createMemo(() => isEmojiOnly(content()));
+  // An agent's references stand out from its text, as in its session view.
+  const fromAgent = () => isBotSenderId(message().sender_id);
   const terms = createMemo(() => termsLookup?.(message().id));
 
   const [markdownRoot, setMarkdownRoot] = createSignal<HTMLDivElement>();
@@ -68,6 +71,7 @@ export function Content(props: ContentProps) {
         class={cn(
           'whitespace-pre-wrap wrap-break-word max-w-full',
           bigEmoji() ? 'text-4xl' : 'text-base',
+          fromAgent() && '[&_[data-mention]]:text-accent',
           props.class
         )}
       >

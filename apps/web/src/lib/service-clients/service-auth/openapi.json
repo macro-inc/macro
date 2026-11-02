@@ -347,6 +347,78 @@
         }
       }
     },
+    "/ai-billing/credits/purchase": {
+      "post": {
+        "tags": ["ai_billing"],
+        "summary": "Buy a credit pack now, charged to the payer's card on file. Any paid team\nmember may buy, within the team's monthly credit limit.",
+        "operationId": "purchase_ai_credits",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CreditPurchaseRequestBody"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "Purchase outcome and updated position",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CreditPurchaseResponse"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid pack or no payment account",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized"
+          },
+          "402": {
+            "description": "A paid plan is required",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          },
+          "409": {
+            "description": "Over the monthly credit limit, or an earlier purchase is still processing",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal server error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/AiBillingErrorBody"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/ai-billing/overage": {
       "patch": {
         "tags": ["ai_billing"],
@@ -1123,6 +1195,26 @@
                 }
               }
             }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpstreamErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpstreamErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -1189,6 +1281,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpstreamErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpstreamErrorResponse"
                 }
               }
             }
@@ -1291,6 +1403,26 @@
                 }
               }
             }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpstreamErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpstreamErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -1367,6 +1499,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpstreamErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpstreamErrorResponse"
                 }
               }
             }
@@ -1456,6 +1608,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpstreamErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpstreamErrorResponse"
                 }
               }
             }
@@ -2085,6 +2257,16 @@
                 }
               }
             }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
           }
         }
       }
@@ -2155,6 +2337,26 @@
                 }
               }
             }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpstreamErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpstreamErrorResponse"
+                }
+              }
+            }
           }
         }
       },
@@ -2199,6 +2401,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpstreamErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpstreamErrorResponse"
                 }
               }
             }
@@ -2258,6 +2480,26 @@
               "application/json": {
                 "schema": {
                   "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "502": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpstreamErrorResponse"
+                }
+              }
+            }
+          },
+          "503": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/UpstreamErrorResponse"
                 }
               }
             }
@@ -3428,6 +3670,145 @@
             }
           },
           "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system-status": {
+      "get": {
+        "tags": ["system_status"],
+        "summary": "The status every user sees. Public: the banner shows wherever the app\nruns, signed in or not.",
+        "operationId": "get_system_status",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CurrentSystemStatus"
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      },
+      "post": {
+        "tags": ["system_status"],
+        "summary": "Sets the status every user sees and pushes it to every open app. Macro\nstaff only.",
+        "description": "Authenticate with a Macro session, or from a script with a personal API\nkey (Settings → API keys) in the `x-macro-user-api-key` header. The body\nis the new status:\n\n- `{\"status\": \"operational\"}` clears the banner. It takes no message.\n- `{\"status\": \"degraded\", \"message\": \"Search is slow to update.\"}`\n- `{\"status\": \"major_outage\", \"message\": \"Macro is unavailable. We're on it.\"}`\n\nMessages are trimmed and must be 1–500 characters. Every call is kept in\nthe history, even when it repeats the current status.",
+        "operationId": "set_system_status",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/SystemStatus"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/StatusUpdate"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "422": {
+            "description": "The body is not a valid status"
+          },
+          "500": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/system-status/history": {
+      "get": {
+        "tags": ["system_status"],
+        "summary": "Recent status updates, newest first, with who set each. Macro staff only.",
+        "operationId": "list_system_status_history",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/SystemStatusHistory"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/ErrorResponse"
+                }
+              }
+            }
+          },
+          "403": {
             "description": "",
             "content": {
               "application/json": {
@@ -5908,7 +6289,7 @@
           "committed_cents": {
             "type": "integer",
             "format": "int64",
-            "description": "Reloads paid, pending, or failed with an invoice that can still collect.\nCustomer cents; manual credit purchases do not count."
+            "description": "Reloads and one-time card purchases paid, pending, or failed with an\ninvoice that can still collect. Customer cents; Checkout purchases do\nnot count."
           },
           "limit_reached": {
             "type": "boolean",
@@ -6294,6 +6675,96 @@
           }
         }
       },
+      "CreditPurchaseRequestBody": {
+        "type": "object",
+        "description": "Request body for [`purchase_credits_handler`].",
+        "required": ["amountCents"],
+        "properties": {
+          "amountCents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "One of the catalog's credit packs, cents."
+          }
+        }
+      },
+      "CreditPurchaseResponse": {
+        "type": "object",
+        "description": "Response for [`purchase_credits_handler`].",
+        "required": ["status", "amountCents"],
+        "properties": {
+          "amountCents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Amount charged, cents: the requested pack, unless an earlier declined\npurchase that Stripe collected in the meantime was booked instead."
+          },
+          "snapshot": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/UsageSnapshot",
+                "description": "The caller's position after the purchase. Absent when it could not be\nread; the purchase still happened, so refetch the summary instead."
+              }
+            ]
+          },
+          "status": {
+            "$ref": "#/components/schemas/CreditPurchaseStatus",
+            "description": "Whether the card on file paid."
+          }
+        }
+      },
+      "CreditPurchaseSnapshot": {
+        "type": "object",
+        "description": "The monthly credit limit that applies to this user's one-time purchases.",
+        "required": ["committed_cents", "resets_at"],
+        "properties": {
+          "committed_cents": {
+            "type": "integer",
+            "format": "int64",
+            "description": "Charged this month so far, including charges that may still collect."
+          },
+          "monthly_limit_cents": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Most credits charged to the card on file per UTC calendar month, from\nautomatic reloads and one-time purchases together, in customer cents.\n`null` when the payer set no limit; team members always have one."
+          },
+          "resets_at": {
+            "type": "string",
+            "format": "date-time",
+            "description": "Start of the next UTC calendar month."
+          }
+        }
+      },
+      "CreditPurchaseStatus": {
+        "type": "string",
+        "description": "How a one-time credit purchase charged to the card on file ended.",
+        "enum": [
+          "paid",
+          "declined",
+          "payment_method_required",
+          "authentication_required"
+        ]
+      },
+      "CurrentSystemStatus": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SystemStatus",
+            "description": "The status and its message."
+          },
+          {
+            "type": "object",
+            "properties": {
+              "updatedAt": {
+                "type": ["string", "null"],
+                "format": "date-time",
+                "description": "When it was set; absent when no status was ever set. Clients keep the\nnewest status they have seen, whether fetched or pushed."
+              }
+            }
+          }
+        ],
+        "description": "The status every user sees, without who set it."
+      },
       "CursorApiKeyStatus": {
         "type": "object",
         "description": "What settings needs to render the Cursor connection.\n\nDeliberately thin. `registered` drives the whole UI; `updatedAt` lets it say\nwhen the key was last replaced, which is the only thing a user can check\nagainst their own memory when a session starts failing.\n\nDeliberately *not* reporting anything about the deployment itself. That is\noperator information: a user who sees it cannot act on it, and a service\nthat cannot reach KMS does not start.",
@@ -6359,14 +6830,15 @@
       },
       "EmailConnectionProviders": {
         "type": "object",
-        "description": "Actual deployment availability for the provider selector.",
+        "description": "What the provider selector offers the requesting user.",
         "required": ["gmail", "outlook"],
         "properties": {
           "gmail": {
             "type": "boolean"
           },
           "outlook": {
-            "type": "boolean"
+            "type": "boolean",
+            "description": "Whether this user may start a new Outlook connection: the deployment\nswitch and their `enable-outlook` flag."
           },
           "outlook_admin_consent_url": {
             "type": ["string", "null"],
@@ -7603,6 +8075,11 @@
           "purchasable"
         ],
         "properties": {
+          "auto_reload_default_monthly_limit_cents": {
+            "type": ["integer", "null"],
+            "format": "int64",
+            "description": "Monthly automatic reload limit a payer on this plan starts from,\ncents. Absent for plans that cannot reload."
+          },
           "included_ai_cents_per_seat": {
             "type": "integer",
             "format": "int64",
@@ -7968,6 +8445,35 @@
           }
         }
       },
+      "StatusUpdate": {
+        "allOf": [
+          {
+            "$ref": "#/components/schemas/SystemStatus",
+            "description": "The status that was set."
+          },
+          {
+            "type": "object",
+            "required": ["id", "userId", "createdAt"],
+            "properties": {
+              "createdAt": {
+                "type": "string",
+                "format": "date-time",
+                "description": "When it was set."
+              },
+              "id": {
+                "type": "string",
+                "format": "uuid",
+                "description": "UUIDv7, so ids sort by creation."
+              },
+              "userId": {
+                "type": "string",
+                "description": "The staff member who set it."
+              }
+            }
+          }
+        ],
+        "description": "One status a staff member set. The newest is the current status."
+      },
       "StripeSessionResponse": {
         "type": "object",
         "description": "Response containing the Stripe session URL",
@@ -7998,6 +8504,66 @@
                 "description": "Future downgrade for the caller's seat, if still pending."
               }
             ]
+          }
+        }
+      },
+      "SystemStatus": {
+        "oneOf": [
+          {
+            "type": "object",
+            "description": "Everything works; no banner is shown.",
+            "required": ["status"],
+            "properties": {
+              "status": {
+                "type": "string",
+                "enum": ["operational"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Some features are slow or failing.",
+            "required": ["message", "status"],
+            "properties": {
+              "message": {
+                "type": "string",
+                "description": "What users should know."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["degraded"]
+              }
+            }
+          },
+          {
+            "type": "object",
+            "description": "Macro is largely unavailable.",
+            "required": ["message", "status"],
+            "properties": {
+              "message": {
+                "type": "string",
+                "description": "What users should know."
+              },
+              "status": {
+                "type": "string",
+                "enum": ["major_outage"]
+              }
+            }
+          }
+        ],
+        "description": "The platform status. Only the non-operational statuses carry a message."
+      },
+      "SystemStatusHistory": {
+        "type": "object",
+        "description": "Recent status updates, newest first.",
+        "required": ["updates"],
+        "properties": {
+          "updates": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/StatusUpdate"
+            },
+            "description": "The updates."
           }
         }
       },
@@ -8316,6 +8882,30 @@
           }
         }
       },
+      "UpstreamErrorCode": {
+        "type": "string",
+        "description": "What kind of upstream failure a 502 or 503 reports, for clients that\nbranch on it.",
+        "enum": [
+          "upstream_unavailable",
+          "upstream_rate_limited",
+          "upstream_invalid_response"
+        ]
+      },
+      "UpstreamErrorResponse": {
+        "type": "object",
+        "description": "The body of a 502 or 503 caused by a third-party service.",
+        "required": ["message", "code"],
+        "properties": {
+          "code": {
+            "$ref": "#/components/schemas/UpstreamErrorCode",
+            "description": "The kind of failure."
+          },
+          "message": {
+            "type": "string",
+            "description": "What failed and what to do about it, written for the user."
+          }
+        }
+      },
       "UsageSnapshot": {
         "type": "object",
         "description": "The payer's current-period position, as shown in Billing settings and used\nby the gate.",
@@ -8364,6 +8954,17 @@
             "type": "integer",
             "format": "int64",
             "description": "Shared prepaid credit balance, in customer cents."
+          },
+          "credit_purchase": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/CreditPurchaseSnapshot",
+                "description": "The monthly credit limit for one-time purchases charged to the card on\nfile. Present for paid, metered users, payer and team members alike."
+              }
+            ]
           },
           "credits_consumed_cents": {
             "type": "integer",
