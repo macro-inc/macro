@@ -83,7 +83,9 @@ test('selects a different company for a pipeline contact', async ({ page }) => {
 
 test('requires accepting a suggested company before creating a pipeline contact', async ({
   page,
-}) => {
+}, testInfo) => {
+  const errors: string[] = [];
+  page.on('pageerror', (error) => errors.push(error.message));
   await page.goto('/');
   await page
     .getByRole('button', { name: 'New pipeline contact', exact: true })
@@ -100,9 +102,19 @@ test('requires accepting a suggested company before creating a pipeline contact'
     'Choose a company for this contact'
   );
   await expect(page.getByTestId('created')).toBeEmpty();
-  await page
-    .getByRole('button', { name: 'Use suggested company: Acme', exact: true })
-    .click();
+  const suggestion = page.getByRole('button', {
+    name: 'Use suggested company: Acme',
+    exact: true,
+  });
+  if (testInfo.project.name === 'desktop') {
+    await suggestion.focus();
+    await expect(page.locator('[role="tooltip"]')).toHaveText('Acme');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('[role="tooltip"]')).toHaveCount(0);
+    await expect(page.getByTestId('created')).toBeEmpty();
+  } else {
+    await suggestion.click();
+  }
   await page
     .getByRole('textbox', { name: 'Email', exact: true })
     .fill('jane@other.example.com');
@@ -110,4 +122,5 @@ test('requires accepting a suggested company before creating a pipeline contact'
   await expect(page.getByTestId('created')).toHaveText(
     '{"companyId":"acme","name":"Jane","email":"jane@other.example.com"}'
   );
+  expect(errors).toEqual([]);
 });

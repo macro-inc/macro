@@ -339,21 +339,21 @@ export function AddPipelineRecordDialog(
               disabled={pending()}
               mount={dialog()}
             />
-            <Show when={!draft().companyId && suggestedCompany()}>
+            <Show when={!draft().companyId && suggestedCompany()} keyed>
               {(suggestion) => (
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
                   class="max-w-full self-start"
-                  tooltip={suggestion().name}
+                  tooltip={suggestion.name}
                   disabled={pending()}
                   onClick={() =>
-                    changeChoice({ ...draft(), companyId: suggestion().id })
+                    changeChoice({ ...draft(), companyId: suggestion.id })
                   }
                 >
                   <span class="truncate">
-                    Use suggested company: {suggestion().name}
+                    Use suggested company: {suggestion.name}
                   </span>
                 </Button>
               )}

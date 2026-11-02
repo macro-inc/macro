@@ -386,6 +386,8 @@ works the same way. A new company may omit its domain. A new contact accepts a
 full email address and an explicit company choice, including a name-only company.
 An email-domain match offers **Use suggested company**; accept it or select a
 different company before submitting. Editing the email keeps that explicit choice.
+Focusing the suggestion reveals its full name; Enter accepts it without submitting
+the form, and closes the tooltip without a browser error.
 **Add deal** stays disabled until a record is chosen, and Command-Enter submits.
 The form makes one row with every value set. A board lane's **New record** opens
 the same dialog with the lane's stage filled in. The table's blank row at the
