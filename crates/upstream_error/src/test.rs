@@ -128,15 +128,18 @@ async fn rate_limited_answers_503_with_retry_after() {
     let response = axum::response::IntoResponse::into_response(UpstreamError {
         service: "GitHub",
         failure: UpstreamFailure::RateLimited {
-            retry_after: Some(Duration::from_secs(42)),
+            retry_after: Some(Duration::from_secs(1500)),
         },
     });
 
     assert_eq!(response.status(), StatusCode::SERVICE_UNAVAILABLE);
-    assert_eq!(response.headers()[http::header::RETRY_AFTER], "42");
+    assert_eq!(response.headers()[http::header::RETRY_AFTER], "1500");
     assert_eq!(
-        body_json(response).await["code"],
-        serde_json::json!("upstream_rate_limited")
+        body_json(response).await,
+        serde_json::json!({
+            "message": "GitHub is limiting requests right now. Try again in 25 minutes.",
+            "code": "upstream_rate_limited",
+        })
     );
 }
 

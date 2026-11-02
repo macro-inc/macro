@@ -4,6 +4,8 @@ use axum::{
     response::{IntoResponse, Response},
 };
 
+use std::time::Duration;
+
 use crate::{UpstreamError, UpstreamFailure};
 
 /// What kind of upstream failure a 502 or 503 reports, for clients that
@@ -50,9 +52,12 @@ impl UpstreamError {
                 UpstreamErrorCode::UpstreamUnavailable,
                 format!("{service} is temporarily unavailable. Try again in a few minutes."),
             ),
-            UpstreamFailure::RateLimited { .. } => (
+            UpstreamFailure::RateLimited { retry_after } => (
                 UpstreamErrorCode::UpstreamRateLimited,
-                format!("{service} is limiting requests right now. Try again shortly."),
+                format!(
+                    "{service} is limiting requests right now. Try again {}.",
+                    retry_phrase(retry_after)
+                ),
             ),
             UpstreamFailure::InvalidResponse => (
                 UpstreamErrorCode::UpstreamInvalidResponse,
@@ -60,6 +65,17 @@ impl UpstreamError {
             ),
         };
         UpstreamErrorResponse { message, code }
+    }
+}
+
+/// When to try again, in words: "shortly" when the provider did not say.
+fn retry_phrase(retry_after: Option<Duration>) -> String {
+    let Some(retry_after) = retry_after else {
+        return "shortly".to_string();
+    };
+    match retry_after.as_secs().div_ceil(60) {
+        0 | 1 => "in a minute".to_string(),
+        minutes => format!("in {minutes} minutes"),
     }
 }
 
