@@ -56,10 +56,6 @@ pub struct Config {
     #[macro_config_default(Environment::new_or_prod())]
     pub environment: Environment,
     pub kafka_brokers: KafkaBrokers,
-    /// Enables event-trigger management, Kafka intake, and pending dispatch together.
-    /// Register EVENT_ROUTINES_ENABLED as a raw boolean in Doppler before rollout.
-    #[macro_config_default(false)]
-    pub event_routines_enabled: bool,
     /// Accept agent-target configuration only after all scheduler workers are upgraded.
     /// Register ROUTINE_AGENTS_ENABLED as a raw boolean in Doppler before rollout.
     #[macro_config_default(false)]

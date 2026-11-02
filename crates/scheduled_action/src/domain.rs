@@ -1,3 +1,4 @@
+pub mod event_rollout;
 pub mod event_runs;
 pub mod event_trigger;
 pub mod execution;

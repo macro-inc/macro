@@ -763,7 +763,10 @@ async fn target_configuration_is_validated_through_http_and_gate_defaults_off() 
 #[tokio::test]
 async fn agent_replacement_requires_explicit_null_and_unavailable_agent_remains_manageable() {
     use crate::domain::{
-        service::test::{FakeExecutor, FakeGrants, FakeRepo, TestService},
+        service::{
+            ScheduledActionServiceImpl,
+            test::{FakeExecutor, FakeGrants, FakeRepo},
+        },
         target_validation::{
             TargetValidation,
             test::{Sessions, agent_task},
@@ -773,7 +776,7 @@ async fn agent_replacement_requires_explicit_null_and_unavailable_agent_remains_
     let (tx, mut rx) = tokio::sync::mpsc::channel(32);
     tokio::spawn(async move { while rx.recv().await.is_some() {} });
     let repo = Arc::new(FakeRepo::default());
-    let svc = TestService::new(
+    let svc = ScheduledActionServiceImpl::new(
         repo.clone(),
         Arc::new(FakeExecutor::default()),
         tx,

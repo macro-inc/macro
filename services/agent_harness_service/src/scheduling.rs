@@ -18,6 +18,7 @@ use macro_service_urls::{ConnectionGatewayUrl, LexicalServiceUrl};
 pub mod config;
 mod routine_analytics;
 use config::Config;
+use scheduled_action::domain::event_rollout::FlaggedEventRoutines;
 use scheduled_action::domain::event_runs::{
     PageSize, admission::EventAdmissionService, condition::ConditionGate,
     dispatch::EventDispatchService,
@@ -207,10 +208,28 @@ pub async fn build(
         )),
         None => None,
     };
+    let routine_flags = config
+        .posthog_api_key
+        .value()
+        .map(|key| {
+            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
+                config
+                    .posthog_host
+                    .value()
+                    .unwrap_or("https://us.i.posthog.com"),
+                key.to_owned(),
+                Duration::from_secs(3),
+            )
+        })
+        .transpose()
+        .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
+    // Event routines follow each owner's PostHog flag; without PostHog no one has it.
+    let event_routines = routine_flags.clone().map(FlaggedEventRoutines::new);
     let event_dispatch = EventDispatchService::new(
         Arc::clone(&event_repo),
         Arc::clone(&event_access),
         Arc::clone(&service_executor),
+        event_routines.clone(),
     )
     .with_conditions(Arc::new(conditions));
     let brokers = config.kafka_brokers.to_string();
@@ -219,7 +238,7 @@ pub async fn build(
     let worker_shutdown = lifecycle.stop_workers.clone();
     let executions = lifecycle.executions.clone();
     start_event_tasks(
-        config.event_routines_enabled,
+        event_routines.is_some(),
         &lifecycle,
         move || {
             let mut ready = ready.clone();
@@ -262,7 +281,7 @@ pub async fn build(
             dispatcher_tx,
             access.clone(),
         )
-        .with_event_management_enabled(config.event_routines_enabled)
+        .with_event_routines(event_routines)
         .with_conditions_enabled(conditions_enabled)
         .with_target_validation(TargetValidation::new(
             sessions,
@@ -270,26 +289,11 @@ pub async fn build(
         ))
         .with_github_links(PgGithubInstallationClaims::new(db.clone())),
     );
-    let template_flags = config
-        .posthog_api_key
-        .value()
-        .map(|key| {
-            feature_flags::outbound::posthog::PostHogFeatureFlags::new(
-                config
-                    .posthog_host
-                    .value()
-                    .unwrap_or("https://us.i.posthog.com"),
-                key.to_owned(),
-                Duration::from_secs(3),
-            )
-        })
-        .transpose()
-        .map_err(|error| anyhow::anyhow!("invalid routine feature flag configuration: {error}"))?;
     let template_state = RoutineTemplateRouterState {
         service: Arc::new(RoutineTemplateServiceImpl::new(
             Arc::clone(&service),
             Arc::new(PgRoutineTemplateRepo::new(db.clone())),
-            template_flags,
+            routine_flags,
         )),
         access_service: Arc::clone(&access),
         authorization_state: authorization_state.clone(),
