@@ -332,7 +332,20 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - Empty human DMs use the shared centered conversations graphic and explain email delivery to nonusers; keep this state out of agent DMs, loading/error states, and populated timelines.
-- Keep CRM database discovery row-linked and permission-scoped; use horizontally centered actionable list states raised toward the toolbar and shared skeletons, with separate search-empty and retry states. Company/contact touch headers use a Switch view drawer that honors host collapse and square copy-link islands; keep phone breadcrumbs above the switcher and leave the workspace view strip unchanged. Record search fills the row beside filters with header spacing; section creation replaces the default floating dock action through FloatRegion. See `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
+- Keep CRM database discovery row-linked and permission-scoped; use horizontally
+  centered actionable list states raised toward the toolbar and shared skeletons,
+  with separate search-empty and retry states. Company/contact touch headers use a
+  Switch view drawer that honors host collapse and square copy-link islands; keep
+  phone breadcrumbs above the switcher and leave the workspace view strip unchanged.
+  Open linked items under their Customers source URL; typed record sections append
+  only `<id>` and reject redundant typed URLs. Workspace activity and record
+  Files/overview notes retain item metadata on their own scoped routes. Keep
+  source and record breadcrumbs without section labels or extra preview-title
+  separators, retain entity menus and sharing, and return the current record
+  breadcrumb to its captured section and history entry.
+  Record search fills the row beside filters with header spacing; section creation
+  replaces the default floating dock action through FloatRegion. See
+  `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
 - Main Tasks mounts reusable GraphQL saved views; keep embedded Project/CRM task lists unchanged. Read `src/features/tasks-view/AGENTS.md` for filter, draft, navigation, and browser checks.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.
 - Email draft reads compare server generations before choosing cached delivery state over a restored working copy; only a definitive first-submission rejection permits local send recovery without server cancellation.
@@ -476,8 +489,12 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   on `meeting.join`; keep provider messages, device labels/IDs, and call-link
   tokens out of telemetry. See [call diagnostics](../../docs/agent-guide/calls.md#browser-call-diagnostics).
 - Diagnose the GraphQL mutation queue with `graphql.mutation_queue.*` spans and logs keyed by `mutation_queue.item_id`; route queue telemetry through `mutation-queue-telemetry.ts`, which dedupes per item and failure class and turns repeats into the periodic summary. Never add per-attempt `console.*` lines or record variables, draft content, or emails.
-- Keep desktop Gmail and Outlook inbox consent in the system browser with a
-  `macro:///inbox-link-callback` return; webview origins are not desktop callbacks.
+- Keep desktop OAuth consent in the system browser with a `macro://` return:
+  `macro:///inbox-link-callback` for Gmail and Outlook inboxes,
+  `macro:///github-link-callback` for GitHub (consumed by the navigation
+  bridge without changing the route). Webview origins are not desktop
+  callbacks. Settings → Integrations refetches connection status on window
+  `focus`, because returning from the browser does not change page visibility.
 - Keep send reservations, leases, and cancellation in the email journal; the general GraphQL queue handles draft autosaves only.
 - Always persist composer sends in account-scoped IndexedDB and dispatch through the fetch-only email client, without a feature flag; cache health and unrelated mutation queues must not gate delivery. See `docs/architecture/email.md` for state and rollout invariants.
 - Retry cache bootstrap on reconnect/foreground or draft Retry only when storage was proven untouched; retain the same scope and block draft sync until the replacement queue is readable.

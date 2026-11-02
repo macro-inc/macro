@@ -474,7 +474,7 @@ the shimmer.
   input is briefly blocked (“Choosing Chat or Code…”) while `POST /agent-mode-choice` on the
   agent harness asks Cloudflare's Clef Flash whether the prompt needs a coding agent. Code
   starts the user's most recently used coding agent (else the first that can start) with its default model and
-  **Choose automatically** for the repository; Chat starts the chat agent with the same
+  **Auto-detect** for the repository, not the saved default; Chat starts the chat agent with the same
   model Chat mode would use. If no coding agent can start, the prompt goes to Chat
   without asking; any failure or a 3s timeout also falls back to Chat. The session opens
   under Chat or Code like one started from that mode.
@@ -560,17 +560,21 @@ the shimmer.
   Selecting Chat hides the repository controls and keeps the mode switch in
   the settings row, without remounting the editor or losing the draft. Reduced-motion
   preferences disable the animation. The hidden drawer is inert. **Repository**
-  (**Choose automatically** with a GitHub icon until one is picked) opens a searchable list:
-  **Choose automatically**, then the repositories the signed-in user reaches
+  (**Auto-detect** with a GitHub icon unless a default was saved) opens a searchable list:
+  **Auto-detect**, then the repositories the signed-in user reaches
   through Macro's GitHub App (`GET /agent-repositories` on the agent harness),
-  recently used ones first. A new conversation always starts on **Choose
-  repository** (Automatic); the last used repository is not preselected.
+  recently used ones first. **Settings → Agents → Coding sessions → Default
+  repository** lets the user save a GitHub repository or **Auto-detect** (the
+  initial default). New Code conversations preselect that choice; changing
+  the composer picker overrides it for that conversation. The preference is
+  saved per user on this device. An inaccessible saved repository falls back
+  to Auto-detect.
   Typing filters the list to those reachable repositories. Unlisted GitHub
   URLs and recents the listing no longer carries are not offered. Arrow keys
   move the highlight and Enter or a click picks it; there is no separate
   confirm button. Someone who reaches no repository sees a hint with **Connect
   GitHub**, which opens Settings → Connected. Listed recents are remembered
-  per user in local storage and offered first, without changing the Automatic
+  per user in local storage and offered first, without changing the saved
   default. Automatic selection always chooses an accessible repository, using
   the most recent accessible session repository when the prompt is ambiguous,
   or the first available repository for users without repository history. Questions
