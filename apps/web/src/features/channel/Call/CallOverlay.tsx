@@ -58,14 +58,19 @@ function ParticipantTileWrapper(props: {
   // Fills its cell, but never wider than 16:9: on a wide panel a full-width
   // tile crops a 16:9 camera to a zoomed-in strip. Taller cells (phones,
   // grids) still fill, so portrait video keeps the space.
+  // The minimum height sits on the cell: size containment ignores content.
   return (
-    <div class="flex size-full items-center justify-center [container-type:size]">
+    <div
+      class={cn(
+        'flex size-full min-h-30 items-center justify-center [container-type:size]',
+        props.class
+      )}
+    >
       <div
         class={cn(
-          'relative flex h-full w-[min(100cqw,calc(100cqh*16/9))] items-center justify-center rounded-lg overflow-hidden bg-panel min-h-30 border border-edge-muted',
+          'relative flex h-full w-[min(100cqw,calc(100cqh*16/9))] items-center justify-center rounded-lg overflow-hidden bg-panel border border-edge-muted',
           props.isSpeaking && 'ring-inset ring-2 ring-accent',
-          props.isConnecting && 'animate-pulse',
-          props.class
+          props.isConnecting && 'animate-pulse'
         )}
       >
         {props.children}
