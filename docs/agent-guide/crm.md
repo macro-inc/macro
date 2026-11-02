@@ -292,9 +292,10 @@ Files or an extra separator before preview titles. The current record breadcrumb
 returns to the captured section and entry state. The item URL is nested under
 `/app/companies` or `/app/companies/pipeline/<uuid>`. Typed record sections use
 `/<record-type>/<record-id>/<tasks-emails-calls-or-databases>/<item-id>`, without
-repeating the item type or a task's `md/task` suffix. Workspace, Files/Notes and
-mixed-type sources retain `/<item-type>/<item-id>` and document metadata because
-the source path alone does not identify the renderer.
+repeating the item type or a task's `md/task` suffix. Redundant typed URLs for
+these sections do not resolve. Workspace activity retains
+`/<item-type>/<item-id>` and document metadata. Record Files and overview notes
+retain document metadata on routes restricted to those sections.
 Back and Forward restore the item and source; selecting the source breadcrumb or
 closing the item returns to the source list or record with its entry state.
 Reload keeps the selected item's URL. Shift-click uses the existing separate

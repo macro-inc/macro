@@ -13,13 +13,13 @@ import {
   companiesRoute,
   crmItemRoute,
   crmPipelineItemRoute,
+  crmPipelineRecordFileItemRoute,
   crmPipelineRecordItemRoute,
   crmPipelineRecordRoute,
-  crmPipelineRecordSectionItemRoute,
   crmPipelineRoute,
+  crmRecordFileItemRoute,
   crmRecordItemRoute,
   crmRecordRoute,
-  crmRecordSectionItemRoute,
 } from '@app/routes/routes';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { For, onCleanup } from 'solid-js';
@@ -75,16 +75,15 @@ const routes: SplitRoutes = {
               ...crmPipelineRoute,
               children: [
                 crmPipelineItemRoute,
-                {
-                  ...crmPipelineRecordRoute,
-                  children: [crmPipelineRecordItemRoute],
-                },
-                crmPipelineRecordSectionItemRoute,
+                crmPipelineRecordRoute,
+                crmPipelineRecordItemRoute,
+                crmPipelineRecordFileItemRoute,
               ],
             },
             crmItemRoute,
-            { ...crmRecordRoute, children: [crmRecordItemRoute] },
-            crmRecordSectionItemRoute,
+            crmRecordRoute,
+            crmRecordItemRoute,
+            crmRecordFileItemRoute,
           ],
         },
       ],
@@ -263,38 +262,37 @@ it('keeps an activity item in its source list across close and forward', async (
   );
 });
 
-it('retains a record trail, section and pipeline source for an item', async () => {
+it('retains a record trail, Files section and pipeline source for a note', async () => {
   const { url, shows, go } = renderCustomers('/companies/pipeline/sales');
   await shows('tab:pipeline:sales section:- records:');
   route.open([acme, maya]);
   await shows(
     'tab:pipeline:sales section:- records:company:acme:Acme,contact:maya:Maya'
   );
-  route.setSection('emails');
+  route.setSection('files');
   await shows(
-    'tab:pipeline:sales section:emails records:company:acme:Acme,contact:maya:Maya'
+    'tab:pipeline:sales section:files records:company:acme:Acme,contact:maya:Maya'
   );
   route.openItem({
     type: 'document',
     id: 'note-1',
     name: 'Note',
     fileType: 'md',
-    subType: { type: 'task' },
   });
   await vi.waitFor(() =>
     expect(screen.getByTestId('item').textContent).toBe('Note')
   );
   expect(url()).toBe(
-    '/companies/pipeline/sales/contact/maya/emails/document/note-1/md/task'
+    '/companies/pipeline/sales/contact/maya/files/document/note-1/md'
   );
   await shows(
-    'tab:pipeline:sales section:emails records:company:acme:Acme,contact:maya:Maya'
+    'tab:pipeline:sales section:files records:company:acme:Acme,contact:maya:Maya'
   );
   route.closeItem();
   await vi.waitFor(() =>
     expect(screen.getByTestId('item').textContent).toBe('-')
   );
-  expect(url()).toBe('/companies/pipeline/sales/contact/maya/emails');
+  expect(url()).toBe('/companies/pipeline/sales/contact/maya/files');
   await go(1);
   await vi.waitFor(() =>
     expect(screen.getByTestId('item').textContent).toBe('Note')
@@ -408,7 +406,7 @@ it.each([
   }
 );
 
-it('keeps Files and Notes items on generic record URLs', async () => {
+it('keeps document metadata in Files and Notes URLs', async () => {
   const { url, shows } = renderCustomers('/companies');
   route.open([acme]);
   await shows('tab:active section:- records:company:acme:Acme');
@@ -438,7 +436,7 @@ it('keeps Files and Notes items on generic record URLs', async () => {
 
 it('closes a directly loaded item to its record section without a prior entry', async () => {
   const { url, shows, canGo } = renderCustomers(
-    '/companies/company/acme/emails/email/thread-1'
+    '/companies/company/acme/emails/thread-1'
   );
   await shows('tab:active section:emails records:company:acme:');
   expect(route.item()?.itemId).toBe('thread-1');

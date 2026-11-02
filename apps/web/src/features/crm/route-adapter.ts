@@ -10,13 +10,13 @@ import {
   companiesRoute,
   crmItemRoute,
   crmPipelineItemRoute,
+  crmPipelineRecordFileItemRoute,
   crmPipelineRecordItemRoute,
   crmPipelineRecordRoute,
-  crmPipelineRecordSectionItemRoute,
   crmPipelineRoute,
+  crmRecordFileItemRoute,
   crmRecordItemRoute,
   crmRecordRoute,
-  crmRecordSectionItemRoute,
 } from '@app/routes/routes';
 import {
   blockNameToDefaultFile,
@@ -36,7 +36,6 @@ import {
   type CrmRecordParams,
   crmItemBlockType,
   crmRecordSearch,
-  crmRecordSectionItemParams,
   crmSearch,
   crmSearchCodec,
 } from './crm-route';
@@ -58,21 +57,11 @@ function listTab(entry: Entry): string | undefined {
 }
 
 function recordItemRoute(
-  params: CrmItemParams & Partial<CrmRecordParams>,
+  section: CrmRecordSection | undefined,
   pipelineId: string | undefined
 ) {
-  const parsed = crmRecordSectionItemParams.safeParse(params);
-  const inferred: CrmItemParams | undefined = parsed.success
-    ? parsed.data
-    : undefined;
-  if (
-    inferred?.itemType === params.itemType &&
-    inferred.itemFileType === params.itemFileType &&
-    inferred.itemSubType === params.itemSubType
-  ) {
-    return pipelineId
-      ? crmPipelineRecordSectionItemRoute
-      : crmRecordSectionItemRoute;
+  if (!section || section === 'overview' || section === 'files') {
+    return pipelineId ? crmPipelineRecordFileItemRoute : crmRecordFileItemRoute;
   }
   return pipelineId ? crmPipelineRecordItemRoute : crmRecordItemRoute;
 }
@@ -87,17 +76,17 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
   const recordItemState = useRouteState(crmRecordItemRoute);
   const pipelineItemState = useRouteState(crmPipelineItemRoute);
   const pipelineRecordItemState = useRouteState(crmPipelineRecordItemRoute);
-  const recordSectionItemState = useRouteState(crmRecordSectionItemRoute);
-  const pipelineRecordSectionItemState = useRouteState(
-    crmPipelineRecordSectionItemRoute
+  const recordFileItemState = useRouteState(crmRecordFileItemRoute);
+  const pipelineRecordFileItemState = useRouteState(
+    crmPipelineRecordFileItemRoute
   );
   const itemState = () =>
     listItemState() ??
     recordItemState() ??
     pipelineItemState() ??
     pipelineRecordItemState() ??
-    recordSectionItemState() ??
-    pipelineRecordSectionItemState();
+    recordFileItemState() ??
+    pipelineRecordFileItemState();
   const navigate = useNavigate();
   const history = usePaneHistory();
 
@@ -221,15 +210,7 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
     const pipelineId = params.pipelineId;
     const itemRoute = pipelineId ? crmPipelineItemRoute : crmItemRoute;
     const target = trail.length
-      ? recordItemRoute(
-          {
-            ...itemParams,
-            recordType: trail.at(-1)?.type,
-            recordId: trail.at(-1)?.id,
-            section: params.section,
-          },
-          pipelineId
-        )
+      ? recordItemRoute(params.section, pipelineId)
       : itemRoute;
     fireAndForget(
       Telemetry.span('crm.item.open', async (span) => {
@@ -278,8 +259,8 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
               match.id === crmRecordItemRoute.id ||
               match.id === crmPipelineItemRoute.id ||
               match.id === crmPipelineRecordItemRoute.id ||
-              match.id === crmRecordSectionItemRoute.id ||
-              match.id === crmPipelineRecordSectionItemRoute.id
+              match.id === crmRecordFileItemRoute.id ||
+              match.id === crmPipelineRecordFileItemRoute.id
           )
         )
           continue;

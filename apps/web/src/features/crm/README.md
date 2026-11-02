@@ -116,11 +116,13 @@ No separate CRM association metadata lookup or row footer runs during paging.
 Linked Tasks, Email, Notes, Calls and Databases open through nested Customers
 routes from workspace activity and record sections. Tasks, Emails, Calls and
 Databases record sections append only `<item-id>` because their section determines
-the renderer; Tasks also omit the redundant `md/task` suffix. Workspace, Files/Notes
-and mixed-type sources retain `<item-type>/<item-id>` and document metadata. The
-route stores the item name and record trail in entry state; its parent retains
-the source tab and section. `route-adapter.ts`
-owns item navigation and close/history restoration;
+the renderer; Tasks also omit the redundant `md/task` suffix. These sections reject
+redundant typed item URLs rather than retaining fallback routes. Workspace activity
+retains `<item-type>/<item-id>` and document metadata; record Files and overview
+notes use document-metadata routes restricted to those sections. The route stores
+the item name and record trail in entry state. Route params retain the record and
+section; pane search retains the workspace tab. `route-adapter.ts` owns item
+navigation and close/history restoration;
 `views/item-detail.tsx` renders authorized details in the existing CRM shell
 with source, record trail and item breadcrumbs, omitting section labels such as
 Tasks and Files. The current record breadcrumb returns to the captured section

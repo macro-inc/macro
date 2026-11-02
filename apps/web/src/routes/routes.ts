@@ -17,9 +17,10 @@ import {
   crmPipelineParams,
   crmPipelineReference,
   crmRecordClaim,
+  crmRecordFileItemParams,
+  crmRecordItemParams,
   crmRecordParams,
   crmRecordReference,
-  crmRecordSectionItemParams,
   crmRecordTrailSchema,
   crmViewReference,
 } from '@app/features/crm/crm-route';
@@ -693,32 +694,34 @@ export const crmItemRoute = defineRoute({
     uuidRouteReference(params.itemId, crmItemBlockType(params)),
 });
 
-export const crmRecordItemRoute = defineRoute({
-  ...crmItemRoute,
-  id: 'companies-record-item',
-});
-
 export const crmPipelineItemRoute = defineRoute({
   ...crmItemRoute,
   id: 'companies-pipeline-item',
 });
 
-export const crmPipelineRecordItemRoute = defineRoute({
+/** A typed record section already identifies the selected item's renderer. */
+export const crmRecordItemRoute = defineRoute({
   ...crmItemRoute,
+  id: 'companies-record-item',
+  path: ':recordType/:recordId/:section/:itemId',
+  params: crmRecordItemParams,
+});
+
+export const crmPipelineRecordItemRoute = defineRoute({
+  ...crmRecordItemRoute,
   id: 'companies-pipeline-record-item',
 });
 
-/** A typed record section already identifies the selected item's renderer. */
-export const crmRecordSectionItemRoute = defineRoute({
+export const crmRecordFileItemRoute = defineRoute({
   ...crmItemRoute,
-  id: 'companies-record-section-item',
-  path: ':recordType/:recordId/:section/:itemId',
-  params: crmRecordSectionItemParams,
+  id: 'companies-record-file-item',
+  path: ':recordType/:recordId/:section?/:itemType/:itemId/:itemFileType?/:itemSubType?',
+  params: crmRecordFileItemParams,
 });
 
-export const crmPipelineRecordSectionItemRoute = defineRoute({
-  ...crmRecordSectionItemRoute,
-  id: 'companies-pipeline-record-section-item',
+export const crmPipelineRecordFileItemRoute = defineRoute({
+  ...crmRecordFileItemRoute,
+  id: 'companies-pipeline-record-file-item',
 });
 
 export const crmPipelineRoute = defineRoute({

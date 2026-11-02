@@ -67,7 +67,7 @@ const CRM_SECTION_ITEM_TYPES = {
 } as const;
 
 /** Typed record sections supply all renderer metadata without extra URL segments. */
-export const crmRecordSectionItemParams = crmRecordParams
+export const crmRecordItemParams = crmRecordParams
   .extend({
     section: z.enum(['tasks', 'emails', 'calls', 'databases']),
     itemId: crmItemParams.shape.itemId,
@@ -76,6 +76,13 @@ export const crmRecordSectionItemParams = crmRecordParams
     ...params,
     ...CRM_SECTION_ITEM_TYPES[params.section],
   }));
+
+/** Files and overview notes need document metadata, unlike typed sections. */
+export const crmRecordFileItemParams = crmRecordParams.extend({
+  ...crmItemParams.shape,
+  section: z.enum(['overview', 'files']).optional(),
+  itemType: z.literal('document'),
+});
 
 /** The canonical entity kind used by item claims, references, and fallback names. */
 export function crmItemBlockType({

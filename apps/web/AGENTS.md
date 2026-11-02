@@ -331,7 +331,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   Switch view drawer that honors host collapse and square copy-link islands; keep
   phone breadcrumbs above the switcher and leave the workspace view strip unchanged.
   Open linked items under their Customers source URL; typed record sections append
-  only `<id>`, while workspace and mixed-type sources retain item metadata. Keep
+  only `<id>` and reject redundant typed URLs. Workspace activity and record
+  Files/overview notes retain item metadata on their own scoped routes. Keep
   source and record breadcrumbs without section labels or extra preview-title
   separators, retain entity menus and sharing, and return the current record
   breadcrumb to its captured section and history entry.

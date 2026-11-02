@@ -13,13 +13,13 @@ import {
   companiesRoute,
   crmItemRoute,
   crmPipelineItemRoute,
+  crmPipelineRecordFileItemRoute,
   crmPipelineRecordItemRoute,
   crmPipelineRecordRoute,
-  crmPipelineRecordSectionItemRoute,
   crmPipelineRoute,
+  crmRecordFileItemRoute,
   crmRecordItemRoute,
   crmRecordRoute,
-  crmRecordSectionItemRoute,
   legacyContentRoute,
   notFoundRoute,
   taskDetailRoute,
@@ -29,7 +29,7 @@ import { createMacroMentionLinkResolver } from '@components/app/split-layout/spl
 import { describe, expect, it, vi } from 'vitest';
 import { pipelineTab } from './core/navigation';
 import type { CrmViewConfig } from './core/saved-view';
-import { crmRecordSectionItemParams, crmSearchCodec } from './crm-route';
+import { crmRecordItemParams, crmSearchCodec } from './crm-route';
 import { encodeCrmViewParam } from './queries/saved-view-codec';
 
 vi.mock('@components/app/split-layout/componentRegistry', () => ({
@@ -61,16 +61,15 @@ const routes = createRoutesManifest({
               ...crmPipelineRoute,
               children: [
                 crmPipelineItemRoute,
-                {
-                  ...crmPipelineRecordRoute,
-                  children: [crmPipelineRecordItemRoute],
-                },
-                crmPipelineRecordSectionItemRoute,
+                crmPipelineRecordRoute,
+                crmPipelineRecordItemRoute,
+                crmPipelineRecordFileItemRoute,
               ],
             },
             crmItemRoute,
-            { ...crmRecordRoute, children: [crmRecordItemRoute] },
-            crmRecordSectionItemRoute,
+            crmRecordRoute,
+            crmRecordItemRoute,
+            crmRecordFileItemRoute,
           ],
         },
         legacyContentRoute,
@@ -200,7 +199,7 @@ describe('CRM item URLs', () => {
     (section, itemType, itemFileType, itemSubType, block) => {
       const path = `/companies/contact/${contactId}/${section}/${itemId}`;
       expect(leafOf(path.slice(1))).toEqual({
-        id: crmRecordSectionItemRoute.id,
+        id: crmRecordItemRoute.id,
         params: {
           recordType: 'contact',
           recordId: contactId,
@@ -220,15 +219,15 @@ describe('CRM item URLs', () => {
   );
 
   it('claims a compact task as the same document as its generic and Tasks URLs', () => {
-    const decoded = crmRecordSectionItemParams.safeParse(
+    const decoded = crmRecordItemParams.safeParse(
       leafOf(`companies/company/${companyId}/tasks/${itemId}`)?.params
     );
     expect(decoded.success).toBe(true);
     if (!decoded.success) throw new Error('Expected a compact task');
-    expect(crmRecordSectionItemRoute.claim?.(decoded.data)).toEqual(
+    expect(crmRecordItemRoute.claim?.(decoded.data)).toEqual(
       taskDetailRoute.claim?.({ taskId: itemId })
     );
-    expect(crmRecordSectionItemRoute.claim?.(decoded.data)).toEqual(
+    expect(crmRecordItemRoute.claim?.(decoded.data)).toEqual(
       crmItemRoute.claim?.({
         itemType: 'document',
         itemId,
@@ -241,7 +240,7 @@ describe('CRM item URLs', () => {
   it('decodes a pipeline record item and mentions the selected call', () => {
     const path = `/companies/pipeline/${pipelineId}/company/${companyId}/calls/${itemId}`;
     expect(leafOf(path.slice(1))).toEqual({
-      id: crmPipelineRecordSectionItemRoute.id,
+      id: crmPipelineRecordItemRoute.id,
       params: {
         recordType: 'company',
         recordId: companyId,
@@ -260,36 +259,82 @@ describe('CRM item URLs', () => {
   it.each([
     [`document/${itemId}/md/task`, 'task'],
     [`document/${itemId}/md`, 'md'],
-    [`email/${itemId}`, 'email'],
-    [`call/${itemId}`, 'call'],
-    [`database/${itemId}`, 'database'],
+    [`document/${itemId}/pdf`, 'pdf'],
   ])(
-    'references the selected %s item rather than its parent record',
+    'references a Files item with its document metadata: %s',
     (item, block) => {
       expect(
-        resolveMention(appUrl(`/companies/company/${companyId}/tasks/${item}`))
+        resolveMention(appUrl(`/companies/company/${companyId}/files/${item}`))
       ).toEqual({ id: itemId, block, params: {} });
     }
   );
 
   it.each([
     ['companies', crmItemRoute.id],
-    [`companies/company/${companyId}`, crmRecordItemRoute.id],
-    [`companies/company/${companyId}/tasks`, crmRecordItemRoute.id],
     [`companies/pipeline/${pipelineId}`, crmPipelineItemRoute.id],
-    [
-      `companies/pipeline/${pipelineId}/contact/${contactId}`,
-      crmPipelineRecordItemRoute.id,
-    ],
-    [
-      `companies/pipeline/${pipelineId}/contact/${contactId}/emails`,
-      crmPipelineRecordItemRoute.id,
-    ],
-  ])('retains the source branch of %s', (source, id) => {
+  ])('retains the workspace source of %s', (source, id) => {
     expect(leafOf(`${source}/email/${itemId}`)).toEqual({
       id,
       params: { itemType: 'email', itemId },
     });
+  });
+
+  it.each([
+    [
+      `companies/company/${companyId}`,
+      crmRecordFileItemRoute.id,
+      'company',
+      companyId,
+      undefined,
+    ],
+    [
+      `companies/company/${companyId}/files`,
+      crmRecordFileItemRoute.id,
+      'company',
+      companyId,
+      'files',
+    ],
+    [
+      `companies/pipeline/${pipelineId}/contact/${contactId}`,
+      crmPipelineRecordFileItemRoute.id,
+      'contact',
+      contactId,
+      undefined,
+    ],
+    [
+      `companies/pipeline/${pipelineId}/contact/${contactId}/files`,
+      crmPipelineRecordFileItemRoute.id,
+      'contact',
+      contactId,
+      'files',
+    ],
+  ])(
+    'retains the Files/Notes source of %s',
+    (source, id, recordType, recordId, section) => {
+      expect(leafOf(`${source}/document/${itemId}/md`)).toEqual({
+        id,
+        params: {
+          recordType,
+          recordId,
+          ...(section ? { section } : {}),
+          itemType: 'document',
+          itemId,
+          itemFileType: 'md',
+        },
+      });
+    }
+  );
+
+  it.each([
+    `companies/company/${companyId}/tasks/document/${itemId}/md/task`,
+    `companies/contact/${contactId}/emails/email/${itemId}`,
+    `companies/company/${companyId}/calls/call/${itemId}`,
+    `companies/contact/${contactId}/databases/database/${itemId}`,
+    `companies/pipeline/${pipelineId}/contact/${contactId}/tasks/document/${itemId}/md/task`,
+    `companies/pipeline/${pipelineId}/company/${companyId}/emails/email/${itemId}`,
+  ])('rejects obsolete typed record item URLs: %s', (path) => {
+    expect(leafOf(path)?.id).toBe(notFoundRoute.id);
+    expect(resolveMention(appUrl(`/${path}`))).toBeUndefined();
   });
 });
 
@@ -511,16 +556,14 @@ describe('legacy CRM URLs', () => {
         route: paneRoute(
           { id: companiesRoute.id, params: {} },
           {
-            id: crmRecordRoute.id,
+            id: crmRecordItemRoute.id,
             params: {
               recordType: 'company',
               recordId: companyId,
               section: 'emails',
+              itemType: 'email',
+              itemId: 'thread-1',
             },
-          },
-          {
-            id: crmRecordItemRoute.id,
-            params: { itemType: 'email', itemId: 'thread-1' },
           }
         ),
       },
