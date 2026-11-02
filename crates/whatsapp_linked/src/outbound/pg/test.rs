@@ -1129,3 +1129,4 @@ async fn rate_limited_send_never_creates_a_dispatchable_intent(pool: PgPool) {
 mod chats;
 mod communities;
 mod direct;
+mod lookups;

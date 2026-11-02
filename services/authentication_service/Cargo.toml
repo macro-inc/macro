@@ -177,6 +177,7 @@ tower = { workspace = true }
 tower-cookies = { version = "0.11.0" }
 tower-http = { workspace = true }
 tracing = { workspace = true }
+upstream_error = { path = "../../crates/upstream_error" }
 url = { workspace = true }
 urlencoding = { workspace = true }
 user_language = { path = "../../crates/user_language", features = ["inbound", "postgres"] }

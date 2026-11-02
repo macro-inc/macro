@@ -73,6 +73,12 @@ draft exactly like its trash button, `Cmd+Shift+U` opens the attach picker, and
 list and quote. Check discard from both a reply (the reply closes) and
 standalone compose (the view goes back), with focus in the body.
 
+Star and mute feedback reports what happened to the write. With GraphQL Soup
+enabled, a star queued while offline toasts that it is waiting to sync (for
+example `Added to favorites, waiting to sync`) rather than confirming it. A REST
+star and a mute fail offline with an error toast and roll back instead of
+waiting for reconnect, so pressing them again works at once.
+
 Recipient fields turn complete addresses into chips when the typed or pasted
 text ends in a comma or semicolon, so `a@example.com, b@example.com,` adds both.
 Enter or a click picks the highlighted suggestion. Type, paste, or Tab straight
@@ -99,7 +105,10 @@ delivery progress is silent, as on Gmail: a composer or sent message shows a
 notice only for a conflict, uncertain or rejected delivery, revoked access,
 unsavable content, or an inbox move. Use its recovery actions and check the
 provider copy before choosing an explicit resend; a resend in flight shows as
-the send button's pending state. Switching the sender
+the send button's pending state. A new-email draft locked by a conflict or an
+unconfirmed draft or attachment write still discards from its trash and
+Cmd+Shift+D; delivery in progress, unknown or rejected delivery, and revoked
+access keep discard locked. Switching the sender
 inbox copies the draft and attachments into the destination; wait for completion
 before sending. If the copy is interrupted, use retry or keep the original.
 A draft the provider could not save can still switch From, which moves it to an
@@ -143,8 +152,7 @@ changing the list query. Text search still resolves favorite IDs for the search
 service. An empty favorites list shows `No favorite emails`.
 
 With `enable-email-focus` and `enable-graphql-soup` on, a `Focus` tab leads the
-desktop Inbox tabs (with an `Experimental` badge beside them while it is open)
-and the mobile pills (`Focus · Experimental`). It lists signal
+desktop Inbox tabs and the mobile pills. It lists signal
 threads from the last 30 days that the email focus worker
 (`services/email_focus_worker`) classified as worth attention, including inboxes
 linked to the account, by priority: the importance score halved for every 2 days
@@ -296,6 +304,10 @@ offline action followed by reconnect. Also wait for provider/metadata synchroniz
 before Undo, and repeat after reloading: an archived received thread can lose its
 inbox-sorting timestamp but must still be unarchivable. Sent-only threads and
 unsent drafts cannot be unarchived; sent mail addressed back to its sender can.
+Threads without received mail hide Mark Not Done in the header, row, menu, and
+hotkeys. REST Soup rows lack that fact, so their row action stays and then says
+the thread stays done. Older sent-only threads still offer it until their
+metadata is next recomputed, and the server rejects it.
 With GraphQL Soup enabled, bulk Mark Not Done settles per email: a rejected
 sent-only/draft thread stays done, while successful and durably queued siblings
 remain restored. Only accepted
@@ -313,7 +325,7 @@ write fills. Home's work-feed Done and Undo return no notification rows, so they
 still read every notification reader again. In the
 network panel one `e` in the Email view sends its two mutations and no `Soup`,
 `SoupNotifications` or `ChannelUnreadPresence` query. Verify the open-thread header too: with GraphQL enabled,
-Mark Not Done remains available for an archived thread whose inbox timestamp is
+Mark Not Done remains available for an archived received thread whose inbox timestamp is
 missing; the server decides whether its received-message history allows restoration.
 The REST path retains its timestamp preflight, whole-batch handling, notification
 ordering, and existing cache reconciliation.
@@ -381,7 +393,26 @@ headers use the selected Mail view's indexed timestamps, not a preview cached fr
 another view. Drafts and Sent display their latest eligible message snapshot, even
 when a newer normal message is the ALL preview; no message bodies are needed.
 Sent also requires a canonical outbound timestamp. Trashed messages cannot supply
-any preview. Calendar uses the authoritative thread calendar-attachment flag.
+any preview. All Mail also excludes spam/junk, including its cached preview and
+non-draft baseline after draft edits. Mixed threads show the latest message outside
+spam and trash; excluded messages must not consume a page slot. Drafts and Sent
+keep their own canonical preview membership. Mail profiles v5/v6 require fresh
+server metadata after upgrading, so older spam-inclusive cache entries cannot
+reappear. HTTP and WebSocket clients explicitly negotiate the Mail capsule profile.
+Absent/unknown capabilities receive legacy v2 capsules, preserving old native draft
+queue admission. Browsers advertise v5; native clients do so only after verifying
+installed iOS build 193 or Android build 20 (unknown/desktop builds retain v2).
+Native discovery falls back to v2 after 1.5 seconds and retains that result for
+the session, so unavailable IPC cannot indefinitely delay GraphQL requests.
+The HTTP transport and WebSocket connection-parameter spans record the selected
+profile and whether discovery used the browser, a supported/unsupported native
+build, failed, or timed out; they do not include native error text.
+Current engines treat v2 capsules as incomplete and use the network for Mail lists.
+Deploy the backend (including its CORS capability header) before the new frontend.
+The backend can deploy before store releases; native v5 offline behavior still
+requires the corresponding native cache update.
+Verify Gmail labels and Outlook
+folder state. Calendar uses the authoritative thread calendar-attachment flag.
 
 A successful authoritative `Soup` first page also invalidates cached Mail facts
 that match its supported view/filter but are missing inside its covered sort
@@ -515,6 +546,9 @@ controls. Verify these remain
 available when returning to Drafts and reopening the draft.
 **Delete** in the title menu moves the thread to Trash and returns to the same
 filtered list. Its toast offers **Undo** to restore the email.
+**Sender → Signal**, **Sender → Noise** and **Block Sender**, and the sender
+commands in the command menu, appear only when the thread has a sender other
+than you. A thread you sent alone omits them.
 **Download .eml** in the title menu saves the thread's newest sent or received
 message (drafts and sends still in flight are skipped) exactly as Gmail or
 Outlook holds it, named after its subject. Anyone who can view the thread can
@@ -564,6 +598,9 @@ a failed local save keeps the composer and draft options open. The message list
 stays mounted underneath so closing a reply preserves its scroll position.
 On touch, a saved reply shows as a **Draft** row with its opening words under the
 message it answers (which stays expanded); tapping it reopens the draft.
+Opening a thread whose last message has a reply draft opens the composer once;
+after Back → Save Draft it stays closed while the save finishes, until the
+**Draft** row is tapped or the thread is opened again.
 On desktop, a saved reply that reappears with its thread (opening it, stepping
 to it with j/k, the reading pane following the list) stays unfocused, so the
 next j moves on instead of typing into it; `r` or a click continues it.
@@ -584,9 +621,10 @@ and type; every character must stay in Subject.
 In new emails, replies, reply-alls, and forwards, `Cmd+Shift+C` (`Ctrl+Shift+C`)
 reveals and focuses Cc and `Cmd+Shift+B` does the same for Bcc, expanding a
 collapsed reply header; inside a composer they never fall through to the
-thread's Copy link. `bunx playwright test --config
-src/features/email-compose/browser-test/playwright.app.config.ts` (from
-`apps/web`) checks both shortcuts in all four composers.
+thread's Copy link. Clicking the Cc or Bcc button also focuses the revealed
+field, so typing goes there instead of to app shortcuts. `bunx playwright test
+--config src/features/email-compose/browser-test/playwright.app.config.ts` (from
+`apps/web`) checks both shortcuts and both buttons in all four composers.
 While an editable field is focused, Escape is handled by that field before the
 close-reply shortcut.
 An edited reply remains a draft when navigating away and returning. Standalone
@@ -644,6 +682,10 @@ missing message or subject error does once filled in. Suggestions leave out
 automated addresses (`notifications@`, `mailer-daemon@`, `postmaster@`,
 `bounce@` and no-reply or do-not-reply addresses); typing one in full still adds
 it. Reply on a bounce goes to its sender, as for any other message.
+With a typed address chip in To or Cc, type text that is not an address
+(`notanemail`) and press Enter, or `bad@@x..com` and Tab: the chip stays, and
+the text stays in the field to be corrected. A typed address already chosen is
+not listed again in the suggestions.
 When checking draft autosave, edit the body of a draft with uploaded or forwarded
 attachments, wait for the save, and reopen it; the attachments should remain visible.
 In a long thread, scroll away from the bottom while a draft save is pending.
@@ -726,8 +768,8 @@ local copy rather than recreating the sent message. The REST compose path keeps
 its existing behavior.
 
 Native draft recovery requires a full app update containing queue inspection and
-durable mutation metadata support. An older app receiving an OTA bundle shows
-**Macro update required** and uses the existing uncached fallback. Its old queue
+durable mutation metadata support. An older app receiving an OTA bundle opens
+the update-required dialog once and uses the existing uncached fallback. Its old queue
 must remain intact, with no new claims or queued writes, until the native update.
 When the cache becomes unavailable, draft saves and discards must not bypass its
 preserved queue through GraphQL or REST fallback. Local editing stays durable;
@@ -984,7 +1026,10 @@ identity after settlement without replacing the editor's current text.
 
 With the persistent GraphQL Email cache enabled, a new standalone draft saved
 offline appears immediately in Drafts and the other matching Mail tabs, including
-date-grouped lists. A draft changes a conversation's preview, read state, and sort
+date-grouped lists, but never in Inbox, before or after reconnect. On Gmail and
+Outlook alike, a draft brings its conversation into Inbox only as a reply to
+received mail; draft-only and sent-only conversations stay in Archived. A draft
+changes a conversation's preview, read state, and sort
 time according to that tab; discarding it restores the remaining conversation's
 metadata. `Showing cached mail` still means only synchronized and locally created
 items are available.

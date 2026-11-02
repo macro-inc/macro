@@ -13,6 +13,7 @@ document.documentElement.dataset.touchDevice = String(isTouchDevice());
 function Fixture() {
   const [view, setView] = createSignal('messages');
   const [selected, setSelected] = createSignal('Nothing created');
+  const [dismissals, setDismissals] = createSignal(0);
   return (
     <main class="min-h-screen bg-page p-8 text-ink">
       <h1 class="mb-6 text-xl font-semibold">
@@ -54,16 +55,34 @@ function Fixture() {
               {
                 persistent: true,
                 region: isMobile() ? 'mobile-prompt-region' : 'prompt-region',
+                onUserDismiss: () => setDismissals((count) => count + 1),
               }
             )
           }
         >
           Show prompt
         </Button>
+        <Button
+          onClick={() =>
+            toast.custom(
+              { title: 'Reminder preview' },
+              {
+                persistent: true,
+                region: isMobile()
+                  ? 'mobile-reminder-region'
+                  : 'reminder-region',
+                onUserDismiss: () => setDismissals((count) => count + 1),
+              }
+            )
+          }
+        >
+          Show reminder
+        </Button>
       </div>
       <p class="mt-5 text-sm text-ink-muted">
         {selected()} — this preview does not save data.
       </p>
+      <p>Dismissals: {dismissals()}</p>
       <div class="mt-6">
         <Tabs
           aria-label="Channel views"

@@ -305,25 +305,6 @@ fn contact(recipient: wire::Recipient) -> ContactInfo {
     }
 }
 
-/// Graph's `bodyPreview` length.
-const SNIPPET_CHARS: usize = 255;
-
-fn reply_snippet(subject: Option<&str>, html: Option<&str>, text: Option<&str>) -> Option<String> {
-    let reply = email_utils::body_replyless::compute_body_replyless(subject, html, text)?;
-    let reply = match html {
-        Some(_) => email_utils::body_parsed::html_to_plaintext(&reply)?,
-        None => reply,
-    };
-    let snippet: String = reply
-        .split_whitespace()
-        .collect::<Vec<_>>()
-        .join(" ")
-        .chars()
-        .take(SNIPPET_CHARS)
-        .collect();
-    (!snippet.is_empty()).then_some(snippet)
-}
-
 pub(super) fn normalize(
     source: wire::Message,
     attachments: Vec<Attachment>,
@@ -358,7 +339,7 @@ pub(super) fn normalize(
         Some(body) => (Some(body.content), None),
         None => (None, None),
     };
-    let snippet = reply_snippet(
+    let snippet = email_utils::body_replyless::reply_snippet(
         source.subject.as_deref(),
         body_html_sanitized.as_deref(),
         body_text.as_deref(),

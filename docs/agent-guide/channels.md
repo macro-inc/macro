@@ -40,6 +40,13 @@ format toolbar applies it to the same paragraphs in either selection direction.
 Verify a selection from the last paragraph back to the start of the first:
 the first paragraph must receive the format too. A range ending at the start of
 the following paragraph leaves that following paragraph unchanged.
+Typing `> ` creates a quote. Pasting text with paragraph breaks into that quote
+keeps all pasted paragraphs quoted, including HTML and text copied from another
+Macro editor. Inline formatting survives. Verify an empty quote and a selection
+within a quote, then type after the paste and save the message; every pasted
+paragraph must still have the quote styling.
+Selections across adjacent quoted paragraphs preserve quoting too. A selection
+that includes unquoted paragraphs keeps the normal paste behavior.
 The backend-free quote check is documented in the Markdown browser-test README
 linked above.
 
@@ -678,6 +685,9 @@ that buffer. Check that pagination retains the visible message, and that latest
 stays pinned when messages arrive, images load, or the composer resizes. Verify
 message/reply navigation, restoration, and the custom scrollbar after pagination.
 Very long flings or slow responses can still exhaust the available scroll range.
+In the iOS app, fling repeatedly through a long channel, starting each fling before
+the previous one's momentum ends, then let it settle. The messages must not jump when
+scrolling comes to rest, nor when it bounces or is held against the top of loaded history.
 
 Inline document mentions should show their stored title before entering the viewport
 and while preview requests are pending. With a slow preview response, check that a

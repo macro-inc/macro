@@ -8,6 +8,12 @@
 - Run Linux native cache-plugin tests from the repository root with `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin`; the [Tauri platform shell](../../docs/development/running-locally.md) supplies the required desktop libraries.
 - `bun run lint:oxlint` (repository root): type-aware oxlint. `typescript/no-floating-promises` is an error with no suppressions and `ignoreVoid: false` (FE-13), enforced in `just check` and CI; start detached work with `fireAndForget` from `@core/util/fireAndForget`, not `void`. Plain `oxlint` without `--type-aware` skips that rule silently. The ast-grep rule `ts-no-expression-void` covers `() => void p()`, which the lint can't see.
 - Email rendering is isolated in `packages/email-renderer` at the repository root. Run `just test-email-rendering` for its Node and Chromium suites. Add fixtures under `packages/email-renderer/tests/fixtures`, run `just test-email-rendering-update`, and review changed images. These are renderer tests, not inbox e2e.
+- Supported browsers are the `browserslist` in `package.json`. Safari and iOS
+  16.4 is the oldest WebKit the app starts on: startup code, including
+  `@pierre/diffs`, evaluates regex lookbehind. `vite.base.ts` builds to it,
+  and the ast-grep rules `ts-browser-floor-apis` and `tsx-browser-floor-apis`
+  ban APIs that turned out to be newer; add one there when it bites, or raise
+  the floor.
 - The app does not register a service worker. Keep `public/sw.js` as a retirement
   endpoint for existing installations; see the [startup bundle rule](../../.agents/rules/web/startup-bundle.md).
   Loro uses async WASM loading and HTML preloads independently of service workers.
@@ -54,8 +60,10 @@ Discussion link scrolling has a backend-free browser regression:
 Phone sheets stacked on each other (Connect email over Settings, Add guests,
 RSVP scope and the delete confirmation over event details) have a backend-free
 browser regression for backdrop taps that must not press what the scrim covers,
-including mixed pointerdown/pointerup dismissal, and for taps inside the top
-sheet that must still press its own controls:
+including mixed pointerdown/pointerup dismissal, for taps inside the top
+sheet that must still press its own controls, and for swipes whose owner keeps
+the sheet open (a discard prompt, a pending confirmation, event details under a
+stacked sheet), which must bring it back on screen:
 `bunx playwright test --config src/components/app/mobile/browser-test/playwright.config.ts`.
 
 Composer typeahead menus choosing the side with room for their full list
@@ -159,6 +167,11 @@ Block formatting passes a forward copy of the selection to Lexical's
 `$setBlocksType` so backward selections include their first paragraph and keep
 the editor's actual selection direction. The Markdown core browser suite's
 `quotes.browser.e2e.ts` checks Quote through the floating toolbar and after saving.
+The same suite checks multi-paragraph plain-text, HTML, and Lexical pastes into
+empty quotes and selections within a quote on desktop, tablet, and phone.
+Selections across adjacent quotes stay quoted; ranges containing unquoted blocks
+retain normal paste behavior.
+Keep pasted paragraphs quoted through the shared clipboard insertion command.
 
 A frontend dev server runs against the **dev** backend, so this needs no local stack, Docker, Rust build, or `sudo`:
 
@@ -266,6 +279,10 @@ about its groups (labels, order, membership) is computed on the server and
 mirrored by the cache's local grouping projection; never add a side cache in
 feature code to cover a remount.
 
+Resolve server date-group keys through the shared `DATE_GROUP_BUCKETS` metadata
+in `lib/queries/soup/grouped/api.ts` for labels and display order; cached Mail
+uses the same metadata.
+
 Keep persistent list hotkeys free of mounted-view closures, and clear
 virtualizer accessors when their view unmounts.
 Keep editor newline handling local; result-opening handlers must yield
@@ -301,6 +318,10 @@ the user's newest account for that app from the last fifteen minutes.
   control/glyph overrides. See the [selection-control contract](../../.agents/rules/web/ui-primitives.md#selection-controls).
 
 - Keep model picker triggers bounded with full-name title tooltips; wrap model names in catalog rows, including effort submenus and touch sheets.
+
+- All Mail previews exclude spam/junk and trash. Keep draft edits from restoring
+  an excluded preview or timestamp, including synced Macro drafts; Drafts and
+  Sent retain their own canonical membership.
 
 Agent split headers show live viewers through `BlockLiveIndicators` with the
 resolved session ID; keep the existing `AgentSessionProvider` subscription to
@@ -442,8 +463,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   [calendar walkthrough](../../docs/agent-guide/calendar.md).
 - Mark loaded calendar and agent-session row notifications through the
   notification source (`markRowNotificationsSeenOnOpen`) so read dots update
-  immediately and failed writes roll back; calendar grid selections also mark
-  the canonical event read, excluding team projections.
+  immediately and failed writes roll back; calendar grid selections and links
+  to an event also mark the canonical event read, excluding team projections.
 - Route explicit meeting-page exits using the server's `callEnded` result: ended
   calls open their record; ongoing channel and scheduled calls return to the
   channel and Calendar. Leaving from a channel's Call tab stays in the channel. Preserve the session ID and send the server leave before media
@@ -475,6 +496,15 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   feature-specific query orchestration with its owning feature.
 - Refresh the channel list's bounded unread edge when opening a conversation,
   including an empty unread result after a read on another device.
+- Read folders for picking or moving through `createFolderList`
+  (`queries/storage/folder-list`): it matches the Drive sidebar's source, so a
+  folder open in Drive, including a team folder, is always in the list. Keep
+  move rules in `folder-destinations.ts` so the picker and drop targets agree.
+  Create one `createFolderDropTargets` per surface, not per row, so a long
+  folder tree shares its folder list and mutation. Rows learn what a drag
+  carries from `EntityDragSelectionContext`,
+  which `SoupEntityContextMenu` provides; see
+  [dragging rows into a folder](../../docs/agent-guide/navigation.md#dragging-rows-into-a-folder).
 - Keep channel rail and title menus on `CHANNEL_ACTION_VIEW_CONTEXT`, including
   the shared desktop `Open in new split` action and its mobile/capacity guards.
 - Route supported move, trash, restore, permanent-delete, duplicate, and share-policy
@@ -662,6 +692,20 @@ on focus/reconnect; route existing subscriptions to billing management. Keep
 known management access through refetch failures, but hide unconfirmed trials.
 Reset rejected checkout offers before refetching eligibility.
 
+## Native commands
+
+Over-the-air bundles reach native apps older than the commands they call.
+`native-commands.json` lists every Tauri command the web code invokes directly,
+through a wrapper such as the cache host's `request`, or by `addPluginListener`.
+`src/lib/tauri/native-commands.test.ts` reads the calls with the TypeScript
+parser and fails when one is missing from that list, is not registered by the
+app (`generate_handler!` or an in-repo plugin's `build.rs`), or names its
+command with a value it cannot read: use a string literal, a constant, or a
+parameter typed as a union of literals. Commands that published plugins' own
+JavaScript packages call are not covered. Before adding a command to the list,
+raise `min-native-build.json` to the first build with it, or handle
+`Command … not found` in the caller (see the src-tauri README).
+
 ## Desktop release builds: generated WASM
 
 Keep `nix/tauri-desktop.nix` in sync with generated WASM dependencies: desktop
@@ -783,7 +827,8 @@ call the reviewed workspace tools, and show separate task/project totals.
 
 Cognition, routines, preview control, and MCP share `agent_harness_service`.
 Agent replies can use the existing `m-document-mention` format with
-`blockName: "routine"`; routines do not appear in the mention menu.
+`blockName: "routine"`; the `@` menu offers routines only to their owner in
+channel composers, where picking one shares it as a template.
 Direct local hosts use port 8101 with the existing feature prefixes; the
 instance proxy retains `/cognition`, `/scheduled-action`, and `/preview`.
 
@@ -822,7 +867,7 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 ### Creation choices and notifications
 
 - Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
-- Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus.
+- Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button.
 - Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
 
 ### Sidebar tag dragging
@@ -836,3 +881,6 @@ The backend-free browser regression is
 Use `features/channel/channel-icon.tsx` for conversation identity in rows,
 favorites, and headers: channel pictures or hashtags, human/self-DM avatars,
 and bot personas share one renderer; keep surface sizing in the caller.
+
+- Advertise Mail v5 capsules only for the current browser engine or a verified supported installed native build; OTA bundle version alone cannot establish native capability.
+- Bound native Mail capability discovery to 1.5 seconds and cache the legacy profile on failure or timeout so stalled IPC cannot block GraphQL transport; record the selected profile and bounded outcome in HTTP and WebSocket setup spans without error text.

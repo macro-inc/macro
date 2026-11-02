@@ -26,10 +26,18 @@ export function createThreadReplyArea(options: {
   // mount, which can let the reset clobber the auto-open if both data
   // sources are synchronously available).
   let prevThreadId: string | undefined;
+  // Once the full-screen composer has been shown in this thread, closing it
+  // is final: Save Draft updates the draft, and reopening on that change
+  // would keep the user in the composer.
+  let mobileReplyShown = false;
+  createEffect(() => {
+    if (options.mobileReply.open()) mobileReplyShown = true;
+  });
   createEffect(() => {
     const tid = options.threadId();
     if (prevThreadId !== tid) {
       prevThreadId = tid;
+      mobileReplyShown = false;
       options.bottomReply.setOpen(false);
       options.mobileReply.close();
     }
@@ -38,7 +46,8 @@ export function createThreadReplyArea(options: {
     if (!lastMessage?.db_id) return;
     if (options.drafts.getDraftForMessage(lastMessage.db_id)) {
       if (options.isTouch()) {
-        options.mobileReply.openForMessage(lastMessage.db_id);
+        if (!mobileReplyShown)
+          options.mobileReply.openForMessage(lastMessage.db_id);
       } else {
         options.bottomReply.setOpen(true);
       }

@@ -54,7 +54,7 @@ export function EmailComposeToolbar(props: {
               onClick={ctx.onDelete}
               tooltip="Delete draft"
               size="icon-md"
-              disabled={ctx.disabled()}
+              disabled={ctx.deleteDisabled?.() ?? ctx.disabled()}
             >
               <Trash class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>

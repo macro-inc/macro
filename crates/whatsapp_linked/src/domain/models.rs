@@ -317,8 +317,12 @@ pub struct Chat {
     /// Group: the subject, or member names for an unnamed group. Direct: the
     /// contact or WhatsApp name, else `+<phone>`. Always non-empty.
     pub name: String,
+    /// The other person's phone number (`+<digits>`) of a direct chat, when
+    /// WhatsApp told us it.
+    pub phone_number: Option<String>,
     /// Newest activity WhatsApp reported (message or history sync); `null`
-    /// when unknown. The list is sorted by it, newest first, unknown last.
+    /// when unknown, as for saved contacts never messaged. The list is
+    /// sorted by it, newest first, unknown last.
     pub last_activity_at: Option<DateTime<Utc>>,
     /// Archived in WhatsApp.
     pub archived: bool,
@@ -347,6 +351,82 @@ pub struct ChatList {
     /// Newest activity first; chats with unknown activity last, by name.
     pub chats: Vec<Chat>,
 }
+
+/// Where a phone-number lookup is.
+#[derive(
+    Debug,
+    Clone,
+    Copy,
+    Serialize,
+    Deserialize,
+    PartialEq,
+    Eq,
+    strum::IntoStaticStr,
+    strum::EnumString,
+)]
+#[serde(rename_all = "snake_case")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = WhatsAppLookupState))]
+#[strum(serialize_all = "snake_case")]
+pub enum LookupState {
+    /// The account's session has not answered yet.
+    Pending,
+    /// The number has a WhatsApp account; its direct chat is in the chat list.
+    Found,
+    /// The number has no WhatsApp account.
+    #[serde(rename = "not_on_whatsapp")]
+    #[strum(serialize = "not_on_whatsapp")]
+    NotOnWhatsApp,
+    /// WhatsApp did not answer in time, or the account's session is offline.
+    Failed,
+}
+
+impl LookupState {
+    /// Stable storage spelling.
+    pub fn as_str(self) -> &'static str {
+        self.into()
+    }
+
+    /// Parse the storage spelling.
+    pub fn parse(value: &str) -> Option<Self> {
+        value.parse().ok()
+    }
+}
+
+/// The owner asking whether a phone number has a WhatsApp account, to start
+/// a direct chat with it.
+#[derive(Debug, Clone, Serialize, PartialEq, Eq)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = WhatsAppLookup))]
+pub struct Lookup {
+    /// Poll `GET /whatsapp/lookups/{id}` with it.
+    pub id: Uuid,
+    /// The number asked about, E.164 (`+<digits>`).
+    pub phone_number: String,
+    /// Progress.
+    pub state: LookupState,
+    /// Found: the direct chat's JID, now addable from the chat list.
+    pub chat_jid: Option<String>,
+}
+
+/// Result of the owner's Import.
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+#[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
+#[cfg_attr(feature = "schema", schema(as = WhatsAppHistoryImport))]
+pub struct HistoryImport {
+    /// Chats that started importing earlier messages from the phone.
+    pub started: u32,
+}
+
+/// Lookups one account may start per [`LOOKUP_WINDOW_MINUTES`]. WhatsApp
+/// bans accounts that query many numbers.
+pub const LOOKUP_LIMIT: i64 = 20;
+/// The window [`LOOKUP_LIMIT`] counts over; older lookups are deleted.
+pub const LOOKUP_WINDOW_MINUTES: i32 = 60;
+/// A lookup still pending this long after it started has failed.
+pub const LOOKUP_EXPIRY_SECONDS: i32 = 60;
 
 /// Most people one text send may @-mention.
 pub const MENTION_LIMIT: usize = 64;

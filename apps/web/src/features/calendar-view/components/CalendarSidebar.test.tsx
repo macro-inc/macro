@@ -19,7 +19,7 @@ import { addDays, format } from 'date-fns';
 import { createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { CalendarFocusOccurrence } from '../calendar-focus-target';
-import { TeamOooUpcomingList } from './CalendarSidebar';
+import { CalendarMiniCalendar, TeamOooUpcomingList } from './CalendarSidebar';
 
 const requests = vi.hoisted(() => ({
   teamOoo: vi.fn<() => Promise<TeamOutOfOfficeItem[]>>(),
@@ -71,6 +71,7 @@ const closeEventDetails = vi.fn(() => {
 
 vi.mock('@app/features/calendar/components/CalendarViewContext', () => ({
   useCalendarView: () => ({
+    displaySettings: { weekStartsOn: 1 },
     selectedEvent,
     selectedEventAnchor,
     selectEvent,
@@ -80,7 +81,7 @@ vi.mock('@app/features/calendar/components/CalendarViewContext', () => ({
   }),
 }));
 vi.mock('@app/features/calendar/components/CalendarPagerContext', () => ({
-  useCalendarPager: () => ({ gotoDate }),
+  useCalendarPager: () => ({ activeDateInfo: () => undefined, gotoDate }),
 }));
 vi.mock('../calendar-focus-target', () => ({
   useCalendarFocus: () => ({ focusOccurrence }),
@@ -139,7 +140,84 @@ afterEach(() => {
   setSelectedEvent(undefined);
   setSelectedEventAnchor(undefined);
   setOverlayVisible(false);
+  vi.useRealTimers();
   vi.clearAllMocks();
+});
+
+describe('CalendarMiniCalendar', () => {
+  it.each([
+    {
+      date: new Date(2026, 9, 31),
+      direction: 'next',
+      target: new Date(2026, 10, 30),
+    },
+    {
+      date: new Date(2027, 0, 31),
+      direction: 'next',
+      target: new Date(2027, 1, 28),
+    },
+    {
+      date: new Date(2028, 0, 31),
+      direction: 'next',
+      target: new Date(2028, 1, 29),
+    },
+    {
+      date: new Date(2027, 2, 31),
+      direction: 'previous',
+      target: new Date(2027, 1, 28),
+    },
+  ])(
+    'keeps keyboard navigation usable after browsing $direction from $date',
+    async ({ date, direction, target }) => {
+      vi.useFakeTimers({ toFake: ['Date'] });
+      vi.setSystemTime(date);
+      const user = userEvent.setup();
+      render(() => <CalendarMiniCalendar />);
+
+      await user.click(
+        screen.getByRole('gridcell', {
+          name: '31',
+          selected: true,
+        })
+      );
+      await user.click(
+        screen.getByRole('button', { name: `Go to ${direction} month` })
+      );
+      expect(gotoDate).toHaveBeenCalledTimes(1);
+      if (direction === 'previous') await user.tab();
+      await user.tab();
+
+      expect(document.activeElement).toBe(
+        screen.getByRole('gridcell', {
+          name: String(target.getDate()),
+          selected: false,
+        })
+      );
+      await user.keyboard('{ArrowLeft}{Enter}');
+      expect(gotoDate).toHaveBeenLastCalledWith(addDays(target, -1));
+    }
+  );
+  it('keeps keyboard month changes independent until a day is selected', async () => {
+    vi.useFakeTimers({ toFake: ['Date'] });
+    vi.setSystemTime(new Date(2027, 0, 31));
+    const user = userEvent.setup();
+    render(() => <CalendarMiniCalendar />);
+
+    await user.click(
+      screen.getByRole('gridcell', { name: '31', selected: true })
+    );
+    await user.keyboard('{PageDown}{ArrowRight}');
+
+    expect(gotoDate).toHaveBeenCalledTimes(1);
+    expect(
+      screen.getByRole('button', { name: 'Choose month' }).textContent
+    ).toContain('March 2027');
+    expect(document.activeElement).toBe(
+      screen.getByRole('gridcell', { name: '1', selected: false })
+    );
+    await user.keyboard('{Enter}');
+    expect(gotoDate).toHaveBeenLastCalledWith(new Date(2027, 2, 1));
+  });
 });
 
 describe('TeamOooUpcomingList', () => {

@@ -1,36 +1,30 @@
 import { openAgentsPage } from '@app/features/agents-view/primitives/open-page';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useSplitLayout } from '@components/app/split-layout/layout';
-import { RecipientSelector } from '@core/component/RecipientSelector';
+import { ForwardToChannel } from '@core/component/ForwardToChannel';
 import { toast } from '@core/component/Toast/Toast';
 import {
   enableRoutineSharing,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import { useEmail, useUserId } from '@core/context/user';
-import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
-import type { WithCustomUserInput } from '@core/user';
 import { getDisplayName } from '@core/user/displayName';
 import { tryMacroId } from '@core/user/macroId';
-import { useSendMessageToPeople } from '@core/util/channels';
 import { getDefaultTimezone } from '@core/util/cron';
 import { writeClipboardData } from '@core/util/dataTransfer';
-import { getDestinationFromOptions } from '@core/util/destination';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { buildSimpleEntityUrl } from '@core/util/url';
-import PaperPlaneIcon from '@icon/system/regular/paper-plane-tilt.svg';
 import { Telemetry } from '@macro-inc/observability';
 import type {
   ActionTrigger,
   RoutineTemplate,
   TemplateVariable,
 } from '@service-scheduled-action/generated/schemas';
-import { Button, type ManagedDialogProps, openDialog } from '@ui';
+import { type ManagedDialogProps, openDialog } from '@ui';
 import {
   type Accessor,
   type ComponentProps,
   createEffect,
-  createMemo,
   createSignal,
   getOwner,
   Match,
@@ -40,27 +34,23 @@ import {
 } from 'solid-js';
 import { TemplateCard } from './components/template-card';
 import { describeTrigger } from './core/routine-triggers';
-import {
-  type Activator,
-  extractTemplateVariables,
-  variableKey,
-} from './core/template';
+import type { Activator } from './core/template';
 import {
   createTemplateActivation,
   templatePrompt,
 } from './primitives/template-activation';
 import { parseRoutineTriggers } from './queries/routine-trigger-mapping';
 import {
+  publishRoutineTemplate,
   useActivateTemplateMutation,
   useReferenceAccess,
   useRoutineTemplateQuery,
-  useShareTemplateMutation,
   useUnshareTemplateMutation,
 } from './queries/templates';
 import { RoutinePromptEditor } from './routine-prompt-editor';
 import { ActivateTemplateDialog } from './views/activate-template-dialog';
 import { RoutineTemplateView } from './views/routine-template-view';
-import { ShareTemplateDialog } from './views/share-template-dialog';
+import { ShareRoutineDialog } from './views/share-template-dialog';
 
 function triggerLines(trigger: ActionTrigger): string[] {
   return (parseRoutineTriggers(trigger) ?? []).map(describeTrigger);
@@ -295,188 +285,112 @@ function EnabledRoutineTemplatePage(props: {
   );
 }
 
-type Recipient = WithCustomUserInput<'user' | 'contact' | 'channel'>;
-
-function mentionMarkup(routineId: string, name: string) {
+/** A routine as a mention in a message, which renders its template card. */
+function routineReference(routineId: string, name: string) {
   const data = JSON.stringify({
     documentId: routineId,
     documentName: name,
     blockName: 'routine',
   });
-  return `<m-document-mention>${data}</m-document-mention>`;
+  return {
+    markdown: `<m-document-mention>${data}</m-document-mention>`,
+    mention: { entity_type: 'automation', entity_id: routineId },
+  };
 }
 
-/** Posts a template's link to a channel or people. */
-function SendTemplate(props: { routineId: string; name: string }) {
-  const [recipients, setRecipients] = createSignal<Recipient[]>([]);
-  const [sending, setSending] = createSignal(false);
-  const { all } = useCombinedRecipients();
-  const { sendToChannel, sendToUsers } = useSendMessageToPeople();
-
-  async function send() {
-    const destination = getDestinationFromOptions(recipients());
-    if (!destination || sending()) return;
-    setSending(true);
-    const message = {
-      content: `Here's a routine you can activate for yourself: ${mentionMarkup(props.routineId, props.name)}`,
-      mentions: [],
-    };
-    try {
-      const result =
-        destination.type === 'channel'
-          ? await sendToChannel({ ...message, channelId: destination.id })
-          : await sendToUsers({ ...message, users: destination.users });
-      if (result) {
-        toast.success('Template sent');
-        setRecipients([]);
-      } else toast.failure('Message failed to send');
-    } finally {
-      setSending(false);
-    }
-  }
-
-  return (
-    <div class="flex items-start gap-2">
-      <RecipientSelector<'user' | 'contact' | 'channel'>
-        placeholder="Channel or people"
-        options={all}
-        selectedOptions={recipients()}
-        setSelectedOptions={setRecipients}
-        triggerMode="input"
-        portalScope="local"
-        class="min-w-0 flex-1"
-      />
-      <Button
-        variant="outline"
-        disabled={recipients().length === 0 || sending()}
-        onClick={() => fireAndForget(send(), 'routines')}
-      >
-        <PaperPlaneIcon class="size-4" />
-        Send
-      </Button>
-    </div>
-  );
-}
-
-/** The owner's share dialog for one of their routines. */
-function ShareTemplate(
-  props: ManagedDialogProps & {
-    routineId: string;
-    name: string;
-    prompt: string;
-    timezone: string | undefined;
-    ownerId: string;
-  }
+/** The owner's Share menu for one of their routines. */
+function ShareRoutine(
+  props: ManagedDialogProps & { routineId: string; name: string }
 ) {
   const query = useRoutineTemplateQuery(() => props.routineId);
-  const shared = () => (query.isPending ? undefined : (query.data ?? null));
-  const share = useShareTemplateMutation();
+  const template = () => (query.isPending ? undefined : (query.data ?? null));
   const unshare = useUnshareTemplateMutation();
-  const [error, setError] = createSignal<string>();
-  const [description, setDescription] = createSignal<string>();
-  const [fills, setFills] = createSignal<
-    ReadonlyMap<string, TemplateVariable['fill']>
-  >(new Map());
+  const [publishing, setPublishing] = createSignal(false);
+  const [sendForm, setSendForm] = createSignal<{
+    canSubmit(): boolean;
+    submit(): void;
+  }>();
 
-  // Start from the shared template's choices for references it still has.
-  const variables = createMemo(() => {
-    const previous = new Map(
-      (shared()?.variables ?? []).map((variable) => [
-        variableKey(variable),
-        variable.fill,
-      ])
-    );
-    return extractTemplateVariables({
-      prompt: props.prompt,
-      timezone: props.timezone,
-      authorId: props.ownerId,
-    }).map((variable) => {
-      const key = variableKey(variable);
-      const fill = fills().get(key) ?? previous.get(key) ?? variable.fill;
-      return { ...variable, fill };
-    });
-  });
-
-  const failed = (cause: unknown) =>
-    setError(
-      cause instanceof Error && cause.message
-        ? cause.message
-        : 'Something went wrong. Please try again.'
-    );
-
-  async function shareTemplate() {
-    setError(undefined);
-    await Telemetry.span('routine.template.share', async (span) => {
-      span.setAttr('routine.id', props.routineId);
-      span.setAttr('routine.template.variables', variables().length);
-      try {
-        await share.mutateAsync({
-          scheduleId: props.routineId,
-          body: {
-            description: description() ?? shared()?.description ?? '',
-            variables: variables(),
-          },
-        });
-        toast.success(shared() ? 'Template updated' : 'Template shared');
-      } catch (cause) {
-        span.error('Sharing the template failed');
-        failed(cause);
-      }
-    });
-  }
-
-  async function stopSharing() {
-    setError(undefined);
+  // Every send and copy publishes the routine's current setup first.
+  async function publish(source: 'send' | 'link') {
+    setPublishing(true);
     try {
-      await unshare.mutateAsync({ scheduleId: props.routineId });
-      toast.success('Stopped sharing');
-    } catch (cause) {
-      failed(cause);
+      await Telemetry.span('routine.template.share', async (span) => {
+        span.setAttr('routine.id', props.routineId);
+        span.setAttr('routine.template.source', source);
+        try {
+          await publishRoutineTemplate(props.routineId);
+        } catch (cause) {
+          span.error('Sharing the routine failed');
+          throw cause;
+        }
+      });
+    } finally {
+      setPublishing(false);
     }
   }
 
   async function copyLink() {
+    try {
+      await publish('link');
+    } catch {
+      toast.failure('Could not share this routine');
+      return;
+    }
     const url = buildSimpleEntityUrl({ type: 'routine', id: props.routineId });
     if (await writeClipboardData({ 'text/plain': url }))
-      toast.success('Template link copied');
+      toast.success('Link copied', {
+        subtext: 'Anyone with the link can activate their own copy.',
+      });
     else toast.alert('Could not copy the link');
   }
 
+  async function stopSharing() {
+    try {
+      await unshare.mutateAsync({ scheduleId: props.routineId });
+      toast.success('Stopped sharing');
+    } catch {
+      toast.failure('Could not stop sharing', { subtext: 'Please try again' });
+    }
+  }
+
   return (
-    <ShareTemplateDialog
+    <ShareRoutineDialog
       open={props.open}
       onOpenChange={props.onOpenChange}
       name={props.name}
-      template={shared()}
-      description={description() ?? shared()?.description ?? ''}
-      onDescription={setDescription}
-      variables={variables()}
-      onFill={(key, fill) =>
-        setFills((current) => new Map(current).set(key, fill))
-      }
-      pending={share.isPending || unshare.isPending}
-      error={error()}
-      onShare={() => fireAndForget(shareTemplate(), 'routines')}
-      onUnshare={() => fireAndForget(stopSharing(), 'routines')}
+      template={template()}
+      pending={publishing() || unshare.isPending}
       onCopyLink={() => fireAndForget(copyLink(), 'routines')}
-      send={<SendTemplate routineId={props.routineId} name={props.name} />}
+      onStopSharing={() => fireAndForget(stopSharing(), 'routines')}
+      sendAction={sendForm()}
+      send={
+        <ForwardToChannel
+          name={props.name}
+          entity={{ entity_type: 'automation', entity_id: props.routineId }}
+          inlineReference={routineReference(props.routineId, props.name)}
+          prepareChannel={() => publish('send')}
+          onSubmit={() => props.onOpenChange(false)}
+          onCancel={() => props.onOpenChange(false)}
+          ref={(form) =>
+            setSendForm({
+              canSubmit: form.canSubmit,
+              submit: form.handleSubmit,
+            })
+          }
+        />
+      }
     />
   );
 }
 
-/** Opens the share-as-template dialog for a routine the viewer owns. */
-export function openShareTemplateDialog(
-  routine: {
-    routineId: string;
-    name: string;
-    prompt: string;
-    timezone: string | undefined;
-    ownerId: string;
-  },
+/** Opens the Share menu for a routine the viewer owns. */
+export function openShareRoutineDialog(
+  routine: { routineId: string; name: string },
   owner: ReturnType<typeof getOwner>
 ) {
   if (!isFeatureEnabled(enableRoutineSharing)) return;
-  return openDialog<ComponentProps<typeof ShareTemplate>>(
+  return openDialog<ComponentProps<typeof ShareRoutine>>(
     (props) => {
       const sharing = useFeatureFlag(enableRoutineSharing);
       createEffect(
@@ -486,7 +400,7 @@ export function openShareTemplateDialog(
       );
       return (
         <Show when={sharing().enabled}>
-          <ShareTemplate {...props} />
+          <ShareRoutine {...props} />
         </Show>
       );
     },

@@ -53,7 +53,8 @@ function getMentionName(item: MentionItem): string {
   if (item.kind === 'group') return item.data.groupAlias;
   if (item.kind === 'bookingLink' || item.kind === 'calendarEvent')
     return item.data.title;
-  if (item.kind === 'externalChat') return item.data.name;
+  if (item.kind === 'externalChat' || item.kind === 'routine')
+    return item.data.name;
   return item.searchText;
 }
 

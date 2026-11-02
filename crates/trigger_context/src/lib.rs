@@ -533,6 +533,15 @@ pub enum RoutineFiring {
     },
 }
 
+/// The GitHub pull request event behind a change.
+#[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
+pub struct PullRequestChange {
+    /// The pull request's URL.
+    pub url: String,
+    /// The GitHub login behind the change: whoever merged it, on a merge.
+    pub github_login: String,
+}
+
 /// The event a routine fired on, one variant per event it can watch.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(tag = "event", rename_all = "snake_case")]
@@ -563,6 +572,9 @@ pub enum RoutineEvent {
     TaskStatusChanged {
         /// The task as it reads now.
         task: TaskSnapshot,
+        /// The pull request event that changed it, when one did.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        pull_request: Option<PullRequestChange>,
     },
     /// A task's priority changed.
     TaskPriorityChanged {
