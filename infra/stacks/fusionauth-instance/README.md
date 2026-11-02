@@ -60,7 +60,7 @@ Use Biome from `nix develop` to match infrastructure CI.
 ## Secondary-inbox login validation investigation
 
 Keep the rejection in `templates/reconcile_secondary_idp_link.js`. On
-FusionAuth 1.69.4, moving it to a login-validation lambda via a boolean in
+FusionAuth 1.69.4 and 1.70.0, moving it to a login-validation lambda via a boolean in
 `user.data` allows overlapping secondary-inbox attempts to receive tokens for
 the primary account. Sequential tests pass and the specific error renders,
 but the handoff does not isolate concurrent attempts.

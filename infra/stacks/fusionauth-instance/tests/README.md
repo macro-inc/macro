@@ -53,6 +53,11 @@ An isolated run with the existing dev theme copied locally produced:
 | Password, passwordless, other OIDC, refresh, existing session | Continued working |
 | Error at desktop and 390px mobile width | Readable; no horizontal overflow or primary-email disclosure |
 
+The same script with the image switched to 1.70.0, the newest release at the
+time, reproduced the bypass as well: 17/50 secondary API logins and 2/20
+secondary hosted logins received primary-account tokens, and the original guard
+again rejected 20/20. Upgrading FusionAuth does not rescue the handoff.
+
 Google itself is replaced by a synthetic upstream OIDC provider; FusionAuth's
 hosted pages, reconciliation, validation, sessions, authorization-code exchange,
 and JWT validation are real. No hosted configuration was changed. These results

@@ -16,7 +16,7 @@ Local bootstrap also reads the deployed reconciliation template from
 ## Gotchas
 
 - Keep secondary-inbox rejection in reconciliation; the `user.data` handoff
-  fails under concurrent logins on 1.69.4 (see `tests/README.md`).
+  fails under concurrent logins on 1.69.4 and 1.70.0 (see `tests/README.md`).
 - Never deploy lambdas from `tests/fixtures/`; they intentionally reproduce an
   unsafe authentication policy.
 - Use block comments in kickstart lambda templates; KickstartRunner flattens
