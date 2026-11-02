@@ -17,10 +17,16 @@ describe('brandingStyle', () => {
     expect(brandingStyle(null)).toBeUndefined();
   });
 
-  it('hands the page its accent and the ink that reads on it', () => {
+  it('hands the page its accent, the ink that reads on it, and a shade away from that ink', () => {
     expect(brandingStyle('#ffd400')).toEqual({
       '--form-accent': '#ffd400',
       '--form-accent-contrast': '#000000',
+      '--form-accent-shade': '#ffffff',
+    });
+    expect(brandingStyle('#1f6feb')).toEqual({
+      '--form-accent': '#1f6feb',
+      '--form-accent-contrast': '#ffffff',
+      '--form-accent-shade': '#000000',
     });
   });
 });

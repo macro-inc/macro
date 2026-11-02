@@ -21,14 +21,22 @@ export function accentContrast(accent: string): '#000000' | '#ffffff' {
 
 /**
  * The variables `.form-branded` derives the page's accent tokens from, or
- * nothing for Macro's own accent.
+ * nothing for Macro's own accent. Hover and press shade the accent away from
+ * its ink, so they never lose contrast with it.
  */
 export function brandingStyle(
   accent: string | null
-): Record<'--form-accent' | '--form-accent-contrast', string> | undefined {
+):
+  | Record<
+      '--form-accent' | '--form-accent-contrast' | '--form-accent-shade',
+      string
+    >
+  | undefined {
   if (!accent) return undefined;
+  const contrast = accentContrast(accent);
   return {
     '--form-accent': accent,
-    '--form-accent-contrast': accentContrast(accent),
+    '--form-accent-contrast': contrast,
+    '--form-accent-shade': contrast === '#ffffff' ? '#000000' : '#ffffff',
   };
 }

@@ -7884,7 +7884,7 @@ export interface FormBranding {
    */
   coverFileId?: string | null;
   /**
-   * The color of the page's buttons, selections and focus rings.
+   * The color of the page's buttons and selected answers.
    */
   accentColor?: string | null;
 }

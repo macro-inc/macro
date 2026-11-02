@@ -140,7 +140,7 @@ share dialog, which also shows the audience panel). Branding (editors) sets a
 logo (**Upload**/**Replace**/**Remove**, shown above the title), a cover image
 (a banner across the top of the respond page) and an accent color (color
 swatch or `#rrggbb` field, **Reset** for Macro's accent) that colors the
-respond page's buttons, selections and focus rings. Images must be PNG, JPEG,
+respond page's buttons and selected answers. Images must be PNG, JPEG,
 WebP or GIF uploaded by the person setting them; nothing set keeps Macro's
 look, and inline form cards in channels never show branding. Anyone with the link: visitors who aren't signed in respond anonymously;
 people signed in to Macro respond as themselves. Roles: View can respond; Edit can change

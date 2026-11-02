@@ -51,6 +51,14 @@ export function BrandingPanel(props: {
 
   function changeAccent(value: string) {
     const accentColor = value.trim().toLowerCase();
+    if (!accentColor) {
+      if (props.branding.accentColor)
+        fireAndForget(
+          props.onChange({ accentColor: null }, 'The accent color'),
+          'form-branding'
+        );
+      return;
+    }
     if (!HEX_COLOR.test(accentColor)) {
       context.notify.failure('Enter a color like #1f6feb.');
       return;
@@ -86,6 +94,7 @@ export function BrandingPanel(props: {
         }
       >
         <ImageActions
+          name="logo"
           set={!!props.branding.logoFileId}
           uploading={uploading() === 'logo'}
           disabled={disabled()}
@@ -114,6 +123,7 @@ export function BrandingPanel(props: {
         }
       >
         <ImageActions
+          name="cover image"
           set={!!props.branding.coverFileId}
           uploading={uploading() === 'cover'}
           disabled={disabled()}
@@ -128,7 +138,7 @@ export function BrandingPanel(props: {
       </BrandingRow>
       <BrandingRow
         label="Accent color"
-        hint="Buttons, selections and focus rings."
+        hint="Buttons and selected answers."
         preview={
           <input
             type="color"
@@ -147,10 +157,7 @@ export function BrandingPanel(props: {
           placeholder="Default"
           maxlength={7}
           disabled={disabled()}
-          onChange={(event) => {
-            const value = event.currentTarget.value;
-            if (value.trim()) changeAccent(value);
-          }}
+          onChange={(event) => changeAccent(event.currentTarget.value)}
         />
         <Show when={props.branding.accentColor}>
           <Button
@@ -196,6 +203,8 @@ function BrandingRow(props: {
 }
 
 function ImageActions(props: {
+  /** What the image is, for the actions' accessible names. */
+  name: string;
   set: boolean;
   uploading: boolean;
   disabled: boolean;
@@ -209,6 +218,7 @@ function ImageActions(props: {
         size="sm"
         disabled={props.disabled}
         aria-busy={props.uploading}
+        aria-label={`${props.set ? 'Replace' : 'Upload'} ${props.name}`}
         onClick={props.onUpload}
       >
         {props.uploading ? 'Uploading…' : props.set ? 'Replace' : 'Upload'}
@@ -218,6 +228,7 @@ function ImageActions(props: {
           variant="ghost"
           size="sm"
           disabled={props.disabled}
+          aria-label={`Remove ${props.name}`}
           onClick={props.onRemove}
         >
           Remove

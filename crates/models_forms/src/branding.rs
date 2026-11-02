@@ -18,7 +18,7 @@ pub struct FormBranding {
     /// The static file shown as a banner across the top of the page.
     #[schema(required = true)]
     pub cover_file_id: Option<Uuid>,
-    /// The color of the page's buttons, selections and focus rings.
+    /// The color of the page's buttons and selected answers.
     #[schema(required = true)]
     pub accent_color: Option<AccentColor>,
 }

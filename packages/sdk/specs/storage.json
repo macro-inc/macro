@@ -31741,7 +31741,7 @@
               },
               {
                 "$ref": "#/components/schemas/AccentColor",
-                "description": "The color of the page's buttons, selections and focus rings."
+                "description": "The color of the page's buttons and selected answers."
               }
             ]
           },
