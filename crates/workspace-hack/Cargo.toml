@@ -355,6 +355,7 @@ nix = { version = "0.31", features = ["feature", "mman"] }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 openssl-sys = { version = "0.9", default-features = false, features = ["vendored"] }
 petgraph = { version = "0.8", default-features = false, features = ["std"] }
+portable-atomic = { version = "1", features = ["require-cas"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_8", "support-v1_0"] }
@@ -379,6 +380,7 @@ nix = { version = "0.31", features = ["feature", "mman"] }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
 openssl-sys = { version = "0.9", default-features = false, features = ["vendored"] }
 petgraph = { version = "0.8", default-features = false, features = ["std"] }
+portable-atomic = { version = "1", features = ["require-cas"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
 signal-hook-mio = { version = "0.2", default-features = false, features = ["support-v0_8", "support-v1_0"] }
@@ -403,6 +405,7 @@ nix = { version = "0.31", features = ["feature", "fs", "mman"] }
 objc2 = { version = "0.6" }
 objc2-foundation = { version = "0.3" }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
+portable-atomic = { version = "1", features = ["require-cas"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
 security-framework-sys = { version = "2" }
@@ -426,6 +429,7 @@ nix = { version = "0.31", features = ["feature", "fs", "mman"] }
 objc2 = { version = "0.6" }
 objc2-foundation = { version = "0.3" }
 once_cell = { version = "1", default-features = false, features = ["critical-section"] }
+portable-atomic = { version = "1", features = ["require-cas"] }
 rand-93f6ce9d446188ac = { package = "rand", version = "0.10" }
 rustix = { version = "1", features = ["event", "fs", "net", "pipe", "process", "system", "time"] }
 security-framework-sys = { version = "2" }

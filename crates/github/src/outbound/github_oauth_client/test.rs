@@ -2,7 +2,9 @@ use std::io::{Read, Write};
 use std::net::{TcpListener, TcpStream};
 use std::sync::mpsc::{self, Receiver};
 use std::thread::JoinHandle;
-use std::time::Duration;
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
+use upstream_error::{UpstreamError, UpstreamFailure};
 
 use super::*;
 
@@ -303,8 +305,9 @@ async fn a_secondary_rate_limit_without_headers_is_throttling() {
     let error = client.is_access_token_expired("token").await.unwrap_err();
     assert_eq!(upstream_failure(error), throttled);
 
+    // Another token: the first is now held back until the limit lifts.
     let error = client
-        .merge_pull_request("token", "macro", "app", 7, GithubMergeMethod::Merge)
+        .merge_pull_request("other token", "macro", "app", 7, GithubMergeMethod::Merge)
         .await
         .unwrap_err();
     assert_eq!(upstream_failure(error), throttled);

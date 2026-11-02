@@ -3,34 +3,31 @@
 #![allow(dead_code)]
 
 use std::collections::BTreeSet;
-use std::time::Duration;
 
 use serde::de::DeserializeOwned;
 
+use super::github_http::{GithubHttp, GithubRequest, unexpected};
 use crate::domain::models::{
-    EnrichedGithubPullRequest, GitRef, GithubKey, GithubPullRequestCheckRun,
+    EnrichedGithubPullRequest, GitRef, GithubError, GithubKey, GithubPullRequestCheckRun,
     GithubPullRequestComment, GithubPullRequestDetails, GithubPullRequestLabel,
     GithubPullRequestReview, GithubPullRequestReviewState, GithubPullRequestStatus,
     GithubPullRequestUser, GithubRepository, latest_reviews,
 };
 
-const GITHUB_API_BASE_URL: &str = "https://api.github.com";
 const METADATA_PAGE_SIZE: u16 = 100;
-const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
-const USER_AGENT: &str = "Macro-Auth-Service";
 
 /// Fetch GitHub pull request details with comments and check runs when available.
 pub(crate) async fn fetch_pull_request_metadata(
-    client: &reqwest::Client,
+    http: &GithubHttp,
     access_token: &str,
     owner: &str,
     repo: &str,
     number: u64,
-) -> Result<GithubPullRequestDetails, anyhow::Error> {
-    let pull_request = fetch_pull_request(client, access_token, owner, repo, number).await?;
-    let discussion = fetch_comments(client, access_token, owner, repo, number).await;
+) -> Result<GithubPullRequestDetails, GithubError> {
+    let pull_request = fetch_pull_request(http, access_token, owner, repo, number).await?;
+    let discussion = fetch_comments(http, access_token, owner, repo, number).await;
     let checks = fetch_check_runs(
-        client,
+        http,
         access_token,
         owner,
         repo,
@@ -83,14 +80,14 @@ pub(crate) async fn fetch_pull_request_metadata(
 
 /// Fetch open pull requests for every repository accessible to an installation token.
 pub(crate) async fn fetch_open_pull_requests_for_installation(
-    client: &reqwest::Client,
+    http: &GithubHttp,
     access_token: &str,
-) -> Result<Vec<EnrichedGithubPullRequest>, anyhow::Error> {
-    let repositories = fetch_installation_repositories(client, access_token).await?;
+) -> Result<Vec<EnrichedGithubPullRequest>, GithubError> {
+    let repositories = fetch_installation_repositories(http, access_token).await?;
     let mut open_pull_requests = Vec::new();
 
     for repository in repositories {
-        match fetch_open_pull_requests_for_repository(client, access_token, &repository).await {
+        match fetch_open_pull_requests_for_repository(http, access_token, &repository).await {
             Ok(repository_pull_requests) => open_pull_requests.extend(repository_pull_requests),
             Err(error) => {
                 tracing::warn!(
@@ -111,17 +108,13 @@ pub(crate) async fn fetch_open_pull_requests_for_installation(
 /// The one pager over `/installation/repositories`; both the open-pull-request
 /// sweep above and the reachable-repositories service come through here.
 pub(crate) async fn fetch_installation_repositories(
-    client: &reqwest::Client,
+    http: &GithubHttp,
     access_token: &str,
-) -> Result<Vec<GithubRepository>, anyhow::Error> {
+) -> Result<Vec<GithubRepository>, GithubError> {
     let repositories: Vec<GithubInstallationRepositoryResponse> = fetch_paginated_github_items(
-        client,
+        http,
         access_token,
-        |page| {
-            format!(
-                "{GITHUB_API_BASE_URL}/installation/repositories?per_page={METADATA_PAGE_SIZE}&page={page}"
-            )
-        },
+        |page| format!("/installation/repositories?per_page={METADATA_PAGE_SIZE}&page={page}"),
         "installation repositories",
         |response: GithubInstallationRepositoriesResponse| response.repositories,
     )
@@ -134,18 +127,18 @@ pub(crate) async fn fetch_installation_repositories(
 }
 
 async fn fetch_open_pull_requests_for_repository(
-    client: &reqwest::Client,
+    http: &GithubHttp,
     access_token: &str,
     repository: &GithubRepository,
-) -> Result<Vec<EnrichedGithubPullRequest>, anyhow::Error> {
+) -> Result<Vec<EnrichedGithubPullRequest>, GithubError> {
     let owner = repository.owner.as_str();
     let repo = repository.name.as_str();
     let pull_requests = fetch_paginated_github_items(
-        client,
+        http,
         access_token,
         |page| {
             format!(
-                "{GITHUB_API_BASE_URL}/repos/{owner}/{repo}/pulls?state=open&per_page={METADATA_PAGE_SIZE}&page={page}"
+                "/repos/{owner}/{repo}/pulls?state=open&per_page={METADATA_PAGE_SIZE}&page={page}"
             )
         },
         "open pull requests",
@@ -398,31 +391,30 @@ struct GithubCheckRunResponse {
 }
 
 async fn fetch_pull_request(
-    client: &reqwest::Client,
+    http: &GithubHttp,
     access_token: &str,
     owner: &str,
     repo: &str,
     number: u64,
-) -> Result<GithubPullRequestResponse, anyhow::Error> {
-    let url = format!("{GITHUB_API_BASE_URL}/repos/{owner}/{repo}/pulls/{number}");
-    let response = github_get(client, access_token, url).send().await?;
-    let status = response.status();
+) -> Result<GithubPullRequestResponse, GithubError> {
+    let response = http
+        .send(GithubRequest::get(
+            access_token,
+            format!("/repos/{owner}/{repo}/pulls/{number}"),
+        ))
+        .await?;
 
-    if !status.is_success() {
-        let error_body = response
-            .text()
-            .await
-            .unwrap_or_else(|_| "unknown error".to_string());
-
-        if status.as_u16() == 401 {
-            tracing::warn!(error_body=%error_body, "GitHub token expired or invalid");
-            anyhow::bail!("unauthorized access")
-        }
-
-        anyhow::bail!("failed to get pull request details {}", error_body)
+    if response.status == reqwest::StatusCode::UNAUTHORIZED {
+        tracing::warn!(error_body=%response.text(), "GitHub token expired or invalid");
+        return Err(GithubError::Internal(anyhow::anyhow!(
+            "unauthorized access"
+        )));
+    }
+    if !response.status.is_success() {
+        return Err(unexpected(&response, "failed to get pull request details"));
     }
 
-    response.json().await.map_err(Into::into)
+    response.json()
 }
 
 /// The comments collected for a pull request plus every discussion author's stable numeric id.
@@ -437,21 +429,21 @@ struct FetchedDiscussion {
 }
 
 async fn fetch_comments(
-    client: &reqwest::Client,
+    http: &GithubHttp,
     access_token: &str,
     owner: &str,
     repo: &str,
     number: u64,
 ) -> Option<FetchedDiscussion> {
-    let mut discussion = fetch_issue_comments(client, access_token, owner, repo, number).await?;
+    let mut discussion = fetch_issue_comments(http, access_token, owner, repo, number).await?;
 
-    let review_comments = fetch_review_comments(client, access_token, owner, repo, number).await?;
+    let review_comments = fetch_review_comments(http, access_token, owner, repo, number).await?;
     discussion.comments.extend(review_comments.comments);
     discussion
         .participant_ids
         .extend(review_comments.participant_ids);
 
-    let reviews = fetch_reviews(client, access_token, owner, repo, number).await?;
+    let reviews = fetch_reviews(http, access_token, owner, repo, number).await?;
     discussion.comments.extend(reviews.comments);
     discussion.participant_ids.extend(reviews.participant_ids);
     discussion.reviews = reviews.reviews;
@@ -460,18 +452,18 @@ async fn fetch_comments(
 }
 
 async fn fetch_issue_comments(
-    client: &reqwest::Client,
+    http: &GithubHttp,
     access_token: &str,
     owner: &str,
     repo: &str,
     number: u64,
 ) -> Option<FetchedDiscussion> {
     match fetch_paginated_github_items(
-        client,
+        http,
         access_token,
         |page| {
             format!(
-                "{GITHUB_API_BASE_URL}/repos/{owner}/{repo}/issues/{number}/comments?per_page={METADATA_PAGE_SIZE}&page={page}"
+                "/repos/{owner}/{repo}/issues/{number}/comments?per_page={METADATA_PAGE_SIZE}&page={page}"
             )
         },
         "pull request issue comments",
@@ -501,18 +493,18 @@ async fn fetch_issue_comments(
 }
 
 async fn fetch_review_comments(
-    client: &reqwest::Client,
+    http: &GithubHttp,
     access_token: &str,
     owner: &str,
     repo: &str,
     number: u64,
 ) -> Option<FetchedDiscussion> {
     match fetch_paginated_github_items(
-        client,
+        http,
         access_token,
         |page| {
             format!(
-                "{GITHUB_API_BASE_URL}/repos/{owner}/{repo}/pulls/{number}/comments?per_page={METADATA_PAGE_SIZE}&page={page}"
+                "/repos/{owner}/{repo}/pulls/{number}/comments?per_page={METADATA_PAGE_SIZE}&page={page}"
             )
         },
         "pull request review comments",
@@ -542,18 +534,18 @@ async fn fetch_review_comments(
 }
 
 async fn fetch_reviews(
-    client: &reqwest::Client,
+    http: &GithubHttp,
     access_token: &str,
     owner: &str,
     repo: &str,
     number: u64,
 ) -> Option<FetchedDiscussion> {
     match fetch_paginated_github_items(
-        client,
+        http,
         access_token,
         |page| {
             format!(
-                "{GITHUB_API_BASE_URL}/repos/{owner}/{repo}/pulls/{number}/reviews?per_page={METADATA_PAGE_SIZE}&page={page}"
+                "/repos/{owner}/{repo}/pulls/{number}/reviews?per_page={METADATA_PAGE_SIZE}&page={page}"
             )
         },
         "pull request reviews",
@@ -592,18 +584,18 @@ fn author_ids<T>(
 }
 
 async fn fetch_check_runs(
-    client: &reqwest::Client,
+    http: &GithubHttp,
     access_token: &str,
     owner: &str,
     repo: &str,
     head_sha: &str,
 ) -> Option<Vec<GithubPullRequestCheckRun>> {
     match fetch_paginated_github_items(
-        client,
+        http,
         access_token,
         |page| {
             format!(
-                "{GITHUB_API_BASE_URL}/repos/{owner}/{repo}/commits/{head_sha}/check-runs?per_page={METADATA_PAGE_SIZE}&page={page}"
+                "/repos/{owner}/{repo}/commits/{head_sha}/check-runs?per_page={METADATA_PAGE_SIZE}&page={page}"
             )
         },
         "check runs",
@@ -631,12 +623,12 @@ async fn fetch_check_runs(
 }
 
 async fn fetch_paginated_github_items<Response, Item, UrlForPage, ItemsFromResponse>(
-    client: &reqwest::Client,
+    http: &GithubHttp,
     access_token: &str,
     mut url_for_page: UrlForPage,
     description: &str,
     mut items_from_response: ItemsFromResponse,
-) -> Result<Vec<Item>, anyhow::Error>
+) -> Result<Vec<Item>, GithubError>
 where
     Response: DeserializeOwned,
     UrlForPage: FnMut(u32) -> String,
@@ -647,7 +639,7 @@ where
 
     loop {
         let response =
-            fetch_github_json::<Response>(client, access_token, url_for_page(page), description)
+            fetch_github_json::<Response>(http, access_token, url_for_page(page), description)
                 .await?;
         let page_items = items_from_response(response);
         let is_last_page = page_items.len() < usize::from(METADATA_PAGE_SIZE);
@@ -665,40 +657,24 @@ where
 }
 
 async fn fetch_github_json<T>(
-    client: &reqwest::Client,
+    http: &GithubHttp,
     access_token: &str,
-    url: String,
+    path: String,
     description: &str,
-) -> Result<T, anyhow::Error>
+) -> Result<T, GithubError>
 where
     T: DeserializeOwned,
 {
-    let response = github_get(client, access_token, url).send().await?;
-    let status = response.status();
+    let response = http.send(GithubRequest::get(access_token, path)).await?;
 
-    if !status.is_success() {
-        let error_body = response
-            .text()
-            .await
-            .unwrap_or_else(|_| "unknown error".to_string());
-        anyhow::bail!("failed to get {description} (status {status}): {error_body}")
+    if !response.status.is_success() {
+        return Err(unexpected(
+            &response,
+            &format!("failed to get {description}"),
+        ));
     }
 
-    response.json().await.map_err(Into::into)
-}
-
-fn github_get(
-    client: &reqwest::Client,
-    access_token: &str,
-    url: String,
-) -> reqwest::RequestBuilder {
-    client
-        .get(url)
-        .header("Authorization", format!("Bearer {access_token}"))
-        .header("Accept", "application/vnd.github+json")
-        .header("User-Agent", USER_AGENT)
-        .header("X-GitHub-Api-Version", "2022-11-28")
-        .timeout(REQUEST_TIMEOUT)
+    response.json()
 }
 
 impl GithubOpenPullRequestResponse {

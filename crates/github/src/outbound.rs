@@ -2,6 +2,8 @@
 
 #[cfg(feature = "link")]
 pub mod github_auth_client;
+#[cfg(any(feature = "link", feature = "sync"))]
+pub(crate) mod github_http;
 #[cfg(feature = "link")]
 pub mod github_oauth_client;
 #[cfg(feature = "sync")]

@@ -277,6 +277,7 @@ futures = "0.3.31"
 getrandom = "0.3"
 gif = { version = "0.14", default-features = false, features = ["std"] }
 glob = "0.3.3"
+governor = { version = "0.10.4", default-features = false, features = ["std", "dashmap", "quanta"] }
 # Pinned engine for the generated dependency artifacts (used by the xtask
 # graph/deps commands). This version lives in Cargo.lock, so dev machines and
 # CI always run the identical generator; guppy is pinned to the version the

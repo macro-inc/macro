@@ -2,9 +2,12 @@
 
 use std::time::Duration;
 
-use super::pull_request_metadata::{
-    fetch_installation_repositories, fetch_open_pull_requests_for_installation,
-    fetch_pull_request_metadata,
+use super::{
+    github_http::GithubHttp,
+    pull_request_metadata::{
+        fetch_installation_repositories, fetch_open_pull_requests_for_installation,
+        fetch_pull_request_metadata,
+    },
 };
 
 use crate::domain::{
@@ -34,14 +37,18 @@ mod test;
 pub struct GithubSyncClientImpl {
     /// The reqwest client
     client: reqwest::Client,
+    /// Pull request and repository reads, paced per installation token.
+    http: GithubHttp,
     #[cfg(test)]
     api_base_url: Option<String>,
 }
 
 impl Default for GithubSyncClientImpl {
     fn default() -> Self {
+        let client = build_client();
         Self {
-            client: build_client(),
+            http: GithubHttp::new(client.clone()),
+            client,
             #[cfg(test)]
             api_base_url: None,
         }
@@ -76,8 +83,10 @@ impl GithubSyncClientImpl {
 
     #[cfg(test)]
     fn with_api_base_url(api_base_url: String) -> Self {
+        let client = build_client();
         Self {
-            client: build_client(),
+            http: GithubHttp::with_api_base_url(client.clone(), api_base_url.clone()),
+            client,
             api_base_url: Some(api_base_url),
         }
     }
@@ -432,9 +441,7 @@ impl GithubSyncClient for GithubSyncClientImpl {
         repo: &str,
         number: u64,
     ) -> Result<GithubPullRequestDetails, GithubError> {
-        fetch_pull_request_metadata(&self.client, access_token, owner, repo, number)
-            .await
-            .map_err(GithubError::Internal)
+        fetch_pull_request_metadata(&self.http, access_token, owner, repo, number).await
     }
 
     #[tracing::instrument(skip(self, access_token), err)]
@@ -442,9 +449,7 @@ impl GithubSyncClient for GithubSyncClientImpl {
         &self,
         access_token: &str,
     ) -> Result<Vec<EnrichedGithubPullRequest>, GithubError> {
-        fetch_open_pull_requests_for_installation(&self.client, access_token)
-            .await
-            .map_err(GithubError::Internal)
+        fetch_open_pull_requests_for_installation(&self.http, access_token).await
     }
 
     #[tracing::instrument(skip(self, access_token), err)]
@@ -529,8 +534,6 @@ impl crate::domain::ports::GithubRepositoryClient for GithubSyncClientImpl {
                 },
             )
             .await?;
-        fetch_installation_repositories(&self.client, &token.token)
-            .await
-            .map_err(GithubError::Internal)
+        fetch_installation_repositories(&self.http, &token.token).await
     }
 }

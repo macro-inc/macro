@@ -21,7 +21,9 @@ inbound = ["axum", "ports"]
 installation_claims = ["dep:sqlx", "ports"]
 link = ["dep:entity_access", "github_pull_requests/ports", "ports"]
 outbound = [
+  "dep:bytes",
   "dep:connection_gateway_client",
+  "dep:governor",
   "dep:fusionauth",
   "dep:redis",
   "dep:reqwest",
@@ -48,6 +50,7 @@ sync = [
 activity = { path = "../activity", default-features = false }
 anyhow = { workspace = true }
 base64 = { workspace = true }
+bytes = { workspace = true, optional = true }
 chrono = { workspace = true }
 connection_gateway_client = { path = "../connection_gateway_client", optional = true }
 cowlike = { path = "../cowlike" }
@@ -61,6 +64,7 @@ entity_access = { path = "../entity_access", default-features = false, features 
 foreign_entity = { path = "../foreign_entity", default-features = false, features = [
   "ports",
 ], optional = true }
+governor = { workspace = true, optional = true }
 github_pull_requests = { path = "../github_pull_requests", default-features = false }
 hex = { workspace = true }
 hmac = { workspace = true }
@@ -96,7 +100,7 @@ macro_user_id = { path = "../macro_user_id" }
 models_properties = { path = "../models_properties" }
 macro_uuid = { path = "../macro_uuid" }
 redis = { workspace = true, features = ["aio", "tokio-comp"], optional = true }
-tokio = { workspace = true, features = ["sync"], optional = true }
+tokio = { workspace = true, features = ["sync", "time"], optional = true }
 
 axum = { workspace = true, optional = true }
 axum-extra = { workspace = true, optional = true }

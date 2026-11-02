@@ -45,8 +45,9 @@ link flow, following the hexagonal architecture pattern.
 
 - Add a webhook event: `src/inbound/github_sync_router.rs` (dispatch) →
   `src/domain/models.rs` (sync model) → `src/outbound/pg_github_sync_repo.rs`.
-- Add a new GitHub API call: `src/outbound/github_sync_client.rs` or
-  `github_auth_client.rs` → the domain service that needs it.
+- Add a new GitHub API call: `src/outbound/github_oauth_client.rs` (user
+  token) or `github_sync_client.rs` (installation token), sent through
+  `GithubHttp` → the domain service that needs it.
 
 ## Checks
 
@@ -75,13 +76,23 @@ link flow, following the hexagonal architecture pattern.
   comparison — don't swap in a plain `==` when touching
   `github_sync_router.rs`.
 - A GitHub or sign-in outage is `GithubError::Upstream`, answered 502/503 by
-  `inbound.rs`. Outbound adapters classify it (`github_oauth_client.rs`
-  `throttling`/`unexpected_response`, `github_auth_client.rs`
-  `fusionauth_error`); everything else they cannot explain stays `Internal`.
-  Port errors reach the service as `GithubError`, so map them with
-  `.map_err(Into::into)`, never `GithubError::Internal(e.into())`, which turns
-  an outage back into a 500. A GitHub 403 is a refusal only after
-  `throttling` rules out a rate limit.
+  `inbound.rs`. Outbound adapters classify it (`github_http.rs`
+  `throttling`/`unexpected`, `github_auth_client.rs` `fusionauth_error`);
+  everything else they cannot explain stays `Internal`. Port errors reach the
+  service as `GithubError`, so map them with `.map_err(Into::into)`, never
+  `GithubError::Internal(e.into())`, which turns an outage back into a 500.
+  Throttling never comes back from `GithubHttp::send` as a response, so a
+  GitHub 403 a caller sees is a refusal.
+- Send new GitHub API calls through `outbound/github_http.rs` (`GithubHttp`);
+  only the sync client's App-JWT and installation-admin calls still use
+  `reqwest` directly. It paces each token with `governor`, holds up to a
+  second and retries once when GitHub says it will accept requests again
+  within that, remembers a throttled token so later calls fail fast with when
+  to retry, shares identical in-flight reads, and revalidates GETs by `ETag`
+  (a 304 costs no quota). Mark GraphQL queries `GithubAccess::Read` and
+  anything that changes GitHub `Write`. Build one per process and clone it;
+  its state is per instance. A user's quota is shared with every other app
+  they authorized, including the `gh` CLI.
 - `GithubError::Forbidden`, `SetupUserNotLinked`, and `RepositoryUnavailable`
   all map to the same 403 deliberately — don't let a response distinguish
   "app not installed" from "installed somewhere you have no claim to".
