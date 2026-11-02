@@ -11,7 +11,7 @@ export type HotkeyProfileDomain = 'email' | 'tasks';
  * `detail` keys live in the scope of the item open in it, for keys that item
  * defines itself (an Email thread in the reading pane has its own scope).
  */
-export type HotkeyProfileContext = 'view' | 'detail';
+type HotkeyProfileContext = 'view' | 'detail';
 
 /**
  * `g` and `o` are Macro's go-to and command-menu leaders; any other leader
@@ -25,7 +25,7 @@ export type ProfileKey = ValidHotkey | readonly [ProfileLeader, ValidHotkey];
 /** Runs a view's profile action; false lets the key fall through. */
 export type ProfileActionHandler = (index: number) => boolean;
 
-export type ProfileTarget<Action extends string> =
+type ProfileTarget<Action extends string> =
   /**
    * Run the nearest command registered for the first of these tokens that can
    * run now; the key falls through when none can.

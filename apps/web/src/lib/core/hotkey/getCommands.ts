@@ -142,7 +142,7 @@ export type ShortcutSheet = {
  * that runs first. Shadowing is per key, so a command keeps its other keys
  * when only one of them is claimed nearer.
  */
-export function getKeyOwners(
+function getKeyOwners(
   commands: CommandWithInfo[]
 ): Map<ValidHotkey, HotkeyCommand> {
   const keyOwners = new Map<ValidHotkey, HotkeyCommand>();
