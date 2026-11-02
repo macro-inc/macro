@@ -15,63 +15,24 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import TagIcon from '@icon/system/regular/tag.svg';
 import TagSimpleIcon from '@icon/system/regular/tag-simple.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
-import { createDroppable } from '@thisbeyond/solid-dnd';
-import { Badge, Button, cn, Tooltip } from '@ui';
+import { Badge, Button, Tooltip } from '@ui';
 import { For, type JSX, Show } from 'solid-js';
-import { canLabelChannel } from '../../../core/channel-label-eligibility';
-import { ChannelLabelMenuItems as OriginalChannelLabelMenuItems } from '../ChannelLabelRows';
 import {
-  type ChannelLabelDropData,
-  rowKeyForLabel,
-  useChannelsRail,
-} from '../ChannelsRailContext';
+  canAssignChannel,
+  canLabelChannel,
+} from '../../../core/channel-label-eligibility';
+import { ChannelLabelMenuItems as OriginalChannelLabelMenuItems } from '../ChannelLabelRows';
+import { rowKeyForLabel, useChannelsRail } from '../ChannelsRailContext';
 import { useChannelRailLabelState } from '../hooks/useChannelRailState';
+import { ChannelSectionEmptyState } from './ChannelSectionEmptyState';
 import { ChannelSectionHeading } from './ChannelSectionHeading';
 import {
   ChannelSectionContextMenu,
   ChannelSectionDropdown,
 } from './ChannelSectionMenu';
-
-/** One drop target and highlight around the full custom section. */
-export function ChannelLabelDropZone(props: {
-  label: ChannelLabel;
-  children: JSX.Element;
-}) {
-  const rail = useChannelsRail();
-  const droppable = createDroppable(
-    `${rail.railId}:channel-label:label:${props.label.id}`,
-    {
-      dragType: 'channel-label-target',
-      dndScope: rail.railId,
-      get target() {
-        return {
-          kind: props.label.rule ? ('smart-tag' as const) : ('label' as const),
-          labelId: props.label.id,
-        };
-      },
-      isDropTargetDisabled: () => !rail.labelsAvailable(),
-    } satisfies ChannelLabelDropData
-  );
-
-  const isDropTarget = () => {
-    const target = rail.activeDropTarget();
-    return target?.kind === 'label' && target.labelId === props.label.id;
-  };
-
-  return (
-    <div
-      ref={droppable.ref}
-      class={cn(
-        'group/channel-label relative min-w-0 shrink-0 rounded-lg',
-        isDropTarget() && 'bg-selected ring-1 ring-inset ring-accent'
-      )}
-    >
-      {props.children}
-    </div>
-  );
-}
 
 /** A custom section with the same heading and controls as built-in sections. */
 export function ChannelLabelRow(props: {
@@ -89,7 +50,7 @@ export function ChannelLabelRow(props: {
       <ChannelSectionHeading
         id={state().domId}
         label={props.label.name}
-        title={
+        tooltip={
           props.label.rule
             ? t('channelLabels.nameContains', {
                 text: props.label.rule.contains,
@@ -103,10 +64,20 @@ export function ChannelLabelRow(props: {
         dragHandle={props.dragHandle}
         badge={
           <Show when={props.label.teamId}>
-            <Tooltip label={t('channelSections.teamChannelsOnly')}>
-              <Badge variant="secondary" size="xs">
-                {t('channelSections.sharedShort')}
-              </Badge>
+            <Tooltip
+              as="span"
+              class="shrink-0"
+              label={t('channelSections.sharedSectionHint')}
+            >
+              <span class="hidden @[16rem]/rail-section:inline-flex">
+                <Badge variant="secondary" size="xs">
+                  {t('channelSections.sharedShort')}
+                </Badge>
+              </span>
+              <UsersIcon
+                class="size-3.5 @[16rem]/rail-section:hidden"
+                aria-label={t('channelSections.sharedShort')}
+              />
             </Tooltip>
           </Show>
         }
@@ -174,7 +145,7 @@ export function ChannelLabelEmptyState(props: { label: ChannelLabel }) {
   };
 
   return (
-    <div class="px-2 py-1 text-xs text-ink-extra-muted">
+    <ChannelSectionEmptyState>
       <p>{message()}</p>
       <Button
         variant="ghost"
@@ -185,7 +156,7 @@ export function ChannelLabelEmptyState(props: { label: ChannelLabel }) {
       >
         {actionLabel()}
       </Button>
-    </div>
+    </ChannelSectionEmptyState>
   );
 }
 
@@ -246,7 +217,12 @@ function SectionMenuItems(props: { channel: ChannelEntity }) {
   const labels = () =>
     rail
       .labels()
-      .filter((label) => !label.rule && canLabelChannel(props.channel, label));
+      .filter(
+        (label) =>
+          !label.rule &&
+          (label.channelIds.includes(props.channel.id) ||
+            canAssignChannel(props.channel, label))
+      );
 
   return (
     <Show

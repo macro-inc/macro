@@ -58,7 +58,7 @@ import {
 import type { VirtualizerHandle } from 'virtua/solid';
 import { useChannelsView } from '../../channels-view-context';
 import {
-  canLabelChannel,
+  canAssignChannel,
   filterChannelLabelMembers,
 } from '../../core/channel-label-eligibility';
 import { resolveChannelLabelMemberships } from '../../core/smart-tags';
@@ -1102,7 +1102,10 @@ export function ChannelsRail(props: ChannelsRailProps) {
       const labelId = drop.target.labelId;
       const label = labels().find((label) => label.id === labelId);
 
-      if (!label || !canLabelChannel(labelChannelById(drag.channelId), label)) {
+      if (
+        !label ||
+        !canAssignChannel(labelChannelById(drag.channelId), label)
+      ) {
         return undefined;
       }
     }

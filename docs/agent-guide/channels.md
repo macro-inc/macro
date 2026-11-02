@@ -961,8 +961,8 @@ team's channels, custom sections, then **All channels**. The team heading is
 is unavailable. All channels is the renamed remaining-public/private list:
 its membership is unchanged, so it excludes team channels and channels assigned
 to custom sections. Each custom section is a top-level heading, independent of
-the Team channels disclosure. Empty sections show a compact action; empty
-Favorites explains how to add a favorite. Private conversations use a lock icon in
+the Team channels disclosure. Empty sections use compact dashed-border containers
+with an action; empty Favorites explains how to add a favorite. Private conversations use a lock icon in
 the sidebar and mobile feed, including favorited private conversations.
 All section headers use the shared collapsible-section styling without leading
 icons or top padding; the section stack supplies a compact 2px flex gap.
@@ -974,8 +974,10 @@ Rows are indented by 8px under every section, including Favorites, custom
 sections, and DMs. Empty-state actions and search results avoid this extra indent. The
 caret stays hidden in expanded sections until hover and remains visible when
 collapsed. Team-shared sections show a neutral Shared
-badge next to the name, before the caret. Personal sections have no scope icon or
-badge. Header focus backgrounds fill the entire header row, including its
+badge next to the name, before the caret. Below 256px of section width, a users
+icon replaces the badge to leave more room for the name. Separate short tooltips
+explain the name and sharing, without overlapping native title hints. Personal
+sections have no scope icon or badge. Header focus backgrounds fill the entire header row, including its
 trailing controls, with no extra right padding.
 
 The sidebar scrolls through all sections. Each expanded section has its own
@@ -991,11 +993,13 @@ the saved preference. Search covers channels and DMs regardless of section
 placement and restores the selected row in its section when closed. Mobile
 retains the recent-conversation feed below.
 
-Use the heading's drag grip to reorder sections, or focus the grip and use
+Use the drag grip before the section name to reorder sections, or focus the grip and use
 Up/Down. An insertion line shows the destination. Section order is a personal
-preference, including for shared sections, and survives reloads. Dragging near
-the sidebar's top or bottom scrolls to distant sections; wheel scrolling remains
-available during a drag. Resize drags compensate for sidebar scroll movement,
+preference, including for shared sections, and survives reloads. The dragged
+section appears as a card preview while its source is subdued. Other sections
+animate into their new positions on drop or keyboard reorder, except with reduced
+motion enabled. Dragging near the sidebar's top or bottom uses the same edge-scroll
+mechanism as Gantt; wheel scrolling remains available during a drag. Resize drags compensate for sidebar scroll movement,
 and the rounded resize grips retain pointer capture until release or cancellation.
 
 Section membership comes from the server's complete visible channel-ID lists.
@@ -1052,7 +1056,9 @@ Each heading has one sliders-icon menu, also available by right-clicking the hea
 switch on the right; toggling it keeps the submenu open.
 Manual sections have a **+** header action and **Add channels** menu entry.
 The picker searches all eligible joined channels, not just rows loaded in the
-sidebar, and excludes channels already in the section. Adding a channel moves its
+sidebar, and excludes channels already in the section. The wider, shorter picker
+keeps its actions visible while the channel list scrolls. Compact helper text
+explains the scope and assignment move. Adding a channel moves its
 manual assignment within the same scope without changing the other scope.
 Partial failures keep successful additions and retry only the failed selection.
 Empty manual sections offer **Add channels**, empty smart sections offer **Edit
@@ -1090,6 +1096,10 @@ and shared assignments remain independent.
 Choose smart grouping in the section dialog for automatic name matching.
 Smart sections match channel names literally and without regard to capitalization. They preserve ordinary section permissions and are not manual
 drop targets. Channels can appear in multiple matching smart sections.
+Hovering an incompatible item over a section shows a not-allowed cursor and an
+explanation over the section, including automatic membership, shared-scope
+restrictions, and channels already in the section. Returning a channel to its
+matching built-in channel group removes only its existing manual assignment.
 
 Support is organized manually through a personal section. The app does not
 classify support channels by their names or silently create a Support section.

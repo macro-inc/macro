@@ -1,4 +1,5 @@
-import { createPointerAutoScroll } from '@app/components/drag-drop/create-pointer-auto-scroll';
+import { createDragAutoScroll } from '@app/components/drag-drop/create-drag-auto-scroll';
+import { createLayoutAnimation } from '@app/components/drag-drop/create-layout-animation';
 import { SearchBar, ViewSidebar } from '@app/components/view-shell';
 import { SlackImportSidebar } from '@app/features/slack-import/slack-import-sidebar';
 import { t } from '@app/lib/i18n';
@@ -52,11 +53,9 @@ import {
   groupChannelRailSections,
 } from './build-channel-rail-rows';
 import { ChannelFavoriteRow } from './ChannelFavoriteRow';
-import {
-  ChannelLabelDropZone,
-  ChannelLabelEmptyState,
-  ChannelLabelRow,
-} from './ChannelLabelRows';
+import { ChannelLabelEmptyState, ChannelLabelRow } from './ChannelLabelRows';
+import { ChannelSectionDropZone } from './ChannelSectionDropZone';
+import { ChannelSectionEmptyState } from './ChannelSectionEmptyState';
 import {
   ChannelSectionDragHandle,
   ChannelSectionHeading,
@@ -188,7 +187,7 @@ function SectionHeading(props: {
     <ChannelSectionContextMenu section={props.group}>
       <ChannelSectionHeading
         id={domIdForRow(rail.railId, key())}
-        title={title()}
+        tooltip={title()}
         label={title()}
         open={open()}
         focused={rail.list.focus.key() === key()}
@@ -234,11 +233,11 @@ function SectionStatus(props: { group: ChannelsGroup }) {
           </Button>
         </Match>
         <Match when={!hasConversations()}>
-          <p class="px-(--sidebar-item-inset) py-2 text-xs text-ink-extra-muted">
+          <ChannelSectionEmptyState>
             {rail.sectionPreferences(props.group).unreadOnly
               ? t('channelSections.noUnreadConversations')
               : t('channelSections.empty')}
-          </p>
+          </ChannelSectionEmptyState>
         </Match>
       </Switch>
     </div>
@@ -313,6 +312,7 @@ function BrowseRow(props: {
 }
 
 type SectionHandle = {
+  layout?: HTMLDivElement;
   root?: HTMLDivElement;
   virtualizer?: VirtualizerHandle;
 };
@@ -352,6 +352,11 @@ function BrowseSection(props: {
       ? rail.isLabelOpen(row.label.id)
       : rail.isGroupOpen(row.group);
   };
+
+  const itemCount = () =>
+    props.section.rows.filter(
+      (row) => row.kind === 'conversation' || row.kind === 'favorite'
+    ).length;
 
   const label = () => {
     const row = heading();
@@ -426,11 +431,8 @@ function BrowseSection(props: {
       open={open()}
       maxHeight={props.maxHeight}
       dropEdge={props.sectionReorder.dropEdge(props.sectionKey)}
-      itemCount={
-        props.section.rows.filter(
-          (row) => row.kind === 'conversation' || row.kind === 'favorite'
-        ).length
-      }
+      dragging={props.sectionReorder.isDragging(props.sectionKey)}
+      itemCount={itemCount()}
       rootRef={(element) => {
         handle.root = element;
         droppable.ref(element);
@@ -464,9 +466,9 @@ function BrowseSection(props: {
           <Show
             when={customLabel()}
             fallback={
-              <p class="px-2 py-1 text-xs text-ink-extra-muted">
+              <ChannelSectionEmptyState>
                 {emptyMessage()}
-              </p>
+              </ChannelSectionEmptyState>
             }
           >
             {(label) => <ChannelLabelEmptyState label={label()} />}
@@ -494,18 +496,16 @@ function BrowseSection(props: {
   );
 
   return (
-    <Show
-      when={
-        props.section.heading.kind === 'label'
-          ? props.section.heading.label
-          : undefined
-      }
-      fallback={content}
+    <div
+      class="min-w-0 shrink-0"
+      ref={(element) => {
+        handle.layout = element;
+      }}
     >
-      {(label) => (
-        <ChannelLabelDropZone label={label()}>{content}</ChannelLabelDropZone>
-      )}
-    </Show>
+      <ChannelSectionDropZone section={props.sectionKey} label={customLabel()}>
+        {content}
+      </ChannelSectionDropZone>
+    </div>
   );
 }
 
@@ -517,27 +517,41 @@ function ExpandedBrowse() {
     groupChannelRailSections(rail.list.items.all())
   );
   const keys = createMemo(() => [...sections().keys()]);
-  const sectionReorder = useSectionReorder(keys);
-  const [dragState, dragActions] = useDragDropContext() ?? [];
-  const autoScroll = createPointerAutoScroll({
-    getViewport: scrollRoot,
-    getPointer: () => dragState?.active.sensor?.coordinates.current,
-    axis: 'y',
-    onScroll: () => dragActions?.detectCollisions(),
+  const handles = new Map<ChannelSectionKey, SectionHandle>();
+  const motion = createLayoutAnimation({
+    viewport: scrollRoot,
+    items: () =>
+      [...handles].flatMap(([key, handle]) =>
+        handle.root && handle.layout
+          ? [{ key, element: handle.root, layout: handle.layout }]
+          : []
+      ),
   });
+  onCleanup(motion.cancel);
 
-  createEffect(() => {
-    const scope = dragState?.active.draggable?.data.dndScope;
-    if (
-      scope !== rail.railId &&
-      scope !== sectionReorder.scope &&
-      scope !== `${rail.railId}:favorites`
-    ) {
-      return;
+  const sectionReorder = useSectionReorder(keys, (reorder) => {
+    const finish = motion.beginHover();
+
+    try {
+      reorder();
+    } finally {
+      finish();
     }
+  });
+  const [dragState, dragActions] = useDragDropContext() ?? [];
+  createDragAutoScroll({
+    getViewport: () => {
+      const scope = dragState?.active.draggable?.data.dndScope;
 
-    autoScroll.start();
-    onCleanup(autoScroll.stop);
+      if (
+        scope === rail.railId ||
+        scope === sectionReorder.scope ||
+        scope === `${rail.railId}:favorites`
+      ) {
+        return scrollRoot();
+      }
+    },
+    axis: 'y',
   });
 
   // Wheel scrolling changes nested drop target positions during a drag too.
@@ -546,7 +560,6 @@ function ExpandedBrowse() {
       dragActions?.detectCollisions();
     }
   };
-  const handles = new Map<ChannelSectionKey, SectionHandle>();
   const favoriteReorder = useFavoriteReorder(
     () =>
       sections()

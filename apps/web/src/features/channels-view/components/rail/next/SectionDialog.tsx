@@ -14,6 +14,7 @@ import {
   openDialog,
   Surface,
   ToggleSwitch,
+  Tooltip,
 } from '@ui';
 import {
   type Accessor,
@@ -92,12 +93,15 @@ function SmartSectionPreview(props: {
                   <ul class="max-h-48 overflow-y-auto">
                     <For each={matches()}>
                       {(channel) => (
-                        <li
-                          class="flex min-w-0 items-center gap-2 p-2"
-                          title={channel.name}
-                        >
+                        <li class="flex min-w-0 items-center gap-2 p-2">
                           <HashIcon class="size-3.5 shrink-0" />
-                          <span class="truncate">{channel.name}</span>
+                          <Tooltip
+                            as="span"
+                            class="min-w-0"
+                            label={channel.name}
+                          >
+                            <span class="truncate">{channel.name}</span>
+                          </Tooltip>
                         </li>
                       )}
                     </For>

@@ -1,6 +1,7 @@
 import { t } from '@app/lib/i18n';
 import { useUserId } from '@core/context/user';
 import { createElementSize } from '@solid-primitives/resize-observer';
+import { cn, Tooltip } from '@ui';
 import { createMemo, createSignal, type JSX, onCleanup, Show } from 'solid-js';
 import {
   CHANNEL_SECTION_MAX_HEIGHT,
@@ -20,6 +21,7 @@ export function ResizableRailSection(props: {
   maxHeight: number;
   itemCount: number;
   dropEdge?: 'top' | 'bottom';
+  dragging?: boolean;
   header: JSX.Element;
   children: JSX.Element;
   rootRef: (element: HTMLDivElement) => void;
@@ -117,7 +119,11 @@ export function ResizableRailSection(props: {
   return (
     <div
       ref={props.rootRef}
-      class="group/rail-section relative min-w-0 shrink-0"
+      class={cn(
+        '@container/rail-section group/rail-section relative min-w-0 shrink-0',
+        props.dragging &&
+          'rounded-lg bg-surface opacity-40 ring-1 ring-edge-muted'
+      )}
       data-resizing={preview() !== undefined ? '' : undefined}
     >
       <Show when={props.dropEdge}>
@@ -153,81 +159,87 @@ export function ResizableRailSection(props: {
             });
 
             return (
-              <button
-                type="button"
-                role="separator"
-                aria-orientation="horizontal"
-                aria-label={t('channelSections.resizeSection', {
-                  name: props.label,
-                })}
-                aria-valuemin={CHANNEL_SECTION_MIN_HEIGHT}
-                aria-valuemax={maximum()}
-                aria-valuenow={Math.round(height())}
-                title={t('channelSections.resizeSectionHint')}
-                class="group flex h-3 w-full touch-none cursor-row-resize items-center justify-center rounded-full outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-edge-focus"
-                onPointerDown={(event) => {
-                  const element = viewport();
-                  if (event.button !== 0 || !element || drag) {
-                    return;
+              <Tooltip.Root>
+                <Tooltip.Trigger
+                  type="button"
+                  role="separator"
+                  aria-orientation="horizontal"
+                  aria-label={t('channelSections.resizeSection', {
+                    name: props.label,
+                  })}
+                  aria-valuemin={CHANNEL_SECTION_MIN_HEIGHT}
+                  aria-valuemax={maximum()}
+                  aria-valuenow={Math.round(height())}
+                  class="group flex h-3 w-full touch-none cursor-row-resize items-center justify-center rounded-full outline-none hover:bg-hover focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-edge-focus"
+                  onPointerDown={(event) => {
+                    const element = viewport();
+                    if (event.button !== 0 || !element || drag) {
+                      return;
+                    }
+
+                    event.preventDefault();
+                    event.stopPropagation();
+                    drag = {
+                      pointer: event.pointerId,
+                      y: event.clientY,
+                      height: element.offsetHeight,
+                      zoom:
+                        element.getBoundingClientRect().height /
+                          element.offsetHeight || 1,
+                      account: account(),
+                      top: element.getBoundingClientRect().top,
+                      handle: event.currentTarget,
+                    };
+                    setPreview(element.offsetHeight);
+                    event.currentTarget.setPointerCapture(event.pointerId);
+                  }}
+                  onPointerMove={(event) => {
+                    if (!drag || event.pointerId !== drag.pointer) {
+                      return;
+                    }
+
+                    if (drag.account !== account()) {
+                      finish(event, true);
+                      return;
+                    }
+
+                    setPreview(draggedHeight(event));
+                  }}
+                  onPointerUp={(event) => finish(event)}
+                  onPointerCancel={(event) => finish(event, true)}
+                  onLostPointerCapture={(event) => finish(event, true)}
+                  onMouseDown={(event) => event.stopPropagation()}
+                  onClick={(event) => event.stopPropagation()}
+                  onDblClick={() =>
+                    rail.setSectionPreferences(props.section, {
+                      height: undefined,
+                    })
                   }
+                  onKeyDown={(event) => {
+                    if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
+                      return;
+                    }
 
-                  event.preventDefault();
-                  event.stopPropagation();
-                  drag = {
-                    pointer: event.pointerId,
-                    y: event.clientY,
-                    height: element.offsetHeight,
-                    zoom:
-                      element.getBoundingClientRect().height /
-                        element.offsetHeight || 1,
-                    account: account(),
-                    top: element.getBoundingClientRect().top,
-                    handle: event.currentTarget,
-                  };
-                  setPreview(element.offsetHeight);
-                  event.currentTarget.setPointerCapture(event.pointerId);
-                }}
-                onPointerMove={(event) => {
-                  if (!drag || event.pointerId !== drag.pointer) {
-                    return;
-                  }
+                    event.preventDefault();
+                    event.stopPropagation();
+                    event.stopImmediatePropagation();
 
-                  if (drag.account !== account()) {
-                    finish(event, true);
-                    return;
-                  }
+                    const direction = event.key === 'ArrowDown' ? 1 : -1;
+                    const step = event.shiftKey ? 100 : 20;
 
-                  setPreview(draggedHeight(event));
-                }}
-                onPointerUp={(event) => finish(event)}
-                onPointerCancel={(event) => finish(event, true)}
-                onLostPointerCapture={(event) => finish(event, true)}
-                onMouseDown={(event) => event.stopPropagation()}
-                onClick={(event) => event.stopPropagation()}
-                onDblClick={() =>
-                  rail.setSectionPreferences(props.section, {
-                    height: undefined,
-                  })
-                }
-                onKeyDown={(event) => {
-                  if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') {
-                    return;
-                  }
-
-                  event.preventDefault();
-                  event.stopPropagation();
-                  event.stopImmediatePropagation();
-
-                  const direction = event.key === 'ArrowDown' ? 1 : -1;
-                  const step = event.shiftKey ? 100 : 20;
-
-                  rail.setSectionPreferences(props.section, {
-                    height: clamp(height() + direction * step),
-                  });
-                }}
-              >
-                <span class="h-0.5 w-8 rounded-full bg-edge-muted group-hover:bg-accent group-focus-visible:bg-accent" />
-              </button>
+                    rail.setSectionPreferences(props.section, {
+                      height: clamp(height() + direction * step),
+                    });
+                  }}
+                >
+                  <span class="h-0.5 w-8 rounded-full bg-edge-muted group-hover:bg-accent group-focus-visible:bg-accent" />
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content>
+                    {t('channelSections.resizeSectionHint')}
+                  </Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
             );
           }}
         </Show>

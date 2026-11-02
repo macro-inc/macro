@@ -20,6 +20,7 @@ import type { ChannelLabelScopeSelection } from '@service-storage/generated/sche
 import { confirmDialog } from '@ui';
 import type { Accessor, Owner } from 'solid-js';
 import {
+  canAssignChannel,
   canLabelChannel,
   filterChannelLabelMembers,
 } from '../../../core/channel-label-eligibility';
@@ -457,7 +458,10 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
       ? labels().find((label) => label.id === fromLabelId)
       : undefined;
 
-    if (labelId && (!to || !canLabelChannel(labelChannelById(channelId), to))) {
+    if (
+      labelId &&
+      (!to || !canAssignChannel(labelChannelById(channelId), to))
+    ) {
       return;
     }
 

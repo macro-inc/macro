@@ -66,6 +66,11 @@ export default {
   sharedShort: 'Shared',
   personal: 'Personal',
   shared: 'Shared with team',
+  sharedSectionHint: 'Shared with your team. Team channels only.',
+  cannotDropHere: 'This item cannot be added here.',
+  smartSectionDropHint: 'Smart sections add channels by name, not by dragging.',
+  alreadyInSection: 'This channel is already in this section.',
+  reorderingSection: 'Reordering section',
   personalDescription: 'Only you can see and organize this section.',
   teamDescription: 'Everyone on your team can see and organize this section.',
   addToSection: 'Add to section',
@@ -111,8 +116,10 @@ export default {
     'Shared sections only include channels from your team that you have joined. Private and public channels belong in personal sections.',
   personalChannelsHint:
     'Personal sections can include team, public, and private channels you have joined.',
-  moveFromOtherSection:
-    'Adding a channel moves it from its other manual section in the same scope.',
+  addPersonalChannelsHint:
+    'Add any joined channel. Moves channels from other personal sections.',
+  addSharedChannelsHint:
+    'Add joined team channels. Moves channels from other shared sections.',
   addSelectedChannels: {
     one: 'Add {{count}} channel',
     other: 'Add {{count}} channels',

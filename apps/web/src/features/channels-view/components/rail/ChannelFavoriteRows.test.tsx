@@ -195,7 +195,8 @@ vi.mock('@app/components/view-shell', () => ({
   },
 }));
 vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => false }));
-vi.mock('@ui', () => ({
+vi.mock('@ui', async () => ({
+  Tooltip: (await import('@ui/components/Tooltip')).Tooltip,
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
 }));
 
@@ -456,7 +457,10 @@ describe('section reordering', () => {
   it('keeps absent sections in their saved positions during keyboard reordering', () => {
     rail.sectionOrder = () => ['favorites', 'channels', 'label:section'];
     const { result } = renderHook(() =>
-      useSectionReorder(() => ['favorites', 'label:section'])
+      useSectionReorder(
+        () => ['favorites', 'label:section'],
+        (reorder) => reorder()
+      )
     );
     result.move('label:section', -1);
     expect(rail.setSectionOrder).toHaveBeenCalledExactlyOnceWith([
@@ -470,7 +474,10 @@ describe('section reordering', () => {
     const [viewer, setViewer] = createSignal('viewer');
     drag.viewer = viewer;
     const { result } = renderHook(() =>
-      useSectionReorder(() => ['favorites', 'label:collapsed', 'channels'])
+      useSectionReorder(
+        () => ['favorites', 'label:collapsed', 'channels'],
+        (reorder) => reorder()
+      )
     );
     const source = { data: { dndScope: result.scope, section: 'channels' } };
     const target = { data: { dndScope: result.scope, section: 'favorites' } };

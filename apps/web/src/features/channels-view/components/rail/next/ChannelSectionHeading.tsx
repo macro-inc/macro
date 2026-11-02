@@ -2,7 +2,7 @@ import { CollapsibleSection } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import DotsSixVerticalIcon from '@icon/system/regular/dots-six-vertical.svg';
 import { createDraggable } from '@thisbeyond/solid-dnd';
-import { Button, cn } from '@ui';
+import { Button, cn, Tooltip } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import type { ChannelSectionKey } from '../../../types';
 import type { useSectionReorder } from './useSectionReorder';
@@ -11,7 +11,7 @@ import type { useSectionReorder } from './useSectionReorder';
 export function ChannelSectionHeading(props: {
   id: string;
   label: string;
-  title?: string;
+  tooltip?: string;
   open: boolean;
   focused: boolean;
   unreadCount: number;
@@ -25,24 +25,31 @@ export function ChannelSectionHeading(props: {
       <CollapsibleSection.Header
         class={cn('rounded-lg pr-0', props.focused && 'bg-hover text-ink')}
       >
+        {props.dragHandle}
         <CollapsibleSection.Trigger
           id={props.id}
           role="treeitem"
           tabIndex={-1}
-          title={props.title}
-          class={cn('flex-1', props.focused && 'text-ink')}
+          class={cn(
+            'flex-1',
+            props.dragHandle && 'pl-0',
+            props.focused && 'text-ink'
+          )}
         >
-          <span class="min-w-0 truncate">{props.label}</span>
+          <Tooltip
+            as="span"
+            class="min-w-0"
+            label={props.tooltip ?? props.label}
+          >
+            <span class="truncate">{props.label}</span>
+          </Tooltip>
           {props.badge}
           <CollapsibleSection.Indicator />
           <Show when={props.unreadCount > 0}>
             <span class="text-xs text-accent">{props.unreadCount}</span>
           </Show>
         </CollapsibleSection.Trigger>
-        <div class="flex shrink-0 items-center">
-          {props.dragHandle}
-          {props.children}
-        </div>
+        <div class="flex shrink-0 items-center">{props.children}</div>
       </CollapsibleSection.Header>
     </CollapsibleSection.Root>
   );
@@ -61,7 +68,17 @@ export function ChannelSectionDragHandle(props: {
     get name() {
       return props.label;
     },
-    overlayIcon: () => <DotsSixVerticalIcon class="size-4" />,
+    overlayContent: () => (
+      <div class="w-56 p-1">
+        <div class="flex min-w-0 items-center gap-2 text-xs font-medium text-ink">
+          <DotsSixVerticalIcon class="size-3.5 shrink-0 text-ink-muted" />
+          <span class="truncate">{props.label}</span>
+        </div>
+        <p class="mt-2 border-t border-edge-muted pt-2 text-xs text-ink-muted">
+          {t('channelSections.reorderingSection')}
+        </p>
+      </div>
+    ),
   });
 
   return (

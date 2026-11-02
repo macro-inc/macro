@@ -160,27 +160,26 @@ function SectionChannelsDialog(
           props.onOpenChange(open);
         }
       }}
-      class="w-[min(30rem,90vw)]"
+      class="w-[min(36rem,90vw)]"
       visibleScrim
     >
       <Surface
         depth={2}
-        class="flex max-h-[75dvh] flex-col overflow-hidden rounded-xl text-ink"
+        class="flex max-h-[min(30rem,65dvh)] flex-col overflow-hidden rounded-xl text-ink"
       >
         <form
           class="flex min-h-0 flex-col"
           onSubmit={(event) => fireAndForget(submit(event), 'channels-view')}
           aria-busy={saving()}
         >
-          <div class="flex shrink-0 flex-col gap-3 px-5 pt-4 pb-3">
+          <div class="flex shrink-0 flex-col gap-2 px-5 pt-4 pb-3">
             <Dialog.Title class="text-base font-semibold">
               {t('channelSections.addChannelsTo', { name: props.label.name })}
             </Dialog.Title>
-            <Dialog.Description class="text-xs leading-5 text-ink-muted">
+            <Dialog.Description class="text-xs leading-4 text-ink-muted">
               {props.label.teamId
-                ? t('channelSections.teamChannelsOnly')
-                : t('channelSections.personalChannelsHint')}{' '}
-              {t('channelSections.moveFromOtherSection')}
+                ? t('channelSections.addSharedChannelsHint')
+                : t('channelSections.addPersonalChannelsHint')}
             </Dialog.Description>
             <Input
               aria-label={t('channelSections.searchChannels')}

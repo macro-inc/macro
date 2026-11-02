@@ -6,7 +6,8 @@ import { useChannelsRail } from '../ChannelsRailContext';
 
 /** Reorder this viewer's sections without changing shared label data. */
 export function useSectionReorder(
-  keys: Accessor<readonly ChannelSectionKey[]>
+  keys: Accessor<readonly ChannelSectionKey[]>,
+  animate: (reorder: () => void) => void
 ) {
   const rail = useChannelsRail();
   const userId = useUserId();
@@ -49,8 +50,10 @@ export function useSectionReorder(
     const all = [...new Set([...rail.sectionOrder(), ...sections])];
     let index = 0;
 
-    rail.setSectionOrder(
-      all.map((key) => (visible.has(key) ? sections[index++] : key))
+    animate(() =>
+      rail.setSectionOrder(
+        all.map((key) => (visible.has(key) ? sections[index++] : key))
+      )
     );
   };
 
@@ -88,5 +91,9 @@ export function useSectionReorder(
     persist(sections);
   };
 
-  return { scope, dropEdge, move };
+  const isDragging = (key: ChannelSectionKey) =>
+    state?.active.draggable?.data.dndScope === scope &&
+    state.active.draggable.data.section === key;
+
+  return { scope, dropEdge, move, isDragging };
 }

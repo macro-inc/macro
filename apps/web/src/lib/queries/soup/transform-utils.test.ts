@@ -13,6 +13,33 @@ vi.mock('@core/constant/allBlocks', () => ({
 vi.mock('@core/context/channels', () => ({ useChannelsContext: vi.fn() }));
 vi.mock('@core/user', () => ({ emailToId: vi.fn() }));
 
+it('preserves channel team identity for section assignment checks', () => {
+  const item = {
+    tag: 'channel',
+    frecency_score: 0,
+    is_favorited: false,
+    data: {
+      channel: {
+        id: 'channel',
+        name: 'Design',
+        channel_type: 'team',
+        team_id: 'team',
+        owner_id: 'owner',
+        created_at: '2026-01-01T00:00:00Z',
+        updated_at: '2026-01-01T00:00:00Z',
+      },
+      participants: [],
+      is_participant: true,
+    },
+  } satisfies SoupApiItem;
+
+  expect(mapApiSoupItemToEntity(item)).toMatchObject({
+    type: 'channel',
+    channelType: 'team',
+    teamId: 'team',
+  });
+});
+
 describe('email soup entities', () => {
   it.each([true, false])(
     'preserves server Signal membership (%s) for Home activity',
