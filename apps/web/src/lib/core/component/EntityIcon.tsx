@@ -58,7 +58,6 @@ import PenNibBold from '@icon/system/bold/pen-nib-bold.svg';
 import PhoneCallBold from '@icon/system/bold/phone-call-bold.svg';
 import ShapesBold from '@icon/system/bold/shapes-bold.svg';
 import SparkleBold from '@icon/system/bold/sparkle-bold.svg';
-import StackBold from '@icon/system/bold/stack-bold.svg';
 import SpreadsheetBold from '@icon/system/bold/table-bold.svg';
 import TableBold from '@icon/system/bold/table-bold.svg';
 import UsersBold from '@icon/system/bold/users-bold.svg';
@@ -73,6 +72,7 @@ import Calendar from '@icon/system/regular/calendar.svg';
 import ClipboardText from '@icon/system/regular/clipboard-text.svg';
 import ClockClockwise from '@icon/system/regular/clock-clockwise.svg';
 import Code from '@icon/system/regular/code.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import Database from '@icon/system/regular/database.svg';
 import Email from '@icon/system/regular/envelope.svg';
 import EmailRead from '@icon/system/regular/envelope-open.svg';
@@ -94,12 +94,12 @@ import GlobeIcon from '@icon/system/regular/globe.svg';
 import HashStraight from '@icon/system/regular/hash-straight.svg';
 import FileImage from '@icon/system/regular/image.svg';
 import ListChecks from '@icon/system/regular/list-checks.svg';
+import LockSimple from '@icon/system/regular/lock-simple.svg';
 import PaintBrushBroad from '@icon/system/regular/paint-brush-broad.svg';
 import PenNib from '@icon/system/regular/pen-nib.svg';
 import PhoneCall from '@icon/system/regular/phone-call.svg';
 import Shapes from '@icon/system/regular/shapes.svg';
 import Sparkle from '@icon/system/regular/sparkle.svg';
-import Stack from '@icon/system/regular/stack.svg';
 import Spreadsheet from '@icon/system/regular/table.svg';
 import Table from '@icon/system/regular/table.svg';
 import Users from '@icon/system/regular/users.svg';
@@ -270,8 +270,8 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'Organization',
   },
   private: {
-    icon: HashStraight,
-    boldIcon: HashStraightBold,
+    icon: LockSimple,
+    boldIcon: LockSimple,
     foreground: 'text-communication',
     background: 'bg-communication/20',
     prettyName: 'Private Channel',
@@ -473,8 +473,8 @@ export const ENTITY_ICON_CONFIGS: Record<EntityWithValidIcon, IconConfig> = {
     prettyName: 'Task',
   },
   initiative: {
-    icon: Stack,
-    boldIcon: StackBold,
+    icon: ProjectIcon,
+    boldIcon: ProjectIcon,
     foreground: 'text-task',
     background: 'bg-task/20',
     prettyName: 'Project',
@@ -718,7 +718,11 @@ export function getEntityIconType(entity: EntityIconData): EntityWithValidIcon {
       { type: 'channel' },
       { type: 'channel_message' },
       { type: 'channel_thread' },
-      (e) => (e.channelType === 'direct_message' ? 'direct_message' : 'channel')
+      (e) => {
+        if (e.channelType === 'direct_message') return 'direct_message';
+        if (e.channelType === 'private') return 'private';
+        return 'channel';
+      }
     )
     .with({ type: 'email' }, (e) =>
       e.hasIcsAttachment ? 'emailInvite' : e.isRead ? 'emailRead' : 'email'

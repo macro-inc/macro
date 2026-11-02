@@ -1,6 +1,8 @@
+import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
 import PlusIcon from '@icon/system/regular/plus.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { hasValue } from '@property/utils/typeGuards';
 import { Button } from '@ui/components/Button';
@@ -9,14 +11,17 @@ import {
   createSignal,
   For,
   type JSX,
+  Match,
   Show,
   Suspense,
+  Switch,
 } from 'solid-js';
 import { TaskBoard } from '../components/task-board';
 import {
   TaskBoardColumnIcon,
   TaskBoardProperty,
 } from '../components/task-board-property';
+import { TaskDeadlineMoveDialog } from '../components/task-deadline-move-dialog';
 import { TASK_SORT_OPTIONS } from '../constants';
 import type { TaskBoardData } from '../context/task-board';
 import {
@@ -25,7 +30,9 @@ import {
   type TaskBoardTask,
   toTaskBoardGrouping,
 } from '../core/task-board';
+import { taskDueDateUrgency } from '../core/task-due-date';
 import { createTaskBoard } from '../primitives/create-task-board';
+import { createTaskDeadlineMove } from '../primitives/create-task-deadline-move';
 import { taskBoardFacetId, taskBoardPropertyId } from '../queries/task-board';
 import { useTasksView } from '../tasks-view-context';
 
@@ -46,7 +53,8 @@ export function TaskBoardView(props: {
   ) => JSX.Element;
   ref?: (element: HTMLDivElement) => void;
 }) {
-  const { state, source, showTaskProject, setFacets } = useTasksView();
+  const { state, source, showTaskProject, setFacets, setState, calendar } =
+    useTasksView();
   const grouping = () => toTaskBoardGrouping(state.groupBy);
   const scope = () =>
     JSON.stringify([
@@ -55,7 +63,11 @@ export function TaskBoardView(props: {
       state.search,
       state.facets,
       state.sort,
+      state.dueDate,
+      calendar().today,
+      calendar().timeZone,
     ]);
+  const deadlineMove = createTaskDeadlineMove({ calendar, scope });
   const board = createTaskBoard({
     grouping,
     scope,
@@ -63,16 +75,22 @@ export function TaskBoardView(props: {
     task: props.data.task,
     actions: props.data.actions,
     compareTasks: props.data.compareTasks,
+    prepareMove: deadlineMove.prepare,
   });
   const [readError, setReadError] = createSignal<string>();
   const loading = source.boardLoading ?? source.isLoading;
   const sortLabel = () =>
-    TASK_SORT_OPTIONS.find(
-      (option) => option.id === (state.sort[0]?.id ?? 'updated_at')
-    )?.label ?? 'Updated';
+    state.search.trim()
+      ? 'search order'
+      : (TASK_SORT_OPTIONS.find(
+          (option) => option.id === (state.sort[0]?.id ?? 'updated_at')
+        )?.label ?? 'Updated');
   const cardPropertyIds = () =>
     CARD_PROPERTY_IDS.filter((id) => {
-      if (id === taskBoardPropertyId(grouping())) {
+      if (
+        id !== SYSTEM_PROPERTY_IDS.DUE_DATE &&
+        id === taskBoardPropertyId(grouping())
+      ) {
         return false;
       }
 
@@ -80,6 +98,10 @@ export function TaskBoardView(props: {
     });
 
   const revealHiddenColumns = () => {
+    if (grouping() === 'due_date') {
+      setState('dueDate', undefined);
+      return;
+    }
     const facets = { ...state.facets };
     delete facets[taskBoardFacetId(grouping())];
     setFacets(facets);
@@ -92,26 +114,6 @@ export function TaskBoardView(props: {
       await operation();
     } catch {
       setReadError('Could not load tasks. Try again.');
-    }
-  };
-
-  const loadMore = async (columnId?: string) => {
-    if (columnId === undefined) {
-      await source.loadMore();
-      const error = source.error();
-
-      if (error) {
-        throw error;
-      }
-
-      return;
-    }
-
-    await source.loadMoreGroup(columnId);
-    const error = source.groupError?.(columnId);
-
-    if (error) {
-      throw error;
     }
   };
 
@@ -131,6 +133,15 @@ export function TaskBoardView(props: {
               taskId={task().id}
               canEdit={!readOnly() && props.data.canEditProperty(task().id, id)}
               iconOnly={iconOnly}
+              dueDateUrgency={
+                id === SYSTEM_PROPERTY_IDS.DUE_DATE
+                  ? taskDueDateUrgency(
+                      task().dueDate,
+                      task().closed ?? true,
+                      calendar()
+                    )
+                  : undefined
+              }
               onSave={async (value, apiValues) => {
                 try {
                   if (readOnly()) {
@@ -290,23 +301,30 @@ export function TaskBoardView(props: {
                   </p>
                 }
                 footer={
-                  <Show when={column().hasMore}>
-                    <div class="py-3">
-                      <Button
-                        size="sm"
-                        variant="secondary"
-                        disabled={column().loadingMore}
-                        onClick={() =>
+                  <Switch>
+                    <Match when={column().hasMore}>
+                      <TaskBoardColumnContinuation
+                        isLoading={column().loadingMore}
+                        failed={Boolean(source.groupError?.(column().id))}
+                        onLoad={() =>
                           fireAndForget(
-                            read(() => loadMore(column().id)),
+                            source.loadMoreGroup(column().id),
                             'tasks-view'
                           )
                         }
-                      >
-                        {column().loadingMore ? 'Loading…' : 'Load more tasks'}
-                      </Button>
-                    </div>
-                  </Show>
+                      />
+                    </Match>
+                    {/* Ungrouped results (search) continue from any column's end. */}
+                    <Match when={source.hasMore()}>
+                      <TaskBoardColumnContinuation
+                        isLoading={source.isLoadingMore()}
+                        failed={Boolean(source.error())}
+                        onLoad={() =>
+                          fireAndForget(source.loadMore(), 'tasks-view')
+                        }
+                      />
+                    </Match>
+                  </Switch>
                 }
               >
                 {(task) => {
@@ -333,22 +351,44 @@ export function TaskBoardView(props: {
           )}
         </TaskBoard.Columns>
       </TaskBoard.Root>
-      <Show when={source.hasMore()}>
-        <div class="p-3">
-          <Button
-            size="sm"
-            variant="secondary"
-            disabled={source.isLoadingMore()}
-            onClick={() =>
-              fireAndForget(
-                read(() => loadMore()),
-                'tasks-view'
-              )
-            }
-          >
-            {source.isLoadingMore() ? 'Loading…' : 'Load more tasks'}
-          </Button>
-        </div>
+      <TaskDeadlineMoveDialog
+        picker={deadlineMove.picker()}
+        onChange={deadlineMove.select}
+        onApply={deadlineMove.apply}
+        onCancel={deadlineMove.cancel}
+      />
+    </div>
+  );
+}
+
+/** Requests the column's next page while near its visible cards; a failure waits for Retry. */
+function TaskBoardColumnContinuation(props: {
+  isLoading: boolean;
+  failed: boolean;
+  onLoad: () => void;
+}) {
+  const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
+  useInfiniteScrollSentinel({
+    sentinel,
+    hasNextPage: () => !props.failed,
+    isFetchingNextPage: () => props.isLoading,
+    fetchNextPage: () => props.onLoad(),
+  });
+
+  return (
+    <div
+      ref={setSentinel}
+      aria-busy={!props.failed}
+      class="flex flex-wrap items-center justify-center gap-2 py-3 text-xs text-ink-muted"
+    >
+      <Show
+        when={props.failed}
+        fallback={<SpinnerIcon class="size-4 animate-spin" />}
+      >
+        <span>Couldn’t load more tasks.</span>
+        <Button size="sm" variant="secondary" onClick={() => props.onLoad()}>
+          Retry
+        </Button>
       </Show>
     </div>
   );
@@ -377,11 +417,14 @@ function TaskBoardColumnHeader(props: {
   return (
     <>
       <span
-        class="flex size-4 shrink-0 items-center justify-center"
+        class="flex size-5 shrink-0 items-center justify-center"
         aria-hidden="true"
       >
         <Suspense>
-          <TaskBoardColumnIcon grouping={props.grouping} id={props.column.id} />
+          <TaskBoardColumnIcon
+            propertyDefinitionId={taskBoardPropertyId(props.grouping)}
+            id={props.column.id}
+          />
         </Suspense>
       </span>
       <Show

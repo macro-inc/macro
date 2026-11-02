@@ -11,9 +11,9 @@ import { buildGraphqlEntitySoupInput } from '@queries/soup/graphql/entity-input'
 import {
   type GraphqlFilterPropertiesExpr,
   type GraphqlInitiativeExpr,
-  InitiativesDocument,
-  type InitiativesQuery,
-  type InitiativesQueryVariables,
+  ProjectSoupDocument,
+  type ProjectSoupQuery,
+  type ProjectSoupQueryVariables,
   type SoupInput,
 } from '@service-storage/graphql/generated/graphql';
 import { mapGraphqlProperties } from '@service-storage/graphql-soup';
@@ -32,6 +32,7 @@ export function projectSoupInput(filters: ProjectFilters): SoupInput {
   );
   if (!input?.initial) throw new Error('Initiative Soup input is unavailable');
   const predicates: GraphqlInitiativeExpr[] = [{ literal: { include: true } }];
+  if (filters.owner) predicates.push({ literal: { owner: filters.owner } });
   if (filters.query)
     predicates.push({ literal: { nameContains: filters.query } });
   if (filters.dueBefore)
@@ -90,9 +91,9 @@ const accessLevels = {
   OWNER: 'owner',
 } as const;
 
-/** Project presentation over the initiative list contract; folders stay distinct. */
+/** Project presentation over the shared Soup entity contract; folders stay distinct. */
 export function projectSoupRows(
-  items: InitiativesQuery['user']['soup']['items']
+  items: ProjectSoupQuery['user']['soup']['items']
 ): ProjectRow[] {
   return items.flatMap((item) => {
     if (item.__typename !== 'GraphqlSoupInitiative') return [];
@@ -105,6 +106,8 @@ export function projectSoupRows(
           appearance: readEntityAppearance(item.appearance),
           updatedAt: item.metadata.updatedAt ?? '',
           createdAt: item.metadata.createdAt ?? undefined,
+          taskCount: item.taskCount,
+          completedTaskCount: item.completedTaskCount,
           access:
             permission?.__typename === 'GraphqlAccessLevelPermission'
               ? accessLevels[permission.accessLevel]
@@ -125,13 +128,13 @@ export function createProjectSoupSource(
   const input = createMemo(() => projectSoupInput(filters()));
   const client = createMemo(soupClient);
   const query = createUrqlInfiniteQuery<
-    InitiativesQuery,
-    InitiativesQueryVariables,
+    ProjectSoupQuery,
+    ProjectSoupQueryVariables,
     string | null
   >(() => {
     const initial = input();
     return {
-      query: InitiativesDocument,
+      query: ProjectSoupDocument,
       client: client(),
       enabled: enabled(),
       initialPageParam: null,
@@ -162,7 +165,7 @@ export function createProjectSoupSource(
     registerGraphqlSoupRevalidations(() => {
       if (!enabled() || !query.isSuccess) return [];
       return (query.data?.pageParams ?? [null]).map((cursor) => ({
-        document: InitiativesDocument,
+        document: ProjectSoupDocument,
         variables: {
           input: cursor
             ? {

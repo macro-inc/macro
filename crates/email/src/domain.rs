@@ -6,6 +6,8 @@ pub mod calendar_invitation_parser;
 pub mod event_forward;
 pub mod events;
 #[cfg(feature = "ports")]
+pub mod focus;
+#[cfg(feature = "ports")]
 pub mod followup;
 #[cfg(feature = "ports")]
 pub mod forwarded_attachments;
@@ -18,6 +20,8 @@ pub mod invitation_resolution;
 #[cfg(feature = "mailbox")]
 pub mod mailbox;
 pub mod models;
+#[cfg(feature = "ports")]
+pub mod read_receipts;
 pub mod senders;
 
 #[cfg(feature = "ports")]

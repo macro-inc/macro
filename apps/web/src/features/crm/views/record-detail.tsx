@@ -43,7 +43,7 @@ import { useCompanyQuery, useContactQuery } from './use-crm';
 
 const recordKey = (record: CrmRecordRef) => `${record.type}:${record.id}`;
 
-function createRecordName(record: CrmRecordRef): () => string {
+export function createRecordName(record: CrmRecordRef): () => string {
   const fallback =
     record.name || (record.type === 'company' ? 'Company' : 'Contact');
   if (record.type === 'company') {
@@ -177,13 +177,13 @@ export function CrmRecordDetail(props: {
           tabindex={-1}
           class="flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
         >
-          <div class="flex h-12 min-w-0 shrink-0 items-center gap-2 px-3 touch:gap-3 touch:border-b touch:border-edge-muted touch:px-4 touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:pb-2">
+          <div class="flex h-12 min-w-0 shrink-0 items-center gap-2 px-3 touch:gap-3 touch:border-b touch:border-edge-muted touch:px-4 touch:h-auto touch:min-h-12 touch:pt-[calc(var(--mobile-content-inset-top,var(--safe-top,0px))+0.5rem)] touch:pb-2 mobile:flex-wrap">
             {props.navigation}
             <ViewBreadcrumbs.Outlet
               aria-label="CRM record location"
-              class="min-w-0 shrink"
+              class="min-w-0 shrink mobile:flex-1"
             />
-            <div class="min-w-0 overflow-x-auto">
+            <div class="min-w-0 not-touch:overflow-x-auto mobile:order-last mobile:flex mobile:basis-full">
               <Show
                 when={current().type === 'contact'}
                 fallback={

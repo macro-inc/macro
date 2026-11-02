@@ -53,6 +53,7 @@ export type FormRefusal =
   | 'invalid-appearance'
   | 'invalid-sharing'
   | 'tally-hidden'
+  | 'invalid-branding'
   | 'conflict'
   | 'internal';
 
@@ -181,6 +182,12 @@ export type FormMetadataPatch = {
   status?: FormStatus;
   closesAt?: string | null;
   tallyVisible?: boolean;
+  /** A static file id, or `null` to remove it. */
+  logoFileId?: string | null;
+  /** A static file id, or `null` to remove it. */
+  coverFileId?: string | null;
+  /** `#rrggbb`, or `null` for Macro's accent. */
+  accentColor?: string | null;
 };
 
 export type SubmitOutcome =
@@ -360,6 +367,13 @@ export type FormContext = {
   };
   /** Upload a file for a file question; answers the link the cell stores. */
   uploadFile: (file: File) => ResultAsync<string, FormWriteFailure>;
+  /** The logo and cover image a form's branding shows. */
+  branding: {
+    /** Upload an image; answers its static file id. */
+    uploadImage: (file: File) => ResultAsync<string, FormWriteFailure>;
+    /** Where a branding image is read, sized for where it shows. */
+    imageUrl: (fileId: string, size: 'small' | 'medium') => string;
+  };
   booking: FormBooking;
   /** Open a direct conversation with the form's owner (stop screen, RFC 02 §4). */
   messageOwner: (ownerId: string) => ResultAsync<void, FormWriteFailure>;

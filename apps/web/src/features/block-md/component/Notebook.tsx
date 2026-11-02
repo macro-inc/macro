@@ -40,6 +40,7 @@ import {
   untrack,
 } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
+import { createEnterOwningControl } from '../util/createEnterOwningControl';
 import { DocumentDiscussion } from './DocumentDiscussion';
 import { InlineTaskGithubPullRequests } from './InlineTaskGithubPullRequests';
 import { InlineTaskProperties } from './InlineTaskProperties';
@@ -125,6 +126,7 @@ export function Notebook(props: {
     return entity && { ...entity, appearance: appearance() };
   };
   const scopeId = () => props.hotkeyScope;
+  const ownsEnter = createEnterOwningControl();
   const resolveAppLink = useMacroMentionLinkResolver();
 
   let notebookRef!: HTMLDivElement;
@@ -232,7 +234,8 @@ export function Notebook(props: {
         scopeId: currentScopeId,
         hotkeyToken: TOKENS.block.focus,
         description: 'Focus Title or Markdown Editor',
-        keyDownHandler: () => {
+        keyDownHandler: (event) => {
+          if (ownsEnter(event?.target)) return false;
           const titleEditor = md.titleEditor;
           const markdownEditor = md.editor;
           const docName = untrack(documentName);

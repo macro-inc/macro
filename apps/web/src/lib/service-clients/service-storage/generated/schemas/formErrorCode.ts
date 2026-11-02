@@ -32,6 +32,7 @@ export const FormErrorCode = {
   invalidSharing: 'invalidSharing',
   invalidAppearance: 'invalidAppearance',
   tallyHidden: 'tallyHidden',
+  invalidBranding: 'invalidBranding',
   conflict: 'conflict',
   internal: 'internal',
 } as const;

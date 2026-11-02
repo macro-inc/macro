@@ -15,7 +15,6 @@ import {
   EntityAppearanceTrigger,
   useChangeEntityIcon,
 } from '../entity-appearance/entity-appearance';
-import type { ScheduleDraft } from './core/draft';
 import { getErrorMessage } from './core/routine-draft';
 import {
   createAgentHistoryMetadata,
@@ -26,7 +25,7 @@ import { createRoutineConnectedApps, RoutineApps } from './routine-apps';
 import { RoutineExecutionPicker } from './routine-execution-picker';
 import { RoutinePromptEditor } from './routine-prompt-editor';
 import {
-  openShareTemplateDialog,
+  openShareRoutineDialog,
   RoutineTemplatePage,
 } from './routine-template';
 import { RoutineTriggers } from './routine-triggers';
@@ -88,16 +87,13 @@ export function RoutineDetail(props: {
     });
   };
   const owner = getOwner();
-  const shareTemplate = () => {
+  const share = () => {
     const routine = source.routine();
     if (!routine) return;
-    openShareTemplateDialog(
+    openShareRoutineDialog(
       {
         routineId: routine.id,
         name: routine.name,
-        prompt: routine.draft?.prompt ?? '',
-        timezone: scheduleTimezone(routine.draft),
-        ownerId: routine.ownerId,
       },
       owner
     );
@@ -149,7 +145,7 @@ export function RoutineDetail(props: {
             toast.success('Prompt copied');
           else toast.alert('Could not copy prompt');
         }}
-        onShareTemplate={sharing().enabled ? shareTemplate : undefined}
+        onShare={sharing().enabled ? share : undefined}
         onOpenTemplate={sharing().enabled ? open : undefined}
         slots={{
           PromptEditor: RoutinePromptEditor,
@@ -163,13 +159,4 @@ export function RoutineDetail(props: {
       />
     </Show>
   );
-}
-
-/** The time zone a routine's schedules run in, for sharing it as a template. */
-function scheduleTimezone(draft: ScheduleDraft | undefined) {
-  const schedule = draft?.triggers?.find(
-    (trigger) => trigger.kind === 'schedule'
-  );
-  if (schedule?.kind === 'schedule') return schedule.timezone;
-  return draft?.triggers ? undefined : draft?.timezone;
 }

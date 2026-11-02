@@ -13,6 +13,7 @@ use rig_agent::tool::ToolOutput;
 use std::collections::HashMap;
 use std::future::Future;
 use std::pin::Pin;
+use std::sync::atomic::{AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use tokio::sync::mpsc;
 use tokio_util::sync::CancellationToken;
@@ -177,14 +178,18 @@ const PENDING_USER_EXECUTION: &str = "PendingUserExecution";
 
 static CANCELLED_REASON: &str = "user cancelled";
 
-/// Retry budget for invalid tool calls recovered via
-/// [`StreamBridge::on_invalid_tool_call`]. Lets the common one-shot recovery —
-/// the model calls a searchable tool it never loaded, the bridge loads it, the
-/// call is retried — succeed, while bounding a model that keeps emitting names
-/// that don't exist anywhere. Past the budget the stream fails with
-/// `UnknownToolCall`, as it did before recovery existed. Retries also consume
-/// multi-turn depth.
-pub(crate) const MAX_INVALID_TOOL_CALL_RETRIES: usize = 2;
+/// Retries per run for tool calls to names that exist nowhere, not even the
+/// searchable catalog (see [`StreamBridge::handle_invalid_tool_call`]). Bounds
+/// a model that keeps hallucinating names; past it the run fails with
+/// `UnknownToolCall`, as it did before recovery existed. Calls that auto-load
+/// a catalog tool don't count: they are bounded by multi-turn depth, which
+/// every retry consumes.
+pub(crate) const MAX_UNKNOWN_TOOL_CALL_RETRIES: usize = 2;
+
+/// The retry budget handed to rig. rig counts every retry against one budget
+/// for the whole run, auto-loads included, so the bridge owns the budget (see
+/// [`MAX_UNKNOWN_TOOL_CALL_RETRIES`]) and rig's must never run out first.
+pub(crate) const RIG_INVALID_TOOL_CALL_RETRIES: usize = usize::MAX;
 
 /// Sends [`StreamPart`] items through an unbounded channel as the RIG agentic
 /// loop produces events.
@@ -203,6 +208,9 @@ pub struct StreamBridge {
     /// [`Self::on_invalid_tool_call`] to recover calls to tools the model
     /// discovered but never loaded.
     searchable_catalog: Arc<Vec<SearchableTool>>,
+    /// Retries spent this run on names not in the catalog; capped at
+    /// [`MAX_UNKNOWN_TOOL_CALL_RETRIES`].
+    unknown_tool_call_retries: Arc<AtomicUsize>,
     /// Finishes a user tool's pending answer before the model reads it, on
     /// hosts that can reach the user mid-turn (see [`UserToolFinisher`]).
     user_tool_finisher: Option<UserToolFinisher>,
@@ -254,6 +262,7 @@ impl StreamBridge {
                 register_loaded,
                 tool_loads,
                 searchable_catalog,
+                unknown_tool_call_retries: Arc::default(),
                 user_tool_finisher,
                 streamed: stream_tool_calls.then(Arc::default),
                 result_limit,
@@ -310,7 +319,8 @@ impl StreamBridge {
     /// never loaded — load it now and ask the model to retry; the next request
     /// is rebuilt from the live tool server, so the retried call is valid. For
     /// names that exist nowhere, the retry feedback points the model at
-    /// `SearchTools` instead of failing the stream on a hallucinated name.
+    /// `SearchTools` instead of failing the stream on a hallucinated name,
+    /// until [`MAX_UNKNOWN_TOOL_CALL_RETRIES`] is spent.
     pub(crate) async fn handle_invalid_tool_call(
         &self,
         tool_name: &str,
@@ -339,11 +349,19 @@ impl StreamBridge {
                      again, checking your arguments against them."
                 )))
             }
-            None => Some(InvalidToolCallAction::retry(format!(
-                "Unknown tool `{tool_name}`: no tool with that name exists in this session \
-                 or its connected integrations. Use `SearchTools` to find the \
-                 right tool, or continue without it."
-            ))),
+            None => {
+                let spent = self
+                    .unknown_tool_call_retries
+                    .fetch_add(1, Ordering::Relaxed);
+                if spent >= MAX_UNKNOWN_TOOL_CALL_RETRIES {
+                    return Some(InvalidToolCallAction::fail());
+                }
+                Some(InvalidToolCallAction::retry(format!(
+                    "Unknown tool `{tool_name}`: no tool with that name exists in this session \
+                     or its connected integrations. Use `SearchTools` to find the \
+                     right tool, or continue without it."
+                )))
+            }
         }
     }
 

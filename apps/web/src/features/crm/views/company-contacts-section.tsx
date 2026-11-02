@@ -6,7 +6,7 @@ import {
   ListLayoutProvider,
 } from '@entity';
 import { Avatar } from '@ui';
-import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
 import {
   CrmListEmpty,
   CrmListSearchEmpty,
@@ -66,7 +66,6 @@ export function CompanyContactsSection(props: {
   company?: CrmCompanyEntity;
   contacts?: CrmContact[];
   onOpenContact?: (contact: CrmContact) => void;
-  actions?: JSX.Element;
 }) {
   const context = useCrmContext();
   const { openWithSplit } = context.createNavigation();
@@ -81,6 +80,10 @@ export function CompanyContactsSection(props: {
         contact.email.toLowerCase().includes(query)
     );
   });
+  const createContact = () => {
+    if (props.company)
+      context.openCreateContact({ companyId: props.company.id });
+  };
 
   return (
     <RecordSection
@@ -89,7 +92,12 @@ export function CompanyContactsSection(props: {
       onSearchChange={setSearch}
       searchPlaceholder="Search contacts…"
       onSearchEscape={() => setSearch('')}
-      actions={props.actions}
+      createAction={{
+        label: 'Add contact',
+        onClick: createContact,
+        disabled: !props.company,
+      }}
+      toolbarCreate
     >
       <Show
         when={props.company}
@@ -105,18 +113,8 @@ export function CompanyContactsSection(props: {
                   title="No contacts yet"
                   description="Add a contact to this company to see them here."
                   action={
-                    props.company?.domains?.[0]
-                      ? {
-                          label: 'Add contact',
-                          onClick: () => {
-                            const domain = props.company?.domains?.[0]?.domain;
-                            if (domain && props.company)
-                              context.openCreateContact({
-                                companyId: props.company.id,
-                                domain,
-                              });
-                          },
-                        }
+                    props.company
+                      ? { label: 'Add contact', onClick: createContact }
                       : undefined
                   }
                 />

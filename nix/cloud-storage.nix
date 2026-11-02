@@ -410,6 +410,11 @@
           ];
         }
         {
+          serviceName = "email-focus-worker";
+          packageName = "email_focus_worker";
+          binaries = [ "email_focus_worker" ];
+        }
+        {
           serviceName = "image-proxy-service";
           packageName = "image_proxy_service";
           binaries = [ "image_proxy_service" ];
@@ -548,6 +553,24 @@
           mkdir -p $out/bin
           cp ${deployServiceBinaryPackages.deploy-service-binaries-document-storage-service}/bin/* $out/bin/
           cp ${deployServiceBinaryPackages.deploy-service-binaries-slack-import-worker}/bin/* $out/bin/
+          ${checkBinaries}
+        '';
+
+      # Same for the email service and its Focus worker.
+      emailServiceDeployBinaries =
+        let
+          cfg = builtins.fromJSON (builtins.readFile ../.github/services-config.json);
+          checkBinaries = pkgs.lib.concatMapStringsSep "\n" (binary: ''
+            test -x "$out/bin/${binary}" || {
+              echo "Missing deploy binary: ${binary}" >&2
+              exit 1
+            }
+          '') cfg.services.email-service.deploy_binaries;
+        in
+        pkgs.runCommand "cloud-storage-email-service-deploy-binaries" { } ''
+          mkdir -p $out/bin
+          cp ${deployServiceBinaryPackages.deploy-service-binaries-email-service}/bin/* $out/bin/
+          cp ${deployServiceBinaryPackages.deploy-service-binaries-email-focus-worker}/bin/* $out/bin/
           ${checkBinaries}
         '';
 
@@ -1093,6 +1116,7 @@
       // deployServiceBinaryPackages
       // {
         deploy-service-binaries-document-storage-service = documentStorageDeployBinaries;
+        deploy-service-binaries-email-service = emailServiceDeployBinaries;
       }
       // deployLambdaPackages
       // pkgs.lib.optionalAttrs isLinux {
@@ -1177,6 +1201,14 @@
               # the Nix lambda derivations. The default cc builder rejects
               # cargo-lambda/cargo-zigbuild's Zig cc wrapper.
               AWS_LC_SYS_CMAKE_BUILDER = "1";
+              # Android builds compile with the NDK's clang, which the cc
+              # builder accepts. The CMake builder needs CMake to locate the
+              # NDK itself, which fails in the tauri-android shell ("Neither
+              # the NDK or a standalone toolchain was found").
+              AWS_LC_SYS_CMAKE_BUILDER_aarch64_linux_android = "0";
+              AWS_LC_SYS_CMAKE_BUILDER_armv7_linux_androideabi = "0";
+              AWS_LC_SYS_CMAKE_BUILDER_i686_linux_android = "0";
+              AWS_LC_SYS_CMAKE_BUILDER_x86_64_linux_android = "0";
               # cargo-zigbuild compiles C with zig cc, which ignores the Nix
               # cc-wrapper's NIX_CFLAGS_COMPILE — so the curl.dev headers that
               # buildInputs provides to host builds (see the note on `libraries`;

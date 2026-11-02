@@ -13,11 +13,14 @@ use gtm_invite::inbound::axum_router::dto::{
     GtmInviteOffer, GtmInviteOfferStatus, PublicGtmInviteLink, RedeemGtmInviteLinkRequest,
 };
 use model::authentication::login::request::{AppleLoginRequest, PasswordRequest};
+use system_status::domain::models::{CurrentSystemStatus, StatusUpdate, SystemStatus};
+use system_status::inbound::axum_router::SystemStatusHistory;
 use teams::domain::model::{
     PatchTeamCrmSettingsRequest, PatchTeamCrmSettingsResponse, PatchTeamMemberPlanRequest,
     PatchTeamRequest, PatchTeamUserRole, Team, TeamInviteDetails, TeamInviteLinkTeam,
     TeamInviteLinkToken, TeamMember, TeamPlan, TeamRole, TeamWithMembers,
 };
+use teams::inbound::axum_router::domain_notice::SendDomainNoticeResponse;
 use teams::inbound::axum_router::get_team_invites::TeamInvitesResponse as TeamTeamInvitesResponse;
 use teams::inbound::axum_router::get_user_invites::TeamInvitesResponse as UserTeamInvitesResponse;
 use teams::inbound::axum_router::invite_link::{
@@ -167,6 +170,7 @@ use model::user::{
                 ai_billing::inbound::axum_router::update_overage_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
                 ai_billing::inbound::axum_router::update_auto_reload_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
                 ai_billing::inbound::axum_router::create_credit_checkout_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
+                ai_billing::inbound::axum_router::purchase_credits_handler::<crate::api::context::AiBillingServiceType, crate::api::context::AuthorizationService>,
 
                 /// /session
                 session::session_login::handler,
@@ -188,6 +192,7 @@ use model::user::{
                 teams::inbound::axum_router::patch_team::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::patch_team_crm_settings::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::toggle_auto_join_domain::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
+                teams::inbound::axum_router::domain_notice::handler::<crate::api::context::DomainNoticeServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::toggle_non_admin_invites::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::reject_invitation::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
                 teams::inbound::axum_router::get_user_invites::handler::<crate::api::context::TeamsServiceType, crate::api::context::EntityAccessServiceType, crate::api::context::AuthorizationService>,
@@ -215,6 +220,11 @@ use model::user::{
                 gtm_invite::inbound::axum_router::resolve_link::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
                 gtm_invite::inbound::axum_router::redeem_link::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
                 gtm_invite::inbound::axum_router::get_offer::handler::<crate::api::context::GtmInviteServiceType, crate::api::context::RateLimiter, crate::api::context::AuthorizationService>,
+
+                /// /system-status
+                system_status::inbound::axum_router::get_current::handler::<crate::api::context::SystemStatusServiceType, crate::api::context::AuthorizationService>,
+                system_status::inbound::axum_router::set_status::handler::<crate::api::context::SystemStatusServiceType, crate::api::context::AuthorizationService>,
+                system_status::inbound::axum_router::list_history::handler::<crate::api::context::SystemStatusServiceType, crate::api::context::AuthorizationService>,
 
                 /// /mobile-welcome-email
                 mobile_welcome_email::handler,
@@ -271,6 +281,12 @@ use model::user::{
                         GtmInviteOffer,
                         GtmInviteOfferStatus,
 
+                        // System status
+                        SystemStatus,
+                        CurrentSystemStatus,
+                        StatusUpdate,
+                        SystemStatusHistory,
+
                         // Plans and AI billing
                         PaidPlan,
                         ChangePlanRequest,
@@ -287,6 +303,10 @@ use model::user::{
                         ai_billing::AutoReloadSnapshot,
                         ai_billing::inbound::axum_router::CreditCheckoutRequestBody,
                         ai_billing::inbound::axum_router::CreditCheckoutResponse,
+                        ai_billing::inbound::axum_router::CreditPurchaseRequestBody,
+                        ai_billing::inbound::axum_router::CreditPurchaseResponse,
+                        ai_billing::CreditPurchaseStatus,
+                        ai_billing::CreditPurchaseSnapshot,
 
                         // GitHub pull requests
                         EnrichGithubPullRequestsProxyRequest,
@@ -341,6 +361,7 @@ use model::user::{
                         PatchTeamCrmSettingsRequest,
                         PatchTeamCrmSettingsResponse,
                         ToggleAutoJoinDomainResponse,
+                        SendDomainNoticeResponse,
                         ToggleNonAdminInvitesResponse,
                         TeamInviteLinkResponse,
                         CreatedTeamInviteLinkResponse,

@@ -654,7 +654,10 @@ pub async fn run() -> anyhow::Result<()> {
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
         ConnectionGatewayGithubRealtime::new(conn_gateway_client.clone()),
-    );
+    )
+    .with_webhook_publisher(github::broker::BrokerGithubWebhookPublisher(
+        macro_event_broker.clone(),
+    ));
 
     let github_pull_request_index_state = PullRequestIndexRouterState {
         service: Arc::new(PullRequestIndexService::new(
@@ -1285,6 +1288,7 @@ pub async fn run() -> anyhow::Result<()> {
         SpawnedChannelEventDispatcher::new(channel_side_effects.clone()),
         PgChannelReferenceSharePermissions::new(db.clone(), entity_access_service.clone()),
         message_realtime,
+        channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
     );
     let message_service = Arc::new(
         messages::domain::service::MessageService::new(
@@ -1599,6 +1603,10 @@ pub async fn run() -> anyhow::Result<()> {
         ),
         macro_event_broker.clone(),
         collab_surface_service.clone(),
+        static_file_service_client::StaticFileServiceClient::new(
+            config.internal_api_key.to_string(),
+            StaticFileServiceUrl::new()?.to_string(),
+        ),
     ));
 
     // Individual initiative and agent-session reads preserve read-after-write
@@ -1952,6 +1960,11 @@ pub async fn run() -> anyhow::Result<()> {
                     calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier::new(
                         (*notification_ingress_service).clone(),
                     ),
+                    crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh::new(
+                        (*conn_gateway_client).clone(),
+                        db.clone(),
+                        event_broker_tracker.clone(),
+                    ),
                 ),
             ),
             authorization_state.clone(),
@@ -2197,6 +2210,9 @@ pub async fn run() -> anyhow::Result<()> {
             Arc::new(readonly_email_service),
             entity_access_service.as_ref().clone(),
         ),
+        email_focus_reader: Arc::new(email::domain::focus::FocusQueries::new(
+            email::outbound::FocusPgRepository(readonly_db.clone()),
+        )),
         graphql_crm_context: graphql_crm::CrmGraphqlContext::new(pipeline_service.clone()),
         graphql_initiative_context: graphql_initiative::InitiativeGraphqlContext::new(
             initiative_service.clone(),

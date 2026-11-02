@@ -180,6 +180,32 @@ describe('createTauriCacheHost', () => {
     host.dispose();
   });
 
+  it('asks for an app update instead of running an older compiled-in schema', async () => {
+    const onInitializationError = vi.fn();
+    invokeMock.mockImplementation(async (command: string) => {
+      if (command === 'graphql_cache_init_with_schema')
+        throw 'Command graphql_cache_init_with_schema not found';
+      return null;
+    });
+    const host = createTauriCacheHost({
+      scope: 'pre-sdl-native',
+      onInitializationError,
+    });
+    await vi.waitFor(() =>
+      expect(onInitializationError).toHaveBeenCalledOnce()
+    );
+    expect(onInitializationError).toHaveBeenCalledWith(
+      expect.objectContaining({
+        name: 'NativeCacheUpgradeRequiredError',
+        message: expect.stringContaining('use the local cache'),
+      })
+    );
+    expect(invokeMock.mock.calls.map(([command]) => command)).toEqual([
+      'graphql_cache_init_with_schema',
+    ]);
+    host.dispose();
+  });
+
   it('projects selected records by explicit key', async () => {
     const records = [
       {

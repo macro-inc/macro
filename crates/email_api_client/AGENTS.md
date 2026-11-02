@@ -19,7 +19,9 @@ Outlook (Microsoft Graph) outbound adapters.
 - `src/outbound/gmail.rs`: the Gmail adapter (feature `outbound-gmail`).
 - `src/outbound/outlook.rs`: the Microsoft Graph adapter (feature
   `outbound-outlook`); every Graph call goes through `outlook/transport.rs`,
-  which owns request headers, provider error mapping, and write-failure logs.
+  which owns request headers, provider error mapping, write-failure logs,
+  and one `outlook.graph_request` span per attempt (with an
+  `outlook.graph_admission` child for the per-mailbox gate wait).
 
 ## Scope
 
@@ -52,6 +54,9 @@ Outlook (Microsoft Graph) outbound adapters.
 
 ## Gotchas
 
+- Undated provider drafts use creation time for All Mail eligibility; spam/junk
+  and trash remain excluded. Keep ingestion, recomputation, and cached projections aligned.
+
 - `#![deny(missing_docs)]`.
 - The service is generic over `<R, T, L>` (repository, token source, request
   gate) — add a new dependency as a port + generic bound, not a concrete
@@ -64,7 +69,11 @@ Outlook (Microsoft Graph) outbound adapters.
   `call_with_token`; a call made with a bare token is invisible to the
   in-flight cap. Their spans declare `gate_in_flight` and `gate_cap` as
   empty fields, which admission fills with the mailbox's load so it sits next
-  to the call's outcome.
+  to the call's outcome. Paginated reads (history, contacts) are page-level
+  ports that the service loops over, one permit per page, so every page is
+  charged to the mailbox's window and checks its cooldown; a refused page
+  fails the read, and the span keeps the last page's load. Keep new paginated
+  provider calls page-level rather than looping in the adapter.
 - Link-based reads go through `read_with_token`, which retries once with a
   fresh token when the provider answers `AuthRequired`; a cached token can
   outlive a revoked grant, and only the fresh fetch lets the token source mark
@@ -78,7 +87,12 @@ Outlook (Microsoft Graph) outbound adapters.
   through it.
 - Graph answers a bodyless POST or PATCH without `Content-Length: 0` with 411
   Length Required. `transport.rs` adds the header, so new Graph calls must go
-  through `request`/`conditional_request` rather than the raw client.
+  through `request`/`conditional_request` rather than the raw client. Use
+  `graph_request` only when a caller must branch on the Graph status, error
+  code, or request id; the others drop them.
+- Same-mailbox Outlook replies use `createReply`. When Graph refuses it with
+  400 `ErrorInvalidOperation`, `create_draft` creates a standalone draft that
+  carries the same correlation and RFC reply headers.
 
 ## Related
 

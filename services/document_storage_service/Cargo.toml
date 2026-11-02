@@ -115,6 +115,7 @@ forms = { path = "../../crates/forms", features = [
   "gateway",
   "inbound",
   "postgres",
+  "static_files",
 ] }
 document_sub_type = { path = "../../crates/document_sub_type" }
 documents_hex = { path = "../../crates/documents", package = "documents", features = ["purge"] }
@@ -310,7 +311,13 @@ cool_asserts = "2"
 flate2 = "1"
 frecency = { path = "../../crates/frecency", features = ["mock"] }
 macro_auth = { path = "../../crates/macro_auth", features = ["testing"] }
+macro_db_migrator = { path = "../../crates/macro_db_migrator" }
+opentelemetry = { workspace = true, features = ["trace"] }
+opentelemetry_sdk = { workspace = true, features = ["testing", "trace"] }
 ordered-float = { workspace = true }
+tracing-opentelemetry = { workspace = true }
+tracing-subscriber = { workspace = true }
+wiremock = { workspace = true }
 
 [package.metadata.cargo-machete]
 ignored = ["connection_gateway_client"]

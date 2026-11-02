@@ -90,7 +90,7 @@ Primary UI references: [project collection](https://linear.app/macro-eng/project
 
 | Area | Observed Linear decision | Macro implementation decision |
 | --- | --- | --- |
-| Collection navigation | Projects has All projects plus saved My Projects and Active projects views; a prominent New project action, filter and display controls. | Add **Projects** to the Tasks view's desktop navigation and mobile tabs. It switches to a project collection with its own filters/search state and New project action. Start with all accessible projects and assignee/status filters. |
+| Collection navigation | Projects has All projects plus saved My Projects and Active projects views; a prominent New project action, filter and display controls. | Keep a separate **Projects** section above Saved views in Tasks, with **My projects**, **All projects**, and **Created by me**. My projects matches Assignees; Created by me matches the owner. Replace individual-project shortcuts, and use one Projects picker on mobile. |
 | List layout | Compact horizontal rows; name/icon dominate the left, properties align in columns on the right. Collapsible groups have counts and a local create action. This workspace groups by status and subgroups by Linear initiative. | Use the Tasks view's density and tokens. Columns: name, status, priority, assignees, due date, task progress. Default to status grouping, with None available. Reuse column alignment and inline property controls. |
 | Display options | List, Board and Timeline; grouping, subgrouping, ordering, closed-project visibility and per-property visibility. | Implement the required list with sorting/grouping and sensible responsive columns. Board, Timeline, saved custom views and nested portfolio grouping are separate scope, not dependencies for this checklist. |
 | Detail navigation | Breadcrumb, project name, favorite/actions controls; Overview, Activity and Issues tabs; collapsible project details sidebar. | Native view within Tasks with project breadcrumbs and **Overview / Tasks** tabs in the top bar. Borrow channel tab positioning while retaining existing Macro tab styling. Put the existing Share menu and side-panel controls in the header; restore project identity and tab from navigation. |
@@ -288,7 +288,7 @@ task/project discovery, and retain permission/lifecycle behavior from PR 1.
 | Requested outcome | Owning PRs |
 | --- | --- |
 | Native views; activity-style feature architecture | 6 |
-| Projects tab and unified list/grouping within Tasks | 2, 6 |
+| Projects navigation and unified list/grouping within Tasks | 2, 6 |
 | Status, priority, assignees and due dates | 2, 5, 6 |
 | Tasks associated with projects | 1–2, 5–6 |
 | Project chip column and task context menu | 2, 6 |

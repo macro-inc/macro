@@ -172,6 +172,7 @@ fn form_over(table: &Table) -> Form {
         status: FormStatus::Open,
         closes_at: None,
         confirmation_message: "".into(),
+        branding: FormBranding::default(),
         created_at: at(9),
         updated_at: at(9),
         is_hidden_in_drive: false,
@@ -358,6 +359,9 @@ async fn facts_change_only_where_given_and_a_closing_time_can_be_cleared(pool: P
                 status: Some(FormStatus::Closed),
                 closes_at: Some(Some(at(17))),
                 tally_visible: Some(true),
+                logo_file_id: Some(Some(Uuid::from_u128(0x1060))),
+                cover_file_id: None,
+                accent_color: Some(Some(AccentColor::try_from("#1f6feb".to_string()).unwrap())),
             },
             at(10),
             None,
@@ -371,6 +375,11 @@ async fn facts_change_only_where_given_and_a_closing_time_can_be_cleared(pool: P
         *changed,
         Form {
             confirmation_message: "Thanks!".into(),
+            branding: FormBranding {
+                logo_file_id: Some(Uuid::from_u128(0x1060)),
+                cover_file_id: None,
+                accent_color: Some(AccentColor::try_from("#1f6feb".to_string()).unwrap()),
+            },
             audience: Audience::Public,
             status: FormStatus::Closed,
             closes_at: Some(at(17)),
@@ -384,6 +393,7 @@ async fn facts_change_only_where_given_and_a_closing_time_can_be_cleared(pool: P
             form.id,
             &crate::domain::models::UpdateForm {
                 closes_at: Some(None),
+                accent_color: Some(None),
                 ..crate::domain::models::UpdateForm::default()
             },
             at(11),
@@ -396,6 +406,14 @@ async fn facts_change_only_where_given_and_a_closing_time_can_be_cleared(pool: P
     };
     assert_eq!(cleared.closes_at, None);
     assert_eq!(cleared.audience, Audience::Public);
+    assert_eq!(
+        cleared.branding,
+        FormBranding {
+            logo_file_id: Some(Uuid::from_u128(0x1060)),
+            cover_file_id: None,
+            accent_color: None,
+        }
+    );
     let renamed = repo
         .rename_form(form.id, "Offsite", at(12))
         .await

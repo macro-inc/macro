@@ -3,8 +3,6 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableDatabases } from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import EmptyStateDatabaseGraphic from '@design/empty-state-folder.svg';
-import PlusIcon from '@icon/system/regular/plus.svg';
-import { Button } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import { CrmListEmpty, CrmListSkeleton } from '../components/list-state';
 import { RecordSection } from '../components/record-section';
@@ -91,12 +89,8 @@ function DatabasesList(props: { scope?: CrmRecordScope; title?: JSX.Element }) {
         title="Databases"
         search={search()}
         onSearchChange={setSearch}
-        actions={
-          <Button variant="outline" onClick={create}>
-            <PlusIcon class="size-4" />
-            New database
-          </Button>
-        }
+        createAction={{ label: 'New database', onClick: create }}
+        toolbarCreate
       >
         {list()}
       </RecordSection>

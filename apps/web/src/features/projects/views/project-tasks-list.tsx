@@ -70,7 +70,7 @@ export function ProjectTasksList(props: ProjectTasksListProps) {
 }
 
 function ProjectTasksListBody(props: ProjectTasksListProps) {
-  const { state, setState, source } = useTasksView();
+  const { state, setState } = useTasksView();
   return (
     <div class="flex size-full min-h-0 flex-col">
       <div class="flex h-12 min-w-0 shrink-0 items-center gap-3 overflow-x-auto scrollbar-hidden px-4 py-2">
@@ -90,21 +90,6 @@ function ProjectTasksListBody(props: ProjectTasksListProps) {
           </Show>
         </div>
       </div>
-      <Show when={source.paginationError?.()}>
-        <div
-          role="alert"
-          class="flex items-center gap-3 px-3 pb-2 text-sm text-ink-muted"
-        >
-          Some tasks could not be loaded.
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => source.retryPagination?.()}
-          >
-            Try again
-          </Button>
-        </div>
-      </Show>
       <TasksContent />
     </div>
   );

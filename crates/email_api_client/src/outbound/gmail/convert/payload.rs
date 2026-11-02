@@ -72,18 +72,27 @@ pub(super) fn parse_gmail_payload(
         }
     }
 
-    let mut part_stack = vec![message_payload];
-    while let Some(part) = part_stack.pop() {
-        parse_part(part, message_id, &mut parsed);
+    // A message/rfc822 part wraps another message, such as the original a
+    // bounce returns. Its text is that message's body, never this one's.
+    let mut part_stack = vec![(message_payload, false)];
+    while let Some((part, in_wrapped_message)) = part_stack.pop() {
+        parse_part(part, in_wrapped_message, message_id, &mut parsed);
         if let Some(parts) = &part.parts {
-            part_stack.extend(parts.iter().rev());
+            let in_wrapped_message =
+                in_wrapped_message || part.mime_type.eq_ignore_ascii_case("message/rfc822");
+            part_stack.extend(parts.iter().rev().map(|child| (child, in_wrapped_message)));
         }
     }
 
     Ok(parsed)
 }
 
-fn parse_part(part: &MessagePart, message_id: &str, parsed: &mut ParsedGmailPayload) {
+fn parse_part(
+    part: &MessagePart,
+    in_wrapped_message: bool,
+    message_id: &str,
+    parsed: &mut ParsedGmailPayload,
+) {
     let mime_type = part.mime_type.to_lowercase();
     let is_multipart = mime_type.starts_with("multipart/alternative")
         || mime_type.starts_with("multipart/related")
@@ -101,7 +110,9 @@ fn parse_part(part: &MessagePart, message_id: &str, parsed: &mut ParsedGmailPayl
         return;
     };
 
-    if let Some(encoded) = &body.data_base64 {
+    if let Some(encoded) = &body.data_base64
+        && !in_wrapped_message
+    {
         let wants_text = mime_type == "text/plain" && parsed.body_text.is_none();
         let wants_html = mime_type == "text/html" && parsed.body_html_sanitized.is_none();
         if wants_text || wants_html {

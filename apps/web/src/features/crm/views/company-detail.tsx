@@ -1,6 +1,4 @@
 import { SidePanel } from '@components/app/side-panel';
-import PlusIcon from '@icon/system/regular/plus.svg';
-import { Button } from '@ui';
 import { createMemo, Match, onCleanup, Show, Suspense, Switch } from 'solid-js';
 import { CrmListSkeleton } from '../components/list-state';
 import { RecordOverview } from '../components/record-overview';
@@ -48,7 +46,6 @@ export function Company(props: {
       id: props.companyId,
     }))
   );
-  const openCreateContactModal = context.openCreateContact;
   const listsEnabled = context.listsEnabled();
   const pipelinesEnabled = context.pipelinesEnabled();
   const { company, contacts } = useCompanyQuery(() => props.companyId);
@@ -93,25 +90,6 @@ export function Company(props: {
                 company={company()}
                 contacts={contacts()}
                 onOpenContact={props.onOpenContact}
-                actions={
-                  <Button
-                    variant="secondary"
-                    // Contact emails are pinned to the company's primary
-                    // domain; disabled until the company has loaded.
-                    disabled={!company()?.domains[0]}
-                    onClick={() => {
-                      const domain = company()?.domains[0]?.domain;
-                      if (domain)
-                        openCreateContactModal({
-                          companyId: props.companyId,
-                          domain,
-                        });
-                    }}
-                  >
-                    <PlusIcon class="size-4" />
-                    Add contact
-                  </Button>
-                }
               />
             </Match>
             <Match when={section() === 'emails'}>

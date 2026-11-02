@@ -843,7 +843,6 @@ export default {
     goForward: 'Avançar',
     createNewSplit: 'Criar novo painel',
     close: 'Fechar',
-    returnToList: 'Voltar à lista',
     previousItem: 'Item anterior',
     nextItem: 'Item seguinte',
     itemNavigation: 'Navegação entre itens',

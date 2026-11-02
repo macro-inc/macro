@@ -81,6 +81,7 @@ export const authExcluded = [
   'getSubscriptionStatus',
   'getTeamByInviteLink',
   'getTeamInviteLink',
+  'getSystemStatus',
   'getTeamInvites',
   // Introductory offers belong to the app's subscription checkout flow.
   'getTrialEligibility',
@@ -103,6 +104,7 @@ export const authExcluded = [
   'listCodexEnvironments',
   'listCursorModels',
   'listGtmInviteLinks',
+  'listSystemStatusHistory',
   'logout',
   'mergeGithubPullRequest',
   'oauth2Callback',
@@ -118,6 +120,7 @@ export const authExcluded = [
   'patchUserTutorial',
   'pollCodexLogin',
   'postProfilePictures',
+  'purchaseAiCredits',
   'putAgentApiKey',
   'putCursorApiKey',
   'putCursorDefaultModel',
@@ -132,11 +135,13 @@ export const authExcluded = [
   'resolveGtmInviteLink',
   'revokeGtmInviteLink',
   'sendMobileWelcomeEmail',
+  'sendTeamDomainNotice',
   'sendReferralCode',
   'sessionCreation',
   'sessionLogin',
   'setGithubPullRequestDraft',
   'setGithubPullRequestState',
+  'setSystemStatus',
   'ssoLogin',
   'startCodexLogin',
   'toggleTeamAutoJoinDomain',
@@ -212,6 +217,7 @@ export const cognitionBacklog =
 
 export const connectionExcluded = [
   'batchSendMessageHandler',
+  'broadcastMessageHandler',
   'getEntityHandler',
   'sendMessageHandler',
 ] as const satisfies readonly (keyof ConnectionSdk)[];
@@ -234,6 +240,7 @@ export const emailExcluded = [
   'getBackfillGmail',
   'getBackfillGmailActive',
   'getMessagesBatch',
+  'getReadReceiptPixel',
   'healthCheckLinks',
   'healthHandler',
   'initUser',
@@ -401,8 +408,13 @@ export const storageExcluded = [
   'whatsappCancelPairing',
   'whatsappConnect',
   'whatsappDisconnect',
+  // History imports and phone-number lookups need the owner's own session:
+  // each wakes their phone, and WhatsApp bans bulk checks.
+  'whatsappImportHistory',
+  'whatsappLookup',
   'whatsappPairing',
   'whatsappPasskey',
+  'whatsappStartLookup',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog =

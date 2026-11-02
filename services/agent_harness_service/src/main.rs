@@ -636,8 +636,8 @@ async fn run() -> anyhow::Result<()> {
         }
         None => None,
     };
-    // `ai-code-mode` decides, per user, whether agent sessions and the public
-    // MCP present the SDK in place of the tools it covers.
+    // `ai-code-mode` decides, per user, whether agent sessions hide
+    // SDK-covered tools and whether the public MCP lists only code mode.
     let code_mode_selector: Option<Arc<dyn agent_inmem::domain::tool_mode::ToolModeSelector>> =
         match (&code_runner, config.posthog_api_key.value()) {
             (Some(_), Some(key)) => {
@@ -678,6 +678,7 @@ async fn run() -> anyhow::Result<()> {
         &secrets,
         tool_context.clone(),
         pool.clone(),
+        aws_sdk_kms::Client::new(&aws_config),
         macro_auth::middleware::decode_jwt::JwtValidationArgs::new_with_secret_manager(
             config.environment,
             &secrets,
@@ -768,6 +769,7 @@ async fn run() -> anyhow::Result<()> {
             cognition: tool_context.cognition_tool_context.service.clone(),
             reviews: reviews_cell.clone(),
             gate: owner_tool_gate.clone(),
+            app_url: macro_service_urls::AppServiceUrl::new()?.as_str().into(),
         },
     );
     // One connector for the agent and the telemetry catalog. It pools each
@@ -1073,8 +1075,14 @@ async fn run() -> anyhow::Result<()> {
         channels::domain::message_delivery::ChannelMessageDelivery::new(
             PgChannelsRepo::new(pool.clone()),
             SpawnedChannelEventDispatcher::new(side_effects),
-            channels::domain::service::NoopChannelReferenceSharePermissions,
+            channels::outbound::pg_channel_reference_share_permissions::PgChannelReferenceSharePermissions::new(
+                pool.clone(),
+                entity_access.clone(),
+            ),
             message_realtime.clone(),
+            channels::outbound::pg_agent_creations::PgAgentCreations::new(
+                pool.clone(),
+            ),
         ),
         messages::domain::delivery::DiscussionDelivery::new(
             messages::outbound::pg_discussion_context::PgDiscussionContext(pool.clone())
@@ -1494,6 +1502,7 @@ async fn run() -> anyhow::Result<()> {
             (*harness).clone(),
             routine_sessions::PipedreamConnectedApps(PgConnectionRepo::new(pool.clone())),
         ),
+        session_repo.clone(),
         MacroAuthorizationState::new(Arc::new(authorization_service.clone())),
     );
     let gateway_state = RuntimeGatewayState::new(
@@ -1765,6 +1774,14 @@ async fn run() -> anyhow::Result<()> {
         }
     });
 
+    let trigger_classifier = config
+        .typesafe_api_key
+        .value()
+        .map(jev::outbound::SystemOneJev::typesafe)
+        .transpose()
+        .context("invalid TYPESAFE_API_KEY")?
+        .map(|provider| Arc::new(jev::domain::JevClassifier::new(provider, recorder.clone())));
+
     // Keep trigger generation in this deployment while retaining Kafka as the
     // boundary between channel events and harness commands.
     let mut trigger = tokio::spawn(trigger::supervise(
@@ -1773,6 +1790,7 @@ async fn run() -> anyhow::Result<()> {
         config.internal_api_key.clone(),
         config.document_storage_service_auth_key.clone(),
         trigger::TriggerServices {
+            classifier: trigger_classifier,
             recorder,
             admission,
             messages: message_service,

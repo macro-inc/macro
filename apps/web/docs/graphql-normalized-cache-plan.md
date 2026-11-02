@@ -351,8 +351,12 @@ foregrounding, or explicit draft Retry, with jittered exponential backoff capped
 at thirty seconds. A newly registered host restarts an exhausted untouched
 coordinator at a new owner epoch with `open-existing`; failed hosts remain
 excluded. Draft writes stay blocked until the replacement opens and inspects
-the preserved mutation queue. Unknown storage failures still require explicit
-recovery or an update; retry never rotates the scope or clears persisted data.
+the preserved mutation queue. A read refused because the database was moving
+between owners (`owner-handoff-blocked`) leaves the host running, so recovery
+proves that same host readable on its next attempt instead of registering
+another. Unknown storage failures still require explicit recovery or an update
+(the compose banner offers Reload then); retry never rotates the scope or clears
+persisted data.
 
 A build's coordinator has its build time in the SharedWorker name, so builds
 use separate coordinators even when their coordinator script URL is identical.
@@ -365,7 +369,8 @@ registered; a departed tab's lock can outlast it), the coordinator posts a
 takeover request on the cross-build channel
 `graphql-cache-takeover:{database name}` (`coordinator-takeover.ts`, a contract
 every later build must keep). Only builds that open the same database join it,
-and only the coordinator whose engine holds the database answers:
+and only the coordinator whose engine holds the database, or is opening or
+draining it, answers:
 
 - **Yield**, if the requester is strictly newer. Every tab registered there gets
   `cache-superseded`. Each page retires its host to the network. The owner's
@@ -374,7 +379,13 @@ and only the coordinator whose engine holds the database answers:
   already sent is reported as uncertain rather than sent again, because it may
   be in the durable queue that the newer build replays. Nothing is elected
   again. The requester's engine, still retrying the lock, opens the same
-  database with its data and queued mutations.
+  database with its data and queued mutations. A holder whose engine is still
+  opening or already draining the database (hiding its owner tab starts a
+  drain, and opening the requesting tab usually hides it) answers at once but
+  supersedes its tabs only once that engine is ready or has drained, so no
+  engine is interrupted while its files may be changing. If that engine is
+  lost first, the promised handover completes in place of the reset election,
+  so a build never wipes a database it agreed to hand over.
 - **Keep**, if the requester is not newer. The requester fails closed as below.
 
 A superseded page offers a persistent reload prompt. It reloads by itself only
@@ -386,9 +397,12 @@ rollback or from stale HTML, only runs uncached, because a reload could land on
 the same build again.
 
 A coordinator that holds nothing but gets a request from a newer build sends
-its tabs there too, without answering. When no yield arrives within a second
-(builds from before handover never answer), when the holder keeps the
-database, or when the engine exhausts its retries, the coordinator fails closed:
+its tabs there too, without answering. An unanswered request is posted again
+every second while the engine keeps retrying the lock: the holder may be
+between owners, or parked with the lock already free, and the requester's own
+retries then take it. When the holder keeps the database, or when the engine
+exhausts its retries (builds from before handover never answer, so their
+holders cost that whole wait), the coordinator fails closed:
 it refuses queued requests with `owner-lock-unavailable` and tells every
 registered page `cache-unavailable`. Those pages retire their host for the rest
 of the page session, without quarantine, toast, or error report; only a tab
@@ -866,6 +880,25 @@ document would retain its server-provided membership, which is why Soup lists
 use `createSoupLiveQuery`: it adds Soup's local membership, ordering, pagination
 and Mail policy through its predicate adapter. That policy remains outside
 generic cache-core.
+
+Supported Soup predicates can read indexed matches before a server response,
+using an empty baseline. `useSoupAstItemsQuery.cacheStatus` reports local
+predicate readiness separately from network loading; `ready` does not prove
+complete server membership. `fetchError` retains background failures even when
+the display-oriented `error` keeps cached results quiet. Explicit entity lookups
+pass typed identities through `graphqlCacheFirstEntities`. The single Soup owner
+keeps the full-identity cache predicate separate from a stable missing-entity
+network request, including pagination and retries. Identity includes entity type,
+so equal IDs in different entity types remain independent. Channel lookups use
+`queries/channel/by-ids` for channel identities, batching, and bounded unread
+refreshes. Soup exposes generic revalidation descriptors rather than registering
+channel notification readers. Consumers receive rows and unresolved IDs without
+coordinating query lifetimes.
+Deletion markers use the same `typename:id` identity through pending mutations,
+retention, display filtering, and restore confirmation. Deleting or restoring a
+document must not hide or restore an unrelated channel with the same ID. The
+GraphQL-enabled deletion flow also scopes REST Soup and search side-cache
+removals to the entity type, including grouped caches and partial-failure rollback.
 
 Mail list pages carry same-query server membership in the existing `baseline`
 field. The Mail adapter reconciles only baseline rows outside the indexed window,

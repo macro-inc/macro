@@ -1,5 +1,6 @@
 import appearance from './en/appearance';
 import channelLabels from './en/channel-labels';
+import channelSections from './en/channel-sections';
 import commandMenu from './en/command-menu';
 import commands from './en/commands';
 import common from './en/common';
@@ -21,6 +22,7 @@ import viewMenus from './en/view-menus';
 export default {
   appearance,
   channelLabels,
+  channelSections,
   commandMenu,
   commands,
   common,

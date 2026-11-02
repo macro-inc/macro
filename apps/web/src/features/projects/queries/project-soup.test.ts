@@ -25,7 +25,7 @@ vi.mock('@entity/extractors-property/property-helpers', () => ({
   soupPropertyToProperty: vi.fn(),
 }));
 
-import type { InitiativesQuery } from '@service-storage/graphql/generated/graphql';
+import type { ProjectSoupQuery } from '@service-storage/graphql/generated/graphql';
 import type { ProjectFilters } from '../core/project';
 import {
   createProjectSoupSource,
@@ -48,6 +48,12 @@ const initiative = (id: string) => ({
     accessLevel: 'EDIT' as const,
   },
   properties: [],
+  taskCount: 8,
+  completedTaskCount: 3,
+  notifications: [],
+  cacheProjection: null,
+  frecencyScore: null,
+  isFavorited: false,
 });
 let dispose: (() => void) | undefined;
 afterEach(() => {
@@ -257,6 +263,48 @@ describe('project Soup source', () => {
       },
     });
   });
+  it('combines created-by-me with name, dates, status, and assignee predicates', () => {
+    const input = projectSoupInput({
+      owner: 'creator',
+      query: 'Launch',
+      dueBefore: '2026-12-31',
+      status: 'active',
+      assignee: 'viewer',
+    });
+    expect(input.initial?.filters?.initiativeFilter).toEqual({
+      and: {
+        left: {
+          and: {
+            left: {
+              and: {
+                left: { literal: { include: true } },
+                right: { literal: { owner: 'creator' } },
+              },
+            },
+            right: { literal: { nameContains: 'Launch' } },
+          },
+        },
+        right: { literal: { dueBefore: '2026-12-31' } },
+      },
+    });
+    expect(input.initial?.filters?.propertiesFilter).toMatchObject({
+      and: {
+        left: {
+          literal: {
+            propertyDefinitionId: SYSTEM_PROPERTY_IDS.STATUS,
+            value: { selectOption: 'active' },
+          },
+        },
+        right: {
+          literal: {
+            propertyDefinitionId: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+            value: { entityRef: 'viewer' },
+          },
+        },
+      },
+    });
+  });
+
   it('keeps canonical descending Soup cursors even for a legacy ascending preference', () => {
     expect(
       projectSoupInput({ sort: 'created', descending: false })
@@ -269,7 +317,7 @@ describe('project Soup source', () => {
     const items = [
       initiative('launch'),
       { __typename: 'GraphqlSoupProject' },
-    ] as InitiativesQuery['user']['soup']['items'];
+    ] as ProjectSoupQuery['user']['soup']['items'];
     expect(projectSoupRows(items)).toEqual([
       {
         project: {
@@ -279,6 +327,8 @@ describe('project Soup source', () => {
           createdAt: '2026-09-26',
           access: 'edit',
           appearance: null,
+          taskCount: 8,
+          completedTaskCount: 3,
         },
         properties: [],
       },
@@ -372,7 +422,7 @@ describe('project Soup source', () => {
         op.query.definitions.some(
           (node: { kind: string; name?: { value: string } }) =>
             node.kind === 'OperationDefinition' &&
-            node.name?.value === 'Initiatives'
+            node.name?.value === 'ProjectSoup'
         )
       )
     ).toBe(true);

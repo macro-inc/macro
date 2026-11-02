@@ -108,7 +108,7 @@ const BOT_TOKEN: &str = "team-bot-token";
 const TEAM_ID: macro_uuid::Uuid = macro_uuid::Uuid::from_u128(0x7EA4);
 
 #[derive(Clone)]
-struct FakeAuth;
+pub(crate) struct FakeAuth;
 
 impl MacroAuthorizationService for FakeAuth {
     async fn authorize(&self, jwt: &str) -> Result<UserContext, Report<MacroAuthorizationError>> {
@@ -189,12 +189,12 @@ impl MacroAuthorizationService for FakeAuth {
 }
 
 #[derive(Clone)]
-struct FakeEntityAccessService {
+pub(crate) struct FakeEntityAccessService {
     levels: HashMap<String, AccessLevel>,
 }
 
 impl FakeEntityAccessService {
-    fn owner_only() -> Self {
+    pub(crate) fn owner_only() -> Self {
         Self {
             levels: HashMap::from([(USER.to_owned(), AccessLevel::Owner)]),
         }
@@ -361,7 +361,7 @@ fn router_with<S: ScheduledActionService>(
     })
 }
 
-async fn request(
+pub(crate) async fn request(
     router: &Router,
     method: &str,
     uri: &str,

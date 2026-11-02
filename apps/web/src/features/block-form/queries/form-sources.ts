@@ -100,6 +100,7 @@ function refusalOf(code: FormErrorCode): FormRefusal {
     .with('invalidAppearance', () => 'invalid-appearance')
     .with('invalidSharing', () => 'invalid-sharing')
     .with('tallyHidden', () => 'tally-hidden')
+    .with('invalidBranding', () => 'invalid-branding')
     .with('conflict', () => 'conflict')
     .with('internal', () => 'internal')
     .exhaustive(() => 'internal');

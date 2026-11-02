@@ -247,15 +247,19 @@ export function useCalendarOccurrencesQuery(
  * Refetches every mounted occurrence viewport. With calendar reads on the
  * cache, the delta runs first so the viewports see the change that prompted
  * the refresh rather than the cache from before it. A cache still starting
- * would hold the delta, so the viewports refetch without it.
+ * would hold the delta, so the viewports refetch without it. The refetch is
+ * skipped when `stillCurrent` turns false while the delta runs.
  */
-export async function invalidateCalendarOccurrences() {
+export async function invalidateCalendarOccurrences(
+  stillCurrent: () => boolean = () => true
+) {
   const controller = activeCalendarSyncController();
   if (controller?.answering()) {
     await controller.runDelta().catch((error) => {
       console.warn('Calendar delta sync failed', error);
     });
   }
+  if (!stillCurrent()) return;
   return queryClient.invalidateQueries({
     queryKey: calendarKeys.occurrences._def,
   });

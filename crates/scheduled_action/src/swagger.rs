@@ -18,7 +18,10 @@ use crate::inbound::template_router::{
     __path_activate_template, __path_get_template, __path_share_template, __path_unshare_template,
 };
 
-use crate::domain::event_trigger::{ActionTrigger, EventFilter, EventFilters, EventName};
+use crate::domain::event_trigger::{
+    ActionTrigger, EventFilter, EventFilters, EventName, GithubSelectorInput,
+    PayloadConditionInput, PayloadScalar,
+};
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionKind, AgentTask,
     AgentTaskAgent, CreateScheduledAction, ExecutionResource, ExecutionResourceType,
@@ -67,6 +70,9 @@ use model_entity::{AppearanceColor, AppearanceIcon, EntityAppearance};
             EventFilter,
             EventFilters,
             EventName,
+            GithubSelectorInput,
+            PayloadConditionInput,
+            PayloadScalar,
             CreateScheduledAction,
             UpdateScheduledAction,
             SetScheduledActionEnabled,

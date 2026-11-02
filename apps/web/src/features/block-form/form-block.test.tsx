@@ -105,6 +105,7 @@ beforeEach(() => {
         closesAt: null,
         tallyVisible: false,
         confirmationMessage: 'Thank you',
+        branding: { logoFileId: null, coverFileId: null, accentColor: null },
         submittedColumnId: null,
         respondentColumnId: null,
       },

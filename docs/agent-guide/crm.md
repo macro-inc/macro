@@ -123,11 +123,17 @@ email on the server after a short typing pause, so results include contacts not
 yet scrolled into view. The desktop header has the title, shared **New** menu,
 and expandable Search; choose **Contact** from New. On touch, **New contact**
 is unchanged. The contact dialog asks for a company through a **Choose a company** pill (searchable by name
-or domain, from the up to 500 most relevant companies with a domain) and fixes
-the email to that company's primary domain; **Add contact** on a company's Team
-tab skips the company pill. The company, contact and pipeline dialogs share the
+or domain, from the up to 500 most relevant companies, including name-only
+companies). Enter a full email address; personal addresses and different domains
+are accepted. **Add contact** on a company's Team tab skips the company pill.
+**New company** requires a name; its domain is optional. If supplied, it must be
+a company domain, not a personal email provider. The company, contact and pipeline dialogs share the
 task/project composer layout: name on the first row beside **Close**, details
 below, and a **Create …** button that also submits on Command-Enter.
+
+Verify company domain validation by creating a company with an allowed business
+domain, then adding a contact whose email matches it. Personal email provider
+domains must still be rejected as company domains.
 
 Desktop `Search companies` and `Search people` start as outlined icon buttons
 and expand into the shared Email/Tasks search bar. Command-F expands and focuses
@@ -178,8 +184,8 @@ Customers too: `/app/company/<uuid>` and `/app/contact/<uuid>` links (which
 **Copy link** still copies), `@` mentions, search and Command-K results,
 favorites, and CRM discussion notifications. A contact opens under People, so its
 breadcrumb returns to People. A split already showing that record is brought
-forward instead. Touch devices keep the standalone pages, and a
-Customers record URL opened on touch redirects to its standalone page.
+forward instead. Touch devices keep the standalone record pages; a Customers
+record URL redirects there unless it opens a linked item inside Customers.
 Each record opened from the details appends a breadcrumb and a history entry: a
 contact from a company's Team tab gives `Companies > <company> > <contact>`, and
 a person's Company link gives `People > <contact> > <company>`. Opening a record
@@ -187,18 +193,44 @@ already in the trail (such as the contact's own company from `Companies >
 <company> > <contact>`) returns to it instead of adding a duplicate. Back and
 Forward restore the trail; a reloaded or shared record URL shows only `<list> >
 <record>`. The CRM sidebar stays visible throughout.
-Company and contact headers group `Copy link` separately from the side-panel toggle. Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
+Company and contact headers group `Copy link` separately from the side-panel toggle.
+Desktop section tabs collapse to icons in narrow panes; each icon keeps a tooltip.
+On phones and tablets, the current section appears as a labeled header island
+with a caret. When the host collapses it, the section icon and caret keep its
+accessible label. Embedded phone headers put the switcher below the breadcrumb
+and actions so the record name and navigation retain space. Tap the switcher to
+open the shared **Switch view** bottom drawer: every available section
+has an icon and label, with a check beside the current section. Choosing a section
+closes the drawer and updates the header label; Escape, backdrop tap, and drag
+also dismiss it. Focus returns to the section trigger. Databases remains gated
+by its feature flag, and contacts do not show Team. The workspace's scrollable
+mobile view strip is unchanged. A direct Databases section link retains its
+title with the unavailable-state message when the flag is off, without database
+queries or creation actions. Copy-link islands are 40px square on touch with
+a 24px icon. Verify both record types, section changes, dismissal, copy feedback,
+and header fit at phone and tablet widths.
 Their information panel starts closed and opens as a floating bubble at every
 width, without shrinking the record content. Click outside the bubble or use
 the toggle to dismiss it; the open state is not restored on a later visit.
 It copies the record's direct URL and shows a confirmation toast; this is also
 available in the embedded company and contact breadcrumb header.
 
-The Team, Emails, Files, Tasks, Calls, and Databases tabs share a compact toolbar: search on
-the left, with available filters and actions on the right. Search remains visible
-for empty lists. `Add contact` and `New task` match the project task list's
-creation button: a rounded outline, standard height, and leading plus icon.
-The associated-tab search fields match the creation buttons' height.
+The Team, Emails, Files, Tasks, Calls, and Databases views share a compact
+toolbar. On desktop, search stays on the left with existing filters and creation
+actions on the right. On touch, search has 16px of space below the header and
+fills the row beside the filter button, or the whole row without filters.
+Email importance and inbox choices open in the shared filter drawer.
+Section creation actions appear at the bottom right above the navigation dock,
+replacing the default app-wide action: Add contact, New email, New note, New task,
+New call, or New database. Add contact is available once the company is loaded,
+including companies without a domain; contact emails may use any valid domain.
+Email-sync and database gates, recipients, and task associations still apply. With company email
+sync off, New email stays visible but disabled; New company must not replace it.
+Keyboard focus and
+higher-priority composers suppress the floating action; leaving the section
+restores the default action. Search remains visible for empty lists.
+Verify filter changes, section changes, disabled creation, and bottom-row clearance
+on phone and tablet; desktop creation controls must stay in the toolbar.
 Team rows show a profile photo when available, otherwise a
 letter avatar at the same 16px size as channel list icons. Team uses the same Soup
 row component as Emails, Files, and Calls: the avatar, name, and email are inline,
@@ -209,9 +241,10 @@ continue loading pages when the current pages have no match.
 Emails, Files, Calls, and References rows open their items without selection
 checkboxes, including on touch devices.
 
-A company is laid out like a project. Its split header or embedded breadcrumb
-header shows rounded view tabs for `Overview`, `Team`, `Emails`, `Files`, `Tasks`, `Calls`, and `Databases`
-tabs, collapsing to icons when narrow. Overview shows the name, pills
+A company is laid out like a project. On desktop, its split header or embedded
+breadcrumb header shows rounded view tabs for `Overview`, `Team`, `Emails`,
+`Files`, `Tasks`, `Calls`, and `Databases`, collapsing to icons when narrow.
+Touch headers use the section drawer described above. Overview shows the name, pills
 for each domain and `Last interacted`, the generated description, a
 **Pipelines** section and the Discussion. Pipelines stacks one full-width card
 per row of a pipeline you can open that references the record. A card's header
@@ -258,10 +291,24 @@ Files also includes attachments of emails with its address. Tasks created from a
 contact also reference its company. The side panel keeps Sharing (admins only)
 and adds References.
 
-In a company or contact's Tasks tab, clicking a task (or pressing Enter on its
-focused row) opens the task detail view at `/app/tasks/<task-id>`, including on
-mobile. Shift-click opens it in a separate split. Verify that the task's status
-and properties appear, rather than the regular Drive markdown editor.
+In workspace activity and a company or contact's embedded sections, clicking a
+Task, Email, Note, Call, or Database opens its authorized detail inside Customers.
+The CRM sidebar stays in place and the breadcrumb shows the source view, record
+trail (when present), and selected item, without section labels such as Tasks or
+Files or an extra separator before preview titles. The current record breadcrumb
+returns to the captured section and entry state. The item URL is nested under
+`/app/companies` or `/app/companies/pipeline/<uuid>`. Typed record sections use
+`/<record-type>/<record-id>/<tasks-emails-calls-or-databases>/<item-id>`, without
+repeating the item type or a task's `md/task` suffix. Redundant typed URLs for
+these sections do not resolve. Workspace activity retains
+`/<item-type>/<item-id>` and document metadata. Record Files and overview notes
+retain document metadata on routes restricted to those sections.
+Back and Forward restore the item and source; selecting the source breadcrumb or
+closing the item returns to the source list or record with its entry state.
+Reload keeps the selected item's URL. Shift-click uses the existing separate
+split behavior; modified row clicks keep the existing split behavior. On touch,
+the existing header and breadcrumb conventions apply without a new navigation UI.
+Verify that tasks display their status and properties, not the Drive editor.
 
 Verify the real CRM routes separately with accessible and inaccessible databases,
 multiple matching rows per database, empty matches, and a second page of results.
@@ -353,7 +400,12 @@ the table's own cell editors (unset ones read **Empty**). The body scrolls while
 the footer stays pinned with **Cancel** (Esc) and **Add deal**. Select
 fields can create a new option. Choosing **Add company “…”** creates the company
 with the row: a searched domain fills the domain and the name. **Add contact “…”**
-works the same way, and a new contact's email must use a company's domain.
+works the same way. A new company may omit its domain. A new contact accepts a
+full email address and an explicit company choice, including a name-only company.
+An email-domain match offers **Use suggested company**; accept it or select a
+different company before submitting. Editing the email keeps that explicit choice.
+Focusing the suggestion reveals its full name; Enter accepts it without submitting
+the form, and closes the tooltip without a browser error.
 **Add deal** stays disabled until a record is chosen, and Command-Enter submits.
 The form makes one row with every value set. A board lane's **New record** opens
 the same dialog with the lane's stage filled in. The table's blank row at the
@@ -378,6 +430,11 @@ the pipeline already had is not added again, so retrying an interrupted import
 adds only what is missing; several rows for one new record add separate entries
 (deals), as an export of such a pipeline lists them. Relation and non-person entity columns are skipped,
 and a value that does not fit its column is left empty.
+
+Agent CSV imports report ambiguous contact emails as unresolved records with an
+actionable reason and continue the valid rows. They never create another contact
+for an ambiguous email; select the intended contact by ID when adding it to the
+pipeline. Storage and authorization failures during lookup still fail the import.
 
 CRM lists are currently disabled by `enableCrmLists` (default `false`). The sidebar
 Lists section, list editor, and company membership controls only mount when enabled.

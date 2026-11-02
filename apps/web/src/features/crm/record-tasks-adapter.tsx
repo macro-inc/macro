@@ -11,9 +11,7 @@ import {
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
 import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
-import PlusIcon from '@icon/system/regular/plus.svg';
 import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
-import { Button } from '@ui';
 import { Show } from 'solid-js';
 import {
   CrmListEmpty,
@@ -22,6 +20,7 @@ import {
   CrmListSkeleton,
 } from './components/list-state';
 import { RecordSection } from './components/record-section';
+import { useOptionalCrmWorkspace } from './context/workspace-context';
 import type { CrmRecordScope } from './core/record';
 import { crmTaskComposerContext } from './task-composer';
 
@@ -33,6 +32,7 @@ import { crmTaskComposerContext } from './task-composer';
  */
 export function CrmRecordTasks(props: { scope: CrmRecordScope }) {
   const layout = useSplitLayout();
+  const workspace = useOptionalCrmWorkspace();
   return (
     <Show when={props.scope} keyed>
       {(scope) => (
@@ -42,6 +42,19 @@ export function CrmRecordTasks(props: { scope: CrmRecordScope }) {
             restoreEntryState
             scopeKey={`crm:${scope.type}:${scope.id}:tasks`}
             onOpenTask={(task, options) => {
+              if (
+                workspace?.host.record.openItem(
+                  {
+                    type: 'document',
+                    id: task.id,
+                    name: task.fallbackName ?? 'Task',
+                    fileType: 'md',
+                    subType: { type: 'task' },
+                  },
+                  options?.event
+                )
+              )
+                return true;
               layout.openWithSplit(
                 { type: 'task', id: task.id },
                 { preferNewSplit: options?.event?.shiftKey }
@@ -91,15 +104,9 @@ function RecordTasksBody(props: { scope: CrmRecordScope }) {
       search={state.search}
       onSearchChange={(search) => setState('search', search)}
       onSearchEscape={() => listElement?.focus()}
-      actions={
-        <>
-          <TasksControls />
-          <Button variant="secondary" onClick={composeTask}>
-            <PlusIcon class="size-4" />
-            New task
-          </Button>
-        </>
-      }
+      actions={<TasksControls />}
+      createAction={{ label: 'New task', onClick: composeTask }}
+      toolbarCreate
     >
       <TaskList
         loadingContent={<CrmListSkeleton label="Loading tasks" />}

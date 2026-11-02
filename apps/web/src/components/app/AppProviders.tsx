@@ -1,5 +1,9 @@
 import { useAccessRequestInvalidations } from '@app/features/access-requests/use-access-request-invalidations';
 import { IncomingMeetingInvitationsProvider } from '@app/features/meetings/incoming-meeting-invitations';
+import {
+  notificationSoundFor,
+  useNotificationSounds,
+} from '@app/features/notification-sounds/use-notification-sounds';
 import { usePendingNotificationNavigationEffect } from '@app/features/notifications/PendingNotificationNavigationEffect';
 import { SearchProvider } from '@app/features/soup/search/context';
 import { useInterfaceLanguageSync } from '@app/lib/i18n/use-interface-language-sync';
@@ -48,6 +52,7 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
     useInvalidateQueriesOnReconnect();
   }
 
+  const userId = useUserId();
   let notificationUpdatePrompted = false;
   async function deliverNotification(notification: UnifiedNotification) {
     if (notifInterface === 'not-supported') return;
@@ -57,7 +62,8 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
       await maybeHandlePlatformNotification(
         notification,
         notifInterface,
-        layoutManager
+        layoutManager,
+        { silent: notificationSoundFor(notification, userId()) !== null }
       );
     } catch (error) {
       console.error('Failed to deliver platform notification', error);
@@ -77,6 +83,7 @@ function ConfiguredGlobalAppStateProvider(props: ParentProps) {
     () => authenticated() === true
   );
   useNotificationUpdates(notificationSource);
+  useNotificationSounds(notificationSource, userId);
   useAccessRequestInvalidations();
   useReactiveFavicon(notificationSource);
 

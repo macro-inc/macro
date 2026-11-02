@@ -342,8 +342,11 @@ function DesktopCalendarSettings(props: {
                 onSelect={controls.connectAnotherAccount}
               >
                 <PlusIcon class="size-3.5 shrink-0 text-ink-muted" />
-                <span class="min-w-0 flex-1 truncate">
-                  Connect another account
+                <span class="flex min-w-0 flex-1 flex-col">
+                  <span class="truncate">Connect another account</span>
+                  <span class="truncate text-xs text-ink-muted">
+                    Email and calendar together
+                  </span>
                 </span>
               </Dropdown.Item>
             </Show>
@@ -551,8 +554,11 @@ function MobileCalendarSettings(props: {
                   }}
                 >
                   <PlusIcon class="size-4 shrink-0 text-ink-muted" />
-                  <span class="min-w-0 flex-1 truncate">
-                    Connect another account
+                  <span class="flex min-w-0 flex-1 flex-col">
+                    <span class="truncate">Connect another account</span>
+                    <span class="truncate text-xs text-ink-muted">
+                      Email and calendar together
+                    </span>
                   </span>
                 </MobileDrawer.Item>
               </Show>

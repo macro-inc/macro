@@ -39,5 +39,24 @@ Screenshots: [desktop](proof/autolinks-desktop.png) and
 through the real floating toolbar on desktop/tablet and the composer format
 ribbon on phones. It checks the first paragraph's quote styling and the saved
 message. Run just this case by adding `quotes.browser.e2e.ts` to the command above.
+It also creates a quote with `> ` and pastes multiple paragraphs from plain text,
+HTML, and Lexical clipboards, both into an empty quote and over selected text.
+All pasted paragraphs stay quoted, inline formatting and surrounding text survive,
+and typing at the paste caret and saving keep the quote formatting.
+Replacing adjacent quotes also preserves quoting, while ranges containing
+unquoted paragraphs retain normal paste behavior.
 
-Screenshots: [desktop](proof/quotes-desktop.png) and [phone](proof/quotes-mobile.png).
+Screenshots: [desktop](proof/quotes-desktop.png), [phone](proof/quotes-mobile.png),
+and [multi-paragraph paste](proof/quote-paste.png).
+
+## Images in lists
+
+`list-images.browser.e2e.ts` mounts the production Markdown editor with media
+and file drop over a numbered list. It inserts an image from an item, from the
+empty item Enter leaves (the image joins the item above, and a second Enter
+leaves the list), presses Enter after an item with an image, and drops a file on
+an item. It checks that the list stays one list with continuous numbering, that
+images align with their item's text, and that the saved Markdown indents each
+image under its item and renders back as one list, on desktop, tablet touch, and
+phone touch. Run just this case by adding `list-images.browser.e2e.ts` to the
+command above.

@@ -1,4 +1,4 @@
-import StackIcon from '@icon/system/regular/stack.svg';
+import ProjectIcon from '@icon/system/regular/cube.svg';
 import { Show } from 'solid-js';
 import { AppearanceGlyph } from '../../entity-appearance/components/appearance-glyph';
 import { appearanceColor } from '../../entity-appearance/core/appearance';
@@ -40,7 +40,7 @@ export function ProjectChip(props: {
             }}
           >
             <AppearanceGlyph appearance={project().appearance}>
-              <StackIcon class="size-full" />
+              <ProjectIcon class="size-full" />
             </AppearanceGlyph>
           </span>
           <span class="truncate">{project().name}</span>

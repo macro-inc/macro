@@ -41,8 +41,10 @@ impl AdoptionRepository for PgWhatsAppRepository {
                 share_permission_db_utils::insert_private_permission(&mut *tx, &permission)
                     .await
                     .map_err(failure)?;
-                // Importing starts from a message of the chat; with none known yet
-                // it waits for the first one.
+                // Importing starts from a message of the chat, when the owner asks
+                // (it wakes their phone); with none known yet a group waits for
+                // the first one, and a direct chat nobody wrote in (a saved
+                // contact, a looked-up number) has nothing to import.
                 let row = sqlx::query_as!(ChatRow,r#"INSERT INTO external_chat (id, provider, remote_id, kind, name, user_id, state, share_permission_id, backfill_state)
                     VALUES ($1,'whatsapp',$2,$3,$4,$5,'active',$6,
                         CASE WHEN EXISTS (SELECT 1 FROM whatsapp_chat WHERE account_id = $7 AND chat_jid = $2 AND anchor IS NOT NULL)
@@ -50,7 +52,7 @@ impl AdoptionRepository for PgWhatsAppRepository {
                                 WHERE g.provider = 'whatsapp' AND g.remote_id = $2 AND m.kind = 'message' AND m.message_id IS NOT NULL
                                   AND EXISTS (SELECT 1 FROM whatsapp_message_observation o WHERE o.chat_id = m.chat_id
                                       AND o.person_id = m.person_id AND o.source_id = m.source_id AND o.account_id = $7))
-                        THEN 'pending' ELSE 'waiting_for_message' END)
+                        THEN 'waiting_for_phone' WHEN $3 = 'direct' THEN 'done' ELSE 'waiting_for_message' END)
                     RETURNING id, provider, remote_id, kind, user_id, state, adopted_at"#,id,adoption.jid,adoption.kind.as_ref(),adoption.name,user,permission,account.id)
                     .fetch_one(&mut *tx).await.map_err(failure)?;
                 let owner = Owner::from_principal_str(user).map_err(failure)?;

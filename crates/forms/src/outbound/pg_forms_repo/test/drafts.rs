@@ -20,6 +20,7 @@ async fn a_projection_commits_its_layout_and_revision_together(pool: PgPool) {
         status: FormStatus::Open,
         closes_at: None,
         confirmation_message: "Thanks".into(),
+        branding: FormBranding::default(),
         created_at: at(9),
         updated_at: at(9),
         is_hidden_in_drive: false,

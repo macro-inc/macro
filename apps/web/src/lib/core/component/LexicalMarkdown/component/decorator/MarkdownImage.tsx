@@ -34,6 +34,7 @@ import {
   useContext,
 } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import { DRAG_DATA_FORMAT } from '../../plugins/draggable-block/draggableBlockPlugin';
 import {
   $upgradeDSSMediaUrl,
   getMediaUrl,
@@ -287,7 +288,9 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           state() === 'error' && 'pattern-edge-muted pattern-diagonal-8',
           state() === 'error' && !effectiveDims()[0] && 'min-h-44',
           // If there are no constrained dimensions, center the image
-          !props.constrainedWidth && !props.constrainedHeight && 'mx-auto'
+          !props.constrainedWidth && !props.constrainedHeight && 'mx-auto',
+          // Under a list item, sit at the item's text like Notion
+          'in-[li]:mx-0 in-[li]:my-2'
         )}
         style={{
           width: effectiveDims()[0] ? '100%' : undefined,
@@ -345,6 +348,12 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           )}
           draggable={true}
           use:internalDrag={true}
+          onDragStart={(e) => {
+            // Dropped in this editor the image moves; anywhere else it is
+            // copied from its URL.
+            if (interactable() && editor()?.isEditable())
+              e.dataTransfer?.setData(DRAG_DATA_FORMAT, props.key);
+          }}
           ref={imageRef}
           src={imageUrl()}
           style={{

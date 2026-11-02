@@ -29,7 +29,7 @@ export function RoutineDetailView(props: {
   onBack(): void;
   onDelete(): void;
   onCopyPrompt(prompt: string): Promise<void>;
-  onShareTemplate?(): void;
+  onShare?(): void;
   onChangeIcon?(): void;
   identityIcon?: import('solid-js').JSX.Element;
   onOpenTemplate?(templateId: string): void;
@@ -129,10 +129,10 @@ export function RoutineDetailView(props: {
                       <CopyIcon class="size-4" />
                       Duplicate
                     </Dropdown.Item>
-                    <Show when={props.onShareTemplate}>
-                      <Dropdown.Item onSelect={props.onShareTemplate}>
+                    <Show when={props.onShare}>
+                      <Dropdown.Item onSelect={props.onShare}>
                         <ShareIcon class="size-4" />
-                        Share as template
+                        Share
                       </Dropdown.Item>
                     </Show>
                     <Show when={isOwned()}>

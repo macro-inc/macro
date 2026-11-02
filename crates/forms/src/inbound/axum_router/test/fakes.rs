@@ -23,8 +23,9 @@ use rootcause::Report;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    Audience, Form, FormAccess, FormDetail, FormError, FormId, FormLayout, FormStatus, FormTally,
-    ListedForm, MyResponse, ResponseSummary, RowId, Submission, SubmissionOutcome, UpdateForm,
+    Audience, Form, FormAccess, FormBranding, FormDetail, FormError, FormId, FormLayout,
+    FormStatus, FormTally, ListedForm, MyResponse, ResponseSummary, RowId, Submission,
+    SubmissionOutcome, UpdateForm,
 };
 use crate::domain::ports::{CreateFormCommand, FormsService};
 use crate::domain::sharing::FormSharingService;
@@ -250,6 +251,7 @@ pub(super) fn form() -> Form {
         status: FormStatus::Open,
         closes_at: None,
         confirmation_message: "".into(),
+        branding: FormBranding::default(),
         created_at: at,
         updated_at: at,
         is_hidden_in_drive: false,

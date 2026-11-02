@@ -451,6 +451,11 @@ async fn refusals_read_as_a_code_status_and_the_question_at_fault() {
         (FormError::OwnerOnly, StatusCode::FORBIDDEN, "ownerOnly"),
         (FormError::TallyHidden, StatusCode::FORBIDDEN, "tallyHidden"),
         (
+            FormError::InvalidBranding("the image must be one you uploaded"),
+            StatusCode::BAD_REQUEST,
+            "invalidBranding",
+        ),
+        (
             FormError::Repository(rootcause::report!("down").into_dynamic()),
             StatusCode::INTERNAL_SERVER_ERROR,
             "internal",

@@ -297,13 +297,12 @@ test('a new offline draft reaches Drafts and reopens through another cache clien
   );
   await context.setOffline(true);
   try {
-    await page
-      .getByRole('combobox', { name: 'View', exact: true })
-      .selectOption('DRAFTS');
+    const view = page.getByRole('combobox', { name: 'View', exact: true });
+    await view.selectOption('DRAFTS');
     await page.getByRole('button', { name: 'Create offline draft' }).click();
     await expect(page.locator('#draft-status')).toHaveText('Draft queued');
     await expect(page.locator('#rows li').first()).toHaveText(
-      'Offline standalone — Not Done'
+      'Offline standalone — Done'
     );
     await page.getByRole('button', { name: 'Reopen cached draft' }).click();
     await expect(page.locator('#draft-status')).toContainText(
@@ -314,7 +313,15 @@ test('a new offline draft reaches Drafts and reopens through another cache clien
     );
     await expect(page.locator('#draft-status')).toContainText('"pending":true');
     await expect(page.locator('#rows li').first()).toHaveText(
-      'Offline standalone — Not Done'
+      'Offline standalone — Done'
+    );
+    await view.selectOption('INBOX');
+    await expect(
+      page.locator('#rows li').filter({ hasText: 'Offline standalone' })
+    ).toHaveCount(0);
+    await view.selectOption('ALL');
+    await expect(page.locator('#rows li').first()).toHaveText(
+      'Offline standalone — Done'
     );
   } finally {
     await context.setOffline(false);
@@ -418,6 +425,7 @@ test('retained mail applies optimistic flags, rollback and committed actions wit
         ownerId: 'offline-mail-viewer',
         linkId: '00000000-0000-0000-0000-000000001000',
         inboxVisible: true,
+        hasReceivedMail: true,
         isRead: false,
         isSignal: false,
         isImportant: false,

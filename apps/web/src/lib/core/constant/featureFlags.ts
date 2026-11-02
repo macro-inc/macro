@@ -188,6 +188,18 @@ export const enableTasksReviews = defineFlag({
   default: onInDev,
 });
 
+/**
+ * Sends a new session's first prompt on its create. A harness that predates
+ * `promptActionId` and `promptAttachments` ignores them, duplicating the
+ * prompt bubble and dropping its files, so deployed environments stay off
+ * until that harness is live; local stacks build both together.
+ */
+export const enableFirstPromptOnCreate = defineFlag({
+  key: 'enable-first-prompt-on-create',
+  env: 'ENABLE_FIRST_PROMPT_ON_CREATE',
+  default: LOCAL_ONLY || undefined,
+});
+
 /** Gantt is visible in local previews; deployed apps retain the remote rollout. */
 export const enableGantt = defineFlag({
   key: 'enable-gantt',
@@ -471,6 +483,15 @@ export const enableEmailSignatures = defineFlag({
   default: onInDev,
 });
 
+// Email read receipts: the per-inbox switch in Settings › Email and the
+// opened status on sent messages. Which copies load Macro's pixels, and so
+// count as opens, does not depend on this flag.
+export const enableEmailReadReceipts = defineFlag({
+  key: 'enable-email-read-receipts',
+  env: 'ENABLE_EMAIL_READ_RECEIPTS',
+  default: onInDev,
+});
+
 // CRM companies & contacts frontend: the Companies view + sidebar entry, the
 // company/contact detail blocks, CRM mentions / quick-access, and CRM rows in
 // global search. PostHog-gated (currently targeted at the Macro team in prod)
@@ -517,6 +538,15 @@ export const enableProjects = defineFlag({
 export const enableReminders = defineFlag({
   key: 'enable-reminders',
   env: 'ENABLE_REMINDERS',
+  default: onInDev,
+});
+
+// The Focus tab in Mail: signal threads the email focus worker classified as
+// worth the owner's attention. Only allowlisted inboxes are classified, so the
+// tab is empty for everyone else.
+export const enableEmailFocus = defineFlag({
+  key: 'enable-email-focus',
+  env: 'ENABLE_EMAIL_FOCUS',
   default: onInDev,
 });
 
@@ -755,6 +785,14 @@ export const enableTagTeamSharing = defineFlag({
   default: onInDev,
 });
 
+// Redesigned Chat sidebar sections. On in development;
+// deployed environments defer to PostHog. Override with VITE_ENABLE_CHAT_SIDEBAR_SECTIONS.
+export const enableChatSidebarSections = defineFlag({
+  key: 'enable-chat-sidebar-sections',
+  env: 'ENABLE_CHAT_SIDEBAR_SECTIONS',
+  default: onInDev,
+});
+
 // Manual and smart channel labels, including their queries and drag/drop UI.
 // Off until PostHog enables them; override with VITE_ENABLE_CHANNEL_TAGS.
 export const enableChannelTags = defineFlag({
@@ -790,6 +828,15 @@ export const enableEntityActivitySection = defineFlag({
 export const enableActivityFeed = defineFlag({
   key: 'enable-activity-feed',
   env: 'ENABLE_ACTIVITY_FEED',
+  default: onInDev,
+});
+
+// Agents home: pending updates from coding agents shown as a stack under the
+// new-chat composer, and the Open PRs section in the Agents sidebar.
+// Override with VITE_ENABLE_AGENT_UPDATES.
+export const enableAgentUpdates = defineFlag({
+  key: 'enable-agent-updates',
+  env: 'ENABLE_AGENT_UPDATES',
   default: onInDev,
 });
 

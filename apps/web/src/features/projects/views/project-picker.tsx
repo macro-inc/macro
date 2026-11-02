@@ -3,13 +3,14 @@ import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import LoadingSpinner from '@icon/system/regular/spinner.svg';
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import {
   DropdownSearchInput,
   DropdownSelectableRow,
   useDropdownSearch,
 } from '@property/editors/selectors/PropertyOptionSelector';
+import { PropertyEmptyIcon } from '@property/extractors/PropertyEmpty';
 import { useSearchInputFocus } from '@property/utils';
 import {
   createEffect,
@@ -172,7 +173,10 @@ export function ProjectPicker(props: {
                         when={item.type === 'project' && item}
                         fallback={
                           <>
-                            <CircleDashedEmpty class="size-3 shrink-0 text-ink-extra-muted" />
+                            <PropertyEmptyIcon
+                              propertyDefinitionId={SYSTEM_PROPERTY_IDS.PROJECT}
+                              class="size-3.5 text-ink-extra-muted"
+                            />
                             <p class="flex-1 min-w-0 truncate text-ink-muted">
                               No project
                             </p>

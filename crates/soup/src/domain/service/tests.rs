@@ -1418,6 +1418,9 @@ async fn grouped_properties_are_populated_by_the_service() {
         .returning(|_| {
             Box::pin(async move {
                 Ok(vec![ItemGroupingInfo {
+                    sort_key: None,
+                    display_order: None,
+                    document_server_facts: None,
                     item: SoupItem::Document(soup_document("grouped-document")),
                     key: "document".to_string(),
                     total_group_count: 1,
@@ -1452,7 +1455,7 @@ async fn grouped_properties_are_populated_by_the_service() {
         .get_user_soup_grouped(GroupedSortRequest {
             limit: 20,
             cursor: Query::Sort(
-                SimpleSortMethod::ViewedUpdated,
+                SimpleSortMethod::ViewedUpdated.into(),
                 EntityFilterAst::mock_empty(),
             ),
             user_id: MacroUserIdStr::parse_from_str("macro|test@example.com").unwrap(),
@@ -2652,6 +2655,7 @@ async fn touched_soup_projection_preserves_authoritative_attachment_facts() {
             Box::pin(async move {
                 Ok(vec![
                     SoupProjectionHydration {
+                        sort_key: None,
                         item: SoupItem::Document(soup_document_uuid_with_updated(
                             ordinary_document,
                             Default::default(),
@@ -2663,6 +2667,7 @@ async fn touched_soup_projection_preserves_authoritative_attachment_facts() {
                         }),
                     },
                     SoupProjectionHydration {
+                        sort_key: None,
                         item: SoupItem::Document(soup_document_uuid_with_updated(
                             attachment,
                             Default::default(),

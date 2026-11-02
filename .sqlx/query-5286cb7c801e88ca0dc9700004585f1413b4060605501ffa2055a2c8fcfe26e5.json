@@ -1,0 +1,34 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO forms (\n                id, name, description, owner_id, database_id, table_id,\n                submitted_column_id, respondent_column_id, audience, tally_visible,\n                status, closes_at, confirmation_message, logo_file_id, cover_file_id,\n                accent_color, created_at, updated_at, name_follows_database, is_hidden_in_drive,\n                appearance\n            )\n            VALUES (\n                $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18,\n                $19, $20, $21\n            )\n            ON CONFLICT (table_id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Bool",
+        "Text",
+        "Timestamptz",
+        "Text",
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Timestamptz",
+        "Timestamptz",
+        "Bool",
+        "Bool",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5286cb7c801e88ca0dc9700004585f1413b4060605501ffa2055a2c8fcfe26e5"
+}

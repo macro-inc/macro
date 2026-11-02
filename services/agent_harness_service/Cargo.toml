@@ -101,13 +101,14 @@ foreign_entity = { path = "../../crates/foreign_entity" }
 frecency = { path = "../../crates/frecency", features = ["outbound", "postgres"] }
 fusionauth = { path = "../../crates/fusionauth" }
 futures = { workspace = true }
-github = { path = "../../crates/github", default-features = false, features = ["outbound", "ports", "sync"] }
+github = { path = "../../crates/github", default-features = false, features = ["installation_claims", "outbound", "ports", "sync"] }
 github_pull_requests = { path = "../../crates/github_pull_requests", features = ["outbound", "s3", "service"] }
 granola_sync = { path = "../../crates/granola_sync" }
 harness_id = { path = "../../crates/harness_id" }
 harnesses = { path = "../../crates/harnesses", default-features = false, features = ["outbound", "ports"] }
 http = { workspace = true }
 http-body-util = { workspace = true }
+image_generation = { path = "../../crates/image_generation", features = ["axum"] }
 import = { path = "../../crates/import" }
 import_notion = { path = "../../crates/import_notion" }
 import_linear = { path = "../../crates/import_linear" }

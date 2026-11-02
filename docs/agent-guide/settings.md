@@ -81,7 +81,9 @@ survive switching settings pages. On phones, the signature preview, replies/forw
 toggle, and clear action are available; editing and import remain desktop-only.
 Accounts list each inbox as its own row, followed by **Connect another Google
 Workspace account** and **Connect an Outlook account**; Integrations shows the
-same rows. Its **Email settings**
+same rows. Outlook appears only once `/link/email/providers` offers it to the
+account (the `enable-outlook` flag); Integrations keeps an Outlook row with
+Manage alone for an account that already has an Outlook inbox. Its **Email settings**
 gear opens the dedicated page, and Email links to Notifications and Calendar.
 With a composer open, save a changed signature or reply-signature preference and
 verify its preview updates. Once the account refresh completes, reopen a composer
@@ -109,14 +111,25 @@ Trace signature actions under `email.signature.save`, `email.signature.clear`,
 or `email.signature.import`; the REST write and `email.settings.refresh` run
 under that action, including the account catalog's durable refresh.
 
+### Email read receipts
+
+Behind `enable-email-read-receipts` (on in dev), **Settings → Email → Read
+receipts** lists each owned inbox with a switch that saves immediately. It is
+off by default. Messages sent from an inbox with it on carry an invisible
+pixel; see [read receipts in a thread](email.md#read-receipts) for the status.
+
 ### Notification permission prompt
 
 After onboarding, an eligible desktop app user sees **Enable Desktop
 Notifications**. Select **Enable** to request permission through the native
-notification provider; macOS uses its system permission dialog. The web prompt
-continues to say **Enable Browser Notifications** and uses browser permissions.
-Select **Hide** to dismiss the prompt. It waits in the same region as other
-prompts, one card at a time.
+notification provider; macOS uses its system permission dialog. The Android app
+says **Enable Notifications** and requests the Android notification permission
+through the same native provider. The web prompt says **Enable Browser
+Notifications** and uses browser permissions.
+**Enable** is its only action; closing the prompt (its corner **Close** on
+desktop, a swipe on phones) counts as a decline and stops it returning on the
+next load. It waits in the same region as other prompts, one card at a time. On
+phones it stays under open sheets and their pickers.
 
 ### Notification snoozes
 
@@ -327,6 +340,13 @@ Macro Light uses `#F5F5F5` outside `#FCFCFC` content panels, white controls,
 `#2E2E2E` ink. Macro Light and Macro Dark share the same muted blue accent
 (`oklch(0.7 0.12 250deg)`); light mode does not switch the accent to orange.
 
+The theme editor's **Status** section exposes **Priority Urgent** separately
+from **Warning**. It defaults to the theme's orange palette color; changing it
+recolors urgent-priority badges without changing in-progress task status.
+The separate **Task statuses** section exposes a color for Not Started, In Progress,
+In Review, Completed, and Canceled. Each color controls its task icons and matching
+group-header tints without changing the global warning, success, or accent colors.
+
 ### Theme mentions
 
 Agent replies can include clickable theme mentions that let users apply a theme
@@ -391,12 +411,19 @@ the flag off. The production usage-limit dialog follows the same flag. Its
 **Monthly limit** meter displays a percentage using the backend's current-period
 usage and allowance. The info button explains AI agent chat and AI document
 editing. **Usage Credits** shows the dollar balance and `Add more`, which opens
-**Need more usage?** with `$25` / `$50` / `$100` / `Other`. Supported amounts
-redirect to Stripe Checkout; unsupported custom amounts are disabled. Free
-accounts see `View plans` instead of purchase or reload controls; paid team
-members who are not the payer see only “Usage credits are managed by your team.”
-Their credit balance and automatic reload row are hidden, with no
-credit-purchase action.
+**Need more usage?** with `$25` / `$50` / `$100` / `Other`. **Buy $25 in
+credits** charges the card on file right away (no Stripe Checkout redirect),
+shows an `Added $25 in credits.` toast, and reports a declined card inline;
+unsupported custom amounts are disabled. Without a card on file, or with a card
+that needs 3-D Secure, the payer is sent to Stripe Checkout for the same pack
+instead, and a team member is asked to have the owner add or update the card. Free accounts see `View plans` instead
+of purchase or reload controls. Paid team members who are not the payer see the
+shared balance with `Add more`, described as “Shared team balance. You can add
+$X more this month, within your team's $Y limit.” Their purchases charge the
+team owner's card and are capped by the team's monthly credit limit: the owner's
+Auto-Reload monthly limit, or the plan default ($200 Pro, $1,000 Max) when the
+owner set none. Packs over what is left are refused, and `Add more` is disabled
+once no pack fits. Members never see the automatic reload row.
 Team owners who pay for their team's seats manage the shared credit balance and
 automatic reload here in Usage, including purchases, balance thresholds, the
 monthly reload cap, and payment methods. Team payers see **Team Usage
@@ -411,8 +438,9 @@ or automatic reload. The development paid-plan preview can still display
 those controls, with purchases disabled.
 
 The **Automatic reload** switch opens **Auto-Reload** without toggling directly.
-It contains Minimum balance (default `$10`), Target balance (default `$100`),
-optional Maximum monthly spend (`No limit`), a payment-method management link,
+It contains Minimum balance (default `$5`), Target balance (default `$25`),
+optional Maximum monthly spend (prefilled `$200` on Pro and `$1,000` on Max while
+Auto-Reload is off; blank means no limit), a payment-method management link,
 and the automatic-charge warning. The dialog saves for paid payers:
 `Turn on auto-reload` enables automatic credit purchases with those thresholds,
 `Save` updates them while on, and `Turn off` disables automatic reload. The monthly
@@ -603,7 +631,8 @@ dot sits beside the name.
 The search filters every row by name, description and category and also searches
 the catalog. **Add custom** sits beside it. Gmail, Google Calendar and Google
 Sheets are hidden from the catalog because Macro syncs email and calendars
-natively. Scrolling toward the end loads the next catalog page; a failed page
+natively. LinkedIn never appears in the catalog or its search: the backend
+hides it. Scrolling toward the end loads the next catalog page; a failed page
 keeps loaded apps and offers Retry.
 Overlaid catalog apps (the `mcp_overlays` table, served at
 `GET /pipedream/mcp/overlays`) look the same in the catalog but never open

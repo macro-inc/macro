@@ -28,6 +28,7 @@ const registration = {
     status: 'open',
     closesAt: null,
     confirmationMessage: 'See you there!',
+    branding: { logoFileId: null, coverFileId: null, accentColor: null },
     createdAt: '2026-10-05T00:00:00Z',
     updatedAt: '2026-10-05T00:00:00Z',
   },

@@ -36,6 +36,16 @@ must load through the webview, not native HTTP. A `vite:preloadError` with
 `scheme tauri not supported` indicates an asset-routing failure; reloading the
 same bundle does not resolve it.
 
+A `vite:preloadError` (a lazy chunk or its CSS failed, usually after a deploy)
+reloads the tab right away, once per build per tab session, when it is online,
+holds no call or upload, and has no text being typed. Otherwise, and on a second
+failure in the same build, the rail's update button (a toast on touch layouts)
+offers the reload; the offer reloads a hidden tab by itself only if that build's
+one automatic reload is unspent. A failed route chunk can still end on the
+root error screen, which hides the offer.
+The sidebar update button and its automatically opened popover are desktop-only,
+even when the sidebar is shown on a touch device.
+
 ## External links in the native app
 
 Desktop external links open in the system browser, whether activated by a normal
@@ -173,6 +183,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/welcome` | Login page (when unauthenticated) |
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
+| `/app/internal/status` | Macro staff only (`@macro.com`): set the system status (Operational, Degraded, Major outage + message), see its history and the `POST /auth/system-status` API. A non-operational status shows a banner across the top of the app for every user; open apps update over the connection gateway |
 | `/app/home` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
 | `/app/home/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/home/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
 | `/app/mail` | Email client |
@@ -198,8 +209,9 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/agents/chat/<uuid>` | Legacy AI chat opened in the Agents workspace (`/app/agent-chats/<uuid>` remains a compatibility alias) |
 | `/app/calls` | Calls list |
 | `/app/companies` | Customers (CRM; needs a team). The selected list is `sN.crm.tab` |
-| `/app/companies/<company-or-contact>/<uuid>` | Customers with a company or contact opened inline, keeping its list's `sN.crm.tab`; a record tab other than Overview adds `/<team-emails-files-tasks-or-calls>`. On desktop, `/app/company/<uuid>` and `/app/contact/<uuid>` redirect here, a `comment_id` moving to `sN.crm-record.commentId`; touch devices keep those standalone pages |
+| `/app/companies/<company-or-contact>/<uuid>` | Customers with a company or contact opened inline, keeping its list's `sN.crm.tab`; a record tab other than Overview adds `/<team-emails-files-tasks-calls-or-databases>`. On desktop, `/app/company/<uuid>` and `/app/contact/<uuid>` redirect here, a `comment_id` moving to `sN.crm-record.commentId`; touch devices keep those standalone pages |
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
+| `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/calendar` | Redirects to `/app/calendar/<month-or-week-or-day>` at the remembered period (Day on phones and Week on desktop by default), keeping an `eventId` |
@@ -379,8 +391,12 @@ A desktop view's name opens the view switcher: clicking it shows the rail's apps
 in rail order, then the More apps, with a check on the current one. Choosing one
 replaces the view in that split, not the active split; Shift opens it in a new
 split. The navigation panel's title shows the name with a caret, sharing one
-hover background. Short names stay whole; long names ellipsize. Main headers show the name alone, with the same hover:
-`ViewSidebar.Title caret={false}` for plain titles, and the first breadcrumb
+hover background. Short names stay whole; long names ellipsize without shrinking
+the caret. Saved-view icons stay beside their labels on one line. List headers
+reserve the title's natural width and scroll the controls beside it when space
+runs out; the switcher trigger stays inside the header's clipping boundary.
+Main headers show the name alone, with the same hover: `ViewSidebar.Title caret={false}` for
+plain titles, and the first breadcrumb
 (Drive, Email, Tasks, Reviews) while it is the current page; deeper, that crumb
 returns to the list. Titles that name content rather than the view (Calendar's
 date, a channel, an agent session, a CRM record) do not switch views. Touch
@@ -592,8 +608,11 @@ controls use the rounded, bordered button groups from the email thread toolbar;
 New and Search have their own rounded, bordered backgrounds. Search starts as an
 icon and expands into a compact field when clicked or opened with Cmd/Ctrl+F.
 Closing it clears the query and returns to the icon. The action stays specific to
-the view: Home returns to its starting pane, Email composes mail, Chat offers a
-channel or direct message, and Calendar offers an event or call. Tasks offers
+the view: Home returns to its starting pane and Email composes mail. With
+`enable-chat-sidebar-sections` enabled, Chat opens one picker for existing
+conversations, new channels, and direct messages; when disabled, Chat offers
+separate channel and direct-message creation actions.
+Calendar offers an event or call. Tasks offers
 **Task**, **Project** (when enabled), and **Tag** in both the Tasks and Projects
 lists. Customers offers Company, Contact, and enabled Pipeline creation. Reviews
 uses the general creation menu. Agents keeps New above its Chat/Code mode tabs.
@@ -608,10 +627,10 @@ when the sidebar is an overlay in a narrow split. Verify with three splits:
 open **Show navigation**, then use the sidebar's **Close** button without first
 hiding navigation; only its owning split closes. The last logical split has no
 sidebar close button; mobile chrome is unchanged.
-A lone non-list content split still shows a header X labeled **Return to list**,
-which returns that split to the most recent list in its history, preserving
-that list’s state. If there is no prior list, it replaces the current entry with
-Home. Excluded background panels do not count toward close eligibility.
+A lone desktop split shows no X, in its header or its frame corner. On a
+non-list content split, `Cmd+Esc` (or `Opt+Esc`) returns it to the most recent
+list in its history, preserving that list’s state; if there is no prior list, it
+opens Home. Excluded background panels do not count toward close eligibility.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
@@ -630,6 +649,14 @@ final position on release. Check a rapid drag followed by immediate release,
 dragging at non-default zoom, and closing a split during a drag; later pointer
 movement must not keep resizing the removed split. Arrow keys still resize
 immediately, with Shift selecting the larger step.
+
+A view's narrow/wide layout reads its width when it mounts, then applies later
+split or window resizes on the next animation frame. Open a channel beside Home,
+drag the split gutter back and forth across the narrow breakpoint, and resize
+the window: the console should show no `ResizeObserver loop completed with
+undelivered notifications` errors, and the sidebar should switch between docked
+and overlay as the split crosses the breakpoint. Drive and other `virtua` lists
+can still report it from the virtualizer's own observer.
 
 Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
 inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,
@@ -797,7 +824,7 @@ Verify first-press dragging after navigation as well as ordinary row clicks and
 right-click menus. A completed drop can move or copy real data; use a disposable
 test item when verifying drop actions.
 
-Split-header, file-upload, and conversation drop targets use plain color
+Split-header, folder, file-upload, and conversation drop targets use plain color
 overlays with small sans-serif hints in fully rounded pills. Invalid file drops
 use the failure background color. Cancel the drag to inspect these hints without
 uploading or moving anything.
@@ -809,6 +836,13 @@ agent sessions, projects, email threads, channels, calls, CRM companies, CRM con
 databases, and forms support toggling; database and form favorites appear in Drive's
 sidebar. Individual channel messages and pull requests are not favoritable. A
 favorited agent session disappears from the list once the session is deleted.
+
+Channel favorites show the same channel picture as regular channel rows, with
+the channel icon as a fallback when no picture is available. Direct-message
+favorites use the participant's avatar when available and the entity icon
+otherwise. Cached pictures remain visible when a background picture query
+rejects with an error; an omitted or unavailable channel preview uses the
+fallback icon.
 
 With the GraphQL local cache enabled, cached favorites remain visible when offline
 or when a background refresh fails. Toggle and reorder success while offline means
@@ -979,7 +1013,8 @@ the person's name and email above Copy email, Copy name, Open contact (CRM teams
 only), DM, and Assign task. An agent's or bot's card offers Settings instead of
 DM when the viewer can configure it: Macro opens Settings → Agents, an agent the
 viewer manages opens straight into its Edit agent form, and a plain bot opens
-its page under Settings → Bots. Touch devices have no hover, so tapping the mention
+its page under Settings → Bots. An agent's avatar beside its channel messages
+opens the same card. Touch devices have no hover, so tapping the mention
 or the picture opens that same card as a bottom sheet; any action there runs and
 dismisses the sheet. Desktop keeps click-to-DM on the picture itself, which touch
 drops in favour of the card's DM action.
@@ -1064,6 +1099,7 @@ The event menu groups Macro activity triggers by surface:
 - **Tasks:** **Task created**, **Status changed**, **Priority changed**, and **Any property changed**.
 - **Email:** **New email received** in the routine owner's inbox, excluding spam, trash, drafts, and historical imports.
 - **Calls:** **Call started**, for calls the routine owner starts (receives the call and who has joined so far); and **Call ended**, for channel calls and meetings the owner joined (receives participants and transcript, cut short for long calls).
+- **GitHub:** presets for **Workflow failed**, **Workflow finished**, **Pull request opened**, **Pull request merged**, **Review requested**, **Review submitted**, **Issue opened**, **Comment added**, **Code pushed**, **Release published**, and **Any GitHub event**, from repositories Macro's GitHub app reaches for the routine owner. Until the owner connects GitHub, the group shows **Connect GitHub** instead.
 
 For messages, mentions, deletion, and task changes, choose specific accessible
 channels/documents/tasks or any accessible item in the same panel. Creation
@@ -1072,9 +1108,23 @@ triggers cover newly created accessible items; email covers the owner's inbox;
 join** — neither has an item picker. Calls the owner did not start never trigger
 **Call started**; calls they did not join never trigger **Call ended**. Mentions match only @ mentions of the routine owner. **Any property changed**
 also includes status and priority; overlapping selectors start only one run for
-the same event. These are Macro events, not incoming HTTP webhooks. Bot-authored
-or delegated changes do not retrigger routines. Saved legacy selectors remain
+the same event. Bot-authored or delegated Macro changes do not retrigger
+routines. Saved legacy selectors remain
 editable but are no longer offered in the new-trigger menu.
+
+A GitHub trigger panel edits the preset's **GitHub events** and **Actions**
+(comma-separated names GitHub sends, such as `workflow_run` and `completed`;
+empty means any), checks **Repositories** from the owner's reachable list
+(none checked means all), and **Also run for bots and apps** (off by default, so
+an agent acting through Macro's app can't retrigger itself). Deliveries only
+reach owners whose currently linked GitHub account installed the delivering
+installation, or whose team did. While GitHub is disconnected the panel shows
+**Connect GitHub** instead, and an enabled GitHub routine can't be saved. The
+panel also has **Only when the payload…** rows: a dotted field (`*` checks every list
+item, e.g. `pull_request.labels.*.name`), a comparison (**is**, **is one of**,
+**is not one of**, **matches** glob, **is set**, **is not set**) and a value.
+Every row must pass before the run is queued. The chip shows the repository
+after the trigger's label.
 
 When `enable-routine-conditions` is on, every activity trigger panel has an
 **Only run if** box for an optional yes/no question about each event, such as
@@ -1128,7 +1178,8 @@ their history and do not repeat.
 An `m-document-mention` with `blockName: "routine"`, the returned routine ID,
 and the saved name renders as a clickable mention in an agent reply. Once the
 routine is deleted the mention reads `Deleted` and clicking it shows a card
-instead of opening the routine. Routines do not appear in the mention menu.
+instead of opening the routine. Owners can mention their routines in channels
+(see Routine templates).
 Only the owner sees a routine's editor and can edit, enable, run, duplicate,
 delete, or view run history. Anyone else who opens a routine link sees its
 template when the owner shared one and routine sharing is enabled, and otherwise
@@ -1149,18 +1200,20 @@ already activated copies keep working. `VITE_ENABLE_ROUTINE_SHARING` overrides
 only the web gate; exercising templates needs the backend flag enabled too.
 
 A routine runs as its owner, so it is shared as a template, never directly.
-The three-dot menu's **Share as template** opens **Share: name**. It explains
-what people get, takes a **Description**, and lists **What changes for each
-person**: every mention in the instructions plus the schedules' time zone, each
-with tabs. People can be **The person activating** (the owner's own mention
-starts here), **Same for everyone**, or **They choose**; items are **Same for
-everyone** or **They choose**; the time zone is **Their time zone** or **Keep** the owner's
-zone. **Share template** publishes a snapshot of the saved routine;
-**Update template** re-snapshots it. Once shared, the dialog shows how many
-routines were activated from it, a channel-or-people picker with **Send** that
-posts the routine mention, **Copy template link** (the routine's own URL), and
-**Stop sharing**, which hides the template while activated routines keep
-running.
+The three-dot menu's **Share** opens the standard Share dialog, **Share:
+name**: a channel-or-people picker, an optional message, and **Share**, which
+posts the routine mention; below it, **Anyone with the link** shows **Just me**
+or **Shared** with the activation count, **Copy Link** (the routine's own URL),
+and, once shared, **Stop sharing**, which hides the template while activated
+routines keep running. Every Share and Copy Link first publishes a snapshot of
+the saved routine. The owner's own mention and the schedules' time zone fill in
+as whoever activates it; other references stay the same for everyone, and
+re-sharing keeps the fills an earlier template set.
+
+In a channel composer (including thread replies), the owner's routines appear
+under **Routines** in the `@` menu. Picking one publishes its template the same
+way, then inserts the mention, so everyone in the channel gets a card they can
+activate from. If publishing fails, the mention is not inserted.
 
 Opening a shared routine someone else owns shows the template laid out like a
 routine's Overview: **Activate for me** at the right of the top bar, then the
@@ -1412,7 +1465,8 @@ restart rules still apply.
 Settings → Agents, its Cursor guide, and Runtimes render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
-Settings → Agents → Agents ends with **Coding sessions**: per-user **Create
+Settings → Agents → Agents ends with **Coding sessions**: a **Default repository**
+select saved per user on this device (see the AI chat guide), then per-user **Create
 tasks** and **Open pull requests** switches, both off by default. Each saves on
 toggle and reverts with a toast if the save fails.
 
@@ -1505,8 +1559,8 @@ right-click **Mark Done** moves the preview to the next item, like the `e` key. 
 
 ## Entity action dialogs
 
-Rename, Delete, and Move to folder use compact centered dialogs on desktop and
-the shared drawer on mobile, with actions in a separated footer. One selected
+Rename and Delete use compact centered dialogs on desktop and the shared drawer
+on mobile, with actions in a separated footer. One selected
 item shows a compact name chip; multiple items show two chips and
 `+N`, which expands single-line names for review.
 Selected-item chips in action command menus and dialogs use the shared Badge,
@@ -1526,14 +1580,26 @@ Email snoozing uses a command menu with quick or typed times, **If no reply** /
 **Regardless**, and **Remove reminder**. Saving waits for confirmation and shows
 retry errors inline. See [Email reminders](reminders.md).
 
-Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, move, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
+Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
 
-The Move to folder picker uses the Drive sidebar’s folder rows: neutral icons, trailing expand/collapse buttons, and indented branch guides. Click a folder to select it; use the chevron to expand it. Search and arrow-key navigation remain available.
+The Move to folder picker is a command menu, like Snooze, over the same folder list as the Drive sidebar. Folders are a flat list with their parent path: **Open in split** (Drive folders and folder splits, in split order, first row selected), **Created by you**, then **Shared with you**, each newest first. It leaves out folders that already hold every item and, for a moved folder, the folder itself and everything under it. Enter or a click moves at once. Typing ranks by name like Cmd+K and adds **New folder “name”** unless a folder has that name; choosing it creates the folder and moves the items into it. Phones show the same list in the drawer with the path under the name.
+
+### Dragging rows into a folder
+
+On desktop, a split showing a folder (Drive's folder route or a folder split) accepts rows dragged from another split and moves them with the same mutation as the picker. Dragging a selected row carries the whole selection, the drag card counts it, and a successful move clears that selection; a failed one keeps it for a retry. Dragging an unselected row carries only that row. The pane shows **Move N items to this folder** only when the drop would work: every row passes Move to folder's owner and type rules, at least one row isn't already there, no folder would land inside itself, the row didn't start in that split, and Alt isn't held, since that marks the drag as a copy. The header still offers **Open in this split**. Other drop targets (composers, documents, canvases) still take only the grabbed row.
+
+Folders in Drive's sidebar take the same drops, outlined while hovered, including rows from the list beside them in the same split. So do folder rows in Drive's lists and in a folder's own list; a row takes the drop ahead of the pane around it, so a drop lands in the row's folder, not the one the pane shows. Held at the sidebar's edge, a drag scrolls a long folder tree. The drag card sits beside the pointer so a narrow target stays visible. Drive's root row is not a drop target.
+
+Every move, from the picker or a drop, ends in a **Moved to folder** or **Moved N items** toast with **Open** and, on desktop with room for another split, **Open in new split**. Either action dismisses the toast and shows the folder on Drive's route; if a split already lists that folder, it focuses that split instead of opening a second copy. A split with an item open inside the folder doesn't count, because the folder's list isn't visible there. Touch devices have no splits, so they show only **Open**.
 
 ### Native update-required dialog
 
 When newer frontend JS requires a newer native app, the mobile shell offers
-**Update app** and **OK**. Update app uses the native opener; Android targets the
+**Update app** and **OK**. It opens once per launch, either when the bundle
+updater reports a native floor, or when the OTA bundle finds the app lacks a
+GraphQL cache command (`graphql_cache_init_with_schema` or
+`graphql_cache_inspect_mutations`); the cache case explains what needs the
+update and the app runs uncached until then. Update app uses the native opener; Android targets the
 HTTPS Play listing for `com.macro.workspace.mobile`, allowing a browser when the Store app
 is absent. An opener failure displays an inline error and the dialog stays
 dismissible. A missing listing is handled in the external store/browser: return

@@ -1744,15 +1744,18 @@ export function createSplitLayout(
       : !options.preferNewSplit || shouldReplaceWhenFull;
 
     if (splitHandle && shouldReplace) {
+      // Activate before replacing: a visit the router yields to another pane
+      // that already claims the content brings that pane up, and activating
+      // afterwards would take it back.
+      if (options.activate !== false) {
+        splitHandle.activate();
+      }
+
       splitHandle.replace({
         next: content,
         referredFrom: options.referredFrom ?? null,
         mergeHistory: options.mergeHistory,
       });
-
-      if (options.activate !== false) {
-        splitHandle.activate();
-      }
 
       return { status: 'opened', split: splitHandle, sourceOwner };
     } else {
