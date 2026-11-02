@@ -74,6 +74,10 @@ vanishes when the first timeline entry appears. Agent DMs keep their own UI.
 
 ## Create a channel
 
+Chat offers separate **New channel** and **New direct message** actions with
+either sidebar layout. **New channel** and the global Create menu use this
+three-step flow:
+
 1. `Create` → `Channel G`. Dialog `Create a channel` opens on step 1 of 3 with the `Name` textbox focused.
 2. Fill the name and click `Next`. Step 2 of 3 shows `Visibility`, with `Team — anyone on your team` selected by default. Team channels are always discoverable to teammates.
 3. For a team channel, click `Create`. For a private channel, select `Private — only specific people` and click `Create`. Creation navigates to the channel (as a split pane: `.../channel/<uuid>`); a system row `Channel <name> created` appears.
@@ -127,31 +131,49 @@ state, and exclude conversation reservations; genuine
 speculative sessions still expire normally.
 
 Send normally: no `@` mention is needed. Attachments, references, and quoted
-messages use the channel composer. While the agent works, a typing row with its
-avatar sits under the newest message: `<name> is thinking`, `is typing`,
-`is working`, or `is waiting for an answer`. Below that row, the owner sees the
-passage being written as it streams. They also see any live question or
-permission request and **Stop**, which cancels the active turn. Answer those
-controls to continue. If **Stop** fails, a failure toast appears and the control
-becomes available again so you can retry.
+messages use the channel composer. While the agent works, a typing row sits
+under the newest message: the agent's avatar beside the working line, which
+names the step the agent is on, or says what the turn is doing (`Thinking`,
+`Writing`, `Working`, or `Waiting for an answer`) between steps and to anyone
+who cannot read the session. The owner also gets **Stop** on that row, which
+cancels the active turn, and any live question or permission request beneath
+it. Answer those controls to continue. If **Stop** fails, a failure toast
+appears and the control becomes available again so you can retry.
 
 The reply is posted as ordinary messages while the turn runs. Each finished
-passage becomes a message. The steps taken between passages show inside the
-message as compact rows: a status icon (spinner, check, cross, or warning for
-interrupted), a label such as `Ran`, `Read`, `Edited`, or `Searching`, and a
-short detail like the command or file name for readers with session access.
+passage becomes a message, led by the steps the agent took to get to it, so
+nothing is posted until the agent has written something and no message shows
+a step running. Steps a turn ends on, with no passage after them (Stop, a
+failure), are posted with how it ended. The working line is one shimmering
+line, led by the working dots, naming the step in progress by its label alone,
+such as `Ran`, `Read`, `Edited`, or `Searching`; the command, query, or file
+stays in the session. The next step slides in as it starts, and steps running
+at the same time take turns every two seconds. In a DM it is the typing row.
+A channel mention's reply in its thread is one message, so the line sits in
+it, and reads `Thinking` whenever the turn is running with no open run, before
+the first step or while the agent writes after one.
+Once a run closes, it folds to a `Used N tools` summary (with
+`· N failed` when a step failed), with a caret after it on hover, that opens
+to compact rows like the session's tool rows: the label, and **Failed** or
+**Interrupted** when a step did not finish.
+Documents, sessions, pull requests, and contacts an agent's reply mentions are
+set in the accent color.
 Stored activity snapshots keep the status and label but omit commands and tool
-input details, in both shared threads and DMs. A long run shows its latest six
-steps behind an `N earlier steps` control. Rows tick live while the run is
-open, then freeze
-into the snapshot saved in the message. Readers without session access always
-see that snapshot. Only the turn's last message notifies. Previews and search
+input details, in both shared threads and DMs. The line follows the session
+live while the run is open; the summary shows the snapshot saved in the
+message. Readers without session access always see that snapshot. Only the
+turn's last message notifies. Previews and search
 quote the passages, not the steps. Typing refreshes every 3 seconds and clears
 on its own if the agent's replica dies. Follow-up messages queue in order, and
 the bar above the composer counts them (`1 queued`). Editing a sent message
 does not invoke the agent again. A reply inside a thread is not part of the
 conversation: the agent answers it only when mentioned there, in the thread,
 as in any channel.
+
+The local playground at `/app/debug/agent-progress` shows each of these states
+in three tabs: **DM**, **Channel mention** (the reply in its thread), and
+**Agent session**, with theme, viewer, and phone-width toggles and a looping
+replay of one turn.
 
 Each failed, stopped, or interrupted source message has its own **Retry message**
 action in the current context. Retry is explicit because an interrupted attempt
@@ -356,6 +378,8 @@ Shift+Enter adds a line to the draft; Enter sends. The composer spaces its
 paragraphs the way the sent message does, so a multi-line draft reads as what
 it will send. Check a multi-line message against the draft that wrote it: the
 spacing must not change on send.
+Typing `6.` then Enter (or `6. `) starts an ordered list at 6; the marker is
+not rewritten to `1.`
 Both the expanded and collapsed composers start with a `+` button (`Add`). It
 opens a menu on desktop and a bottom drawer on mobile: `Mention` (opens the `@` typeahead), `Attach files` (the file
 picker; the iOS media picker on iOS), `GIF` (the same picker as `/gif`), then under `Create` the same actions as
@@ -370,6 +394,12 @@ after the first three (five participants shows **+2**).
 Drag the handle, tap the backdrop, or press Escape to dismiss without starting a
 call. Only confirming notifies participants; joining a live call skips the sheet.
 Check both DMs and channels, including long names, in light and dark themes.
+On phones, a collapsed composer with attachments shows a thumbnail of the
+first one between `+` and the draft, with the number of attachments over it
+when there are two or more; a document shows its file icon. It shows with or
+without draft text, and tapping it opens the composer with the attachments
+below the editor. Check one image, several mixed attachments, and a document
+alone, with and without text, in light and dark themes.
 Input action and formatting buttons show the app tooltip without a second
 native browser tooltip.
 On desktop, select draft text to open the floating formatting toolbar. Its
@@ -457,7 +487,9 @@ event is created — no invitation goes out from the initial request. It cannot 
 email at all. A bot or agent reply posted for a person shares, as that person, the linked items
 (chips or attachments) that the replying bot created for them while answering: those with a
 `created` activity row by that bot on the person's behalf since the person's latest message in
-the thread before the reply. Activity arrives asynchronously, so missing rows are re-checked
+the thread before the reply, or, for a bot message that starts its own thread (a poll card
+posted top-level), their latest message in the channel. Forms an agent creates through code
+mode (its SDK token) are attributed to its bot like native tool creations. Activity arrives asynchronously, so missing rows are re-checked
 after 5 and 30 seconds. Existing items it links, plain URLs, and bot posts with no person
 behind them share nothing. The bot never asks whether to share; it calls `ShareWithChannel` when asked to
 share an existing item. Private and confidential calendar events stay unshared, and a
@@ -582,11 +614,14 @@ Coding agents use `macro_internal.set_pull_request` to register an existing or
 new GitHub PR with their session. Macro Internal MCP is hosted by the harness
 service at `/mcp/internal` on its egress listener, separately from workspace MCP.
 Cursor, sandbox, and macrod sessions receive session-scoped credentials; the
-model supplies only the URL. The tool records the link, not the GitHub PR itself.
+model supplies only the URL. The tool records the link, not the GitHub PR itself,
+and returns the session's `/app/agent/<id>` URL.
 Macro Internal MCP's server instructions ask coding agents to register PRs with
-it, to open them ready for review rather than as drafts, and to get CI passing
-before handing off. External MCP clients get the ready-for-review rule in
-Macro's MCP instructions, and in-app agents tell coding agents they dispatch. It is not prepended
+it, to link the returned session URL in the PR description (the PR block reads
+that link as the PR's origin), to open them ready for review rather than as
+drafts, and to get CI passing before handing off. External MCP clients get the
+ready-for-review rule in Macro's MCP instructions, and in-app agents tell coding
+agents they dispatch. It is not prepended
 to individual user messages. Cursor
 enables automatic PR creation when a repository is selected. Its returned URL
 is also recorded because
@@ -688,6 +723,9 @@ Very long flings or slow responses can still exhaust the available scroll range.
 In the iOS app, fling repeatedly through a long channel, starting each fling before
 the previous one's momentum ends, then let it settle. The messages must not jump when
 scrolling comes to rest, nor when it bounces or is held against the top of loaded history.
+In a channel opened for the first time, fling up through unmeasured history and
+straight back down: scrolling must stop at the latest message, never in blank space
+below it.
 
 Inline document mentions should show their stored title before entering the viewport
 and while preview requests are pending. With a slow preview response, check that a
@@ -860,9 +898,14 @@ response must not switch back or mark that earlier channel read.
 A transient notification-fetch failure keeps the conversation and composer mounted
 while notifications are unavailable. Recovery marks top-level message notifications
 seen without moving the conversation. No notification read marking runs
-from an abbreviated list result, even if that result is empty. Access failures
+from an abbreviated list result, even if that result is empty. Access failures and server-confirmed missing channels
 show **Conversation unavailable** and stay hidden during retry until access is
-confirmed. A route without cached channel metadata shows **Loading conversation**
+confirmed. With GraphQL caching enabled, an empty local projection cannot hide a
+server-confirmed conversation; a stale positive row cannot undo a fresh denial or
+deletion. Contradictory cache membership triggers a bounded server confirmation.
+An initially empty cache result waits for that confirmation before declaring the
+channel unavailable. Unavailable routes still recover from invite notifications
+and reconnect without mounting a message view first. A route without cached channel metadata shows **Loading conversation**
 until its channel arrives. On mobile, opening from the Recent conversation list
 also navigates immediately: a slow or failed notification lookup must not prevent
 messages and the composer from loading. Full-edge notification hydration runs
@@ -884,178 +927,190 @@ with the same full sidebar contents. With no conversation selected, the
 slide-over opens on its own and closes once a conversation is picked; the
 backdrop or `Escape` still dismisses it. There is no separate skinny sidebar mode.
 
-On desktop, the Chat rail has `All` and `Recent` tabs in a flat, shared track
-aligned with New. Choices use equal widths, a transparent outlined track with
-1px padding, and fully rounded pill shapes. The 32px selected state matches
-New's fill and border without an extra shadow. All contains an optional
-`Favorites` section and the
-independently paginated `Team channels`, `Channels`, and `DMs` sections, in
-that order. `Team channels` lists team channels; `Channels` lists every other
-non-DM channel (public and private). Each section collapses on its own and
-keeps its own sort; open sections split the column evenly, and the bottom-most
-open one takes any remaining height. Favorites appears when
-the user has channel favorites and only lists channels. Favorites show a custom
-channel picture when set; otherwise all non-DM channels use a hashtag, including
-team channels. Favorites, regular rows, and headers share the same channel/DM
-icon renderer, including participant avatars, self-DMs, and bot personas. Channel favorites open
-in the shared channel detail. Shift-clicking a favorite, channel, or DM opens that
-conversation in a new split instead. Shift-click refreshes the notification
-selection and opens at latest. Split opens mark top-level notifications seen,
-including mentions and reactions, only after the split is opened or reused.
-Deferred navigation waits until the destination is applied; an unavailable split
-must leave unread state unchanged. Join-only channels remain
-blocked after hydration, including on mobile.
+### Sidebar redesign rollout
 
-With GraphQL caching enabled, a current-query cached Team channels, Channels, or DMs page
-(including an empty page) remains quiet on a response-free refresh failure.
-Hold or fail the refresh before local filtering finishes: cached rows must not
-flash **Couldn’t load conversations** while awaiting reconciliation. Changing
-filters or resetting the cache must not use older rows to hide a new-query error.
-Cache misses, HTTP/GraphQL failures, and failures to load an uncached continuation
-still show errors and retry controls; background refresh retries continue.
+`enable-chat-sidebar-sections` gates the desktop layout, not channel or
+direct-message creation. It defaults on in development; deployed builds defer to
+PostHog. Set `VITE_ENABLE_CHAT_SIDEBAR_SECTIONS=true` or `false` to override it locally.
+Wait for the flag to resolve before mounting a desktop layout or loading its
+lists. An unavailable or disabled remote flag restores **All**, **Recent**, and
+**Threads** (the latter still requires `enable-channel-threads-preview`), the
+original independently scrolling groups, and separate creation actions. A saved
+Recent or Threads tab survives switching the redesign on and off. Personal-section
+queries and new section preferences do not affect the flag-off layout. Existing
+labels remain governed by `enable-channel-tags`. Mobile retains its recent feed
+regardless of the redesign flag, including while it is loading.
 
-Right-clicking a favorite opens the same menu as its channel's row in the
-sections below — `Mark Read`, `Open in new split`, `Unfavorite`,
-`Mute notifications`, `Copy Link`,
-and the label actions when channel labels are enabled — and focuses the
-favorite row rather than the channel's own row.
-`Open in new split` is available for favorites, channels, and DMs on desktop.
-It follows the shared navigation behavior: a conversation already shown inline
-is focused with a `Content already open` toast. The action is hidden on phones
-and disabled when there is no room for another split.
+### Original sidebar (flag off)
 
-### Threads tab
+The desktop rail keeps **All** and **Recent** tabs in a shared pill track beside
+New. All contains optional Favorites and independently paginated Team channels,
+Channels, and DMs. Channels lists joined public and private channels. Each group
+collapses and sorts independently; open groups split the available height.
 
-The `enable-channel-threads-preview` feature flag adds a third `Threads` tab.
-It is on in development; `VITE_ENABLE_CHANNEL_THREADS_PREVIEW` overrides it
-locally. The rail shows an `All threads` row above a `Conversations` section
-with the same sort and `+` controls as the All tab's sections. Conversations
-lists only channels and DMs that hold threads the user takes part in; it pages
-through the user's threads and loads their channels, so scrolling the section
-reveals more. Selecting a row filters the main pane instead of opening the
-conversation. `All threads` clears the filter. At desktop width the rail stays
-docked on Threads with no **Hide navigation** control. In narrow splits the tab
-neither opens nor closes the slide-over, so switching between `Threads`, `All`,
-and `Recent` inside it keeps it open.
+`enable-channel-threads-preview` adds a **Threads** tab. It is on in development;
+`VITE_ENABLE_CHANNEL_THREADS_PREVIEW` overrides it locally. **All threads** clears
+the channel filter, while the Conversations section lists channels and DMs with
+threads the user participates in. Scrolling loads more. Selecting a conversation
+filters the thread view instead of opening that conversation. On desktop, Threads
+pins navigation open with no Hide navigation control. In narrow splits, changing
+between Threads, All, and Recent preserves an already-open navigation overlay.
 
-The main pane is a virtualized list of channel threads the user takes part in,
-newest reply first. It loads more as it nears the end and returns to the top
-when the selected conversation changes. Messages the user sent that have no
-replies are hidden. Each card shows the root message with its replies collapsed
-the same way as a channel timeline: the first reply groups, then a
-`N more replies` control that expands the rest in place. In `All threads`, each
-card is labelled with its conversation. An icon button (`View in channel`)
-appears at a card's top right on hover or focus, and always on touch; it
-switches back to `All` and opens the channel at that thread. Shift-clicking a
-conversation row opens it in a new split. The filter lives in the view's state,
-not the URL: it survives back/forward within the split and reloads, but a
-copied link opens the Threads tab on `All threads`.
+### Sectioned sidebar (flag on)
 
-### Channel labels
+With the flag on, desktop Chat has one conversation sidebar, without All, Recent,
+or Threads view tabs. Favorites appears first, followed by Direct messages, the
+team's channels, and custom sections. The team heading is **[Team name] channels**,
+with **Team channels** as the fallback while the name is unavailable.
+Other joined public and private channels remain in Channels until assigned to a
+personal section. Each custom section is a top-level heading, independent of the
+Team channels disclosure. Empty sections remain visible with a short hint; empty
+Favorites explains how to add a favorite. Private conversations use a lock icon in
+the sidebar and mobile feed, including favorited private conversations.
+All section headers use the shared collapsible-section styling without leading
+icons or top padding; the section stack supplies an 8px flex gap. Custom-section
+drop zones and highlights cover both the header and its content, including the
+empty state.
+Section, DM, and search containers use the 8px outer sidebar gutter; headings
+and rows add their own item padding so headings align with the Chat title.
+Content is indented by 8px under every section, including Favorites, custom
+sections, DMs, and empty states. Search results remain unindented. The
+caret stays hidden in expanded sections until hover and remains visible when
+collapsed. Team-shared sections show a neutral Shared
+badge next to the name, before the caret. Personal sections have no scope icon or
+badge. Header focus backgrounds fill the entire header row, including its
+trailing controls, with no extra right padding.
 
-Channel labels require the `enable-channel-tags` feature flag. The flag is off
-until explicitly enabled, including in development. For a local frontend,
-`VITE_ENABLE_CHANNEL_TAGS=true` enables it and `VITE_ENABLE_CHANNEL_TAGS=false`
-forces it off; restart the frontend after changing the environment override.
+The sidebar scrolls through all sections. Each expanded section has its own
+virtualized, scrollable list. Lists with more than two items have a resize grip;
+drag it to choose a height between two rows (68px) and the end of the list,
+capped by the available pane space. Shorter lists fit their content and have no
+resize grip. Favorites and Direct messages default to four visible rows;
+other sections default to their maximum height. Focus the grip and use Up/Down
+to resize by 20px (100px with Shift), or double-click to restore the default.
+Section heights persist as personal preferences alongside sorting and sidebar
+width. Heights adapt to filtered content and smaller panes without discarding
+the saved preference. Search covers channels and DMs regardless of section
+placement and restores the selected row in its section when closed. Mobile
+retains the recent-conversation feed below.
 
-With the flag off, Team channels remains a flat list in its selected sort order.
-The heading's `+` creates a channel directly. Label headings, creation dialogs,
-channel-menu label actions, and label drag targets are absent, and the app makes
-no channel-label list or smart-label preview requests. Existing saved labels
-remain unchanged and reappear when the flag is enabled.
+Section membership comes from the server's complete visible channel-ID lists.
+The sidebar shows available channel rows immediately. One shared by-ID query
+per batch supplies cached channel data and fetches only missing records using
+Soup's generic explicit-entity hydration. Channel batching and unread refreshes
+stay in the channel query layer; the sidebar does not coordinate separate cache
+and network queries.
+Each expanded section appends skeleton rows while its remaining channels load.
+A failed fetch keeps available rows and replaces that section's loading feedback
+with Retry. Loading sections must not briefly show an empty-state hint.
+Collapsing a section hides its loading feedback without changing membership or
+stopping shared channel hydration.
 
-Even with the flag enabled, the heading keeps the direct `Create channel`
-action while labels are loading or unavailable. It shows the label creation
-menu only after the label list loads successfully; it never advertises disabled
-`New label` or `New smart label` actions. Changing the rollout flag to off also
-removes open label menus and dismisses label dialogs without reloading Chat.
+Favorites open the same channel detail as ordinary rows. Shift-clicking a
+favorite, channel, or DM opens it in a new split. Rejected navigation and failed
+hydration must not mark notifications read. Context menus retain Mark Read,
+Open in new split, Unfavorite, notification controls, and Copy Link.
 
-Verify both states after reloading Chat: with the flag off, inspect the heading
-action and a channel's context menu, drag between channel rows, and confirm
-there are no `/channel-labels` requests. With the flag enabled, verify the `+`
-menu offers `New channel`, `New label`, and `New smart label`; open each label
-dialog and cancel to check the controls without changing shared data. The
-creation, assignment, and persistence checks below require the label backend
-and an account where those changes are safe.
+Favorites defaults to **Custom order**. Drag a favorite onto another favorite to
+move it to that position; an accent insertion line shows the exact destination
+above or below the target row. The order saves through the shared favorites API
+and survives reloads. Hidden favorites and favorites of other entity types keep
+their positions. **Sort → Custom order** restores dragging after choosing an
+automatic sort. Dropping a favorite does not open its conversation or move it
+into a custom section. Failed saves roll back and show an error toast.
 
-Labels group channels inside the `Team channels` section; the `Channels`
-section's `+` only creates a channel. Team members share the
-same labels and can create, rename, delete, or move their channels between them.
-Users without a team have labels private to their account. The naming and delete
-dialogs explain which scope applies. Collapse/expand state is per user.
-Every label remains visible, including empty labels; only team channels the
-viewer actively participates in are shown inside it. Shared labels accept only
-channels belonging to the label's team. Private account labels also accept only
-team channels. Public channels, private channels, and direct messages cannot be
-labelled. They keep their normal navigation, have no label menu actions, and
-cannot be dragged into labels. Existing ineligible assignments no longer group
-channels, including non-team channels and other teams' channels in shared labels.
-Names are unique within the team or account, case-insensitively.
+### Sections
 
-Layout: labels come first in creation order, each showing its visible channels
-A→Z, followed by ungrouped channels in the section's selected sort order. A label
-row has an unread count, a `···` menu (`Rename`, `Mark all as read`, `Delete label`), and a disclosure caret.
-Clicking the row or pressing Enter toggles it; `h` / `l` on a label or one of its
-channels collapses or expands that label. `[` / `]` jump between section headings.
+Sections reuse channel labels. The existing `enable-channel-tags` flag controls
+section management; `VITE_ENABLE_CHANNEL_TAGS=true` enables it locally.
+Turning the flag off hides section controls and stops label reads without
+deleting saved labels. Channel and direct-message creation remain independent of
+the label service and its feature flag.
 
-Creating: use the `Team channels` heading's `+` → `New label`, including when the
-account has no team. The name field receives focus on opening and reopening.
-Enter or `Create label` saves; Escape or Cancel dismisses without saving.
-The dialog stays open while saving and shows a failure inline, preserving the
-name for a retry. A successful empty label appears immediately and survives
-reload. Rename uses the same dialog prefilled. Delete asks for confirmation;
-its button says `Delete for everyone` for shared labels and `Delete label` for
-private ones. Channels remain accessible after deleting their label.
+Use **New → New section** to create a section. The wider dialog has a name field
+and a **Smart section** switch in its body. **Shared with team** sits on the left
+of the footer, with the action buttons on the right. With both switches off, the
+section is personal and manual; smart grouping reveals its name rule and preview.
+Edit and delete through each section's sliders menu. Personal sections are
+private to the account, including for team members, and accept joined team,
+public, or private channels. Shared sections
+retain the team's existing label permissions and accept only channels from that
+team. Neither kind accepts DMs. A personal assignment never changes a shared
+assignment. Names are unique within each scope, case-insensitively.
 
-Moving: right-click a team channel for `Add to label` / `Move to label`, including a
-`New label…` option, or use `Ungroup from “<label>”`. Drag a channel onto a label
-heading or one of its channels to move in. Drag a grouped channel onto a plain
-team channel, the Team channels heading, or empty space below the list to ungroup it.
-Dragging one ungrouped team channel onto another opens a name dialog; saving creates
-the label with both channels atomically. A failed save changes neither channel.
-Dropping on the source channel or its current label does nothing; Escape from
-the naming dialog leaves both channels unchanged.
+Each heading has one sliders-icon menu, also available by right-clicking the header.
+**Sort** opens its independent single-select options with a checkmark on the right.
+**Filter** contains **Unread only**. The unread label sits on the left and its
+switch on the right; toggling it keeps the submenu open.
+Custom sections include editing, Mark all as read, notification actions, and a
+destructive Delete action in the same menu. Click and right-click menus use the
+same standard context-menu rows, spacing, and selection indicators. Use the heading's caret
+to expand/collapse it; this is not repeated
+in the menu. There is no separate all-sections management menu.
+Sorting and unread filters are personal, even for a team-shared section. Date ordering
+follows each paginated source; Favorites and custom sections also offer A–Z.
+Filtered-out channels retain their membership and do not reappear ungrouped.
+Shared name and rule edits apply to the team; personal edits affect only the account.
+Deleting a section does not delete its conversations or change channel access.
 
-For drag verification, start from the channel name and from different horizontal
-positions in a row, then move across row boundaries and scroll the list. The
-highlight follows the visible target under the pointer, with a whole group
-highlighted when moving into it. A drag must not open a preview or reorder the
-source. Check moves into collapsed and empty labels, ungrouping, cancellation,
-and persistence after reload. Grouping in one Chat rail must not trigger a
-second dialog in another rail. If the label service cannot be reached, the
-UI reports the failure instead of claiming the group was saved.
+Every desktop section menu, including **Favorites**, **Channels**,
+**[team name] channels**, and **Direct messages**, offers **Mute all channels**,
+**Unmute all channels**, and **Snooze all channels…**. These update only your
+notifications, including for shared sections. Each action uses the section's
+complete current membership, including filtered-out and unloaded channels;
+channels added later do not inherit the change. Built-in lists resolve all pages
+before applying an action, exclude channels assigned to custom sections just as
+the sidebar does, and never include unjoined channels. Favorites targets only
+channel favorites, not documents or other favorite types. Snooze uses the usual
+duration/date picker and resumes notifications at the chosen time. A partial
+failure keeps successful updates and reports the failures; snooze retries only
+failed channels. Empty or unavailable custom sections and empty Favorites disable
+these actions. Mobile remains unchanged.
 
-Smart labels: use `Channels` → `+` → `New smart label`. Enter a label name and a
-`Name contains` pattern. Matching ignores capitalization and treats punctuation
-literally; it does not use wildcards or regular expressions. The creation dialog
-shows up to five matching channels as you type, followed by `+N more channels
-matched` for overflow. Empty patterns cannot be saved; a valid pattern with no
-current matches can be saved for future channels. Only team channels you
-participate in are matched; shared labels match channels from their own team.
-Public channels, private channels, and direct messages are excluded from both
-the preview and saved results.
+Use a channel's Add to section menu to change the personal or shared assignment.
+Each section uses a checkbox: checking moves the channel into that section,
+and unchecking removes it. Only one section per scope is assigned; the personal
+and shared assignments remain independent.
 
-Group headings have no icon in the sidebar; smart label creation uses a filter
-icon. Channels appear in every matching smart label and keep any manual label
-assignment. A channel in any smart label is excluded
-from the ungrouped list, even when its matching labels are collapsed. Membership
-follows channel names automatically. Existing matches update with live name
-changes; new shared-label matches and unloaded channels refresh periodically.
-Use the heading's `···` →
-`Edit smart label` to change the name or pattern and preview the new matches.
-Smart labels cannot be drag targets or manually assigned through `Move to label`.
-Deleting a smart label preserves channels, other labels, and manual assignments.
+Choose smart grouping in the section dialog for automatic name matching.
+Smart sections match channel names literally and without regard to capitalization. They preserve ordinary section permissions and are not manual
+drop targets. Channels can appear in multiple matching smart sections.
 
-Verify overlapping rules, collapsed labels, no matches, overflow, and quickly
-changing patterns (an older response must not replace the latest preview).
-Check public and private channels with matching names: they stay in the normal
-list, have no label actions, and cannot be dragged into labels or used as a
-second channel when grouping by drop. Team channels still support these actions.
-Open the same matched channel from two labels and verify keyboard focus remains
-on the chosen row. Check rule edits and persistence after reload.
+Support is organized manually through a personal section. The app does not
+classify support channels by their names or silently create a Support section.
+
+Verify personal and shared creation, same-name sections in different scopes,
+private-channel assignment, and rejecting private-channel assignment to a shared
+section. Check collapse and reload, stale requests after an account change,
+empty sections, assignment failures, and one channel in both scopes. Check the
+New menu, both dialog switches, keyboard access, edit-dialog focus, destructive
+deletion, and per-section unread and sort preferences after reload. Confirm
+unread filtering does not change section
+membership or another section's rows. Scroll a long sidebar with many sections
+and confirm that Direct messages remains immediately below Favorites. Keyboard
+navigation and section shortcuts must follow
+the same order as the rendered rows.
+Drag a channel between sections and confirm the sidebar stays visible while
+lookups refetch, including with a slow or paused connection.
+When a channel belongs to both a personal and a shared section, drag its
+personal-section row into the ungrouped list. Only the personal assignment is
+removed; the shared assignment remains. Repeat from the shared-section row to
+verify the opposite scope.
+
+### Creation actions
+
+**New** offers separate **New channel** and **New direct message** actions in
+both sidebar layouts. **New channel** opens the existing
+[name, visibility, and optional invitations flow](#create-a-channel).
+**New direct message** opens the existing recipient picker, including people,
+external email addresses, private groups, and available agent personas.
+The sectioned sidebar also offers **New section** in the same menu.
+
+Check each creation action with the sidebar flag on and off; changing the layout
+must not change the creation flow.
 
 When calls are enabled, `Live` appears below the rail's toolbar while an active
-quick call is available. It stays visible in both tabs and during conversation
+quick call is available. It stays visible while browsing sections and during conversation
 search, and disappears when no active quick calls remain. Entries are titled
 `Call with <creator's name>`. Clicking a call opens
 its camera/microphone setup at `/app/meet/join/<token>`; it does not join immediately.
@@ -1077,51 +1132,26 @@ While reading older history or composing in the preview, incoming notifications
 messages, or revoke composer focus. To check this, leave an unsent draft in a
 preview scrolled into older history and deliver a notification. Selecting another
 conversation or explicitly navigating to a message must still work.
-The search action beside the tabs opens a search field below them and replaces
-the active tab contents with matching channels and direct messages from one
-activity-ordered source. Search results use compact rows on `All` and
-conversation cards on `Recent`. Switching tabs preserves the active search and
-query, then scrolls the results to the selected channel when present or to the
-start. Closing search restores the active tab and applies the same scroll
-behavior to its lists. An empty result uses the standard search empty state
-artwork and wraps long queries. Desktop channel name search combines local fuzzy
-matches and service results, deduplicated by channel ID, across channels and
-DMs. The local matches cover every conversation the viewer is in (the complete
-channel list, not only the loaded page), so a channel outside the newest hundred
-appears from the first keystroke; a loaded row keeps its unread and preview
-metadata when it matches. An empty query shows the ordinary list. Scrolling
-search results loads the next search page; clearing the query restores ordinary
-list pagination. Check a matching query, a query for a conversation absent from
-the ordinary list, a query with no matches, and a clear/reopen cycle. Mobile dock
-search uses the independent Search route described below.
-Recent search includes both channels and DMs, including service hits without
-message previews. It does not require message metadata or an importance filter.
-Loaded conversation metadata is preserved when a service hit has the same ID.
-Pending and placeholder service results never appear as current hits. Ordinary
-list errors do not affect an active search.
-Collapsing a section does not discard its loaded pages. Recent has its own
-pagination cursor. Each list is virtualized, so offscreen conversations may not
-exist in the DOM.
-Verify Recent in a visible browser with a latest-message preview containing an
-agent-session mention. Let its title resolve, scroll the preview out of view and
-back, then switch to All. The title should update without repeatedly remounting
-the mention, and scrolling and navigation must remain responsive; a headless
-browser alone can miss this regression.
-Channels and DMs each have a sort action before their create action. They can be
-sorted by last viewed, last updated, or date created, and each choice persists
-independently as a user preference.
-Compact channel and DM rows in All have the same height. Section headings place
-their caret immediately after the title and reveal it on hover or while the
-section is collapsed; hovering only undims the heading text, while
-keyboard-focusing the heading with Arrow keys or `j` / `k` gives it a background.
-Clicking a section heading toggles it without moving the keyboard highlight;
-keyboard activation still toggles the highlighted section.
+The sidebar search action expands a field under the title. Search results replace
+the section list with compact conversation rows and preserve the selected
+channel. Closing search restores the section list and scrolls to that selection
+when available. Search merges the complete joined-channel list with authorized
+service results, deduplicates by channel ID, and retains loaded unread metadata.
+Clearing the query restores ordinary pagination.
 
-Arrow Down / `j` at the last loaded conversation holds focus while that
-section loads its next page. Once loading finishes, the next press advances
-into the appended rows. If the section has no next page, navigation proceeds
-to the next section. `[` and `]` jump between the visible Favorites,
-Channels, and DMs section headers.
+Each primary channel list and the DM panel keeps its own persisted sort:
+last viewed, last updated, or date created. Custom section channels follow that
+section's selected sort, defaulting to alphabetical order. Loading failures show
+Retry without hiding already loaded rows.
+Loading another page must preserve keyboard focus and scroll position.
+
+Arrow Down / `j` follows visible rows, including section headings. `h` / `l`
+collapse or expand the focused section. `[` / `]` jump between primary and custom
+section headings, including the DM heading. Paging at the last loaded channel
+retains focus until the next page arrives.
+From a custom-section heading in the middle of the list, use both `[` and `]`;
+each shortcut must move to the adjacent heading rather than the Team channels
+heading.
 
 On touch layouts, Channels shows only the Recent conversation feed, with channel
 and DM message previews. Rows use Home's touch row: the unread dot in the left
@@ -1183,10 +1213,20 @@ an opened unread conversation, so mark-read and message targeting retain their
 complete top-level inputs in Chat and thread-scoped inputs in Inbox. Reopening
 a conversation must refresh that full
 edge even within 30 seconds; mark-read waits for the refresh rather than using
-older cached notifications. Failed lookups and successful lookups with no matching
+older cached notifications. Failed server lookups and successful server lookups with no matching
 channel show **Conversation unavailable** with **Retry**, never permanent loading.
 Retry rather than marking just the one unread witness. Repeated mobile taps must
 open the last selected conversation, not a slower earlier request.
+
+A backend-free cache regression runs on desktop and phone viewports:
+`bunx playwright test --config src/lib/queries/channel/browser-test/playwright.config.ts`.
+It uses the production normalized exchange, query adapter, and detail state with a
+controlled transport. Confirm a channel, type a draft, then deliver repeated empty
+cache projections: the composer must remain mounted. A fresh server absence must
+hide it, a cached positive row must leave it hidden, and a fresh grant must recover
+it. See the [desktop fixture](assets/channel-access-cache-desktop.png) and
+[phone fixture](assets/channel-access-cache-phone.png); these show synthetic data,
+not a full app session.
 
 Opening also refreshes that channel's bounded unread edge in the same request.
 Read a DM on another device while its web sidebar retains an unread dot (for
@@ -1195,7 +1235,7 @@ The dot and DM unread count must clear without reloading, even when the complete
 unread response is empty and no mark-read mutation runs. Another unread DM must
 keep its dot.
 
-Check cached Home → Chat navigation, All/Recent/search, and unread state after a
+Check cached Home → Chat navigation, section browsing/search, and unread state after a
 read, a new notification, deletion, and reconnect, without reloading the page.
 With the mark-read response delayed, channel/DM dots, section counts, and new-activity
 targets should clear as soon as the local read is applied. A failed read restores

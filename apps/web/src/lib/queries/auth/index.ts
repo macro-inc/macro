@@ -12,6 +12,7 @@ export {
   useChangePlanMutation,
   useCreateAiCreditCheckoutMutation,
   useIncludedAiCentsByTier,
+  usePurchaseAiCreditsMutation,
   useSubscriptionStatusQuery,
   useUpdateAiAutoReloadMutation,
   useUpdateAiOverageMutation,
@@ -19,6 +20,7 @@ export {
 export {
   type GithubLink,
   type GithubLinkStatus,
+  githubLinkAuthorizationUrl,
   invalidateGithubLinkStatus,
   useDeleteGithubLinkMutation,
   useGithubLinkStatusQuery,

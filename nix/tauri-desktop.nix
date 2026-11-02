@@ -886,8 +886,8 @@
             "sha256-IdhZM/B8EyC/4/3HxQjkzNkrJeA68+43+rKity+iGLY=";
           "git+https://github.com/macro-inc/tauri-plugins?rev=6ddd6600e20436388f169e936b610fe93944b7b0#6ddd6600e20436388f169e936b610fe93944b7b0" =
             "sha256-5ErLW2po5ZlTTuJjsCExwC//rHYcQo2tKXiyz3w/0kQ=";
-          "git+https://github.com/macro-inc/tauri?rev=285fb6b1#285fb6b1cb2fc20666da1688f4c74e240a100035" =
-            "sha256-++WQc4YpvoMPBFTuDj//856BguC1ArS6AeLTbIOn38Q=";
+          "git+https://github.com/macro-inc/tauri?rev=4b8a46f1#4b8a46f15c0a54a5c06a1486cd5432d444c17bd8" =
+            "sha256-nRfbjAGUWsbN5CBhFgfARFMEWquvCHvgsTH9a8BqA1g=";
           "git+https://github.com/tauri-apps/winit-gtk4?rev=3d7c7cd19d3c752f75762ceea535444e63bdf8de#3d7c7cd19d3c752f75762ceea535444e63bdf8de" =
             "sha256-2mFNnZcPnVqPQ2iakMoXSKXrlHiIv+HuQZ7iOwtrKb4=";
           "git+https://github.com/tursodatabase/turso?rev=79163249538197d01dec5ea7f65519454ed792e2#79163249538197d01dec5ea7f65519454ed792e2" =
@@ -970,14 +970,17 @@
           cef = lib.findFirst (p: p.name == "cef") null lock.package;
         in
         lib.last (lib.splitString "+" cef.version);
+      # An empty sha256 means the codec build for a new CEF version is still
+      # pending; build with the CDN CEF meanwhile rather than block releases.
+      cefCodecsPinned =
+        assert lib.assertMsg (cefCodecsVersion == cefCrateVersion)
+          "desktop-cef loads CEF ${cefCrateVersion} but cef-codecs.json pins ${cefCodecsVersion}; update the manifest and rebuild";
+        lib.warnIf (cefCodecs.sha256 == "")
+          "apps/web/tauri/desktop-cef/cef-codecs.json has no sha256; building with the CDN CEF, which cannot play H.264, HEVC, or AAC"
+          (cefCodecs.sha256 != "");
       cefCodecsArchive = pkgs.fetchurl {
         url = "https://github.com/macro-inc/macro/releases/download/${cefCodecs.releaseTag}/${cefCodecs.asset}";
-        sha256 =
-          assert lib.assertMsg (cefCodecsVersion == cefCrateVersion)
-            "desktop-cef loads CEF ${cefCrateVersion} but cef-codecs.json pins ${cefCodecsVersion}; update the manifest and rebuild";
-          assert lib.assertMsg (cefCodecs.sha256 != "")
-            "apps/web/tauri/desktop-cef/cef-codecs.json has no sha256; run the `Build CEF with codecs` workflow and pin its output";
-          cefCodecs.sha256;
+        inherit (cefCodecs) sha256;
       };
       cefCodecsDistribution = pkgs.runCommand "cef-codecs-${cefCodecsVersion}" { } ''
         tar -xjf ${cefCodecsArchive}
@@ -1017,9 +1020,13 @@
         preBuild = ''
           export PATH="$PATH:/usr/bin:/bin:/usr/sbin:/sbin"
           export CEF_PATH="$TMPDIR/tauri-cef"
+        ''
+        + lib.optionalString cefCodecsPinned ''
           mkdir -p "$CEF_PATH"
           cp -R ${cefCodecsDistribution}/. "$CEF_PATH/"
           chmod -R u+w "$CEF_PATH"
+        ''
+        + ''
           cp ${../apps/web/package.json} apps/web/package.json
           rm -rf apps/web/dist
           cp -r ${frontend} apps/web/dist

@@ -109,18 +109,13 @@ const useIsViewerReadyForScroll = () => {
   return () => rootViewer.isReady() && rootViewer.hasVisiblePages();
 };
 
-/**
- * Converts a location into URL parameters for sharing.
- *
- * @param location - The PDF location to convert
- * @returns URL with location parameters
- */
-export function locationToUrl(location: PdfLocation | undefined): string {
-  const url = new URL(window.location.href);
+/** Builds a standalone PDF link with only the selected location parameters. */
+export function locationToUrl(
+  documentId: string,
+  location: PdfLocation | undefined
+): string {
+  const url = new URL(buildSimpleEntityUrl({ type: 'pdf', id: documentId }));
   const params = url.searchParams;
-
-  // Clear existing parameters
-  Object.values(URL_PARAMS).forEach((param) => params.delete(param));
 
   if (!location) {
     return url.toString();
@@ -199,9 +194,7 @@ export function useCreateShareUrl() {
         shareLocation?.type === 'annotation' ? shareLocation : undefined,
     };
     const selectedLocation = selectLocationForFidelity(fidelity, locations);
-    const url = locationToUrl(selectedLocation);
-    const params = Object.fromEntries(new URL(url).searchParams);
-    return buildSimpleEntityUrl({ type: 'pdf', id: pdf.documentId() }, params);
+    return locationToUrl(pdf.documentId(), selectedLocation);
   };
   return createCallback(createShareUrl);
 }

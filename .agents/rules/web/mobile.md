@@ -56,6 +56,10 @@ read their code, and follow that pattern rather than inventing a new one.
 - Phone drawers have a handle and no X; drag, backdrop, or Escape dismiss,
   and focus returns to the opener. No submenus at phone width: drill in
   place with a back row.
+- A sheet takes focus itself when it opens, so no row opens wearing a focus
+  ring; only a first tab stop that is a text field keeps it. Name another
+  target with `initialFocusEl` or `onInitialFocus`, never an autofocus of your
+  own.
 - Actions that must stay in reach while a sheet scrolls sit in its pinned
   chrome between the handle and `MobileDrawer.ScrollBody`, never in a sticky
   band inside the scroll. A touch popover split exposes that slot as
@@ -90,8 +94,10 @@ read their code, and follow that pattern rather than inventing a new one.
 - Overlays are Kobalte or corvu layers or handle Escape: Android Back sends
   Escape to the top layer. Own back stacks use `useAndroidBackNavigation`.
 - Persistent prompts (`toast.custom` with `persistent`) go to the prompt
-  region (`useKeyedPersistentToasts` does it); a prompt in the transient
-  region would cover a sheet's controls.
+  region (`useKeyedPersistentToasts` does it). Its phone layer
+  (`z-mobile-prompt-region`) sits under the modal stack, so sheets and the
+  pickers on them cover it; a prompt in the transient region, which stays above
+  sheets, would cover a sheet's controls.
 - Pass a composer typeahead or picker menu's `floatWithSelection` its
   `fullHeight` (content cap plus panel padding) so it picks the side with room
   for its whole list instead of shrinking below the caret when its first

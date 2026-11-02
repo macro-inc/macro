@@ -74,6 +74,7 @@ async fn a_purge_retires_the_surface_only_once_the_form_is_gone() {
         FixedClock(world.clone()),
         RecordingBroker(world.clone()),
         witness.clone(),
+        FakeImageFiles(world.clone()),
     );
     forms.trash_form(owner()).await.unwrap();
 

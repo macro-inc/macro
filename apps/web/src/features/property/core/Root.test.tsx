@@ -1,8 +1,15 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { createSignal } from 'solid-js';
+import { createSignal, Show } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
-import type { EntityProperty, SelectProperty } from '../types';
+import { InlineNumberEditor } from '../editors/inline/InlineNumberEditor';
+import { InlineTextEditor } from '../editors/inline/InlineTextEditor';
+import type {
+  EntityProperty,
+  NumberProperty,
+  SelectProperty,
+  StringProperty,
+} from '../types';
 import { getSelectValues } from '../utils/typeGuards';
 import { useProperty } from './context';
 import { Root } from './Root';
@@ -260,6 +267,47 @@ it('returns focus to the pill after the editor took it', async () => {
   expect(document.activeElement).toBe(pill);
 });
 
+it('returns focus to its own root when another shows the same property', async () => {
+  const [replaced, setReplaced] = createSignal(false);
+  const Pill = () => {
+    const ctx = useProperty();
+    return (
+      <Show
+        when={replaced()}
+        fallback={
+          <button onClick={(event) => ctx.openEditor(event.currentTarget)}>
+            Set
+          </button>
+        }
+      >
+        <button>Saved</button>
+      </Show>
+    );
+  };
+  const Close = () => {
+    const ctx = useProperty();
+    return <button onClick={() => ctx.closeEditor()}>Close</button>;
+  };
+  render(() => (
+    <>
+      <Root property={priority}>
+        <button>Title row pill</button>
+      </Root>
+      <Root property={priority}>
+        <Pill />
+        <Close />
+      </Root>
+    </>
+  ));
+
+  fireEvent.click(screen.getByText('Set'));
+  setReplaced(true);
+  fireEvent.click(screen.getByText('Close'));
+  await nextTask();
+
+  expect(document.activeElement).toBe(screen.getByText('Saved'));
+});
+
 it('leaves focus in the field the editor found it in', async () => {
   const { title, pill } = renderEditor();
 
@@ -270,4 +318,53 @@ it('leaves focus in the field the editor found it in', async () => {
   await nextTask();
 
   expect(document.activeElement).toBe(title);
+});
+
+it('edits an empty-value slot and preserves zero as a number', async () => {
+  const field: NumberProperty = {
+    ...priority,
+    propertyDefinitionId: 'number-definition',
+    displayName: 'Estimate',
+    valueType: 'NUMBER',
+    value: null,
+  };
+  const saved = Promise.withResolvers<void>();
+  const onSave = vi.fn(() => saved.promise);
+  render(() => (
+    <Root property={field} canEdit onSave={onSave}>
+      <InlineNumberEditor emptyValue={<span>Not set</span>} />
+    </Root>
+  ));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Not set' }));
+  const input = screen.getByRole('spinbutton');
+  fireEvent.input(input, { target: { value: '0' } });
+  fireEvent.keyDown(input, { key: 'Enter' });
+  expect(onSave).toHaveBeenCalledExactlyOnceWith(field, {
+    valueType: 'NUMBER',
+    value: 0,
+  });
+  saved.resolve();
+  await saved.promise;
+  expect(await screen.findByRole('button', { name: '0' })).toBeTruthy();
+});
+
+it('keeps empty-value slots passive for read-only inline fields', () => {
+  const field: StringProperty = {
+    ...priority,
+    propertyDefinitionId: 'text-definition',
+    displayName: 'Description',
+    valueType: 'STRING',
+    value: null,
+  };
+  const onSave = vi.fn();
+  render(() => (
+    <Root property={field} canEdit={false} onSave={onSave}>
+      <InlineTextEditor emptyValue={<span>Not set</span>} />
+    </Root>
+  ));
+
+  fireEvent.click(screen.getByRole('button', { name: 'Not set' }));
+  expect(screen.queryByRole('textbox')).toBeNull();
+  expect(onSave).not.toHaveBeenCalled();
 });

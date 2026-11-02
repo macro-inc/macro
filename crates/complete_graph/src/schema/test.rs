@@ -49,6 +49,7 @@ mod calendar;
 mod crm_record;
 mod database_activity;
 mod database_row;
+mod database_view_rows;
 mod email_archive;
 mod form_activity;
 mod initiative;
@@ -241,6 +242,7 @@ impl SoupService for CountingSoupService {
                     },
                 );
                 soup::domain::models::SoupProjectionHydration {
+                    sort_key: None,
                     item,
                     document_server_facts,
                 }
@@ -311,12 +313,22 @@ impl SoupService for CountingSoupService {
         self.grouped_calls.fetch_add(1, Ordering::SeqCst);
         Ok(vec![
             soup::domain::models::grouping::ItemGroupingInfo {
+                sort_key: None,
+                display_order: None,
+                document_server_facts: Some(soup::domain::models::SoupDocumentServerFacts {
+                    is_email_attachment: false,
+                    is_important: true,
+                    status_option_ids: Vec::new(),
+                }),
                 key: "document".to_string(),
                 total_group_count: 3,
                 index_in_group: 1,
                 item: grouped_document(Uuid::from_u128(1)),
             },
             soup::domain::models::grouping::ItemGroupingInfo {
+                sort_key: None,
+                display_order: None,
+                document_server_facts: None,
                 key: "document".to_string(),
                 total_group_count: 3,
                 index_in_group: 2,
@@ -1156,6 +1168,18 @@ impl EntityAccessService for CountingEntityAccessService {
             | (EntityType::Form, form_activity::RESPONDED_FORM_ID) => Some(AccessLevel::View),
             (EntityType::Form, form_activity::EDITABLE_FORM_ID) => Some(AccessLevel::Edit),
             (EntityType::Database | EntityType::Form, _) => None,
+            (EntityType::Team, _) => {
+                return EntityAccessReceipt::try_new_authenticated_user(
+                    MacroUserIdStr::parse_from_str(VALID_USER_ID).unwrap(),
+                    entity_access::domain::models::Entity {
+                        entity_id: entity_id.to_owned(),
+                        entity_type,
+                    },
+                    EntityPermission::TeamRole {
+                        role: TeamRole::Member,
+                    },
+                );
+            }
             (EntityType::EmailThread, _) => {
                 let thread_id = Uuid::parse_str(entity_id).unwrap();
                 self.email_thread_checks.lock().unwrap().push(thread_id);
@@ -1545,19 +1569,15 @@ impl TestHarness {
                     self.thread_reader.clone(),
                 ),
             ))
-            .data(graphql_soup::AgentSessionEntityLoader(
-                graphql_soup::soup_item_loader(
-                    self.primary_soup_service.clone(),
-                    Arc::new(self.email_service.clone()),
-                    self.state.entity_access.as_ref().clone(),
-                ),
+            .data(graphql_soup::AgentSessionEntityLoader::new(
+                self.primary_soup_service.clone(),
+                Arc::new(self.email_service.clone()),
+                self.state.entity_access.as_ref().clone(),
             ))
-            .data(graphql_soup::PrimarySoupItemLoader(
-                graphql_soup::soup_item_loader(
-                    self.primary_soup_service.clone(),
-                    Arc::new(self.email_service.clone()),
-                    self.state.entity_access.as_ref().clone(),
-                ),
+            .data(graphql_soup::PrimarySoupItemLoader::new(
+                self.primary_soup_service.clone(),
+                Arc::new(self.email_service.clone()),
+                self.state.entity_access.as_ref().clone(),
             ))
             .data(graphql_properties::entity_properties_loader(
                 user_id.clone(),
@@ -1601,11 +1621,11 @@ async fn soup_updates_subscribes_as_the_authenticated_user() {
     let document_id = Uuid::from_u128(42);
     let deleted_document_id = Uuid::from_u128(43);
     soup_service.set_raw_response(vec![soup_document(document_id)]);
-    let loader = graphql_soup::PrimarySoupItemLoader(graphql_soup::soup_item_loader(
+    let loader = graphql_soup::PrimarySoupItemLoader::new(
         soup_service.clone(),
         Arc::new(NoOpEmailService),
         NoOpEntityAccessService,
-    ));
+    );
     let schema: SoupSchema<
         CountingSoupService,
         TestRealtimeSubscriptionService,
@@ -1705,6 +1725,32 @@ async fn agent_session_is_read_from_the_primary_not_the_list_replica() {
 }
 
 #[tokio::test]
+async fn agent_session_read_carries_the_viewer_team_for_its_linked_pr() {
+    let harness = harness();
+    let session_id = Uuid::from_u128(7);
+    harness
+        .primary_soup_service
+        .set_raw_response(vec![soup_agent_session(session_id)]);
+
+    let response = harness
+        .execute(&format!(
+            r#"{{ user {{ agentSession(sessionId: "{session_id}") {{ id }} }} }}"#
+        ))
+        .await;
+
+    assert!(response.errors.is_empty(), "{:?}", response.errors);
+    // Linked PRs are stored for the team; without its receipt the row's PR
+    // state reads as unknown and overwrites the list's known state.
+    assert_eq!(
+        harness
+            .primary_soup_service
+            .raw_team_receipts
+            .load(Ordering::SeqCst),
+        1
+    );
+}
+
+#[tokio::test]
 async fn soup_entity_is_read_from_the_primary_not_the_list_replica() {
     let harness = harness();
     let document_id = Uuid::from_u128(8);
@@ -1786,11 +1832,11 @@ async fn agent_session_log_appended_streams_runs_for_an_accessible_session() {
     });
     let soup_service = CountingSoupService::default();
     soup_service.set_raw_response(vec![soup_agent_session(session_id)]);
-    let loader = graphql_soup::AgentSessionEntityLoader(graphql_soup::soup_item_loader(
+    let loader = graphql_soup::AgentSessionEntityLoader::new(
         soup_service.clone(),
         Arc::new(NoOpEmailService),
         NoOpEntityAccessService,
-    ));
+    );
     let schema = build_schema_with_service::<
         CountingSoupService,
         NoOpEmailService,
@@ -2258,7 +2304,7 @@ async fn group_soup_nests_items_in_bins_and_reuses_cached_authorization() {
 
     let response = harness
         .execute(
-            "{ user { id groupSoup(input: {initial: {groupBy: {field: ENTITY_TYPE}}}) { bins { key totalCount nextCursor items { id entityType } } } } }",
+            "{ user { id groupSoup(input: {initial: {groupBy: {field: ENTITY_TYPE}}}) { bins { key totalCount displayOrder nextCursor items { id entityType cacheProjection } } } } }",
         )
         .await;
 
@@ -2270,6 +2316,18 @@ async fn group_soup_nests_items_in_bins_and_reuses_cached_authorization() {
     assert_eq!(harness.authorization_calls.load(Ordering::SeqCst), 1);
     let cursor = bin["nextCursor"].as_str().unwrap();
     assert_eq!(bin["items"].as_array().unwrap().len(), 2);
+    assert_eq!(bin["displayOrder"], 0);
+    let items = bin["items"].as_array().unwrap();
+    let supplement = soup_filter_projection::decode_cache_projection_supplement(
+        items[0]["cacheProjection"].as_str().unwrap(),
+    )
+    .unwrap();
+    assert_eq!(
+        supplement.record_key(),
+        &predicate_index::RecordKey::new(format!("GraphqlSoupDocument:{}", Uuid::from_u128(1)))
+            .unwrap()
+    );
+    assert!(items[1]["cacheProjection"].is_null());
 
     let continuation = format!(
         "{{ user {{ groupSoup(input: {{continuation: {{groupBy: {{field: ENTITY_TYPE}}, groupKey: \"document\", cursor: \"{cursor}\"}}}}) {{ bins {{ key }} }} }} }}"
