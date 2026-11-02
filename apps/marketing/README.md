@@ -996,13 +996,15 @@ and closing sources at desktop and phone widths, without remounting the original
 conversation or document. Display names use first names. All product pages use
 `HomepageClosing` for the bottom Open app CTA and the shared feature heading styles.
 
-Chat sidebar parity: `workspace/ChatSidebar.tsx` adapts the app's
-`channels-view/components/rail/ExpandedChannelsRail.tsx` with local fixtures.
-It uses the shared Tabs and ViewSidebar controls, 32px section headers and a 4px
-header-to-list gap. Channels and DMs scroll independently. Verify search,
-section collapse, Threads navigation, and opening a mentioned source after
-switching channels. Message text uses the app's 15px/24px reading size; dark
-surface and edge tokens are frozen from `apps/web/src/index.css`.
+Chat sidebar demo: `workspace/ChatSidebar.tsx` retains the earlier
+All/Recent/Threads layout with local fixtures, shared Tabs and ViewSidebar
+controls, 32px section headers, and a 4px header-to-list gap. It is not the current
+app's sidebar parity target: `channels-view/components/rail/ExpandedChannelsRail.tsx`
+uses Favorites, Team channels, and custom sections in one scrolling list, with a
+sticky collapsible DM panel and no view tabs. Verify the demo's search, section
+collapse, thread navigation, and opening a mentioned source after switching
+channels. Message text uses the app's 15px/24px reading size; dark surface and edge
+tokens are frozen from `apps/web/src/index.css`.
 
 Keep Merge/Merged and Open session actions in the shared agent chip at the same
 24px height and pill radius, with touch resizing disabled for both.

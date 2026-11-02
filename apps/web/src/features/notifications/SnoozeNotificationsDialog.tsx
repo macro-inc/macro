@@ -1,6 +1,7 @@
 import { toast } from '@core/component/Toast/Toast';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { useMuteItemMutation } from '@queries/notification/unsubscribes';
 import type { UserUnsubscribe } from '@service-notification/generated/schemas/userUnsubscribe';
 import {
@@ -58,6 +59,26 @@ function SnoozeNotificationsDialog(
       );
     },
   });
+
+  const submit = (until: Date) =>
+    Telemetry.span('notifications.snooze', async (span) => {
+      span.setAttr(
+        'notification.item_ids',
+        props.items.map((item) => item.item_id)
+      );
+      span.setAttr('notification.count', controller.remainingCount());
+
+      await controller.submit(until);
+
+      const error = controller.error();
+
+      if (error) {
+        span.error(error);
+      } else {
+        span.setAttr('notification.snoozed_until', until.toISOString());
+      }
+    });
+
   return (
     <SnoozePicker
       {...props}
@@ -67,9 +88,7 @@ function SnoozeNotificationsDialog(
       options={options()}
       pending={controller.pending()}
       error={controller.error()}
-      onSelect={(until) =>
-        fireAndForget(controller.submit(until), 'notifications')
-      }
+      onSelect={(until) => fireAndForget(submit(until), 'notifications')}
     />
   );
 }
