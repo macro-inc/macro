@@ -81,6 +81,12 @@ on the create (`prompt` + `promptActionId`) and no `/control` request follows;
 a persona, effort, or speed keeps the control request. Either way the prompt
 shows as one bubble that the logged row confirms in place.
 
+Switching a disconnected session's model wakes its runtime first; the
+selector re-enables with the new model's options once the runtime answers. If
+the live feed misses that answer, the client reads the log after 10 seconds,
+and after a minute it takes back an unconfirmed change, so the selector shows
+the runtime's model again and stays usable.
+
 Macro's in-process agent opens each reply with a line from a fast model
 (`gpt-5.4-mini`), usually within half a second of Enter. Small talk
 ("hi there", "thanks") gets that line as the whole reply, and the chosen model,

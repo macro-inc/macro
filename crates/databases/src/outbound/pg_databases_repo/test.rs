@@ -19,6 +19,7 @@ mod changes;
 #[cfg(feature = "gateway")]
 mod derived_cells;
 mod entity_split;
+mod folders;
 #[cfg(feature = "gateway")]
 mod journal;
 #[cfg(feature = "gateway")]

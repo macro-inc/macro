@@ -308,6 +308,7 @@ export function EmailList(props: EmailListProps) {
   const actionState = toEntityActionListState({
     controller: list,
     getEntity: (row) => (row.kind === 'entity' ? row.entity : undefined),
+    positions: source.positions,
     collapse: {
       // Signal and Noise remove archived threads; finish the row animation first.
       enabled: () =>

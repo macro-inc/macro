@@ -3,6 +3,7 @@
 //! access crate's helpers.
 
 mod drafts;
+mod folders;
 mod layout;
 mod ledger;
 mod sharing;
@@ -33,6 +34,9 @@ pub enum PgFormsRepoError {
     /// ones decoded.
     #[error("failed to encode or decode stored gate rules")]
     Json(#[from] serde_json::Error),
+    /// A folder id is not a uuid.
+    #[error("folder id is not a uuid")]
+    FolderId(#[from] uuid::Error),
     /// Positions could not be minted for a layout.
     #[error("layout position")]
     Position(#[from] PositionError),
@@ -98,6 +102,7 @@ struct FormRow {
     trashed_at: Option<DateTime<Utc>>,
     name_follows_database: bool,
     is_hidden_in_drive: bool,
+    project_id: Option<String>,
 }
 
 impl TryFrom<FormRow> for StoredForm {
@@ -136,6 +141,7 @@ impl TryFrom<FormRow> for StoredForm {
                 },
                 created_at: row.created_at,
                 updated_at: row.updated_at,
+                project_id: row.project_id,
                 is_hidden_in_drive: row.is_hidden_in_drive,
             },
             trashed_at: row.trashed_at,
@@ -258,7 +264,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                    submitted_column_id, respondent_column_id, audience, tally_visible,
                    status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,
                    created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive
+                   name_follows_database, is_hidden_in_drive, project_id
             FROM forms WHERE id = $1
             "#,
             id.into_uuid(),
@@ -279,7 +285,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                        submitted_column_id, respondent_column_id, audience, tally_visible,
                        status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,
                    created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive
+                   name_follows_database, is_hidden_in_drive, project_id
                 FROM forms WHERE id = ANY($1) AND trashed_at IS NULL
                 ORDER BY id
                 "#,
@@ -313,7 +319,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                        submitted_column_id, respondent_column_id, audience, tally_visible,
                        status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,
                    created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive
+                   name_follows_database, is_hidden_in_drive, project_id
                 FROM forms WHERE database_id = $1 AND trashed_at IS NULL
                 ORDER BY created_at, id
                 "#,
@@ -404,7 +410,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                       submitted_column_id, respondent_column_id, audience, tally_visible,
                       status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,
                    created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive
+                   name_follows_database, is_hidden_in_drive, project_id
             "#,
             id.into_uuid(),
             changes.description.as_deref(),
@@ -448,7 +454,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                       submitted_column_id, respondent_column_id, audience, tally_visible,
                       status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,
                    created_at, updated_at, trashed_at,
-                   name_follows_database, is_hidden_in_drive
+                   name_follows_database, is_hidden_in_drive, project_id
             "#,
             id.into_uuid(),
             name,
@@ -475,7 +481,7 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
                       submitted_column_id, respondent_column_id, audience, tally_visible,
                       status, closes_at, confirmation_message, logo_file_id, cover_file_id, accent_color,
                    created_at, updated_at, trashed_at,
-                      name_follows_database, is_hidden_in_drive
+                      name_follows_database, is_hidden_in_drive, project_id
             "#,
             id.into_uuid(),
             updated_at,
@@ -509,6 +515,11 @@ impl crate::domain::ports::FormsRepo for PgFormsRepo {
         .await?
         .rows_affected()
             > 0)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn move_form(&self, id: FormId, project_id: Option<&str>) -> Result<bool, Self::Error> {
+        folders::move_form(&self.pool, id, project_id).await
     }
 
     #[tracing::instrument(err, skip(self))]

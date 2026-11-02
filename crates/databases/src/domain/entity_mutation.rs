@@ -1,10 +1,11 @@
-//! The entity-mutation lifecycle capabilities for databases: rename, trash,
-//! restore and permanent delete; the router reports the rest unsupported.
+//! The entity-mutation capabilities for databases: rename, move between
+//! folders, trash, restore and permanent delete; the router reports the rest
+//! unsupported.
 
 use entity_access::domain::models::{EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel};
 use entity_mutation::{
-    DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, RenameEntity,
-    RestoreEntity, TrashEntity,
+    DeleteEntityPermanently, EntityMutationEffect, EntityMutationErrorCode, MoveEntity,
+    RenameEntity, RestoreEntity, TrashEntity, capability::MoveEntityRequest, project_refs,
 };
 use macro_event_broker::MacroEventBroker;
 use model_entity::Entity;
@@ -54,6 +55,44 @@ where
     ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
         DatabasesService::rename_database(self, receipt, display_name).await?;
         Ok(vec![EntityMutationEffect::updated(entity)])
+    }
+}
+
+impl<Repository, Definitions, Cells, Events, Access, Broker> MoveEntity
+    for DatabasesServiceImpl<Repository, Definitions, Cells, Events, Access, Broker>
+where
+    Repository: DatabasesRepo,
+    Definitions: ColumnDefinitionStore,
+    Cells: CellStore,
+    Events: TableEventPublisher,
+    Access: AccessDirectory,
+    Broker: MacroEventBroker,
+{
+    /// Filing a database in a folder shares it with the folder's members,
+    /// which only its owner may do.
+    type Receipt = OwnerAccessLevel;
+
+    async fn move_entity(
+        &self,
+        request: MoveEntityRequest<Self::Receipt>,
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
+        let (entity, receipt, project_id) = match request {
+            MoveEntityRequest::MoveToRoot { entity, receipt } => (entity, receipt, None),
+            MoveEntityRequest::MoveToProject {
+                entity,
+                receipt,
+                project_id,
+                project_receipt: _,
+            } => (entity, receipt, Some(project_id)),
+        };
+        let previous_project_id = self.move_database(receipt, project_id.as_deref()).await?;
+        Ok(std::iter::once(EntityMutationEffect::updated(entity))
+            .chain(
+                project_refs([previous_project_id, project_id])
+                    .into_iter()
+                    .map(EntityMutationEffect::updated),
+            )
+            .collect())
     }
 }
 
