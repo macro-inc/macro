@@ -7561,7 +7561,7 @@ export interface CreateContact {
    */
   name: string;
   /**
-   * The contact's email address, e.g. "jane@acme.com" or "jane@gmail.com". Omit it to add the contact by name only.
+   * The contact's email address, e.g. "jane@example.com". Omit it to add the contact by name only.
    */
   email?: string | null;
 }

@@ -803,7 +803,7 @@ async fn create_contact_rejects_blank_name() {
     let access = company_receipt();
     for name in ["", "   ", "\t\n"] {
         let err = service()
-            .create_contact(&access, name, Some("jane@acme.com"))
+            .create_contact(&access, name, Some("jane@example.com"))
             .await
             .unwrap_err();
         assert!(matches!(err, CrmError::InvalidRequest(_)), "name {name:?}");
@@ -816,8 +816,8 @@ async fn create_contact_normalizes_optional_email() {
     let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
     let access = company_receipt();
     for email in [
-        Some(" Jane@Acme.com "),
-        Some("jane@GMAIL.com"),
+        Some(" Jane@Example.com "),
+        Some("jane@EXAMPLE.net"),
         Some("   "),
         None,
     ] {
@@ -826,8 +826,8 @@ async fn create_contact_normalizes_optional_email() {
     assert_eq!(
         *repo.created_contact_emails.lock().unwrap(),
         [
-            r#"Some("jane@acme.com")"#,
-            r#"Some("jane@gmail.com")"#,
+            r#"Some("jane@example.com")"#,
+            r#"Some("jane@example.net")"#,
             "None",
             "None",
         ]
@@ -950,7 +950,7 @@ async fn blocking_a_domain_requires_admin_and_a_bare_domain() {
     assert!(matches!(err, CrmError::SettingsAdminRequired));
 
     let admin = receipt_with_role(TeamRole::Admin);
-    for domain in ["", "https://acme.com", "jane@acme.com", "acme"] {
+    for domain in ["", "https://example.com", "jane@example.com", "example"] {
         let err = service()
             .set_domain_blocked(&admin, domain, true)
             .await

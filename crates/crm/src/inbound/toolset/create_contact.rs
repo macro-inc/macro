@@ -46,7 +46,7 @@ pub struct CreateContact {
     pub name: String,
     /// Email address, if known.
     #[schemars(
-        description = "The contact's email address, e.g. \"jane@acme.com\" or \"jane@gmail.com\". Omit it to add the contact by name only."
+        description = "The contact's email address, e.g. \"jane@example.com\". Omit it to add the contact by name only."
     )]
     #[serde(default)]
     pub email: Option<String>,

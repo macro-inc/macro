@@ -15,7 +15,7 @@ import {
 
 // A plausible address; the server enforces the real rules.
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
-const INVALID_EMAIL = 'Enter an email like jane@acme.com, or leave it empty';
+const INVALID_EMAIL = 'Enter an email like jane@example.com, or leave it empty';
 
 export function contactCreationError(cause: unknown): string {
   if (cause instanceof ThrownResultError) {

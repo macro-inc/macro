@@ -12,7 +12,15 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-const OWNER: &str = "macro|owner@test.com";
+const OWNER: &str = "macro|owner@example.com";
+
+/// A consumer provider. Email sync files only these addresses without a
+/// company, and no reserved example domain is one.
+const PERSONAL_DOMAIN: &str = "gmail.com";
+
+fn personal(local: &str) -> String {
+    format!("{local}@{PERSONAL_DOMAIN}")
+}
 
 async fn unfiled_contacts(pool: &PgPool, team_id: Uuid) -> sqlx::Result<Vec<(String, i64)>> {
     sqlx::query_as(
@@ -75,11 +83,11 @@ async fn personal_emails_stay_out_by_default(pool: PgPool) -> anyhow::Result<()>
             .await?
             .exclude_personal_emails
     );
-    populate(&service, team_id, link_id, "jane@gmail.com", true).await;
+    populate(&service, team_id, link_id, &personal("jane"), true).await;
 
     assert!(unfiled_contacts(&pool, team_id).await?.is_empty());
     assert_eq!(
-        count_companies_for_domain(&pool, team_id, "gmail.com").await?,
+        count_companies_for_domain(&pool, team_id, PERSONAL_DOMAIN).await?,
         0
     );
     Ok(())
@@ -96,30 +104,37 @@ async fn personal_emails_file_without_a_company_when_let_in(pool: PgPool) -> any
     let_personal_emails_in(&repo, team_id).await;
 
     // Received mail never creates a contact; sent mail does, once.
-    populate(&service, team_id, link_id, "jane@gmail.com", false).await;
+    populate(&service, team_id, link_id, &personal("jane"), false).await;
     assert!(unfiled_contacts(&pool, team_id).await?.is_empty());
-    populate(&service, team_id, link_id, "Jane@Gmail.com", true).await;
-    populate(&service, team_id, link_id, "jane@gmail.com", true).await;
-    populate(&service, team_id, link_id, "jane@gmail.com", false).await;
+    populate(
+        &service,
+        team_id,
+        link_id,
+        &personal("Jane").to_uppercase(),
+        true,
+    )
+    .await;
+    populate(&service, team_id, link_id, &personal("jane"), true).await;
+    populate(&service, team_id, link_id, &personal("jane"), false).await;
     // Vendor domains stay out even when personal emails are let in.
-    populate(&service, team_id, link_id, "billing@stripe.com", true).await;
+    populate(&service, team_id, link_id, "billing@vendor.example", true).await;
 
     assert_eq!(
         unfiled_contacts(&pool, team_id).await?,
-        [("jane@gmail.com".to_owned(), 1)]
+        [(personal("jane"), 1)]
     );
     assert_eq!(
-        count_companies_for_domain(&pool, team_id, "gmail.com").await?,
+        count_companies_for_domain(&pool, team_id, PERSONAL_DOMAIN).await?,
         0
     );
     assert_eq!(
-        count_companies_for_domain(&pool, team_id, "stripe.com").await?,
+        count_companies_for_domain(&pool, team_id, "vendor.example").await?,
         0
     );
 
     // Tearing down the only source removes the synced contact.
     let outcome = service
-        .depopulate_contact(&team_id, &link_id, "jane@gmail.com")
+        .depopulate_contact(&team_id, &link_id, &personal("jane"))
         .await?;
     assert!(outcome.source_deleted && outcome.contact_deleted);
     assert!(!outcome.company_deleted);
@@ -136,16 +151,21 @@ async fn link_teardown_removes_synced_unfiled_contacts(pool: PgPool) -> anyhow::
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
     let_personal_emails_in(&repo, team_id).await;
-    populate(&service, team_id, link_id, "jane@gmail.com", true).await;
-    repo.create_contact_for_team(&team_id, Some("john@gmail.com"), "John", Utc::now())
-        .await?;
+    populate(&service, team_id, link_id, &personal("jane"), true).await;
+    repo.create_contact_for_team(
+        &team_id,
+        Some(personal("john").as_str()),
+        "John",
+        Utc::now(),
+    )
+    .await?;
 
     repo.depopulate_link_in_team(&team_id, &link_id).await?;
 
     // The manually created contact survives.
     assert_eq!(
         unfiled_contacts(&pool, team_id).await?,
-        [("john@gmail.com".to_owned(), 0)]
+        [(personal("john"), 0)]
     );
     Ok(())
 }

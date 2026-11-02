@@ -10,9 +10,9 @@ use uuid::Uuid;
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_contact_inserts_contact(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
-    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    seed_team(&pool, team_id, "macro|owner@example.com").await?;
     enable_crm_for_team(&pool, team_id).await?;
-    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let company_id = insert_company(&pool, team_id, true, &["example.com"]).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let now = Utc::now();
@@ -20,7 +20,7 @@ async fn create_contact_inserts_contact(pool: PgPool) -> anyhow::Result<()> {
         .create_contact_for_company(
             &team_id,
             &company_id,
-            Some("Jane@Acme.com"),
+            Some("Jane@Example.com"),
             "Jane",
             now,
             false,
@@ -29,7 +29,7 @@ async fn create_contact_inserts_contact(pool: PgPool) -> anyhow::Result<()> {
 
     // Email is stored lowercased; the contact starts visible and both
     // interaction endpoints seed from `now`.
-    assert_eq!(contact.email.as_deref(), Some("jane@acme.com"));
+    assert_eq!(contact.email.as_deref(), Some("jane@example.com"));
     assert_eq!(contact.name.as_deref(), Some("Jane"));
     assert_eq!(contact.company_id, Some(company_id));
     assert!(!contact.hidden);
@@ -53,15 +53,15 @@ async fn create_contact_inserts_contact(pool: PgPool) -> anyhow::Result<()> {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_contact_rejects_duplicate_email(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
-    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    seed_team(&pool, team_id, "macro|owner@example.com").await?;
     enable_crm_for_team(&pool, team_id).await?;
-    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let company_id = insert_company(&pool, team_id, true, &["example.com"]).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     repo.create_contact_for_company(
         &team_id,
         &company_id,
-        Some("jane@acme.com"),
+        Some("jane@example.com"),
         "Jane",
         Utc::now(),
         false,
@@ -73,7 +73,7 @@ async fn create_contact_rejects_duplicate_email(pool: PgPool) -> anyhow::Result<
         .create_contact_for_company(
             &team_id,
             &company_id,
-            Some("JANE@acme.com"),
+            Some("JANE@example.com"),
             "Jane 2",
             Utc::now(),
             false,
@@ -89,9 +89,9 @@ async fn create_contact_rejects_duplicate_email(pool: PgPool) -> anyhow::Result<
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_contact_accepts_explicit_cross_domain_links(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
-    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    seed_team(&pool, team_id, "macro|owner@example.com").await?;
     enable_crm_for_team(&pool, team_id).await?;
-    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let company_id = insert_company(&pool, team_id, true, &["example.com"]).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     for email in ["jane@other.com", "jane@gmail.com", "jane@sub.acme.com"] {
@@ -115,17 +115,17 @@ async fn create_contact_accepts_explicit_cross_domain_links(pool: PgPool) -> any
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_contact_accepts_any_company_domain(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
-    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    seed_team(&pool, team_id, "macro|owner@example.com").await?;
     enable_crm_for_team(&pool, team_id).await?;
     // Multi-domain company: any of its domains is a valid email domain,
     // matched case-insensitively.
-    let company_id = insert_company(&pool, team_id, true, &["acme.com", "Acme.io"]).await?;
+    let company_id = insert_company(&pool, team_id, true, &["example.com", "Acme.io"]).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     repo.create_contact_for_company(
         &team_id,
         &company_id,
-        Some("jane@acme.com"),
+        Some("jane@example.com"),
         "Jane",
         Utc::now(),
         false,
@@ -134,7 +134,7 @@ async fn create_contact_accepts_any_company_domain(pool: PgPool) -> anyhow::Resu
     repo.create_contact_for_company(
         &team_id,
         &company_id,
-        Some("jane@ACME.IO"),
+        Some("jane@EXAMPLE.ORG"),
         "Jane",
         Utc::now(),
         false,
@@ -147,9 +147,9 @@ async fn create_contact_accepts_any_company_domain(pool: PgPool) -> anyhow::Resu
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_contact_accepts_personal_email_at_any_company(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
-    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    seed_team(&pool, team_id, "macro|owner@example.com").await?;
     enable_crm_for_team(&pool, team_id).await?;
-    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let company_id = insert_company(&pool, team_id, true, &["example.com"]).await?;
     let solo_id = insert_company(&pool, team_id, true, &[]).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
@@ -158,19 +158,19 @@ async fn create_contact_accepts_personal_email_at_any_company(pool: PgPool) -> a
             .create_contact_for_company(
                 &team_id,
                 &company,
-                Some("Jane@Gmail.com"),
+                Some("Jane@Example.net"),
                 "Jane",
                 Utc::now(),
                 false,
             )
             .await?;
-        assert_eq!(contact.email.as_deref(), Some("jane@gmail.com"));
+        assert_eq!(contact.email.as_deref(), Some("jane@example.net"));
     }
     let err = repo
         .create_contact_for_company(
             &team_id,
             &solo_id,
-            Some("jane@gmail.com"),
+            Some("jane@example.net"),
             "Jane again",
             Utc::now(),
             false,
@@ -184,7 +184,7 @@ async fn create_contact_accepts_personal_email_at_any_company(pool: PgPool) -> a
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_contact_without_email(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
-    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    seed_team(&pool, team_id, "macro|owner@example.com").await?;
     enable_crm_for_team(&pool, team_id).await?;
     let company_id = insert_company(&pool, team_id, true, &[]).await?;
 
@@ -205,18 +205,18 @@ async fn create_contact_without_email(pool: PgPool) -> anyhow::Result<()> {
 async fn create_contact_cross_team_company_not_found(pool: PgPool) -> anyhow::Result<()> {
     let team_a = Uuid::now_v7();
     let team_b = Uuid::now_v7();
-    seed_team(&pool, team_a, "macro|owner-a@test.com").await?;
-    seed_team(&pool, team_b, "macro|owner-b@test.com").await?;
+    seed_team(&pool, team_a, "macro|owner-a@example.com").await?;
+    seed_team(&pool, team_b, "macro|owner-b@example.com").await?;
     enable_crm_for_team(&pool, team_a).await?;
     enable_crm_for_team(&pool, team_b).await?;
-    let company_id = insert_company(&pool, team_a, true, &["acme.com"]).await?;
+    let company_id = insert_company(&pool, team_a, true, &["example.com"]).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let err = repo
         .create_contact_for_company(
             &team_b,
             &company_id,
-            Some("jane@acme.com"),
+            Some("jane@example.com"),
             "Jane",
             Utc::now(),
             true,
@@ -230,9 +230,9 @@ async fn create_contact_cross_team_company_not_found(pool: PgPool) -> anyhow::Re
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_contact_hidden_company_semantics(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
-    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    seed_team(&pool, team_id, "macro|owner@example.com").await?;
     enable_crm_for_team(&pool, team_id).await?;
-    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let company_id = insert_company(&pool, team_id, true, &["example.com"]).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     repo.set_company_hidden(&team_id, &company_id, true).await?;
@@ -242,7 +242,7 @@ async fn create_contact_hidden_company_semantics(pool: PgPool) -> anyhow::Result
         .create_contact_for_company(
             &team_id,
             &company_id,
-            Some("jane@acme.com"),
+            Some("jane@example.com"),
             "Jane",
             Utc::now(),
             false,
@@ -256,7 +256,7 @@ async fn create_contact_hidden_company_semantics(pool: PgPool) -> anyhow::Result
         .create_contact_for_company(
             &team_id,
             &company_id,
-            Some("jane@acme.com"),
+            Some("jane@example.com"),
             "Jane",
             Utc::now(),
             true,
@@ -269,16 +269,16 @@ async fn create_contact_hidden_company_semantics(pool: PgPool) -> anyhow::Result
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_contact_requires_crm_enabled(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
-    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    seed_team(&pool, team_id, "macro|owner@example.com").await?;
     // Company exists but no team_crm_settings row: killswitch off.
-    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let company_id = insert_company(&pool, team_id, true, &["example.com"]).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let err = repo
         .create_contact_for_company(
             &team_id,
             &company_id,
-            Some("jane@acme.com"),
+            Some("jane@example.com"),
             "Jane",
             Utc::now(),
             false,
@@ -292,18 +292,18 @@ async fn create_contact_requires_crm_enabled(pool: PgPool) -> anyhow::Result<()>
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn populate_merges_into_manual_contact(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
-    let owner = "macro|owner@test.com";
+    let owner = "macro|owner@example.com";
     seed_team(&pool, team_id, owner).await?;
     enable_crm_for_team(&pool, team_id).await?;
-    let link_id = insert_email_link(&pool, owner, "owner@test.com").await?;
-    let company_id = insert_company(&pool, team_id, true, &["acme.com"]).await?;
+    let link_id = insert_email_link(&pool, owner, "owner@example.com").await?;
+    let company_id = insert_company(&pool, team_id, true, &["example.com"]).await?;
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let contact = repo
         .create_contact_for_company(
             &team_id,
             &company_id,
-            Some("jane@acme.com"),
+            Some("jane@example.com"),
             "Jane",
             Utc::now(),
             false,
@@ -316,8 +316,8 @@ async fn populate_merges_into_manual_contact(pool: PgPool) -> anyhow::Result<()>
     repo.populate_contact(
         &team_id,
         &link_id,
-        "acme.com",
-        "jane@acme.com",
+        "example.com",
+        "jane@example.com",
         Some("Jane Doe (observed)"),
         now,
         now,
@@ -336,7 +336,7 @@ async fn populate_merges_into_manual_contact(pool: PgPool) -> anyhow::Result<()>
     // must keep the manual contact (manually_created shields it from
     // the no-sources orphan cleanup).
     let outcome = repo
-        .depopulate_contact(&team_id, &link_id, "acme.com", "jane@acme.com")
+        .depopulate_contact(&team_id, &link_id, "example.com", "jane@example.com")
         .await?;
     // Only the source row goes; the manual contact and its company stay.
     assert!(outcome.source_deleted);
@@ -350,10 +350,10 @@ async fn populate_merges_into_manual_contact(pool: PgPool) -> anyhow::Result<()>
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn manual_rows_survive_link_teardown(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
-    let owner = "macro|owner@test.com";
+    let owner = "macro|owner@example.com";
     seed_team(&pool, team_id, owner).await?;
     enable_crm_for_team(&pool, team_id).await?;
-    let link_id = insert_email_link(&pool, owner, "owner@test.com").await?;
+    let link_id = insert_email_link(&pool, owner, "owner@example.com").await?;
 
     let repo = CompaniesRepositoryImpl::new(pool.clone());
 
@@ -362,13 +362,13 @@ async fn manual_rows_survive_link_teardown(pool: PgPool) -> anyhow::Result<()> {
     let manual_company = repo
         .create_company_for_team(&team_id, Some("manual.com"), "Manual Co", Utc::now())
         .await?;
-    let derived_company = insert_company(&pool, team_id, true, &["acme.com"]).await?;
-    insert_contact_with_source(&pool, derived_company, "bob@acme.com", link_id).await?;
+    let derived_company = insert_company(&pool, team_id, true, &["example.com"]).await?;
+    insert_contact_with_source(&pool, derived_company, "bob@example.com", link_id).await?;
     let manual_contact = repo
         .create_contact_for_company(
             &team_id,
             &derived_company,
-            Some("jane@acme.com"),
+            Some("jane@example.com"),
             "Jane",
             Utc::now(),
             false,
@@ -398,7 +398,7 @@ async fn shared_email_preserves_every_company_opt_out(pool: PgPool) -> anyhow::R
     let team = Uuid::now_v7();
     seed_team(&pool, team, "macro|owner@example.com").await?;
     enable_crm_for_team(&pool, team).await?;
-    let enabled = insert_company(&pool, team, true, &["acme.com"]).await?;
+    let enabled = insert_company(&pool, team, true, &["example.com"]).await?;
     let disabled = insert_company(&pool, team, false, &["other.com"]).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     for company in [enabled, disabled] {

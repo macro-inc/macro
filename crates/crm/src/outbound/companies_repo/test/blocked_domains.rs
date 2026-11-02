@@ -12,7 +12,15 @@ use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::PgPool;
 use uuid::Uuid;
 
-const OWNER: &str = "macro|owner@test.com";
+const OWNER: &str = "macro|owner@example.com";
+
+/// A consumer provider, so email sync would admit it if it weren't
+/// blocked. No reserved example domain is one.
+const PERSONAL_DOMAIN: &str = "gmail.com";
+
+fn personal(local: &str) -> String {
+    format!("{local}@{PERSONAL_DOMAIN}")
+}
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn blocking_hides_existing_records_and_stops_sync(pool: PgPool) -> anyhow::Result<()> {
@@ -22,8 +30,8 @@ async fn blocking_hides_existing_records_and_stops_sync(pool: PgPool) -> anyhow:
     let link_id = insert_email_link(&pool, OWNER, "user@macro.com").await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
-    let acme = insert_company(&pool, team_id, true, &["acme.com"]).await?;
-    let jane = insert_contact(&pool, acme, "jane@acme.com").await?;
+    let acme = insert_company(&pool, team_id, true, &["example.com"]).await?;
+    let jane = insert_contact(&pool, acme, "jane@example.com").await?;
     repo.update_team_settings(
         &team_id,
         &CrmTeamSettingsPatch {
@@ -33,12 +41,12 @@ async fn blocking_hides_existing_records_and_stops_sync(pool: PgPool) -> anyhow:
     )
     .await?;
     let solo = repo
-        .create_contact_for_team(&team_id, Some("sam@gmail.com"), "Sam", Utc::now())
+        .create_contact_for_team(&team_id, Some(personal("sam").as_str()), "Sam", Utc::now())
         .await?;
 
-    repo.block_domain(&team_id, "acme.com").await?;
-    repo.block_domain(&team_id, "acme.com").await?;
-    repo.block_domain(&team_id, "gmail.com").await?;
+    repo.block_domain(&team_id, "example.com").await?;
+    repo.block_domain(&team_id, "example.com").await?;
+    repo.block_domain(&team_id, PERSONAL_DOMAIN).await?;
 
     assert_eq!(
         repo.list_blocked_domains(&team_id)
@@ -46,20 +54,20 @@ async fn blocking_hides_existing_records_and_stops_sync(pool: PgPool) -> anyhow:
             .into_iter()
             .map(|blocked| blocked.domain)
             .collect::<Vec<_>>(),
-        ["acme.com", "gmail.com"]
+        ["example.com", PERSONAL_DOMAIN]
     );
     assert!(fetch_company_hidden(&pool, acme).await? == Some(true));
     assert!(fetch_contact_hidden(&pool, jane).await? == Some(true));
     assert!(fetch_contact_hidden(&pool, solo.id).await? == Some(true));
 
     // Sync skips blocked domains: no new company, no new contact.
-    for email in ["bob@acme.com", "ann@gmail.com"] {
+    for email in ["bob@example.com".to_owned(), personal("ann")] {
         service
             .populate_contact(
                 &team_id,
                 &link_id,
                 "user@macro.com",
-                email,
+                &email,
                 None,
                 Utc::now(),
                 Utc::now(),
@@ -76,14 +84,14 @@ async fn blocking_hides_existing_records_and_stops_sync(pool: PgPool) -> anyhow:
     .await?;
     assert_eq!(unfiled, 1);
 
-    repo.unblock_domain(&team_id, "acme.com").await?;
+    repo.unblock_domain(&team_id, "example.com").await?;
     assert!(fetch_company_hidden(&pool, acme).await? == Some(false));
     assert!(fetch_contact_hidden(&pool, jane).await? == Some(false));
     assert!(fetch_contact_hidden(&pool, solo.id).await? == Some(true));
     assert_eq!(
         repo.list_blocked_domains(&team_id).await?.len(),
         1,
-        "gmail.com stays blocked"
+        "the personal domain stays blocked"
     );
     Ok(())
 }
@@ -92,12 +100,12 @@ async fn blocking_hides_existing_records_and_stops_sync(pool: PgPool) -> anyhow:
 async fn blocklists_are_per_team(pool: PgPool) -> anyhow::Result<()> {
     let team_a = Uuid::now_v7();
     let team_b = Uuid::now_v7();
-    seed_team(&pool, team_a, "macro|a@test.com").await?;
-    seed_team(&pool, team_b, "macro|b@test.com").await?;
-    let acme_b = insert_company(&pool, team_b, true, &["acme.com"]).await?;
+    seed_team(&pool, team_a, "macro|a@example.com").await?;
+    seed_team(&pool, team_b, "macro|b@example.com").await?;
+    let acme_b = insert_company(&pool, team_b, true, &["example.com"]).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
 
-    repo.block_domain(&team_a, "acme.com").await?;
+    repo.block_domain(&team_a, "example.com").await?;
 
     assert!(fetch_company_hidden(&pool, acme_b).await? == Some(false));
     assert!(repo.list_blocked_domains(&team_b).await?.is_empty());
