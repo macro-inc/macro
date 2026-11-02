@@ -83,6 +83,10 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
 
 ## Gotchas
 
+- `/mobile-welcome-email` copies allowlisted ad parameters from the capture
+  request onto the desktop signup link and always sets
+  `signup_flow=mobile_email`. The web app keeps that set on the PostHog person
+  when the account is identified. Do not take `signup_flow` from the request.
 - Answer third-party failures as 502/503, not 500: match
   `GithubError::Upstream(error)` before a route's 500 catch-all, and answer a
   `FusionAuthClientError` whose `upstream()` is set with that error's
