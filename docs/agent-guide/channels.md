@@ -436,8 +436,8 @@ losing edit permission prevents a late insertion. Cancellation aborts the transf
 and discards any completed upload that was not inserted.
 On desktop, arrow keys move through the two-column grid and scroll the full
 selection outline into view; Enter inserts it and Escape closes the picker.
-Check that GIFs animate in the picker, in the draft, after sending, and in the
-enlarged image viewer. Newly inserted GIFs use static-file references; picker
+Check that GIFs animate in the picker, in the draft, after sending, after copying
+and pasting, and in the enlarged image viewer. Newly inserted GIFs use static-file references; picker
 previews and existing Klipy URL images still load directly with anonymous CORS.
 
 Closed mention menus do not gather, rank, or paginate candidates. When checking

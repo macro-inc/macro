@@ -1,10 +1,12 @@
+import { staticFileIdEndpoint } from '@core/constant/servers';
+import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { ImageNode, SupportedNodeTypes } from '@macro-inc/lexical-core';
 import { $createParagraphNode, $getRoot, createEditor } from 'lexical';
 import { expect, it } from 'vitest';
 import { $insertGifNode } from './gifPlugin';
 import type { Gif } from './klipy';
 
-it('serializes the inserted ImageNode as a durable static-file reference', () => {
+it('preserves static-file GIFs through JSON and HTML copying', () => {
   const editor = createEditor({
     nodes: SupportedNodeTypes,
     onError(error) {
@@ -43,12 +45,41 @@ it('serializes the inserted ImageNode as a durable static-file reference', () =>
         type: 'image',
         srcType: 'sfs',
         id: 'static-1',
-        url: '',
+        url: staticFileIdEndpoint('static-1'),
         alt: gif.title,
         width: 640,
         height: 480,
         constrainedWidth: 400,
         constrainedHeight: 300,
+      }),
+    ])
+  );
+
+  const html = editor.read(() => $generateHtmlFromNodes(editor));
+  const document = new DOMParser().parseFromString(html, 'text/html');
+  expect(document.querySelector('img')?.getAttribute('src')).toBe(
+    staticFileIdEndpoint('static-1')
+  );
+  const pastedEditor = createEditor({
+    nodes: SupportedNodeTypes,
+    onError(error) {
+      throw error;
+    },
+  });
+  pastedEditor.update(
+    () => {
+      $getRoot().append(...$generateNodesFromDOM(pastedEditor, document));
+    },
+    { discrete: true }
+  );
+  expect(pastedEditor.getEditorState().toJSON().root.children).toEqual(
+    expect.arrayContaining([
+      expect.objectContaining({
+        type: 'image',
+        srcType: 'sfs',
+        id: 'static-1',
+        url: staticFileIdEndpoint('static-1'),
+        alt: gif.title,
       }),
     ])
   );

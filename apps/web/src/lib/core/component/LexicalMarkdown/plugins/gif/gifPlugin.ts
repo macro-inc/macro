@@ -1,3 +1,4 @@
+import { staticFileIdEndpoint } from '@core/constant/servers';
 import { $createImageNode, ImageNode } from '@macro-inc/lexical-core';
 import {
   COMMAND_PRIORITY_NORMAL,
@@ -44,6 +45,7 @@ export function $insertGifNode(gif: Gif, staticFileId: string) {
   const imageNode = $createImageNode({
     srcType: 'sfs',
     id: staticFileId,
+    url: staticFileIdEndpoint(staticFileId),
     alt: gif.title,
     width: gif.width,
     height: gif.height,
