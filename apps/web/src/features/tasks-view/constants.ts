@@ -76,13 +76,48 @@ export const TASK_GROUP_OPTIONS: {
   id: TaskGroupBy;
   label: string;
 }[] = [
-  { id: 'none', label: 'None' },
-  { id: 'status', label: 'Status' },
-  { id: 'priority', label: 'Priority' },
-  { id: 'assignee', label: 'Assignee' },
-  { id: 'project', label: 'Project' },
-  { id: 'date', label: 'Date' },
-  { id: 'due_date', label: 'Due date' },
+  {
+    id: 'none',
+    get label() {
+      return t('viewMenus.groupNone');
+    },
+  },
+  {
+    id: 'status',
+    get label() {
+      return t('viewMenus.status');
+    },
+  },
+  {
+    id: 'priority',
+    get label() {
+      return t('viewMenus.priority');
+    },
+  },
+  {
+    id: 'assignee',
+    get label() {
+      return t('viewMenus.assignee');
+    },
+  },
+  {
+    id: 'project',
+    get label() {
+      return t('viewMenus.project');
+    },
+  },
+  {
+    id: 'date',
+    get label() {
+      return t('viewMenus.date');
+    },
+  },
+  {
+    id: 'due_date',
+    get label() {
+      return t('viewMenus.dueDate');
+    },
+  },
 ];
 
 export const TASK_SORT_DEFINITIONS: SortDefinition<
@@ -125,12 +160,29 @@ export const TASK_SORT_OPTIONS: {
   label: string;
   property?: TaskPropertySort;
 }[] = [
-  { id: 'viewed_at', label: 'Viewed' },
-  { id: 'updated_at', label: 'Updated' },
-  { id: 'created_at', label: 'Created' },
+  {
+    id: 'viewed_at',
+    get label() {
+      return t('viewMenus.sortViewed');
+    },
+  },
+  {
+    id: 'updated_at',
+    get label() {
+      return t('viewMenus.sortUpdated');
+    },
+  },
+  {
+    id: 'created_at',
+    get label() {
+      return t('viewMenus.sortCreated');
+    },
+  },
   {
     id: 'status',
-    label: 'Status',
+    get label() {
+      return t('viewMenus.status');
+    },
     property: {
       propertyDefinitionId: SYSTEM_PROPERTY_IDS.STATUS,
       direction: 'asc',
@@ -138,7 +190,9 @@ export const TASK_SORT_OPTIONS: {
   },
   {
     id: 'priority',
-    label: 'Priority',
+    get label() {
+      return t('viewMenus.priority');
+    },
     property: {
       propertyDefinitionId: SYSTEM_PROPERTY_IDS.PRIORITY,
       direction: 'desc',
@@ -146,7 +200,9 @@ export const TASK_SORT_OPTIONS: {
   },
   {
     id: 'due_date_earliest',
-    label: 'Due soonest',
+    get label() {
+      return t('viewMenus.sortDueSoonest');
+    },
     property: {
       propertyDefinitionId: SYSTEM_PROPERTY_IDS.DUE_DATE,
       direction: 'asc',
@@ -154,7 +210,9 @@ export const TASK_SORT_OPTIONS: {
   },
   {
     id: 'due_date_latest',
-    label: 'Due furthest away',
+    get label() {
+      return t('viewMenus.sortDueLatest');
+    },
     property: {
       propertyDefinitionId: SYSTEM_PROPERTY_IDS.DUE_DATE,
       direction: 'desc',

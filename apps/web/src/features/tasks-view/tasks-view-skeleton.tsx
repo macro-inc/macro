@@ -7,7 +7,7 @@ export function TasksViewSkeleton() {
       <ViewSkeleton.Sidebar title="Tasks" createLabel="New task" />
       <ViewSkeleton.Main
         title="My tasks"
-        controls={[1, 3, 2, '+ New ⌄', 1]}
+        controls={[1, 'View', '+ New ⌄', 1]}
         searchPlaceholder="Search tasks"
       />
     </ViewSkeleton.Root>

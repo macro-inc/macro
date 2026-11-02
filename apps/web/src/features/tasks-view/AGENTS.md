@@ -11,6 +11,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - `primitives/create-task-saved-view-draft.ts`: confirmed filter/due-date/layout/grouping/sort snapshots, dirty state, skipped-setting diagnostics, and revision-aware reconciliation; receives only the detail source, without navigation, mutation, or dialog state.
 - `views/task-saved-views.tsx`: compound sidebar/mobile lists, filter summaries, imperative action dialogs, and request-scoped write/reload completion; the Tasks host owns selection and navigation.
 - `queries/use-tasks-query.ts`: shared list, board, Gantt, and search filtering.
+- `components/TasksViewMenu.tsx`: adapts task state to the shared `ListViewMenu`; desktop combines layout, grouping, and sorting, while touch shows grouping and sorting in a separate View sheet.
 
 ## Gotchas
 
@@ -56,7 +57,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Place the saved-view picker after Filters and before built-in mobile tabs; omit duplicate headers and general create controls, but offer Create view in the empty state.
 - Group the shared sidebar and picker empty state in a subtly bordered, rounded container with 12px padding, the inherited background, and no shadow: “Your go-to views”, “Save your setup for next time.” and a `secondary`, `sm` Create view button with a leading plus icon, without a separate illustration; keep the sidebar header's icon-only plus available in every section state, and isolate both creation buttons' keyboard scopes from task-list selection shortcuts.
 - Keep mobile pills in a flex wrapper inside the header so their shadow margins cannot collapse the header and overlap task content.
-- Keep desktop list-header filters, layout, sort, and grouping at `md` / `icon-md` (32px), matching New and Search; preserve the mobile filter drawer.
+- Keep desktop list-header Filters and View at `md` / `icon-md` (32px), matching New and Search; keep the mobile Filters drawer separate from the View sheet.
 - Show one local New view draft row after creation starts; prefill its save dialog with New view, replace the row on confirmed save, and remove it on cancellation or navigation without adding fake cached records.
 - Close the selected-view menu before opening a dialog, discard deferred actions after account or selection changes, and close dialogs after account, saved-view, or built-in-tab navigation.
 - Own mobile action dialogs outside closing drawers; finish drawer closure before opening a dialog, and reopen filters after cancellation only within the same navigation scope.

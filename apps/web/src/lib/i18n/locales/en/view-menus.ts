@@ -37,6 +37,11 @@ export default {
   sortLastViewed: 'Last viewed',
   sortLastUpdated: 'Last updated',
   sortDateCreated: 'Date created',
+  sortViewed: 'Viewed',
+  sortUpdated: 'Updated',
+  sortCreated: 'Created',
+  sortDueSoonest: 'Due soonest',
+  sortDueLatest: 'Due furthest away',
 
   // Group options
   groupNone: 'None',
@@ -49,8 +54,15 @@ export default {
   priority: 'Priority',
   priorities: 'Priorities',
   assignee: 'Assignee',
+  dueDate: 'Due date',
 
   // List controls
+  view: 'View',
+  viewOptions: 'View options',
+  groupBy: 'Group by',
+  searchOrder: 'Search order',
+  searchOrderDescription:
+    'Search keeps its existing result ordering. Clear search to sort tasks.',
   layout: 'Layout',
   layoutList: 'List',
   layoutBoard: 'Board',

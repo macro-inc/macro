@@ -109,7 +109,7 @@ export type ViewLayoutDropdownProps = Omit<
   layouts?: readonly ViewLayout[];
 };
 
-const VIEW_LAYOUT_OPTIONS: ListControlOption<ViewLayout>[] = [
+export const VIEW_LAYOUT_OPTIONS: ListControlOption<ViewLayout>[] = [
   {
     id: 'list',
     get label() {

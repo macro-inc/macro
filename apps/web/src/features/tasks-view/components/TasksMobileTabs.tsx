@@ -8,6 +8,7 @@ import { isProjectTab } from '../core/task-navigation';
 import { useTasksView } from '../tasks-view-context';
 import { TaskSavedViewsPicker } from '../views/task-saved-views';
 import { TasksFilterDrawer } from './TasksFilterDrawer';
+import { TasksViewMenu } from './TasksViewMenu';
 
 function ProjectsPicker() {
   const { state, setTab } = useTasksView();
@@ -93,6 +94,7 @@ export function TasksMobileTabs(props: { leading?: JSX.Element }) {
             {props.leading ?? (
               <Show when={!isProjectTab(state.tab)}>
                 <TasksFilterDrawer />
+                <TasksViewMenu />
               </Show>
             )}
             <TaskSavedViewsPicker />
