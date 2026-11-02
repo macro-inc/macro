@@ -277,8 +277,10 @@ dropdown shows the current date, or **No due date** when unset, above the date
 choices. Due dates stay outside the title.
 Board cards show due dates in property pills. Overdue dates
 on open tasks use the danger color; only dates due today or tomorrow use the
-warning color. Later dates, completed tasks, and canceled tasks have neutral due
-dates. Urgency refreshes at local midnight, on timezone changes, and app resume.
+warning color. On light themes, list and board warning icons and text mix 60%
+warning with 40% foreground for contrast; dark themes keep the warning color.
+Later dates, completed tasks, and canceled tasks have neutral due dates. Urgency
+refreshes at local midnight, on timezone changes, and app resume.
 Date selections persist with the navigation entry and round-trip through
 `tasks.dueDate`, `tasks.dueStart`, and `tasks.dueEnd` URL parameters.
 
