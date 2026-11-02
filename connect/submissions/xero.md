@@ -1,12 +1,12 @@
 ---
 vendor: xero
 apps: [xero_accounting_api]
-state: drafting
+state: deferred
 portal: https://developer.xero.com/app/manage
 account: connect@macro.com
 submitted:
 last_contact:
-next_action: Human approves the Core plan (AUD$35/month, card on file) and supplies the redirect host; the agent then creates the PKCE app
+next_action: Deferred by Eric on 2026-11-02
 next_action_owner: human
 due: 2026-11-02
 ---

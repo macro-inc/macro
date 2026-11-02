@@ -1,6 +1,6 @@
 # Status
 
-Last updated 2026-10-31 by Claude. Slice 1 is deployed and proven end to end
+Last updated 2026-11-02 by Claude. Slice 1 is deployed and proven end to end
 on dev: `https://connect-dev.macro.com`, demo at
 `https://connect-dev.macro.com/demo`, dashboard at `/demo/dashboard`. Target: Macro's own users off Pipedream
 for catalog apps by 2026-11-06 ([plan](docs/plan.md#week-one)).
@@ -9,26 +9,24 @@ for catalog apps by 2026-11-06 ([plan](docs/plan.md#week-one)).
 
 Eric. Each item is ready for one sitting; agents prepare the rest.
 
-- [ ] **Review PR #9231** (Connect as an independent backend; touches none of
-      Macro's deployed services).
-- [ ] **Review the demo PR** (stacked on #9231): the demo app, its optional
-      infra, and the CDP driver.
-- [ ] **Review the dashboard PR #9272** (stacked on the demo PR):
-      `/v1/connections`, `/v1/users`, `/v1/connections/summary`, and
-      `/demo/dashboard`.
-- [ ] **Company facts every vendor form asks for** (unblocks Zoom, Xero,
-      Figma, Vercel, Box, Discord): legal company name; contact name, title,
-      and email; Connect's production host and OAuth callback (proposed:
-      `https://connect.macro.com`, callback `/v1/oauth/callback`); landing,
-      privacy, terms, and support URLs (proposed: that host's `/`, `/privacy`,
-      `/terms`, `/support`; agents draft the pages for your approval); a logo
-      and wordmark. Approve the product description in each record's Draft.
-- [ ] Xero: approve the Core plan (AUD$35/month, card on file) and choose
-      read-only or read-write for v1.
-- [ ] Box: approve sending the drafted email to `integrate@box.com`
-      ([record](submissions/box.md)).
-- [ ] Zoom: say which security evidence exists (SSDLC, SAST, DAST, pen test,
-      security and incident policies); Zoom's review asks for it.
+- [ ] **Review the dashboard PR #9272** (now against main; #9231 and the
+      demo PR are merged): `/v1/connections`, `/v1/users`,
+      `/v1/connections/summary`, and `/demo/dashboard`.
+- [ ] **Review the catalog PR #9278** (stacked on #9272): `oauth_client`
+      labels, 28 live DCR/CIMD apps, the per-app acceptance probe, and the
+      conformance table in [catalog.md](docs/catalog.md).
+- [ ] Netlify: click Authorize on the consent page (open in the Connect
+      browser, noVNC port 6081; restart from `/demo` if it expired), or OK an
+      agent clicking vendor consent
+      screens for the `connect@macro.com` test accounts. The Netlify grant is
+      the remaining check for its "Authorize stalls" note.
+- [ ] Stripe: finish the `connect@macro.com` Stripe signup (it shows a
+      CAPTCHA) in the browser via noVNC (port 6081), so an agent can complete
+      Stripe's consent and tool check.
+- [ ] Discord: pass the Cloudflare check on the Developer Support sign-up
+      page (open in the Connect browser, noVNC port 6081); an agent then
+      creates the support account and sends the drafted question
+      ([record](submissions/discord.md)).
 - [ ] Rotate the `connect@macro.com` password (it was shared in a chat
       transcript on 2026-10-30), then update `CONNECT_ACCOUNT_PASSWORD` in
       Doppler `connect/prd`.
@@ -55,12 +53,29 @@ Nothing.
 
 ## Next
 
+Unresolved catalog apps from T021: Netlify (Authorize stalls), Calendly
+(Google signup loops), Coda (Connect's DCR returns `oauth_failed`), and real
+consents for the smaller live apps (Attio, Apollo, Cloudflare, Supabase, Exa,
+Quo, Mailchimp, Webflow, and others). Then
 Token refresh against a live vendor (when a Linear or Sentry access token
 expires, the gateway must refresh it; unit-tested, not yet seen live). Then
 [T010](tasks/T010-macro-adapter.md) Macro integration and reconnect prompts
 (T011). Submissions wait on the company facts above.
 
 ## Done
+
+- 2026-11-02: Submitted Vercel's MCP client review form and Figma's remote
+  MCP access request (Figma has paused adding clients, no timeline), with
+  the company facts in [answers.md](submissions/answers.md). Xero, Box, and
+  Zoom deferred by Eric.
+
+- 2026-11-02: [T021](tasks/T021-catalog-dcr-apps.md) every used DCR/CIMD app
+  classified ([table](docs/catalog.md)); 28 live, each labelled
+  `managed_oauth_app` or `dcr`, deployed to dev. 29 of 30 reach the vendor's
+  sign-in on dev; real consents and a read tool call for Todoist, ClickUp,
+  Jira, Airtable (now DCR); consent only for Confluence and Granola. Canva and
+  Trello moved back to pending. Atlassian orgs must allow Connect's host
+  under Admin → Connectors.
 
 - 2026-10-31: Dev deployed (`pulumi up`, stack `macro-inc/macro-connect/dev`).
   `integration.sh dev` passes 11/11, including each vendor accepting Connect's

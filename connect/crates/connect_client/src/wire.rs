@@ -16,10 +16,23 @@ pub struct CatalogEntry {
     pub description: String,
     /// Access methods, such as `mcp`.
     pub access: Vec<String>,
+    /// How Connect obtains an OAuth client; absent for API-key-only apps.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub oauth_client: Option<OAuthClient>,
     /// Vendor-owned MCP server URL.
     pub mcp_url: String,
     /// Connect-served icon path when an official SVG is available.
     pub icon_url: Option<String>,
+}
+
+/// How Connect obtains a vendor OAuth client.
+#[derive(Clone, Copy, Debug, Deserialize, Eq, PartialEq, Serialize, ToSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum OAuthClient {
+    /// Connect registers and manages its own vendor OAuth app.
+    ManagedOauthApp,
+    /// The vendor authorization server registers Connect's client.
+    Dcr,
 }
 
 /// Body for creating a browser connect session.

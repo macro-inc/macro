@@ -10,6 +10,10 @@ An opt-in binary that checks a running Connect service through the public Rust c
 - `connections_listing` checks summary, connection listing, and user listing
   parameters for a fresh user.
 - `../../tooling/integration.sh`: local Compose and dev entry points.
+- `local-acceptance` checks DCR app authorize pages through local Connect;
+  `dev` checks every live app against the public dev URL.
+- Set `CONNECT_IT_PROJECT` to use an isolated Compose database when an existing
+  local project's migrations do not match this worktree.
 
 ## Scope
 

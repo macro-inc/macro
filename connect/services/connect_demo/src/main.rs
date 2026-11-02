@@ -16,7 +16,7 @@ use axum::{
 };
 use connect_client::{
     ConnectClient,
-    wire::{ConnectionStatus, UsersQuery},
+    wire::{ConnectionStatus, OAuthClient, UsersQuery},
 };
 use connect_platform::{ConfigLoader, Telemetry, http_trace_layer};
 use serde::Deserialize;
@@ -135,6 +135,12 @@ async fn catalog(State(state): State<AppState>, Extension(user): Extension<DemoU
                 "MCP"
             }
         ));
+        if let Some(oauth_client) = app.oauth_client {
+            content.push_str(match oauth_client {
+                OAuthClient::ManagedOauthApp => "<span class=\"badge\">Managed OAuth app</span>",
+                OAuthClient::Dcr => "<span class=\"badge\">DCR</span>",
+            });
+        }
         if connected.contains(app.id.as_str()) {
             content.push_str(&format!("<strong>Connected</strong><form method=\"post\" action=\"/demo/disconnect/{id}\"><button>Disconnect</button></form><form class=\"ajax\" method=\"post\" action=\"/demo/apps/{id}/tools\"><button>Try it</button></form><small>Disconnect removes this demo connection without revoking vendor access.</small>"));
         } else {

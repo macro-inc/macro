@@ -36,6 +36,7 @@ import {
 import {
   type AccessiblePreviewItem,
   isAccessiblePreviewItem,
+  isPreviewItemNoAccess,
 } from '@queries/preview';
 import { blockNameToItemType } from '@service-storage/client';
 import { createCallback } from '@solid-primitives/rootless';
@@ -434,6 +435,8 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
   const pollHeight = () =>
     props.blockName === 'form' ? pollCardHeight(props.previewData) : undefined;
   const boundedPreview = () => resizable() || Boolean(pollHeight());
+  const cardNoun = () =>
+    pollHeight() ? 'poll' : props.blockName === 'form' ? 'form' : 'item';
 
   const [previewBoxHeight, setPreviewBoxHeight] = createSignal(
     stringifyPreviewBox(props.previewBox || DEFAULT_PREVIEW_BOX)[1]
@@ -696,6 +699,18 @@ function DocumentCardInner(props: DocumentCardDecoratorProps) {
                 </Card.Body>
               </Show>
             </TaskPropertiesPreviewProvider>
+          )}
+        </Match>
+        <Match when={matches(item(), isPreviewItemNoAccess)}>
+          {(item) => (
+            <div
+              role="status"
+              class="flex flex-1 items-center justify-center p-4 text-sm text-ink-muted"
+            >
+              {item().access === 'no_access'
+                ? `You don’t have access to this ${cardNoun()}`
+                : `This ${cardNoun()} was deleted`}
+            </div>
           )}
         </Match>
       </Switch>
