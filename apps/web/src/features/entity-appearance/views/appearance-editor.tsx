@@ -1,19 +1,21 @@
+import { MobileDrawer } from '@app/components/app/mobile/MobileDrawer';
 import { t } from '@app/lib/i18n';
 import { getEntityIconType } from '@core/component/EntityIcon';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Popover } from '@kobalte/core/popover';
-import { Dialog } from '@ui/components/Dialog';
 import type { ManagedDialogProps } from '@ui/components/ImperativeDialog';
 import type { Result } from 'neverthrow';
 import { createEffect, Show } from 'solid-js';
 import type { EntityData } from '../../entity/types/entity';
 import { AppearancePicker } from '../components/appearance-picker';
 import type { EntityAppearance } from '../core/appearance';
-import { createAppearanceDraft } from '../primitives/create-appearance-draft';
+import { createAppearanceEditor } from '../primitives/create-appearance-editor';
+import { createRecentIcons } from '../primitives/create-recent-icons';
 
 export type AppearanceEditorProps = ManagedDialogProps & {
   entity: EntityData;
+  userId: string;
   anchor?: { x: number; y: number; width: number; height: number };
   isCurrent: () => boolean;
   save: (appearance: EntityAppearance) => Promise<Result<void, string>>;
@@ -21,26 +23,28 @@ export type AppearanceEditorProps = ManagedDialogProps & {
 export function AppearanceEditor(props: AppearanceEditorProps) {
   let anchor: HTMLSpanElement | undefined;
   const close = () => props.onOpenChange(false);
-  const draft = createAppearanceDraft({
+  const editor = createAppearanceEditor({
     initial: props.entity.appearance,
     isCurrent: props.isCurrent,
     save: props.save,
-    onSaved: close,
   });
+  const recent = createRecentIcons(props.userId);
   createEffect(() => {
     if (!props.isCurrent()) close();
   });
   const content = () => (
     <AppearancePicker
-      appearance={draft.appearance()}
-      columns={isMobile() ? 5 : 7}
+      appearance={editor.appearance()}
+      mobile={isMobile()}
       defaultIcon={getEntityIconType(props.entity)}
-      onChange={draft.change}
-      changed={draft.changed()}
-      saving={draft.saving()}
-      error={draft.error()}
-      onCancel={close}
-      onApply={() => fireAndForget(draft.apply(), 'entity-appearance')}
+      onChange={(appearance) =>
+        fireAndForget(editor.change(appearance), 'entity-appearance')
+      }
+      saving={editor.saving()}
+      error={editor.error()}
+      recent={recent.icons()}
+      onPick={recent.record}
+      onClose={close}
     />
   );
   return (
@@ -53,7 +57,7 @@ export function AppearanceEditor(props: AppearanceEditorProps) {
             aria-hidden="true"
             class="pointer-events-none fixed"
             style={{
-              left: `${props.anchor?.x ?? window.innerWidth / 2 - 176}px`,
+              left: `${props.anchor?.x ?? window.innerWidth / 2 - 172}px`,
               top: `${props.anchor?.y ?? 80}px`,
               width: `${props.anchor?.width ?? 1}px`,
               height: `${props.anchor?.height ?? 1}px`,
@@ -83,10 +87,27 @@ export function AppearanceEditor(props: AppearanceEditorProps) {
         </>
       }
     >
-      <Dialog open={props.open} onOpenChange={props.onOpenChange} class="w-88">
-        <Dialog.Title class="sr-only">{t('appearance.title')}</Dialog.Title>
-        {content()}
-      </Dialog>
+      <MobileDrawer
+        side="bottom"
+        open={props.open}
+        onOpenChange={props.onOpenChange}
+      >
+        <MobileDrawer.Portal>
+          <MobileDrawer.Overlay />
+          <MobileDrawer.Content
+            targetHeight={Math.min(90, (560 / window.innerHeight) * 100)}
+            maxHeight={95}
+          >
+            <MobileDrawer.Handle />
+            <MobileDrawer.Title class="sr-only">
+              {t('appearance.title')}
+            </MobileDrawer.Title>
+            <MobileDrawer.ScrollBody class="overflow-hidden">
+              {content()}
+            </MobileDrawer.ScrollBody>
+          </MobileDrawer.Content>
+        </MobileDrawer.Portal>
+      </MobileDrawer>
     </Show>
   );
 }

@@ -20,10 +20,11 @@ export function useChangeEntityIcon() {
     const actor = userId();
     if (!actor || !supportsEntityAppearance(entity)) return;
     const rect = element?.getBoundingClientRect();
-    openDialog(
+    return openDialog(
       AppearanceEditor,
       {
         entity,
+        userId: actor,
         anchor: rect
           ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
           : undefined,

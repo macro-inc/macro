@@ -39,6 +39,7 @@ function App() {
       <Show when={open()}>
         <AppearanceEditor
           open
+          userId="preview-user"
           onOpenChange={setOpen}
           isCurrent={() => true}
           entity={{
