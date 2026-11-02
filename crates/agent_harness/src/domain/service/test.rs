@@ -4701,6 +4701,124 @@ async fn a_chosen_model_is_selected_on_a_runtime_that_does_not_read_the_row() {
     assert_eq!(request["value"], "openai/gpt-5.6");
 }
 
+/// A persisted persona's model and instructions apply unless the create
+/// names its own. The caller's pick is the session's from the row onwards.
+#[tokio::test]
+async fn a_managed_persona_profile_applies_unless_overridden() {
+    let (service, repo, containers, _, _) = harness();
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: None,
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: Some("Prefer small diffs.".to_owned()),
+        model: Some("claude-4.5-sonnet-thinking".to_owned()),
+        prompt: None,
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: BotId::TEST_B,
+            profile: Some(agent_session::domain::ports::ManagedAgentProfile {
+                model: "persona-model".to_owned(),
+                harness: "in-memory".to_owned(),
+                instructions: "persona instructions".to_owned(),
+                mcp_servers: AgentMcpServers::OwnerConnections,
+            }),
+        }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
+    });
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.bot_id, BotId::TEST_B);
+    assert_eq!(session.harness, "in-memory");
+    assert_eq!(session.model, "claude-4.5-sonnet-thinking");
+    assert_eq!(session.instructions.as_deref(), Some("Prefer small diffs."));
+}
+
+#[tokio::test]
+async fn a_managed_persona_profile_is_used_when_nothing_overrides_it() {
+    let (service, repo, containers, _, _) = harness();
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: None,
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: None,
+        model: None,
+        prompt: None,
+        profile: Some(agent_session::domain::ports::SelectedManagedPersona {
+            bot_id: BotId::TEST_B,
+            profile: Some(agent_session::domain::ports::ManagedAgentProfile {
+                model: "persona-model".to_owned(),
+                harness: "in-memory".to_owned(),
+                instructions: "persona instructions".to_owned(),
+                mcp_servers: AgentMcpServers::OwnerConnections,
+            }),
+        }),
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
+    });
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.bot_id, BotId::TEST_B);
+    assert_eq!(session.harness, "in-memory");
+    assert_eq!(session.model, "persona-model");
+    assert_eq!(
+        session.instructions.as_deref(),
+        Some("persona instructions")
+    );
+}
+
+/// `repoUrl` without a persona used to 422: the default sandboxed coder
+/// does not honor a repository. An explicit repository is a Cursor session.
+#[tokio::test]
+async fn a_repository_without_a_persona_opens_as_cursor() {
+    let (service, repo, containers, _, _) = harness();
+    let service = service.with_repositories(Arc::new(SelectedRepositories::urls(&[
+        "https://github.com/macro-inc/macro",
+    ])));
+    let open = service.open_managed_session(OpenManagedSession {
+        id: None,
+        repo_url: Some("https://github.com/macro-inc/macro".into()),
+        repo_branch: None,
+        owner: model_owner::Owner::User(sender()),
+        instructions: None,
+        model: None,
+        prompt: None,
+        profile: None,
+        source: agent_session::domain::model::SessionSource::User,
+        visibility: agent_session::domain::model::SessionVisibility::Listed,
+    });
+    let drive = async {
+        while containers.spawned() == 0 {
+            tokio::task::yield_now().await;
+        }
+        let container = containers.container(session_of(&containers)).unwrap();
+        complete_session_handshake(&container).await;
+    };
+    let (opened, _) = tokio::join!(open, drive);
+    let session = repo.get(opened.unwrap().id).await.unwrap();
+    assert_eq!(session.bot_id, bot_id::CURSOR_BOT_ID);
+    assert_eq!(session.harness, "cursor");
+    assert_eq!(
+        session.repo_url.as_deref(),
+        Some("https://github.com/macro-inc/macro")
+    );
+}
+
 /// The agents-view create path names the Cursor bot with no persisted
 /// profile. The deployment default harness is the sandboxed coder's
 /// `opencode`; Cursor sessions must not inherit it.
