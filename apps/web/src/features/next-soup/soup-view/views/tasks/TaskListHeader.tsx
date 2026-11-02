@@ -161,7 +161,14 @@ function HeaderCell(props: {
               <span class="truncate @max-[840px]/u-list:hidden">
                 {props.label}
               </span>
-              <span class="hidden @max-[840px]/u-list:flex @max-[840px]/u-list:px-1.5">
+              <span
+                class={cn(
+                  'hidden @max-[840px]/u-list:flex',
+                  props.gridArea === 'assignees'
+                    ? '@max-[840px]/u-list:px-1'
+                    : '@max-[840px]/u-list:px-1.5'
+                )}
+              >
                 {props.narrowIcon?.()}
               </span>
             </Show>
