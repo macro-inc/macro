@@ -4634,7 +4634,7 @@ dependencies = [
  "webhook",
  "windows-sys 0.61.2",
  "workspace-hack",
- "zip 9.0.5",
+ "zip",
 ]
 
 [[package]]
@@ -5191,7 +5191,7 @@ dependencies = [
  "utoipa",
  "utoipa-swagger-ui",
  "workspace-hack",
- "zip 9.0.5",
+ "zip",
 ]
 
 [[package]]
@@ -6677,7 +6677,7 @@ dependencies = [
  "wiremock",
  "work_feed",
  "workspace-hack",
- "zip 9.0.5",
+ "zip",
 ]
 
 [[package]]
@@ -6929,7 +6929,7 @@ dependencies = [
  "tracing",
  "urlencoding",
  "workspace-hack",
- "zip 9.0.5",
+ "zip",
 ]
 
 [[package]]
@@ -13595,7 +13595,7 @@ dependencies = [
  "tracing-subscriber",
  "url",
  "workspace-hack",
- "zip 9.0.5",
+ "zip",
 ]
 
 [[package]]
@@ -21161,7 +21161,7 @@ dependencies = [
  "tracing",
  "walkdir",
  "workspace-hack",
- "zip 9.0.5",
+ "zip",
 ]
 
 [[package]]
@@ -21375,7 +21375,7 @@ dependencies = [
  "url",
  "utoipa",
  "utoipa-swagger-ui-vendored",
- "zip 3.0.0",
+ "zip",
 ]
 
 [[package]]
@@ -23009,6 +23009,7 @@ dependencies = [
  "xxhash-rust",
  "zerocopy",
  "zeroize",
+ "zip",
 ]
 
 [[package]]
@@ -23363,20 +23364,6 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.117",
-]
-
-[[package]]
-name = "zip"
-version = "3.0.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "12598812502ed0105f607f941c386f43d441e00148fce9dec3ca5ffb0bde9308"
-dependencies = [
- "arbitrary",
- "crc32fast",
- "flate2",
- "indexmap 2.14.0",
- "memchr",
- "zopfli",
 ]
 
 [[package]]

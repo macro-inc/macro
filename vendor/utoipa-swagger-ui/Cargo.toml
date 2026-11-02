@@ -147,7 +147,7 @@ version = "0.1"
 optional = true
 
 [build-dependencies.zip]
-version = "3.0"
+version = "9.0"
 features = ["deflate"]
 default-features = false
 
