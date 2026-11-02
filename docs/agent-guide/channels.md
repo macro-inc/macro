@@ -431,6 +431,9 @@ the GIF picker anchors to its editor rather than staying hidden.
 The larger desktop GIF picker stays within the viewport on narrow screens.
 Repeat after scrolling the page: the picker must stay beside the composer,
 without adding the page's scroll offset to its fixed position.
+Open and dismiss the keyboard while the picker is open: it must recalculate
+its placement and available height. Focusing search must not scroll the page
+away from the composer.
 Trending GIFs show first, with the large search field focused on both desktop
 and phones. Search keeps the composer expanded, and tapping anywhere in the
 search field keeps focus there. Tap a GIF to download its original animated bytes

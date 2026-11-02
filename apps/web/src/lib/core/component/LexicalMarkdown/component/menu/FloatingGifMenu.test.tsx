@@ -1,4 +1,5 @@
 /** @vitest-environment jsdom */
+import { setVirtualKeyboardHeight } from '@core/mobile/virtualKeyboard';
 import { computePosition } from '@floating-ui/dom';
 import {
   cleanup,
@@ -42,6 +43,10 @@ vi.mock('@core/util/uploadFile', async (original) => ({
 const touchDevice = vi.hoisted(() => vi.fn(() => false));
 vi.mock('@core/mobile/isTouchDevice', () => ({
   isTouchDevice: touchDevice,
+}));
+const nativeMobile = vi.hoisted(() => vi.fn(() => false));
+vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
+  isNativeMobilePlatform: nativeMobile,
 }));
 vi.mock('../../plugins/gif', async (original) => ({
   ...(await original<typeof import('../../plugins/gif')>()),
@@ -130,6 +135,8 @@ afterEach(() => {
   vi.mocked(computePosition).mockClear();
   vi.unstubAllGlobals();
   touchDevice.mockReturnValue(false);
+  nativeMobile.mockReturnValue(false);
+  setVirtualKeyboardHeight(0);
   vi.useRealTimers();
   vi.restoreAllMocks();
 });
@@ -295,6 +302,8 @@ it.each([
   'empty element',
   'clipped element',
   'scrolled document',
+  'resized viewport',
+  'native keyboard',
 ])(
   'keeps the picker correctly anchored within the viewport for a %s caret',
   async (anchorType) => {
@@ -305,14 +314,21 @@ it.each([
     const defaultPosition = vi.mocked(computePosition).getMockImplementation();
     vi.mocked(computePosition).mockImplementation(floating.computePosition);
     try {
+      const changesViewport =
+        anchorType === 'resized viewport' || anchorType === 'native keyboard';
+      const editorTop = changesViewport ? 300 : 600;
+      let viewportHeight = 768;
+      nativeMobile.mockReturnValue(anchorType === 'native keyboard');
       const scrollY = anchorType === 'scrolled document' ? 900 : 0;
       vi.spyOn(window, 'scrollY', 'get').mockReturnValue(scrollY);
       vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(
         1024
       );
-      vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(
-        768
-      );
+      vi.spyOn(
+        document.documentElement,
+        'clientHeight',
+        'get'
+      ).mockImplementation(() => viewportHeight);
       vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(
         function (this: HTMLElement) {
           return this.getBoundingClientRect().width;
@@ -328,11 +344,16 @@ it.each([
         'getBoundingClientRect'
       ).mockImplementation(function (this: HTMLElement) {
         if (this === document.documentElement)
-          return new DOMRect(0, -scrollY, 1024, 768 + scrollY);
+          return new DOMRect(0, -scrollY, 1024, viewportHeight + scrollY);
         if (this.hasAttribute('contenteditable'))
-          return new DOMRect(100, 600, 400, 40);
+          return new DOMRect(100, editorTop, 400, 40);
         if (this.hasAttribute('data-holds-prompts'))
-          return new DOMRect(0, 0, 448, 460);
+          return new DOMRect(
+            0,
+            0,
+            448,
+            Math.min(460, Number.parseFloat(this.style.maxHeight || '460'))
+          );
         if (this.hasAttribute('data-lexical-text')) {
           if (anchorType === 'clipped element')
             return new DOMRect(100, -50, 100, 20);
@@ -380,6 +401,21 @@ it.each([
       await waitFor(() =>
         expect(panel).toHaveProperty('style.visibility', 'visible')
       );
+      if (changesViewport) {
+        expect(Number.parseFloat(panel.style.top)).toBeGreaterThan(editorTop);
+        if (anchorType === 'native keyboard') setVirtualKeyboardHeight(350);
+        else {
+          viewportHeight = 400;
+          window.dispatchEvent(new Event('resize'));
+        }
+        await waitFor(() =>
+          expect(Number.parseFloat(panel.style.top)).toBeLessThan(editorTop)
+        );
+        expect(Number.parseFloat(panel.style.maxHeight)).toBeGreaterThan(0);
+        expect(Number.parseFloat(panel.style.maxHeight)).toBeLessThan(
+          editorTop
+        );
+      }
       expect(Number.parseFloat(panel.style.top)).toBeGreaterThan(0);
       expect(Number.parseFloat(panel.style.top)).toBeLessThan(600);
     } finally {
@@ -393,9 +429,11 @@ it.each([false, true])(
   async (touch) => {
     touchDevice.mockReturnValue(touch);
     const { open, leaveComposer } = mountPicker();
+    const focus = vi.spyOn(HTMLElement.prototype, 'focus');
     open();
     const input = screen.getByRole('searchbox');
     expect(document.activeElement).toBe(input);
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
     expect(leaveComposer).not.toHaveBeenCalled();
 
     expect(fireEvent.pointerDown(input)).toBe(true);
@@ -406,6 +444,7 @@ it.each([false, true])(
     input.blur();
     fireEvent.click(screen.getByRole('group'));
     expect(document.activeElement).toBe(input);
+    expect(focus).toHaveBeenLastCalledWith({ preventScroll: true });
     fireEvent.input(input, { target: { value: 'hello' } });
     expect(input).toHaveProperty('value', 'hello');
 

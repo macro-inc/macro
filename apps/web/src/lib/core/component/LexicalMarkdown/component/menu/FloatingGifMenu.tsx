@@ -307,12 +307,16 @@ export function FloatingGifMenu(
             hideBorder
             class="menu-surface rounded-xl flex flex-col gap-1.5 p-1.5"
           >
-            <InputGroup size="xl" onClick={() => inputRef?.focus()}>
+            <InputGroup
+              size="xl"
+              onClick={() => inputRef?.focus({ preventScroll: true })}
+            >
               <InputGroup.Input
                 ref={(element) => {
                   inputRef = element;
                   onMount(() => {
-                    if (menuOpen() && canEdit()) element.focus();
+                    if (menuOpen() && canEdit())
+                      element.focus({ preventScroll: true });
                   });
                 }}
                 type="search"

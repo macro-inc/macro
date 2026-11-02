@@ -1,4 +1,5 @@
 import { isInBlock } from '@core/block';
+import { virtualKeyboardHeight } from '@core/mobile/virtualKeyboard';
 import { blockElementSignal } from '@core/signal/blockElement';
 import { getScrollParent } from '@core/util/scrollParent';
 import {
@@ -17,7 +18,7 @@ import {
 } from '@floating-ui/dom';
 import { Telemetry } from '@macro-inc/observability';
 import type { Accessor, JSX } from 'solid-js';
-import { createEffect, createSignal, onCleanup, onMount } from 'solid-js';
+import { createEffect, createSignal, on, onCleanup, onMount } from 'solid-js';
 import { iosSafePadding, iosSizeMiddleware } from './iosFloatingMiddleware';
 
 const DEFAULT_SPACING = 8;
@@ -185,7 +186,6 @@ export function floatWithSelection(
       const spacing = accessor()?.spacing ?? DEFAULT_SPACING;
       const fullHeight = accessor()?.fullHeight;
       if (fullHeight !== undefined) {
-        decidedPlacement = await sideWithRoomFor(anchor, fullHeight, spacing);
         await updatePosition();
         return;
       }
@@ -223,9 +223,14 @@ export function floatWithSelection(
 
   async function updatePosition() {
     let current = currentAnchor();
-    if (!current || !decidedPlacement) return;
+    if (!current) return;
 
     const spacing = accessor()?.spacing ?? DEFAULT_SPACING;
+    const fullHeight = accessor()?.fullHeight;
+    if (fullHeight !== undefined) {
+      decidedPlacement = await sideWithRoomFor(current, fullHeight, spacing);
+    }
+    if (!decidedPlacement) return;
     const onAvailableHeight = accessor()?.onAvailableHeight;
     const { x, y, middlewareData } = await computePosition(
       toReference(current),
@@ -308,6 +313,9 @@ export function floatWithSelection(
     }
   });
 
+  createEffect(
+    on(virtualKeyboardHeight, repositionInBackground, { defer: true })
+  );
   createEffect(() => {
     cleanupAutoUpdate();
     const reference = currentAnchor();
