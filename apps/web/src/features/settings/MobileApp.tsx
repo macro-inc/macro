@@ -21,6 +21,9 @@ const STORES = {
     get prompt() {
       return t('settingsMobileApp.appStorePrompt');
     },
+    get description() {
+      return t('settingsMobileApp.appStoreDescription');
+    },
     qr: AppStoreQr,
   },
   android: {
@@ -28,6 +31,9 @@ const STORES = {
     name: 'Google Play',
     get prompt() {
       return t('settingsMobileApp.googlePlayPrompt');
+    },
+    get description() {
+      return t('settingsMobileApp.googlePlayDescription');
     },
     qr: PlayStoreQr,
   },
@@ -53,34 +59,37 @@ export function MobileApp() {
     );
   }
 
+  // A phone gets just its own store when its browser says which phone it is.
+  const detected = storePlatform(navigator.userAgent, navigator.maxTouchPoints);
+
   return (
     <SettingsPage
       title={t('settingsMobileApp.title')}
       description={
         isMobile()
-          ? t('settingsMobileApp.storeLinksDescription')
+          ? storeLinksDescription(detected)
           : t('settingsMobileApp.scanDescription')
       }
     >
       <SettingsCard>
         <Show when={isMobile()} fallback={<StoreQrCode />}>
-          <StoreLinks />
+          <StoreLinks platforms={detected ? [detected] : PLATFORMS} />
         </Show>
       </SettingsCard>
     </SettingsPage>
   );
 }
 
-/**
- * A phone can't scan its own screen, so phones get store links instead: just
- * their own store's when the browser says which phone it is, both otherwise.
- */
-function StoreLinks() {
-  const detected = storePlatform(navigator.userAgent, navigator.maxTouchPoints);
+function storeLinksDescription(platform: Platform | undefined) {
+  if (!platform) return t('settingsMobileApp.storeLinksDescription');
+  return STORES[platform].description;
+}
 
+/** A phone can't scan its own screen, so phones get store links instead. */
+function StoreLinks(props: { platforms: Platform[] }) {
   return (
     <div class="flex flex-col gap-2 p-4">
-      <For each={detected ? [detected] : PLATFORMS}>
+      <For each={props.platforms}>
         {(platform) => (
           <a
             href={storeListingUrl(platform)}

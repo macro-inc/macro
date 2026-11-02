@@ -154,38 +154,45 @@ describe('MobileApp', () => {
     [
       'an iPhone',
       'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
+      'Download Macro from the App Store.',
       [['App Store', APP_STORE_URL]],
     ],
     [
       'an Android phone',
       'Mozilla/5.0 (Linux; Android 14; Pixel 8)',
+      'Download Macro from Google Play.',
       [['Google Play', PLAY_STORE_URL]],
     ],
     [
       'an unrecognized phone',
       'Mozilla/5.0 (Mobile; rv:48.0)',
+      'Download Macro from your app store.',
       [
         ['App Store', APP_STORE_URL],
         ['Google Play', PLAY_STORE_URL],
       ],
     ],
-  ])('links %s to its store without a QR code', (_, userAgent, expected) => {
-    device.phone = true;
-    Object.defineProperty(navigator, 'userAgent', {
-      value: userAgent,
-      configurable: true,
-    });
-    Object.defineProperty(navigator, 'maxTouchPoints', {
-      value: 5,
-      configurable: true,
-    });
-    render(() => <MobileApp />);
+  ])(
+    'links %s to its store without a QR code',
+    (_, userAgent, description, expected) => {
+      device.phone = true;
+      Object.defineProperty(navigator, 'userAgent', {
+        value: userAgent,
+        configurable: true,
+      });
+      Object.defineProperty(navigator, 'maxTouchPoints', {
+        value: 5,
+        configurable: true,
+      });
+      render(() => <MobileApp />);
 
-    expect(
-      screen
-        .getAllByRole('link')
-        .map((link) => [link.textContent, link.getAttribute('href')])
-    ).toEqual(expected);
-    expect(screen.queryByRole('radio')).toBeNull();
-  });
+      expect(screen.getByText(description)).toBeTruthy();
+      expect(
+        screen
+          .getAllByRole('link')
+          .map((link) => [link.textContent, link.getAttribute('href')])
+      ).toEqual(expected);
+      expect(screen.queryByRole('radio')).toBeNull();
+    }
+  );
 });
