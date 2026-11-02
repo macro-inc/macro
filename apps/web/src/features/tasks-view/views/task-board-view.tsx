@@ -21,6 +21,7 @@ import {
   TaskBoardColumnIcon,
   TaskBoardProperty,
 } from '../components/task-board-property';
+import { TaskDeadlineMoveDialog } from '../components/task-deadline-move-dialog';
 import { TASK_SORT_OPTIONS } from '../constants';
 import type { TaskBoardData } from '../context/task-board';
 import {
@@ -29,7 +30,9 @@ import {
   type TaskBoardTask,
   toTaskBoardGrouping,
 } from '../core/task-board';
+import { taskDueDateUrgency } from '../core/task-due-date';
 import { createTaskBoard } from '../primitives/create-task-board';
+import { createTaskDeadlineMove } from '../primitives/create-task-deadline-move';
 import { taskBoardFacetId, taskBoardPropertyId } from '../queries/task-board';
 import { useTasksView } from '../tasks-view-context';
 
@@ -50,7 +53,8 @@ export function TaskBoardView(props: {
   ) => JSX.Element;
   ref?: (element: HTMLDivElement) => void;
 }) {
-  const { state, source, showTaskProject, setFacets } = useTasksView();
+  const { state, source, showTaskProject, setFacets, setState, calendar } =
+    useTasksView();
   const grouping = () => toTaskBoardGrouping(state.groupBy);
   const scope = () =>
     JSON.stringify([
@@ -59,7 +63,11 @@ export function TaskBoardView(props: {
       state.search,
       state.facets,
       state.sort,
+      state.dueDate,
+      calendar().today,
+      calendar().timeZone,
     ]);
+  const deadlineMove = createTaskDeadlineMove({ calendar, scope });
   const board = createTaskBoard({
     grouping,
     scope,
@@ -67,16 +75,22 @@ export function TaskBoardView(props: {
     task: props.data.task,
     actions: props.data.actions,
     compareTasks: props.data.compareTasks,
+    prepareMove: deadlineMove.prepare,
   });
   const [readError, setReadError] = createSignal<string>();
   const loading = source.boardLoading ?? source.isLoading;
   const sortLabel = () =>
-    TASK_SORT_OPTIONS.find(
-      (option) => option.id === (state.sort[0]?.id ?? 'updated_at')
-    )?.label ?? 'Updated';
+    state.search.trim()
+      ? 'search order'
+      : (TASK_SORT_OPTIONS.find(
+          (option) => option.id === (state.sort[0]?.id ?? 'updated_at')
+        )?.label ?? 'Updated');
   const cardPropertyIds = () =>
     CARD_PROPERTY_IDS.filter((id) => {
-      if (id === taskBoardPropertyId(grouping())) {
+      if (
+        id !== SYSTEM_PROPERTY_IDS.DUE_DATE &&
+        id === taskBoardPropertyId(grouping())
+      ) {
         return false;
       }
 
@@ -84,6 +98,10 @@ export function TaskBoardView(props: {
     });
 
   const revealHiddenColumns = () => {
+    if (grouping() === 'due_date') {
+      setState('dueDate', undefined);
+      return;
+    }
     const facets = { ...state.facets };
     delete facets[taskBoardFacetId(grouping())];
     setFacets(facets);
@@ -115,6 +133,15 @@ export function TaskBoardView(props: {
               taskId={task().id}
               canEdit={!readOnly() && props.data.canEditProperty(task().id, id)}
               iconOnly={iconOnly}
+              dueDateUrgency={
+                id === SYSTEM_PROPERTY_IDS.DUE_DATE
+                  ? taskDueDateUrgency(
+                      task().dueDate,
+                      task().closed ?? true,
+                      calendar()
+                    )
+                  : undefined
+              }
               onSave={async (value, apiValues) => {
                 try {
                   if (readOnly()) {
@@ -324,6 +351,12 @@ export function TaskBoardView(props: {
           )}
         </TaskBoard.Columns>
       </TaskBoard.Root>
+      <TaskDeadlineMoveDialog
+        picker={deadlineMove.picker()}
+        onChange={deadlineMove.select}
+        onApply={deadlineMove.apply}
+        onCancel={deadlineMove.cancel}
+      />
     </div>
   );
 }

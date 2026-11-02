@@ -13,6 +13,7 @@ import ClaudeIcon from '@icon/claude-color.svg';
 import GmailIcon from '@icon/gmail-color.svg';
 import OutlookIcon from '@icon/outlook-color.svg';
 import DesktopIcon from '@icon/system/regular/desktop.svg';
+import { useOutlookAvailable } from '@queries/auth/outlook-link';
 import { useUserTeamsQuery } from '@queries/team/teams';
 import type { Team as TeamSummary } from '@service-auth/generated/schemas/team';
 import type { Link as EmailLink } from '@service-email/generated/schemas';
@@ -96,11 +97,18 @@ function emailItem(
   };
 }
 
-/** Gmail and Outlook, one row per provider; accounts are managed in Email settings. */
-export function useEmailItems(hosts: IntegrationItemHosts): IntegrationItem[] {
+/**
+ * Gmail and Outlook, one row per provider; accounts are managed in Email
+ * settings. Outlook shows when the server offers it to this user, or to manage
+ * Outlook inboxes already connected.
+ */
+export function useEmailItems(
+  hosts: IntegrationItemHosts
+): Accessor<IntegrationItem[]> {
   const { query } = useEmailLinks();
   const connectInbox = useConnectInbox();
   const multiInbox = useFeatureFlag(enableMultiInbox);
+  const outlookOffered = useOutlookAvailable();
   const links = () => (query.isSuccess ? query.data.links : []);
   const linksFor = (provider: EmailLink['provider']) =>
     links().filter((link) =>
@@ -113,7 +121,7 @@ export function useEmailItems(hosts: IntegrationItemHosts): IntegrationItem[] {
 
   const actionsFor = (provider: EmailLink['provider']) => () => (
     <>
-      <Show when={canAdd()}>
+      <Show when={canAdd() && (provider !== 'OUTLOOK' || outlookOffered())}>
         <ConnectAction
           label={linksFor(provider).length > 0 ? 'Add account' : 'Connect'}
           ariaLabel={
@@ -133,11 +141,21 @@ export function useEmailItems(hosts: IntegrationItemHosts): IntegrationItem[] {
       </Show>
     </>
   );
-  if (!ENABLE_EMAIL) return [];
-  return [
-    emailItem('GMAIL', () => linksFor('GMAIL'), actionsFor('GMAIL')),
-    emailItem('OUTLOOK', () => linksFor('OUTLOOK'), actionsFor('OUTLOOK')),
-  ];
+  if (!ENABLE_EMAIL) return () => [];
+  const gmail = emailItem(
+    'GMAIL',
+    () => linksFor('GMAIL'),
+    actionsFor('GMAIL')
+  );
+  const outlook = emailItem(
+    'OUTLOOK',
+    () => linksFor('OUTLOOK'),
+    actionsFor('OUTLOOK')
+  );
+  return () =>
+    outlookOffered() || linksFor('OUTLOOK').length > 0
+      ? [gmail, outlook]
+      : [gmail];
 }
 
 /**

@@ -384,7 +384,7 @@ function tokenScore(query: string, candidate: string): number {
 export function searchSettings(
   groups: readonly SettingsTabGroup[],
   query: string,
-  options: { emailSignatures?: boolean } = {}
+  options: { emailSignatures?: boolean; outlook?: boolean } = {}
 ): SettingsSearchResult[] {
   const tokens = words(query);
   if (!tokens.length) return [];
@@ -404,7 +404,8 @@ export function searchSettings(
       (setting) =>
         setting.tab === page.tab &&
         (options.emailSignatures !== false ||
-          setting.title !== 'Email signatures')
+          setting.title !== 'Email signatures') &&
+        (options.outlook !== false || setting.title !== 'Outlook')
     ).map((setting) => ({
       ...setting,
       target: settingsTarget(setting.target),

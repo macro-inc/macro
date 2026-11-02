@@ -11,8 +11,6 @@
  */
 
 import { ItemPreview } from '@core/component/ItemPreview';
-import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
-import EmailIcon from '@icon/system/regular/envelope.svg';
 import type {
   ToolDetail,
   UserToolOutcome,
@@ -93,13 +91,6 @@ export function UserToolCall(props: {
 
   return (
     <ToolCard
-      icon={
-        props.common.label === 'CreateCalendarEvent' ? (
-          <CalendarIcon class="size-4" />
-        ) : (
-          <EmailIcon class="size-4" />
-        )
-      }
       title={props.common.label}
       status={props.common.status}
       subtitle={draft() && draftSubtitle(draft()!)}
