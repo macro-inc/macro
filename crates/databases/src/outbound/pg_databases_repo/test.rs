@@ -16,6 +16,7 @@ mod apply_ops;
 mod cell_triggers;
 #[cfg(feature = "gateway")]
 mod changes;
+mod duplicate;
 mod entity_split;
 #[cfg(feature = "gateway")]
 mod journal;

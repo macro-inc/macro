@@ -562,6 +562,34 @@ impl CellStore for FakeCells {
     }
 }
 
+impl crate::domain::duplicate::DatabaseDuplicateRepo for FakeCells {
+    type Error = FakeError;
+    async fn duplicate_database(
+        &self,
+        database: &Database,
+        writes: &Writes,
+    ) -> Result<WritesOutcome, FakeError> {
+        {
+            let mut world = self.0.lock().unwrap();
+            world.databases.push(database.clone());
+            world
+                .grants
+                .entry(database.owner_id.clone())
+                .or_default()
+                .push((database.id, AccessLevel::Owner));
+        }
+        let outcome = self.apply_writes(writes).await;
+        if !matches!(outcome, Ok(WritesOutcome::Applied { .. })) {
+            let mut world = self.0.lock().unwrap();
+            world.databases.retain(|stored| stored.id != database.id);
+            if let Some(grants) = world.grants.get_mut(&database.owner_id) {
+                grants.retain(|(id, _)| *id != database.id);
+            }
+        }
+        outcome
+    }
+}
+
 impl ColumnDefinitionStore for FakeDefinitions {
     type Error = FakeError;
     async fn bindable_definition(

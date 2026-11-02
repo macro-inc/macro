@@ -3,6 +3,7 @@
 
 mod casts;
 mod column_types;
+mod duplicate;
 mod infer_column_type;
 mod metadata;
 mod ops;

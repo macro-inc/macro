@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO database_entities (database_id, name, user_id)\n            VALUES ($1, $2, $3)\n            RETURNING database_id AS id, name, user_id AS owner_id, created_at, trashed_at\n            ",
+  "query": "\n            INSERT INTO database_entities (database_id, name, user_id, created_at)\n            VALUES ($1, $2, $3, COALESCE($4::timestamptz, now()))\n            RETURNING database_id AS id, name, user_id AS owner_id, created_at, trashed_at\n            ",
   "describe": {
     "columns": [
       {
@@ -33,7 +33,8 @@
       "Left": [
         "Uuid",
         "Text",
-        "Text"
+        "Text",
+        "Timestamptz"
       ]
     },
     "nullable": [
@@ -44,5 +45,5 @@
       true
     ]
   },
-  "hash": "d3f49ff7d68128de8122f431ea9ea61f708233f45db84b12e93341dccdc036b5"
+  "hash": "dc9911821f50c4b3d51b52751932631a7f281fafa568574f83391c080f8aa7d1"
 }

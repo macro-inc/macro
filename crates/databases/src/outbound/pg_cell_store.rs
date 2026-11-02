@@ -3,6 +3,7 @@
 //! options.
 
 mod core;
+mod duplicate;
 mod provisioning;
 mod required;
 mod transfer;
