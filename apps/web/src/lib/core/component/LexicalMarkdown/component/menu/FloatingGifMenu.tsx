@@ -283,6 +283,7 @@ export function FloatingGifMenu(
           class="w-[28rem] mobile:w-[calc(100cqw-1rem-2px)] max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content menu-open-animation"
           use:floatWithSelection={{
             selection: untrack(() => window.getSelection()),
+            fallbackElement: editor()?.getRootElement(),
             reactiveOnContainer: editor()?.getRootElement(),
             onAvailableHeight: setMenuAvailableHeight,
             fullHeight: MAX_GRID_HEIGHT + PANEL_CHROME_HEIGHT,

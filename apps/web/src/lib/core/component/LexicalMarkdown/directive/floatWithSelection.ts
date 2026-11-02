@@ -36,6 +36,8 @@ function style(el: HTMLElement, styles: Partial<JSX.CSSProperties>) {
 
 type FloatWithSelectionOptions = {
   selection: Selection | undefined | null;
+  /** Use this anchor only when the browser has no selection to position from. */
+  fallbackElement?: Element | null;
   reactiveOnContainer?: HTMLElement | null;
   useBlockBoundary?: boolean;
   spacing?: number;
@@ -154,10 +156,9 @@ export function floatWithSelection(
   async function setInitialFloatingPosition(
     selection: Selection | null | undefined
   ) {
-    if (!selection) return;
-    let anchor: Range | Element | null = null;
+    let anchor: Range | Element | null = accessor()?.fallbackElement ?? null;
 
-    if (selection.rangeCount >= 1) {
+    if (selection && selection.rangeCount >= 1) {
       // Snapshot the caret. getRangeAt() is live, so focusing a picker
       // search field would rewrite this anchor and hide() the menu.
       const range = selection.getRangeAt(0).cloneRange();
@@ -168,7 +169,7 @@ export function floatWithSelection(
       } else {
         anchor = range;
       }
-    } else if (selection.anchorNode instanceof Element) {
+    } else if (selection?.anchorNode instanceof Element) {
       anchor = selection.anchorNode;
     }
 

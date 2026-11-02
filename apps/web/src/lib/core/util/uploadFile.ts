@@ -65,11 +65,11 @@ export function isNativeStagedUpload(
   return file.kind === 'native-staged';
 }
 
-/** Remove an upload that was cancelled before its owner accepted it. */
+/** Remove a failed or unaccepted static upload. */
 export async function discardStaticUpload(id: string): Promise<void> {
   const removed = await staticFileClient.deleteFile({ file_id: id });
   if (removed.isErr()) {
-    Telemetry.error('Could not remove cancelled static upload', {
+    Telemetry.error('Could not remove unused static upload', {
       'file.id': id,
     });
   } else {
@@ -108,9 +108,7 @@ export async function createStaticUploadFile(
     signal?.throwIfAborted();
     return id;
   } catch (error) {
-    if (signal?.aborted) {
-      await discardStaticUpload(id);
-    }
+    await discardStaticUpload(id);
     throw error;
   }
 }

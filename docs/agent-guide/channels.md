@@ -426,15 +426,16 @@ formatting or link menu, opens above the composer on phones, and stays visible
 after you choose the action, including with the iOS keyboard open. Both the `/`
 formatting menu and the GIF picker span the available chat width on phones,
 using the mentions menu's side gutters.
+If the browser has no caret selection, the GIF picker anchors to its editor.
 The larger desktop GIF picker stays within the viewport on narrow screens.
 Trending GIFs show first, with the large search field focused on both desktop
 and phones. Search keeps the composer expanded, and tapping anywhere in the
 search field keeps focus there. Tap a GIF to download its original animated bytes
 and upload them to Macro's static-file service before insertion, without sending
 the draft. The picker shows upload progress and prevents duplicate selections;
-a failure leaves it open for retry. Closing the picker, changing the draft, or
-losing edit permission prevents a late insertion. Cancellation aborts the transfer
-and discards any completed upload that was not inserted.
+a failure removes the unused upload and leaves the picker open for retry. Closing
+the picker, changing the draft, or losing edit permission prevents a late insertion.
+Cancellation aborts the transfer and discards any completed upload that was not inserted.
 On desktop, arrow keys move through the two-column grid and scroll the full
 selection outline into view; Enter inserts it and Escape closes the picker.
 Check that GIFs animate in the picker, in the draft, after sending, after copying

@@ -201,15 +201,22 @@ function mountPicker(companionPriority?: number) {
   };
 }
 
-it('opens the picker when the editor has no selection', async () => {
+it('positions the picker at the editor when there is no selection', async () => {
   const { editor } = mountPicker();
+  window.getSelection()?.removeAllRanges();
   editor.update(
     () => {
       editor.dispatchCommand(TRY_INSERT_GIF_COMMAND, undefined);
     },
     { discrete: true }
   );
-  expect(await screen.findByRole('searchbox')).toBeTruthy();
+  const input = await screen.findByRole('searchbox');
+  const panel = input.closest('[data-holds-prompts]')!;
+  await waitFor(() => expect(panel).toHaveProperty('style.top', '200px'));
+  expect(panel).toHaveProperty('style.visibility', 'visible');
+  expect(vi.mocked(computePosition).mock.lastCall?.[0]).toBe(
+    editor.getRootElement()
+  );
 });
 it.each([MenuPriority.Normal, MenuPriority.High])(
   'opens the GIF picker over an existing menu with priority %s',

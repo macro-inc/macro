@@ -55,6 +55,32 @@ it('keeps the reservation readable and forwards cancellation to the PUT', async 
   });
 });
 
+it.each(['response', 'network'])(
+  'deletes the reserved static file when a PUT fails with a %s error',
+  async (failure) => {
+    if (failure === 'response') {
+      vi.mocked(platformFetch).mockResolvedValue(
+        new Response(null, { status: 500 })
+      );
+    } else {
+      vi.mocked(platformFetch).mockRejectedValue(
+        new Error('Network unavailable')
+      );
+    }
+    const file = createUploadFile(
+      new File(['GIF89a'], 'animation.gif', { type: 'image/gif' })
+    );
+
+    await expect(createStaticUploadFile(file)).rejects.toThrow(
+      failure === 'response' ? 'Failed to upload file' : 'Network unavailable'
+    );
+    expect(fetchWithToken).toHaveBeenLastCalledWith(
+      expect.stringContaining('/api/file/static-gif'),
+      { method: 'DELETE' }
+    );
+  }
+);
+
 it('aborts an in-flight PUT and deletes its reserved static file', async () => {
   const started = Promise.withResolvers<void>();
   vi.mocked(platformFetch).mockImplementation(
