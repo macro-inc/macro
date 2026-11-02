@@ -36,6 +36,13 @@ const SETTINGS: Setting[] = [
   },
   {
     tab: 'Shortcuts',
+    title: 'Shortcut profiles',
+    target: 'Shortcut profiles',
+    keywords:
+      'keyboard hotkeys keymap superhuman linear email tasks other app layout',
+  },
+  {
+    tab: 'Shortcuts',
     title: 'Search and command menu shortcuts',
     target: 'Core',
     keywords: 'keyboard hotkeys find create settings chat',
