@@ -174,6 +174,14 @@ impl Check {
     }
 }
 
+impl CodeStep {
+    /// The rules a code step follows on its own: its title, source and
+    /// writes, its knobs, and its sentence.
+    pub fn validate(&self) -> Result<(), ProgramError> {
+        code_step(self)
+    }
+}
+
 fn code_step(code: &CodeStep) -> Result<(), ProgramError> {
     let title = code.title.trim();
     if title.is_empty() || title.chars().count() > MAX_TITLE_CHARS {

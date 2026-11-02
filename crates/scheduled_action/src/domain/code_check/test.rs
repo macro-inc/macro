@@ -251,6 +251,24 @@ async fn checking_steps_reports_each_failing_step_with_declarations_to_fix_it() 
     assert!(error.downcast_ref::<InvalidCodeSteps>().is_some());
 }
 
+#[tokio::test]
+async fn checking_steps_reports_knobs_and_sentences_saving_would_refuse() {
+    let step = json!({
+        "type": "code",
+        "title": "Label",
+        "source": "export async function main({ knobs }: StepContext) { return knobs.label; }",
+        "knobs": [{ "type": "text", "name": "label", "label": "Label", "value": "vc" }],
+        "sentence": "Label it {label} when {?aboutMoney}.",
+    });
+    let checked = check(&Checker::default(), &json!([step])).await.unwrap();
+    assert_eq!(checked.steps.len(), 1);
+    assert_eq!(checked.steps[0].index, 0);
+    assert_eq!(
+        checked.steps[0].problems,
+        ["the sentence shows `aboutMoney`, but the step has no knob by that name"]
+    );
+}
+
 #[test]
 fn starters_are_offered_as_code_only_where_code_can_be_saved() {
     assert!(starters(&NoRoutineCode).is_empty());
@@ -260,7 +278,7 @@ fn starters_are_offered_as_code_only_where_code_can_be_saved() {
             .iter()
             .map(|starter| starter.key.as_str())
             .collect::<Vec<_>>(),
-        ["inbox", "triage", "updates"]
+        ["inbox", "triage", "updates", "invoices"]
     );
     for starter in &offered {
         assert_eq!(starter.steps.len(), 1);

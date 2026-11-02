@@ -237,18 +237,36 @@ pub async fn check(code: &impl RoutineCode, steps: &Value) -> anyhow::Result<Cod
             .await
             .map_err(|error| CodeCheckError::Unavailable(error.0))?
     };
+    let mut steps: Vec<CodeStepCheck> = failing
+        .into_iter()
+        .map(bounded_step)
+        .map(|step| CodeStepCheck {
+            declarations: code.declarations(&step.problems),
+            index: step.index,
+            title: step.title,
+            problems: step.problems,
+        })
+        .collect();
+    // Saving would also refuse a step whose knobs or sentence break the
+    // rules, so the author gets those here too, first.
+    for (index, step) in program.code_steps().into_iter().enumerate() {
+        let Err(error) = step.validate() else {
+            continue;
+        };
+        match steps.iter_mut().find(|checked| checked.index == index) {
+            Some(checked) => checked.problems.insert(0, error.to_string()),
+            None => steps.push(CodeStepCheck {
+                index,
+                title: step.title.trim().to_owned(),
+                problems: vec![error.to_string()],
+                declarations: String::new(),
+            }),
+        }
+    }
+    steps.sort_by_key(|step| step.index);
     Ok(CodeCheck {
         sdk: sdk.into(),
-        steps: failing
-            .into_iter()
-            .map(bounded_step)
-            .map(|step| CodeStepCheck {
-                declarations: code.declarations(&step.problems),
-                index: step.index,
-                title: step.title,
-                problems: step.problems,
-            })
-            .collect(),
+        steps,
     })
 }
 
