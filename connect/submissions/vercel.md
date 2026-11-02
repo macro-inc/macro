@@ -1,14 +1,14 @@
 ---
 vendor: vercel
 apps: [vercel_token_auth]
-state: drafting
+state: submitted
 portal: https://forms.gle/FQ3nYPbovoHvbfmz9
 account: connect@macro.com
-submitted:
-last_contact:
-next_action: Human fills the NEEDS-HUMAN items (redirect URI, contact, company facts, logo and wordmark URLs); the agent then submits Vercel's client review form
-next_action_owner: human
-due: 2026-11-02
+submitted: 2026-11-02
+last_contact: 2026-11-02
+next_action: Check for a Vercel reply (connect@macro.com, and ask Eric about eric.hayes@macro.com); with none by due, follow up on the Vercel community forum. On approval, run conformance, then set vercel live
+next_action_owner: agent
+due: 2026-11-09
 ---
 
 ## Requirements
@@ -81,3 +81,15 @@ noted.
 - 2026-10-30: Found the request channel (Google Form linked from Vercel MCP
   docs), read its 13 fields without submitting, checked live metadata (CIMD
   true, DCR, `none` auth), drafted offline. Nothing submitted.
+- 2026-11-02: Submitted the client review form (Google confirmed "Your
+  response has been recorded"). Contact Eric Hayes, eric.hayes@macro.com;
+  company Coparse, Inc. dba Macro (from macro.com/terms); logo
+  `https://macro.com/macro-favicon.svg`; wordmark
+  `apps/marketing/src/assets/designs/design-wordmark.svg` via
+  raw.githubusercontent.com (the repo is public); docs link the dev demo and
+  the `connect/` tree; redirect URIs `https://connect-dev.macro.com/v1/oauth/callback`
+  and `https://connect.macro.com/v1/oauth/callback`; test steps through
+  `/demo`, with Vercel enabled once allowlisted. Asked which registration
+  method and allowlist key Vercel wants.
+- 2026-11-02: Sweep: no reply in connect@macro.com (replies go to
+  eric.hayes@macro.com, which the operator cannot read). Next check 2026-11-09.

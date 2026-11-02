@@ -49,8 +49,17 @@ export function proxyImageUrl(src: string): string {
 /** URL to put on an `<img>` for a remote markdown image. */
 export function displayImageUrl(src: string): string {
   // Markdown import turns a pasted image into a plain URL. Static files are
-  // public and send their own CORS headers, while the proxy needs a session
-  // cookie that a `crossorigin="anonymous"` image never sends.
+  // public and send their own CORS headers, so they skip the proxy.
   if (src.startsWith(`${SERVER_HOSTS['static-file']}/`)) return src;
   return proxyImageUrl(githubRawImageUrl(src));
+}
+
+/**
+ * Whether `src` loads through the image proxy. The proxy authenticates by
+ * session cookie, which a cross-origin request only sends with credentials
+ * (`crossorigin="use-credentials"` on an `<img>`, `credentials: 'include'` on
+ * a fetch).
+ */
+export function isImageProxyUrl(src: string): boolean {
+  return src.startsWith(`${SERVER_HOSTS['image-proxy-service']}/proxy?`);
 }
