@@ -146,7 +146,6 @@ export function ProjectWorkspace(props: {
                               value
                             )
                           }
-                          onRefresh={props.source.refresh}
                           entitySelfFilter={{
                             blockId: props.project.id,
                             entityType: 'INITIATIVE',

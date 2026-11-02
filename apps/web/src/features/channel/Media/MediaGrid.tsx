@@ -11,8 +11,6 @@ import type { MediaItem } from './media-items';
 
 // Square tile size in px; keep in sync with the `size-25.5` class and THUMB_SIZE.
 const ATTACHMENT_TILE_SIZE = 102;
-// Keep in sync with the `size-6.5` class.
-const COMPACT_TILE_SIZE = 26;
 const SINGLE_IMAGE_MAX_WIDTH = 400;
 const SINGLE_IMAGE_MAX_HEIGHT = 400;
 const MESSAGE_GALLERY_IMAGE_MAX_WIDTH = 200;
@@ -66,37 +64,23 @@ function MessageImageTile(props: {
   );
 }
 
-function AttachmentImageTile(props: {
-  item: MediaItem;
-  onOpen?: () => void;
-  /** A small thumbnail beside a collapsed message. */
-  compact?: boolean;
-}) {
-  const size = () => (props.compact ? COMPACT_TILE_SIZE : ATTACHMENT_TILE_SIZE);
+function AttachmentImageTile(props: { item: MediaItem; onOpen?: () => void }) {
   return (
     // Root holds the fixed square; image and fallback both fill it (no reflow).
-    <MediaImage.Root
-      class={props.compact ? 'size-6.5 rounded-md' : 'size-25.5'}
-    >
+    <MediaImage.Root class="size-25.5">
       <MediaImage.Image
         // Small thumbnail for these ~100px boxes; src is the fallback.
         src={props.item.thumbSrc ?? props.item.src}
         previewSrc={props.item.previewSrc}
         class={cn(
           'size-full select-none rounded-2xl border border-edge object-cover',
-          props.compact && 'rounded-md',
           props.onOpen && 'hover:opacity-80'
         )}
         onOpen={props.onOpen}
-        width={size()}
-        height={size()}
+        width={ATTACHMENT_TILE_SIZE}
+        height={ATTACHMENT_TILE_SIZE}
         loading="lazy"
-        fallback={
-          <MediaImage.Fallback
-            fill
-            class={props.compact ? 'rounded-md' : undefined}
-          />
-        }
+        fallback={<MediaImage.Fallback fill />}
       />
     </MediaImage.Root>
   );
@@ -184,35 +168,22 @@ function MessageVideoTile(props: {
   );
 }
 
-function AttachmentVideoTile(props: {
-  item: MediaItem;
-  onOpen?: () => void;
-  compact?: boolean;
-}) {
+function AttachmentVideoTile(props: { item: MediaItem; onOpen?: () => void }) {
   return (
-    <MediaVideo.Root
-      class={cn(
-        'size-25.5 group overflow-hidden border border-edge bg-surface',
-        props.compact && 'size-6.5 rounded-md'
-      )}
-    >
+    <MediaVideo.Root class="size-25.5 group overflow-hidden border border-edge bg-surface">
       <MediaVideo.Preview
         src={props.item.src}
         class="size-full object-cover"
         onOpen={props.onOpen}
       />
-      <MediaVideo.PlayOverlay
-        onOpen={props.onOpen}
-        class={props.compact ? '[&_svg]:size-3' : undefined}
-      />
+      <MediaVideo.PlayOverlay onOpen={props.onOpen} />
     </MediaVideo.Root>
   );
 }
 
 export function MediaGrid(props: {
   items: MediaItem[];
-  /** `compact` shows every item as a small thumbnail. */
-  variant: 'message' | 'attachments' | 'compact';
+  variant: 'message' | 'attachments';
   onOpen: (index: number) => void;
   /** An item whose file failed to load (message tiles only). */
   onError?: (id: string) => void;
@@ -225,9 +196,9 @@ export function MediaGrid(props: {
   return (
     <div
       class={cn(
-        props.variant === 'message'
-          ? 'flex flex-row flex-wrap gap-2'
-          : 'flex flex-row flex-wrap gap-1.5',
+        props.variant === 'attachments'
+          ? 'flex flex-row flex-wrap gap-1.5'
+          : 'flex flex-row flex-wrap gap-2',
         props.class
       )}
     >
@@ -242,10 +213,11 @@ export function MediaGrid(props: {
                 onError={() => props.onError?.(item.id)}
               />
             </Match>
-            <Match when={item.kind === 'image'}>
+            <Match
+              when={item.kind === 'image' && props.variant === 'attachments'}
+            >
               <AttachmentImageTile
                 item={item}
-                compact={props.variant === 'compact'}
                 onOpen={() => props.onOpen(index())}
               />
             </Match>
@@ -259,7 +231,6 @@ export function MediaGrid(props: {
             <Match when={true}>
               <AttachmentVideoTile
                 item={item}
-                compact={props.variant === 'compact'}
                 onOpen={() => props.onOpen(index())}
               />
             </Match>

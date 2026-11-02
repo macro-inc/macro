@@ -8,6 +8,7 @@ use axum::{
 use model::response::ErrorResponse;
 use thiserror::Error;
 use tower::ServiceBuilder;
+use tracing::Level;
 use utoipa::ToSchema;
 
 use crate::api::{context::ApiContext, middleware, utils::default_redirect_url};
@@ -35,7 +36,10 @@ impl IntoResponse for SendMobileWelcomeEmailError {
             SendMobileWelcomeEmailError::InvalidEmail
             | SendMobileWelcomeEmailError::EmailBlocked
             | SendMobileWelcomeEmailError::PersonalEmail => StatusCode::BAD_REQUEST,
-            SendMobileWelcomeEmailError::InternalError(_) => StatusCode::INTERNAL_SERVER_ERROR,
+            SendMobileWelcomeEmailError::InternalError(error) => {
+                tracing::error!(error = ?error, "mobile welcome email failed");
+                StatusCode::INTERNAL_SERVER_ERROR
+            }
         };
 
         (
@@ -86,7 +90,7 @@ pub fn router(state: ApiContext) -> Router<ApiContext> {
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(skip(ctx), fields(email=%req.email), err)]
+#[tracing::instrument(skip(ctx), fields(email=%req.email), err(level = Level::INFO))]
 pub async fn handler(
     State(ctx): State<ApiContext>,
     extract::Json(req): extract::Json<SendMobileWelcomeEmailRequest>,

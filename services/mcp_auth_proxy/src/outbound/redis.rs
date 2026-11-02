@@ -75,6 +75,99 @@ impl RedisClientRegistry {
     fn revoked_grant_key(grant_id: &str) -> String {
         format!("{REVOKED_GRANT_KEY_PREFIX}{grant_id}")
     }
+
+    /// Every live registration, with the time it has left.
+    pub async fn export_clients(&self) -> anyhow::Result<Vec<(RegisteredClient, Duration)>> {
+        let entries = self.export(CLIENT_KEY_PREFIX).await?;
+        entries
+            .into_iter()
+            .map(|(_, json, remaining)| {
+                let client = serde_json::from_str::<StoredRegisteredClient>(&json)
+                    .map(RegisteredClient::from)
+                    .context("failed to deserialize client registration")?;
+                Ok((client, remaining))
+            })
+            .collect()
+    }
+
+    /// Every live refresh token binding as `(digest, binding, time left)`.
+    pub async fn export_bindings(
+        &self,
+    ) -> anyhow::Result<Vec<(String, RefreshTokenBinding, Duration)>> {
+        let entries = self.export(REFRESH_BINDING_KEY_PREFIX).await?;
+        entries
+            .into_iter()
+            .map(|(digest, value, remaining)| {
+                let binding = parse_refresh_token_binding(&digest, value)?;
+                Ok((digest, binding, remaining))
+            })
+            .collect()
+    }
+
+    /// Every live grant revocation as `(grant_id, time left)`.
+    pub async fn export_revoked_grants(&self) -> anyhow::Result<Vec<(String, Duration)>> {
+        let entries = self.export(REVOKED_GRANT_KEY_PREFIX).await?;
+        Ok(entries
+            .into_iter()
+            .map(|(grant_id, _, remaining)| (grant_id, remaining))
+            .collect())
+    }
+
+    /// Reads every key under `prefix` as `(suffix, value, time left)`. Keys
+    /// that expire mid-scan, or carry no TTL, are skipped.
+    async fn export(&self, prefix: &str) -> anyhow::Result<Vec<(String, String, Duration)>> {
+        let mut conn = self
+            .client
+            .get_multiplexed_async_connection()
+            .await
+            .context("unable to connect to redis")?;
+        let mut keys: Vec<String> = Vec::new();
+        let mut cursor: u64 = 0;
+        loop {
+            let (next, batch): (u64, Vec<String>) = redis::cmd("SCAN")
+                .arg(cursor)
+                .arg("MATCH")
+                .arg(format!("{prefix}*"))
+                .arg("COUNT")
+                .arg(EXPORT_SCAN_COUNT)
+                .query_async(&mut conn)
+                .await
+                .with_context(|| format!("failed to scan keys under {prefix}"))?;
+            keys.extend(batch);
+            if next == 0 {
+                break;
+            }
+            cursor = next;
+        }
+        // SCAN may return a key more than once.
+        keys.sort_unstable();
+        keys.dedup();
+
+        let mut entries = Vec::with_capacity(keys.len());
+        for chunk in keys.chunks(EXPORT_READ_BATCH) {
+            let mut pipeline = redis::pipe();
+            for key in chunk {
+                pipeline.get(key).pttl(key);
+            }
+            let values: Vec<(Option<String>, i64)> = pipeline
+                .query_async(&mut conn)
+                .await
+                .with_context(|| format!("failed to read keys under {prefix}"))?;
+            for (key, (value, remaining_ms)) in chunk.iter().zip(values) {
+                let (Some(value), Ok(remaining_ms)) = (value, u64::try_from(remaining_ms)) else {
+                    continue;
+                };
+                if let Some(suffix) = key.strip_prefix(prefix) {
+                    entries.push((
+                        suffix.to_owned(),
+                        value,
+                        Duration::from_millis(remaining_ms),
+                    ));
+                }
+            }
+        }
+        Ok(entries)
+    }
 }
 
 #[derive(serde::Serialize, serde::Deserialize)]
@@ -103,6 +196,12 @@ fn parse_refresh_token_binding(
         grant_id: stored.grant_id,
     })
 }
+
+/// Keys SCAN examines per call while exporting. The cache holds millions of
+/// unrelated keys, so a larger page means far fewer round trips.
+const EXPORT_SCAN_COUNT: usize = 10_000;
+/// Keys read per pipelined round trip while exporting.
+const EXPORT_READ_BATCH: usize = 500;
 
 #[derive(serde::Serialize, serde::Deserialize)]
 struct StoredRegisteredClient {

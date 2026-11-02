@@ -37,6 +37,8 @@ Old copied `/app/call/<callId>` links redirect to the Calls detail without losin
 the transcript target. Existing `/app/drive/call/<callId>` links still work.
 The detail shows a loading state, recording/transcript/summary, Share, and a call
 side panel below the breadcrumb header; a failed load shows Retry.
+While the call is in progress, a `Join call` button under the title joins it
+(desktop and phone); it is hidden once you are in that call.
 `call_transcript_id=<segmentId>` seeks the matching video segment after loading.
 Check a direct link, both old link formats, a Calls-list click, a second split,
 the breadcrumb return, browser Back/Forward, and clicking the same transcript

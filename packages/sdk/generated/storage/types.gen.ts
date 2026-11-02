@@ -975,6 +975,12 @@ export type ApiEntityFilterAst = {
      */
     ghprf?: unknown;
     /**
+     * Filters applied to initiatives (wire key `if`). Opt-in like agent
+     * sessions: an omitted filter returns no initiatives, and any literal,
+     * a notification state included, opts them in.
+     */
+    if?: unknown;
+    /**
      * the filters that should be applied to the project entity
      */
     pf?: unknown;
@@ -1925,6 +1931,10 @@ export type CalendarMentionEvent = {
      * Entity update time of the previewed copy.
      */
     updatedAt: string;
+    /**
+     * The calendars holding `viewer_event_id`, the canonical copy's first.
+     */
+    viewerCalendarIds?: Array<string>;
     viewerCopy?: null | CalendarMentionViewerCopy;
     /**
      * The requester's own event entity for the mentioned meeting. Differs
@@ -9522,7 +9532,8 @@ export type InitiativeFilters = {
     /**
      * Opt this query into initiatives at all. Initiatives are off by
      * default — see [`crate::ast::initiative::InitiativeLiteral::Include`].
-     * Asking for specific `initiative_ids` or `owners` also opts in.
+     * Asking for specific `initiative_ids`, `owners` or `notification_filters`
+     * also opts in.
      */
     include?: boolean;
     /**
@@ -9534,9 +9545,13 @@ export type InitiativeFilters = {
      */
     name?: string | null;
     /**
-     * Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot
-     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
-     * owner.
+     * Filter by initiative notification state.
+     */
+    notification_filters?: NotificationFilters;
+    /**
+     * Filter by initiative owner principal — a user ('macro|user@example.com'), a
+     * bot ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include
+     * every owner.
      */
     owners?: Array<string>;
 };
@@ -10448,6 +10463,7 @@ export type MessagePatchedMetadata = {
      * Actor that patched the message.
      */
     actor: ChannelSender;
+    completed_reply?: null | MessagePostedMetadata;
     /**
      * Macro Markdown body after the patch.
      */
@@ -16537,7 +16553,8 @@ export type WhatsAppChat = {
     kind: ExternalChatKind;
     /**
      * Newest activity WhatsApp reported (message or history sync); `null`
-     * when unknown. The list is sorted by it, newest first, unknown last.
+     * when unknown, as for saved contacts never messaged. The list is
+     * sorted by it, newest first, unknown last.
      */
     lastActivityAt?: string | null;
     /**
@@ -16545,6 +16562,11 @@ export type WhatsAppChat = {
      * contact or WhatsApp name, else `+<phone>`. Always non-empty.
      */
     name: string;
+    /**
+     * The other person's phone number (`+<digits>`) of a direct chat, when
+     * WhatsApp told us it.
+     */
+    phoneNumber?: string | null;
     /**
      * Pinned in WhatsApp.
      */
@@ -16592,6 +16614,54 @@ export type WhatsAppDisconnectRequest = {
      */
     authorizationGeneration: number;
 };
+
+/**
+ * Result of the owner's Import.
+ */
+export type WhatsAppHistoryImport = {
+    /**
+     * Chats that started importing earlier messages from the phone.
+     */
+    started: number;
+};
+
+/**
+ * The owner asking whether a phone number has a WhatsApp account, to start
+ * a direct chat with it.
+ */
+export type WhatsAppLookup = {
+    /**
+     * Found: the direct chat's JID, now addable from the chat list.
+     */
+    chatJid?: string | null;
+    /**
+     * Poll `GET /whatsapp/lookups/{id}` with it.
+     */
+    id: string;
+    /**
+     * The number asked about, E.164 (`+<digits>`).
+     */
+    phoneNumber: string;
+    /**
+     * Progress.
+     */
+    state: WhatsAppLookupState;
+};
+
+/**
+ * A phone number to start a direct chat with.
+ */
+export type WhatsAppLookupRequest = {
+    /**
+     * E.164: `+`, the country code and the number, without spacing.
+     */
+    phoneNumber: string;
+};
+
+/**
+ * Where a phone-number lookup is.
+ */
+export type WhatsAppLookupState = 'pending' | 'found' | 'not_on_whatsapp' | 'failed';
 
 /**
  * Owner-only pairing status. Deliberately has no `Debug` implementation: the
@@ -24971,6 +25041,47 @@ export type WhatsappDisconnectResponses = {
 };
 
 export type WhatsappDisconnectResponse = WhatsappDisconnectResponses[keyof WhatsappDisconnectResponses];
+
+export type WhatsappImportHistoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/whatsapp/history-import';
+};
+
+export type WhatsappImportHistoryResponses = {
+    200: WhatsAppHistoryImport;
+};
+
+export type WhatsappImportHistoryResponse = WhatsappImportHistoryResponses[keyof WhatsappImportHistoryResponses];
+
+export type WhatsappStartLookupData = {
+    body: WhatsAppLookupRequest;
+    path?: never;
+    query?: never;
+    url: '/whatsapp/lookups';
+};
+
+export type WhatsappStartLookupResponses = {
+    200: WhatsAppLookup;
+};
+
+export type WhatsappStartLookupResponse = WhatsappStartLookupResponses[keyof WhatsappStartLookupResponses];
+
+export type WhatsappLookupData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/whatsapp/lookups/{id}';
+};
+
+export type WhatsappLookupResponses = {
+    200: WhatsAppLookup;
+};
+
+export type WhatsappLookupResponse = WhatsappLookupResponses[keyof WhatsappLookupResponses];
 
 export type WhatsappCancelPairingData = {
     body?: never;

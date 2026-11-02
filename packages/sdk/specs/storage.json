@@ -19464,6 +19464,84 @@
         }
       }
     },
+    "/whatsapp/history-import": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Import earlier messages of the caller's chats that wait for their phone\n(`backfill.state` `waiting_for_phone`). WhatsApp must be open on the phone.",
+        "operationId": "whatsapp_import_history",
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppHistoryImport"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/whatsapp/lookups": {
+      "post": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Ask whether a phone number has a WhatsApp account, to start a direct chat\nwith it; poll the lookup until it is no longer `pending`. Found numbers\njoin the chat list, so `POST /external-chats` adds them.",
+        "operationId": "whatsapp_start_lookup",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/WhatsAppLookupRequest"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppLookup"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/whatsapp/lookups/{id}": {
+      "get": {
+        "tags": ["whatsapp_linked::inbound::router"],
+        "summary": "Poll the caller's phone-number lookup.",
+        "operationId": "whatsapp_lookup",
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/WhatsAppLookup"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
     "/whatsapp/pairing/{id}": {
       "get": {
         "tags": ["whatsapp_linked::inbound::router"],
@@ -21053,6 +21131,9 @@
           "ghprf": {
             "description": "the filters that should be applied to GitHub pull request records, on top of `fef`"
           },
+          "if": {
+            "description": "Filters applied to initiatives (wire key `if`). Opt-in like agent\nsessions: an omitted filter returns no initiatives, and any literal,\na notification state included, opts them in."
+          },
           "pf": {
             "description": "the filters that should be applied to the project entity"
           },
@@ -22316,6 +22397,14 @@
             "type": "string",
             "format": "date-time",
             "description": "Entity update time of the previewed copy."
+          },
+          "viewerCalendarIds": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "description": "The calendars holding `viewer_event_id`, the canonical copy's first."
           },
           "viewerCopy": {
             "oneOf": [
@@ -34196,7 +34285,7 @@
           },
           "include": {
             "type": "boolean",
-            "description": "Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids` or `owners` also opts in."
+            "description": "Opt this query into initiatives at all. Initiatives are off by\ndefault — see [`crate::ast::initiative::InitiativeLiteral::Include`].\nAsking for specific `initiative_ids`, `owners` or `notification_filters`\nalso opts in."
           },
           "initiative_ids": {
             "type": "array",
@@ -34209,12 +34298,16 @@
             "type": ["string", "null"],
             "description": "Case-insensitive name substring."
           },
+          "notification_filters": {
+            "$ref": "#/components/schemas/NotificationFilters",
+            "description": "Filter by initiative notification state."
+          },
           "owners": {
             "type": "array",
             "items": {
               "type": "string"
             },
-            "description": "Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
+            "description": "Filter by initiative owner principal — a user ('macro|user@example.com'), a\nbot ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include\nevery owner."
           }
         }
       },
@@ -35643,6 +35736,17 @@
           "actor": {
             "$ref": "#/components/schemas/ChannelSender",
             "description": "Actor that patched the message."
+          },
+          "completed_reply": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/MessagePostedMetadata",
+                "description": "Completed bot answer, evaluated for agent triggers like a new post.\nOrdinary edits and streaming updates omit this; older producers remain\ncompatible with the trigger consumer."
+              }
+            ]
           },
           "content": {
             "type": "string",
@@ -45419,11 +45523,15 @@
           "lastActivityAt": {
             "type": ["string", "null"],
             "format": "date-time",
-            "description": "Newest activity WhatsApp reported (message or history sync); `null`\nwhen unknown. The list is sorted by it, newest first, unknown last."
+            "description": "Newest activity WhatsApp reported (message or history sync); `null`\nwhen unknown, as for saved contacts never messaged. The list is\nsorted by it, newest first, unknown last."
           },
           "name": {
             "type": "string",
             "description": "Group: the subject, or member names for an unnamed group. Direct: the\ncontact or WhatsApp name, else `+<phone>`. Always non-empty."
+          },
+          "phoneNumber": {
+            "type": ["string", "null"],
+            "description": "The other person's phone number (`+<digits>`) of a direct chat, when\nWhatsApp told us it."
           },
           "pinned": {
             "type": "boolean",
@@ -45488,6 +45596,59 @@
             "description": "Fences retries against a later reconnect or replacement."
           }
         }
+      },
+      "WhatsAppHistoryImport": {
+        "type": "object",
+        "description": "Result of the owner's Import.",
+        "required": ["started"],
+        "properties": {
+          "started": {
+            "type": "integer",
+            "format": "int32",
+            "description": "Chats that started importing earlier messages from the phone.",
+            "minimum": 0
+          }
+        }
+      },
+      "WhatsAppLookup": {
+        "type": "object",
+        "description": "The owner asking whether a phone number has a WhatsApp account, to start\na direct chat with it.",
+        "required": ["id", "phoneNumber", "state"],
+        "properties": {
+          "chatJid": {
+            "type": ["string", "null"],
+            "description": "Found: the direct chat's JID, now addable from the chat list."
+          },
+          "id": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Poll `GET /whatsapp/lookups/{id}` with it."
+          },
+          "phoneNumber": {
+            "type": "string",
+            "description": "The number asked about, E.164 (`+<digits>`)."
+          },
+          "state": {
+            "$ref": "#/components/schemas/WhatsAppLookupState",
+            "description": "Progress."
+          }
+        }
+      },
+      "WhatsAppLookupRequest": {
+        "type": "object",
+        "description": "A phone number to start a direct chat with.",
+        "required": ["phoneNumber"],
+        "properties": {
+          "phoneNumber": {
+            "type": "string",
+            "description": "E.164: `+`, the country code and the number, without spacing."
+          }
+        }
+      },
+      "WhatsAppLookupState": {
+        "type": "string",
+        "description": "Where a phone-number lookup is.",
+        "enum": ["pending", "found", "not_on_whatsapp", "failed"]
       },
       "WhatsAppPairState": {
         "type": "object",

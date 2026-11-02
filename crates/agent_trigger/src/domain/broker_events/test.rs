@@ -378,6 +378,7 @@ fn a_conversation_turn_carries_its_trigger_without_the_channel() {
         email: None,
     };
     let discussion = trigger_context::DiscussionContext {
+        agent_request: None,
         surface: trigger_context::DiscussionSurface::Channel {
             id: Uuid::from_u128(1),
             name: None,

@@ -57,13 +57,19 @@ written, `writeScroll` synchronously commits the current total to the sizer;
 otherwise a growing last row can clamp the scroll against the old DOM extent.
 Viewport and inset changes explicitly scroll to the end only if previously pinned.
 The offset observer distinguishes instant programmatic scrolls from user scrolling,
-so our own corrections do not prolong gesture compensation.
+including scroll events dispatched while our own `scrollTo` runs, so our own
+corrections neither start nor prolong gesture compensation.
 
 Safari wheel scrolling and iOS touch scrolling use a separate logical offset while a gesture is
 active. Size and prepend corrections counter-shift the rows instead of writing
-`scrollTop`, which interrupts native momentum. Scroll observations and saved
-snapshots include that adjustment. After touch release and 150ms without input or scrolling,
-the adjustment is removed and committed to the DOM offset in the same task.
+`scrollTop`: WebKit drops a write that lands while native scrolling is still moving,
+and the list jumps by the whole adjustment. Any native scroll event activates
+compensation, because iOS sends no `touchstart` for a fling that begins during momentum.
+Scroll observations and saved snapshots include that adjustment. After touch release,
+once 150ms pass without input or scrolling and `scrollTop` has not moved in that time,
+the adjustment is removed and committed to the DOM offset in the same task. A busy
+main thread can delay scroll events beyond 150ms while momentum continues, so the
+timer alone is not proof that scrolling stopped.
 The sizer retains its logical height and clips shifted overflow during this period.
 Because a gesture never moves the native extent, rows above that are taller than
 their 96px estimate would only grow the adjustment, and a long fling stops at
@@ -71,8 +77,9 @@ their 96px estimate would only grow the adjustment, and a long fling stops at
 therefore keeps rows up to twelve viewports above the reading position mounted
 and measured before a gesture reaches them, adding at most six unmeasured rows
 per range pass.
-Reaching either scroll boundary releases the shifted origin; explicit message,
-reply, latest, and pinned viewport/inset navigation flush it before computing targets.
+Scroll boundaries follow the same rule: momentum bounces there, and a finger can hold
+the list against an edge. Explicit message, reply, latest, and pinned viewport/inset
+navigation flush the adjustment before computing targets.
 Elastic overscroll must return in bounds before a correction is committed. Touch end
 and cancellation listeners stay on the original event target even if its row unmounts.
 The `@tanstack/virtual-core` patch adds `useIOSScrollDeferral`, enabled by default.

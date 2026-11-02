@@ -7,6 +7,16 @@ import type { SoupApiItem } from '@service-storage/generated/schemas/soupApiItem
 import { match } from 'ts-pattern';
 import { type GroupByField, type GroupMeta, NOT_SET_GROUP_KEY } from './types';
 
+export const DATE_GROUP_BUCKETS = [
+  ['today', 'Today'],
+  ['yesterday', 'Yesterday'],
+  ['this_week', 'This Week'],
+  ['last_week', 'Last Week'],
+  ['this_month', 'This Month'],
+  ['last_month', 'Last Month'],
+  ['older', 'Older'],
+] as const;
+
 /** Sort methods the grouped soup endpoints accept. */
 export type GroupedSortMethod = Exclude<
   NonNullable<Params['sort_method']>,
@@ -139,7 +149,13 @@ export function resolveGroupMetaForKey(
 
       return;
     })
-    .with({ type: 'date' }, () => undefined)
+    .with({ type: 'date' }, () => {
+      const displayOrder = DATE_GROUP_BUCKETS.findIndex(
+        ([bucketKey]) => bucketKey === key
+      );
+      if (displayOrder === -1) return;
+      return { key, label: DATE_GROUP_BUCKETS[displayOrder][1], displayOrder };
+    })
     .exhaustive(() => undefined);
 }
 
@@ -214,18 +230,25 @@ export function makeGroupComparator(
         return diff !== 0 ? diff : defaultOrder(a, b);
       };
     }
-    if (groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES) {
-      return (a, b) => {
-        const aNotSet = a.key === NOT_SET_GROUP_KEY;
-        const bNotSet = b.key === NOT_SET_GROUP_KEY;
-        if (aNotSet && bNotSet) return 0;
-        if (aNotSet) return 1;
-        if (bNotSet) return -1;
-        return a.label.localeCompare(b.label);
-      };
+    if (
+      groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.ASSIGNEES ||
+      groupBy.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
+    ) {
+      return notSetLastByLabel;
     }
   }
+  if (groupBy?.type === 'project') return notSetLastByLabel;
   return defaultOrder;
+}
+
+/** People and projects sort by name; the unassigned group closes the list. */
+function notSetLastByLabel(a: GroupMeta, b: GroupMeta): number {
+  const aNotSet = a.key === NOT_SET_GROUP_KEY;
+  const bNotSet = b.key === NOT_SET_GROUP_KEY;
+  if (aNotSet && bNotSet) return 0;
+  if (aNotSet) return 1;
+  if (bNotSet) return -1;
+  return a.label.localeCompare(b.label);
 }
 
 /**

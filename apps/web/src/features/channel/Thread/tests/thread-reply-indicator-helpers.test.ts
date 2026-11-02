@@ -23,8 +23,6 @@ describe('thread-reply-indicator-helpers', () => {
   it('formats collapsed reply labels', () => {
     expect(getThreadReplyCountLabel(1)).toBe('1 more reply');
     expect(getThreadReplyCountLabel(2)).toBe('2 more replies');
-    expect(getThreadReplyCountLabel(1, { all: true })).toBe('1 reply');
-    expect(getThreadReplyCountLabel(3, { all: true })).toBe('3 replies');
   });
 
   it('returns unique user ids in reply order', () => {

@@ -1,6 +1,7 @@
 import type { RichMessage } from '../../mentions';
 import { MacroError, unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
+import type { StaticImage } from '../images/image';
 import type { Channel } from './channel';
 import type { Thread } from './thread';
 
@@ -13,7 +14,7 @@ import type { Thread } from './thread';
  * cached by the client.
  *
  * The webhook endpoint supports content only. Mentions in `<m-*>` tags still
- * work, but threads and attachments are not supported.
+ * work, but threads and images are not supported.
  *
  * Posting to a `Thread` puts the message in that thread; to a `Channel`, at the
  * channel root. One target rather than a channel plus a thread id, so the two
@@ -23,6 +24,7 @@ export async function postToChannel(
   client: MacroClient,
   target: Channel | Thread,
   body: RichMessage,
+  images: StaticImage[] = [],
 ): Promise<string> {
   const { channelId, thread } = resolve(target);
 
@@ -33,13 +35,26 @@ export async function postToChannel(
         body: {
           content: body.content,
           mentions: body.mentions,
-          attachments: [],
+          attachments: images.map((image) => ({
+            entity_type: STATIC_IMAGE,
+            entity_id: image.id,
+            width: image.width ?? null,
+            height: image.height ?? null,
+          })),
           thread_id: thread?.rootId ?? null,
           nonce: crypto.randomUUID(),
         },
       }),
     );
     return id;
+  }
+
+  if (images.length > 0) {
+    throw new MacroError(
+      'a user-owned bot can only post via the channel webhook endpoint, which ' +
+        'does not support images — use a team-owned bot, or requestedAs(user), ' +
+        'to attach images',
+    );
   }
 
   if (thread) {
@@ -66,6 +81,9 @@ export async function postToChannel(
   );
   return message_id;
 }
+
+/** Attachment type of an image in static file storage. */
+const STATIC_IMAGE = 'static/image';
 
 /** Split a target into the channel to post in and the thread to post under. */
 function resolve(target: Channel | Thread): {

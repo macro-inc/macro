@@ -166,6 +166,8 @@ export class CoordinatorCore {
   private readonly unavailableTabs = new Map<string, string>();
   /** Set once a newer app build took the database over; never cleared. */
   private supersededReason: string | undefined;
+  /** A newer build asked while this engine may still be changing the files. */
+  private supersedePending = false;
   private readonly queuedRequests: QueuedRequest[] = [];
   private readonly inFlight = new Map<RouteId, InFlightRequest>();
   private readonly cacheChanges = new CacheChangeBatch();
@@ -204,6 +206,12 @@ export class CoordinatorCore {
   /** Whether a newer app build took the database over. */
   get superseded(): boolean {
     return this.supersededReason !== undefined;
+  }
+
+  /** Whether a newer app build took the database over, or will once this
+   * engine has settled. */
+  get handingOver(): boolean {
+    return this.supersededReason !== undefined || this.supersedePending;
   }
 
   registerTab(tabId: string, visible = true): CoordinatorAction[] {
@@ -412,6 +420,10 @@ export class CoordinatorCore {
         openOutcome: ready.openOutcome,
       });
     }
+    if (this.supersedePending) {
+      actions.push(...this.completeSupersede());
+      return actions;
+    }
     // A hidden engine may have reset storage before it immediately drains.
     // Notify hosts of that outcome, but leave queued work for its successor.
     const handoff = this.handoffIfNeeded();
@@ -536,7 +548,11 @@ export class CoordinatorCore {
       kind: 'waiting-for-tab',
       nextDatabaseAction: 'open-existing',
     };
-    actions.push(...this.activateNext('open-existing'));
+    actions.push(
+      ...(this.supersedePending
+        ? this.completeSupersede()
+        : this.activateNext('open-existing'))
+    );
     this.assertInvariants();
     return actions;
   }
@@ -554,20 +570,26 @@ export class CoordinatorCore {
    * using the cache and moves to that build; a tab that registers later only
    * runs uncached. The owner's page leaves the way a navigating page does,
    * which stops its engine and frees the database, and nothing is elected
-   * afterwards. Refused while an engine is starting, recovering, or draining,
-   * because its files may be changing.
+   * afterwards. While an engine is opening, recovering, or draining the
+   * database its files may be changing, so the handover waits until that
+   * engine has settled: it completes when the engine becomes ready or drains.
    */
   supersede(): CoordinatorAction[] {
-    const { kind } = this.stateValue;
+    const state = this.stateValue;
+    if (this.supersededReason !== undefined) return [];
     if (
-      this.supersededReason !== undefined ||
-      (kind !== 'active' &&
-        kind !== 'waiting-for-tab' &&
-        kind !== 'parked' &&
-        kind !== 'failed')
+      state.kind === 'draining' ||
+      state.kind === 'resetting-after-loss' ||
+      (state.kind === 'activating' && startupPhaseMayTouchStorage(state.phase))
     ) {
+      this.supersedePending = true;
       return [];
     }
+    return this.completeSupersede();
+  }
+
+  private completeSupersede(): CoordinatorAction[] {
+    this.supersedePending = false;
     const reason = SUPERSEDED_REASON;
     this.supersededReason = reason;
     const actions: CoordinatorAction[] = [
@@ -679,6 +701,16 @@ export class CoordinatorCore {
   resumeAfterLoss(): CoordinatorAction[] {
     const state = this.stateValue;
     if (state.kind !== 'resetting-after-loss') return [];
+    if (this.supersedePending) {
+      // The lost engine was promised to a newer build. Hand over now instead
+      // of electing a reset owner that would wipe the database it agreed to
+      // yield, queued mutations included.
+      this.stateValue = {
+        kind: 'waiting-for-tab',
+        nextDatabaseAction: state.databaseAction,
+      };
+      return this.completeSupersede();
+    }
     const candidate = this.chooseCandidate(state.previousTabId);
     if (!candidate) {
       this.stateValue = {

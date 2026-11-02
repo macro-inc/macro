@@ -119,15 +119,33 @@ export type CalendarEventFilters = {
  */
 export type CalendarEventMetadata = {
     /**
+     * Display name of the calendar holding this copy. Absent on an event
+     * shared with the user, which is on none of their calendars.
+     */
+    calendarName?: string | null;
+    /**
      * Direct conference join URL when known.
      */
     conferenceUrl?: string | null;
+    /**
+     * Whether a calendar holding this copy is on the user's schedule. The
+     * user can see calendars that are not theirs, such as a colleague's: a
+     * row without this, and that they do not attend, says what that calendar
+     * shows, not where the user is.
+     */
+    contributesToAvailability?: boolean | null;
     createdAt: string;
     /**
      * Free-text description, when the event carries one. May contain HTML from
      * the source; clients render a plain-text preview.
      */
     description?: string | null;
+    /**
+     * The connected inbox syncing that calendar. It stays the user's own
+     * address on a colleague's calendar, so it never says whose calendar it
+     * is.
+     */
+    inbox?: string | null;
     /**
      * Whether the canonical source prohibits mutation.
      */
@@ -139,6 +157,7 @@ export type CalendarEventMetadata = {
     isRecurring: boolean;
     occurrence?: null | CalendarEventSearchOccurrence;
     organizer?: null | CalendarEventOrganizer;
+    role?: null | CalendarEventSearchRole;
     /**
      * Canonical status (`confirmed`, `tentative`, `cancelled`).
      */
@@ -151,8 +170,10 @@ export type CalendarEventMetadata = {
 };
 
 /**
- * The event's organizer — its creator, in Google's model. Either field can be
- * absent when the source does not name it.
+ * The organizer the provider names on the event. Either field can be absent
+ * when the source does not name it. On a read-only Outlook calendar, such as
+ * its holidays, Microsoft names the mailbox owner on every event, so this
+ * does not say the user organized anything: `role` does.
  */
 export type CalendarEventOrganizer = {
     /**
@@ -218,6 +239,11 @@ export type CalendarEventSearchResult = {
      */
     score?: number | null;
 };
+
+/**
+ * What the user is on one copy of an event, through the inbox holding it.
+ */
+export type CalendarEventSearchRole = 'organizer' | 'guest';
 
 /**
  * Which calendar events a unified search covers.
@@ -1479,7 +1505,8 @@ export type InitiativeFilters = {
     /**
      * Opt this query into initiatives at all. Initiatives are off by
      * default — see [`crate::ast::initiative::InitiativeLiteral::Include`].
-     * Asking for specific `initiative_ids` or `owners` also opts in.
+     * Asking for specific `initiative_ids`, `owners` or `notification_filters`
+     * also opts in.
      */
     include?: boolean;
     /**
@@ -1491,9 +1518,13 @@ export type InitiativeFilters = {
      */
     name?: string | null;
     /**
-     * Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot
-     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
-     * owner.
+     * Filter by initiative notification state.
+     */
+    notification_filters?: NotificationFilters;
+    /**
+     * Filter by initiative owner principal — a user ('macro|user@example.com'), a
+     * bot ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include
+     * every owner.
      */
     owners?: Array<string>;
 };

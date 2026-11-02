@@ -10,7 +10,6 @@ import { createChannelMessageActions } from '../Channel/create-channel-message-a
 import { createDeleteMessageConfirmation } from '../Channel/create-delete-message-confirmation';
 import type { InputHandle, InputSnapshot } from '../Input';
 import { Thread } from '../Thread';
-import type { FocusRequest } from '../Thread/focus-request';
 import { buildReplyTargetValue } from '../Thread/utils/message-actions';
 import { channelReplyInputOffsetX } from '../Thread/utils/thread-rail-geometry';
 import { useStandaloneThread } from './context';
@@ -20,9 +19,6 @@ type EditableThreadProps = {
   channelId: string;
   messageId: string;
   data?: MessageListItem;
-  expanded?: boolean;
-  keepReplying?: boolean;
-  replyInputFocusRequest?: FocusRequest;
 };
 
 function EditableThreadInner() {
@@ -114,9 +110,6 @@ export function EditableThread(props: EditableThreadProps) {
       channelId={props.channelId}
       messageId={props.messageId}
       data={props.data}
-      expanded={props.expanded}
-      keepReplying={props.keepReplying}
-      replyInputFocusRequest={props.replyInputFocusRequest}
     >
       <EditableThreadInner />
     </StandaloneThread.Root>

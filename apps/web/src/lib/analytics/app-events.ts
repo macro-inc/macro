@@ -224,12 +224,14 @@ export type AppEvents = {
    */
   email_message_sent: { isReply: boolean };
   /**
-   * How the inbox-link OAuth callback ended. `connected` covers re-linking an
-   * inbox that was already connected; the client cannot tell them apart.
+   * How the inbox-link OAuth callback ended. `already_connected` is a plain add
+   * whose account chooser returned an inbox the user already had; `connected`
+   * still covers reconnects and calendar upgrades of an existing inbox.
    */
   email_link_callback_result: {
     outcome:
       | 'connected'
+      | 'already_connected'
       | 'already_initialized'
       | 'shared_inbox_conflict'
       | 'payment_required'

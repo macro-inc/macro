@@ -82,7 +82,7 @@ export type DraftSyncViewState = {
   message: string;
   detail?: string;
   failed: boolean;
-  action?: 'retry' | 'retry-discard';
+  action?: 'retry' | 'retry-discard' | 'reload';
   canKeepEditing: boolean;
 };
 

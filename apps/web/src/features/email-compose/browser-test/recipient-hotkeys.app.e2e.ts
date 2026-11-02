@@ -35,4 +35,29 @@ for (const composer of ['new', 'reply', 'reply-all', 'forward']) {
     await expect(cc).toBeFocused();
     await expect(page.getByTestId('thread-command')).toHaveText('none');
   });
+
+  test(`clicking Cc and Bcc focuses the revealed field in the ${composer} composer`, async ({
+    page,
+  }) => {
+    await page.goto(
+      `/src/features/email-compose/browser-test/recipient-hotkeys.html?composer=${composer}`
+    );
+    await page.locator('[contenteditable="true"]').waitFor();
+    // Replies open with their recipients collapsed into a summary.
+    if (composer === 'reply' || composer === 'reply-all') {
+      await page.getByRole('button', { name: /^Replying to/ }).click();
+    }
+
+    for (const field of ['Cc', 'Bcc']) {
+      await page.getByRole('button', { name: field, exact: true }).click();
+      const input = page
+        .getByText(field, { exact: true })
+        .locator('..')
+        .getByRole('combobox');
+      await expect(input).toBeFocused();
+      // Typing lands in the field instead of reaching the app's hotkeys.
+      await page.keyboard.type('cq');
+      await expect(input).toHaveValue('cq');
+    }
+  });
 }

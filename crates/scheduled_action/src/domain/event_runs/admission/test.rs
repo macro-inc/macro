@@ -200,3 +200,89 @@ async fn mentions_mail_and_calls_only_admit_their_recipient_even_when_others_hav
         );
     }
 }
+
+fn github_delivery(conclusion: &str, sender_type: &str) -> IncomingEvent {
+    let body = json!({
+        "action": "completed",
+        "installation": { "id": 77 },
+        "repository": { "id": 42, "full_name": "macro-inc/macro", "url": "https://api.github.com/x" },
+        "sender": { "login": "octocat", "type": sender_type },
+        "workflow_run": { "name": "CI", "conclusion": conclusion },
+    });
+    let delivery = github::domain::models::GithubWebhookReceived::from_delivery(
+        Some("delivery".to_owned()),
+        "workflow_run".to_owned(),
+        &body,
+    )
+    .unwrap();
+    IncomingEvent {
+        event_id: generate_uuid_v7(),
+        schema_version: 1,
+        payload: crate::domain::event_trigger::EventPayload::Github(
+            github::broker::GithubWebhookTopicEvent::Received(delivery),
+        ),
+    }
+}
+
+fn failed_ci_routine() -> EventActionConfiguration {
+    EventActionConfiguration {
+        filters: serde_json::from_value(json!([{
+            "events": ["github"],
+            "github": {
+                "events": ["workflow_run"],
+                "actions": ["completed"],
+                "repositories": ["Macro-Inc/macro"],
+            },
+            "match": [
+                { "path": ["workflow_run", "name"], "equals": "CI" },
+                { "path": ["workflow_run", "conclusion"], "equals": "failure" },
+            ],
+        }]))
+        .unwrap(),
+        ..configuration()
+    }
+}
+
+#[tokio::test]
+async fn github_deliveries_run_routines_whose_selector_and_payload_match() {
+    let repo = Arc::new(Repo::default());
+    repo.0.lock().unwrap().configurations = vec![failed_ci_routine()];
+    let service = EventAdmissionService::new(
+        repo.clone(),
+        Arc::new(Access::default()),
+        10.try_into().unwrap(),
+    );
+
+    for (event, inserted) in [
+        (github_delivery("success", "User"), 0),
+        (github_delivery("failure", "Bot"), 0),
+        (github_delivery("failure", "User"), 1),
+    ] {
+        assert_eq!(
+            service.ingest(&event).await.unwrap(),
+            EventIngestionResult::Admitted { inserted }
+        );
+    }
+    let pending = &repo.0.lock().unwrap().pending;
+    assert!(matches!(
+        pending[0].event.source(),
+        EventSource::Github(delivery) if delivery.installation_id == 77
+    ));
+}
+
+#[tokio::test]
+async fn github_deliveries_need_a_claim_to_the_installation() {
+    let repo = Arc::new(Repo::default());
+    repo.0.lock().unwrap().configurations = vec![failed_ci_routine()];
+    let access = Arc::new(Access::default());
+    *access.denied.lock().unwrap() = true;
+    let service = EventAdmissionService::new(repo.clone(), access, 10.try_into().unwrap());
+
+    assert_eq!(
+        service
+            .ingest(&github_delivery("failure", "User"))
+            .await
+            .unwrap(),
+        EventIngestionResult::Admitted { inserted: 0 }
+    );
+}

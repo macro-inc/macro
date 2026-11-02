@@ -27,7 +27,7 @@ pub fn is_property_attribute(attribute: &Token) -> bool {
 
 /// A cached-Mail profile containing the same canonical message facts plus properties.
 pub fn mail_profile() -> Profile {
-    Profile::new(mail::token("soup-mail-v4"))
+    Profile::new(mail::token("soup-mail-v6"))
 }
 
 fn supported(ast: &EntityFilterAst) -> bool {

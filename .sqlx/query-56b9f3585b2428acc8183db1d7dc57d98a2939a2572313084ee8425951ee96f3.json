@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE email_threads t SET has_received_mail = calc.received\n        FROM (SELECT EXISTS (\n            SELECT 1 FROM email_messages m\n            WHERE m.thread_id = $1 AND NOT m.is_draft AND (NOT m.is_sent OR EXISTS (\n                SELECT 1 FROM email_message_recipients r\n                JOIN email_contacts recipient ON recipient.id = r.contact_id\n                JOIN email_contacts sender ON sender.id = m.from_contact_id\n                WHERE r.message_id = m.id AND LOWER(recipient.email_address) = LOWER(sender.email_address)\n            ))\n        ) AS received) calc\n        WHERE t.id = $1 AND t.has_received_mail IS DISTINCT FROM calc.received\n    ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "56b9f3585b2428acc8183db1d7dc57d98a2939a2572313084ee8425951ee96f3"
+}

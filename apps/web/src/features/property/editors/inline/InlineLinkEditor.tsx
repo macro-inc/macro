@@ -88,7 +88,6 @@ export function InlineLinkEditor() {
         : [normalized];
       await ctx.onSave?.(property(), { valueType: 'LINK', values: next });
       cancelAdding();
-      ctx.onRefresh?.();
     } catch {
       // mutation onError owns toast
     } finally {
@@ -105,7 +104,6 @@ export function InlineLinkEditor() {
         valueType: 'LINK',
         values: next.length > 0 ? next : null,
       });
-      ctx.onRefresh?.();
     } catch {
       // mutation onError owns toast
     } finally {
