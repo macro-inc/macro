@@ -429,6 +429,24 @@ describe('command menu search ranking', () => {
       expect(ids(items, 'avery, morgan')).toEqual(['namesakes', 'group']);
     });
 
+    it('reassigns a term when a later participant has no other', () => {
+      const group = channel('group', 'Avery Morgan, Avery Chen');
+      expect(ids([group], 'avery, chen', false)).toEqual(['group']);
+      expect(
+        ids([note('note', 'Avery chen plan'), group], 'avery, chen')[0]
+      ).toBe('group');
+    });
+
+    it('answers a long pasted query quickly on a large group', () => {
+      const people = Array.from({ length: 12 }, (_, index) =>
+        index === 11 ? 'Zane Young' : `Avery Person${index}`
+      );
+      const group = channel('group', people.join(', '));
+      const started = performance.now();
+      ids([group], Array.from({ length: 12 }, () => 'avery').join(' '), false);
+      expect(performance.now() - started).toBeLessThan(250);
+    });
+
     it('finds a one-to-one DM by its name reversed', () => {
       const dm = channel('dm', 'Avery Morgan', NOW, 'dm');
       expect(ids([dm], 'morgan avery', false)).toEqual(['dm']);
@@ -455,6 +473,14 @@ describe('command menu search ranking', () => {
         ]);
       }
     );
+
+    it('keeps a group DM out of the first-name group', () => {
+      const items = [
+        channel('group-dm', 'Avery Morgan, Blair Chen', NOW, 'dm'),
+        channel('one-to-one', 'Avery Morgan', NOW - 60 * DAY, 'dm'),
+      ];
+      expect(ids(items, 'avery')).toEqual(['one-to-one', 'group-dm']);
+    });
 
     it('keeps the more recently viewed DM first when the short name is the active one', () => {
       expect(

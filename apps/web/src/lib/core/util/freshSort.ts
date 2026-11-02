@@ -154,25 +154,36 @@ function namesEveryParticipant(normalizedName: string, term: string): boolean {
   if (participants.length < 2) return false;
 
   const terms = term.split(/[\s,]+/).filter(Boolean);
+  if (terms.length < participants.length) return false;
+
   const startsWordOf = (queryTerm: string, words: string[]) =>
     words.some((word) => word.startsWith(queryTerm));
-  const eachHasOwnTerm = (index: number, unusedTerms: string[]): boolean => {
-    if (index === participants.length) return true;
-
-    return unusedTerms.some(
-      (queryTerm, termIndex) =>
-        startsWordOf(queryTerm, participants[index]) &&
-        eachHasOwnTerm(
-          index + 1,
-          unusedTerms.filter((_, unusedIndex) => unusedIndex !== termIndex)
-        )
-    );
-  };
-
-  return (
-    terms.every((queryTerm) =>
+  if (
+    !terms.every((queryTerm) =>
       participants.some((words) => startsWordOf(queryTerm, words))
-    ) && eachHasOwnTerm(0, terms)
+    )
+  ) {
+    return false;
+  }
+
+  // Bipartite matching by augmenting paths: a term taken by an earlier
+  // participant is freed when that participant can move to another term.
+  const holderOfTerm = new Map<number, number>();
+  const assignTerm = (participant: number, triedTerms: Set<number>): boolean =>
+    terms.some((queryTerm, termIndex) => {
+      if (triedTerms.has(termIndex)) return false;
+      if (!startsWordOf(queryTerm, participants[participant])) return false;
+      triedTerms.add(termIndex);
+
+      const holder = holderOfTerm.get(termIndex);
+      if (holder !== undefined && !assignTerm(holder, triedTerms)) return false;
+
+      holderOfTerm.set(termIndex, participant);
+      return true;
+    });
+
+  return participants.every((_, participant) =>
+    assignTerm(participant, new Set())
   );
 }
 
@@ -183,7 +194,11 @@ function calculateNameMatchRank(
 ): number {
   if (!term) return 0;
   if (normalizedName === term) return 3;
-  if (isPerson && normalizedName.split(/\s+/)[0] === term) return 3;
+
+  // A comma lists several people, so its first word is only one person's name.
+  const namesOnePerson = isPerson && !normalizedName.includes(',');
+  if (namesOnePerson && normalizedName.split(/\s+/)[0] === term) return 3;
+
   if (normalizedName.startsWith(term)) return 1;
   return 0;
 }
