@@ -483,6 +483,15 @@ export const enableEmailSignatures = defineFlag({
   default: onInDev,
 });
 
+// Email read receipts: the per-inbox switch in Settings › Email and the
+// opened status on sent messages. Which copies load Macro's pixels, and so
+// count as opens, does not depend on this flag.
+export const enableEmailReadReceipts = defineFlag({
+  key: 'enable-email-read-receipts',
+  env: 'ENABLE_EMAIL_READ_RECEIPTS',
+  default: onInDev,
+});
+
 // CRM companies & contacts frontend: the Companies view + sidebar entry, the
 // company/contact detail blocks, CRM mentions / quick-access, and CRM rows in
 // global search. PostHog-gated (currently targeted at the Macro team in prod)
@@ -773,6 +782,14 @@ export const enableCalendarAddSharedEvent = defineFlag({
 export const enableTagTeamSharing = defineFlag({
   key: 'enable-tag-team-sharing',
   env: 'ENABLE_TAG_TEAM_SHARING',
+  default: onInDev,
+});
+
+// Redesigned Chat sidebar sections. On in development;
+// deployed environments defer to PostHog. Override with VITE_ENABLE_CHAT_SIDEBAR_SECTIONS.
+export const enableChatSidebarSections = defineFlag({
+  key: 'enable-chat-sidebar-sections',
+  env: 'ENABLE_CHAT_SIDEBAR_SECTIONS',
   default: onInDev,
 });
 

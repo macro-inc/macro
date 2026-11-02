@@ -74,7 +74,7 @@ vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),
 }));
 vi.mock(
-  '@components/app/split-layout/components/PriorityCollapseOverflowSensor',
+  '@app/components/priority-collapse/PriorityCollapseOverflowSensor',
   () => ({
     createPriorityCollapseController: () => ({
       setRow: () => {},
@@ -83,8 +83,10 @@ vi.mock(
     PriorityCollapseOverflowSensor: mocks.pass,
   })
 );
-vi.mock('@components/app/split-layout/layoutUtils', () => ({
+vi.mock('@app/components/priority-collapse/createPriorityCollapser', () => ({
   useRegisterPriorityCollapseItem: () => () => false,
+}));
+vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitDisplayName: () => {},
   useSplitPanelOrThrow: () => ({ splitHotkeyScope: 'test-scope' }),
 }));

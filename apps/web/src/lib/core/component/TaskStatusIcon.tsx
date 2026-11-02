@@ -1,6 +1,6 @@
-import StatusCanceled from '@icon/system/regular/task-cancelled.svg';
+import StatusCanceled from '@icon/system/fill/task-canceled-fill.svg';
+import StatusDone from '@icon/system/fill/task-completed-fill.svg';
 import StatusCreated from '@icon/system/regular/task-created.svg';
-import StatusDone from '@icon/system/regular/task-done.svg';
 import StatusInProgress from '@icon/system/regular/task-in-progress.svg';
 import StatusInReview from '@icon/system/regular/task-in-review.svg';
 import { PROPERTY_OPTION_IDS } from '@property/identifiers';
@@ -21,27 +21,27 @@ const STATUS_ICONS: Record<
   [PROPERTY_OPTION_IDS.STATUS.NOT_STARTED]: {
     icon: StatusCreated,
     label: 'Not started',
-    color: 'text-ink-muted',
+    color: 'text-task-status-not-started',
   },
   [PROPERTY_OPTION_IDS.STATUS.IN_PROGRESS]: {
     icon: StatusInProgress,
     label: 'In progress',
-    color: 'text-warning',
+    color: 'text-task-status-in-progress',
   },
   [PROPERTY_OPTION_IDS.STATUS.IN_REVIEW]: {
     icon: StatusInReview,
     label: 'In review',
-    color: 'text-note',
+    color: 'text-task-status-in-review',
   },
   [PROPERTY_OPTION_IDS.STATUS.COMPLETED]: {
     icon: StatusDone,
     label: 'Completed',
-    color: 'text-success',
+    color: 'text-task-status-completed',
   },
   [PROPERTY_OPTION_IDS.STATUS.CANCELED]: {
     icon: StatusCanceled,
     label: 'Canceled',
-    color: 'text-ink-muted',
+    color: 'text-task-status-canceled',
   },
 };
 
@@ -50,6 +50,8 @@ export function TaskStatusIcon(
   props: Omit<EntityIconProps, 'targetType' | 'shared'> & {
     statusId?: string;
     completed?: boolean;
+    /** Hide the glyph from assistive technology when its caller supplies the label. */
+    decorative?: boolean;
   }
 ) {
   const status = () => {
@@ -66,6 +68,7 @@ export function TaskStatusIcon(
     <span
       role="img"
       aria-label={`Task: ${status().label}`}
+      aria-hidden={props.decorative || undefined}
       data-icon-motion="none"
       class={cn(
         ICON_SIZE_CLASSES[props.size ?? 'xs'],

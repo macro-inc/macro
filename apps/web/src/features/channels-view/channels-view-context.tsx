@@ -13,7 +13,10 @@ import {
 import { channelDetailRoute, channelsSplitRoute } from '@app/routes/routes';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
-import { enableChannelThreadsPreview } from '@core/constant/featureFlags';
+import {
+  enableChannelThreadsPreview,
+  enableChatSidebarSections,
+} from '@core/constant/featureFlags';
 import { createAssertedContextProvider } from '@core/context/createContext';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -30,13 +33,14 @@ import {
 import { createChannelsViewPersistence } from './persistence';
 import type {
   ChannelListSort,
+  ChannelSectionKey,
+  ChannelSectionPreferences,
   ChannelsRailSection,
   ChannelsSortGroup,
   ChannelsTab,
   ChannelsViewState,
   ChannelsViewStateOptions,
 } from './types';
-import { activeChannelsTab } from './utils';
 
 type ChannelsViewProviderProps = ContextProviderProps & {
   initialState?: ChannelsViewStateOptions;
@@ -46,6 +50,9 @@ export type ChannelsViewContext = {
   state: Store<ChannelsViewState>;
   /** The mobile list opens channels in the split; only desktop renders detail. */
   mobileLayout: () => boolean;
+  /** Whether the redesigned desktop sections are enabled. */
+  sectionsEnabled: Accessor<boolean>;
+  sectionsLoading: Accessor<boolean>;
   selectedChannel: Accessor<ChannelPreviewSelection | undefined>;
   /** Whether the Threads tab is available to this user. */
   threadsEnabled: Accessor<boolean>;
@@ -64,6 +71,10 @@ export type ChannelsViewContext = {
   /** Per-user collapse state of a team channel label. */
   setLabelOpen: (labelId: string, open: boolean) => void;
   setSortBy: (group: ChannelsSortGroup, sort: ChannelListSort) => void;
+  setSectionPreferences: (
+    section: ChannelSectionKey,
+    preferences: ChannelSectionPreferences
+  ) => void;
   setAsideWidth: (width: number) => void;
 };
 
@@ -89,6 +100,7 @@ function createInitialState(
         CHANNELS_DEFAULT_SORT_BY.direct_messages,
       threads: initial.sortBy?.threads ?? CHANNELS_DEFAULT_SORT_BY.threads,
     },
+    sectionPreferences: { ...initial.sectionPreferences },
     asideWidth: clampChannelsRailWidth(
       initial.asideWidth ?? CHANNELS_DEFAULT_RAIL_WIDTH
     ),
@@ -108,6 +120,8 @@ export const [ChannelsViewProvider, useChannelsView] =
       const navigate = useNavigate();
       const params = useRouteParams(channelDetailRoute);
       const [search, setSearch] = createSearchParams(channelsSearch);
+      const sectionsFlag = useFeatureFlag(enableChatSidebarSections);
+      const sectionsEnabled = () => sectionsFlag().enabled;
       const threadsFlag = useFeatureFlag(enableChannelThreadsPreview);
       const threadsEnabled = () => threadsFlag().enabled;
       const selectPreview = createPreviewSelectionGuard();
@@ -218,8 +232,15 @@ export const [ChannelsViewProvider, useChannelsView] =
         state,
         mobileLayout,
         selectedChannel,
+        sectionsEnabled,
+        sectionsLoading: () => sectionsFlag().loading,
         threadsEnabled,
-        tab: () => activeChannelsTab(state.tab, threadsEnabled()),
+        tab: () => {
+          if (sectionsEnabled()) return 'browse';
+          return state.tab === 'threads' && !threadsEnabled()
+            ? 'browse'
+            : state.tab;
+        },
         threadsChannelId: () => state.threadsChannelId,
         setThreadsChannelId: (channelId) => {
           if (state.threadsChannelId === channelId) return;
@@ -241,6 +262,11 @@ export const [ChannelsViewProvider, useChannelsView] =
                 : [...collapsed, labelId]
           ),
         setSortBy: (group, sort) => setState('sortBy', group, sort),
+        setSectionPreferences: (section, preferences) =>
+          setState('sectionPreferences', (current) => ({
+            ...current,
+            [section]: { ...current[section], ...preferences },
+          })),
         setAsideWidth: (width) =>
           setState('asideWidth', clampChannelsRailWidth(width)),
       };

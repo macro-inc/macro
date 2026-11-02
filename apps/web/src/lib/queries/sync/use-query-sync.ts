@@ -47,6 +47,11 @@ import {
   invalidatePullRequestMentions,
 } from '@queries/storage/pr-mention-sync';
 import { handleTaskDuplicateMatchesUpdated } from '@queries/storage/task-duplicates';
+import {
+  handleSystemStatusMessage,
+  invalidateCurrentSystemStatus,
+  SYSTEM_STATUS_MESSAGE_TYPE,
+} from '@queries/system-status/status';
 import { handleRefreshCalendar } from '../calendar/sync';
 // Side-effect import: registers the scheduled-action live-update websocket
 // listener. Must be imported somewhere that always loads on app start — this
@@ -86,6 +91,10 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
   ws.addEventListener(WebsocketEvent.Open, invalidatePullRequestMentions);
   onCleanup(() =>
     ws.removeEventListener(WebsocketEvent.Open, invalidatePullRequestMentions)
+  );
+  ws.addEventListener(WebsocketEvent.Open, invalidateCurrentSystemStatus);
+  onCleanup(() =>
+    ws.removeEventListener(WebsocketEvent.Open, invalidateCurrentSystemStatus)
   );
 
   createConnectionWebsocketEffect((data) => {
@@ -208,6 +217,9 @@ export function useQuerySync(userId: Accessor<string | undefined>): void {
         fireAndForget(invalidateFavorites(), 'websocket-query-sync');
         invalidateAllProperties();
         invalidateAllSoup();
+      })
+      .with({ type: SYSTEM_STATUS_MESSAGE_TYPE }, () => {
+        handleSystemStatusMessage(data.data);
       })
       .with({ type: 'task_duplicate_matches_updated' }, () => {
         withParsedWebsocketPayload(
