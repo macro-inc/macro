@@ -14,15 +14,17 @@ The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the
 sharing dialog; copying a link is a separate action.
 
-In the Share dialog's **Optional message**, paste an image with Cmd/Ctrl+V,
-use **Attach files**, or drop a file into the composer. Images show a removable
-preview and are sent inline beside the shared item to each selected person or
-channel. Share (including Cmd/Ctrl+Enter and the phone drawer's Share button)
-waits for uploads; Enter still inserts a newline. Removing an uploading image
+In the Share dialog's **Optional message**, paste an image with Cmd/Ctrl+V
+or drop a file into the composer. Share composers have no paperclip button on
+desktop or mobile. Images show a removable preview and are sent inline beside
+the shared item to each selected person or channel. Share (including
+Cmd/Ctrl+Enter and the phone drawer's Share button) waits for uploads; Enter still inserts a newline. Removing an uploading image
 keeps it removed, and closing the dialog discards its attachment draft.
-Verify paste, file selection, drop, removal during upload, upload failure, and
+Verify paste, drop, removal during upload, upload failure, and
 sending to both a person and a channel. On touch, attachment previews scroll
-horizontally and removal remains available without hover.
+horizontally and removal remains available without hover. Composer fixture
+screenshots: [desktop](media/share-images/desktop.png) and
+[phone](media/share-images/mobile.png).
 
 With `enable-calendar-meeting-notes` enabled, owned markdown documents' Share
 panel also lists **Meeting links** (under the **Link** tab on mobile).

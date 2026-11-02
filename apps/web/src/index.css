@@ -547,7 +547,7 @@ body.tauri-ios {
 
      Bands:
        0- 99  in-page — viewer internals (0-19), app chrome (20-30),
-              cross-panel content (31), floating widgets (90)
+              cross-panel content (31), floating widgets (90), phone prompts (95)
      100-199  modal stack, drag previews, menus
      200-299  always on top — tooltips, toasts
 
@@ -597,6 +597,11 @@ body.tauri-ios {
   /* App-level floating widgets (`z-float`: draggable call controls, incoming
      calls). Above all other in-page content, below the modal stack. */
   --z-index-float:          90;
+  /* Phone prompts and reminders wait for an answer, so they stay above the
+     dock and floating widgets but under the modal stack: an open sheet, its
+     scrim and the pickers and menus on it cover them. Phone transient toasts
+     stay on `z-toast-region`. */
+  --z-index-mobile-prompt-region: 95;
 
   /* ---- 100-199: modal stack, drag previews, menus ----------------------- */
   /* Anchored at 100 so nothing in-page can ever cover a modal. */
