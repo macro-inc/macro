@@ -1,3 +1,4 @@
+import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import {
   MACRO_CODER_NAME,
   MACRO_CODER_PRINCIPAL_ID,
@@ -7,7 +8,6 @@ import {
   MACRO_SYSTEM_NAME,
   MACRO_SYSTEM_PRINCIPAL_ID,
 } from '@core/constant/macroSystem';
-import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import { describe, expect, it } from 'vitest';
 import {
   type ChannelMessageWithMaybeSender,
