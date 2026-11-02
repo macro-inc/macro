@@ -712,7 +712,6 @@ export default {
     tabMobileApp: '移动应用',
     tabTags: '标签',
     tabIntegrations: '集成',
-    tabRuntimes: '运行时',
     tabMcpServer: 'MCP 服务器',
     tabApiKeys: 'API 密钥',
     tabBots: '机器人',

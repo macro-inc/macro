@@ -239,8 +239,8 @@ export function NewChatPage(props: {
   };
 
   const connect = (agent: RosterAgent) => {
-    // Both land on Settings → Runtimes: Cursor to save an API key, macrod to
-    // restart the local runtime (one click on desktop) or re-pair it.
+    // Both land on Settings → Agents → Runtimes: Cursor to save an API key,
+    // macrod to restart the local runtime (one click on desktop) or re-pair it.
     if (agent.harness === 'cursor' || agent.harness === 'macrod') {
       openSettings('Harness');
     }

@@ -750,7 +750,6 @@ export default {
     tabMobileApp: 'मोबाइल ऐप',
     tabTags: 'टैग',
     tabIntegrations: 'इंटीग्रेशन',
-    tabRuntimes: 'रनटाइम',
     tabMcpServer: 'MCP सर्वर',
     tabApiKeys: 'API कुंजियां',
     tabBots: 'बॉट',

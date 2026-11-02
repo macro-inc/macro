@@ -1,0 +1,14 @@
+/* Let the backdrop glow ease into a new accent as the agent's color changes. */
+@property --agent-accent {
+  syntax: '<color>';
+  inherits: true;
+  initial-value: transparent;
+}
+[data-agent-stage] {
+  transition: --agent-accent 320ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  [data-agent-stage] {
+    transition: none;
+  }
+}

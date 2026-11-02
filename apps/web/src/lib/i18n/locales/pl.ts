@@ -811,7 +811,6 @@ export default {
     tabMobileApp: 'Aplikacja mobilna',
     tabTags: 'Tagi',
     tabIntegrations: 'Integracje',
-    tabRuntimes: 'Środowiska',
     tabMcpServer: 'Serwer MCP',
     tabApiKeys: 'Klucze API',
     tabBots: 'Boty',

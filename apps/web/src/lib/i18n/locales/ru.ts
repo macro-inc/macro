@@ -816,7 +816,6 @@ export default {
     tabMobileApp: 'Мобильное приложение',
     tabTags: 'Теги',
     tabIntegrations: 'Интеграции',
-    tabRuntimes: 'Среды выполнения',
     tabMcpServer: 'Сервер MCP',
     tabApiKeys: 'Ключи API',
     tabBots: 'Боты',

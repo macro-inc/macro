@@ -23,7 +23,7 @@ export function WhereItRunsOption(props: {
     <div
       class={cn(
         'min-w-0 rounded-lg border',
-        props.checked ? 'border-accent bg-accent-bg' : 'border-edge-muted'
+        props.checked ? 'border-ink' : 'border-edge-muted'
       )}
     >
       <div class="flex min-w-0 items-center gap-3 pr-3">
@@ -41,7 +41,7 @@ export function WhereItRunsOption(props: {
             disabled={props.disabled}
             onChange={props.onSelect}
             aria-label={props.title}
-            class="shrink-0 accent-accent disabled:opacity-40"
+            class="shrink-0 accent-ink disabled:opacity-40"
           />
           <span
             aria-hidden="true"

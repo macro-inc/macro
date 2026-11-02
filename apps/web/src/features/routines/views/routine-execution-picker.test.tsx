@@ -367,7 +367,8 @@ describe('routine execution picker', () => {
     );
     let trigger = openPicker();
     // A disconnected macrod agent stays clickable: selecting it is the
-    // reconnect path (opens Settings → Runtimes) rather than a dead row.
+    // reconnect path (opens the Runtimes section of Settings → Agents) rather
+    // than a dead row.
     const reconnect = screen.getByRole('menuitem', { name: /Local worker/ });
     expect(reconnect.getAttribute('aria-disabled')).not.toBe('true');
     expect(reconnect.textContent).toContain('Reconnect runtime');

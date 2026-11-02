@@ -63,6 +63,8 @@ describe('settings navigation', () => {
         (item) => item.tab
       )
     ).not.toContain('Connections');
-    expect(developer?.items.map((item) => item.tab)).toContain('Harness');
+    // Runtimes are a section of Agents; their old links still resolve there.
+    expect(developer?.items.map((item) => item.tab)).not.toContain('Harness');
+    expect(settingsSlugToTab('harness')).toBe('Harness');
   });
 });

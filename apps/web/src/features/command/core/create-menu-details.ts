@@ -213,6 +213,16 @@ const DETAILS: Record<string, CreateMenuDetails> = {
     'create.agentExample2',
     'create.agentExample3',
   ]),
+  'Custom agent': details(
+    'ai',
+    'create.customAgentTagline',
+    'create.customAgentDetails',
+    [
+      'create.customAgentExample1',
+      'create.customAgentExample2',
+      'create.customAgentExample3',
+    ]
+  ),
   Routine: details('ai', 'create.routineTagline', 'create.routineDetails', [
     'create.routineExample1',
     'create.routineExample2',
@@ -324,6 +334,7 @@ const SHORT_TAGLINES: Record<string, TranslationKey> = {
   Project: 'create.projectShortTagline',
   Reminder: 'create.reminderShortTagline',
   Agent: 'create.agentShortTagline',
+  'Custom agent': 'create.customAgentShortTagline',
   Routine: 'create.routineShortTagline',
   Skill: 'create.skillShortTagline',
   Form: 'create.formTagline',

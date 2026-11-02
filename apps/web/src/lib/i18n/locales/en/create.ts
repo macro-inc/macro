@@ -7,6 +7,9 @@ export default {
   chatHint: 'New agent session',
   agentDescription: 'Create agent session',
   agentHint: 'Dedicated Agent Session',
+  customAgentLabel: 'Custom agent',
+  customAgentDescription: 'Create a custom agent',
+  customAgentHint: 'A face, a name, and instructions',
   routineLabel: 'Routine',
   routineDescription: 'Run a model or agent on a schedule or Macro activity',
   routineHint: 'Schedules and activity triggers',
@@ -232,6 +235,13 @@ export default {
   agentExample2: 'Draft a doc',
   agentExample3: 'Fix a bug',
   agentShortTagline: 'Dedicated agent session',
+  customAgentTagline: 'An agent your team can mention anywhere',
+  customAgentDetails:
+    'Give it a face, a name and instructions.\nMention it in docs, CRM records and tasks, or assign it work.',
+  customAgentExample1: 'Bug fixer',
+  customAgentExample2: 'Research assistant',
+  customAgentExample3: 'Deal desk',
+  customAgentShortTagline: 'Your team’s own agent',
   routineTagline: 'Run an agent on a schedule or trigger',
   routineDetails:
     'Put recurring work on a schedule or a trigger.\nLet an agent take care of it automatically.',

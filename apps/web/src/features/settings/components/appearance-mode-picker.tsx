@@ -67,7 +67,7 @@ export function AppearanceModePicker(props: {
               />
               <span
                 aria-hidden="true"
-                class="relative block h-24 w-full rounded-xl border border-ink/10 p-1 transition-colors group-hover:border-ink/25 peer-checked:border-accent peer-checked:ring-2 peer-checked:ring-accent/30 peer-focus-visible:outline-2 peer-focus-visible:outline-offset-4 peer-focus-visible:outline-accent"
+                class="relative block h-24 w-full rounded-xl border border-ink/10 p-1 transition-colors group-hover:border-ink/25 peer-checked:border-ink peer-checked:ring-1 peer-checked:ring-ink peer-focus-visible:outline-2 peer-focus-visible:outline-offset-4 peer-focus-visible:outline-ink"
               >
                 <span class="absolute inset-1 overflow-hidden rounded-lg">
                   <ThemePreview

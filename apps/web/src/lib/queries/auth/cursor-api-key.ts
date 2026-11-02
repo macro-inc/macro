@@ -67,7 +67,7 @@ export function useSaveCursorApiKey() {
 /**
  * Forgets the stored Cursor API key.
  *
- * This does not revoke anything at Cursor; the Harness settings copy makes
+ * This does not revoke anything at Cursor; the Cursor connect page makes
  * that distinction explicit.
  */
 export function useDisconnectCursorApiKey() {
