@@ -291,11 +291,11 @@ function TagOverflow(props: {
 
 /**
  * Compact tag display for list rows, rendered from the entity's already-loaded
- * soup properties (no per-row fetch). Shows up to `maxVisible` chips then a
- * "+N tags" chip, or "N tags" when every tag is collapsed. Clicking a chip
- * opens the TagPicker to edit the entity's tags. Hovering a chip surfaces a
- * "Filter by" link and hovering the overflow lists the hidden tags.
- * onFilterByTag applies a tag filter to the list.
+ * soup properties (no per-row fetch). A sole tag keeps its named chip; otherwise
+ * shows up to `maxVisible` chips then a "+N tags" chip, or "N tags" when every tag
+ * is collapsed. Clicking a chip opens the TagPicker to edit the entity's tags.
+ * Hovering a chip surfaces a "Filter by" link; hovering the overflow lists hidden
+ * tags. onFilterByTag applies a tag filter to the list.
  */
 export function EntityRowTags(props: {
   entityId: string;
@@ -319,14 +319,16 @@ export function EntityRowTags(props: {
   const limit = createMemo(() =>
     Math.min(appliedTags().length, props.maxVisible ?? DEFAULT_MAX_VISIBLE)
   );
-  const maxVisible = () =>
-    props.collapse ? Math.min(limit(), visibleLimit()) : limit();
+  const maxVisible = () => {
+    if (appliedTags().length === 1) return 1;
+    return props.collapse ? Math.min(limit(), visibleLimit()) : limit();
+  };
 
   createEffect(() => {
     const collapse = props.collapse;
     const count = limit();
     // Keep triggers mounted through the picker and any nested tag editor.
-    if (!collapse || pickerActive()) return;
+    if (!collapse || pickerActive() || appliedTags().length === 1) return;
     for (let index = 0; index < count; index++) {
       onCleanup(
         collapse.register({

@@ -88,6 +88,7 @@ describe('TagSetsContext', () => {
             entityId="document-1"
             entityType={EntityType.DOCUMENT}
             properties={properties}
+            maxVisible={0}
           />
         </TagSetsProvider>
       </QueryClientProvider>
@@ -148,13 +149,19 @@ describe('TagSetsContext', () => {
         ],
       } as TagSetResponse,
     ];
-    const properties = [
+    const [tagIds, setTagIds] = createSignal([
+      'first-tag',
+      'second-tag',
+      'third-tag',
+      'fourth-tag',
+    ]);
+    const properties = () => [
       {
         id: 'property-assignment',
         definition: { id: 'tag-definition' },
         value: {
           type: 'SelectOption',
-          value: ['first-tag', 'second-tag', 'third-tag', 'fourth-tag'],
+          value: tagIds(),
         },
       } as SoupProperty,
     ];
@@ -164,7 +171,7 @@ describe('TagSetsContext', () => {
           <EntityRowTags
             entityId="document-resize"
             entityType={EntityType.DOCUMENT}
-            properties={properties}
+            properties={properties()}
             collapse={collapse}
           />
         </TagSetsProvider>
@@ -199,5 +206,16 @@ describe('TagSetsContext', () => {
     expect(view.getByRole('button', { name: 'Second' })).toBeTruthy();
     expect(view.getByRole('button', { name: 'Third' })).toBeTruthy();
     expect(view.queryByRole('button', { name: 'Fourth' })).toBeNull();
+
+    for (const registration of registrations.values()) {
+      registration.setCollapsed(true);
+    }
+    setTagIds(['first-tag']);
+    expect(registrations.size).toBe(0);
+    expect(view.getByRole('button', { name: 'First' })).toBeTruthy();
+
+    setTagIds(['first-tag', 'second-tag', 'third-tag', 'fourth-tag']);
+    expect(registrations.size).toBe(3);
+    expect(view.getByRole('button', { name: '4 tags' })).toBeTruthy();
   });
 });
