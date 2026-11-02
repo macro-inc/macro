@@ -54,6 +54,8 @@ pub struct FormsToolConfig {
     pub app_origin: String,
     /// Existing Cloudflare AI editing worker origin.
     pub editing_worker_url: String,
+    /// Internal client for the images a form's branding shows.
+    pub static_files: static_file_service_client::StaticFileServiceClient,
 }
 
 /// Reuse host clients and the same Forms and Scheduling domain services as HTTP.
@@ -69,6 +71,7 @@ pub fn build_forms_tool_context(
     let FormsToolConfig {
         app_origin,
         editing_worker_url,
+        static_files,
     } = config;
     let surfaces = Arc::new(pg_collab_surface_service(
         pool.clone(),
@@ -83,6 +86,7 @@ pub fn build_forms_tool_context(
         ToolFormEvents(gateway.map(GatewayFormEventPublisher::new)),
         broker,
         surfaces,
+        static_files,
     ));
     let scheduling = Arc::new(SchedulingService::new(
         PostgresRepository::new(pool.clone()),

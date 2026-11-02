@@ -23,8 +23,9 @@ use rootcause::Report;
 use uuid::Uuid;
 
 use crate::domain::models::{
-    Audience, Form, FormAccess, FormDetail, FormError, FormId, FormLayout, FormStatus, FormTally,
-    ListedForm, MyResponse, ResponseSummary, RowId, Submission, SubmissionOutcome, UpdateForm,
+    Audience, Form, FormAccess, FormBranding, FormDetail, FormError, FormId, FormLayout,
+    FormStatus, FormTally, ListedForm, MyResponse, ResponseSummary, RowId, Submission,
+    SubmissionOutcome, UpdateForm,
 };
 use crate::domain::ports::{CreateFormCommand, FormsService};
 use crate::domain::sharing::FormSharingService;
@@ -32,10 +33,12 @@ use crate::inbound::axum_router::{FormsRouterState, forms_router};
 
 pub(super) const OWNER: &str = "macro|owner@forms-router.test";
 pub(super) const RESPONDENT: &str = "macro|respondent@forms-router.test";
+pub(super) const AGENT: bot_id::BotId = bot_id::BotId::TEST_A;
 pub(super) const FORM: FormId = FormId::from_uuid(Uuid::from_u128(0xf0));
 pub(super) const ROW: RowId = RowId::from_uuid(Uuid::from_u128(0x40));
 
-/// Accepts the bearer tokens `owner` and `respondent`.
+/// Accepts the bearer tokens `owner` and `respondent`, and `agent`: the
+/// owner's SDK token carrying [`AGENT`]'s attribution, as code mode mints.
 #[derive(Clone, Copy)]
 pub(super) struct Tokens;
 
@@ -44,15 +47,16 @@ impl JwtValidator for Tokens {
         &self,
         jwt: &str,
     ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
-        let user_id = match jwt {
-            "owner" => OWNER,
-            "respondent" => RESPONDENT,
+        let (user_id, agent_id) = match jwt {
+            "owner" => (OWNER, None),
+            "respondent" => (RESPONDENT, None),
+            "agent" => (OWNER, Some(AGENT)),
             _ => return Err(Report::new(MacroAuthorizationError::InvalidCredentials)),
         };
         Ok(macro_authorization::ValidatedCredential {
-            origin: macro_authorization::CredentialOrigin::Session,
+            origin: macro_authorization::CredentialOrigin::MacroApiJwt,
             identity: ValidatedIdentity {
-                agent_id: None,
+                agent_id,
                 agent_via: None,
                 user_id: user_id.to_string(),
                 fusion_user_id: format!("fusion-{jwt}"),
@@ -232,6 +236,7 @@ fn handed<Level: RequiredPermission>(
 pub(super) struct RecordingForms {
     pub(super) handed: Mutex<Vec<Handed>>,
     pub(super) refusal: Mutex<Option<FormError>>,
+    pub(super) creating_bots: Mutex<Vec<Option<bot_id::BotId>>>,
 }
 
 pub(super) fn form() -> Form {
@@ -250,6 +255,7 @@ pub(super) fn form() -> Form {
         status: FormStatus::Open,
         closes_at: None,
         confirmation_message: "".into(),
+        branding: FormBranding::default(),
         created_at: at,
         updated_at: at,
         is_hidden_in_drive: false,
@@ -295,6 +301,7 @@ impl FormsService for RecordingForms {
         creator: databases::domain::models::Viewer,
         command: CreateFormCommand,
     ) -> Result<FormDetail, FormError> {
+        self.creating_bots.lock().unwrap().push(creator.acting_bot);
         let entity_id = match &command.source {
             crate::domain::ports::CreateSource::NewDatabase { .. } => String::new(),
             crate::domain::ports::CreateSource::Table { receipt, .. } => {

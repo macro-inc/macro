@@ -15,6 +15,7 @@ use crate::domain::coding_agents::{
     CodingAgent, CodingAgentError, CodingAgentService, DispatchCodingAgentRequest,
     DispatchedCodingAgent,
 };
+use crate::domain::updates::AgentUpdates;
 
 #[cfg(test)]
 mod test;
@@ -42,6 +43,36 @@ pub struct ListCodingAgents {}
 pub struct ListCodingAgentsResponse {
     /// Personas the user can currently dispatch.
     pub agents: Vec<CodingAgent>,
+}
+
+/// Read the current user's coding sessions that need attention.
+#[derive(Debug, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+#[schemars(
+    title = "ListAgentUpdates",
+    description = "List the current user's coding-agent sessions waiting for an answer or stalled for over 20 minutes. The user answers permissions and questions through the cards Macro renders from this tool's result. To send a coding agent instructions, use ManageAgentSession with a prompt. To recall the user's earlier decisions about these agents, search earlier agent conversations with ContentSearch (entity_types agent_sessions) and read them with ReadAgentSession."
+)]
+pub struct ListAgentUpdates {}
+
+impl ToolAnnotated for ListAgentUpdates {
+    const ANNOTATIONS: ToolAnnotations = ToolAnnotations::read_only("Read agent updates");
+}
+
+#[async_trait]
+impl AsyncTool<CodingAgentToolContext> for ListAgentUpdates {
+    type Output = AgentUpdates;
+
+    async fn call(
+        &self,
+        context: ServiceContext<CodingAgentToolContext>,
+        request: RequestContext,
+    ) -> ToolResult<Self::Output> {
+        context
+            .service
+            .list_updates(request.user_id)
+            .await
+            .map_err(tool_error)
+    }
 }
 
 impl ToolAnnotated for ListCodingAgents {
@@ -126,6 +157,7 @@ pub fn coding_agent_toolset() -> AsyncToolCollection<CodingAgentToolContext> {
         .add_tool::<super::manage_agent_session::ManageAgentSession, CodingAgentToolContext>()
         .add_tool::<CreateAgentSession, CodingAgentToolContext>()
         .add_tool::<ListCodingAgents, CodingAgentToolContext>()
+        .add_tool::<ListAgentUpdates, CodingAgentToolContext>()
         .add_tool::<DispatchCodingAgent, CodingAgentToolContext>()
 }
 

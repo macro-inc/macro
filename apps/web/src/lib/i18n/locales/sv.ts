@@ -810,7 +810,6 @@ export default {
     goForward: 'Gå framåt',
     createNewSplit: 'Skapa ny panel',
     close: 'Stäng',
-    returnToList: 'Tillbaka till listan',
     previousItem: 'Föregående objekt',
     nextItem: 'Nästa objekt',
     itemNavigation: 'Objektnavigering',

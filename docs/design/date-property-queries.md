@@ -161,10 +161,12 @@ refreshes all property-dependent queries.
 
 Tasks uses cached property definitions/options for its local numeric comparator,
 with missing values last and the same update/ID tie-breakers as SQL. Group
-metadata uses the same stored option `display_order`; leave assignee labels in
-alphabetical order. Status and Priority are explicit sort choices. Do not add
-property sorting or date predicates to the WASM reconciliation engine:
-property-sorted pages remain server-backed.
+metadata uses the stored option `display_order`; the client presents system
+Priority groups in Urgent, High, Medium, Low order with unset priority last,
+independently of item sort direction. Leave assignee labels in alphabetical order. Status and
+Priority are explicit sort choices. Do not add property sorting or date
+predicates to the WASM reconciliation engine: property-sorted pages remain
+server-backed.
 
 ## Alternatives rejected
 

@@ -47,7 +47,7 @@ pub struct CrmCompanyWithContacts {
 }
 
 /// A known external company tracked by a team (CRM-style record). A company
-/// aggregates one or more email domains and individual contacts that are
+/// aggregates zero or more email domains and individual contacts that are
 /// considered to belong to the same external party.
 ///
 /// Company display metadata (name, description, icon) lives in
@@ -264,11 +264,11 @@ pub struct CrmAddressStatus {
     /// team's company) are reported as `exists = false` so existence
     /// doesn't leak across teams.
     pub exists: bool,
-    /// `crm_contacts.hidden` for the matched contact. `false` when `!exists`.
+    /// Whether any matching team contact is hidden. `false` when `!exists`.
     pub contact_hidden: bool,
-    /// `crm_companies.hidden` for the matched contact's company. `false` when `!exists`.
+    /// Whether any matching contact's company is hidden. `false` when `!exists`.
     pub company_hidden: bool,
-    /// `crm_companies.email_sync` for the matched contact's company. `false` when `!exists`.
+    /// Whether every matching contact's company enables email sync. `false` when `!exists`.
     pub email_sync: bool,
 }
 
@@ -399,9 +399,6 @@ pub enum CrmError {
     /// The company already has a contact with the requested email.
     #[error("a crm contact with this email already exists for the company")]
     ContactAlreadyExistsForCompany,
-    /// The contact's email domain is not one of the company's domains.
-    #[error("contact email domain must match one of the company's domains")]
-    ContactEmailDomainMismatch,
     /// The team-level `team_crm_settings.crm_enabled` killswitch is off.
     #[error("crm is not enabled for this team")]
     CrmDisabledForTeam,

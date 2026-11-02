@@ -99,6 +99,7 @@ function refusalOf(code: FormErrorCode): FormRefusal {
     .with('invalidName', () => 'invalid-name')
     .with('invalidSharing', () => 'invalid-sharing')
     .with('tallyHidden', () => 'tally-hidden')
+    .with('invalidBranding', () => 'invalid-branding')
     .with('conflict', () => 'conflict')
     .with('internal', () => 'internal')
     .exhaustive(() => 'internal');
