@@ -935,3 +935,40 @@ fn parse_unknown_tag_mixed_with_recognized() {
         ]
     );
 }
+
+// =============================================================================
+// Lenient parsing (prose that need not be valid markup)
+// =============================================================================
+
+fn lenient_plain_text(input: &str) -> String {
+    PlainTextFormatter::format_xml_text(ParsedXmlText::parse_lenient(input)).0
+}
+
+#[test]
+fn lenient_parse_unwraps_mentions_beside_stray_angle_brackets() {
+    let input = r#"Fixed Vec<String> for <m-user-mention>{"userId":"macro|user@example.com","email":"user@example.com"}</m-user-mention> when 5 < 10 in <m-document-mention>{"documentId":"doc-1","documentName":"the request","blockName":"channel","blockParams":{}}</m-document-mention>"#;
+    assert!(ParsedXmlText::parse(input).is_err());
+    assert_eq!(
+        lenient_plain_text(input),
+        "Fixed Vec<String> for user@example.com when 5 < 10 in the request"
+    );
+}
+
+#[test]
+fn lenient_parse_drops_unknown_tags_like_strict_parse() {
+    let input = r#"<m-await>{"text":"thinking"}</m-await>Done <m-await/>"#;
+    assert_eq!(lenient_plain_text(input), "Done ");
+}
+
+#[test]
+fn lenient_parse_keeps_a_malformed_mention_as_text() {
+    let input = r#"Hi <m-user-mention>invalid</m-user-mention>"#;
+    assert_eq!(lenient_plain_text(input), input);
+}
+
+#[test]
+fn lenient_parse_of_valid_markup_matches_strict_parse() {
+    let input = r#"<m-user-mention>{"userId":"macro|user@example.com","email":"user@example.com"}</m-user-mention> see <m-link>{"text":"docs","url":"https://example.com"}</m-link>"#;
+    let strict = PlainTextFormatter::format_xml_text(ParsedXmlText::parse(input).unwrap()).0;
+    assert_eq!(lenient_plain_text(input), strict);
+}
