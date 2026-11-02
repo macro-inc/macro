@@ -366,7 +366,8 @@ function CallOverlayContent(props: CallOverlayProps) {
           <Button
             ref={peopleButton}
             size="icon-md"
-            label={isShowing('people') ? 'Hide people' : 'Show people'}
+            aria-label={isShowing('people') ? 'Hide people' : 'Show people'}
+            tooltip={isShowing('people') ? 'Hide people' : 'Show people'}
             aria-pressed={isShowing('people')}
             aria-controls={sidebarId}
             onClick={() => toggleTab('people')}
@@ -377,7 +378,8 @@ function CallOverlayContent(props: CallOverlayProps) {
             <Button
               ref={chatButton}
               size="icon-md"
-              label={isShowing('chat') ? 'Close chat' : 'Open chat'}
+              aria-label={isShowing('chat') ? 'Close chat' : 'Open chat'}
+              tooltip={isShowing('chat') ? 'Close chat' : 'Open chat'}
               aria-pressed={isShowing('chat')}
               aria-controls={sidebarId}
               onClick={() => toggleTab('chat')}

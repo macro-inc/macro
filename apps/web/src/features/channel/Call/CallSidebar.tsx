@@ -1,10 +1,10 @@
 import { SidePanel } from '@components/app/side-panel';
 import { UserIcon } from '@core/component/UserIcon';
 import { getDisplayName, tryMacroId } from '@core/user';
-import ChatIcon from '@phosphor/chat-circle.svg';
-import MicrophoneSlash from '@phosphor/microphone-slash.svg';
-import UsersIcon from '@phosphor/users.svg';
-import XIcon from '@phosphor/x.svg';
+import ChatIcon from '@icon/system/regular/chat-circle.svg';
+import MicrophoneSlash from '@icon/system/regular/microphone-slash.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, Tabs, ToggleSwitch } from '@ui';
 import type { RemoteParticipant } from 'livekit-client';
 import { For, type JSX, Show } from 'solid-js';
@@ -197,7 +197,7 @@ export function CallSidebar(props: {
           class="ml-auto"
           variant="ghost"
           size="icon-md"
-          label="Close sidebar"
+          aria-label="Close sidebar"
           onClick={props.onClose}
         >
           <XIcon />
