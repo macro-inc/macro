@@ -700,12 +700,13 @@ Escape cancels. Renaming keeps the question and its saved query unchanged. A sav
 query names databases, tables, and columns by their display names, so renaming one
 it reads makes the answer fail until the question is updated.
 
-AI document editing (**Edit with AI**, `EditDocument`) works with database blocks.
+AI document editing (the selection toolbar's **AI edit**, `EditDocument`) works with
+database blocks.
 It inserts a saved answer or chart from the `<m-db-query>` block that
 `SaveDatabaseQuery` returns, can change an existing answer's chart type, title,
 or height without changing its question, and can switch an embedded database
 to another table or view. To check, have chat save a chart and add it to a
-document, then ask **Edit with AI** to make it a pie chart; the same question
+document, then select nearby text, choose **AI edit**, and ask for a pie chart; the same question
 should redraw as a pie.
 
 An existing document keeps its answer label when Databases is off and does not
