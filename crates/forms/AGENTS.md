@@ -44,6 +44,12 @@ service.
 
 - `cargo test -p forms --all-features` (`SQLX_OFFLINE` unset).
 
+## Gotchas
+
+- A form is filed in a folder on its own (`forms.project_id`, `MoveEntity`,
+  owner only); its database stays where it is. The folder's inherited grants
+  on the form reach the database through form access, like any form grant.
+
 ## Related
 
 - Skills: `collab-surface-core`, `database-core` · Rules: `.agents/rules/rust/architecture.md`

@@ -59,6 +59,7 @@ fn a_form_detail_reads_as_the_web_client_expects() {
             confirmation_message: "".into(),
             created_at: Utc.with_ymd_and_hms(2026, 9, 1, 9, 0, 0).unwrap(),
             updated_at: Utc.with_ymd_and_hms(2026, 9, 2, 9, 0, 0).unwrap(),
+            project_id: None,
             is_hidden_in_drive: false,
         },
         access: FormAccess::Edit,
@@ -121,6 +122,7 @@ fn a_form_detail_reads_as_the_web_client_expects() {
                 "confirmationMessage": "",
                 "createdAt": "2026-09-01T09:00:00Z",
                 "updatedAt": "2026-09-02T09:00:00Z",
+                "projectId": null,
                 "isHiddenInDrive": false,
             },
             "access": "edit",
@@ -411,6 +413,7 @@ fn a_form_takes_responses_while_open_and_before_it_closes() {
         confirmation_message: "".into(),
         created_at: now,
         updated_at: now,
+        project_id: None,
         is_hidden_in_drive: false,
     };
     assert!(form(FormStatus::Open, None).accepts_responses_at(now));
@@ -441,6 +444,7 @@ fn a_listed_form_names_the_callers_access_beside_the_form() {
             confirmation_message: "Thanks".into(),
             created_at: now,
             updated_at: now,
+            project_id: None,
             is_hidden_in_drive: false,
         },
         access: FormAccess::View,
@@ -464,6 +468,7 @@ fn a_listed_form_names_the_callers_access_beside_the_form() {
                 "confirmationMessage": "Thanks",
                 "createdAt": "2026-09-01T09:00:00Z",
                 "updatedAt": "2026-09-01T09:00:00Z",
+                "projectId": null,
                 "isHiddenInDrive": false,
             },
             "access": "view",
@@ -530,6 +535,7 @@ fn form_and_response_schemas_require_every_field_they_always_serialize() {
         confirmation_message: "".into(),
         created_at: now,
         updated_at: now,
+        project_id: None,
         is_hidden_in_drive: false,
     };
     let response = FormResponse {

@@ -274,3 +274,61 @@ async fn a_database_receipt_is_not_a_form_receipt() {
         .await;
     assert!(matches!(refused, Err(FormError::NotFound)));
 }
+
+#[cfg(feature = "entity_mutation")]
+#[tokio::test]
+async fn moving_a_form_files_it_names_both_folders_and_leaves_its_database() {
+    use entity_mutation::{
+        EntityMutationEffect, EntityMutationErrorCode, MoveEntity, capability::MoveEntityRequest,
+    };
+    use model_entity::EntityType;
+
+    let world = world();
+    seed_rsvp(&world, Audience::Members);
+    let forms = service(&world);
+    let entity = EntityType::Form.with_entity_string(RSVP_FORM.to_string());
+    let owner = || form_receipt::<OwnerAccessLevel>(RSVP_FORM, OWNER, AccessLevel::Owner);
+    let into = |project_id: &str| MoveEntityRequest::MoveToProject {
+        entity: entity.clone(),
+        receipt: owner(),
+        project_id: project_id.to_string(),
+        project_receipt: form_receipt::<EditAccessLevel>(RSVP_FORM, OWNER, AccessLevel::Owner),
+    };
+
+    assert_eq!(
+        forms.move_entity(into("clients")).await.unwrap(),
+        vec![
+            EntityMutationEffect::updated(entity.clone()),
+            EntityMutationEffect::updated(EntityType::Project.with_entity_string("clients".into())),
+        ]
+    );
+    assert_eq!(
+        forms
+            .move_entity(MoveEntityRequest::MoveToRoot {
+                entity: entity.clone(),
+                receipt: owner(),
+            })
+            .await
+            .unwrap(),
+        vec![
+            EntityMutationEffect::updated(entity.clone()),
+            EntityMutationEffect::updated(EntityType::Project.with_entity_string("clients".into())),
+        ]
+    );
+    forms.move_entity(into("archive")).await.unwrap();
+    assert_eq!(
+        world.lock().unwrap().forms[0].form.project_id.as_deref(),
+        Some("archive")
+    );
+    assert!(world.lock().unwrap().batches.is_empty());
+
+    forms.trash_form(owner()).await.unwrap();
+    assert!(matches!(
+        forms.move_entity(into("clients")).await,
+        Err(EntityMutationErrorCode::NotFound(_))
+    ));
+    assert_eq!(
+        world.lock().unwrap().forms[0].form.project_id.as_deref(),
+        Some("archive")
+    );
+}

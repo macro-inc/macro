@@ -2,6 +2,7 @@
 //! cells are entity properties, written through the properties adapter.
 
 /// The change journal's statements, shared with the cell store's batches.
+mod folders;
 pub(crate) mod journal;
 /// Row identity statements, shared with the cell store's batches.
 pub(crate) mod rows;
@@ -47,6 +48,9 @@ pub enum PgDatabasesRepoError {
     /// one decoded.
     #[error("failed to encode or decode stored json")]
     Json(#[from] serde_json::Error),
+    /// A folder id is not a uuid.
+    #[error("folder id is not a uuid")]
+    FolderId(#[from] uuid::Error),
     /// A stored position is not a fractional key.
     #[error("stored position")]
     Position(#[from] PositionError),
@@ -88,6 +92,7 @@ pub(crate) struct DatabaseRecord {
     pub(crate) owner_id: String,
     pub(crate) created_at: chrono::DateTime<chrono::Utc>,
     pub(crate) trashed_at: Option<chrono::DateTime<chrono::Utc>>,
+    pub(crate) project_id: Option<String>,
 }
 
 impl From<DatabaseRecord> for Database {
@@ -98,6 +103,7 @@ impl From<DatabaseRecord> for Database {
             owner_id: record.owner_id,
             created_at: record.created_at,
             trashed_at: record.trashed_at,
+            project_id: record.project_id,
         }
     }
 }
@@ -163,7 +169,7 @@ pub(crate) async fn insert_owned_database(
         r#"
             INSERT INTO database_entities (database_id, name, user_id)
             VALUES ($1, $2, $3)
-            RETURNING database_id AS id, name, user_id AS owner_id, created_at, trashed_at
+            RETURNING database_id AS id, name, user_id AS owner_id, created_at, trashed_at, project_id
             "#,
         database_id.into_uuid(),
         name,
@@ -327,7 +333,7 @@ where
     ) -> Result<Option<(Database, Vec<Table>)>, Self::Error> {
         let Some(database) = sqlx::query_as!(
             DatabaseRecord,
-            r#"SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at FROM database_entities WHERE database_id = $1"#,
+            r#"SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at, project_id FROM database_entities WHERE database_id = $1"#,
             id.into_uuid()
         )
         .fetch_optional(&self.pool)
@@ -390,6 +396,15 @@ where
         .execute(&self.pool)
         .await?;
         Ok(restored.rows_affected() == 1)
+    }
+
+    #[tracing::instrument(err, skip(self))]
+    async fn move_database(
+        &self,
+        id: DatabaseId,
+        project_id: Option<&str>,
+    ) -> Result<bool, Self::Error> {
+        folders::move_database(&self.pool, id, project_id).await
     }
 
     /// Deleting the app entity cleans up its owned storage, grants and journal,
@@ -489,7 +504,7 @@ where
         Ok(sqlx::query_as!(
             DatabaseRecord,
             r#"
-            SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at
+            SELECT database_id AS id, name, user_id AS owner_id, created_at, trashed_at, project_id
             FROM database_entities
             WHERE database_id = ANY($1)
             ORDER BY created_at

@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            UPDATE forms SET name = $2, updated_at = $3\n            WHERE id = $1 AND trashed_at IS NULL\n            RETURNING id, name, description, owner_id, database_id, table_id,\n                      submitted_column_id, respondent_column_id, audience, tally_visible,\n                      status, closes_at, confirmation_message, created_at, updated_at, trashed_at,\n                   name_follows_database, is_hidden_in_drive\n            ",
+  "query": "\n                SELECT id, name, description, owner_id, database_id, table_id,\n                       submitted_column_id, respondent_column_id, audience, tally_visible,\n                       status, closes_at, confirmation_message, created_at, updated_at, trashed_at,\n                   name_follows_database, is_hidden_in_drive, project_id\n                FROM forms WHERE id = ANY($1) AND trashed_at IS NULL\n                ORDER BY id\n                ",
   "describe": {
     "columns": [
       {
@@ -92,13 +92,16 @@
         "ordinal": 17,
         "name": "is_hidden_in_drive",
         "type_info": "Bool"
+      },
+      {
+        "ordinal": 18,
+        "name": "project_id",
+        "type_info": "Text"
       }
     ],
     "parameters": {
       "Left": [
-        "Uuid",
-        "Text",
-        "Timestamptz"
+        "UuidArray"
       ]
     },
     "nullable": [
@@ -119,8 +122,9 @@
       false,
       true,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "0324782b3a73b0449ea096091d52edf33cf128bb77eee4bf09032e7b4785fe9b"
+  "hash": "66a26417483793c65cda07bc59c409786b9b795ecf1789a21055e216c009d9f4"
 }

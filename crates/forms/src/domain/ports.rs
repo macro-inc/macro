@@ -179,6 +179,15 @@ pub trait FormsRepo: Send + Sync + 'static {
     /// Bring a form back from the trash; `false` when it is gone.
     fn restore_form(&self, id: FormId) -> impl Future<Output = Result<bool, Self::Error>> + Send;
 
+    /// File a live form in a folder, or at the root when `project_id` is
+    /// `None`, swapping the grants it inherits from folders to match;
+    /// `false` when it is trashed or gone.
+    fn move_form(
+        &self,
+        id: FormId,
+        project_id: Option<&str>,
+    ) -> impl Future<Output = Result<bool, Self::Error>> + Send;
+
     /// Remove a form, its layout, ledger and grants.
     fn delete_form(&self, id: FormId) -> impl Future<Output = Result<(), Self::Error>> + Send;
 

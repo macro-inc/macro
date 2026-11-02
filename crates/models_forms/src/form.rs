@@ -129,6 +129,9 @@ pub struct Form {
     pub created_at: DateTime<Utc>,
     /// When its facts or layout last changed.
     pub updated_at: DateTime<Utc>,
+    /// The folder it is filed in; `null` at the root.
+    #[schema(required = true)]
+    pub project_id: Option<String>,
     /// Whether Drive leaves it, and the database behind it, out of its
     /// listings, as for a channel poll.
     pub is_hidden_in_drive: bool,

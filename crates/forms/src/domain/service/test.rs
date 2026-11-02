@@ -295,6 +295,7 @@ fn seed_rsvp(world: &Shared, audience: Audience) {
             confirmation_message: "".into(),
             created_at: now,
             updated_at: now,
+            project_id: None,
             is_hidden_in_drive: false,
         },
         trashed_at: None,

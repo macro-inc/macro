@@ -44,6 +44,9 @@ pub struct Database {
     /// Set when trashed.
     #[schema(required = true)]
     pub trashed_at: Option<DateTime<Utc>>,
+    /// The folder it is filed in; `null` at the root.
+    #[schema(required = true)]
+    pub project_id: Option<String>,
 }
 
 /// One table (tab) of a database.

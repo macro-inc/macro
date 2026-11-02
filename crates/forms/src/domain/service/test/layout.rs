@@ -26,6 +26,7 @@ fn respondent_details_withhold_the_booking_destination() {
         confirmation_message: "Thank you".into(),
         created_at: start_of_tests(),
         updated_at: start_of_tests(),
+        project_id: None,
         is_hidden_in_drive: false,
     };
     let layout = FormLayout {

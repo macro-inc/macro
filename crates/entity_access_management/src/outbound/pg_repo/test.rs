@@ -873,3 +873,62 @@ async fn move_project_from_a_to_d_updates_inherited_access(pool: Pool<Postgres>)
     );
 }
 
+/// A database and a form filed in PROJECT_C move with PROJECT_B: they take
+/// on PROJECT_D's two grants, as the documents beside them do.
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../fixtures", scripts("move_project_test_data"))
+)]
+async fn move_project_carries_inherited_access_to_its_databases_and_forms(pool: Pool<Postgres>) {
+    let repo = PgRepository::new(pool.clone());
+    let project_a = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap();
+    let project_b = Uuid::parse_str("bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb").unwrap();
+    let project_d = Uuid::parse_str("dddddddd-dddd-dddd-dddd-dddddddddddd").unwrap();
+
+    repo.move_project(&project_b, Some(&project_a), Some(&project_d))
+        .await
+        .unwrap();
+
+    let inherited = |entity_id: Uuid| {
+        let pool = pool.clone();
+        async move {
+            sqlx::query!(
+                r#"
+                SELECT source_id, access_level AS "access_level: AccessLevel"
+                FROM entity_access
+                WHERE entity_id = $1
+                  AND granted_from_project_id = 'dddddddd-dddd-dddd-dddd-dddddddddddd'
+                ORDER BY source_id
+                "#,
+                entity_id,
+            )
+            .fetch_all(&pool)
+            .await
+            .unwrap()
+            .into_iter()
+            .map(|row| (row.source_id, row.access_level))
+            .collect::<Vec<_>>()
+        }
+    };
+    let project_d_grants = sqlx::query!(
+        r#"
+        SELECT source_id, access_level AS "access_level: AccessLevel"
+        FROM entity_access
+        WHERE entity_id = $1 AND granted_from_project_id IS NULL
+        ORDER BY source_id
+        "#,
+        project_d,
+    )
+    .fetch_all(&pool)
+    .await
+    .unwrap()
+    .into_iter()
+    .map(|row| (row.source_id, row.access_level))
+    .collect::<Vec<_>>();
+    assert_eq!(project_d_grants.len(), 2);
+
+    let database = Uuid::parse_str("e1111111-1111-1111-1111-111111111111").unwrap();
+    let form = Uuid::parse_str("e3333333-3333-3333-3333-333333333333").unwrap();
+    assert_eq!(inherited(database).await, project_d_grants);
+    assert_eq!(inherited(form).await, project_d_grants);
+}

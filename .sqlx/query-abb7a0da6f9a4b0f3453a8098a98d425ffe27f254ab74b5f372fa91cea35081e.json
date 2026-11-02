@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT id, name, description, owner_id, database_id, table_id,\n                   submitted_column_id, respondent_column_id, audience, tally_visible,\n                   status, closes_at, confirmation_message, created_at, updated_at, trashed_at,\n                   name_follows_database, is_hidden_in_drive\n            FROM forms WHERE id = $1\n            ",
+  "query": "\n                SELECT id, name, description, owner_id, database_id, table_id,\n                       submitted_column_id, respondent_column_id, audience, tally_visible,\n                       status, closes_at, confirmation_message, created_at, updated_at, trashed_at,\n                   name_follows_database, is_hidden_in_drive, project_id\n                FROM forms WHERE database_id = $1 AND trashed_at IS NULL\n                ORDER BY created_at, id\n                ",
   "describe": {
     "columns": [
       {
@@ -92,6 +92,11 @@
         "ordinal": 17,
         "name": "is_hidden_in_drive",
         "type_info": "Bool"
+      },
+      {
+        "ordinal": 18,
+        "name": "project_id",
+        "type_info": "Text"
       }
     ],
     "parameters": {
@@ -117,8 +122,9 @@
       false,
       true,
       false,
-      false
+      false,
+      true
     ]
   },
-  "hash": "1021df133a51edb89e15fb3c8933a8514598fd449882f44c0a8ad386fa7676aa"
+  "hash": "abb7a0da6f9a4b0f3453a8098a98d425ffe27f254ab74b5f372fa91cea35081e"
 }
