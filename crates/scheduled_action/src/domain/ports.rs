@@ -2,8 +2,8 @@ use super::event_runs::{AuthorizedEventRun, ClaimToken, ConfigurationRevision};
 use super::event_trigger::{EventName, EventReference};
 use super::execution::ExecutionHandle;
 use super::models::{
-    ActionExecutionRecord, CreateScheduledAction, DispatchEvent, InProgressExecution,
-    ScheduledAction, ScheduledActionUpdate, UpdateScheduledAction,
+    ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, DispatchEvent,
+    InProgressExecution, ScheduledAction, ScheduledActionUpdate,
 };
 use super::templates::{RoutineTemplate, ShareRoutineTemplate, TemplateSnapshot};
 use anyhow::Result;
@@ -146,7 +146,7 @@ pub trait ScheduledActionService: Send + Sync + 'static {
     fn create_action(
         &self,
         principal: &CreationPrincipal,
-        input: CreateScheduledAction,
+        input: ActionConfiguration,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// `create_action` for a routine activated from `template_id`, recorded
@@ -154,7 +154,7 @@ pub trait ScheduledActionService: Send + Sync + 'static {
     fn create_action_from_template(
         &self,
         principal: &CreationPrincipal,
-        input: CreateScheduledAction,
+        input: ActionConfiguration,
         template_id: Uuid,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
@@ -170,7 +170,7 @@ pub trait ScheduledActionService: Send + Sync + 'static {
     fn update_action(
         &self,
         receipt: EntityAccessReceipt<EditAccessLevel>,
-        input: UpdateScheduledAction,
+        input: ActionConfigurationUpdate,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 
     /// Change activation without touching configuration. Requesting the
@@ -243,7 +243,7 @@ pub trait RoutineTemplateService: Send + Sync + 'static {
         &self,
         principal: &CreationPrincipal,
         template_id: Uuid,
-        input: CreateScheduledAction,
+        input: ActionConfiguration,
     ) -> impl Future<Output = Result<ScheduledAction>> + Send;
 }
 

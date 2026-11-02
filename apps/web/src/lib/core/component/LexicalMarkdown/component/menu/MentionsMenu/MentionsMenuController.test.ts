@@ -41,7 +41,7 @@ it('keeps the same people visible and selected as delayed categories arrive', ()
       bucket('documents', items('doc', 74)),
       bucket('channels', items('channel', 24)),
       bucket('agentSessions', items('session', 3)),
-      bucket('companies', items('company', 8)),
+      bucket('crm', items('company', 8)),
       bucket('emails', items('email', 3)),
     ]);
     expect(menu.combinedItems().slice(0, 3)).toEqual(people.slice(0, 3));
@@ -132,7 +132,7 @@ it('keeps every category reachable when stable People rows exceed the preview ta
       'documents',
       'channels',
       'agentSessions',
-      'companies',
+      'crm',
       'emails',
       'dates',
     ];

@@ -378,6 +378,8 @@ Shift+Enter adds a line to the draft; Enter sends. The composer spaces its
 paragraphs the way the sent message does, so a multi-line draft reads as what
 it will send. Check a multi-line message against the draft that wrote it: the
 spacing must not change on send.
+Typing `6.` then Enter (or `6. `) starts an ordered list at 6; the marker is
+not rewritten to `1.`
 Both the expanded and collapsed composers start with a `+` button (`Add`). It
 opens a menu on desktop and a bottom drawer on mobile: `Mention` (opens the `@` typeahead), `Attach files` (the file
 picker; the iOS media picker on iOS), `GIF` (the same picker as `/gif`), then under `Create` the same actions as
@@ -410,7 +412,10 @@ beside the buttons and collapse when it fits again, without flickering between
 layouts. Also add and remove a line break or attachment and
 confirm the draft and caret position survive. The attachment and send controls
 should remain usable in both layouts. Existing message and reply edit inputs show
-only the send control, with no format or discard button; Escape cancels the edit.
+Attach files, Discard Edit, and Send, with no format toggle; Escape also cancels
+an edit. The iOS app uses its native media picker. Check inline and unified edits
+on desktop and touch: attach a file and save, then edit again and discard changes
+without changing the original message or attachments.
 The iOS share sheet keeps its editor above the attachment and formatting controls.
 Check this arrangement at both phone and tablet widths.
 
