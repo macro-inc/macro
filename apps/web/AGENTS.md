@@ -510,15 +510,12 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   [dragging rows into a folder](../../docs/agent-guide/navigation.md#dragging-rows-into-a-folder).
 - Keep channel rail and title menus on `CHANNEL_ACTION_VIEW_CONTEXT`, including
   the shared desktop `Open in new split` action and its mobile/capacity guards.
-- Gate the Chat redesign with `enable-chat-sidebar-sections`; wait for its result, restore the tabbed rail and separate creation flows when off, and keep mobile unchanged.
+- Gate the Chat redesign with `enable-chat-sidebar-sections`; wait for its result, restore the tabbed rail when off, and keep mobile unchanged.
   Keep the original rail renderer and label dialogs in `components/rail/`; build the redesigned rail and section dialogs in `components/rail/next/`, with shared controller, context, and row primitives outside `next/`.
   With the flag on, keep desktop Chat sections in a scrolling stack with Favorites first and DMs directly below; personal and team-shared section assignments remain independent, including when dragging a row out of its originating section.
   Keep resize grips keyboard-accessible, preserve per-section heights in personal preferences, and route list navigation through the sectioned renderer's scroll handle rather than global virtualizer indexes.
   Cap section heights at measured list content and available pane space; hide resize grips for two or fewer items, default Favorites and DMs to four rows, and default other sections to their maximum height.
-  Mobile retains the recent feed. Use the unified New conversation picker and
-  require explicit confirmation before creating a duplicate visible channel name.
-  Use one name-first dialog for channels and conversations, with at most three inline suggestions; reveal channel privacy and invite controls only for channel creation, and retain typed names on blur.
-  Resume unfinished channel setup after failures without recreating the channel; keep drafts locked after creation and guard each later write against account/team changes.
+  Mobile retains the recent feed. Keep New channel and New direct message on their separate existing creation flows, independent of the sidebar flag.
   Use `--sidebar-gutter` for the outer section, DM, and search containers; shared headings and rows provide their own item padding.
   Indent all section content by 8px, including Favorites, custom sections, DMs, and empty states; keep unsectioned search results unindented.
   Reuse shared collapsible section headers and their hidden-caret behavior without leading icons; keep a neutral Shared badge next to the name before the caret, apply focus backgrounds across the full header row, and omit trailing header padding.

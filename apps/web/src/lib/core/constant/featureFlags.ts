@@ -776,7 +776,7 @@ export const enableTagTeamSharing = defineFlag({
   default: onInDev,
 });
 
-// Redesigned Chat sections and unified conversation creation. On in development;
+// Redesigned Chat sidebar sections. On in development;
 // deployed environments defer to PostHog. Override with VITE_ENABLE_CHAT_SIDEBAR_SECTIONS.
 export const enableChatSidebarSections = defineFlag({
   key: 'enable-chat-sidebar-sections',

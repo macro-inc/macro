@@ -1,10 +1,6 @@
-import { useFeatureFlag } from '@app/lib/analytics/posthog';
-import { t } from '@app/lib/i18n';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { RecipientSelector } from '@core/component/RecipientSelector';
 import { toast } from '@core/component/Toast/Toast';
-import { enableChatSidebarSections } from '@core/constant/featureFlags';
-import { useChannelsContext } from '@core/context/channels';
 import { useUserId } from '@core/context/user';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import { recipientEntityMapper, type WithCustomUserInput } from '@core/user';
@@ -31,34 +27,20 @@ import {
   RadioGroup,
   ToggleSwitch,
 } from '@ui';
-import {
-  createEffect,
-  createMemo,
-  createSignal,
-  For,
-  on,
-  Show,
-} from 'solid-js';
+import { createMemo, createSignal, Show } from 'solid-js';
 
 const [newChannelModalOpen, setNewChannelModalOpen] = createSignal(false);
-const [initialChannelName, setInitialChannelName] = createSignal('');
 const newChannelModalFocusLock = useFocusLock('create-channel');
 
 type ChannelVisibility = 'team' | 'private';
 type ChannelCreationStep = 'name' | 'visibility' | 'invite';
 
 export function openNewChannelModal() {
-  openNewChannelModalWithName('');
-}
-
-export function openNewChannelModalWithName(initialName: string) {
-  setInitialChannelName(initialName);
   newChannelModalFocusLock.acquire();
   setNewChannelModalOpen(true);
 }
 
 export function CreateChannelModal() {
-  const sections = useFeatureFlag(enableChatSidebarSections);
   const { replaceOrInsertSplit } = useSplitLayout();
   const userId = useUserId();
   const [step, setStep] = createSignal<ChannelCreationStep>('name');
@@ -71,8 +53,6 @@ export function CreateChannelModal() {
   const addParticipantsMutation = useAddParticipantsMutation();
   const addAgentMutation = useAddBotToChannelMutation();
   const currentTeamQuery = useCurrentTeamQuery();
-  const { channels } = useChannelsContext();
-  const [duplicateConfirmed, setDuplicateConfirmed] = createSignal(false);
   const [name, setName] = createSignal('');
   const [visibility, setVisibility] = createSignal<ChannelVisibility>('team');
   const [autoJoinTeam, setAutoJoinTeam] = createSignal(true);
@@ -94,21 +74,6 @@ export function CreateChannelModal() {
     currentTeamQuery.isSuccess ? currentTeamQuery.data?.team : undefined;
   let nameInput: HTMLInputElement | undefined;
   let visibilityOptions: HTMLDivElement | undefined;
-  const matchingChannels = createMemo(() =>
-    sections().enabled
-      ? channels().filter(
-          (channel) =>
-            channel.channel_type !== 'direct_message' &&
-            channel.name?.trim().toLocaleLowerCase() ===
-              channelName().toLocaleLowerCase()
-        )
-      : []
-  );
-  createEffect(
-    on(newChannelModalOpen, (open) => {
-      if (open) setName(initialChannelName());
-    })
-  );
 
   function reset() {
     setStep('name');
@@ -119,7 +84,6 @@ export function CreateChannelModal() {
     setError(undefined);
     setCreatedChannelId(undefined);
     setSentRecipientIds([]);
-    setDuplicateConfirmed(false);
     setAddedAgentIds([]);
   }
 
@@ -159,11 +123,6 @@ export function CreateChannelModal() {
 
   async function createChannel() {
     if (createChannelMutation.isPending) return;
-    if (matchingChannels().length > 0 && !duplicateConfirmed()) {
-      setStep('name');
-      setError(t('channelSections.matchingChannels'));
-      return;
-    }
     const selectedVisibility = visibility();
     const selectedTeam = team();
     if (selectedVisibility === 'team' && !selectedTeam) {
@@ -253,10 +212,6 @@ export function CreateChannelModal() {
     setError(undefined);
 
     if (step() === 'name') {
-      if (matchingChannels().length > 0 && !duplicateConfirmed()) {
-        setError(t('channelSections.matchingChannels'));
-        return;
-      }
       if (!channelName()) {
         setError('Enter a channel name');
         return;
@@ -369,7 +324,6 @@ export function CreateChannelModal() {
                     value={name()}
                     onInput={(event) => {
                       setName(event.currentTarget.value);
-                      setDuplicateConfirmed(false);
                       setError(undefined);
                     }}
                     placeholder="e.g. Feature Requests"
@@ -392,35 +346,6 @@ export function CreateChannelModal() {
                   Channels are where conversations happen around a topic. Use a
                   name that is easy to find and understand.
                 </p>
-                <Show when={matchingChannels().length > 0}>
-                  <div class="flex flex-col gap-2 text-sm">
-                    <p class="text-ink-muted">
-                      {t('channelSections.matchingChannels')}
-                    </p>
-                    <For each={matchingChannels()}>
-                      {(channel) => (
-                        <Button
-                          type="button"
-                          variant="ghost"
-                          onClick={() => {
-                            resetAndClose();
-                            replaceOrInsertSplit({
-                              type: 'channel',
-                              id: channel.id,
-                            });
-                          }}
-                        >
-                          {channel.name}
-                        </Button>
-                      )}
-                    </For>
-                    <ToggleSwitch
-                      checked={duplicateConfirmed()}
-                      onChange={setDuplicateConfirmed}
-                      label={t('channelSections.createAnyway')}
-                    />
-                  </div>
-                </Show>
               </div>
             </Show>
 

@@ -74,10 +74,9 @@ vanishes when the first timeline entry appears. Agent DMs keep their own UI.
 
 ## Create a channel
 
-With `enable-chat-sidebar-sections` on, Chat's **New → New conversation** uses
-the single name-first dialog described [below](#new-conversation). With it off,
-Chat offers separate **New channel** and **New direct message** actions. Both
-**New channel** and the global Create menu retain this three-step flow:
+Chat offers separate **New channel** and **New direct message** actions with
+either sidebar layout. **New channel** and the global Create menu use this
+three-step flow:
 
 1. `Create` → `Channel G`. Dialog `Create a channel` opens on step 1 of 3 with the `Name` textbox focused.
 2. Fill the name and click `Next`. Step 2 of 3 shows `Visibility`, with `Team — anyone on your team` selected by default. Team channels are always discoverable to teammates.
@@ -909,9 +908,9 @@ backdrop or `Escape` still dismisses it. There is no separate skinny sidebar mod
 
 ### Sidebar redesign rollout
 
-`enable-chat-sidebar-sections` gates the desktop layout and unified creation
-flow. It defaults on in development; deployed builds defer to PostHog. Set
-`VITE_ENABLE_CHAT_SIDEBAR_SECTIONS=true` or `false` to override it locally.
+`enable-chat-sidebar-sections` gates the desktop layout, not channel or
+direct-message creation. It defaults on in development; deployed builds defer to
+PostHog. Set `VITE_ENABLE_CHAT_SIDEBAR_SECTIONS=true` or `false` to override it locally.
 Wait for the flag to resolve before mounting a desktop layout or loading its
 lists. An unavailable or disabled remote flag restores **All**, **Recent**, and
 **Threads** (the latter still requires `enable-channel-threads-preview`), the
@@ -1004,8 +1003,8 @@ into a custom section. Failed saves roll back and show an error toast.
 Sections reuse channel labels. The existing `enable-channel-tags` flag controls
 section management; `VITE_ENABLE_CHANNEL_TAGS=true` enables it locally.
 Turning the flag off hides section controls and stops label reads without
-deleting saved labels. The New conversation action remains independent of the
-label service and its feature flag.
+deleting saved labels. Channel and direct-message creation remain independent of
+the label service and its feature flag.
 
 Use **New → New section** to create a section. The wider dialog has a name field
 and a **Smart section** switch in its body. **Shared with team** sits on the left
@@ -1077,34 +1076,17 @@ personal-section row into the ungrouped list. Only the personal assignment is
 removed; the shared assignment remains. Repeat from the shared-section row to
 verify the opposite scope.
 
-### New conversation
+### Creation actions
 
-**New** offers **New conversation** and **New section**. The conversation dialog
-creates named channels and direct conversations without opening another dialog.
-Its main field accepts a channel name, person, or email, with at most three
-matching existing channels and people directly below it. Selecting a channel
-opens it. Selecting people changes the primary action to Start conversation or
-Open conversation and supports a private group. Selecting an agent keeps that
-conversation one-to-one. Complete external emails offer Invite explicitly.
-Typing alone never silently chooses a suggestion. Arrow Down from the input
-focuses the first suggestion; arrow keys move through the matches, and Enter
-opens or selects the focused match.
+**New** offers separate **New channel** and **New direct message** actions in
+both sidebar layouts. **New channel** opens the existing
+[name, visibility, and optional invitations flow](#create-a-channel).
+**New direct message** opens the existing recipient picker, including people,
+external email addresses, private groups, and available agent personas.
+The sectioned sidebar also offers **New section** in the same menu.
 
-With a channel name and no selected recipients, the action is **Create a channel**.
-Channel controls appear in the same dialog: **Private channel**, team auto-join
-when not private, and optional **Add people or agents**. Team discoverability and
-auto-join remain the defaults. An exact, case-insensitive existing name offers
-reuse and requires explicit confirmation before creating another channel.
-
-Failed setup and a team change preserve the created channel for its originating
-account; returning to its team retries only unfinished
-invitations or auto-join, rather than creating another channel. The draft stays
-locked once creation succeeds; Open channel can leave optional setup unfinished.
-Late responses must not navigate a different account or continue setup in a
-different team. Verify existing and new DMs, private groups, agents, external
-recipients, three-result suggestion limits, deliberate duplicates, private/team
-creation, optional invites, partial failure and retry, and cancellation on desktop
-and touch layouts.
+Check each creation action with the sidebar flag on and off; changing the layout
+must not change the creation flow.
 
 When calls are enabled, `Live` appears below the rail's toolbar while an active
 quick call is available. It stays visible while browsing sections and during conversation
