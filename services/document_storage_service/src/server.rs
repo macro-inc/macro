@@ -1603,6 +1603,10 @@ pub async fn run() -> anyhow::Result<()> {
         ),
         macro_event_broker.clone(),
         collab_surface_service.clone(),
+        static_file_service_client::StaticFileServiceClient::new(
+            config.internal_api_key.to_string(),
+            StaticFileServiceUrl::new()?.to_string(),
+        ),
     ));
 
     // Individual initiative and agent-session reads preserve read-after-write
