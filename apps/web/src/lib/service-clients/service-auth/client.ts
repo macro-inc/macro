@@ -1219,7 +1219,16 @@ export const authServiceClient = {
     return authServiceClient.initGithubLink(originalUrl);
   },
 
-  async sendMobileWelcomeEmail(email: string) {
+  async sendMobileWelcomeEmail(
+    email: string,
+    attribution?: Record<string, string>
+  ) {
+    const body: { email: string; attribution?: Record<string, string> } = {
+      email,
+    };
+    if (attribution && Object.keys(attribution).length > 0) {
+      body.attribution = attribution;
+    }
     return safeFetch<
       SendMobileWelcomeEmailResponse,
       'RATE_LIMITED' | 'INVALID_EMAIL'
@@ -1227,7 +1236,7 @@ export const authServiceClient = {
       `${authHost}/mobile-welcome-email`,
       {
         method: 'POST',
-        body: JSON.stringify({ email }),
+        body: JSON.stringify(body),
         credentials: 'include',
       },
       async (response) => {
