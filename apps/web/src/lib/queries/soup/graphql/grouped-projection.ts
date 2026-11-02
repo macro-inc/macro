@@ -60,7 +60,7 @@ export function createGraphqlGroupedSoupProjection(
       return {
         key: bin.key,
         label: resolved?.label ?? bin.label ?? bin.key,
-        displayOrder: resolved?.displayOrder ?? null,
+        displayOrder: bin.displayOrder ?? resolved?.displayOrder ?? null,
         totalCount: bin.totalCount,
         itemIds,
         nextCursor: bin.nextCursor ?? null,

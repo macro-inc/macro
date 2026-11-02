@@ -16,12 +16,6 @@ import {
   RenderTool,
 } from '@core/component/AI/component/tool/handler';
 import { parseLegacyGeneratedImage } from '@core/component/AI/component/tool/legacy-generated-image';
-import ReadIcon from '@icon/system/regular/file-text.svg';
-import GlobeIcon from '@icon/system/regular/globe.svg';
-import ListIcon from '@icon/system/regular/list-bullets.svg';
-import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
-import PencilIcon from '@icon/system/regular/pencil-simple.svg';
-import WrenchIcon from '@icon/system/regular/wrench.svg';
 import type { ToolDetail } from '@service-agent-fold/generated/types';
 import {
   deserializeToolCall,
@@ -30,7 +24,6 @@ import {
   type ToolName,
 } from '@service-cognition/generated/tools/tool';
 import { createMemo, ErrorBoundary, type JSX, Show, Suspense } from 'solid-js';
-import { match } from 'ts-pattern';
 import { isToolActive, ToolCard } from '../../ui';
 import type { ToolCallCommon, ToolCallContext } from './shared';
 
@@ -97,7 +90,6 @@ export function MacroToolCall(props: {
 
   const fallback = () => (
     <ToolCard
-      icon={<MacroToolIcon name={props.common.label} />}
       title={props.common.label}
       subtitle={subtitle()}
       status={props.common.status}
@@ -225,44 +217,4 @@ function responseError(response: ToolResponse | undefined): string | undefined {
     return response.data.content.error_code;
   }
   return undefined;
-}
-
-function MacroToolIcon(props: { name: string }): JSX.Element {
-  return match(props.name)
-    .with(
-      'ContentSearch',
-      'NameSearch',
-      'SearchSkills',
-      'SearchTools',
-      'WebSearch',
-      () => <SearchIcon class="size-4" />
-    )
-    .with(
-      'ReadContent',
-      'ReadMetadata',
-      'ReadThread',
-      'ReadChat',
-      'ReadAgentSession',
-      'ReadProject',
-      'ReadPresentation',
-      'ReadDesign',
-      'ReadPhotoshopDocument',
-      'ReadIllustratorDocument',
-      'ReadWordDocument',
-      'ReadCalendarEvent',
-      () => <ReadIcon class="size-4" />
-    )
-    .with('WebFetch', () => <GlobeIcon class="size-4" />)
-    .with(
-      'EditDocument',
-      'EditSpreadsheet',
-      'EditPresentation',
-      'EditWordDocument',
-      'CreateDocument',
-      () => <PencilIcon class="size-4" />
-    )
-    .with('ListEntities', 'ListSkills', 'ListCalendarEvents', () => (
-      <ListIcon class="size-4" />
-    ))
-    .otherwise(() => <WrenchIcon class="size-4" />);
 }

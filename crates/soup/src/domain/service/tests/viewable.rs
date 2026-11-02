@@ -51,6 +51,7 @@ async fn a_caller_with_no_account_hydrates_without_viewer_state_or_pull_requests
             Box::pin(async move {
                 Ok(vec![SoupProjectionHydration {
                     document_server_facts: None,
+                    sort_key: None,
                     item: SoupItem::Initiative(SoupInitiative {
                         id: initiative_id,
                         name: "Launch".to_owned(),

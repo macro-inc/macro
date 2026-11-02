@@ -117,6 +117,7 @@ where
             .map(|candidate| SoupProjectionHydration {
                 item: candidate.item,
                 document_server_facts: candidate.document_server_facts,
+                sort_key: None,
             })
             .collect())
     }

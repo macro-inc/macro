@@ -9,6 +9,7 @@ import {
   type SupportedNotificationSettings,
   useNotificationSettings,
 } from '../notification-settings';
+import { notificationsBlockedMessage } from '../notifications-blocked-message';
 
 export const BrowserNotificationModal = () => {
   const settings = useNotificationSettings();
@@ -56,17 +57,13 @@ function NotificationToastTrigger(props: {
         ),
         actions: [
           {
-            label: 'Hide',
-            onClick: () => {
-              props.settings.dismissPrompt();
-              toast.dismiss(toastId);
-            },
-          },
-          {
             label: 'Enable',
             onClick: async () => {
               try {
                 await props.settings.toggle(true);
+                if (!props.settings.isEnabled()) {
+                  toast.failure(notificationsBlockedMessage());
+                }
               } catch (error) {
                 console.error('Failed to enable notifications:', error);
               }
@@ -78,6 +75,8 @@ function NotificationToastTrigger(props: {
       {
         persistent: true,
         region: isMobile() ? 'mobile-prompt-region' : 'prompt-region',
+        // Closing the prompt is a decline, so don't ask again on the next load.
+        onUserDismiss: () => props.settings.dismissPrompt(),
       }
     );
   });

@@ -162,6 +162,7 @@ impl TaskPropertiesPort for TestTaskPropertiesPort {
         &self,
         _access: &EntityAccessReceipt<EditAccessLevel>,
         _credited_user: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
+        _source: Option<&models_properties::service::property_change_source::PropertyChangeSource>,
         _status: &str,
     ) -> anyhow::Result<()> {
         Ok(())
@@ -2781,6 +2782,7 @@ impl TaskPropertiesPort for RecordingTaskPropertiesPort {
         &self,
         _access: &EntityAccessReceipt<EditAccessLevel>,
         _credited_user: Option<&macro_user_id::user_id::MacroUserIdStr<'static>>,
+        _source: Option<&models_properties::service::property_change_source::PropertyChangeSource>,
         _status: &str,
     ) -> anyhow::Result<()> {
         Ok(())

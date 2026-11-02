@@ -98,6 +98,7 @@ async fn work_feed_refills_after_drops_and_carries_reason_timestamps() {
                 .filter_map(|entity| {
                     let id = Uuid::parse_str(&entity.entity_id).unwrap();
                     (id != ghost).then(|| SoupProjectionHydration {
+                        sort_key: None,
                         item: SoupItem::Document(soup_document_uuid_with_updated(
                             id,
                             Default::default(),
@@ -173,6 +174,7 @@ async fn work_feed_full_page_continues_from_the_last_candidate() {
                 .entities
                 .iter()
                 .map(|entity| SoupProjectionHydration {
+                    sort_key: None,
                     item: SoupItem::Document(soup_document_uuid_with_updated(
                         Uuid::parse_str(&entity.entity_id).unwrap(),
                         Default::default(),

@@ -8,6 +8,12 @@
 - Run Linux native cache-plugin tests from the repository root with `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin`; the [Tauri platform shell](../../docs/development/running-locally.md) supplies the required desktop libraries.
 - `bun run lint:oxlint` (repository root): type-aware oxlint. `typescript/no-floating-promises` is an error with no suppressions and `ignoreVoid: false` (FE-13), enforced in `just check` and CI; start detached work with `fireAndForget` from `@core/util/fireAndForget`, not `void`. Plain `oxlint` without `--type-aware` skips that rule silently. The ast-grep rule `ts-no-expression-void` covers `() => void p()`, which the lint can't see.
 - Email rendering is isolated in `packages/email-renderer` at the repository root. Run `just test-email-rendering` for its Node and Chromium suites. Add fixtures under `packages/email-renderer/tests/fixtures`, run `just test-email-rendering-update`, and review changed images. These are renderer tests, not inbox e2e.
+- Supported browsers are the `browserslist` in `package.json`. Safari and iOS
+  16.4 is the oldest WebKit the app starts on: startup code, including
+  `@pierre/diffs`, evaluates regex lookbehind. `vite.base.ts` builds to it,
+  and the ast-grep rules `ts-browser-floor-apis` and `tsx-browser-floor-apis`
+  ban APIs that turned out to be newer; add one there when it bites, or raise
+  the floor.
 - The app does not register a service worker. Keep `public/sw.js` as a retirement
   endpoint for existing installations; see the [startup bundle rule](../../.agents/rules/web/startup-bundle.md).
   Loro uses async WASM loading and HTML preloads independently of service workers.
@@ -57,7 +63,9 @@ browser regression for backdrop taps that must not press what the scrim covers,
 including mixed pointerdown/pointerup dismissal, for taps inside the top
 sheet that must still press its own controls, and for swipes whose owner keeps
 the sheet open (a discard prompt, a pending confirmation, event details under a
-stacked sheet), which must bring it back on screen:
+stacked sheet), which must bring it back on screen. It also keeps a persistent
+prompt under an open sheet and its picker, above a transient notice, and that
+notice on top of the sheet:
 `bunx playwright test --config src/components/app/mobile/browser-test/playwright.config.ts`.
 
 Composer typeahead menus choosing the side with room for their full list
@@ -122,11 +130,12 @@ Gate event notes and document Share meeting-link controls with
 on in dev and uses PostHog in production.
 See `docs/agent-guide/calendar.md` at the repo root.
 
-Share message image paste, file selection, drop, removal during upload, and
+Share message image paste, drop, removal during upload, and
 upload failure have desktop, phone, and tablet browser coverage:
 `bunx playwright test --config src/lib/core/component/ForwardMessageComposer/browser-test/playwright.config.ts`.
 Keep the shared uploader from restoring removed attachments or publishing after
 the composer is disposed. The Share button and shortcut use the same upload guard.
+Keep Share composers free of a paperclip button on desktop and mobile; preserve image paste and file drop.
 
 Menus that find entities by typed name (Command-K, mobile name search, @
 mentions) rank with `NAME_MATCH_RANKING` in `@core/util/freshSort`: names equal
@@ -273,6 +282,10 @@ about its groups (labels, order, membership) is computed on the server and
 mirrored by the cache's local grouping projection; never add a side cache in
 feature code to cover a remount.
 
+Resolve server date-group keys through the shared `DATE_GROUP_BUCKETS` metadata
+in `lib/queries/soup/grouped/api.ts` for labels and display order; cached Mail
+uses the same metadata.
+
 Keep persistent list hotkeys free of mounted-view closures, and clear
 virtualizer accessors when their view unmounts.
 Keep editor newline handling local; result-opening handlers must yield
@@ -309,13 +322,30 @@ the user's newest account for that app from the last fifteen minutes.
 
 - Keep model picker triggers bounded with full-name title tooltips; wrap model names in catalog rows, including effort submenus and touch sheets.
 
+- All Mail previews exclude spam/junk and trash. Keep draft edits from restoring
+  an excluded preview or timestamp, including synced Macro drafts; Drafts and
+  Sent retain their own canonical membership.
+
 Agent split headers show live viewers through `BlockLiveIndicators` with the
 resolved session ID; keep the existing `AgentSessionProvider` subscription to
 `agent_session` rather than enabling legacy block tracking of placeholder IDs.
 
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
 - Empty human DMs use the shared centered conversations graphic and explain email delivery to nonusers; keep this state out of agent DMs, loading/error states, and populated timelines.
-- Keep CRM database discovery row-linked and permission-scoped; use horizontally centered actionable list states raised toward the toolbar and shared skeletons, with separate search-empty and retry states. Company/contact touch headers use a Switch view drawer that honors host collapse and square copy-link islands; keep phone breadcrumbs above the switcher and leave the workspace view strip unchanged. Record search fills the row beside filters with header spacing; section creation replaces the default floating dock action through FloatRegion. See `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
+- Keep CRM database discovery row-linked and permission-scoped; use horizontally
+  centered actionable list states raised toward the toolbar and shared skeletons,
+  with separate search-empty and retry states. Company/contact touch headers use a
+  Switch view drawer that honors host collapse and square copy-link islands; keep
+  phone breadcrumbs above the switcher and leave the workspace view strip unchanged.
+  Open linked items under their Customers source URL; typed record sections append
+  only `<id>` and reject redundant typed URLs. Workspace activity and record
+  Files/overview notes retain item metadata on their own scoped routes. Keep
+  source and record breadcrumbs without section labels or extra preview-title
+  separators, retain entity menus and sharing, and return the current record
+  breadcrumb to its captured section and history entry.
+  Record search fills the row beside filters with header spacing; section creation
+  replaces the default floating dock action through FloatRegion. See
+  `src/features/crm/README.md` and `docs/agent-guide/crm.md` at the repo root.
 - Main Tasks mounts reusable GraphQL saved views; keep embedded Project/CRM task lists unchanged. Read `src/features/tasks-view/AGENTS.md` for filter, draft, navigation, and browser checks.
 - Enable persisted email/calendar review controls only for the review’s saved acting account; historical reviews fall back to the session owner. Require session edit access on desktop and mobile.
 - Email draft reads compare server generations before choosing cached delivery state over a restored working copy; only a definitive first-submission rejection permits local send recovery without server cancellation.
@@ -466,8 +496,12 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   on `meeting.join`; keep provider messages, device labels/IDs, and call-link
   tokens out of telemetry. See [call diagnostics](../../docs/agent-guide/calls.md#browser-call-diagnostics).
 - Diagnose the GraphQL mutation queue with `graphql.mutation_queue.*` spans and logs keyed by `mutation_queue.item_id`; route queue telemetry through `mutation-queue-telemetry.ts`, which dedupes per item and failure class and turns repeats into the periodic summary. Never add per-attempt `console.*` lines or record variables, draft content, or emails.
-- Keep desktop Gmail and Outlook inbox consent in the system browser with a
-  `macro:///inbox-link-callback` return; webview origins are not desktop callbacks.
+- Keep desktop OAuth consent in the system browser with a `macro://` return:
+  `macro:///inbox-link-callback` for Gmail and Outlook inboxes,
+  `macro:///github-link-callback` for GitHub (consumed by the navigation
+  bridge without changing the route). Webview origins are not desktop
+  callbacks. Settings → Integrations refetches connection status on window
+  `focus`, because returning from the browser does not change page visibility.
 - Keep send reservations, leases, and cancellation in the email journal; the general GraphQL queue handles draft autosaves only.
 - Always persist composer sends in account-scoped IndexedDB and dispatch through the fetch-only email client, without a feature flag; cache health and unrelated mutation queues must not gate delivery. See `docs/architecture/email.md` for state and rollout invariants.
 - Retry cache bootstrap on reconnect/foreground or draft Retry only when storage was proven untouched; retain the same scope and block draft sync until the replacement queue is readable.
@@ -489,6 +523,16 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   feature-specific query orchestration with its owning feature.
 - Refresh the channel list's bounded unread edge when opening a conversation,
   including an empty unread result after a read on another device.
+- Decide channel detail access from completed server results; bound confirmations of contradictory cache membership, preserve known unavailable state during retries, and keep unavailable routes registered for notification/reconnect refresh.
+- Read folders for picking or moving through `createFolderList`
+  (`queries/storage/folder-list`): it matches the Drive sidebar's source, so a
+  folder open in Drive, including a team folder, is always in the list. Keep
+  move rules in `folder-destinations.ts` so the picker and drop targets agree.
+  Create one `createFolderDropTargets` per surface, not per row, so a long
+  folder tree shares its folder list and mutation. Rows learn what a drag
+  carries from `EntityDragSelectionContext`,
+  which `SoupEntityContextMenu` provides; see
+  [dragging rows into a folder](../../docs/agent-guide/navigation.md#dragging-rows-into-a-folder).
 - Keep channel rail and title menus on `CHANNEL_ACTION_VIEW_CONTEXT`, including
   the shared desktop `Open in new split` action and its mobile/capacity guards.
 - Route supported move, trash, restore, permanent-delete, duplicate, and share-policy
@@ -539,6 +583,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - When adding or changing a feature flag, follow the `feature-flags` skill.
 - Gate routine template actions, pages, dialogs, and message cards on `enable-routine-sharing`; keep ordinary routines usable while it is off.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
+- Keep Tasks date ranges on view-owned date-bucket boundaries in `features/tasks-view/core/task-due-date.ts`; send `sort_method=property` with the selected definition and direction, use keyed `date_ranges` grouping, and restart pages when midnight/timezone/resume changes the query key; preserve text-search ordering.
+- Render Tasks due dates in an editable list-property column with a calendar icon only when a date is set; show only the urgency-colored icon on phones and narrow panes, keep the current date visible in its dropdown, and limit warning urgency to today and tomorrow.
+- Revalidate Soup queries whose selected sort/group property or date predicate matches an edited definition; compute loaded date-group movement in TypeScript, then refetch authoritative counts and unloaded rows. Keep property sorts and date filters out of the timestamp-only WASM projection.
+- Keep REST grouped Soup item pools and `itemIds` keyed by raw entity IDs, matching Tasks readers and the normalized cache.
 
 ## Rules
 
@@ -675,6 +723,20 @@ and keep Pro checkout disabled while eligibility is unknown. Refresh the offer
 on focus/reconnect; route existing subscriptions to billing management. Keep
 known management access through refetch failures, but hide unconfirmed trials.
 Reset rejected checkout offers before refetching eligibility.
+
+## Native commands
+
+Over-the-air bundles reach native apps older than the commands they call.
+`native-commands.json` lists every Tauri command the web code invokes directly,
+through a wrapper such as the cache host's `request`, or by `addPluginListener`.
+`src/lib/tauri/native-commands.test.ts` reads the calls with the TypeScript
+parser and fails when one is missing from that list, is not registered by the
+app (`generate_handler!` or an in-repo plugin's `build.rs`), or names its
+command with a value it cannot read: use a string literal, a constant, or a
+parameter typed as a union of literals. Commands that published plugins' own
+JavaScript packages call are not covered. Before adding a command to the list,
+raise `min-native-build.json` to the first build with it, or handle
+`Command … not found` in the caller (see the src-tauri README).
 
 ## Desktop release builds: generated WASM
 
@@ -837,8 +899,16 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 ### Creation choices and notifications
 
 - Reuse `CreateMenuItem` for explanatory New menu entries: original icons, a title, and muted wrapping descriptions, preserving the existing `ViewCreateButton` trigger and each action's feature gates.
-- Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button.
+- Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
 - Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
+
+### Inline property values
+
+Inline property fields stay `readOnly`, never `disabled`, while they save: a
+browser moves focus off a disabled field, so a failed save would strand it. Enter
+and Escape return focus to the value through `Property.Root`; tabbing or clicking
+away leaves focus where the user put it. The backend-free regression is
+`bunx playwright test --config src/features/property/editors/inline/browser-test/playwright.config.ts`.
 
 ### Sidebar tag dragging
 
@@ -848,6 +918,18 @@ Use the shared scoped drag helpers and overlayIcon for the tag chip.
 The backend-free browser regression is
 `bunx playwright test --config src/features/property/tags/browser-test/playwright.config.ts`.
 
+### Enter on a property pill
+
+A document control owns Enter unless a press focused it, including one given
+focus back when a mouse dismisses its picker. Tab reaches an editable pill
+directly; its hover card keeps a stop only on read-only values. Real focus
+heuristics decide this, so jsdom can't cover it. The backend-free browser
+regression is
+`bunx playwright test --config src/features/property/browser-test/playwright.config.ts`.
+
 Use `features/channel/channel-icon.tsx` for conversation identity in rows,
 favorites, and headers: channel pictures or hashtags, human/self-DM avatars,
 and bot personas share one renderer; keep surface sizing in the caller.
+
+- Advertise Mail v5 capsules only for the current browser engine or a verified supported installed native build; OTA bundle version alone cannot establish native capability.
+- Bound native Mail capability discovery to 1.5 seconds and cache the legacy profile on failure or timeout so stalled IPC cannot block GraphQL transport; record the selected profile and bounded outcome in HTTP and WebSocket setup spans without error text.

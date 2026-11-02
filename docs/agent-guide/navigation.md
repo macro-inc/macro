@@ -36,6 +36,14 @@ must load through the webview, not native HTTP. A `vite:preloadError` with
 `scheme tauri not supported` indicates an asset-routing failure; reloading the
 same bundle does not resolve it.
 
+A `vite:preloadError` (a lazy chunk or its CSS failed, usually after a deploy)
+reloads the tab right away, once per build per tab session, when it is online,
+holds no call or upload, and has no text being typed. Otherwise, and on a second
+failure in the same build, the rail's update button (a toast on touch layouts)
+offers the reload; the offer reloads a hidden tab by itself only if that build's
+one automatic reload is unspent. A failed route chunk can still end on the
+root error screen, which hides the offer.
+
 ## External links in the native app
 
 Desktop external links open in the system browser, whether activated by a normal
@@ -173,6 +181,7 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/welcome` | Login page (when unauthenticated) |
 | `/app/invite?token=<token>` | GTM invite welcome page ("Welcome, <first name>", Continue → signup). Links come from the staff portal, last 48h, and grant the first month of Premium free once the account is created |
 | `/app/internal/invite-links` | Macro staff only (`@macro.com`): create GTM invite links and track opens, signups, and subscriptions |
+| `/app/internal/status` | Macro staff only (`@macro.com`): set the system status (Operational, Degraded, Major outage + message), see its history and the `POST /auth/system-status` API. A non-operational status shows a banner across the top of the app for every user; open apps update over the connection gateway |
 | `/app/home` | Desktop: Home (notifications + recent activity); mobile: Notifications soup |
 | `/app/home/<block-type>/<uuid>` | Home with an item opened inline; `<block-type>` may be an alias such as `task`; a targeted channel message uses `sN.channels.messageId` (and optionally `sN.channels.threadId`) and a document comment `sN.drive.commentId`; a calendar row renders the Calendar view inline at `/app/home/calendar/<month-or-week-or-day>` with the event, occurrence, and locator range in `sN.calendar.*` |
 | `/app/mail` | Email client |
@@ -198,8 +207,9 @@ successfully rather than hashing the empty JavaScript placeholder.
 | `/app/agents/chat/<uuid>` | Legacy AI chat opened in the Agents workspace (`/app/agent-chats/<uuid>` remains a compatibility alias) |
 | `/app/calls` | Calls list |
 | `/app/companies` | Customers (CRM; needs a team). The selected list is `sN.crm.tab` |
-| `/app/companies/<company-or-contact>/<uuid>` | Customers with a company or contact opened inline, keeping its list's `sN.crm.tab`; a record tab other than Overview adds `/<team-emails-files-tasks-or-calls>`. On desktop, `/app/company/<uuid>` and `/app/contact/<uuid>` redirect here, a `comment_id` moving to `sN.crm-record.commentId`; touch devices keep those standalone pages |
+| `/app/companies/<company-or-contact>/<uuid>` | Customers with a company or contact opened inline, keeping its list's `sN.crm.tab`; a record tab other than Overview adds `/<team-emails-files-tasks-calls-or-databases>`. On desktop, `/app/company/<uuid>` and `/app/contact/<uuid>` redirect here, a `comment_id` moving to `sN.crm-record.commentId`; touch devices keep those standalone pages |
 | `/app/companies/pipeline/<uuid>` | Customers on a pipeline; `/<company-or-contact>/<uuid>` after it opens a record from the pipeline. `/app/pipeline/<uuid>` redirects here |
+| `/app/companies/<company-or-contact>/<uuid>/<tasks-emails-calls-or-databases>/<item-id>` | Customers with the selected item inline; the section determines its type, with no redundant typed URL fallback. The same suffix works under a pipeline; workspace activity and record Files/overview notes retain type metadata |
 | `/app/activity` | Activity heatmap + feed |
 | `/app/calendar/<month-or-week-or-day>` | Calendar; the focused event, its occurrence, and the locator range use `sN.calendar.*` |
 | `/app/calendar` | Redirects to `/app/calendar/<month-or-week-or-day>` at the remembered period (Day on phones and Week on desktop by default), keeping an `eventId` |
@@ -625,10 +635,10 @@ when the sidebar is an overlay in a narrow split. Verify with three splits:
 open **Show navigation**, then use the sidebar's **Close** button without first
 hiding navigation; only its owning split closes. The last logical split has no
 sidebar close button; mobile chrome is unchanged.
-A lone non-list content split still shows a header X labeled **Return to list**,
-which returns that split to the most recent list in its history, preserving
-that list’s state. If there is no prior list, it replaces the current entry with
-Home. Excluded background panels do not count toward close eligibility.
+A lone desktop split shows no X, in its header or its frame corner. On a
+non-list content split, `Cmd+Esc` (or `Opt+Esc`) returns it to the most recent
+list in its history, preserving that list’s state; if there is no prior list, it
+opens Home. Excluded background panels do not count toward close eligibility.
 These buttons and Home items activate on primary-button
 press; keyboard activation remains supported. Home, Chat, Email,
 Tasks, and other views using the shared inner
@@ -814,7 +824,7 @@ Verify first-press dragging after navigation as well as ordinary row clicks and
 right-click menus. A completed drop can move or copy real data; use a disposable
 test item when verifying drop actions.
 
-Split-header, file-upload, and conversation drop targets use plain color
+Split-header, folder, file-upload, and conversation drop targets use plain color
 overlays with small sans-serif hints in fully rounded pills. Invalid file drops
 use the failure background color. Cancel the drag to inspect these hints without
 uploading or moving anything.
@@ -1455,7 +1465,8 @@ restart rules still apply.
 Settings → Agents, its Cursor guide, and Runtimes render while their requests are pending.
 A pending Cursor model catalog shows `Loading models…` beside a disabled model
 picker; a failed catalog shows an inline error. The rest of settings stays usable.
-Settings → Agents → Agents ends with **Coding sessions**: per-user **Create
+Settings → Agents → Agents ends with **Coding sessions**: a **Default repository**
+select saved per user on this device (see the AI chat guide), then per-user **Create
 tasks** and **Open pull requests** switches, both off by default. Each saves on
 toggle and reverts with a toast if the save fails.
 
@@ -1548,8 +1559,8 @@ right-click **Mark Done** moves the preview to the next item, like the `e` key. 
 
 ## Entity action dialogs
 
-Rename, Delete, and Move to folder use compact centered dialogs on desktop and
-the shared drawer on mobile, with actions in a separated footer. One selected
+Rename and Delete use compact centered dialogs on desktop and the shared drawer
+on mobile, with actions in a separated footer. One selected
 item shows a compact name chip; multiple items show two chips and
 `+N`, which expands single-line names for review.
 Selected-item chips in action command menus and dialogs use the shared Badge,
@@ -1569,14 +1580,26 @@ Email snoozing uses a command menu with quick or typed times, **If no reply** /
 **Regardless**, and **Remove reminder**. Saving waits for confirmation and shows
 retry errors inline. See [Email reminders](reminders.md).
 
-Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, move, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
+Action dialogs share `ActionDialogShell` presentation slots: the same capped selection badges for single and multiple items, compact heading and copy, prominent fields, and an attached footer. Rename, delete, and shared confirmations use this layout. Bulk rename keeps bubble tabs and one first-item preview.
 
-The Move to folder picker uses the Drive sidebar’s folder rows: neutral icons, trailing expand/collapse buttons, and indented branch guides. Click a folder to select it; use the chevron to expand it. Search and arrow-key navigation remain available.
+The Move to folder picker is a command menu, like Snooze, over the same folder list as the Drive sidebar. Folders are a flat list with their parent path: **Open in split** (Drive folders and folder splits, in split order, first row selected), **Created by you**, then **Shared with you**, each newest first. It leaves out folders that already hold every item and, for a moved folder, the folder itself and everything under it. Enter or a click moves at once. Typing ranks by name like Cmd+K and adds **New folder “name”** unless a folder has that name; choosing it creates the folder and moves the items into it. Phones show the same list in the drawer with the path under the name.
+
+### Dragging rows into a folder
+
+On desktop, a split showing a folder (Drive's folder route or a folder split) accepts rows dragged from another split and moves them with the same mutation as the picker. Dragging a selected row carries the whole selection, the drag card counts it, and a successful move clears that selection; a failed one keeps it for a retry. Dragging an unselected row carries only that row. The pane shows **Move N items to this folder** only when the drop would work: every row passes Move to folder's owner and type rules, at least one row isn't already there, no folder would land inside itself, the row didn't start in that split, and Alt isn't held, since that marks the drag as a copy. The header still offers **Open in this split**. Other drop targets (composers, documents, canvases) still take only the grabbed row.
+
+Folders in Drive's sidebar take the same drops, outlined while hovered, including rows from the list beside them in the same split. So do folder rows in Drive's lists and in a folder's own list; a row takes the drop ahead of the pane around it, so a drop lands in the row's folder, not the one the pane shows. Held at the sidebar's edge, a drag scrolls a long folder tree. The drag card sits beside the pointer so a narrow target stays visible. Drive's root row is not a drop target.
+
+Every move, from the picker or a drop, ends in a **Moved to folder** or **Moved N items** toast with **Open** and, on desktop with room for another split, **Open in new split**. Either action dismisses the toast and shows the folder on Drive's route; if a split already lists that folder, it focuses that split instead of opening a second copy. A split with an item open inside the folder doesn't count, because the folder's list isn't visible there. Touch devices have no splits, so they show only **Open**.
 
 ### Native update-required dialog
 
 When newer frontend JS requires a newer native app, the mobile shell offers
-**Update app** and **OK**. Update app uses the native opener; Android targets the
+**Update app** and **OK**. It opens once per launch, either when the bundle
+updater reports a native floor, or when the OTA bundle finds the app lacks a
+GraphQL cache command (`graphql_cache_init_with_schema` or
+`graphql_cache_inspect_mutations`); the cache case explains what needs the
+update and the app runs uncached until then. Update app uses the native opener; Android targets the
 HTTPS Play listing for `com.macro.workspace.mobile`, allowing a browser when the Store app
 is absent. An opener failure displays an inline error and the dialog stays
 dismissible. A missing listing is handled in the external store/browser: return

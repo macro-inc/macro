@@ -954,6 +954,12 @@ export type RefreshCalendarEvent = {
      * True for sharing changes and any possibly affected OOO projection.
      */
     team_ooo_changed: boolean;
+} | {
+    event: 'join_request_answered';
+    /**
+     * The shared event they asked to join.
+     */
+    event_id: string;
 };
 
 /**

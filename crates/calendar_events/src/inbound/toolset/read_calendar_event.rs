@@ -14,6 +14,7 @@ use uuid::Uuid;
 use super::{CalendarLabels, CalendarToolContext, description_preview, time_fields};
 use crate::domain::{
     join_requests::CalendarJoinRequestStatus,
+    labels::off_schedule_summary,
     models::{
         CalendarMentionEvent, CalendarMentionPreview, CalendarMentionRequestItem,
         CalendarMentionViewerCopy,
@@ -124,12 +125,9 @@ impl ReadCalendarEventResponse {
                 "{} is on a calendar the user can see; whether it is theirs could not be checked.",
                 event.title
             ),
-            CalendarEventAccess::OnVisibleCalendar => format!(
-                "{} is on {}, which the user can see but which is not part of their schedule and \
-                 may be someone else's.",
-                event.title,
-                calendar_name.as_deref().unwrap_or("a calendar"),
-            ),
+            CalendarEventAccess::OnVisibleCalendar => {
+                off_schedule_summary(&event.title, calendar_name.as_deref())
+            }
             CalendarEventAccess::Invited => {
                 format!(
                     "The user is invited to {}; it is on their calendar.",
