@@ -126,7 +126,7 @@ An earlier probe also reached Coda: Connect returned `502 Bad Gateway` with `{"e
 
 ### Open questions
 
-- Why does Connect's Coda registration fail after the vendor accepts the same DCR request directly? This needs diagnosis before Coda can be live.
+- Why does Connect's Coda registration fail after the vendor accepts the same DCR request directly? Diagnosed 2026-11-02: rmcp's `register_client` gets `403` with an empty body from `https://coda.io/v4/api/oauth2/register`, while curl with the identical JSON body gets `201`. The likely difference is that rmcp's reqwest client sends no `User-Agent`. Whether Connect should send an identifying `User-Agent` on vendor OAuth requests is waiting on the product owner, because it borders the no-bot-check-workarounds rule. Connect's `outbound/oauth.rs` also discards rmcp's error detail (`map_err(|_| Error::OAuth)`), which hid this.
 - CIMD client-ID acceptance and full sign-in, refresh, tools, and read-only call conformance await the dev deployment and vendor test accounts, as scoped in the task Context.
 
 ### Proposed commits
