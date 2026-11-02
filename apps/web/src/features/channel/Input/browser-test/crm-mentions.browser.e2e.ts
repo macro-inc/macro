@@ -23,32 +23,38 @@ for (const mobile of [false, true]) {
         const cursor = body.variables.input.continuation?.cursor;
         contactQueries.push(cursor ?? 'first');
         const index = cursor ? 2 : 1;
+        const contact = {
+          __typename: 'GraphqlSoupCrmContact',
+          id: `contact-${index}`,
+          contactTeamId: 'team',
+          companyId: 'company',
+          companyName: 'Acme company',
+          crmContactName: `Acme contact ${index}`,
+          email: index === 1 ? 'member@example.com' : 'external@example.com',
+          hidden: false,
+          firstInteraction: null,
+          lastInteraction: null,
+          createdAt: '2026-01-01T00:00:00Z',
+          updatedAt: '2026-01-01T00:00:00Z',
+          viewedAt: null,
+        };
+        const items = [contact];
+        if (cursor) {
+          items.push({
+            ...contact,
+            id: 'contact-0',
+            crmContactName: 'Acme duplicate',
+            email: 'member@example.com',
+            updatedAt: '2025-01-01T00:00:00Z',
+          });
+        }
         await route.fulfill({
           json: {
             data: {
               user: {
                 id: 'viewer',
                 soup: {
-                  items: [
-                    {
-                      __typename: 'GraphqlSoupCrmContact',
-                      id: `contact-${index}`,
-                      contactTeamId: 'team',
-                      companyId: 'company',
-                      companyName: 'Acme company',
-                      crmContactName: `Acme contact ${index}`,
-                      email:
-                        index === 1
-                          ? 'member@example.com'
-                          : 'external@example.com',
-                      hidden: false,
-                      firstInteraction: null,
-                      lastInteraction: null,
-                      createdAt: '2026-01-01T00:00:00Z',
-                      updatedAt: '2026-01-01T00:00:00Z',
-                      viewedAt: null,
-                    },
-                  ],
+                  items,
                   nextCursor: cursor ? null : 'next-page',
                 },
               },
@@ -94,6 +100,7 @@ for (const mobile of [false, true]) {
         .click();
       await expect(menu.getByTitle('Acme contact 2')).toBeVisible();
       await expect(menu.getByTitle('Acme member')).toHaveCount(0);
+      await expect(menu.getByText('CRM (3)', { exact: true })).toBeVisible();
     } else {
       await expect(menu.locator('.group').first()).toContainText('Acme member');
       await expect(menu.getByTitle('Acme contact 2')).toBeVisible();
@@ -102,6 +109,7 @@ for (const mobile of [false, true]) {
       });
     }
     expect(contactQueries).toContain('next-page');
+    await expect(menu.getByTitle('Acme duplicate')).toHaveCount(0);
     const contact = menu.getByTitle('Acme contact 1');
     if (mobile) await contact.tap();
     else await contact.click();

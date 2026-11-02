@@ -2585,8 +2585,8 @@ With CRM enabled, any task, document or call can point at CRM records through th
 `Companies` and `Contacts` system properties: side panel `Properties` →
 `Add property`. Both pickers list Quick Access records: the team's companies and
 its most recently interacted contacts, filtered by name, domain or email. CRM
-contacts have their own Quick Access bucket, apart from people, and are not
-offered in `@` mentions or the command menu. Values show the
+contacts have their own Quick Access bucket, apart from people. They appear
+under **CRM** in `@` mentions and under **People** in the command menu. Values show the
 record's name and open the company or contact. An entity can carry the property
 without listing it (set at creation or through the API); adding that property
 pins the existing value rather than clearing it. Calls are linked automatically

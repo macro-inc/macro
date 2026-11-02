@@ -257,9 +257,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   );
   const crmMention = {
     entities: crmItems,
-    totalCount: () =>
-      (companyMention?.totalCount() ?? 0) +
-      (contactsEnabled() ? (contactMention?.totalCount() ?? 0) : 0),
+    totalCount: () => crmItems().length,
     hasMore: () =>
       (companyMention?.hasMore() ?? false) ||
       (contactsEnabled() && (contactMention?.hasMore() ?? false)),
