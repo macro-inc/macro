@@ -10,7 +10,7 @@ use sqlx::PgPool;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn agents_are_named_by_their_own_bot_rows(pool: PgPool) -> anyhow::Result<()> {
-    let macro_user_id = uuid::Uuid::new_v4();
+    let macro_user_id = uuid::Uuid::now_v7();
     sqlx::query(
         "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, 'owner@example.com', 'owner@example.com', 'stripe_owner')",
     )
@@ -63,7 +63,7 @@ async fn agents_are_named_by_their_own_bot_rows(pool: PgPool) -> anyhow::Result<
     assert_eq!(agent_name(&bots, bot_id::MACRO_AI_BOT_ID).await, None);
     // A deleted or unknown agent has no name to present.
     assert_eq!(
-        agent_name(&bots, BotId::new_from_uuid(uuid::Uuid::new_v4())).await,
+        agent_name(&bots, BotId::new_from_uuid(uuid::Uuid::now_v7())).await,
         None
     );
     Ok(())
