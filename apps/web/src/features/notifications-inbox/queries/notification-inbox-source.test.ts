@@ -283,6 +283,39 @@ describe('createNotificationInboxSource', () => {
     });
   });
 
+  it('drops an undo’s patches when the filter changed while it was in flight', async () => {
+    vi.useFakeTimers();
+    const [scope, setScope] = createSignal<InboxScope>({
+      rowTypes: ALL_INBOX_ROW_TYPES,
+    });
+    let answerUndo = (_answer: unknown) => {};
+    const undoAnswer = new Promise((resolve) => {
+      answerUndo = resolve;
+    });
+    const { fake, feed, row, rowIds } = setup(
+      { ...doneResult, UndoNotificationInboxRowsDone: undoAnswer },
+      scope
+    );
+    await flush();
+    fake.queries[0].resolve(inboxPage([docA, docB]));
+    await flush();
+    const done = await feed.markDone([row('document:doc-b#top_level')]);
+
+    const undoing = done.undo();
+    setScope({ rowTypes: ['task'] });
+    await flush();
+    fake.queries.at(-1)?.resolve(inboxPage([docA]));
+    await flush();
+    answerUndo({
+      undoNotificationInboxRowsDone: { patches: [upsertedPatch(docC)] },
+    });
+    await undoing;
+    await flush();
+
+    expect(rowIds()).not.toContain('document:doc-c#top_level');
+    expect(rowIds()).toContain('document:doc-a#task');
+  });
+
   it('reads a row as seen at once and marks it seen by row', async () => {
     vi.useFakeTimers();
     const seenEntry = inboxEntry({

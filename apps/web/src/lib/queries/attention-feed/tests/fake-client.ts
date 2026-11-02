@@ -96,7 +96,7 @@ export function createFakeAttentionFeedClient(
     const name = operationName(query);
     mutations.push({ name, variables });
     return {
-      toPromise: async () => ({ data: mutationData[name] }),
+      toPromise: async () => ({ data: await mutationData[name] }),
     };
   };
 

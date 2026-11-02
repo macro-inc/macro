@@ -169,6 +169,14 @@ export function createNotificationInboxSource(
       : withSeenRows(withoutDoneRows(ordered(), done()), seen())
   );
 
+  /** Patches for a filter that has since changed would add rows it hides. */
+  const applyIfCurrent = (
+    scope: NotificationInboxScopeInput,
+    patches: Parameters<typeof live.applyPatches>[0]
+  ) => {
+    if (scopeInput() === scope) live.applyPatches(patches);
+  };
+
   const revalidate = (client: Client) =>
     fireAndForget(
       options.revalidateNotifications?.(client),
@@ -196,16 +204,13 @@ export function createNotificationInboxSource(
     return {
       undo: async () => {
         // The filter may have changed since the done; restore into this one.
-        const patches = await undoInboxRowsDone(
-          client,
-          undoToken,
-          scopeInput()
-        );
+        const scope = scopeInput();
+        const patches = await undoInboxRowsDone(client, undoToken, scope);
         restoreNotifications?.();
         setDone((current) => unmarkRows(current, ids));
         revalidate(client);
         // The restored places land now rather than with the stream.
-        live.applyPatches(patches);
+        applyIfCurrent(scope, patches);
       },
     };
   };
@@ -217,8 +222,9 @@ export function createNotificationInboxSource(
     const ids = unseen.map((row) => row.id);
     setSeen((current) => markRows(current, unseen));
     try {
-      const patches = await markInboxRowsSeen(client, ids, scopeInput());
-      live.applyPatches(patches);
+      const scope = scopeInput();
+      const patches = await markInboxRowsSeen(client, ids, scope);
+      applyIfCurrent(scope, patches);
     } catch (error) {
       setSeen((current) => unmarkRows(current, ids));
       throw error;
