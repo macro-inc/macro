@@ -4,6 +4,7 @@ import {
   uploadNativeStagedFileToPresignedUrl,
 } from '@core/mobile/nativeStagedUpload';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { invalidateUserQuota } from '@queries/auth';
 import { staticFileClient } from '@service-static-files/client';
 import { contentHash } from './hash';
@@ -64,10 +65,25 @@ export function isNativeStagedUpload(
   return file.kind === 'native-staged';
 }
 
+/** Remove an upload that was cancelled before its owner accepted it. */
+export async function discardStaticUpload(id: string): Promise<void> {
+  const removed = await staticFileClient.deleteFile({ file_id: id });
+  if (removed.isErr()) {
+    Telemetry.error('Could not remove cancelled static upload', {
+      'file.id': id,
+    });
+  } else {
+    fireAndForget(invalidateUserQuota(), 'file-upload');
+  }
+}
+
 export async function createStaticUploadFile(
-  file: UploadFile
+  file: UploadFile,
+  signal?: AbortSignal
 ): Promise<string> {
   const contentType = resolveUploadContentType(file);
+  signal?.throwIfAborted();
+  // Let reservation finish so cancellation can delete the returned ID.
   const result = await staticFileClient.makePresignedUrl({
     file_name: file.name,
     content_type: contentType,
@@ -76,20 +92,27 @@ export async function createStaticUploadFile(
   if (result.isErr()) throw new Error('Failed to upload file');
 
   const { upload_url, id } = result.value;
-  if (isNativeStagedUpload(file)) {
-    await uploadNativeStagedFileToPresignedUrl(file, upload_url);
+  try {
+    signal?.throwIfAborted();
+    if (isNativeStagedUpload(file)) {
+      await uploadNativeStagedFileToPresignedUrl(file, upload_url);
+    } else {
+      const uploadResult = await staticFileClient.uploadToPresignedUrl({
+        url: upload_url,
+        blob: file.file,
+        contentType,
+        signal,
+      });
+      if (!uploadResult.success) throw new Error('Failed to upload file');
+    }
+    signal?.throwIfAborted();
     return id;
+  } catch (error) {
+    if (signal?.aborted) {
+      await discardStaticUpload(id);
+    }
+    throw error;
   }
-
-  const uploadResult = await staticFileClient.uploadToPresignedUrl({
-    url: upload_url,
-    blob: file.file,
-    contentType,
-  });
-  if (!uploadResult.success) {
-    throw new Error('Failed to upload file');
-  }
-  return id;
 }
 
 /**
