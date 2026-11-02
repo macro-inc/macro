@@ -9,6 +9,7 @@ import {
 import { $getRoot, $isParagraphNode } from 'lexical';
 import { describe, expect, it } from 'vitest';
 import { read, setup } from '../ai-toolkit/_test-helpers';
+import type { DatabaseQueryView } from '../editor';
 import { serializeWithXml } from '../utils';
 import { Doc } from './doc';
 
@@ -176,6 +177,14 @@ describe('Doc — database answers and charts', () => {
         view: { displayMode: 'scalar' },
       })
     ).toThrow(/scalar/);
+    expect(() =>
+      doc.apply({
+        kind: 'setDatabaseQueryView',
+        node: chartId!,
+        // Model code is untyped; a question field must never ride along.
+        view: { title: 'Other', queryId: 'q-9' } as DatabaseQueryView,
+      })
+    ).toThrow(/cannot change queryId/);
     expect(() =>
       doc.apply({
         kind: 'setDatabaseQueryView',

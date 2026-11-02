@@ -48,6 +48,8 @@ export function $createInlineQuery(query: string): DatabaseQueryNode {
   return $createDatabaseQueryNode(data);
 }
 
+const VIEW_FIELDS = new Set(['displayMode', 'title', 'chart', 'height']);
+
 /** Change how an answer is shown; `null` removes a field. The question stays. */
 export function $setQueryView(
   node: LexicalNode,
@@ -59,6 +61,10 @@ export function $setQueryView(
   const current = node.exportComponentProps();
   const next: Record<string, unknown> = { ...current };
   for (const [field, value] of Object.entries(view)) {
+    if (!VIEW_FIELDS.has(field))
+      throw new EditError(
+        `{${id}}: cannot change ${field}; a view changes only displayMode, title, chart, or height`
+      );
     if (value === null) delete next[field];
     else if (value !== undefined) next[field] = value;
   }
