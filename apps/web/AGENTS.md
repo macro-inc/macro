@@ -330,8 +330,9 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   with separate search-empty and retry states. Company/contact touch headers use a
   Switch view drawer that honors host collapse and square copy-link islands; keep
   phone breadcrumbs above the switcher and leave the workspace view strip unchanged.
-  Open linked items directly under their Customers source URL as `<item-type>/<id>`;
-  keep source and record breadcrumbs without section labels or extra preview-title
+  Open linked items under their Customers source URL; typed record sections append
+  only `<id>`, while workspace and mixed-type sources retain item metadata. Keep
+  source and record breadcrumbs without section labels or extra preview-title
   separators, retain entity menus and sharing, and return the current record
   breadcrumb to its captured section and history entry.
   Record search fills the row beside filters with header spacing; section creation

@@ -19,6 +19,7 @@ import {
   crmRecordClaim,
   crmRecordParams,
   crmRecordReference,
+  crmRecordSectionItemParams,
   crmRecordTrailSchema,
   crmViewReference,
 } from '@app/features/crm/crm-route';
@@ -705,6 +706,19 @@ export const crmPipelineItemRoute = defineRoute({
 export const crmPipelineRecordItemRoute = defineRoute({
   ...crmItemRoute,
   id: 'companies-pipeline-record-item',
+});
+
+/** A typed record section already identifies the selected item's renderer. */
+export const crmRecordSectionItemRoute = defineRoute({
+  ...crmItemRoute,
+  id: 'companies-record-section-item',
+  path: ':recordType/:recordId/:section/:itemId',
+  params: crmRecordSectionItemParams,
+});
+
+export const crmPipelineRecordSectionItemRoute = defineRoute({
+  ...crmRecordSectionItemRoute,
+  id: 'companies-pipeline-record-section-item',
 });
 
 export const crmPipelineRoute = defineRoute({

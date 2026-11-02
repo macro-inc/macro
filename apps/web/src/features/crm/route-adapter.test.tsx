@@ -15,9 +15,11 @@ import {
   crmPipelineItemRoute,
   crmPipelineRecordItemRoute,
   crmPipelineRecordRoute,
+  crmPipelineRecordSectionItemRoute,
   crmPipelineRoute,
   crmRecordItemRoute,
   crmRecordRoute,
+  crmRecordSectionItemRoute,
 } from '@app/routes/routes';
 import { cleanup, render, screen } from '@solidjs/testing-library';
 import { For, onCleanup } from 'solid-js';
@@ -77,10 +79,12 @@ const routes: SplitRoutes = {
                   ...crmPipelineRecordRoute,
                   children: [crmPipelineRecordItemRoute],
                 },
+                crmPipelineRecordSectionItemRoute,
               ],
             },
             crmItemRoute,
             { ...crmRecordRoute, children: [crmRecordItemRoute] },
+            crmRecordSectionItemRoute,
           ],
         },
       ],
@@ -295,6 +299,141 @@ it('retains a record trail, section and pipeline source for an item', async () =
   await vi.waitFor(() =>
     expect(screen.getByTestId('item').textContent).toBe('Note')
   );
+});
+
+it('opens a contact task at its compact URL and restores its trail on forward', async () => {
+  const { url, shows, canGo, go } = renderCustomers(
+    '/companies?s0.crm.tab=people'
+  );
+  await shows('tab:people section:- records:');
+  route.open([acme, maya]);
+  await shows(
+    'tab:people section:- records:company:acme:Acme,contact:maya:Maya'
+  );
+  route.setSection('tasks');
+  await shows(
+    'tab:people section:tasks records:company:acme:Acme,contact:maya:Maya'
+  );
+  expect(
+    route.openItem({
+      type: 'document',
+      id: 'task-1',
+      name: 'Follow up',
+      fileType: 'md',
+      subType: { type: 'task' },
+    })
+  ).toBe(true);
+  await vi.waitFor(() => expect(route.item()?.name).toBe('Follow up'));
+  expect(url()).toBe('/companies/contact/maya/tasks/task-1?s0.crm.tab=people');
+  expect(route.item()).toMatchObject({
+    itemType: 'document',
+    itemId: 'task-1',
+    itemFileType: 'md',
+    itemSubType: 'task',
+  });
+  route.closeItem();
+  await vi.waitFor(() => expect(route.item()).toBeUndefined());
+  expect(url()).toBe('/companies/contact/maya/tasks?s0.crm.tab=people');
+  expect(canGo(1)).toBe(true);
+  await go(1);
+  await vi.waitFor(() => expect(route.item()?.name).toBe('Follow up'));
+  await shows(
+    'tab:people section:tasks records:company:acme:Acme,contact:maya:Maya'
+  );
+  expect(url()).toBe('/companies/contact/maya/tasks/task-1?s0.crm.tab=people');
+});
+
+it('opens a pipeline email at its compact URL and restores it after close', async () => {
+  const { url, shows, canGo, go } = renderCustomers(
+    '/companies/pipeline/sales'
+  );
+  route.open([acme]);
+  await shows('tab:pipeline:sales section:- records:company:acme:Acme');
+  route.setSection('emails');
+  await shows('tab:pipeline:sales section:emails records:company:acme:Acme');
+  expect(
+    route.openItem({
+      type: 'email',
+      id: 'thread-1',
+      name: 'Thread',
+      ownerId: 'owner',
+      isRead: true,
+      isDraft: false,
+      isImportant: false,
+      done: false,
+    })
+  ).toBe(true);
+  await vi.waitFor(() => expect(route.item()?.name).toBe('Thread'));
+  expect(url()).toBe('/companies/pipeline/sales/company/acme/emails/thread-1');
+  expect(route.item()).toMatchObject({ itemType: 'email', itemId: 'thread-1' });
+  route.closeItem();
+  await vi.waitFor(() => expect(route.item()).toBeUndefined());
+  expect(url()).toBe('/companies/pipeline/sales/company/acme/emails');
+  expect(canGo(1)).toBe(true);
+  await go(1);
+  await vi.waitFor(() => expect(route.item()?.name).toBe('Thread'));
+  expect(url()).toBe('/companies/pipeline/sales/company/acme/emails/thread-1');
+});
+
+it.each([
+  [
+    '/companies/contact/maya/databases/db-1',
+    'contact',
+    'maya',
+    'databases',
+    'database',
+    'db-1',
+    '/companies/contact/maya/databases',
+  ],
+  [
+    '/companies/pipeline/sales/company/acme/calls/call-1',
+    'company',
+    'acme',
+    'calls',
+    'call',
+    'call-1',
+    '/companies/pipeline/sales/company/acme/calls',
+  ],
+])(
+  'reloads %s with inferred metadata and closes to its record section',
+  async (path, type, id, section, itemType, itemId, parent) => {
+    const { url, shows, canGo } = renderCustomers(path);
+    const tab = path.includes('/pipeline/') ? 'pipeline:sales' : 'active';
+    await shows(`tab:${tab} section:${section} records:${type}:${id}:`);
+    expect(route.item()).toMatchObject({ itemType, itemId });
+    route.closeItem();
+    await vi.waitFor(() => expect(route.item()).toBeUndefined());
+    expect(url()).toBe(parent);
+    expect(canGo(-1)).toBe(true);
+  }
+);
+
+it('keeps Files and Notes items on generic record URLs', async () => {
+  const { url, shows } = renderCustomers('/companies');
+  route.open([acme]);
+  await shows('tab:active section:- records:company:acme:Acme');
+  route.setSection('files');
+  await shows('tab:active section:files records:company:acme:Acme');
+  route.openItem({
+    type: 'document',
+    id: 'file-1',
+    name: 'File',
+    fileType: 'pdf',
+  });
+  await vi.waitFor(() => expect(route.item()?.name).toBe('File'));
+  expect(url()).toBe('/companies/company/acme/files/document/file-1/pdf');
+  route.closeItem();
+  await vi.waitFor(() => expect(route.item()).toBeUndefined());
+  route.setSection('overview');
+  await shows('tab:active section:- records:company:acme:Acme');
+  route.openItem({
+    type: 'document',
+    id: 'note-1',
+    name: 'Note',
+    fileType: 'md',
+  });
+  await vi.waitFor(() => expect(route.item()?.name).toBe('Note'));
+  expect(url()).toBe('/companies/company/acme/document/note-1/md');
 });
 
 it('closes a directly loaded item to its record section without a prior entry', async () => {

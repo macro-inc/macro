@@ -59,6 +59,24 @@ export const crmItemParams = z.object({
 
 export type CrmItemParams = z.infer<typeof crmItemParams>;
 
+const CRM_SECTION_ITEM_TYPES = {
+  tasks: { itemType: 'document', itemFileType: 'md', itemSubType: 'task' },
+  emails: { itemType: 'email' },
+  calls: { itemType: 'call' },
+  databases: { itemType: 'database' },
+} as const;
+
+/** Typed record sections supply all renderer metadata without extra URL segments. */
+export const crmRecordSectionItemParams = crmRecordParams
+  .extend({
+    section: z.enum(['tasks', 'emails', 'calls', 'databases']),
+    itemId: crmItemParams.shape.itemId,
+  })
+  .transform((params) => ({
+    ...params,
+    ...CRM_SECTION_ITEM_TYPES[params.section],
+  }));
+
 /** The canonical entity kind used by item claims, references, and fallback names. */
 export function crmItemBlockType({
   itemType,

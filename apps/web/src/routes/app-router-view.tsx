@@ -105,9 +105,11 @@ import {
   crmPipelineItemRoute,
   crmPipelineRecordItemRoute,
   crmPipelineRecordRoute,
+  crmPipelineRecordSectionItemRoute,
   crmPipelineRoute,
   crmRecordItemRoute,
   crmRecordRoute,
+  crmRecordSectionItemRoute,
   debugRoutes,
   driveCallRoute,
   driveFolderDocumentRoute,
@@ -436,11 +438,13 @@ export function AppRouterView() {
             <Route definition={crmPipelineRecordRoute}>
               <Route definition={crmPipelineRecordItemRoute} />
             </Route>
+            <Route definition={crmPipelineRecordSectionItemRoute} />
           </Route>
           <Route definition={crmItemRoute} />
           <Route definition={crmRecordRoute}>
             <Route definition={crmRecordItemRoute} />
           </Route>
+          <Route definition={crmRecordSectionItemRoute} />
         </Route>
         <Route definition={foldersRoute} component={FoldersRouteView} />
         <Route definition={searchRoute} component={SearchRouteView} />

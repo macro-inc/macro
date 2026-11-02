@@ -15,9 +15,11 @@ import {
   crmPipelineItemRoute,
   crmPipelineRecordItemRoute,
   crmPipelineRecordRoute,
+  crmPipelineRecordSectionItemRoute,
   crmPipelineRoute,
   crmRecordItemRoute,
   crmRecordRoute,
+  crmRecordSectionItemRoute,
   legacyContentRoute,
   notFoundRoute,
   taskDetailRoute,
@@ -27,7 +29,7 @@ import { createMacroMentionLinkResolver } from '@components/app/split-layout/spl
 import { describe, expect, it, vi } from 'vitest';
 import { pipelineTab } from './core/navigation';
 import type { CrmViewConfig } from './core/saved-view';
-import { crmSearchCodec } from './crm-route';
+import { crmRecordSectionItemParams, crmSearchCodec } from './crm-route';
 import { encodeCrmViewParam } from './queries/saved-view-codec';
 
 vi.mock('@components/app/split-layout/componentRegistry', () => ({
@@ -63,10 +65,12 @@ const routes = createRoutesManifest({
                   ...crmPipelineRecordRoute,
                   children: [crmPipelineRecordItemRoute],
                 },
+                crmPipelineRecordSectionItemRoute,
               ],
             },
             crmItemRoute,
             { ...crmRecordRoute, children: [crmRecordItemRoute] },
+            crmRecordSectionItemRoute,
           ],
         },
         legacyContentRoute,
@@ -186,6 +190,73 @@ describe('CRM item URLs', () => {
       })
     ).toEqual(taskDetailRoute.claim?.({ taskId: itemId }));
   });
+  it.each([
+    ['tasks', 'document', 'md', 'task', 'task'],
+    ['emails', 'email', undefined, undefined, 'email'],
+    ['calls', 'call', undefined, undefined, 'call'],
+    ['databases', 'database', undefined, undefined, 'database'],
+  ])(
+    'decodes a %s record item and references the item, not the record',
+    (section, itemType, itemFileType, itemSubType, block) => {
+      const path = `/companies/contact/${contactId}/${section}/${itemId}`;
+      expect(leafOf(path.slice(1))).toEqual({
+        id: crmRecordSectionItemRoute.id,
+        params: {
+          recordType: 'contact',
+          recordId: contactId,
+          section,
+          itemId,
+          itemType,
+          ...(itemFileType ? { itemFileType } : {}),
+          ...(itemSubType ? { itemSubType } : {}),
+        },
+      });
+      expect(resolveMention(appUrl(path))).toEqual({
+        id: itemId,
+        block,
+        params: {},
+      });
+    }
+  );
+
+  it('claims a compact task as the same document as its generic and Tasks URLs', () => {
+    const decoded = crmRecordSectionItemParams.safeParse(
+      leafOf(`companies/company/${companyId}/tasks/${itemId}`)?.params
+    );
+    expect(decoded.success).toBe(true);
+    if (!decoded.success) throw new Error('Expected a compact task');
+    expect(crmRecordSectionItemRoute.claim?.(decoded.data)).toEqual(
+      taskDetailRoute.claim?.({ taskId: itemId })
+    );
+    expect(crmRecordSectionItemRoute.claim?.(decoded.data)).toEqual(
+      crmItemRoute.claim?.({
+        itemType: 'document',
+        itemId,
+        itemFileType: 'md',
+        itemSubType: 'task',
+      })
+    );
+  });
+
+  it('decodes a pipeline record item and mentions the selected call', () => {
+    const path = `/companies/pipeline/${pipelineId}/company/${companyId}/calls/${itemId}`;
+    expect(leafOf(path.slice(1))).toEqual({
+      id: crmPipelineRecordSectionItemRoute.id,
+      params: {
+        recordType: 'company',
+        recordId: companyId,
+        section: 'calls',
+        itemId,
+        itemType: 'call',
+      },
+    });
+    expect(resolveMention(appUrl(path))).toEqual({
+      id: itemId,
+      block: 'call',
+      params: {},
+    });
+  });
+
   it.each([
     [`document/${itemId}/md/task`, 'task'],
     [`document/${itemId}/md`, 'md'],

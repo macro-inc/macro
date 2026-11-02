@@ -290,8 +290,11 @@ The CRM sidebar stays in place and the breadcrumb shows the source view, record
 trail (when present), and selected item, without section labels such as Tasks or
 Files or an extra separator before preview titles. The current record breadcrumb
 returns to the captured section and entry state. The item URL is nested under
-`/app/companies` or `/app/companies/pipeline/<uuid>`; record items also retain
-`/<record-type>/<record-id>/<section>` before `/<item-type>/<item-id>`.
+`/app/companies` or `/app/companies/pipeline/<uuid>`. Typed record sections use
+`/<record-type>/<record-id>/<tasks-emails-calls-or-databases>/<item-id>`, without
+repeating the item type or a task's `md/task` suffix. Workspace, Files/Notes and
+mixed-type sources retain `/<item-type>/<item-id>` and document metadata because
+the source path alone does not identify the renderer.
 Back and Forward restore the item and source; selecting the source breadcrumb or
 closing the item returns to the source list or record with its entry state.
 Reload keeps the selected item's URL. Shift-click uses the existing separate
