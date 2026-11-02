@@ -777,7 +777,9 @@ shows the absolute date, time, timezone, calendar, and invitees. For example,
 “Call John at 3pm tomorrow” becomes a one-hour event at 3 PM tomorrow with no
 invitation; inviting John requires an explicit invitation request or guest edit.
 Bare hours use a reasonable default (1–7 PM, 8–11 AM, 12 noon). For example,
-“call with Julia tomorrow at 7” becomes 7 PM tomorrow for one hour. An assumption
+“call with Julia tomorrow at 7” becomes 7 PM tomorrow for one hour. A time with
+no day is its next occurrence: “sync at 3pm” is 3 PM today, or tomorrow once 3 PM
+has passed, and a task deadline “by 3pm” resolves the same way. An assumption
 cue beneath the date/time range draws attention to the inferred AM/PM; editing the start
 time removes that cue. The temporal model identifies clock facts, explicit AM/PM and day parts;
 Rust resolves them, marks assumed AM/PM, validates timestamps and supplies
