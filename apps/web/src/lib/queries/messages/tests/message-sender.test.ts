@@ -7,6 +7,7 @@ import {
   MACRO_SYSTEM_NAME,
   MACRO_SYSTEM_PRINCIPAL_ID,
 } from '@core/constant/macroSystem';
+import { MACRO_AGENT_PRINCIPAL_ID } from '@core/constant/macroAgent';
 import { describe, expect, it } from 'vitest';
 import {
   type ChannelMessageWithMaybeSender,
@@ -130,6 +131,28 @@ describe('message sender normalization', () => {
     expect(firstPartyBotName('00000000-0000-0000-0000-000000000002')).toBe(
       undefined
     );
+  });
+
+  it('names a post made through an MCP client after the client', () => {
+    const message = normalizeThreadReplySender({
+      id: 'reply-1',
+      parent: { type: 'channel', id: 'channel-1' },
+      mentions: [],
+      sender_id: MACRO_AGENT_PRINCIPAL_ID,
+      bot_profile: { name: 'Macro' },
+      triggered_by: 'macro|alice@example.com',
+      triggered_via: 'Claude Code',
+      content: 'posted from Claude Code',
+      created_at: '2026-11-02T10:00:00.000Z',
+      updated_at: '2026-11-02T10:00:00.000Z',
+      attachments: [],
+      reactions: [],
+    });
+
+    expect(getBotDisplayName(message.sender_id, message.sender)).toBe(
+      'Claude Code'
+    );
+    expect(getBotDisplayName(MACRO_AGENT_PRINCIPAL_ID)).toBe('Macro');
   });
 
   it('uses a generic label rather than exposing an unknown bot UUID', () => {
