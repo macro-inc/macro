@@ -61,6 +61,7 @@ it('shows a text file literally, never as Markdown', async () => {
 
   await waitFor(() => screen.getByText('# Not a heading'));
   expect(container.textContent).toContain('  **indented**');
+  expect(container.querySelectorAll('p')).toHaveLength(1);
   expect(container.querySelector('h1')).toBeNull();
   expect(container.querySelector('strong')).toBeNull();
   expect(screen.queryByText(/No preview available/)).toBeNull();

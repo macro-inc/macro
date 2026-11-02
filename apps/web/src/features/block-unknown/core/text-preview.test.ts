@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { decodeTextPreview, mayContainText } from './text-preview';
+import {
+  decodeTextPreview,
+  mayContainText,
+  TEXT_PREVIEW_MAX_LINES,
+  textPreviewState,
+} from './text-preview';
 
 const bytes = (text: string) => new TextEncoder().encode(text);
 
@@ -53,8 +58,28 @@ describe('decodeTextPreview', () => {
     ).toBe('hi');
   });
 
+  it('leaves a file with too many lines to render as a download', () => {
+    const atLimit = 'a\n'.repeat(TEXT_PREVIEW_MAX_LINES);
+
+    expect(decodeTextPreview(bytes(atLimit))).not.toBeNull();
+    expect(decodeTextPreview(bytes(`${atLimit}a\n`))).toBeNull();
+  });
+
   it('rejects binary content', () => {
     expect(decodeTextPreview(new Uint8Array([0x68, 0x00, 0x69]))).toBeNull();
     expect(decodeTextPreview(new Uint8Array([0xff, 0xd8, 0xff]))).toBeNull();
+  });
+});
+
+describe('textPreviewState', () => {
+  it('keeps every line in one paragraph, so copied text has no extra blank lines', () => {
+    const { root } = JSON.parse(textPreviewState('one\n\n  three'));
+
+    expect(root.children).toHaveLength(1);
+    expect(
+      root.children[0].children.map(
+        (node: { type: string; text?: string }) => node.text ?? node.type
+      )
+    ).toEqual(['one', 'linebreak', 'linebreak', '  three']);
   });
 });

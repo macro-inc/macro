@@ -33,8 +33,10 @@ function loadTextPreview(file: TextPreviewFile, signal: AbortSignal) {
       return null;
     }
     span.setAttr('file.size', blob.value.size);
-    const text = decodeTextPreview(new Uint8Array(await blob.value.arrayBuffer()));
-    span.setAttr('file.text_preview.outcome', text ? 'text' : 'not_text');
+    const text = decodeTextPreview(
+      new Uint8Array(await blob.value.arrayBuffer())
+    );
+    span.setAttr('file.text_preview.outcome', text ? 'text' : 'no_preview');
     return text;
   });
 }
