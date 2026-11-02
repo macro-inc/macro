@@ -7,7 +7,7 @@
  */
 
 /**
- * Semantic tint keys; themes own the rendered colors.
+ * Named tint keys from the shared tag color palette.
  */
 export type AppearanceColor =
   (typeof AppearanceColor)[keyof typeof AppearanceColor];
@@ -16,11 +16,14 @@ export type AppearanceColor =
 export const AppearanceColor = {
   gray: 'gray',
   red: 'red',
+  tomato: 'tomato',
   orange: 'orange',
+  amber: 'amber',
   yellow: 'yellow',
   green: 'green',
   teal: 'teal',
   blue: 'blue',
+  indigo: 'indigo',
   purple: 'purple',
   pink: 'pink',
 } as const;

@@ -10313,16 +10313,19 @@ export const listDatabasesResponseItem = zod
                       .enum([
                         'gray',
                         'red',
+                        'tomato',
                         'orange',
+                        'amber',
                         'yellow',
                         'green',
                         'teal',
                         'blue',
+                        'indigo',
                         'purple',
                         'pink',
                       ])
                       .describe(
-                        'Semantic tint keys; themes own the rendered colors.'
+                        'Named tint keys from the shared tag color palette.'
                       ),
                   ])
                   .optional(),
@@ -10897,16 +10900,19 @@ export const getDatabaseResponse = zod
                       .enum([
                         'gray',
                         'red',
+                        'tomato',
                         'orange',
+                        'amber',
                         'yellow',
                         'green',
                         'teal',
                         'blue',
+                        'indigo',
                         'purple',
                         'pink',
                       ])
                       .describe(
-                        'Semantic tint keys; themes own the rendered colors.'
+                        'Named tint keys from the shared tag color palette.'
                       ),
                   ])
                   .optional(),
@@ -11719,15 +11725,18 @@ export const setDatabaseAppearanceBody = zod
           .enum([
             'gray',
             'red',
+            'tomato',
             'orange',
+            'amber',
             'yellow',
             'green',
             'teal',
             'blue',
+            'indigo',
             'purple',
             'pink',
           ])
-          .describe('Semantic tint keys; themes own the rendered colors.'),
+          .describe('Named tint keys from the shared tag color palette.'),
       ])
       .optional(),
     icon: zod
@@ -11773,15 +11782,18 @@ export const setDatabaseAppearanceResponse = zod
           .enum([
             'gray',
             'red',
+            'tomato',
             'orange',
+            'amber',
             'yellow',
             'green',
             'teal',
             'blue',
+            'indigo',
             'purple',
             'pink',
           ])
-          .describe('Semantic tint keys; themes own the rendered colors.'),
+          .describe('Named tint keys from the shared tag color palette.'),
       ])
       .optional(),
     icon: zod
@@ -16911,16 +16923,19 @@ export const getUserDocumentsHandlerResponse = zod.object({
                           .enum([
                             'gray',
                             'red',
+                            'tomato',
                             'orange',
+                            'amber',
                             'yellow',
                             'green',
                             'teal',
                             'blue',
+                            'indigo',
                             'purple',
                             'pink',
                           ])
                           .describe(
-                            'Semantic tint keys; themes own the rendered colors.'
+                            'Named tint keys from the shared tag color palette.'
                           ),
                       ])
                       .optional(),
@@ -17160,16 +17175,19 @@ export const createDocumentResponse = zod.object({
                         .enum([
                           'gray',
                           'red',
+                          'tomato',
                           'orange',
+                          'amber',
                           'yellow',
                           'green',
                           'teal',
                           'blue',
+                          'indigo',
                           'purple',
                           'pink',
                         ])
                         .describe(
-                          'Semantic tint keys; themes own the rendered colors.'
+                          'Named tint keys from the shared tag color palette.'
                         ),
                     ])
                     .optional(),
@@ -17385,16 +17403,19 @@ export const createCanvasHandlerResponse = zod
                     .enum([
                       'gray',
                       'red',
+                      'tomato',
                       'orange',
+                      'amber',
                       'yellow',
                       'green',
                       'teal',
                       'blue',
+                      'indigo',
                       'purple',
                       'pink',
                     ])
                     .describe(
-                      'Semantic tint keys; themes own the rendered colors.'
+                      'Named tint keys from the shared tag color palette.'
                     ),
                 ])
                 .optional(),
@@ -17561,16 +17582,19 @@ export const createMarkdownHandlerResponse = zod
                     .enum([
                       'gray',
                       'red',
+                      'tomato',
                       'orange',
+                      'amber',
                       'yellow',
                       'green',
                       'teal',
                       'blue',
+                      'indigo',
                       'purple',
                       'pink',
                     ])
                     .describe(
-                      'Semantic tint keys; themes own the rendered colors.'
+                      'Named tint keys from the shared tag color palette.'
                     ),
                 ])
                 .optional(),
@@ -17960,16 +17984,19 @@ export const createTaskHandlerResponse = zod
                     .enum([
                       'gray',
                       'red',
+                      'tomato',
                       'orange',
+                      'amber',
                       'yellow',
                       'green',
                       'teal',
                       'blue',
+                      'indigo',
                       'purple',
                       'pink',
                     ])
                     .describe(
-                      'Semantic tint keys; themes own the rendered colors.'
+                      'Named tint keys from the shared tag color palette.'
                     ),
                 ])
                 .optional(),
@@ -18292,16 +18319,19 @@ export const getBatchPreviewHandlerResponse = zod.object({
                         .enum([
                           'gray',
                           'red',
+                          'tomato',
                           'orange',
+                          'amber',
                           'yellow',
                           'green',
                           'teal',
                           'blue',
+                          'indigo',
                           'purple',
                           'pink',
                         ])
                         .describe(
-                          'Semantic tint keys; themes own the rendered colors.'
+                          'Named tint keys from the shared tag color palette.'
                         ),
                     ])
                     .optional(),
@@ -18691,16 +18721,19 @@ export const getDocumentResponse = zod.object({
                         .enum([
                           'gray',
                           'red',
+                          'tomato',
                           'orange',
+                          'amber',
                           'yellow',
                           'green',
                           'teal',
                           'blue',
+                          'indigo',
                           'purple',
                           'pink',
                         ])
                         .describe(
-                          'Semantic tint keys; themes own the rendered colors.'
+                          'Named tint keys from the shared tag color palette.'
                         ),
                     ])
                     .optional(),
@@ -18939,16 +18972,19 @@ export const saveDocumentHandlerResponse = zod.object({
                     .enum([
                       'gray',
                       'red',
+                      'tomato',
                       'orange',
+                      'amber',
                       'yellow',
                       'green',
                       'teal',
                       'blue',
+                      'indigo',
                       'purple',
                       'pink',
                     ])
                     .describe(
-                      'Semantic tint keys; themes own the rendered colors.'
+                      'Named tint keys from the shared tag color palette.'
                     ),
                 ])
                 .optional(),
@@ -19639,15 +19675,18 @@ export const setDocumentAppearanceBody = zod
           .enum([
             'gray',
             'red',
+            'tomato',
             'orange',
+            'amber',
             'yellow',
             'green',
             'teal',
             'blue',
+            'indigo',
             'purple',
             'pink',
           ])
-          .describe('Semantic tint keys; themes own the rendered colors.'),
+          .describe('Named tint keys from the shared tag color palette.'),
       ])
       .optional(),
     icon: zod
@@ -19693,15 +19732,18 @@ export const setDocumentAppearanceResponse = zod
           .enum([
             'gray',
             'red',
+            'tomato',
             'orange',
+            'amber',
             'yellow',
             'green',
             'teal',
             'blue',
+            'indigo',
             'purple',
             'pink',
           ])
-          .describe('Semantic tint keys; themes own the rendered colors.'),
+          .describe('Named tint keys from the shared tag color palette.'),
       ])
       .optional(),
     icon: zod
@@ -19809,16 +19851,19 @@ export const copyDocumentResponse = zod
                           .enum([
                             'gray',
                             'red',
+                            'tomato',
                             'orange',
+                            'amber',
                             'yellow',
                             'green',
                             'teal',
                             'blue',
+                            'indigo',
                             'purple',
                             'pink',
                           ])
                           .describe(
-                            'Semantic tint keys; themes own the rendered colors.'
+                            'Named tint keys from the shared tag color palette.'
                           ),
                       ])
                       .optional(),
@@ -20611,16 +20656,19 @@ export const simpleSaveResponse = zod.object({
                     .enum([
                       'gray',
                       'red',
+                      'tomato',
                       'orange',
+                      'amber',
                       'yellow',
                       'green',
                       'teal',
                       'blue',
+                      'indigo',
                       'purple',
                       'pink',
                     ])
                     .describe(
-                      'Semantic tint keys; themes own the rendered colors.'
+                      'Named tint keys from the shared tag color palette.'
                     ),
                 ])
                 .optional(),
@@ -20868,16 +20916,19 @@ export const getDocumentVersionResponse = zod.object({
                     .enum([
                       'gray',
                       'red',
+                      'tomato',
                       'orange',
+                      'amber',
                       'yellow',
                       'green',
                       'teal',
                       'blue',
+                      'indigo',
                       'purple',
                       'pink',
                     ])
                     .describe(
-                      'Semantic tint keys; themes own the rendered colors.'
+                      'Named tint keys from the shared tag color palette.'
                     ),
                 ])
                 .optional(),
@@ -23690,16 +23741,19 @@ export const listFormsResponseItem = zod
                   .enum([
                     'gray',
                     'red',
+                    'tomato',
                     'orange',
+                    'amber',
                     'yellow',
                     'green',
                     'teal',
                     'blue',
+                    'indigo',
                     'purple',
                     'pink',
                   ])
                   .describe(
-                    'Semantic tint keys; themes own the rendered colors.'
+                    'Named tint keys from the shared tag color palette.'
                   ),
               ])
               .optional(),
@@ -23883,16 +23937,19 @@ export const listAccessibleFormsResponseItem = zod
                       .enum([
                         'gray',
                         'red',
+                        'tomato',
                         'orange',
+                        'amber',
                         'yellow',
                         'green',
                         'teal',
                         'blue',
+                        'indigo',
                         'purple',
                         'pink',
                       ])
                       .describe(
-                        'Semantic tint keys; themes own the rendered colors.'
+                        'Named tint keys from the shared tag color palette.'
                       ),
                   ])
                   .optional(),
@@ -24058,16 +24115,19 @@ export const getFormResponse = zod
                       .enum([
                         'gray',
                         'red',
+                        'tomato',
                         'orange',
+                        'amber',
                         'yellow',
                         'green',
                         'teal',
                         'blue',
+                        'indigo',
                         'purple',
                         'pink',
                       ])
                       .describe(
-                        'Semantic tint keys; themes own the rendered colors.'
+                        'Named tint keys from the shared tag color palette.'
                       ),
                   ])
                   .optional(),
@@ -24675,16 +24735,19 @@ export const updateFormResponse = zod
                   .enum([
                     'gray',
                     'red',
+                    'tomato',
                     'orange',
+                    'amber',
                     'yellow',
                     'green',
                     'teal',
                     'blue',
+                    'indigo',
                     'purple',
                     'pink',
                   ])
                   .describe(
-                    'Semantic tint keys; themes own the rendered colors.'
+                    'Named tint keys from the shared tag color palette.'
                   ),
               ])
               .optional(),
@@ -24816,15 +24879,18 @@ export const setFormAppearanceBody = zod
           .enum([
             'gray',
             'red',
+            'tomato',
             'orange',
+            'amber',
             'yellow',
             'green',
             'teal',
             'blue',
+            'indigo',
             'purple',
             'pink',
           ])
-          .describe('Semantic tint keys; themes own the rendered colors.'),
+          .describe('Named tint keys from the shared tag color palette.'),
       ])
       .optional(),
     icon: zod
@@ -24870,15 +24936,18 @@ export const setFormAppearanceResponse = zod
           .enum([
             'gray',
             'red',
+            'tomato',
             'orange',
+            'amber',
             'yellow',
             'green',
             'teal',
             'blue',
+            'indigo',
             'purple',
             'pink',
           ])
-          .describe('Semantic tint keys; themes own the rendered colors.'),
+          .describe('Named tint keys from the shared tag color palette.'),
       ])
       .optional(),
     icon: zod
@@ -24950,16 +25019,19 @@ export const collaborateFormResponse = zod
                           .enum([
                             'gray',
                             'red',
+                            'tomato',
                             'orange',
+                            'amber',
                             'yellow',
                             'green',
                             'teal',
                             'blue',
+                            'indigo',
                             'purple',
                             'pink',
                           ])
                           .describe(
-                            'Semantic tint keys; themes own the rendered colors.'
+                            'Named tint keys from the shared tag color palette.'
                           ),
                       ])
                       .optional(),
@@ -25960,16 +26032,19 @@ export const putFormLayoutResponse = zod
                           .enum([
                             'gray',
                             'red',
+                            'tomato',
                             'orange',
+                            'amber',
                             'yellow',
                             'green',
                             'teal',
                             'blue',
+                            'indigo',
                             'purple',
                             'pink',
                           ])
                           .describe(
-                            'Semantic tint keys; themes own the rendered colors.'
+                            'Named tint keys from the shared tag color palette.'
                           ),
                       ])
                       .optional(),
@@ -28678,16 +28753,19 @@ export const listInitiativesResponse = zod
                           .enum([
                             'gray',
                             'red',
+                            'tomato',
                             'orange',
+                            'amber',
                             'yellow',
                             'green',
                             'teal',
                             'blue',
+                            'indigo',
                             'purple',
                             'pink',
                           ])
                           .describe(
-                            'Semantic tint keys; themes own the rendered colors.'
+                            'Named tint keys from the shared tag color palette.'
                           ),
                       ])
                       .optional(),
@@ -28956,16 +29034,19 @@ export const createInitiativeResponse = zod
                   .enum([
                     'gray',
                     'red',
+                    'tomato',
                     'orange',
+                    'amber',
                     'yellow',
                     'green',
                     'teal',
                     'blue',
+                    'indigo',
                     'purple',
                     'pink',
                   ])
                   .describe(
-                    'Semantic tint keys; themes own the rendered colors.'
+                    'Named tint keys from the shared tag color palette.'
                   ),
               ])
               .optional(),
@@ -29093,16 +29174,19 @@ export const getInitiativeResponse = zod
                   .enum([
                     'gray',
                     'red',
+                    'tomato',
                     'orange',
+                    'amber',
                     'yellow',
                     'green',
                     'teal',
                     'blue',
+                    'indigo',
                     'purple',
                     'pink',
                   ])
                   .describe(
-                    'Semantic tint keys; themes own the rendered colors.'
+                    'Named tint keys from the shared tag color palette.'
                   ),
               ])
               .optional(),
@@ -29309,16 +29393,19 @@ export const updateInitiativeResponse = zod
                   .enum([
                     'gray',
                     'red',
+                    'tomato',
                     'orange',
+                    'amber',
                     'yellow',
                     'green',
                     'teal',
                     'blue',
+                    'indigo',
                     'purple',
                     'pink',
                   ])
                   .describe(
-                    'Semantic tint keys; themes own the rendered colors.'
+                    'Named tint keys from the shared tag color palette.'
                   ),
               ])
               .optional(),
@@ -29441,15 +29528,18 @@ export const setInitiativeAppearanceBody = zod
           .enum([
             'gray',
             'red',
+            'tomato',
             'orange',
+            'amber',
             'yellow',
             'green',
             'teal',
             'blue',
+            'indigo',
             'purple',
             'pink',
           ])
-          .describe('Semantic tint keys; themes own the rendered colors.'),
+          .describe('Named tint keys from the shared tag color palette.'),
       ])
       .optional(),
     icon: zod
@@ -29495,15 +29585,18 @@ export const setInitiativeAppearanceResponse = zod
           .enum([
             'gray',
             'red',
+            'tomato',
             'orange',
+            'amber',
             'yellow',
             'green',
             'teal',
             'blue',
+            'indigo',
             'purple',
             'pink',
           ])
-          .describe('Semantic tint keys; themes own the rendered colors.'),
+          .describe('Named tint keys from the shared tag color palette.'),
       ])
       .optional(),
     icon: zod
@@ -29882,16 +29975,19 @@ export const getItemsSoupResponse = zod
                                   .enum([
                                     'gray',
                                     'red',
+                                    'tomato',
                                     'orange',
+                                    'amber',
                                     'yellow',
                                     'green',
                                     'teal',
                                     'blue',
+                                    'indigo',
                                     'purple',
                                     'pink',
                                   ])
                                   .describe(
-                                    'Semantic tint keys; themes own the rendered colors.'
+                                    'Named tint keys from the shared tag color palette.'
                                   ),
                               ])
                               .optional(),
@@ -30919,16 +31015,19 @@ export const getItemsSoupResponse = zod
                                   .enum([
                                     'gray',
                                     'red',
+                                    'tomato',
                                     'orange',
+                                    'amber',
                                     'yellow',
                                     'green',
                                     'teal',
                                     'blue',
+                                    'indigo',
                                     'purple',
                                     'pink',
                                   ])
                                   .describe(
-                                    'Semantic tint keys; themes own the rendered colors.'
+                                    'Named tint keys from the shared tag color palette.'
                                   ),
                               ])
                               .optional(),
@@ -34964,16 +35063,19 @@ export const postItemsSoupResponse = zod
                                   .enum([
                                     'gray',
                                     'red',
+                                    'tomato',
                                     'orange',
+                                    'amber',
                                     'yellow',
                                     'green',
                                     'teal',
                                     'blue',
+                                    'indigo',
                                     'purple',
                                     'pink',
                                   ])
                                   .describe(
-                                    'Semantic tint keys; themes own the rendered colors.'
+                                    'Named tint keys from the shared tag color palette.'
                                   ),
                               ])
                               .optional(),
@@ -36001,16 +36103,19 @@ export const postItemsSoupResponse = zod
                                   .enum([
                                     'gray',
                                     'red',
+                                    'tomato',
                                     'orange',
+                                    'amber',
                                     'yellow',
                                     'green',
                                     'teal',
                                     'blue',
+                                    'indigo',
                                     'purple',
                                     'pink',
                                   ])
                                   .describe(
-                                    'Semantic tint keys; themes own the rendered colors.'
+                                    'Named tint keys from the shared tag color palette.'
                                   ),
                               ])
                               .optional(),
@@ -39485,16 +39590,19 @@ export const postItemsSoupAstResponse = zod
                                   .enum([
                                     'gray',
                                     'red',
+                                    'tomato',
                                     'orange',
+                                    'amber',
                                     'yellow',
                                     'green',
                                     'teal',
                                     'blue',
+                                    'indigo',
                                     'purple',
                                     'pink',
                                   ])
                                   .describe(
-                                    'Semantic tint keys; themes own the rendered colors.'
+                                    'Named tint keys from the shared tag color palette.'
                                   ),
                               ])
                               .optional(),
@@ -40522,16 +40630,19 @@ export const postItemsSoupAstResponse = zod
                                   .enum([
                                     'gray',
                                     'red',
+                                    'tomato',
                                     'orange',
+                                    'amber',
                                     'yellow',
                                     'green',
                                     'teal',
                                     'blue',
+                                    'indigo',
                                     'purple',
                                     'pink',
                                   ])
                                   .describe(
-                                    'Semantic tint keys; themes own the rendered colors.'
+                                    'Named tint keys from the shared tag color palette.'
                                   ),
                               ])
                               .optional(),
@@ -44461,16 +44572,19 @@ export const postItemsSoupAstGroupedResponse = zod
                                         .enum([
                                           'gray',
                                           'red',
+                                          'tomato',
                                           'orange',
+                                          'amber',
                                           'yellow',
                                           'green',
                                           'teal',
                                           'blue',
+                                          'indigo',
                                           'purple',
                                           'pink',
                                         ])
                                         .describe(
-                                          'Semantic tint keys; themes own the rendered colors.'
+                                          'Named tint keys from the shared tag color palette.'
                                         ),
                                     ])
                                     .optional(),
@@ -45510,16 +45624,19 @@ export const postItemsSoupAstGroupedResponse = zod
                                         .enum([
                                           'gray',
                                           'red',
+                                          'tomato',
                                           'orange',
+                                          'amber',
                                           'yellow',
                                           'green',
                                           'teal',
                                           'blue',
+                                          'indigo',
                                           'purple',
                                           'pink',
                                         ])
                                         .describe(
-                                          'Semantic tint keys; themes own the rendered colors.'
+                                          'Named tint keys from the shared tag color palette.'
                                         ),
                                     ])
                                     .optional(),
@@ -48949,16 +49066,19 @@ export const postItemsSoupAstGroupedResponse = zod
                                         .enum([
                                           'gray',
                                           'red',
+                                          'tomato',
                                           'orange',
+                                          'amber',
                                           'yellow',
                                           'green',
                                           'teal',
                                           'blue',
+                                          'indigo',
                                           'purple',
                                           'pink',
                                         ])
                                         .describe(
-                                          'Semantic tint keys; themes own the rendered colors.'
+                                          'Named tint keys from the shared tag color palette.'
                                         ),
                                     ])
                                     .optional(),
@@ -49998,16 +50118,19 @@ export const postItemsSoupAstGroupedResponse = zod
                                         .enum([
                                           'gray',
                                           'red',
+                                          'tomato',
                                           'orange',
+                                          'amber',
                                           'yellow',
                                           'green',
                                           'teal',
                                           'blue',
+                                          'indigo',
                                           'purple',
                                           'pink',
                                         ])
                                         .describe(
-                                          'Semantic tint keys; themes own the rendered colors.'
+                                          'Named tint keys from the shared tag color palette.'
                                         ),
                                     ])
                                     .optional(),

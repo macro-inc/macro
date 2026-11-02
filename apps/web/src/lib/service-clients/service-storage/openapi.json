@@ -21606,15 +21606,18 @@
       },
       "AppearanceColor": {
         "type": "string",
-        "description": "Semantic tint keys; themes own the rendered colors.",
+        "description": "Named tint keys from the shared tag color palette.",
         "enum": [
           "gray",
           "red",
+          "tomato",
           "orange",
+          "amber",
           "yellow",
           "green",
           "teal",
           "blue",
+          "indigo",
           "purple",
           "pink"
         ]
@@ -29508,7 +29511,7 @@
               },
               {
                 "$ref": "#/components/schemas/AppearanceColor",
-                "description": "A theme-aware palette key. Native emoji retain their own colors."
+                "description": "A shared tag-palette key. Native emoji retain their own colors."
               }
             ]
           },

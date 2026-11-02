@@ -13,9 +13,10 @@ icons and task status icons retain their existing behavior.
 ## Contract
 
 The shared Rust `model_entity::EntityAppearance` contains an optional icon and
-an optional theme-aware palette key. Icons are distinct original Macro SVG names
-or single native emoji. Emoji retain native colors. Each entity domain owns its
-nullable JSON field, eligibility, authorization, writes, and lifecycle.
+an optional named key from the shared tag color palette. Icons are distinct
+original Macro SVG names or single native emoji. Emoji retain native colors.
+Each entity domain owns its nullable JSON field, eligibility, authorization,
+writes, and lifecycle.
 
 Edits require existing edit access; routines remain owner-only. Metadata-only
 writes do not change content timestamps or execution configuration revisions.
@@ -50,8 +51,9 @@ Recent reordering. The Emoji tab groups the shared catalog and pins category
 navigation. Arrow keys move between cells and Enter selects.
 
 Colors appear only on Icons. Default is a ring in the entity type color, followed
-by the nine palette colors. Remove clears only the icon. There is no draft,
-preview header, Reset all, or Apply/Cancel footer.
+by the same twelve fixed colors as tags, in tag-palette order; swatches wrap in
+narrow panes. Remove clears only the icon. There is no draft, preview header,
+Reset all, or Apply/Cancel footer.
 
 ## History
 

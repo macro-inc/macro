@@ -163,8 +163,8 @@ await doc.setAppearance({}); // restore the default icon and color
 ```
 
 Writes replace both overrides without changing content timestamps. Omit an
-override to restore its default. Colors use the fixed theme-aware palette and
-only tint Macro icons; native emoji keep their own colors.
+override to restore its default. Colors use the same twelve-color palette as
+tags and only tint Macro icons; native emoji keep their own colors.
 
 ### Listing and searching
 

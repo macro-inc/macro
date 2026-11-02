@@ -425,7 +425,7 @@ export function AppearancePicker(props: {
         </InputGroup>
         <Show when={tab() === 'icons'}>
           <div
-            class="grid grid-cols-10 place-items-center"
+            class="grid grid-cols-[repeat(auto-fit,minmax(2.75rem,1fr))] place-items-center gap-y-1"
             role="group"
             aria-label={t('appearance.color')}
           >

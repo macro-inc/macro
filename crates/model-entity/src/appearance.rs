@@ -25,7 +25,7 @@ pub struct EntityAppearance {
     /// A custom Macro glyph or a native emoji.
     #[serde(default)]
     pub icon: Option<AppearanceIcon>,
-    /// A theme-aware palette key. Native emoji retain their own colors.
+    /// A shared tag-palette key. Native emoji retain their own colors.
     #[serde(default)]
     pub color: Option<AppearanceColor>,
 }
@@ -56,7 +56,7 @@ pub enum AppearanceIcon {
     },
 }
 
-/// Semantic tint keys; themes own the rendered colors.
+/// Named tint keys from the shared tag color palette.
 #[derive(
     Debug,
     Clone,
@@ -75,8 +75,12 @@ pub enum AppearanceColor {
     Gray,
     /// Red.
     Red,
+    /// Tomato.
+    Tomato,
     /// Orange.
     Orange,
+    /// Amber.
+    Amber,
     /// Yellow.
     Yellow,
     /// Green.
@@ -85,6 +89,8 @@ pub enum AppearanceColor {
     Teal,
     /// Blue.
     Blue,
+    /// Indigo.
+    Indigo,
     /// Purple.
     Purple,
     /// Pink.

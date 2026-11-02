@@ -66,9 +66,10 @@ stays open. Escape, outside clicks, and Done close without undoing saved choices
 There is no draft, preview header, or Apply/Cancel footer. Failed saves roll back
 the rejected choice without replacing a newer edit.
 
-The Icons tab shows ten color swatches: Default (a ring in the entity's type
-color) and nine theme-aware colors. The Emoji tab hides the row; emoji retain
-native colors. **Remove** clears only the icon, while Default clears only color.
+The Icons tab shows Default (a ring in the entity's type color) and the same
+twelve fixed colors as tags, in tag-palette order. Swatches wrap in narrow panes.
+The Emoji tab hides the row; emoji retain native colors. **Remove** clears only
+the icon, while Default clears only color.
 Recent picks are stored per account. The catalog is grouped and excludes layout
 and editing glyphs from the picker without invalidating existing stored icons.
 Icon search also includes matching emoji. Both catalogs render virtualized rows,

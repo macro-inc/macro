@@ -128,9 +128,9 @@ export type AiAdmissionErrorBody = {
 };
 
 /**
- * Semantic tint keys; themes own the rendered colors.
+ * Named tint keys from the shared tag color palette.
  */
-export type AppearanceColor = 'gray' | 'red' | 'orange' | 'yellow' | 'green' | 'teal' | 'blue' | 'purple' | 'pink';
+export type AppearanceColor = 'gray' | 'red' | 'tomato' | 'orange' | 'amber' | 'yellow' | 'green' | 'teal' | 'blue' | 'indigo' | 'purple' | 'pink';
 
 /**
  * The source of an entity's custom icon.

@@ -2,7 +2,7 @@
 
 ## What it is
 
-Shared icon and theme-aware color editing for routines, ordinary Markdown,
+Shared icon and tag-palette color editing for routines, ordinary Markdown,
 snippets, task projects (initiatives), forms, and databases.
 
 ## Start here
@@ -42,6 +42,7 @@ snippets, task projects (initiatives), forms, and databases.
 - Keep mutations account-scoped, update every reader optimistically, and roll back rejected writes without overwriting newer edits.
 - Keep recent picks account-scoped and filter only the picker catalog; stored icon names remain valid.
 - Show colors only on Icons; Default uses the entity type color and Remove clears only the icon.
+- Reuse the shared 12-color tag palette in `@core/constant/color-palette`; preserve named wire keys and let swatches wrap.
 - Use `virtua` for both catalogs and search results; pin and restore focused choices across scrolling and Recent reordering.
 - Read only the normalized appearance fields before optimistic writes; unrelated preview fields can be absent on a loaded entity.
 - Type cache-write payloads with the generated subscription result; `soupUpdates` is a list.

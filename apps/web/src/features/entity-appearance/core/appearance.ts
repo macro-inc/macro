@@ -1,3 +1,4 @@
+import { COLOR_PALETTE } from '@core/constant/color-palette';
 import type { AppearanceColor } from '@service-storage/generated/schemas/appearanceColor';
 import type { EntityAppearance } from '@service-storage/generated/schemas/entityAppearance';
 
@@ -12,24 +13,14 @@ const APPEARANCE_ENTITY_TYPES = [
 ] as const;
 export type AppearanceEntityType = (typeof APPEARANCE_ENTITY_TYPES)[number];
 
-export const APPEARANCE_COLORS = [
-  'gray',
-  'red',
-  'orange',
-  'yellow',
-  'green',
-  'teal',
-  'blue',
-  'purple',
-  'pink',
-] as const satisfies readonly AppearanceColor[];
+export const APPEARANCE_COLORS = COLOR_PALETTE.map(
+  ({ key }) => key
+) satisfies AppearanceColor[];
 
 export function appearanceColor(
   color: AppearanceColor | null | undefined
 ): string | undefined {
-  if (!color) return;
-  if (color === 'gray') return 'var(--color-ink-muted)';
-  return `var(--color-${color})`;
+  return COLOR_PALETTE.find(({ key }) => key === color)?.color;
 }
 
 export function supportsEntityAppearance<

@@ -7,7 +7,7 @@ Shared entity identity and presentation vocabulary, without persistence or autho
 ## Start here
 
 - `src/lib.rs`: entity kinds and identity wrappers.
-- `src/appearance.rs`: validated shared icon and palette values.
+- `src/appearance.rs`: validated shared icon and named tag-palette values.
 - `src/appearance_icons.generated.rs`: generated typed icon catalog; do not edit by hand.
 
 ## Scope

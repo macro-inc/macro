@@ -1,5 +1,5 @@
 # Type Alias: AppearanceColor
 
-> **AppearanceColor** = `"gray"` \| `"red"` \| `"orange"` \| `"yellow"` \| `"green"` \| `"teal"` \| `"blue"` \| `"purple"` \| `"pink"`
+> **AppearanceColor** = `"gray"` \| `"red"` \| `"tomato"` \| `"orange"` \| `"amber"` \| `"yellow"` \| `"green"` \| `"teal"` \| `"blue"` \| `"indigo"` \| `"purple"` \| `"pink"`
 
-Semantic tint keys; themes own the rendered colors.
+Named tint keys from the shared tag color palette.
