@@ -1,6 +1,7 @@
-import CalendarIcon from '@phosphor/calendar-blank.svg';
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
+import { Key } from '@solid-primitives/keyed';
 import { Button, Checkbox } from '@ui';
-import { For, Show } from 'solid-js';
+import { Show } from 'solid-js';
 import type { DocumentNoteLink, NoteRead, NoteTeam } from '../core/types';
 
 export function DocumentNotesSection(props: {
@@ -8,6 +9,7 @@ export function DocumentNotesSection(props: {
   team: NoteRead<NoteTeam | null>;
   selected?: DocumentNoteLink;
   saving: boolean;
+  removing: boolean;
   error?: string;
   onSelect: (link: DocumentNoteLink | undefined) => void;
   onRemove: () => void;
@@ -49,25 +51,28 @@ export function DocumentNotesSection(props: {
             {props.error}
           </p>
         </Show>
-        <For each={props.state.data}>
+        <Key
+          each={props.state.data}
+          by={(link) => JSON.stringify([link.eventId, link.occurrenceKey])}
+        >
           {(link) => (
             <div class="mt-3 rounded-xl border border-edge-muted p-3">
               <div class="flex items-start gap-3">
                 <CalendarIcon class="mt-0.5 size-4 shrink-0 text-ink-muted" />
                 <div class="min-w-0 flex-1">
-                  <p class="truncate font-medium">{link.eventTitle}</p>
+                  <p class="truncate font-medium">{link().eventTitle}</p>
                   <p class="mt-1 text-xs text-ink-muted">
-                    {link.occurrenceKey === 'single'
+                    {link().occurrenceKey === 'single'
                       ? 'One-time meeting'
-                      : link.occurrenceKey.slice(0, 10)}{' '}
+                      : link().occurrenceKey.slice(0, 10)}{' '}
                     · Can view
                   </p>
                 </div>
                 <Button
                   variant="ghost"
                   size="sm"
-                  disabled={props.saving}
-                  onClick={() => props.onSelect(link)}
+                  disabled={props.removing}
+                  onClick={() => props.onSelect(link())}
                 >
                   Unlink
                 </Button>
@@ -75,10 +80,10 @@ export function DocumentNotesSection(props: {
               <Show when={props.team.data}>
                 {(team) => (
                   <Checkbox
-                    checked={link.team?.id === team().id}
+                    checked={link().team?.id === team().id}
                     disabled={props.saving}
                     onChange={(checked) =>
-                      props.onTeam(link, checked ? team().id : undefined)
+                      props.onTeam(link(), checked ? team().id : undefined)
                     }
                     class="mt-3 gap-2"
                   >
@@ -91,18 +96,18 @@ export function DocumentNotesSection(props: {
               </Show>
               <Show
                 when={
-                  link.team &&
+                  link().team &&
                   props.team.data !== undefined &&
-                  link.team.id !== props.team.data?.id
+                  link().team?.id !== props.team.data?.id
                 }
               >
                 <div class="mt-3 flex items-center justify-between gap-3 text-xs text-ink-muted">
-                  <span>{link.team?.name} can also view this note.</span>
+                  <span>{link().team?.name} can also view this note.</span>
                   <Button
                     variant="ghost"
                     size="sm"
                     disabled={props.saving}
-                    onClick={() => props.onTeam(link, undefined)}
+                    onClick={() => props.onTeam(link(), undefined)}
                   >
                     Remove team access
                   </Button>
@@ -110,8 +115,8 @@ export function DocumentNotesSection(props: {
               </Show>
               <Show
                 when={
-                  props.selected?.eventId === link.eventId &&
-                  props.selected?.occurrenceKey === link.occurrenceKey
+                  props.selected?.eventId === link().eventId &&
+                  props.selected?.occurrenceKey === link().occurrenceKey
                 }
               >
                 <div class="mt-3 border-t border-edge-muted pt-3">
@@ -134,14 +139,14 @@ export function DocumentNotesSection(props: {
                       disabled={props.saving}
                       onClick={props.onRemove}
                     >
-                      {props.saving ? 'Removing…' : 'Unlink meeting'}
+                      {props.removing ? 'Removing…' : 'Unlink meeting'}
                     </Button>
                   </div>
                 </div>
               </Show>
             </div>
           )}
-        </For>
+        </Key>
       </section>
     </Show>
   );

@@ -141,3 +141,6 @@ impl IntoResponse for ExtractorError {
         (status, Json(ErrorResponse { message })).into_response()
     }
 }
+
+mod external_chat;
+pub use external_chat::ExternalChatAccessLevelExtractor;

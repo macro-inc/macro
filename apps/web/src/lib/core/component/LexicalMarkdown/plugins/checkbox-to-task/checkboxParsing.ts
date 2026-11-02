@@ -81,9 +81,10 @@ export function extractTitleFromMarkdown(markdownText: string): string {
 
 /**
  * Get plain text title from a ListItemNode, collecting text from all children
- * except user/date mentions (which become task properties instead).
+ * except user/date mentions (which become task properties instead). Safe in a
+ * read context.
  */
-function $extractTitleFromNode(node: ListItemNode): string {
+export function $extractTitleFromNode(node: ListItemNode): string {
   return $collectTextContent(node).trim().replace(/\s+/g, ' ');
 }
 

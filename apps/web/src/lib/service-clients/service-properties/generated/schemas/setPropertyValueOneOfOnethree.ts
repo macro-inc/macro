@@ -4,13 +4,12 @@
  * properties_service
  * OpenAPI spec version: 0.1.0
  */
-import type { EntityReference } from './entityReference';
 import type { SetPropertyValueOneOfOnethreeType } from './setPropertyValueOneOfOnethreeType';
 
 /**
- * Entity reference
+ * Multiple select options by ID (for multi-select properties)
  */
 export type SetPropertyValueOneOfOnethree = {
-  reference: EntityReference;
+  option_ids: string[];
   type: SetPropertyValueOneOfOnethreeType;
 };

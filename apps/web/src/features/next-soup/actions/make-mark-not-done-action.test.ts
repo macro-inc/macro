@@ -114,6 +114,27 @@ describe('makeMarkNotDoneAction', () => {
     });
   });
 
+  it.each([true, false])(
+    'never unarchives a done thread with no received mail (GraphQL=%s)',
+    async (graphql) => {
+      mocks.graphql = graphql;
+      const action = createAction();
+      const sentOnly = {
+        ...doneEmail('sent-only'),
+        hasReceivedMail: false,
+      } as EntityData;
+      expect(action.canExecute(sentOnly)).toBe(false);
+      await action.execute([sentOnly]);
+      expect(mocks.executeMarkEntitiesUndone).not.toHaveBeenCalled();
+      expect(
+        action.canExecute({
+          ...doneEmail('received'),
+          hasReceivedMail: true,
+        } as EntityData)
+      ).toBe(true);
+    }
+  );
+
   it('unarchives a thread and restores only its notifications', async () => {
     await expect(createAction().execute([doneEmail('inbound')])).resolves.toBe(
       'committed'

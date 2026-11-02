@@ -124,8 +124,10 @@ pub enum SignalError {
     /// The store failed.
     #[error(transparent)]
     Store(#[from] StoreError),
-    /// Any other protocol failure.
-    #[error("signal protocol error: {0:?}")]
+    /// Any other protocol failure. The message leaves the report out, since
+    /// libsignal names addresses (JIDs) in its errors; read it from the field
+    /// or `Debug`.
+    #[error("signal protocol error")]
     Internal(rootcause::Report),
 }
 

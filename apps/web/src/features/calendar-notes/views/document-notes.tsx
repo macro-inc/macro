@@ -11,6 +11,7 @@ export function DocumentNotesView(props: { source: DocumentNotesSource }) {
       team={props.source.team()}
       selected={controller.selected()}
       saving={controller.saving()}
+      removing={controller.removing()}
       error={controller.error()}
       onSelect={controller.select}
       onTeam={(link, teamId) =>

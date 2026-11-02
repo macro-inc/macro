@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO crm_cleanup_candidates (link_id, contact_email)\n        SELECT $1, contact_email\n        FROM unnest($2::text[]) AS contact_email\n        ORDER BY contact_email\n        ON CONFLICT (link_id, contact_email) DO UPDATE SET created_at = now()\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "86d25242758f7528bbad456f87df54a16205fe23ae743e66194733ea3cb80910"
+}

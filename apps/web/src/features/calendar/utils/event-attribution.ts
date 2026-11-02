@@ -1,4 +1,5 @@
 import type { CalendarEvent, CalendarSource } from '../types';
+import { calendarDisplayLabel } from './calendar-label';
 
 /** A person attributed on an event: organizer or creator. */
 export interface CalendarPerson {
@@ -101,7 +102,7 @@ export function eventAttribution(event: CalendarEvent): EventAttribution {
     organizer !== undefined && !sameAsCalendar(organizer, event.calendar);
 
   return {
-    calendarName: event.calendar.name || 'Calendar',
+    calendarName: calendarDisplayLabel(event.calendar, false) || 'Calendar',
     creator: showCreator ? creator : undefined,
     organizer: showOrganizer ? organizer : undefined,
   };

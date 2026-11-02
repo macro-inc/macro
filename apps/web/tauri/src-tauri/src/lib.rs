@@ -45,6 +45,7 @@ mod logging;
 mod macos_notification_permission;
 mod share_target;
 mod staged_upload;
+mod whatsapp_passkey;
 #[cfg(desktop)]
 mod window_state;
 
@@ -366,6 +367,7 @@ pub fn run_with(builder: tauri::Builder<AppRuntime>) {
         .manage(graphql_cache_plugin::CacheState::default())
         .manage(IsIpad(is_ipad_device))
         .invoke_handler(tauri::generate_handler![
+            whatsapp_passkey::whatsapp_passkey_authenticate,
             desktop_update::get_native_update_status,
             desktop_update::restart_native_update,
             diagnostics::read_desktop_diagnostics,

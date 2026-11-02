@@ -133,34 +133,6 @@ impl RedisClient {
         Ok(())
     }
 
-    /// Initialize backfill thread progress in Redis
-    pub async fn init_backfill_thread_progress(
-        &self,
-        job_id: Uuid,
-        thread_id: &str,
-        total_messages: i32,
-    ) -> anyhow::Result<()> {
-        let key = Self::thread_status_key(job_id, thread_id);
-
-        let mut redis_connection = self
-            .inner
-            .get_multiplexed_async_connection()
-            .await
-            .context("unable to connect to redis")?;
-
-        redis_connection
-            .hset_multiple::<&str, &str, i32, ()>(
-                &key,
-                &[
-                    ("total_messages", total_messages),
-                    ("completed_messages", 0),
-                ],
-            )
-            .await?;
-
-        Ok(())
-    }
-
     /// Increment completed messages count and return true if thread is complete, deleting redis entry for thread if so
     pub async fn incr_completed_messages(
         &self,

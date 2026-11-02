@@ -28,6 +28,12 @@ export type NotesSource = {
   unlink: (documentId: string) => Promise<Result<void, NoteFailure>>;
 };
 
+/** Already cached, owned Markdown candidates from the app's Quick Access source. */
+export type NoteDocumentSearch = (
+  query: Accessor<string>,
+  enabled: Accessor<boolean>
+) => Accessor<NoteDocument[]>;
+
 export type DocumentNotesSource = {
   links: Accessor<NoteRead<DocumentNoteLink[]>>;
   team: Accessor<NoteRead<NoteTeam | null>>;

@@ -26,8 +26,8 @@ export function createActivityTracker(
   const openedChannelAt = createMemo<Date>((prev) => prev ?? new Date());
 
   // Freeze lastViewedAt at the value present when the channel was first opened.
-  // This prevents a query refetch (triggered by the activity mutation on mount)
-  // from resetting viewed_at to "now" and hiding all the new-message indicators.
+  // This prevents the entry view write, which updates the activity cache, from
+  // resetting viewed_at to "now" and hiding all the new-message indicators.
   const frozenLastViewedAt = createMemo<DateValue | undefined | null>((prev) =>
     prev !== undefined ? prev : props.lastViewedAt()
   );

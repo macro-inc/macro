@@ -36,7 +36,7 @@ async fn echo_then_trash(
             .is_draft
     );
     // The same production path used by inbox synchronization, not a direct flag UPDATE.
-    insert_message(pool, thread, &mut echo, link(), true).await?;
+    insert_message(pool, thread, &mut echo, link(), true, None).await?;
     assert!(
         repo.get_simple_message(message(), &[link()])
             .await?

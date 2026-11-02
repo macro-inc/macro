@@ -199,13 +199,13 @@ pub trait PropertiesRepo: Send + Sync + 'static {
     ) -> impl Future<Output = Result<PropertyOptionReplaceOutcome, Self::Err>> + Send;
 
     /// Delete a property option and strip its id from every entity value that
-    /// references it, atomically. Returns `true` if the option was deleted,
-    /// `false` if it didn't exist.
+    /// references it, atomically. Returns `None` if the option didn't exist,
+    /// otherwise one post-commit snapshot per entity value it was stripped from.
     fn delete_property_option(
         &self,
         property_definition_id: Uuid,
         option_id: Uuid,
-    ) -> impl Future<Output = Result<bool, Self::Err>> + Send;
+    ) -> impl Future<Output = Result<Option<Vec<EntityPropertyMutationSnapshot>>, Self::Err>> + Send;
 
     /// Get the single tag definition owned by the given owner, if it exists.
     // Explicit lifetime required by mockall's automock expansion.

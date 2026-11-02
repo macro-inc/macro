@@ -6,6 +6,7 @@ import type {
 import {
   type Accessor,
   createMemo,
+  createSignal,
   For,
   onCleanup,
   onMount,
@@ -88,6 +89,7 @@ export function ThreadReplyList(props: {
   return (
     <For each={[...repliesById().keys()]}>
       {(id) => {
+        const [element, setElement] = createSignal<HTMLDivElement>();
         onCleanup(() => replyElements.delete(id));
         const replyMessage = () => ({
           ...repliesById().get(id)!,
@@ -100,6 +102,7 @@ export function ThreadReplyList(props: {
         return (
           <div
             ref={(element) => {
+              setElement(element);
               replyElements.set(id, element);
               notifyElementOnMount(props.onMessageMount, id, element);
             }}
@@ -128,7 +131,11 @@ export function ThreadReplyList(props: {
                 </Show>
               </Show>
             </Show>
-            <MarkMessageNotifications messageId={id} parent={props.parent}>
+            <MarkMessageNotifications
+              messageId={id}
+              parent={props.parent}
+              element={element()}
+            >
               <ChannelMessage
                 parent={props.parent}
                 inputMode={props.inputMode}

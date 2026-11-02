@@ -1,6 +1,6 @@
 import { SidePanel } from '@components/app/side-panel';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ListIcon from '@phosphor/list-bullets.svg';
+import ListIcon from '@icon/system/regular/list-bullets.svg';
 import { Button } from '@ui';
 import { createSignal, For, Show } from 'solid-js';
 import { useCrmLists, useCurrentTeamQuery } from './use-crm';

@@ -1,9 +1,9 @@
 import { ViewCreateButton } from '@app/components/view-shell/ViewCreateButton';
 import { ManageMeetingsDialog } from '@app/features/meetings/manage-meetings-dialog';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import PhoneIcon from '@phosphor/phone.svg';
-import UsersIcon from '@phosphor/users.svg';
-import VideoCameraIcon from '@phosphor/video-camera.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import PhoneIcon from '@icon/system/regular/phone.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
+import VideoCameraIcon from '@icon/system/regular/video-camera.svg';
 import { Button, Dropdown } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import { useQuickCallsFlag } from '../../meetings/use-quick-calls-flag';
@@ -25,7 +25,7 @@ export function NewMeetingButton(props: NewMeetingActions) {
         <Show
           when={props.presentation}
           fallback={
-            <Button variant="accent" size="sm" onClick={props.onChannelCall}>
+            <Button variant="primary" size="sm" onClick={props.onChannelCall}>
               <VideoCameraIcon class="size-3.5" />
               New call
             </Button>
@@ -62,10 +62,11 @@ function NewMeetingMenu(props: NewMeetingActions) {
           when={props.presentation}
           fallback={
             <Dropdown.Trigger
-              variant="accent"
+              aria-label="New call"
+              tooltip="New call"
+              variant="primary"
               size="sm"
               class="gap-1.5 px-2"
-              label="New call"
             >
               <VideoCameraIcon class="size-3.5" />
               <span>New call</span>

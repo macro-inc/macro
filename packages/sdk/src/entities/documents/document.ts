@@ -56,7 +56,7 @@ export class Document
   extends PropertiedEntity<DocumentDetail>
   implements Mentionable
 {
-  /** Owner-only meeting grants, including unavailable meetings. Unlink a returned note to revoke its meeting/team access. */
+  /** Meeting links visible to the reader. Owners also receive unavailable grants and may unlink them to revoke meeting/team access. */
   async meetingNotes(): Promise<
     Array<{ note: CalendarNote; eventTitle: string }>
   > {

@@ -3,8 +3,8 @@ import { isListViewID, type ListView } from '@app/constants/list-views';
 import { CommandState } from '@app/features/command/state';
 import { VIEW_TAB_PRESETS } from '@app/features/next-soup/sidebar/soup-filter-presets';
 import {
-  markCalendarNotificationSeenOnOpen,
   markChannelNotificationsSeenOnOpen,
+  markRowNotificationsSeenOnOpen,
   openEntityInSplitFromUnifiedList,
 } from '@app/features/next-soup/utils';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -195,7 +195,7 @@ export const useSoupViewHotkeys = (options: UseSoupViewHotkeysOptions) => {
     entity: EntityData,
     openOptions: { location?: SearchLocation; openInNewSplit?: boolean }
   ) => {
-    markCalendarNotificationSeenOnOpen(entity, notificationSource);
+    markRowNotificationsSeenOnOpen(entity, notificationSource);
     await openEntityInSplitFromUnifiedList(entity, {
       ...openOptions,
       splitHandle,

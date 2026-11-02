@@ -67,7 +67,10 @@ export function NarrowCondensedLayout(props: LayoutProps) {
           )}
         </Show>
       </Entity.Slot>
-      <Entity.Slot placement="timestamp">{props.scheduleStatus}</Entity.Slot>
+      <Entity.Slot placement="timestamp" class="flex items-center gap-1">
+        {props.referenceProperties}
+        {props.scheduleStatus}
+      </Entity.Slot>
     </Entity.Layout>
   );
 }

@@ -1,9 +1,8 @@
-import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
-import CheckIcon from '@phosphor/check.svg';
-import FileTextIcon from '@phosphor/file-text.svg';
-import LinkIcon from '@phosphor/link.svg';
-import MagnifyingGlassIcon from '@phosphor/magnifying-glass.svg';
-import XIcon from '@phosphor/x.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import FileTextIcon from '@icon/system/regular/file-text.svg';
+import LinkIcon from '@icon/system/regular/link.svg';
+import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, Checkbox, Dialog, InputGroup } from '@ui';
 import { For, Show } from 'solid-js';
 import type { NoteDocument, NotePicker, NoteRead } from '../core/types';
@@ -19,6 +18,7 @@ export function NoteDialog(props: {
   selected?: NoteDocument;
   onSelect: (document: NoteDocument) => void;
   linkedIds: string[];
+  linksReady: boolean;
   teamId?: string;
   onTeam: (id: string | undefined) => void;
   saving: boolean;
@@ -85,10 +85,14 @@ export function NoteDialog(props: {
             aria-label="Your markdown documents"
             aria-busy={props.picker.pending}
           >
-            <Show when={props.picker.pending && !props.picker.data}>
-              <For each={[0, 1, 2]}>
-                {() => <ListSkeleton.Bar class="my-2 h-5 w-3/4" />}
-              </For>
+            <Show
+              when={
+                props.picker.pending && !props.picker.data?.documents.length
+              }
+            >
+              <p role="status" class="px-3 py-5 text-sm text-ink-muted">
+                Searching notes…
+              </p>
             </Show>
             <Show when={props.picker.error}>
               <p role="alert" class="py-4 text-sm text-failure">
@@ -105,6 +109,7 @@ export function NoteDialog(props: {
                     size="md"
                     fullWidth
                     aria-label={document.name}
+                    tooltip={document.name}
                     aria-pressed={
                       props.selected?.documentId === document.documentId
                     }
@@ -211,13 +216,19 @@ export function NoteDialog(props: {
             Cancel
           </Button>
           <Button
-            variant={props.kind === 'unlink' ? 'danger' : 'strong'}
+            variant={props.kind === 'unlink' ? 'danger' : 'primary'}
             size="md"
             onClick={props.onSave}
-            disabled={!props.selected || props.saving}
+            disabled={
+              !props.selected ||
+              props.saving ||
+              (props.kind === 'link' &&
+                (!props.linksReady ||
+                  props.linkedIds.includes(props.selected.documentId)))
+            }
           >
             <Show when={props.kind === 'link'}>
-              <LinkIcon />
+              <LinkIcon class="size-4 shrink-0 touch:size-6" />
             </Show>
             {props.saving
               ? 'Saving…'
@@ -231,10 +242,11 @@ export function NoteDialog(props: {
           variant="ghost"
           size="icon-sm"
           aria-label="Close"
+          tooltip="Close"
           disabled={props.saving}
           class="absolute right-4 top-4 sm:right-6 sm:top-6"
         >
-          <XIcon />
+          <XIcon class="size-3.5 shrink-0 touch:size-6" />
         </Dialog.CloseButton>
       </div>
     </Dialog>

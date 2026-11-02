@@ -2,6 +2,9 @@
 
 /// Event-to-activity mappings for this domain.
 pub mod activity;
+/// Folder duplication through the unified entity-mutation vocabulary.
+#[cfg(feature = "service")]
+pub mod duplicate;
 /// Unified entity-mutation capability impls.
 #[cfg(feature = "service")]
 pub mod entity_mutation;

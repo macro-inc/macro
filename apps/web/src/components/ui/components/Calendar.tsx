@@ -1,12 +1,12 @@
 import CorvuCalendar, {
   type RootSingleProps as CorvuCalendarRootSingleProps,
 } from '@corvu/calendar';
-import ArrowDownIcon from '@phosphor/arrow-down.svg';
-import ArrowUpIcon from '@phosphor/arrow-up.svg';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CheckIcon from '@phosphor/check.svg';
+import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
+import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import {
   createMemo,
   createSignal,
@@ -452,12 +452,12 @@ export function CalendarMonthMenu(props: CalendarMonthMenuProps) {
       <Show when={props.presentation === 'radio-group'}>
         <div class="flex pt-3">
           <Button
+            aria-label="Go To Today"
+            tooltip="Go To Today"
             fullWidth
             variant="ghost"
             size="sm"
-            depth={3}
             class="min-h-11 bg-ink/6 px-3 text-ink"
-            label="Go To Today"
             onClick={() => {
               if (props.onToday) {
                 props.onToday();

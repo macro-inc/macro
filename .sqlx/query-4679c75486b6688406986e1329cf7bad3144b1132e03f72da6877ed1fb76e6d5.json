@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO whatsapp_event_buffer (account_id, ciphertext_hash, server_time, nonce, value)\n            VALUES ($1, $2, $3, $4, $5)\n            ON CONFLICT (account_id, ciphertext_hash) DO UPDATE SET\n                server_time = EXCLUDED.server_time,\n                inserted_at = now(),\n                nonce = EXCLUDED.nonce,\n                value = EXCLUDED.value\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bytea",
+        "Timestamptz",
+        "Bytea",
+        "Bytea"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4679c75486b6688406986e1329cf7bad3144b1132e03f72da6877ed1fb76e6d5"
+}

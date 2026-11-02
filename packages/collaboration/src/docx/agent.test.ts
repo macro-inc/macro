@@ -274,11 +274,11 @@ describe('runDocxAgentRequest', () => {
     );
   });
 
-  it('refuses a document nobody has opened yet', async () => {
+  it('refuses a document with no live copy', async () => {
     const { source } = session(false);
     await expect(
       runDocxAgentRequest(source, { action: 'read' })
-    ).rejects.toThrow(/hasn't been opened in Macro's editor yet/);
+    ).rejects.toThrow(/has no live copy/);
   });
 
   it('fails when the sync service never acknowledges the edit', async () => {

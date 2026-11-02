@@ -733,13 +733,26 @@ export function softInvalidateMessageTimelineByIds(parent: MessageParent) {
   });
 }
 
+/** Whether `next` joins the activity row that `previous`, just before it, ends. */
+export type ActivityMerge = (
+  previous: TimelineActivity,
+  next: TimelineActivity
+) => boolean;
+
 /**
  * Build a single oldest-first timeline index for display and lookup.
  * Pages arrive newest-first, entries within each page are newest-first,
  * so we reverse both layers in one pass.
  */
-/** The rows a timeline renders, oldest first, from its cached pages. */
-export function buildMessageIndex(pages: MessageTimelinePage[] | undefined) {
+/**
+ * The rows a timeline renders, oldest first, from its cached pages.
+ * Consecutive activity that `mergeActivity` accepts shares one row, keyed and
+ * dated by its newest activity.
+ */
+export function buildMessageIndex(
+  pages: MessageTimelinePage[] | undefined,
+  mergeActivity?: ActivityMerge
+) {
   /**
    * New objects carrying their row key as `id`, so `reconcile` pairs each
    * entry with its own previous copy. Without an `id` it pairs by position
@@ -752,9 +765,20 @@ export function buildMessageIndex(pages: MessageTimelinePage[] | undefined) {
   /** Message ids only: selection and navigation skip activity. */
   const keys: string[] = [];
   const byId = new Map<string, MessageListItem>();
+  /** Each activity row's newest activity. */
   const activityByKey = new Map<string, TimelineActivity>();
+  /** Every activity of a row that merged several, oldest first. */
+  const activityGroupByKey = new Map<string, TimelineActivity[]>();
 
-  if (!pages?.length) return { entries, entryKeys, keys, byId, activityByKey };
+  if (!pages?.length)
+    return {
+      entries,
+      entryKeys,
+      keys,
+      byId,
+      activityByKey,
+      activityGroupByKey,
+    };
 
   const seen = new Set<string>();
   for (let i = pages.length - 1; i >= 0; i--) {
@@ -764,26 +788,46 @@ export function buildMessageIndex(pages: MessageTimelinePage[] | undefined) {
       const key = timelineEntryKey(entry);
       if (seen.has(key)) continue;
       seen.add(key);
-      entries.push({ ...entry, id: key });
-      entryKeys.push(key);
       if (entry.type === 'activity') {
+        const lastKey = entryKeys.at(-1);
+        const previous =
+          lastKey === undefined ? undefined : activityByKey.get(lastKey);
+        if (
+          lastKey !== undefined &&
+          previous &&
+          mergeActivity?.(previous, entry.activity)
+        ) {
+          const group = activityGroupByKey.get(lastKey) ?? [previous];
+          activityByKey.delete(lastKey);
+          activityGroupByKey.delete(lastKey);
+          entries[entries.length - 1] = { ...entry, id: key };
+          entryKeys[entryKeys.length - 1] = key;
+          activityByKey.set(key, entry.activity);
+          activityGroupByKey.set(key, [...group, entry.activity]);
+          continue;
+        }
+        entries.push({ ...entry, id: key });
+        entryKeys.push(key);
         activityByKey.set(key, entry.activity);
         continue;
       }
+      entries.push({ ...entry, id: key });
+      entryKeys.push(key);
       keys.push(key);
       byId.set(key, entry.message);
     }
   }
 
-  return { entries, entryKeys, keys, byId, activityByKey };
+  return { entries, entryKeys, keys, byId, activityByKey, activityGroupByKey };
 }
 
 /** A reactive index over a timeline query's cached pages. */
 export function createMessageIndex(
-  data: Accessor<MessageTimelineData | undefined>
+  data: Accessor<MessageTimelineData | undefined>,
+  mergeActivity?: ActivityMerge
 ) {
   const [messageIndex, setMessageIndex] = createStore(
-    buildMessageIndex(data()?.pages)
+    buildMessageIndex(data()?.pages, mergeActivity)
   );
 
   createEffect(
@@ -792,7 +836,9 @@ export function createMessageIndex(
       if (!data()) {
         return;
       }
-      setMessageIndex(reconcile(buildMessageIndex(data()?.pages)));
+      setMessageIndex(
+        reconcile(buildMessageIndex(data()?.pages, mergeActivity))
+      );
     })
   );
 

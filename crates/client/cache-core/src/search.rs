@@ -53,6 +53,7 @@ impl SearchProfile {
                 "email",
                 "crm_company",
                 "crm_contact",
+                "initiative",
             ],
         }
     }
@@ -132,7 +133,7 @@ pub enum SearchError {
 
 /// Revision of the derived Quick Access rows. Storage adapters rebuild existing
 /// rows when this changes; normalized records and pending writes remain valid.
-pub const QUICK_ACCESS_PROJECTION_VERSION: u32 = 3;
+pub const QUICK_ACCESS_PROJECTION_VERSION: u32 = 4;
 
 /// Normalized entity types used by the Quick Access projection. Storage rebuilds
 /// restrict decoding to this set so unrelated payloads do not delay readiness.
@@ -144,6 +145,7 @@ pub const QUICK_ACCESS_TYPENAMES: &[&str] = &[
     "GraphqlSoupChannel",
     "GraphqlSoupCrmCompany",
     "GraphqlSoupCrmContact",
+    "GraphqlSoupInitiative",
     "GraphqlUser",
     "User",
 ];
@@ -209,6 +211,7 @@ fn quick_access_fields<'a>(
         "GraphqlSoupChannel" => (channel_bucket(record), &["channelName", "name"]),
         "GraphqlSoupCrmCompany" => ("crm_company", &["crmCompanyName", "name", "domains"]),
         "GraphqlSoupCrmContact" => ("crm_contact", &["crmContactName", "name", "email"]),
+        "GraphqlSoupInitiative" => ("initiative", &["displayName"]),
         "GraphqlUser" | "User" => ("person", &["name", "email"]),
         _ => return None,
     };
@@ -310,6 +313,16 @@ fn normalize_search_text(value: &str) -> String {
 }
 
 fn quick_access_timestamp(typename: &str, record: &Record) -> i64 {
+    // Initiatives keep their timestamps in an embedded metadata object.
+    if typename == "GraphqlSoupInitiative" {
+        let Some(CacheValue::Object(metadata)) = record.fields.get("metadata") else {
+            return 0;
+        };
+        return ["viewedAt", "updatedAt", "createdAt"]
+            .into_iter()
+            .find_map(|field| metadata.get(field).and_then(value_timestamp))
+            .unwrap_or(0);
+    }
     if typename == "GraphqlSoupCrmContact" {
         return ["lastInteraction", "updatedAt", "createdAt"]
             .into_iter()

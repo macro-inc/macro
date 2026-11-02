@@ -1,50 +1,25 @@
 import { SLACK_PIPEDREAM_SLUGS } from '@core/pipedream/slugs';
+import LinearIcon from '@icon/linear-color.svg';
 import GithubIcon from '@icon/mcp-github.svg';
-import LinearIcon from '@icon/mcp-linear.svg';
 import NotionIcon from '@icon/mcp-notion.svg';
-import SlackIcon from '@icon/mcp-slack.svg';
+import SlackIcon from '@icon/slack-color.svg';
 import type { JSX } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { ProviderId } from './model';
 
-export type FeaturedStarter = {
-  id: ProviderId;
-  name: string;
-  note: string;
-};
-
-export const EMPTY_STARTERS: FeaturedStarter[] = [
-  {
-    id: 'github',
-    name: 'GitHub',
-    note: 'Repos, pull requests, and issues for Macro AI',
-  },
-  {
-    id: 'linear',
-    name: 'Linear',
-    note: 'Issues for Macro AI',
-  },
-  {
-    id: 'notion',
-    name: 'Notion',
-    note: 'Search pages with Macro AI',
-  },
-  {
-    id: 'slack',
-    name: 'Slack',
-    note: 'Conversations for Macro AI',
-  },
-];
-
 export const PIPEDREAM_BROWSE_HIDDEN_SLUGS: ReadonlySet<string> = new Set([
-  ...EMPTY_STARTERS.map((item) => item.id),
+  // Featured providers have their own rows.
+  'github',
+  'linear',
+  'notion',
+  'slack',
   ...SLACK_PIPEDREAM_SLUGS,
   'cursor',
+  // Macro syncs email and calendars natively (Settings → Integrations → Email).
+  'gmail',
+  'google_calendar',
+  'google_sheets',
 ]);
-
-export function isPipedreamBrowseHidden(appSlug: string): boolean {
-  return PIPEDREAM_BROWSE_HIDDEN_SLUGS.has(appSlug);
-}
 
 export function providerIcon(id: ProviderId): JSX.Element {
   return match(id)

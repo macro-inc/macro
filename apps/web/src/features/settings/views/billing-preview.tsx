@@ -109,17 +109,17 @@ export function BillingPreview(props: {
         <div class="flex flex-wrap gap-2">
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             onClick={() => setPaywallOpen(true)}
           >
             Preview paywall
           </Button>
-          <Button size="sm" variant="outline" onClick={reset}>
+          <Button size="sm" variant="secondary" onClick={reset}>
             Reset preview
           </Button>
           <Button
             size="sm"
-            variant="outline"
+            variant="secondary"
             onClick={() => {
               reset();
               setPaywallOpen(false);
@@ -227,7 +227,7 @@ export function BillingPreview(props: {
       when={active()}
       fallback={props.renderLive(
         <div class="flex flex-wrap items-center gap-3">
-          <Button size="sm" variant="outline" onClick={() => setActive(true)}>
+          <Button size="sm" variant="secondary" onClick={() => setActive(true)}>
             Preview billing & paywall
           </Button>
           <span class="text-xs text-ink-muted">Local development</span>

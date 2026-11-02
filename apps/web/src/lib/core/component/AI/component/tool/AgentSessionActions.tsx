@@ -1,4 +1,4 @@
-import Robot from '@phosphor-icons/core/regular/robot.svg';
+import Robot from '@icon/system/regular/robot.svg';
 import type { ToolName } from '@service-cognition/generated/tools/tool';
 import { createSignal, For, Show, Suspense } from 'solid-js';
 import { MagicChip } from '../../../LexicalMarkdown/component/decorator/MagicChip';

@@ -1,5 +1,5 @@
 import { internalDrag } from '@core/directive/internalDragState';
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import Spinner from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
 import { cn } from '@ui';
 import {
   createEffect,
@@ -82,6 +82,8 @@ function Image(props: {
   style?: JSX.CSSProperties;
   loading?: 'eager' | 'lazy';
   fallback?: JSX.Element;
+  /** The file couldn't be loaded; the fallback otherwise stays up. */
+  onError?: () => void;
 }) {
   const [loaded, setLoaded] = createSignal(false);
   const hasDimensions = () => (props.width ?? 0) > 0 && (props.height ?? 0) > 0;
@@ -133,6 +135,7 @@ function Image(props: {
         loading={props.loading}
         onClick={() => props.onOpen?.()}
         onLoad={() => setLoaded(true)}
+        onError={() => props.onError?.()}
         use:internalDrag={true}
       />
     </>

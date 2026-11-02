@@ -1,8 +1,8 @@
 import { defineDoc } from '@app/features/ui-gallery/types';
-import FileIcon from '@phosphor/file.svg';
-import FileCodeIcon from '@phosphor/file-code.svg';
-import FileTextIcon from '@phosphor/file-text.svg';
-import FolderIcon from '@phosphor/folder.svg';
+import FileIcon from '@icon/system/regular/file.svg';
+import FileCodeIcon from '@icon/system/regular/file-code.svg';
+import FileTextIcon from '@icon/system/regular/file-text.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
 import { createSignal, type JSX } from 'solid-js';
 import type { FileTreeDirectory, FileTreeNode } from '../utils/file-tree';
 import { FileTree } from './FileTree';

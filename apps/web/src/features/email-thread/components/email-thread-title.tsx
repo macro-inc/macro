@@ -1,5 +1,5 @@
 import { cn } from '@ui/utils/classname';
-import { createSignal } from 'solid-js';
+import { createSignal, type JSX, Show } from 'solid-js';
 import { CopySubjectButton } from './copy-subject-button';
 
 function lastWordCluster(title: string): { lead: string; last: string } {
@@ -12,6 +12,8 @@ export function EmailThreadTitle(props: {
   title: string;
   onCopy?: (subject: string) => void | boolean | Promise<void | boolean>;
   copyReveal?: 'hover' | 'always';
+  /** Replaces the Copy subject button after the last word. */
+  trailing?: JSX.Element;
   class?: string;
 }) {
   const [titleHovered, setTitleHovered] = createSignal(false);
@@ -30,14 +32,21 @@ export function EmailThreadTitle(props: {
       {cluster().lead}
       <span class={cluster().lead ? 'whitespace-nowrap' : undefined}>
         {cluster().last}
-        <CopySubjectButton
-          subject={props.title}
-          onCopy={props.onCopy}
-          class={cn(
-            'ml-1.5 select-none text-inherit transition-opacity duration-150 ease',
-            copyHidden() ? 'opacity-0' : 'opacity-100'
-          )}
-        />
+        <Show
+          when={props.trailing}
+          fallback={
+            <CopySubjectButton
+              subject={props.title}
+              onCopy={props.onCopy}
+              class={cn(
+                'ml-1.5 select-none text-inherit transition-opacity duration-150 ease',
+                copyHidden() ? 'opacity-0' : 'opacity-100'
+              )}
+            />
+          }
+        >
+          {props.trailing}
+        </Show>
       </span>
     </h1>
   );

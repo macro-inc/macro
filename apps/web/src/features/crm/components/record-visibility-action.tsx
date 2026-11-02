@@ -1,5 +1,5 @@
-import EyeIcon from '@phosphor/eye.svg';
-import EyeSlashIcon from '@phosphor/eye-slash.svg';
+import EyeIcon from '@icon/system/regular/eye.svg';
+import EyeSlashIcon from '@icon/system/regular/eye-slash.svg';
 import { Button, ConfirmDialog } from '@ui';
 import { createSignal, Show } from 'solid-js';
 
@@ -29,7 +29,7 @@ function VisibilityControl(props: RecordVisibilityActionProps) {
   return (
     <div class="flex flex-col items-start gap-2">
       <Button
-        variant="outline"
+        variant="secondary"
         disabled={!props.canManage || props.pending}
         onClick={() => setConfirming(true)}
       >

@@ -30,9 +30,10 @@ stacks. Process isolation belongs to
   An import review only starts its write: its `review.decided` is quiet, and
   its `review.settled` comes from the import when the write ends; only an
   import that could not start settles here.
-- `src/domain/documentation.rs`: Jev selection of generated SDK docs, rendered
-  into the per-turn prompt (top four, 48 KiB) or returned for a
-  `DescribeCodeTools` `task` (every relevant entity, 32 KiB).
+- `src/domain/documentation.rs`: the generated SDK catalog (an index per
+  entity, a reference per symbol). Jev selects entity indexes for the per-turn
+  prompt (top four, 48 KiB) or a `DescribeCodeTools` `task` (every relevant
+  entity, 32 KiB); `ReadCodeDocs` reads symbol references (32 KiB).
 - `src/inbound/toolset.rs`: `toolset()` for sessions, `user_toolset()` for the
   public MCP. Tool texts are composed: host-specific parts in `toolset/session/`
   and `toolset/user/`, guidance both share in `toolset/shared/`. Edit shared

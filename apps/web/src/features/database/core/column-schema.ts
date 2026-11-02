@@ -157,6 +157,7 @@ export function castTargetOf(
     .with({ type: 'number' }, () => plain('NUMBER'))
     .with({ type: 'boolean' }, () => plain('BOOLEAN'))
     .with({ type: 'date' }, () => plain('DATE'))
+    .with({ type: 'date_range' }, () => plain('DATE_RANGE'))
     .with({ type: 'link' }, () => plain('LINK'))
     .with({ type: 'select' }, ({ multi }) => plain('SELECT_STRING', multi))
     .with({ type: 'select_number' }, ({ multi }) =>

@@ -1,5 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import Copy from '@phosphor/copy.svg';
+import Copy from '@icon/system/regular/copy.svg';
 import { CopyButton } from '@ui';
 import {
   createSignal,
@@ -69,9 +69,9 @@ export function OwnerSettingsSection(props: {
   }
   const pageShare = () => (
     <CopyButton
-      variant="outline"
+      aria-label="Copy link"
+      variant="secondary"
       size="md"
-      label="Copy link"
       tooltip={
         source.profile()?.revision
           ? undefined

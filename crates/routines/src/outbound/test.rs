@@ -1,4 +1,5 @@
 use super::*;
+use crate::domain::RoutineApp;
 use crate::domain::RoutineSchedule;
 #[test]
 fn agent_tasks_do_not_silently_become_model_tasks_or_override_defaults() {
@@ -11,9 +12,17 @@ fn agent_tasks_do_not_silently_become_model_tasks_or_override_defaults() {
             expression: "0 0 9 * * *".into(),
             timezone: "UTC".into(),
         },
+        required_apps: vec![RoutineApp {
+            app_slug: "linear".into(),
+            name: "Linear".into(),
+        }],
     };
     let body = configuration_body(&config, Utc::now()).unwrap();
     assert_eq!(body["task"]["agent"]["bot_id"], agent_id.to_string());
+    assert_eq!(
+        body["task"]["mcp_servers"],
+        serde_json::json!([{ "app_slug": "linear", "server_name": "Linear" }])
+    );
     assert!(body["task"].get("model").is_none());
     assert!(body.get("enabled").is_none());
     assert!(body.get("owner").is_none());
@@ -78,6 +87,7 @@ async fn requests_forward_authenticated_identity_and_preserve_target_and_activat
         schedule: RoutineSchedule::Once {
             at: Utc::now() + chrono::Duration::hours(1),
         },
+        required_apps: Vec::new(),
     };
     client.create(&user, &config).await.unwrap();
     client.update(&user, id, &config).await.unwrap();

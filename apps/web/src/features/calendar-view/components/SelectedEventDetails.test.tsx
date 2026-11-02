@@ -13,6 +13,7 @@ import { SelectedEventDetails } from './SelectedEventDetails';
 
 const mocks = vi.hoisted(() => ({
   mobile: false,
+  forwardEditorOpen: false,
   openComposer: vi.fn(),
   openDocument: vi.fn(),
   deleteEvent: vi.fn(),
@@ -44,10 +45,14 @@ vi.mock(
   })
 );
 vi.mock('@app/features/calendar/hooks/create-guest-invite-controller', () => ({
-  createGuestInviteController: () => ({ editorOpen: () => false }),
+  createGuestInviteController: () => ({
+    editorOpen: () => false,
+    forwardEditorOpen: () => mocks.forwardEditorOpen,
+  }),
 }));
 vi.mock('@app/features/calendar/hooks/use-calendar-ui-flag', () => ({
   useCalendarGuestInvitesFlag: () => () => false,
+  useCalendarInvitationForwardFlag: () => () => false,
   useCalendarMeetingNotesFlag: () => () => true,
 }));
 // The sections have their own tests; exercise the overlay's actions and
@@ -158,6 +163,7 @@ function showDetails(selected: CalendarEvent) {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.forwardEditorOpen = false;
   vi.stubGlobal('ResizeObserver', ObserverStub);
   vi.stubGlobal('PointerEvent', MouseEvent);
   vi.stubGlobal('scrollTo', vi.fn());
@@ -223,6 +229,20 @@ describe.each([
 ])('in the %s', (_surface, mobile) => {
   beforeEach(() => {
     mocks.mobile = mobile;
+  });
+
+  it('stays open while the forward editor is open, so its recipients are not lost', async () => {
+    mocks.forwardEditorOpen = true;
+    const user = userEvent.setup();
+    showDetails(event());
+
+    await user.click(
+      screen.getByRole('button', { name: 'Close event details' })
+    );
+
+    expect(
+      screen.getByRole('button', { name: 'Close event details' })
+    ).toBeTruthy();
   });
 
   it('offers no Edit on a snapshot, and deletes it as the viewer’s copy', async () => {

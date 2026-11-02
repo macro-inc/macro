@@ -32,6 +32,9 @@ const agentTaskSchema = z
   .looseObject({
     agent: z.looseObject({ bot_id: routineAgentIdSchema }).nullish(),
     model: routineModelSchema.nullish(),
+    mcp_servers: z
+      .array(z.object({ app_slug: z.string(), server_name: z.string() }))
+      .optional(),
     prompt: z.string(),
     user_prompt: z.string(),
   })
@@ -94,6 +97,7 @@ export function draftFromSchedule(
     dayOfMonth: parsed.dayOfMonth,
     target: targetFromTask(task),
     runVisibility: schedule.run_visibility,
+    apps: task.mcp_servers ?? [],
     timezone: trigger?.timezone,
     triggers,
     ...(trigger ? onceFromCron(trigger.schedule, trigger.timezone) : {}),
@@ -118,7 +122,11 @@ function applyTarget(task: RoutineTask, target: RoutineTarget): void {
 
 function buildAgentTask(draft: ScheduleDraft): RoutineTask {
   const target = routineTargetSchema.parse(draft.target);
-  const task: RoutineTask = { prompt: '', user_prompt: draft.prompt.trim() };
+  const task: RoutineTask = {
+    prompt: '',
+    user_prompt: draft.prompt.trim(),
+    mcp_servers: draft.apps,
+  };
   applyTarget(task, target);
   return task;
 }
@@ -149,11 +157,15 @@ export function draftToUpdateBody(
     targetFromTask(previousTask)
   );
   const promptChanged = draft.prompt !== previousTask.user_prompt;
+  const appsChanged =
+    draft.apps.map((app) => app.app_slug).join(',') !==
+    (previousTask.mcp_servers ?? []).map((app) => app.app_slug).join(',');
   let task = previous.task;
-  if (targetChanged || promptChanged) {
+  if (targetChanged || promptChanged || appsChanged) {
     const editedTask = { ...previousTask };
     if (targetChanged) applyTarget(editedTask, target.data);
     if (promptChanged) editedTask.user_prompt = draft.prompt.trim();
+    if (appsChanged) editedTask.mcp_servers = draft.apps;
     task = editedTask;
   }
   const runVisibility = draft.runVisibility ?? previous.run_visibility;

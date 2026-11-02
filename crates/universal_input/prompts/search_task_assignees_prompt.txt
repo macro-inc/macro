@@ -1,0 +1,1 @@
+People explicitly assigned the requested tasks. Return names or supplied addresses, never IDs. Keep each person together. Assignment is distinct from who created a task. Use [] when absent. Do not infer assignments from names in the topic or treat negated assignments as positive filters.

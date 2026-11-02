@@ -7,9 +7,10 @@ use crate::domain::models::{
     GithubExchangeTokenResponse, GithubGrantLinkOutcome, GithubLink, GithubLinkStatus,
     GithubMergeMethod, GithubMergeOutcome, GithubPullRequestDetails,
     GithubPullRequestMergeabilityEntry, GithubPullRequestNumber, GithubPullRequestRef,
-    GithubRepositoryMergeSettings, GithubUserInfo, MergeGithubPullRequestRequest,
-    MergeGithubPullRequestResponse, SetGithubPullRequestDraftRequest,
-    SetGithubPullRequestDraftResponse,
+    GithubPullRequestState, GithubRepositoryMergeSettings, GithubStateOutcome, GithubUserInfo,
+    MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
+    SetGithubPullRequestDraftRequest, SetGithubPullRequestDraftResponse,
+    SetGithubPullRequestStateRequest, SetGithubPullRequestStateResponse,
 };
 use macro_user_id::{lowercased::Lowercase, user_id::MacroUserId};
 
@@ -96,7 +97,7 @@ pub trait GithubRepo: Send + Sync + 'static {
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait GithubOauth: Send + Sync + 'static {
     /// The error type returned by repository operations.
-    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
+    type Err: Into<GithubError> + Send + std::fmt::Debug;
 
     /// Constructs the oauth url to authenticate with github.
     ///
@@ -172,6 +173,17 @@ pub trait GithubOauth: Send + Sync + 'static {
         draft: bool,
     ) -> impl Future<Output = Result<GithubDraftOutcome, Self::Err>> + Send;
 
+    /// Closes a pull request, or reopens it, as the user. A change GitHub
+    /// declines is a [`GithubStateOutcome::Rejected`] value, not an error.
+    fn set_pull_request_state(
+        &self,
+        access_token: &str,
+        owner: &str,
+        repo: &str,
+        number: u64,
+        state: GithubPullRequestState,
+    ) -> impl Future<Output = Result<GithubStateOutcome, Self::Err>> + Send;
+
     /// Reads whether each pull request merges cleanly, as the user sees it.
     /// Pull requests the user cannot see are left out.
     fn get_pull_request_mergeability(
@@ -185,7 +197,7 @@ pub trait GithubOauth: Send + Sync + 'static {
 #[cfg_attr(test, mockall::automock(type Err = anyhow::Error;))]
 pub trait Auth: Send + Sync + 'static {
     /// The error type returned by repository operations.
-    type Err: Into<anyhow::Error> + Send + std::fmt::Debug;
+    type Err: Into<GithubError> + Send + std::fmt::Debug;
 
     /// Creates or refreshes the grant after OAuth has verified the GitHub account.
     fn link_user(
@@ -274,6 +286,17 @@ pub trait GithubLinkService: Send + Sync + 'static {
         user_id: &MacroUserId<Lowercase<'static>>,
         request: SetGithubPullRequestDraftRequest,
     ) -> impl Future<Output = Result<SetGithubPullRequestDraftResponse, GithubError>> + Send;
+
+    /// Closes a pull request, or reopens it, as the user with their own
+    /// GitHub grant.
+    ///
+    /// A change GitHub declines is
+    /// [`GithubError::PullRequestUpdateRejected`] with GitHub's message.
+    fn set_pull_request_state(
+        &self,
+        user_id: &MacroUserId<Lowercase<'static>>,
+        request: SetGithubPullRequestStateRequest,
+    ) -> impl Future<Output = Result<SetGithubPullRequestStateResponse, GithubError>> + Send;
 
     /// Reads whether each pull request merges cleanly into its base, as the
     /// user sees it. More than

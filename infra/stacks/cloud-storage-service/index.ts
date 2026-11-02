@@ -166,6 +166,7 @@ const gmailOpsQueueArn: pulumi.Output<string> = emailServiceStack
 const {
   notificationIngressQueueArn,
   notificationApnsVoipPlatformArn: snsApnsVoipPlatformArn,
+  notificationFcmPlatformArn: snsFcmPlatformArn,
 } = getMacroNotify();
 
 // To re-use this secret name after a destroy, you will need to delete the secret without recovery to prevent conflict:
@@ -379,7 +380,8 @@ const cloudStorageService = new CloudStorageService(
     ],
     slackImportUploadPolicyArn: slackImportQueue.uploadPolicy.arn,
     callRecordingCrudPolicyArn,
-    snsPlatformArns: [snsApnsVoipPlatformArn],
+    // Native call pushes: iOS PushKit and Android FCM.
+    snsPlatformArns: [snsApnsVoipPlatformArn, snsFcmPlatformArn],
     containerEnvVars: [
       {
         name: 'GITHUB_PULL_REQUEST_PATCH_BUCKET',

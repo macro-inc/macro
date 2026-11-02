@@ -1,4 +1,5 @@
-//! Sending an email with Macro documents attached.
+//! Sending an email with files attached: Macro documents, or files the
+//! caller produced itself, such as an event's iCalendar file.
 //!
 //! The scheduled sender attaches whatever `email_attachments_drafts` rows a
 //! message has when its delivery runs, so attachments must be staged on a
@@ -22,27 +23,43 @@ use crate::domain::{
     },
     ports::{
         DraftAttachmentRepo, DraftAttachmentSource, DraftAttachmentStorage, DraftSendService,
-        EmailAttachmentSendService,
+        EmailAttachmentSendService, EmailFileSendService,
     },
 };
 
-/// [`EmailAttachmentSendService`] over a [`DraftSendService`] (any
-/// `EmailService`) for the draft and the send, plus the three attachment ports.
-pub struct DraftAttachmentSender<Svc, R, S, St> {
+/// [`EmailFileSendService`] over a [`DraftSendService`] (any
+/// `EmailService`) for the draft and the send, plus the draft attachment
+/// record and its object store: sends files the caller already holds.
+pub struct StagedAttachmentSender<Svc, R, St> {
     email: Arc<Svc>,
     repo: R,
-    source: S,
     storage: St,
+}
+
+impl<Svc, R, St> StagedAttachmentSender<Svc, R, St> {
+    /// Compose the sender from the email service and the staging ports.
+    pub fn new(email: Arc<Svc>, repo: R, storage: St) -> Self {
+        Self {
+            email,
+            repo,
+            storage,
+        }
+    }
+}
+
+/// [`EmailAttachmentSendService`] over a [`StagedAttachmentSender`], with
+/// the documents a send names resolved into files through `source`.
+pub struct DraftAttachmentSender<Svc, R, S, St> {
+    staged: StagedAttachmentSender<Svc, R, St>,
+    source: S,
 }
 
 impl<Svc, R, S, St> DraftAttachmentSender<Svc, R, S, St> {
     /// Compose the sender from the email service and the attachment ports.
     pub fn new(email: Arc<Svc>, repo: R, source: S, storage: St) -> Self {
         Self {
-            email,
-            repo,
+            staged: StagedAttachmentSender::new(email, repo, storage),
             source,
-            storage,
         }
     }
 }
@@ -80,11 +97,10 @@ pub(crate) fn input_for_staged_draft(
     input
 }
 
-impl<Svc, R, S, St> DraftAttachmentSender<Svc, R, S, St>
+impl<Svc, R, St> StagedAttachmentSender<Svc, R, St>
 where
     Svc: DraftSendService,
     R: DraftAttachmentRepo,
-    S: DraftAttachmentSource,
     St: DraftAttachmentStorage,
     anyhow::Error: From<R::Err>,
 {
@@ -112,7 +128,7 @@ where
                 s3_key,
                 upload_pending: false,
                 content_id: None,
-                is_inline: false,
+                is_inline: sourced.is_inline,
             };
             self.repo
                 .insert_draft_attachment(link.id, &record)
@@ -142,28 +158,24 @@ where
         }
     }
 
-    async fn send_with_attachments(
+    /// Send `input` with `files` staged on its draft first; with no files
+    /// it is exactly a send. An oversized set is refused before any draft
+    /// exists.
+    pub async fn send_with_files(
         &self,
         link: &Link,
         accessible_inboxes: &[Link],
         input: CreateDraftInput,
-        attachments: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+        files: Vec<SourcedAttachment>,
     ) -> Result<CreatedDraft, EmailErr> {
-        if attachments.is_empty() {
+        if files.is_empty() {
             return self
                 .email
                 .send_message(link, accessible_inboxes, input)
                 .await;
         }
-
-        // Check the running total after each download, so an oversized set
-        // fails as soon as it crosses the limit rather than after every file
-        // is held in memory.
-        let mut sourced = Vec::with_capacity(attachments.len());
-        for receipt in attachments {
-            sourced.push(self.source.fetch_attachment(receipt).await?);
-            total_attachment_bytes(&sourced)?;
-        }
+        total_attachment_bytes(&files)?;
+        let sourced = files;
 
         let mut draft_input = input.clone();
         draft_input.send_time = None;
@@ -180,6 +192,53 @@ where
         let send_input = input_for_staged_draft(input, &draft);
         self.email
             .send_message(link, accessible_inboxes, send_input)
+            .await
+    }
+}
+
+impl<Svc, R, St> EmailFileSendService for StagedAttachmentSender<Svc, R, St>
+where
+    Svc: DraftSendService,
+    R: DraftAttachmentRepo,
+    St: DraftAttachmentStorage,
+    anyhow::Error: From<R::Err>,
+{
+    fn send_message_with_files(
+        &self,
+        link: &Link,
+        accessible_inboxes: &[Link],
+        input: CreateDraftInput,
+        files: Vec<SourcedAttachment>,
+    ) -> impl Future<Output = Result<CreatedDraft, EmailErr>> + Send {
+        self.send_with_files(link, accessible_inboxes, input, files)
+    }
+}
+
+impl<Svc, R, S, St> DraftAttachmentSender<Svc, R, S, St>
+where
+    Svc: DraftSendService,
+    R: DraftAttachmentRepo,
+    S: DraftAttachmentSource,
+    St: DraftAttachmentStorage,
+    anyhow::Error: From<R::Err>,
+{
+    async fn send_with_attachments(
+        &self,
+        link: &Link,
+        accessible_inboxes: &[Link],
+        input: CreateDraftInput,
+        attachments: Vec<EntityAccessReceipt<ViewAccessLevel>>,
+    ) -> Result<CreatedDraft, EmailErr> {
+        // Check the running total after each download, so an oversized set
+        // fails as soon as it crosses the limit rather than after every file
+        // is held in memory.
+        let mut sourced = Vec::with_capacity(attachments.len());
+        for receipt in attachments {
+            sourced.push(self.source.fetch_attachment(receipt).await?);
+            total_attachment_bytes(&sourced)?;
+        }
+        self.staged
+            .send_with_files(link, accessible_inboxes, input, sourced)
             .await
     }
 }

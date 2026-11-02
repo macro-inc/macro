@@ -949,6 +949,43 @@ async fn insert_draft_attachment_records_the_attachment_on_the_inboxs_draft(
     migrator = "MACRO_DB_MIGRATIONS",
     fixtures(path = "../../../../fixtures", scripts("email_message"))
 )]
+async fn insert_draft_attachment_keeps_an_inline_part_inline(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    // An invitation's calendar body is staged inline with no Content-ID;
+    // delivery reads the flag back to send it as the message's calendar part.
+    use crate::domain::ports::DraftAttachmentRepo;
+    let repo = EmailPgRepo::new(pool);
+    let link = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let draft = Uuid::parse_str("ee000003-0000-0000-0000-000000000003")?;
+    let id = Uuid::parse_str("dd000010-0000-0000-0000-000000000010")?;
+
+    repo.delete_scheduled_messages_batch(&[draft], link).await?;
+    repo.insert_draft_attachment(
+        link,
+        &AttachmentDraft {
+            file_name: "invite.ics".to_owned(),
+            content_type: "text/calendar; method=REQUEST".to_owned(),
+            is_inline: true,
+            ..staged_attachment(draft, id)
+        },
+    )
+    .await?;
+
+    let drafts = repo.draft_attachments_by_message_ids(&[draft]).await?;
+    let staged = drafts[&draft]
+        .iter()
+        .find(|a| a.id == id)
+        .expect("the staged attachment is recorded");
+    assert!(staged.is_inline);
+    assert_eq!(staged.content_id, None);
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(path = "../../../../fixtures", scripts("email_message"))
+)]
 async fn insert_draft_attachment_refuses_another_inboxs_draft(
     pool: Pool<Postgres>,
 ) -> anyhow::Result<()> {

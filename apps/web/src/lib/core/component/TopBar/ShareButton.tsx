@@ -12,13 +12,13 @@ import {
   ShareRequestIcon,
   useShareRequestTrigger,
 } from '@app/features/access-requests/share-request-trigger';
+import { DirectAccessInvite } from '@app/features/access-requests/views/DirectAccessInvite';
 import type { MeetingAccessState } from '@app/features/calendar-notes/core/types';
 import { DocumentMeetingNotes } from '@app/features/calendar-notes/document-meeting-notes';
 import {
   updatePipelineSharePermissions,
   updatePipelineTeamShare,
 } from '@app/features/crm/sharing-adapter';
-import { projectRouteId } from '@app/features/projects/core/route';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { useChannelParticipants } from '@channel/use-channel-participants';
@@ -56,6 +56,7 @@ import clickOutside from '@core/directive/clickOutside';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isMobile } from '@core/mobile/isMobile';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { blockHotkeyScopeSignal } from '@core/signal/blockElement';
 import { blockEditPermissionEnabledSignal } from '@core/signal/load';
 import { useIsDocumentOwner } from '@core/signal/permissions';
@@ -65,17 +66,16 @@ import { buildSimpleEntityUrl } from '@core/util/url';
 import { useCopyLink } from '@core/util/useCopyLink';
 import { OwnerLabel } from '@entity/owner/owner-display';
 import IconShared from '@icon/share.svg';
-import { Dialog } from '@kobalte/core/dialog';
-import ChevronDownIcon from '@phosphor/caret-down.svg';
-import IconComment from '@phosphor/chat-teardrop.svg';
-import CheckIcon from '@phosphor/check.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import IconEye from '@phosphor/eye.svg';
-import IconLink from '@phosphor/link.svg';
-import IconEdit from '@phosphor/pencil.svg';
-import UserCircle from '@phosphor/user-circle.svg';
-import UsersIcon from '@phosphor/users.svg';
-import IconX from '@phosphor/x.svg';
+import ChevronDownIcon from '@icon/system/regular/caret-down.svg';
+import IconComment from '@icon/system/regular/chat-teardrop.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import IconEye from '@icon/system/regular/eye.svg';
+import IconLink from '@icon/system/regular/link.svg';
+import IconEdit from '@icon/system/regular/pencil.svg';
+import UserCircle from '@icon/system/regular/user-circle.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
+import IconX from '@icon/system/regular/x.svg';
 import { updateAgentSessionSharePermissions } from '@queries/agent-session/share-permissions';
 import {
   setCallRecordTeamShareCache,
@@ -83,6 +83,7 @@ import {
   updateCallTeamShare,
   useCallRecordQuery,
 } from '@queries/call/call';
+import { updateExternalChatPermissions } from '@queries/external-chats/share-permissions';
 import { updateInitiativeSharePermissions } from '@queries/initiative/share-permissions';
 import {
   fetchSharePermissions,
@@ -113,6 +114,7 @@ import { useNavigate } from '@solidjs/router';
 import { useQuery, useQueryClient } from '@tanstack/solid-query';
 import {
   Button,
+  ButtonGroup,
   CopyButton,
   cn,
   Dropdown,
@@ -162,6 +164,7 @@ import {
   type TeamShareScope,
   teamShareScopeOptionsForItem,
 } from './linkShare';
+import { ShareDialogFrame, ShareDialogTitle } from './ShareDialogFrame';
 
 false && clickOutside;
 
@@ -174,17 +177,18 @@ const isLinkSharingDisabledForItem = (itemType: ShareItemType): boolean =>
   itemType === 'crm_pipeline';
 
 /** Blocks, plus native entities that are shared without one. */
-type ShareBlockType = BlockName | BlockAlias | 'initiative';
+type ShareBlockType = BlockName | BlockAlias | 'initiative' | 'external_chat';
 
 function shareUrl(type: ShareBlockType, id: string): string {
-  if (type !== 'initiative') return buildSimpleEntityUrl({ type, id });
-  return buildSimpleEntityUrl({
-    type: 'component',
-    id: projectRouteId({ id, section: 'overview' }),
-  });
+  if (type === 'external_chat')
+    return buildSimpleEntityUrl({ type: 'external/whatsapp', id });
+  return buildSimpleEntityUrl({ type, id });
 }
 
-/** The levels a recipient can hold on an item; forms have no comments. */
+/**
+ * The levels a recipient can hold on an item: forms have no comments, and a
+ * external chat is read-only in Macro (sending follows provider membership).
+ */
 export function shareLevelsFor(
   itemType: ShareItemType,
   blockAlias?: ShareBlockType
@@ -193,6 +197,7 @@ export function shareLevelsFor(
   if (
     itemType === 'document' &&
     blockAlias &&
+    blockAlias !== 'external_chat' &&
     resolveBlockAlias(blockAlias) === 'md'
   ) {
     const levels: AccessLevel[] = ['view'];
@@ -200,6 +205,7 @@ export function shareLevelsFor(
     if (ENABLE_MARKDOWN_LIVE_COLLABORATION) levels.push('edit');
     return levels;
   }
+  if (itemType === 'external_chat') return ['view'];
   return undefined;
 }
 
@@ -210,6 +216,8 @@ const SHARE_LINK_SUBTEXT =
 // they may forward. Their links don't grant access to recipients either, so
 // copying skips SHARE_LINK_SUBTEXT.
 const RESTRICTED_SHARE_DESCRIPTIONS: Partial<Record<ShareItemType, string>> = {
+  external_chat:
+    'Only the owner can share access to this chat. Sending always requires your own connected account.',
   crm_pipeline:
     'Only editors can share this pipeline. You can copy a link for people who already have access.',
   agent_session:
@@ -248,6 +256,8 @@ function forwardTarget(
         `Could not share this ${blockAlias === 'pipeline' ? 'pipeline' : 'project'}`
       );
   };
+  if (blockAlias === 'external_chat')
+    throw new Error('External chats use direct people sharing');
   if (blockAlias === 'pipeline')
     return { blockId: id, blockName: blockAlias, prepareChannel };
   if (blockAlias !== 'initiative')
@@ -420,6 +430,9 @@ interface LinkSharingControlsProps {
 /** Owner-only explicit team sharing, present only for entity types that support it. */
 interface TeamShareControls {
   accessLevel: AccessLevel | null | undefined;
+  /** An independent view grant that is managed under Meeting links. */
+  meetingViewAccess?: boolean;
+  meetingAccess?: MeetingAccessState | 'unknown';
   setAccessLevel: (scope: TeamShareScope) => void;
   /** Noun for the copy, e.g. "document" or "chat". */
   itemNoun: string;
@@ -437,22 +450,42 @@ function teamShareOnOwnCard(
 
 function TeamAccessSection(props: { teamShare: TeamShareControls }) {
   const teamShareScope = () => getTeamShareScope(props.teamShare.accessLevel);
+  const label = () => {
+    const scope = teamShareScope();
+    if (scope !== 'NONE') return getTeamShareScopeCopy(scope);
+    if (props.teamShare.meetingViewAccess) return 'View via meeting';
+    if (props.teamShare.meetingAccess === 'loading') return 'Checking…';
+    if (props.teamShare.meetingAccess === 'error')
+      return 'Check meeting access';
+    if (props.teamShare.meetingAccess === 'unknown') return 'Direct: None';
+    return getTeamShareScopeCopy(scope);
+  };
 
   return (
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div class="flex flex-col gap-1">
         <span class="font-medium">Team access</span>
         <p class="text-sm text-ink-muted">
-          Share this {props.teamShare.itemNoun} directly with the owner's team.
+          <Show
+            when={props.teamShare.meetingViewAccess}
+            fallback={
+              <>
+                Share this {props.teamShare.itemNoun} directly with the owner's
+                team.
+              </>
+            }
+          >
+            Your team can view through meeting links.
+          </Show>
         </p>
       </div>
       <Dropdown>
         <Dropdown.Trigger
-          variant="outline"
+          variant="secondary"
           aria-label="Team access"
           class="min-w-16.75 py-1 pl-2 pr-1 flex items-center gap-1"
         >
-          {getTeamShareScopeCopy(teamShareScope())}
+          {label()}
           <ChevronDownIcon class="size-4 text-ink-extra-muted" />
         </Dropdown.Trigger>
         <Dropdown.Content portalScope="local">
@@ -466,7 +499,12 @@ function TeamAccessSection(props: { teamShare: TeamShareControls }) {
             <For each={props.teamShare.scopeOptions}>
               {(option) => (
                 <Dropdown.RadioItem value={option.value}>
-                  <span class="flex-1 truncate">{option.label}</span>
+                  <span class="flex-1 truncate">
+                    {option.value === 'NONE' &&
+                    props.teamShare.meetingViewAccess
+                      ? 'Use meeting access'
+                      : option.label}
+                  </span>
                   <Dropdown.ItemIndicator>
                     <CheckIcon class="size-3.5 text-accent" />
                   </Dropdown.ItemIndicator>
@@ -487,8 +525,20 @@ function LinkSharingControls(props: LinkSharingControlsProps) {
     const status = getShareStatus(
       props.linkShare,
       props.hasExplicitShares || props.meetingAccess === 'shared',
-      props.teamShare?.accessLevel
+      props.teamShare?.accessLevel ??
+        (props.teamShare?.meetingViewAccess ? 'view' : undefined)
     );
+    if (
+      status.label === 'Team' &&
+      props.teamShare?.meetingViewAccess &&
+      !props.teamShare.accessLevel &&
+      !props.linkShare
+    ) {
+      return {
+        ...status,
+        tooltip: 'Your team can view through meeting links.',
+      };
+    }
     if (status.label === 'Shared' && props.meetingAccess === 'shared') {
       return {
         ...status,
@@ -563,7 +613,7 @@ function LinkSharingControls(props: LinkSharingControlsProps) {
                 setPermissions={props.setLinkShareAccessLevel}
               />
             </div>
-            <Button variant="outline" onClick={props.copyLink}>
+            <Button variant="secondary" onClick={props.copyLink}>
               <CopyIcon class="size-4" />
               <span>Copy Link</span>
             </Button>
@@ -657,7 +707,7 @@ function RecipientsSkeleton() {
 interface MobileShareDrawerProps {
   meetingNotesEnabled: boolean;
   meetingAccess?: MeetingAccessState | 'unknown';
-  onMeetingAccessState: (state: MeetingAccessState) => void;
+  onMeetingAccessState: (state: MeetingAccessState, teamIds: string[]) => void;
   requests: SharingSource;
   requestLevels: readonly AccessLevel[];
   editPermissionEnabled?: boolean;
@@ -732,7 +782,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
 
   const [forwardRef, setForwardRef] = createSignal<{
     handleSubmit: () => void;
-    getSelectedOptions: () => unknown[];
+    canSubmit: () => boolean;
   }>();
 
   return (
@@ -762,12 +812,10 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
             </div>
             <Show when={effectiveActiveTab() === 'share' && props.canForward}>
               <Button
-                variant="ghost"
+                variant="primary"
                 size="sm"
-                class="shrink-0 ml-2 pl-2 disabled:text-ink-muted text-accent"
-                disabled={
-                  (forwardRef()?.getSelectedOptions().length ?? 0) === 0
-                }
+                class="shrink-0 ml-2"
+                disabled={!forwardRef()?.canSubmit()}
                 onClick={() => forwardRef()?.handleSubmit()}
               >
                 Share
@@ -788,10 +836,23 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
               display: effectiveActiveTab() === 'share' ? undefined : 'none',
             }}
           >
-            <Show when={!props.canForward}>
-              <p class="px-4 py-3 text-sm text-ink-muted">
-                {RESTRICTED_SHARE_DESCRIPTIONS[props.itemType]}
-              </p>
+            <Show
+              when={
+                props.itemType === 'external_chat' &&
+                props.userPermissions === Permissions.OWNER
+              }
+              fallback={
+                <Show when={!props.canForward}>
+                  <p class="px-4 py-3 text-sm text-ink-muted">
+                    {RESTRICTED_SHARE_DESCRIPTIONS[props.itemType]}
+                  </p>
+                </Show>
+              }
+            >
+              <DirectAccessInvite
+                source={props.requests}
+                description="Invite someone to read this conversation. Sending requires their own connected account."
+              />
             </Show>
             <Show when={props.canForward}>
               <AfterFirstPaint fallback={<ShareFormSkeleton />}>
@@ -825,7 +886,7 @@ function MobileShareDrawer(props: MobileShareDrawerProps) {
             </Show>
             <Show when={!props.canForward}>
               <div class="px-4 py-3">
-                <Button variant="outline" onClick={props.copyLink}>
+                <Button variant="secondary" onClick={props.copyLink}>
                   <CopyIcon class="size-4" />
                   <span>Copy Link</span>
                 </Button>
@@ -1027,7 +1088,8 @@ export function ShareModal(props: ShareModalProps) {
     enclosingBlockId === props.id &&
     props.itemType !== 'agent_session' &&
     props.itemType !== 'initiative' &&
-    props.itemType !== 'crm_pipeline';
+    props.itemType !== 'crm_pipeline' &&
+    props.itemType !== 'external_chat';
   // Outside a block the dialog reads a cached query, which the Share trigger
   // warms on hover, so it opens with the roster already in hand.
   const queryClient = useQueryClient();
@@ -1069,9 +1131,24 @@ export function ShareModal(props: ShareModalProps) {
     documentId: string;
     userId: string | undefined;
     state: MeetingAccessState;
+    teamIds: string[];
   }>();
-  const setMeetingAccess = (state: MeetingAccessState) =>
-    setMeetingAccessSnapshot({ documentId: props.id, userId: userId(), state });
+  const setMeetingAccess = (state: MeetingAccessState, teamIds: string[]) =>
+    setMeetingAccessSnapshot({
+      documentId: props.id,
+      userId: userId(),
+      state,
+      teamIds,
+    });
+  const meetingTeamAccess = () => {
+    const snapshot = meetingAccessSnapshot();
+    if (snapshot?.documentId !== props.id || snapshot.userId !== userId())
+      return false;
+    const teamId = currentTeamQuery.isSuccess
+      ? currentTeamQuery.data?.team?.id
+      : undefined;
+    return !!teamId && snapshot.teamIds.includes(teamId);
+  };
   const meetingAccess = (): MeetingAccessState => {
     const snapshot = meetingAccessSnapshot();
     return snapshot?.documentId === props.id && snapshot.userId === userId()
@@ -1101,10 +1178,12 @@ export function ShareModal(props: ShareModalProps) {
     props.userPermissions === Permissions.OWNER ||
     props.userPermissions === Permissions.CAN_EDIT;
   const canForward = () =>
-    props.itemType === 'crm_pipeline'
-      ? canSharePipeline()
-      : !RESTRICTED_SHARE_DESCRIPTIONS[props.itemType] ||
-        (Boolean(userId()) && props.owner === userId());
+    props.itemType === 'external_chat'
+      ? false
+      : props.itemType === 'crm_pipeline'
+        ? canSharePipeline()
+        : !RESTRICTED_SHARE_DESCRIPTIONS[props.itemType] ||
+          (Boolean(userId()) && props.owner === userId());
   const userPermissions = () =>
     props.itemType === 'agent_session' && !canForward()
       ? Permissions.CAN_VIEW
@@ -1114,10 +1193,14 @@ export function ShareModal(props: ShareModalProps) {
     props.itemType === 'crm_pipeline' && canSharePipeline()
       ? Permissions.OWNER
       : userPermissions();
+  const directSharingOwner = () =>
+    props.itemType === 'external_chat' &&
+    props.userPermissions === Permissions.OWNER;
   const editPermissionEnabled = () => {
     if (props.itemType === 'agent_session') return true;
     if (
       props.itemType === 'document' &&
+      props.blockAlias !== 'external_chat' &&
       resolveBlockAlias(props.blockAlias) === 'md'
     )
       return ENABLE_MARKDOWN_LIVE_COLLABORATION;
@@ -1193,7 +1276,20 @@ export function ShareModal(props: ShareModalProps) {
 
   const removeChannelAccess = createCallback(async (channelId: string) => {
     if (recipientPermissions() !== Permissions.OWNER) return;
-    if (usesGraphqlSharePolicy(props.itemType)) {
+    // An external chat reaches a channel only by mention; its owner revokes it.
+    if (props.itemType === 'external_chat') {
+      const result = await updateExternalChatPermissions(props.id, {
+        channelSharePermissions: [{ operation: 'remove', channelId }],
+      });
+      if (result.isOk()) {
+        fireAndForget(refetch(), 'share-modal');
+        toast.success('Removed channel access');
+      } else {
+        toast.alert('Failed to remove channel access', {
+          subtext: 'Please try again',
+        });
+      }
+    } else if (usesGraphqlSharePolicy(props.itemType)) {
       const result = await updateEntitySharePolicy(props.itemType, props.id, {
         channelSharePermissions: [{ operation: 'remove', channelId }],
       });
@@ -1352,7 +1448,11 @@ export function ShareModal(props: ShareModalProps) {
       accessLevel: AccessLevel,
       hideSuccessToast?: boolean
     ) => {
-      if (recipientPermissions() !== Permissions.OWNER) return;
+      if (
+        recipientPermissions() !== Permissions.OWNER ||
+        props.itemType === 'external_chat'
+      )
+        return;
 
       let result:
         | Result<any, ResultError<any>[]>
@@ -1501,7 +1601,12 @@ export function ShareModal(props: ShareModalProps) {
         getTeamShareScope(sharePermission.teamShareAccessLevel) !== 'NONE';
 
       let result: Result<unknown, ResultError<any>[]>;
-      if (props.itemType !== 'call' && usesGraphqlSharePolicy(props.itemType)) {
+      if (props.itemType === 'external_chat') {
+        result = await updateExternalChatPermissions(props.id, sharePermission);
+      } else if (
+        props.itemType !== 'call' &&
+        usesGraphqlSharePolicy(props.itemType)
+      ) {
         result = await updateEntitySharePolicy(
           props.itemType,
           props.id,
@@ -1556,12 +1661,16 @@ export function ShareModal(props: ShareModalProps) {
         setCallRecordTeamShareCache(props.id, shared);
       }
       if (scope === 'NONE') {
-        toast.success(`Removed team access for this ${itemNoun}`);
+        toast.success(
+          canManageMeetingLinks()
+            ? `Removed direct team access for this ${itemNoun}`
+            : `Removed team access for this ${itemNoun}`
+        );
         return;
       }
 
       toast.success('Updated team access', {
-        subtext: `The owner's team can ${getTeamShareScopeCopy(scope).toLowerCase()} this ${itemNoun}`,
+        subtext: `The owner's team can ${scope} this ${itemNoun}`,
       });
       analytics.track('share_entity', {
         entityType: props.itemType,
@@ -1591,6 +1700,8 @@ export function ShareModal(props: ShareModalProps) {
     currentTeamQuery.data
       ? {
           accessLevel: teamShareAccessLevel(),
+          meetingViewAccess: canManageMeetingLinks() && meetingTeamAccess(),
+          meetingAccess: meetingAccessForSharing(),
           setAccessLevel: setTeamShareAccessLevel,
           itemNoun:
             props.blockAlias === 'snippet'
@@ -1606,7 +1717,9 @@ export function ShareModal(props: ShareModalProps) {
       const scope = getLinkShareScope(sharePermission.linkShare);
       let result: Result<any, ResultError<any>[]> | undefined;
 
-      if (usesGraphqlSharePolicy(props.itemType)) {
+      if (props.itemType === 'external_chat') {
+        result = await updateExternalChatPermissions(props.id, sharePermission);
+      } else if (usesGraphqlSharePolicy(props.itemType)) {
         result = await updateEntitySharePolicy(
           props.itemType,
           props.id,
@@ -1740,349 +1853,334 @@ export function ShareModal(props: ShareModalProps) {
         />
       }
     >
-      <Dialog onOpenChange={props.onOpenChange} open={props.open}>
-        <Dialog.Portal>
-          <Dialog.Overlay class="z-modal fixed inset-0 scrim-glass" />
-          <div class="z-modal fixed inset-0">
-            <Dialog.Content
-              class="max-w-[calc(100vw-16px)] mt-20 sm:mt-40 mx-auto overflow-y-auto scrollbar-hidden portal-scope isolate flex flex-col gap-2 *:max-h-[75vh]"
-              style={{ width: '800px' }}
-            >
-              {/* Card 1: Share form — gradient border */}
-              <Panel
-                depth={2}
-                hideBorder
-                class="elevated-surface rounded-[24px] bg-dialog"
-              >
-                <Panel.Header class="px-4">
-                  <Dialog.Title class="flex items-center gap-1.5 min-w-0 overflow-hidden whitespace-nowrap w-full text-sm font-medium">
-                    <span class="shrink-0">Share:</span>
-                    <EntityIcon
-                      targetType={props.blockAlias}
-                      size="sm"
-                      class="shrink-0"
-                    />
-                    <span class="truncate">{props.name}</span>
-                  </Dialog.Title>
-                </Panel.Header>
-                <Panel.Body>
-                  <Show when={!canForward()}>
-                    <p class="px-4 py-3 text-sm text-ink-muted">
-                      {RESTRICTED_SHARE_DESCRIPTIONS[props.itemType]}
-                    </p>
-                  </Show>
-                  <Show when={canForward()}>
-                    <AfterFirstPaint fallback={<ShareFormSkeleton />}>
-                      <ForwardToChannel
-                        {...forwardTarget(
-                          props.blockAlias,
-                          props.id,
-                          setChannelPermissions
-                        )}
-                        editPermissionEnabled={editPermissionEnabled()}
-                        submitPermissionInfo={{
-                          setChannelPermissions: (id, accessLevel) =>
-                            setChannelPermissions(id, accessLevel, true),
-                          userPermissions: recipientPermissions(),
-                          channelSharePermissions: recipients(),
-                        }}
-                        onSubmit={() => props.onOpenChange(false)}
-                        onCancel={() => props.onOpenChange(false)}
-                        refetch={refetch}
-                        name={props.name}
-                        hideAccessLevelSelector={props.itemType === 'email'}
-                        initialAccessLevel={
-                          props.itemType === 'email' ? 'view' : null
-                        }
-                        allowedAccessLevels={shareLevelsFor(
-                          props.itemType,
-                          props.blockAlias
-                        )}
-                      />
-                    </AfterFirstPaint>
-                  </Show>
-                  <Show when={!canForward()}>
-                    <div class="flex justify-end px-4 py-3">
-                      <Button variant="outline" onClick={copyLink}>
-                        <CopyIcon class="size-4" />
-                        <span>Copy Link</span>
-                      </Button>
-                    </div>
-                  </Show>
-                </Panel.Body>
-              </Panel>
+      <ShareDialogFrame open={props.open} onOpenChange={props.onOpenChange}>
+        {/* Card 1: Share form — gradient border */}
+        <Panel
+          depth={2}
+          hideBorder
+          class="elevated-surface rounded-[24px] bg-dialog"
+        >
+          <Panel.Header class="px-4">
+            <ShareDialogTitle
+              icon={
+                <EntityIcon
+                  targetType={props.blockAlias}
+                  size="sm"
+                  class="shrink-0"
+                />
+              }
+              name={props.name}
+            />
+          </Panel.Header>
+          <Panel.Body>
+            <Show when={!canForward() && !directSharingOwner()}>
+              <p class="px-4 py-3 text-sm text-ink-muted">
+                {RESTRICTED_SHARE_DESCRIPTIONS[props.itemType]}
+              </p>
+            </Show>
+            <Show when={directSharingOwner()}>
+              <DirectAccessInvite
+                source={requests}
+                description="Invite someone to read this conversation. Sending requires their own connected account."
+              />
+            </Show>
+            <Show when={canForward()}>
+              <AfterFirstPaint fallback={<ShareFormSkeleton />}>
+                <ForwardToChannel
+                  {...forwardTarget(
+                    props.blockAlias,
+                    props.id,
+                    setChannelPermissions
+                  )}
+                  editPermissionEnabled={editPermissionEnabled()}
+                  submitPermissionInfo={{
+                    setChannelPermissions: (id, accessLevel) =>
+                      setChannelPermissions(id, accessLevel, true),
+                    userPermissions: recipientPermissions(),
+                    channelSharePermissions: recipients(),
+                  }}
+                  onSubmit={() => props.onOpenChange(false)}
+                  onCancel={() => props.onOpenChange(false)}
+                  refetch={refetch}
+                  name={props.name}
+                  hideAccessLevelSelector={props.itemType === 'email'}
+                  initialAccessLevel={
+                    props.itemType === 'email' ? 'view' : null
+                  }
+                  allowedAccessLevels={shareLevelsFor(
+                    props.itemType,
+                    props.blockAlias
+                  )}
+                />
+              </AfterFirstPaint>
+            </Show>
+            <Show when={!canForward()}>
+              <div class="flex justify-end px-4 py-3">
+                <Button variant="secondary" onClick={copyLink}>
+                  <CopyIcon class="size-4" />
+                  <span>Copy Link</span>
+                </Button>
+              </div>
+            </Show>
+          </Panel.Body>
+        </Panel>
 
-              <AccessRequestError source={requests} />
-              <Show
-                when={
-                  requests.state()?.canReview &&
-                  (requests.state()?.pendingCount ?? 0) > 0
-                }
-              >
-                <Panel
-                  depth={2}
-                  hideBorder
-                  class="elevated-surface rounded-[24px] bg-dialog"
-                >
-                  <Panel.Body>
-                    <PermissionRequestsView source={requests} />
-                  </Panel.Body>
-                </Panel>
-              </Show>
+        <AccessRequestError source={requests} />
+        <Show
+          when={
+            requests.state()?.canReview &&
+            (requests.state()?.pendingCount ?? 0) > 0
+          }
+        >
+          <Panel
+            depth={2}
+            hideBorder
+            class="elevated-surface rounded-[24px] bg-dialog"
+          >
+            <Panel.Body>
+              <PermissionRequestsView source={requests} />
+            </Panel.Body>
+          </Panel>
+        </Show>
 
-              {/* Card 2: Recipients — plain border */}
-              <Show
-                when={
-                  (recipients()?.length ?? 0) > 0 ||
-                  !!(props.owner ?? requests.state()?.owner) ||
-                  permissionsLoading()
-                }
-              >
-                <Panel
-                  depth={2}
-                  hideBorder
-                  class="elevated-surface rounded-[24px] bg-dialog"
+        {/* Card 2: Recipients — plain border */}
+        <Show
+          when={
+            (recipients()?.length ?? 0) > 0 ||
+            !!(props.owner ?? requests.state()?.owner) ||
+            permissionsLoading()
+          }
+        >
+          <Panel
+            depth={2}
+            hideBorder
+            class="elevated-surface rounded-[24px] bg-dialog"
+          >
+            <Panel.Header class="px-4">
+              <span class="text-sm font-medium">
+                <Show when={!ownerOnlyRoster()} fallback="Owner">
+                  People with access to this {getShareItemNoun(props.itemType)}
+                </Show>
+              </span>
+            </Panel.Header>
+            <Panel.Body class="text-ink">
+              <div class="relative">
+                <ScrollIndicators
+                  scrollRef={recipientScrollRef}
+                  noBorderStart
+                  noBorderEnd
+                />
+                <CustomScrollbar scrollContainer={recipientScrollRef} />
+                <div
+                  class="overflow-y-auto scrollbar-hidden max-h-[calc(27vh-40px)]"
+                  ref={setRecipientScrollRef}
                 >
-                  <Panel.Header class="px-4">
-                    <span class="text-sm font-medium">
-                      <Show when={!ownerOnlyRoster()} fallback="Owner">
-                        People with access to this{' '}
-                        {getShareItemNoun(props.itemType)}
-                      </Show>
-                    </span>
-                  </Panel.Header>
-                  <Panel.Body class="text-ink">
-                    <div class="relative">
-                      <ScrollIndicators
-                        scrollRef={recipientScrollRef}
-                        noBorderStart
-                        noBorderEnd
-                      />
-                      <CustomScrollbar scrollContainer={recipientScrollRef} />
-                      <div
-                        class="overflow-y-auto scrollbar-hidden max-h-[calc(27vh-40px)]"
-                        ref={setRecipientScrollRef}
-                      >
-                        <div class="grid gap-3 text-ink text-sm select-none p-4">
-                          <Show when={props.owner ?? requests.state()?.owner}>
-                            <div class="flex justify-between">
-                              <div class="flex items-center gap-2 overflow-hidden font-medium">
-                                <OwnerLabel
-                                  ownerId={
-                                    props.owner ??
-                                    requests.state()?.owner ??
-                                    undefined
-                                  }
-                                  viewerLabel="Me"
-                                />
-                              </div>
-                              <div class="flex items-center">
-                                <div class="font-medium text-ink-muted text-xs">
-                                  Owner
-                                </div>
-                              </div>
-                            </div>
-                          </Show>
-                          <RequestAccessView
-                            source={requests}
-                            allowedLevels={requestLevels()}
+                  <div class="grid gap-3 text-ink text-sm select-none p-4">
+                    <Show when={props.owner ?? requests.state()?.owner}>
+                      <div class="flex justify-between">
+                        <div class="flex items-center gap-2 overflow-hidden font-medium">
+                          <OwnerLabel
+                            ownerId={
+                              props.owner ??
+                              requests.state()?.owner ??
+                              undefined
+                            }
+                            viewerLabel="Me"
                           />
-                          <DirectAccessView
-                            source={requests}
-                            exclude={props.directPeopleIds}
-                          />
-                          <Dynamic component={props.people} />
-                          <Show when={permissionsLoading()}>
-                            <RecipientsSkeleton />
-                          </Show>
-                          <For each={recipients() || []}>
-                            {(recipient) => (
-                              <div class="flex justify-between">
-                                <div
-                                  class="flex items-center gap-2 overflow-hidden"
-                                  onClick={() =>
-                                    navigateToChannel(recipient.channel_id)
-                                  }
-                                >
-                                  <Switch
-                                    fallback={
-                                      <UsersIcon class="shrink-0 size-4" />
-                                    }
-                                  >
-                                    <Match
-                                      when={
-                                        channelNameMap().get(
-                                          recipient.channel_id
-                                        )?.type === 'direct_message'
-                                      }
-                                    >
-                                      <DmRecipientIcon
-                                        channelId={recipient.channel_id}
-                                      />
-                                    </Match>
-                                    <Match
-                                      when={channelNameMap().get(
-                                        recipient.channel_id
-                                      )}
-                                    >
-                                      <UsersIcon class="shrink-0 size-4" />
-                                    </Match>
-                                  </Switch>
-                                  <div class="font-medium truncate">
-                                    <Show
-                                      when={
-                                        channelNameMap().get(
-                                          recipient.channel_id
-                                        )?.type !== 'direct_message'
-                                      }
-                                      fallback={
-                                        channelNameMap().get(
-                                          recipient.channel_id
-                                        )?.name || 'Conversation'
-                                      }
-                                    >
-                                      <GroupChannelLabel
-                                        channelId={recipient.channel_id}
-                                        fallbackName={
-                                          channelNameMap().get(
-                                            recipient.channel_id
-                                          )?.name || 'Conversation'
-                                        }
-                                      />
-                                    </Show>
-                                  </div>
-                                  <Show when={props.itemType === 'form'}>
-                                    <span class="shrink-0 text-xs text-ink-muted">
-                                      Can respond (channel)
-                                    </span>
-                                  </Show>
-                                </div>
-                                <div class="flex items-center">
-                                  <ShareOptions
-                                    editPermissionEnabled={editPermissionEnabled()}
-                                    allowedAccessLevels={shareLevelsFor(
-                                      props.itemType,
-                                      props.blockAlias
-                                    )}
-                                    disabled={
-                                      recipientPermissions() !==
-                                      Permissions.OWNER
-                                    }
-                                    permissions={recipient.access_level}
-                                    setPermissions={(accessLevel) => {
-                                      if (accessLevel === null) {
-                                        fireAndForget(
-                                          removeChannelAccess(
-                                            recipient.channel_id
-                                          ),
-                                          'share-modal'
-                                        );
-                                      } else if (
-                                        accessLevel !== recipient.access_level
-                                      ) {
-                                        fireAndForget(
-                                          setChannelPermissions(
-                                            recipient.channel_id,
-                                            accessLevel
-                                          ),
-                                          'share-modal'
-                                        );
-                                      }
-                                    }}
-                                  />
-                                </div>
-                              </div>
-                            )}
-                          </For>
+                        </div>
+                        <div class="flex items-center">
+                          <div class="font-medium text-ink-muted text-xs">
+                            Owner
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  </Panel.Body>
-                </Panel>
-              </Show>
-
-              {/* Card 3: Link sharing — plain border */}
-              <Show
-                when={
-                  props.open &&
-                  meetingNotesFlag().enabled &&
-                  props.blockAlias === 'md' &&
-                  props.itemType === 'document' &&
-                  !!userId() &&
-                  (props.owner ?? requests.state()?.owner) === userId()
-                }
-              >
-                <DocumentMeetingNotes
-                  documentId={props.id}
-                  onAccessState={setMeetingAccess}
-                />
-              </Show>
-              <Show
-                when={
-                  props.linkSharing ||
-                  (userPermissions() === Permissions.OWNER &&
-                    !isLinkSharingDisabledForItem(props.itemType))
-                }
-              >
-                <Panel
-                  depth={2}
-                  hideBorder
-                  class="elevated-surface rounded-[24px] bg-dialog"
-                >
-                  <Panel.Body>
-                    <Show
-                      when={props.linkSharing}
-                      fallback={
-                        <LinkSharingControls
-                          allowedAccessLevels={shareLevelsFor(
-                            props.itemType,
-                            props.blockAlias
-                          )}
-                          loading={permissionsLoading()}
-                          meetingAccess={meetingAccessForSharing()}
-                          editPermissionEnabled={editPermissionEnabled()}
-                          linkShare={linkShare()}
-                          linkShareAccessLevel={linkShareAccessLevel()}
-                          hasExplicitShares={
-                            (recipients()?.length ?? 0) > 0 ||
-                            !!props.hasDirectShares ||
-                            requests.grants().length > 0
-                          }
-                          setLinkShareScope={setLinkShareScope}
-                          setLinkShareAccessLevel={setLinkShareAccessLevel}
-                          copyLink={copyLink}
-                          teamShare={teamShareControls()}
-                        />
-                      }
-                    >
-                      <div class="p-4">
-                        <Dynamic component={props.linkSharing} />
-                      </div>
                     </Show>
-                  </Panel.Body>
-                </Panel>
-              </Show>
+                    <RequestAccessView
+                      source={requests}
+                      allowedLevels={requestLevels()}
+                    />
+                    <DirectAccessView
+                      source={requests}
+                      exclude={props.directPeopleIds}
+                    />
+                    <Dynamic component={props.people} />
+                    <Show when={permissionsLoading()}>
+                      <RecipientsSkeleton />
+                    </Show>
+                    <For each={recipients() || []}>
+                      {(recipient) => (
+                        <div class="flex justify-between">
+                          <div
+                            class="flex items-center gap-2 overflow-hidden"
+                            onClick={() =>
+                              navigateToChannel(recipient.channel_id)
+                            }
+                          >
+                            <Switch
+                              fallback={<UsersIcon class="shrink-0 size-4" />}
+                            >
+                              <Match
+                                when={
+                                  channelNameMap().get(recipient.channel_id)
+                                    ?.type === 'direct_message'
+                                }
+                              >
+                                <DmRecipientIcon
+                                  channelId={recipient.channel_id}
+                                />
+                              </Match>
+                              <Match
+                                when={channelNameMap().get(
+                                  recipient.channel_id
+                                )}
+                              >
+                                <UsersIcon class="shrink-0 size-4" />
+                              </Match>
+                            </Switch>
+                            <div class="font-medium truncate">
+                              <Show
+                                when={
+                                  channelNameMap().get(recipient.channel_id)
+                                    ?.type !== 'direct_message'
+                                }
+                                fallback={
+                                  channelNameMap().get(recipient.channel_id)
+                                    ?.name || 'Conversation'
+                                }
+                              >
+                                <GroupChannelLabel
+                                  channelId={recipient.channel_id}
+                                  fallbackName={
+                                    channelNameMap().get(recipient.channel_id)
+                                      ?.name || 'Conversation'
+                                  }
+                                />
+                              </Show>
+                            </div>
+                            <Show when={props.itemType === 'form'}>
+                              <span class="shrink-0 text-xs text-ink-muted">
+                                Can respond (channel)
+                              </span>
+                            </Show>
+                          </div>
+                          <div class="flex items-center">
+                            <ShareOptions
+                              editPermissionEnabled={editPermissionEnabled()}
+                              allowedAccessLevels={shareLevelsFor(
+                                props.itemType,
+                                props.blockAlias
+                              )}
+                              disabled={
+                                recipientPermissions() !== Permissions.OWNER
+                              }
+                              permissions={recipient.access_level}
+                              setPermissions={(accessLevel) => {
+                                if (accessLevel === null) {
+                                  fireAndForget(
+                                    removeChannelAccess(recipient.channel_id),
+                                    'share-modal'
+                                  );
+                                } else if (
+                                  accessLevel !== recipient.access_level
+                                ) {
+                                  fireAndForget(
+                                    setChannelPermissions(
+                                      recipient.channel_id,
+                                      accessLevel
+                                    ),
+                                    'share-modal'
+                                  );
+                                }
+                              }}
+                            />
+                          </div>
+                        </div>
+                      )}
+                    </For>
+                  </div>
+                </div>
+              </div>
+            </Panel.Body>
+          </Panel>
+        </Show>
+
+        {/* Card 3: Link sharing — plain border */}
+        <Show
+          when={
+            props.open &&
+            meetingNotesFlag().enabled &&
+            props.blockAlias === 'md' &&
+            props.itemType === 'document' &&
+            !!userId() &&
+            (props.owner ?? requests.state()?.owner) === userId()
+          }
+        >
+          <DocumentMeetingNotes
+            documentId={props.id}
+            onAccessState={setMeetingAccess}
+          />
+        </Show>
+        <Show
+          when={
+            props.linkSharing ||
+            (userPermissions() === Permissions.OWNER &&
+              !isLinkSharingDisabledForItem(props.itemType))
+          }
+        >
+          <Panel
+            depth={2}
+            hideBorder
+            class="elevated-surface rounded-[24px] bg-dialog"
+          >
+            <Panel.Body>
               <Show
-                when={teamShareOnOwnCard(props.itemType, teamShareControls())}
+                when={props.linkSharing}
+                fallback={
+                  <LinkSharingControls
+                    allowedAccessLevels={shareLevelsFor(
+                      props.itemType,
+                      props.blockAlias
+                    )}
+                    loading={permissionsLoading()}
+                    meetingAccess={meetingAccessForSharing()}
+                    editPermissionEnabled={editPermissionEnabled()}
+                    linkShare={linkShare()}
+                    linkShareAccessLevel={linkShareAccessLevel()}
+                    hasExplicitShares={
+                      (recipients()?.length ?? 0) > 0 ||
+                      !!props.hasDirectShares ||
+                      requests.grants().length > 0
+                    }
+                    setLinkShareScope={setLinkShareScope}
+                    setLinkShareAccessLevel={setLinkShareAccessLevel}
+                    copyLink={copyLink}
+                    teamShare={teamShareControls()}
+                  />
+                }
               >
-                {(teamShare) => (
-                  <Panel
-                    depth={2}
-                    hideBorder
-                    class="elevated-surface rounded-[24px] bg-dialog"
-                  >
-                    <Panel.Body>
-                      <div class="p-4 text-sm text-ink">
-                        <TeamAccessSection teamShare={teamShare()} />
-                      </div>
-                    </Panel.Body>
-                  </Panel>
-                )}
+                <div class="p-4">
+                  <Dynamic component={props.linkSharing} />
+                </div>
               </Show>
-            </Dialog.Content>
-          </div>
-        </Dialog.Portal>
-      </Dialog>
+            </Panel.Body>
+          </Panel>
+        </Show>
+        <Show when={teamShareOnOwnCard(props.itemType, teamShareControls())}>
+          {(teamShare) => (
+            <Panel
+              depth={2}
+              hideBorder
+              class="elevated-surface rounded-[24px] bg-dialog"
+            >
+              <Panel.Body>
+                <div class="p-4 text-sm text-ink">
+                  <TeamAccessSection teamShare={teamShare()} />
+                </div>
+              </Panel.Body>
+            </Panel>
+          )}
+        </Show>
+      </ShareDialogFrame>
     </Show>
   );
 }
@@ -2093,6 +2191,7 @@ export function ShareTrigger(props: {
   blockType?: ShareBlockType;
   hotkeyScope?: string;
   copyLink?: () => void;
+  size?: 'sm' | 'md';
 }) {
   const isAuthenticated = useIsAuthenticated();
   const inBlock = isInBlock();
@@ -2121,10 +2220,12 @@ export function ShareTrigger(props: {
     throw new Error('<ShareTrigger> requires an explicit block id');
   };
 
-  const itemType = (): ShareItemType =>
-    blockType() === 'initiative'
-      ? 'initiative'
-      : blockNameToItemType(blockType());
+  const itemType = (): ShareItemType => {
+    const type = blockType();
+    return type === 'initiative' || type === 'external_chat'
+      ? type
+      : blockNameToItemType(type);
+  };
 
   // Hovering or focusing Share loads what the dialog shows first, so a click
   // opens it with its roster instead of waiting on the network.
@@ -2211,17 +2312,22 @@ export function ShareTrigger(props: {
       sharePermission.teamShareAccessLevel
     );
   });
+  const iconSize = () =>
+    isTouchDevice() || props.size === 'md' ? 'icon-md' : 'icon-sm';
 
   return (
-    <HeaderActionGroup label="Sharing">
+    <HeaderActionGroup label="Sharing" size={props.size}>
       <div
         ref={requests.ref}
-        class="flex items-center touch:gap-1"
+        class="flex items-stretch touch:items-center touch:gap-1"
         onPointerEnter={warmShareDialog}
         onFocusIn={warmShareDialog}
       >
-        <Tooltip
-          label={
+        <HeaderActionButton
+          grouped
+          size={isTouchDevice() ? undefined : props.size}
+          label="Share"
+          tooltip={
             shareStatus()?.tooltip ??
             (blockType() === 'agent'
               ? 'Share agent session'
@@ -2231,32 +2337,29 @@ export function ShareTrigger(props: {
                   ? 'This item has been shared with you.'
                   : `Share ${blockType()}`)
           }
-        >
-          <HeaderActionButton
-            label="Share"
-            icon={
-              <ShareRequestIcon count={requests.count()}>
-                <IconShared class="size-4" />
-              </ShareRequestIcon>
+          icon={
+            <ShareRequestIcon count={requests.count()}>
+              <IconShared class="size-4" />
+            </ShareRequestIcon>
+          }
+          onClick={() => {
+            if (!isAuthenticated()) {
+              openLoginModal();
+            } else {
+              analytics.track('share_menu_open', { blockType: blockType() });
+              requests.open();
             }
-            onClick={() => {
-              if (!isAuthenticated()) {
-                openLoginModal();
-              } else {
-                analytics.track('share_menu_open', { blockType: blockType() });
-                requests.open();
-              }
-            }}
-          />
-        </Tooltip>
+          }}
+        />
 
         <CopyButton
+          as={ButtonGroup.Button}
           variant="ghost"
           tooltip="Copy Share Link"
-          size="icon-md"
+          size={iconSize()}
           onClick={ShareLinkAction().action}
         >
-          <Dynamic component={ShareLinkAction().icon} class="size-3.5!" />
+          <Dynamic component={ShareLinkAction().icon} class="size-3.5" />
         </CopyButton>
       </div>
     </HeaderActionGroup>
@@ -2291,16 +2394,25 @@ export function ShareOptions(props: {
     const optionsList: { value: string; label: string }[] = [];
 
     // Always add view option
-    optionsList.push({ value: 'view', label: accessLevelText('view') });
+    optionsList.push({
+      value: 'view',
+      label: `Can ${accessLevelText('view').toLowerCase()}`,
+    });
 
     // Add comment option if applicable
     if (blockName !== 'md' || ENABLE_MARKDOWN_COMMENTS) {
-      optionsList.push({ value: 'comment', label: accessLevelText('comment') });
+      optionsList.push({
+        value: 'comment',
+        label: `Can ${accessLevelText('comment').toLowerCase()}`,
+      });
     }
 
     // Add edit option if enabled
     if (editPermissionEnabled()) {
-      optionsList.push({ value: 'edit', label: accessLevelText('edit') });
+      optionsList.push({
+        value: 'edit',
+        label: `Can ${accessLevelText('edit').toLowerCase()}`,
+      });
     }
 
     // Add no access option if not hidden
@@ -2326,7 +2438,10 @@ export function ShareOptions(props: {
   const currentValueText = createMemo(() => {
     const value = currentValue();
     if (value === 'none') return accessLevelText(null);
-    return accessLevelText(value as AccessLevel);
+    return (
+      options().find((option) => option.value === value)?.label ??
+      accessLevelText(value as AccessLevel)
+    );
   });
 
   const CurrentIcon = createMemo(() => {
@@ -2349,7 +2464,7 @@ export function ShareOptions(props: {
   return (
     <Dropdown modal={false} open={isOpen()} onOpenChange={setIsOpen}>
       <Dropdown.Trigger
-        variant="outline"
+        variant="secondary"
         disabled={props.disabled}
         class={`min-w-16.75 py-1 pl-2 pr-1 flex items-center gap-1 ${props.noBorder ? 'border-0 sm:border' : ''}`}
         on:keydown={(e: KeyboardEvent) => {

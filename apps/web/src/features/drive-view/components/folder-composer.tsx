@@ -1,9 +1,9 @@
 import { fileFolderDrop } from '@core/directive/fileFolderDrop';
-import ArrowsOutIcon from '@phosphor/arrows-out.svg';
-import FileIcon from '@phosphor/file.svg';
-import FolderIcon from '@phosphor/folder.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
-import XIcon from '@phosphor/x.svg';
+import ArrowsOutIcon from '@icon/system/regular/arrows-out.svg';
+import FileIcon from '@icon/system/regular/file.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button, EntityComposer } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import type { FolderUpload } from '../core/folder-composer';
@@ -61,14 +61,15 @@ export function FolderComposer(props: {
           <div class="flex-1 flex items-center">
             <Show when={props.onExpand}>
               <Button
+                variant="ghost"
                 tabIndex={-1}
-                size="icon-composer"
+                size="icon-md"
                 aria-label="Continue editing in split"
                 tooltip="Continue editing in split"
                 disabled={props.busy}
                 onClick={props.onExpand}
               >
-                <ArrowsOutIcon />
+                <ArrowsOutIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
               </Button>
             </Show>
           </div>
@@ -76,8 +77,7 @@ export function FolderComposer(props: {
             <Button
               tabIndex={-1}
               size="sm"
-              variant="outline"
-              depth={3}
+              variant="secondary"
               disabled={props.busy}
               onClick={() => {
                 props.onClear();
@@ -88,14 +88,15 @@ export function FolderComposer(props: {
             </Button>
           </Show>
           <Button
+            variant="ghost"
             tabIndex={-1}
-            size="icon-composer"
+            size="icon-md"
             aria-label="Close"
             tooltip="Close"
             disabled={props.busy}
             onClick={props.onClose}
           >
-            <XIcon />
+            <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </EntityComposer.Header>
         <EntityComposer.Main class="gap-4">
@@ -142,7 +143,7 @@ export function FolderComposer(props: {
                 <div class="flex flex-wrap justify-center gap-2">
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     disabled={props.busy}
                     onClick={props.onFiles}
                   >
@@ -150,7 +151,7 @@ export function FolderComposer(props: {
                   </Button>
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     disabled={props.busy}
                     onClick={props.onFolder}
                   >
@@ -188,13 +189,14 @@ export function FolderComposer(props: {
                             : entry.file.name}
                         </span>
                         <Button
+                          variant="ghost"
                           size="icon-sm"
                           aria-label={`Remove ${entry.file.name}`}
                           tooltip="Remove"
                           disabled={props.busy}
                           onClick={() => props.onRemove(entry)}
                         >
-                          <XIcon />
+                          <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                         </Button>
                       </li>
                     )}

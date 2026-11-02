@@ -31,6 +31,8 @@ field and mutate.
 - [`Link`](../../email/link/classes/Link.md)
 - [`EmailMessage`](../../email/message/classes/EmailMessage.md)
 - [`FavoritableEntity`](FavoritableEntity.md)
+- [`ExternalChatMessage`](../../external-chat/message/classes/ExternalChatMessage.md)
+- [`ExternalChatSend`](../../external-chat/send/classes/ExternalChatSend.md)
 - [`Form`](../../forms/form/classes/Form.md)
 - [`GithubPullRequest`](../../github-pull-requests/pull-request/classes/GithubPullRequest.md)
 - [`Harness`](../../harnesses/harness/classes/Harness.md)
@@ -43,6 +45,8 @@ field and mutate.
 - [`AccessRequest`](../../sharing/access/classes/AccessRequest.md)
 - [`Team`](../../teams/team/classes/Team.md)
 - [`Webhook`](../../webhooks/webhook/classes/Webhook.md)
+- [`WhatsAppAccount`](../../whatsapp/account/classes/WhatsAppAccount.md)
+- [`WhatsAppChat`](../../whatsapp/chat/classes/WhatsAppChat.md)
 
 ## Type Parameters
 

@@ -1,4 +1,4 @@
-import Spinner from '@phosphor-icons/core/bold/spinner-gap-bold.svg?component-solid';
+import Spinner from '@icon/system/bold/spinner-gap-bold.svg?component-solid';
 import { Button, cn, Panel } from '@ui';
 import { type Accessor, type JSX, Show } from 'solid-js';
 
@@ -40,9 +40,8 @@ export function LoadMoreButton(props: {
 }) {
   return (
     <Button
-      variant="outline"
-      size="sm"
-      depth={4}
+      variant="secondary"
+      size="xs"
       class="justify-self-center mt-2 bg-surface"
       onClick={() => props.onLoadMore()}
       disabled={props.isFetching()}

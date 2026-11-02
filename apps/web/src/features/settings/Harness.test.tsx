@@ -24,7 +24,7 @@ import {
 import { Suspense } from 'solid-js';
 import { beforeAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import { Harness } from './Harness';
-import { chooseSelectOption } from './tests/select-helpers';
+import { chooseModelOption } from './tests/select-helpers';
 
 vi.mock('@ui', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@ui')>()),
@@ -342,7 +342,7 @@ describe('Harness', () => {
     expect(screen.queryByLabelText('API key')).toBeNull();
     expect(screen.getByText(/does not revoke it in Cursor/)).toBeTruthy();
 
-    chooseSelectOption(screen.getByLabelText('Default model'), 'Another Model');
+    chooseModelOption(screen.getByLabelText('Default model'), 'Another Model');
     await waitFor(() => {
       expect(mocks.setDefaultModel).toHaveBeenCalledWith('another-model');
       expect(mocks.toastSuccess).toHaveBeenCalledWith('Default model updated');

@@ -1,32 +1,38 @@
-use super::{SHA_COUNT_KEY_PREFIX, SHA_DELETE_BUCKET};
+use super::{SHA_COUNT_KEY_PREFIX, SHA_DELETE_BUCKET, SHA_REFERENCE_TTL};
 use anyhow::Context;
-use redis::AsyncCommands;
 
+/// Adds one reference to each SHA, restarts its expiry, and takes it out of
+/// the delete bucket, all in one MULTI/EXEC so a counter never exists without
+/// an expiry.
+#[tracing::instrument(skip_all, fields(sha_count = shas.len()), err)]
 pub(crate) async fn increment_counts(
     client: &redis::Client,
     shas: Vec<String>,
 ) -> anyhow::Result<()> {
+    if shas.is_empty() {
+        return Ok(());
+    }
     let mut redis_connection = client
         .get_multiplexed_async_connection()
         .await
         .context("unable to connect to redis")?;
 
-    for sha in shas {
-        let key = format!("{}{}", SHA_COUNT_KEY_PREFIX, sha);
-        // increments sha key by 1
-        redis_connection
-            .incr::<&str, i32, i32>(key.as_str(), 1)
-            .await
-            .map_err(anyhow::Error::from)?;
-
-        // removes the key from the delete bucket in case it is in there
-        redis_connection
-            .srem::<&str, &str, bool>(SHA_DELETE_BUCKET, sha.as_str())
-            .await
-            .map_err(anyhow::Error::from)?;
+    let mut pipeline = redis::pipe();
+    pipeline.atomic();
+    for sha in &shas {
+        let key = format!("{SHA_COUNT_KEY_PREFIX}{sha}");
+        pipeline
+            .incr(&key, 1)
+            .ignore()
+            .expire(&key, SHA_REFERENCE_TTL.as_secs() as i64)
+            .ignore()
+            .srem(SHA_DELETE_BUCKET, sha)
+            .ignore();
     }
-
-    Ok(())
+    pipeline
+        .query_async::<()>(&mut redis_connection)
+        .await
+        .context("unable to increment sha counts")
 }
 
 #[cfg(test)]

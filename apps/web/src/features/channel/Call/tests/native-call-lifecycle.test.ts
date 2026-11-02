@@ -46,6 +46,7 @@ function setup(initial: NativeCallSnapshot | null = first) {
     const native = createNativeCallState();
     native.setSnapshot(initial);
     const unwatch = vi.fn();
+    let nativeEnded: () => void = () => {};
     const ports = {
       shouldRequestToken: vi.fn((_channelId: string) => true),
       requestToken: vi.fn(async () => ({
@@ -73,7 +74,10 @@ function setup(initial: NativeCallSnapshot | null = first) {
       beginJoin: vi.fn(),
       rollbackJoin: vi.fn(),
       setError: vi.fn(),
-      watch: vi.fn(() => unwatch),
+      watch: vi.fn((_call, _onDisconnect, onNativeEnd: () => void) => {
+        nativeEnded = onNativeEnd;
+        return unwatch;
+      }),
       onJoined: vi.fn(),
       onLeft: vi.fn(),
       reportError: vi.fn(),
@@ -85,7 +89,15 @@ function setup(initial: NativeCallSnapshot | null = first) {
       lifecycle.dispose();
       dispose();
     });
-    return { native, lifecycle, ports, unwatch, unbind, dispose };
+    return {
+      native,
+      lifecycle,
+      ports,
+      unwatch,
+      unbind,
+      dispose,
+      nativeEnd: () => nativeEnded(),
+    };
   });
 }
 
@@ -171,6 +183,89 @@ describe('native snapshot events and call ownership', () => {
       });
     }
   );
+
+  it.each(['leave', 'native end'] as const)(
+    'never rejoins a call the user left by %s while native still reports it',
+    async (exit) => {
+      const { native, lifecycle, ports, nativeEnd } = setup();
+      // Native keeps reporting the call it was asked to end.
+      ports.disconnect.mockImplementation(async () => {});
+      const pending = deferred();
+      ports.leave.mockReturnValueOnce(pending.promise);
+      const leaving =
+        exit === 'leave' ? lifecycle.leave(first.channelId) : undefined;
+      if (exit === 'native end') nativeEnd();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(lifecycle.getState().t).toBe('leaving');
+      // The incident: a fresh snapshot of the same call arrives mid-leave.
+      native.setSnapshot({ ...first, callId: first.callId.toUpperCase() });
+      pending.resolve();
+      await leaving;
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(ports.requestToken).not.toHaveBeenCalled();
+      expect(ports.onJoined).not.toHaveBeenCalled();
+      expect(lifecycle.getState().t).toBe('idle');
+      // The leftover native call is ended, without a second server leave, and
+      // a native layer that never reports the end can't loop the release.
+      expect(ports.leave).toHaveBeenCalledOnce();
+      expect(ports.disconnect.mock.calls.slice(1)).toEqual([
+        [{ endNativeCall: true }],
+        [{ endNativeCall: true }],
+      ]);
+      expect(ports.onLeft).toHaveBeenLastCalledWith(
+        identity(first),
+        'stale_native_session'
+      );
+    }
+  );
+
+  it('keeps a left call out after a join refused while the leave was in flight', async () => {
+    const { lifecycle, ports } = setup();
+    ports.disconnect.mockImplementation(async () => {});
+    const pending = deferred();
+    ports.leave.mockReturnValueOnce(pending.promise);
+    const leaving = lifecycle.leave(first.channelId);
+    await vi.advanceTimersByTimeAsync(0);
+    await expect(lifecycle.join(first.channelId)).rejects.toThrow(
+      'still leaving'
+    );
+    pending.resolve();
+    await leaving;
+    await vi.advanceTimersByTimeAsync(0);
+    expect(lifecycle.getState().t).toBe('idle');
+    expect(ports.disconnect).toHaveBeenLastCalledWith({ endNativeCall: true });
+    expect(ports.onJoined).not.toHaveBeenCalled();
+  });
+
+  it('ends a leftover native call once when native confirms the end', async () => {
+    const { native, lifecycle, ports } = setup();
+    ports.disconnect.mockImplementationOnce(async () => {});
+    await lifecycle.leave(first.channelId);
+    await vi.advanceTimersByTimeAsync(0);
+    expect(ports.disconnect).toHaveBeenLastCalledWith({ endNativeCall: true });
+    expect(native.snapshot()).toBeNull();
+    expect(ports.disconnect).toHaveBeenCalledTimes(2);
+    expect(ports.leave).toHaveBeenCalledOnce();
+    expect(lifecycle.getState().t).toBe('idle');
+  });
+
+  it('lets a left call back in when the user joins its channel again', async () => {
+    const { native, lifecycle, ports } = setup();
+    await lifecycle.leave(first.channelId);
+    const joining = lifecycle.join(first.channelId);
+    await vi.advanceTimersByTimeAsync(300);
+    await joining;
+    native.setSnapshot(first);
+    expect(lifecycle.getState()).toEqual({
+      t: 'active',
+      call: identity(first),
+    });
+    expect(ports.onJoined).toHaveBeenCalledExactlyOnceWith(
+      identity(first),
+      'user'
+    );
+    expect(ports.disconnect).toHaveBeenCalledOnce();
+  });
 
   it('preserves a newer native call arriving before transport cleanup finishes', async () => {
     const { native, lifecycle, ports } = setup();
@@ -672,7 +767,10 @@ describe('native snapshot events and call ownership', () => {
         t: 'active',
         call: identity(first),
       });
-      expect(ports.onJoined).toHaveBeenCalledExactlyOnceWith(identity(first));
+      expect(ports.onJoined).toHaveBeenCalledExactlyOnceWith(
+        identity(first),
+        'user'
+      );
       expect(ports.disconnect).not.toHaveBeenCalled();
       expect(ports.leave).not.toHaveBeenCalled();
     }

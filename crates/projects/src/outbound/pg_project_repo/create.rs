@@ -15,7 +15,7 @@ pub(super) async fn create_project<B: BotFacts>(
     let row = sqlx::query!(
         r#"
         INSERT INTO "Project" (name, "userId", "parentId", "createdAt", "updatedAt")
-        VALUES ($1, $2, $3, NOW(), NOW())
+        VALUES ($1, $2, $3, NOW(), COALESCE($4::timestamp, NOW()::timestamp))
         RETURNING
             id,
             name,
@@ -28,6 +28,7 @@ pub(super) async fn create_project<B: BotFacts>(
         args.name,
         args.owner.principal_id(),
         args.parent_id,
+        args.updated_at.map(|updated_at| updated_at.naive_utc()),
     )
     .fetch_one(transaction.as_mut())
     .await?;

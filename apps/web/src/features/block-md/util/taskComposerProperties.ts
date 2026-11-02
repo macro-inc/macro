@@ -22,6 +22,7 @@ import { useTagsQuery } from '@queries/properties/tags';
 import type { PropertyDefinition } from '@service-properties/generated/schemas/propertyDefinition';
 import type { PropertyDefinitionDetailResponse } from '@service-properties/generated/schemas/propertyDefinitionDetailResponse';
 import type { PropertyDefinitionWithOptions } from '@service-properties/generated/schemas/propertyDefinitionWithOptions';
+import type { Accessor } from 'solid-js';
 import { createSignal } from 'solid-js';
 import { createStore, reconcile, type Store, unwrap } from 'solid-js/store';
 
@@ -125,7 +126,15 @@ export async function createTaskWithProperties(
   options?: {
     revalidateSoup?: boolean;
     shareWithTeam?: boolean;
+    /** Disable when the caller provides its own recovery notification. */
+    showFailureToast?: boolean;
     onMutate?: () => void;
+    /** The create response arrived, before history/project follow-up work. */
+    onCreated?: (
+      task: NonNullable<
+        Awaited<ReturnType<typeof createTaskWithInitialSnapshot>>
+      >
+    ) => void;
   }
 ) {
   options?.onMutate?.();
@@ -151,9 +160,12 @@ export async function createTaskWithProperties(
   });
 
   if (!createdTask) {
-    toast.failure('Failed to create Task');
+    if (options?.showFailureToast !== false)
+      toast.failure('Failed to create Task');
     return null;
   }
+
+  options?.onCreated?.(createdTask);
 
   // createTaskWithInitialSnapshot already revalidates Soup; just update history.
   upsertToHistory({
@@ -255,6 +267,8 @@ function extractPropertyValue(
  */
 export function createTaskComposerProperties(args: {
   initialValues: Record<string, PropertyApiValues>;
+  values?: Accessor<Record<string, PropertyApiValues>>;
+  additionalPropertyIds?: Accessor<string[]>;
   initialVisiblePropertyIds?: string[];
   allDefinitions?: boolean;
 }) {
@@ -337,7 +351,12 @@ export function createTaskComposerProperties(args: {
 
   const visibleIds = () =>
     taskComposerVisiblePropertyIds(
-      visiblePropertyIds(),
+      [
+        ...new Set([
+          ...visiblePropertyIds(),
+          ...(args.additionalPropertyIds?.() ?? []),
+        ]),
+      ],
       availableDefinitions(),
       projects().enabled
     );
@@ -385,7 +404,11 @@ export function createTaskComposerProperties(args: {
         updatedAt: new Date(0),
         createdAt: new Date(0),
         valueType: definition.data_type,
-        value: extractPropertyValue(definition, propertyValues, options()),
+        value: extractPropertyValue(
+          definition,
+          args.values?.() ?? propertyValues,
+          options()
+        ),
         options: options().get(definition.id),
       } as Property;
     });

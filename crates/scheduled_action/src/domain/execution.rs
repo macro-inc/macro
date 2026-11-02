@@ -18,8 +18,8 @@ use crate::domain::models::{
     MAX_ACTION_TIME, ResolvedTaskTarget, ScheduledAction, ScheduledActionUpdate,
 };
 use crate::domain::ports::{
-    RoutineRun, ScheduledActionExecutor, ScheduledActionLiveUpdate, ScheduledActionRepo,
-    ScheduledAgentRunner,
+    FinishedRoutineRun, RoutineRun, RoutineRunObserver, RunEnd, RunTarget, RunTrigger,
+    ScheduledActionExecutor, ScheduledActionLiveUpdate, ScheduledActionRepo, ScheduledAgentRunner,
 };
 
 /// Run identity allocated before any awaited preparation. Runners can cancel
@@ -54,6 +54,7 @@ pub struct InProcessExecutor<Rpo, Live, Runner> {
     live_updates: Arc<Live>,
     runner: Arc<Runner>,
     admission: Arc<dyn AiAdmissionService>,
+    observer: Arc<dyn RoutineRunObserver>,
     tracker: TaskTracker,
     cancellation: CancellationToken,
 }
@@ -65,6 +66,7 @@ impl<Rpo, Live, Runner> Clone for InProcessExecutor<Rpo, Live, Runner> {
             live_updates: self.live_updates.clone(),
             runner: self.runner.clone(),
             admission: self.admission.clone(),
+            observer: self.observer.clone(),
             tracker: self.tracker.clone(),
             cancellation: self.cancellation.clone(),
         }
@@ -91,6 +93,7 @@ where
             runner,
             live_updates,
             admission: Arc::new(DisabledAiAdmissionService),
+            observer: Arc::new(()),
             tracker,
             cancellation,
         }
@@ -100,6 +103,12 @@ where
     /// session/harness service, not to the scheduler's model policy.
     pub fn with_admission(mut self, admission: Arc<dyn AiAdmissionService>) -> Self {
         self.admission = admission;
+        self
+    }
+
+    /// Tell `observer` about every run that starts and then ends.
+    pub fn with_observer(mut self, observer: Arc<dyn RoutineRunObserver>) -> Self {
+        self.observer = observer;
         self
     }
 
@@ -200,6 +209,39 @@ async fn bounded<T>(
     }
 }
 
+fn finished_run(
+    action: &ScheduledAction,
+    trigger: RunTrigger,
+    started_at: DateTime<Utc>,
+    result: &Result<()>,
+) -> Option<FinishedRoutineRun> {
+    let target = serde_json::from_value::<AgentTask>(action.task.clone())
+        .ok()
+        .and_then(|task| {
+            task.resolve_target().ok().map(|target| match target {
+                ResolvedTaskTarget::Model { .. } => RunTarget::Model,
+                ResolvedTaskTarget::Agent { .. } => RunTarget::Agent,
+            })
+        })
+        .unwrap_or(RunTarget::Unknown);
+    let end = match result {
+        Ok(()) => RunEnd::Succeeded,
+        Err(error) if error.is::<ExecutionCancelled>() => RunEnd::Interrupted,
+        Err(error) => match error.downcast_ref::<AiAdmissionError>() {
+            Some(AiAdmissionError::Denied(_)) => RunEnd::AiLimitReached,
+            _ => RunEnd::Failed,
+        },
+    };
+    Some(FinishedRoutineRun {
+        owner: action.owner_user().ok()?.clone(),
+        routine_id: action.id?,
+        trigger,
+        target,
+        end,
+        duration: Utc::now() - started_at,
+    })
+}
+
 fn execution_record(
     action: &ScheduledAction,
     resource: Option<ExecutionResource>,
@@ -283,6 +325,13 @@ where
             if let Err(error) = &result {
                 executor.cancel(&action, &handle, error).await;
             }
+            let trigger = match firing {
+                RoutineRun::Scheduled { .. } => RunTrigger::Scheduled,
+                _ => RunTrigger::Manual,
+            };
+            if let Some(run) = finished_run(&action, trigger, start_time, &result) {
+                executor.observer.run_finished(run);
+            }
             let record = execution_record(&action, handle.resource.clone(), start_time, &result);
             let end_time = record.end_time;
             let bookkeeping = async {
@@ -355,6 +404,10 @@ where
         .await;
         if let Err(error) = &result {
             self.cancel(&run.action, &handle, error).await;
+        }
+        let trigger = RunTrigger::Event(run.run.pending.event.event_name());
+        if let Some(finished) = finished_run(&run.action, trigger, run.started_at, &result) {
+            self.observer.run_finished(finished);
         }
         let record = execution_record(
             &run.action,

@@ -771,3 +771,21 @@ it.each([undefined, 4, 5, 6])(
     }
   }
 );
+
+it('consumes Calendar booking-link creation once and keeps it unsaved until Save', async () => {
+  const { setSearch, search, onSearchChange, saves } = fixture();
+  setSearch({ createBookingLink: true, tab: 'availability' });
+  expect(
+    await screen.findByRole('button', { name: 'Save test event' })
+  ).toBeTruthy();
+  expect(search.createBookingLink).toBe(false);
+  expect(search.tab).toBe('links');
+  expect(onSearchChange).toHaveBeenCalledWith({
+    createBookingLink: false,
+    tab: 'links',
+  });
+  expect(saves).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: 'Cancel test event' }));
+  expect(screen.queryByRole('button', { name: 'Save test event' })).toBeNull();
+  expect(saves).not.toHaveBeenCalled();
+});

@@ -7,12 +7,12 @@ import { useUserId } from '@core/context/user';
 import { getDisplayName, macroIdToEmail, tryMacroId } from '@core/user';
 import { debouncedDependent } from '@core/util/debounce';
 import { fuzzyFilter } from '@core/util/fuzzy';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import type { CollectionNode } from '@kobalte/core';
 import { Select } from '@kobalte/core/select';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CheckIcon from '@phosphor/check.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import TrashIcon from '@phosphor/trash.svg';
 import { useAiBillingSummaryQuery } from '@queries/auth';
 import {
   useDeleteTeamInviteMutation,
@@ -94,6 +94,7 @@ function RoleSelect(props: {
       )}
     >
       <Select.Trigger
+        variant="ghost"
         as={Button}
         class="rounded-xs px-1 py-0.5 text-xs -ml-1 data-expanded:bg-ink/10"
         disabled={props.disabled}
@@ -382,9 +383,8 @@ export function TeamMembers(props: { team: TeamSummary }) {
             {/* Inverted (black on light, white on dark) so inviting is the
                 page's primary action. */}
             <Button
-              variant="cta"
-              glass={false}
-              class="bg-ink text-[15px] text-surface"
+              variant="primary"
+              class="text-[15px]"
               onClick={() => setShowInviteModal(true)}
             >
               <PlusIcon class="size-4" />

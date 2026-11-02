@@ -1,11 +1,17 @@
 import { SplitHeaderContextMenu } from '@components/app/split-layout/components/SplitHeaderContextMenu';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { Button, type ButtonProps, cn } from '@ui';
 import { CollapseTransition } from '@ui/components/CollapseTransition';
-import type { JSX } from 'solid-js';
-import { createSignal, Show, splitProps } from 'solid-js';
+import type { Component, JSX } from 'solid-js';
+import {
+  createContext,
+  createSignal,
+  Show,
+  splitProps,
+  useContext,
+} from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { ViewSidebarCloseButton, ViewSidebarToggle } from './ViewShell';
 
@@ -31,12 +37,15 @@ function Header(
     searchLabel?: string;
     searchOpen?: boolean;
     onSearchOpenChange?: (open: boolean) => void;
+    /** View controls (e.g. filters) in the right group, before search. */
+    actions?: JSX.Element;
     collapseControl?: JSX.Element;
   }
 ) {
   const [local, rest] = splitProps(props, [
     'children',
     'class',
+    'actions',
     'search',
     'searchLabel',
     'searchOpen',
@@ -68,11 +77,12 @@ function Header(
           )}
           data-view-sidebar-header=""
         >
-          {local.children}
+          <div class="min-w-0 flex-1">{local.children}</div>
           <div class="ml-auto flex shrink-0 items-center gap-1">
+            {local.actions}
             <Show when={!isTouchDevice() && local.search}>
               <Control
-                label={local.searchLabel ?? 'Search'}
+                aria-label={local.searchLabel ?? 'Search'}
                 aria-expanded={searchOpen()}
                 onClick={toggleSearch}
               >
@@ -97,17 +107,50 @@ function Header(
   );
 }
 
-function Title(props: JSX.HTMLAttributes<HTMLHeadingElement>) {
-  const [local, rest] = splitProps(props, ['children', 'class']);
+export type ViewSwitcherProps = {
+  /** The view or section name; clicking it opens the menu. */
+  children: JSX.Element;
+  /** Shown beside navigation titles; collapsed headers show the name only. */
+  caret?: boolean;
+  /** Rendered instead where the menu is unavailable (touch, popovers). */
+  fallback?: JSX.Element;
+};
+
+/**
+ * The app's view switcher. The app chrome supplies it so this shell stays
+ * independent of the app's navigation.
+ */
+export const ViewSwitcherContext =
+  createContext<Component<ViewSwitcherProps>>();
+
+/** A view name that opens the view switcher, or plain text without one. */
+export function ViewSwitchTrigger(props: ViewSwitcherProps) {
+  const ViewSwitcher = useContext(ViewSwitcherContext);
+  if (!ViewSwitcher) return <>{props.fallback ?? props.children}</>;
+  return <ViewSwitcher {...props} />;
+}
+
+function Title(
+  props: JSX.HTMLAttributes<HTMLHeadingElement> & {
+    /** Navigation titles show a caret; collapsed headers omit it. */
+    caret?: boolean;
+  }
+) {
+  const [local, rest] = splitProps(props, ['caret', 'children', 'class']);
   return (
     <h1
       {...rest}
       class={cn(
-        'min-w-0 truncate text-sm font-semibold tracking-[-0.03em] text-ink',
+        'flex min-w-0 max-w-full flex-1 items-center text-sm font-semibold tracking-[-0.03em] text-ink',
         local.class
       )}
     >
-      {local.children}
+      <ViewSwitchTrigger
+        caret={local.caret ?? true}
+        fallback={<span class="truncate">{local.children}</span>}
+      >
+        {local.children}
+      </ViewSwitchTrigger>
     </h1>
   );
 }
@@ -149,9 +192,9 @@ function Control(props: ButtonProps) {
   return (
     <Button
       variant="ghost"
-      size="icon-sm"
+      size="icon-xs"
       {...rest}
-      class={cn('size-(--sidebar-control-size) shrink-0', local.class)}
+      class={cn('shrink-0', local.class)}
       data-view-sidebar-control=""
     />
   );
@@ -282,7 +325,7 @@ function TreeItem(props: {
         <span class="absolute right-(--sidebar-action-inset) top-1/2 flex -translate-y-1/2">
           <Control
             class="rounded-md"
-            label={`${props.expanded ? 'Collapse' : 'Expand'} ${props.label}`}
+            aria-label={`${props.expanded ? 'Collapse' : 'Expand'} ${props.label}`}
             aria-expanded={props.expanded}
             onClick={props.onToggle}
           >
@@ -325,6 +368,7 @@ function Action(props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) {
   const [local, rest] = splitProps(props, ['children', 'class']);
   return (
     <Button
+      variant="secondary"
       type="button"
       {...rest}
       class={cn(

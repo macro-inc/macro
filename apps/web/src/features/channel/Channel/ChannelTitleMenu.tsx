@@ -2,7 +2,7 @@ import { toSingleEntityActionListState } from '@app/features/next-soup/actions';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { SoupEntityActionsDropdown } from '@app/features/soup/SoupEntityActionsDropdown';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import DotsThreeIcon from '@phosphor/dots-three.svg';
+import DotsThreeIcon from '@icon/system/regular/dots-three.svg';
 import { Show } from 'solid-js';
 import { CHANNEL_ACTION_VIEW_CONTEXT } from './channel-actions';
 import { useChannelEntity } from './channel-entity';
@@ -33,9 +33,9 @@ export function ChannelTitleMenu(props: { channelId: string }) {
           entity={current()}
           list={list}
           viewContext={CHANNEL_ACTION_VIEW_CONTEXT}
-          triggerProps={{ size: 'icon-sm', label: 'Channel actions' }}
+          triggerProps={{ size: 'icon-sm', 'aria-label': 'Channel actions' }}
         >
-          <DotsThreeIcon />
+          <DotsThreeIcon class="size-4 shrink-0" />
         </SoupEntityActionsDropdown>
       )}
     </Show>

@@ -7,6 +7,7 @@ import { emailClient } from '@service-email/client';
 import { storageServiceClient } from '@service-storage/client';
 import type { CalendarJoinRequest } from '@service-storage/generated/schemas/calendarJoinRequest';
 import { CalendarJoinRequestErrorCode } from '@service-storage/generated/schemas/calendarJoinRequestErrorCode';
+import type { CalendarJoinRequestStatus } from '@service-storage/generated/schemas/calendarJoinRequestStatus';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { calendarKeys } from './keys';
@@ -26,6 +27,9 @@ function joinRequestsQueryOptions(eventId: string, enabled: boolean) {
       ).requests,
     enabled,
     staleTime: 30_000,
+    // `refresh_calendar` refetches this under an open list; rows keep their
+    // identity, and focus, when another row leaves.
+    reconcile: 'id',
   };
 }
 
@@ -107,6 +111,24 @@ export type RespondToCalendarJoinRequestArgs = {
   decision: CalendarJoinRequestDecision;
 };
 
+const ANSWER_STATUS: Record<
+  CalendarJoinRequestDecision,
+  CalendarJoinRequestStatus
+> = { accept: 'accepted', decline: 'declined' };
+
+/**
+ * Whether an answer lost to one given elsewhere. The server returns a request
+ * it no longer holds as pending unchanged, so a status other than the decision
+ * means the press did nothing. An acceptance can still overrule a decline that
+ * lands while its invitation is written; that returns `accepted`, its own.
+ */
+export function isAlreadyAnswered(
+  answered: CalendarJoinRequest,
+  decision: CalendarJoinRequestDecision
+): boolean {
+  return answered.status !== ANSWER_STATUS[decision];
+}
+
 async function respondToCalendarJoinRequest({
   request,
   decision,
@@ -119,7 +141,12 @@ async function respondToCalendarJoinRequest({
       const answered = await throwOnErr(() =>
         emailClient.respondToCalendarJoinRequest(request.id, { decision })
       );
-      span.setAttr('calendar.join_request.outcome', answered.status);
+      span.setAttr(
+        'calendar.join_request.outcome',
+        isAlreadyAnswered(answered, decision)
+          ? 'already_answered'
+          : answered.status
+      );
       return answered;
     } catch (error) {
       span.setAttr('calendar.join_request.outcome', 'failed');

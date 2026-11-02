@@ -163,7 +163,8 @@ export function createQueryComposer(options: QueryComposerOptions) {
   async function ask(
     question: string,
     generation: number,
-    source: QuestionContext
+    source: QuestionContext,
+    repair?: { sql: string; message: string }
   ): Promise<Result<void, QueryFailure>> {
     if (
       source.tableId &&
@@ -172,31 +173,49 @@ export function createQueryComposer(options: QueryComposerOptions) {
       return err({ kind: 'table-unavailable' });
     const generated = await options.generate({
       prompt: question,
-      sql: sql(),
-      schema: requestSchema(),
+      sql: repair?.sql ?? sql(),
+      schema: repair ? schema() : requestSchema(),
+      ...(repair ? { error: repair.message } : {}),
     });
     if (generated.isErr()) return err(generated.error);
     const next = generated.value;
     if (generation !== revision || !isCurrentContext(source))
       return ok(undefined);
     const statement = next.sql.trim();
-    setUndo({
-      ...accepted,
-      preview: preview(),
-      presentation: presentation(),
-      resolvedSource: resolvedSource(),
-    });
+    if (!repair)
+      setUndo({
+        ...accepted,
+        preview: preview(),
+        presentation: presentation(),
+        resolvedSource: resolvedSource(),
+      });
     setResolvedSource(
       next.source ? { schema: next.source, context: source } : undefined
     );
     setSqlSignal(statement);
     setSqlPrompt(question);
     setSqlContext(source);
-    return readAnswer(statement, question, generation, source, {
+    const read = await readAnswer(statement, question, generation, source, {
       title: next.title,
       displayMode: next.displayMode ?? 'scalar',
       chart: next.chart,
     });
+    if (
+      !repair &&
+      read.isErr() &&
+      read.error.kind === 'engine' &&
+      (read.error.error.stage === 'parse' ||
+        read.error.error.stage === 'resolve') &&
+      generation === revision &&
+      isCurrentContext(source)
+    ) {
+      setPhase('generating');
+      return ask(question, generation, source, {
+        sql: statement,
+        message: read.error.message,
+      });
+    }
+    return read;
   }
 
   const generate = async () => {
@@ -207,11 +226,14 @@ export function createQueryComposer(options: QueryComposerOptions) {
     setPhase('generating');
     setGenerationPending(true);
     clearError();
-    const asked = await ask(question, generation, source);
-    if (asked.isErr() && generation === revision && isCurrentContext(source))
-      reportFailure(asked.error);
-    setGenerationPending(false);
-    setPhase('idle');
+    try {
+      const asked = await ask(question, generation, source);
+      if (asked.isErr() && generation === revision && isCurrentContext(source))
+        reportFailure(asked.error);
+    } finally {
+      setGenerationPending(false);
+      setPhase('idle');
+    }
   };
 
   const run = async () => {

@@ -49,6 +49,16 @@ export function createNotesController(
     const active = dialog();
     const document = selected();
     if (!active || active.kind === 'sharing' || !document || saving()) return;
+    if (active.kind === 'link') {
+      const linkedNotes = source.notes().data;
+      // PUT also changes an existing link's team grant. An early or stale
+      // selection must never turn "link" into an unintended sharing update.
+      if (!linkedNotes) return;
+      if (linkedNotes.some((note) => note.documentId === document.documentId)) {
+        setError('This note is already linked to the meeting.');
+        return;
+      }
+    }
     setSaving(true);
     setError(undefined);
     const result =

@@ -42,14 +42,14 @@ export function MeetingList(props: {
                 <div class="flex gap-2">
                   <Button
                     size="sm"
-                    variant="accent"
+                    variant="primary"
                     onClick={() => props.onJoin(meeting)}
                   >
                     Join call
                   </Button>
                   <Button
                     size="sm"
-                    variant="outline"
+                    variant="secondary"
                     onClick={() => props.onCopy(meeting)}
                   >
                     Copy link

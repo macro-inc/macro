@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { getAttachmentKindFromFile } from '@channel/Input/utils/file-helpers';
 import { toast } from '@core/component/Toast/Toast';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
@@ -19,6 +20,10 @@ import {
   DictationPanel,
 } from '@app/features/dictation/components/dictation-controls';
 import { createComposerDictation } from '@app/features/dictation/composer-dictation';
+import {
+  ComposerAddDrawer,
+  ComposerAddMenu,
+} from '@channel/Input/ComposerAddMenu';
 import { InputProvider } from '@channel/Input/context';
 import { Input } from '@channel/Input/Input';
 import type { InputAttachmentData, InputCommands } from '@channel/Input/types';
@@ -43,6 +48,7 @@ import {
   onMount,
   Show,
 } from 'solid-js';
+import { agentAttachmentItems } from './attachment-menu';
 
 /**
  * Id of the agent input's text-area wrapper. Exposed so callers (e.g. the
@@ -56,6 +62,7 @@ export type QuoteInsert = (text: string) => void;
 export interface AgentInputProps {
   /** Image capability of the selected model; unknown runtimes omit it. */
   supportsImages?: boolean | null;
+  modelName?: string;
   placeholder?: string;
   /** Context to seed in the composer without sending it. */
   initialInput?: string;
@@ -73,15 +80,6 @@ export interface AgentInputProps {
    * stays a send arrow, ringed so it reads as flush rather than a new message.
    */
   hasQueuedMessages?: boolean;
-  /**
-   * Advancing the queue would not advance it right now, so Enter and the
-   * button stay inert (the control reads Stop). Either a stop is already on
-   * its way - the queue advances when the turn it ends actually ends, so a
-   * second stop does nothing but post again - or the prompt that last
-   * advanced is still unconfirmed, so there is no turn the server has opened
-   * for a stop to end.
-   */
-  sendNextHeld?: boolean;
   /**
    * Enter or the send button with an empty input and a queued message. Falls
    * back to `onStop`, which is the mechanism: the queue advances when the
@@ -134,6 +132,13 @@ export interface AgentInputProps {
 }
 
 export function AgentInput(props: AgentInputProps) {
+  const [attachDrawerOpen, setAttachDrawerOpen] = createSignal(false);
+  const imageUnsupportedReason = () =>
+    props.supportsImages === false
+      ? t('common.imagesUnsupported', {
+          model: props.modelName ?? t('common.selectedModel'),
+        })
+      : undefined;
   const [owned, setOwned] = createSignal(props.initialInput ?? '');
   const controlled = () => props.onDraftChange !== undefined;
   const markdown = () => (controlled() ? (props.draft ?? '') : owned());
@@ -210,23 +215,21 @@ export function AgentInput(props: AgentInputProps) {
   // Deliberately not gated on `busy`. A speculated stop reads as done
   // everywhere else, so `busy` is already false while the runtime is still
   // winding the turn down - and that is exactly when a waiting message is
-  // most worth advancing. What does gate it is `sendNextHeld`: a stop already
-  // in flight, or a previous advance the log has not confirmed yet. Attached
-  // files are something to send in their own right, so they hold it back too.
+  // most worth advancing. Attached files are something to send in their own
+  // right, so they hold it back.
   const canSendNext = () =>
     !dictation.active() &&
     markdown().trim().length === 0 &&
     attachments().length === 0 &&
     props.hasQueuedMessages === true &&
-    !props.sendNextHeld &&
     !props.disabled &&
     !props.readOnly &&
     props.onStop !== undefined;
 
   const sendNext = () => {
     if (!canSendNext()) return;
-    // Stop bypasses the server queue: the fold shows it at once as a pending
-    // Stopped line, and when the runtime ends the cancelled turn the server
+    // Without `onSendNext`, Stop is the mechanism: it bypasses the server
+    // queue, the fold shows it at once as a pending Stopped line, and when the runtime ends the cancelled turn the server
     // dispatches the oldest waiting action, so the queue remains FIFO. How
     // soon that is depends on the runtime - a booting sandbox cannot be
     // interrupted until it is up.
@@ -351,11 +354,6 @@ export function AgentInput(props: AgentInputProps) {
         classList={{ 'opacity-50': props.readOnly }}
       >
         {/* Desktop: the model pill sits above the box, as it always has. */}
-        <Show when={props.supportsImages === false}>
-          <p role="status" class="px-3 py-1 text-xs text-ink-muted">
-            {IMAGE_INPUT_WARNING}
-          </p>
-        </Show>
         <Show when={!isTouchDevice() && props.modelControl}>
           <div class="flex items-center px-0.5">{props.modelControl}</div>
         </Show>
@@ -441,6 +439,32 @@ export function AgentInput(props: AgentInputProps) {
                     <Input.AttachFilesAction
                       accept={null}
                       disabled={props.disabled || props.readOnly}
+                      trigger={(openFiles, openImages) => {
+                        const groups = () => [
+                          {
+                            items: agentAttachmentItems(
+                              openFiles,
+                              openImages,
+                              imageUnsupportedReason()
+                            ),
+                          },
+                        ];
+                        return (
+                          <>
+                            <ComposerAddMenu
+                              groups={groups()}
+                              disabled={props.disabled || props.readOnly}
+                              onOpenDrawer={() => setAttachDrawerOpen(true)}
+                            />
+                            <ComposerAddDrawer
+                              groups={groups()}
+                              open={attachDrawerOpen()}
+                              onOpenChange={setAttachDrawerOpen}
+                              getEditor={() => editor.lexical.getRootElement()}
+                            />
+                          </>
+                        );
+                      }}
                     />
                   </Show>
                   <div class="ml-auto flex shrink-0 items-center gap-[3.75px]">
@@ -467,9 +491,10 @@ export function AgentInput(props: AgentInputProps) {
                           }
                         >
                           <Button
-                            variant={isTouchDevice() ? 'ghost' : 'strong'}
-                            size="icon-composer"
-                            label="Stop"
+                            aria-label="Stop"
+                            tooltip="Stop"
+                            variant={isTouchDevice() ? 'ghost' : 'secondary'}
+                            size="icon-md"
                             disabled={props.disabled || props.readOnly}
                             onClick={() => props.onStop?.()}
                             class={
@@ -487,8 +512,10 @@ export function AgentInput(props: AgentInputProps) {
                         appearance="composer"
                         intent="flush"
                         aria-label="Flush queued messages"
-                        tooltip="Flush queued messages"
-                        shortcut="Enter"
+                        tooltip={{
+                          content: 'Flush queued messages',
+                          shortcut: 'Enter',
+                        }}
                         onClick={sendNext}
                         disabled={!canSendNext()}
                       />

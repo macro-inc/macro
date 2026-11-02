@@ -18,7 +18,7 @@ export function createQuestionCapabilities(
   return {
     read: (sql, context) =>
       input
-        .read(sql)
+        .read(sql, context)
         .andThen((answer): ResultAsync<QueryAnswer, QueryFailure> => {
           const databaseIds = answer.readDatabaseIds;
           if (

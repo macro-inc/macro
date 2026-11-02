@@ -40,6 +40,7 @@ import {
 import { mapGraphqlEmailMessage } from './graphql/mapper';
 import { emailKeys } from './keys';
 import {
+  abandonDraftDelete,
   beginDraftAttempt,
   draftSyncPaused,
   localDraftMessage,
@@ -376,22 +377,35 @@ export async function deleteEmailDraftQueued(input: {
   assertEmailDraftQueueAvailable();
   const local = await readLocalDraft(input.draftId);
   const attempt = local ? await beginDraftAttempt(local, 'delete') : undefined;
-  const cached = await readCachedDraftAndThread(input.draftId, input.threadId);
-  const client = getGraphqlSoupClient();
-  assertEmailDraftQueueAvailable();
-  const outcome = await executeGraphqlDeleteEmailDraft(client, {
-    existingThread: cached.existingThread,
-    mutationUuid: cached.mutationUuid ?? input.draftId,
-    draftId: local?.draftId ?? String(cached.draftId),
-    clientMetadata: attempt,
-    draftGeneration:
-      input.draftGeneration ??
-      local?.content.draft_generation ??
-      cached.existingDraft?.draftGeneration ??
-      0,
-    threadDbId: cached.threadDbId,
-  });
+  const abandon = async () => {
+    if (attempt) await abandonDraftDelete(attempt).catch(reportError);
+  };
+  let outcome: Awaited<ReturnType<typeof executeGraphqlDeleteEmailDraft>>;
+  try {
+    const cached = await readCachedDraftAndThread(
+      input.draftId,
+      input.threadId
+    );
+    const client = getGraphqlSoupClient();
+    assertEmailDraftQueueAvailable();
+    outcome = await executeGraphqlDeleteEmailDraft(client, {
+      existingThread: cached.existingThread,
+      mutationUuid: cached.mutationUuid ?? input.draftId,
+      draftId: local?.draftId ?? String(cached.draftId),
+      clientMetadata: attempt,
+      draftGeneration:
+        input.draftGeneration ??
+        local?.content.draft_generation ??
+        cached.existingDraft?.draftGeneration ??
+        0,
+      threadDbId: cached.threadDbId,
+    });
+  } catch (error) {
+    await abandon();
+    throw error;
+  }
   if (outcome.kind === 'failed') {
+    await abandon();
     return {
       kind: 'rejected',
       code: rejection(outcome.code, 'Failed to delete draft', input.threadId),

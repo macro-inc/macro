@@ -16,8 +16,8 @@ use chrono::{DateTime, Utc};
 use models_databases::position::Position;
 use models_databases::views::{CardPosition, DatabaseView, ViewId};
 use models_databases::{
-    CellValue, ChangeId, ColumnId, ColumnKind, DatabaseId, DatabaseOp, EntityRef, OptionId,
-    OptionRef, RowId, TableId, TableVersion,
+    CellValue, ChangeId, ColumnId, ColumnKind, DatabaseId, DatabaseOp, DateRange, EntityRef,
+    OptionId, OptionRef, RowId, TableId, TableVersion,
 };
 use models_properties::service::property_value::PropertyValue;
 use serde::{Deserialize, Serialize};
@@ -455,6 +455,10 @@ pub fn cell_value(value: &PropertyValue) -> Option<CellValue> {
         PropertyValue::Num(number) => CellValue::Number(*number),
         PropertyValue::Bool(checked) => CellValue::Boolean(*checked),
         PropertyValue::Date(date) => CellValue::Date(*date),
+        PropertyValue::DateRange(range) => CellValue::DateRange(DateRange {
+            start: range.start(),
+            end: range.end(),
+        }),
         PropertyValue::Link(urls) => CellValue::Link(urls.clone()),
         PropertyValue::SelectOption(options) => CellValue::Options(
             options

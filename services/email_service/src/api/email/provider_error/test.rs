@@ -10,7 +10,7 @@ fn maps_provider_errors_to_api_statuses() {
         (
             EmailApiError::RateLimited {
                 retry_after: Some(Duration::from_secs(10)),
-                origin: RateLimitOrigin::Provider,
+                origin: RateLimitOrigin::Provider { concurrency: false },
             },
             StatusCode::TOO_MANY_REQUESTS,
         ),
@@ -55,17 +55,27 @@ fn maps_outdated_cursor_to_conflict() {
 fn rate_limited_responses_carry_a_retry_after_header_when_known() {
     let headers = provider_error_headers(&EmailApiError::RateLimited {
         retry_after: Some(Duration::from_secs(42)),
-        origin: RateLimitOrigin::Provider,
+        origin: RateLimitOrigin::Provider { concurrency: false },
     });
     assert_eq!(
         headers.get(RETRY_AFTER).and_then(|v| v.to_str().ok()),
         Some("42")
     );
 
+    let headers = provider_error_headers(&EmailApiError::RateLimited {
+        retry_after: Some(Duration::from_millis(950)),
+        origin: RateLimitOrigin::Local,
+    });
+    assert_eq!(
+        headers.get(RETRY_AFTER).and_then(|v| v.to_str().ok()),
+        Some("1"),
+        "a sub-second wait must not tell clients to retry immediately"
+    );
+
     assert!(
         provider_error_headers(&EmailApiError::RateLimited {
             retry_after: None,
-            origin: RateLimitOrigin::Provider,
+            origin: RateLimitOrigin::Provider { concurrency: false },
         })
         .is_empty()
     );

@@ -32,9 +32,9 @@ import {
 import { toast } from '@core/component/Toast/Toast';
 import { openLoginModal } from '@core/component/TopBar/LoginButton';
 import { fireAndForget } from '@core/util/fireAndForget';
+import DownloadIcon from '@icon/system/regular/download-simple.svg';
+import Printer from '@icon/system/regular/printer.svg';
 import { Telemetry } from '@macro-inc/observability';
-import DownloadIcon from '@phosphor/download-simple.svg';
-import Printer from '@phosphor/printer.svg';
 import { useSearchParams } from '@solidjs/router';
 import type { JSX } from 'solid-js';
 import { Show } from 'solid-js';

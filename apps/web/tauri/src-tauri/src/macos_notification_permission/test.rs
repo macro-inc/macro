@@ -65,6 +65,7 @@ fn immediate_notifications_preserve_the_title_and_optional_body() {
             None,
             Some("Hello 👋\nSecond line"),
             None,
+            true,
         ),
         None,
     );
@@ -75,8 +76,10 @@ fn immediate_notifications_preserve_the_title_and_optional_body() {
     );
     assert!(request.trigger().is_none());
 
-    let title_only =
-        notification_request(&notification_content("Reminder", None, None, None), None);
+    let title_only = notification_request(
+        &notification_content("Reminder", None, None, None, true),
+        None,
+    );
     assert_eq!(title_only.content().title().to_string(), "Reminder");
     assert!(title_only.content().body().is_empty());
 }
@@ -84,7 +87,13 @@ fn immediate_notifications_preserve_the_title_and_optional_body() {
 #[test]
 fn conversation_notifications_name_and_stack_their_conversation() {
     let request = notification_request(
-        &notification_content("Ada", Some("design"), Some("Ship it"), Some("channel-1")),
+        &notification_content(
+            "Ada",
+            Some("design"),
+            Some("Ship it"),
+            Some("channel-1"),
+            true,
+        ),
         None,
     );
     assert_eq!(request.content().subtitle().to_string(), "design");
@@ -94,15 +103,30 @@ fn conversation_notifications_name_and_stack_their_conversation() {
     );
     assert!(request.content().sound().is_some());
 
-    let direct = notification_request(&notification_content("Ada", None, None, None), None);
+    let direct = notification_request(&notification_content("Ada", None, None, None, true), None);
     assert!(direct.content().subtitle().is_empty());
     assert!(direct.content().threadIdentifier().is_empty());
 }
 
 #[test]
+fn silent_notifications_leave_the_sound_to_the_app() {
+    let request = notification_request(
+        &notification_content("Ada", None, Some("Ship it"), None, false),
+        None,
+    );
+    assert!(request.content().sound().is_none());
+}
+
+#[test]
 fn repeated_notifications_do_not_replace_each_other() {
-    let first = notification_request(&notification_content("Same title", None, None, None), None);
-    let second = notification_request(&notification_content("Same title", None, None, None), None);
+    let first = notification_request(
+        &notification_content("Same title", None, None, None, true),
+        None,
+    );
+    let second = notification_request(
+        &notification_content("Same title", None, None, None, true),
+        None,
+    );
     assert_ne!(first.identifier(), second.identifier());
     assert!(Uuid::parse_str(&first.identifier().to_string()).is_ok());
 }
@@ -110,15 +134,15 @@ fn repeated_notifications_do_not_replace_each_other() {
 #[test]
 fn delivered_notifications_keep_their_destination_without_webview_callbacks() {
     let request = notification_request(
-        &notification_content("Message", None, None, None),
+        &notification_content("Message", None, None, None, true),
         Some("first-notification"),
     );
     let second = notification_request(
-        &notification_content("Message", None, None, None),
+        &notification_content("Message", None, None, None, true),
         Some("second-notification"),
     );
     let repeated = notification_request(
-        &notification_content("Message", None, None, None),
+        &notification_content("Message", None, None, None, true),
         Some("first-notification"),
     );
     assert_ne!(request.identifier(), repeated.identifier());

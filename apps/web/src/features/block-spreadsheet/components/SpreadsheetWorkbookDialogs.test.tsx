@@ -5,7 +5,7 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { type ComponentProps, createSignal, type ParentProps } from 'solid-js';
+import { type ComponentProps, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { SpreadsheetFindDialog } from './SpreadsheetDialogs';
 import {
@@ -13,9 +13,6 @@ import {
   SpreadsheetSheetDialog,
 } from './SpreadsheetWorkbookDialogs';
 
-vi.mock('@ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
-}));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('@components/app/mobile/MobileDrawer', () => ({
   MobileDrawer: () => null,

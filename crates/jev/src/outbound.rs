@@ -1,5 +1,5 @@
 //! Outbound adapters implementing the Jev ports.
 
-pub mod typesafe;
+pub mod system_one;
 
-pub use typesafe::{TypesafeApiKey, TypesafeConfigError, TypesafeJev};
+pub use system_one::{SystemOneConfigError, SystemOneJev, TypesafeApiKey};

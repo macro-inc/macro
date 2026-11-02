@@ -1,5 +1,5 @@
-import PlayIcon from '@phosphor/play.svg';
-import XIcon from '@phosphor/x.svg';
+import PlayIcon from '@icon/system/regular/play.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Button } from '@ui';
 import { createSignal, Show } from 'solid-js';
 import type { ViewTourVideo as Video } from '../core/view-tour';
@@ -33,12 +33,13 @@ export function ViewTourVideo(props: { video: Video }) {
             {props.video.title}
           </span>
           <Button
+            aria-label="Close video"
+            tooltip="Close video"
             variant="ghost"
             size="icon-sm"
-            label="Close video"
             onClick={() => setPlaying(false)}
           >
-            <XIcon />
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </div>
         <iframe

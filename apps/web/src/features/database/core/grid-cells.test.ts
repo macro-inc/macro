@@ -83,6 +83,90 @@ describe('engine cells as grid values', () => {
   });
 });
 
+describe('engine date ranges as grid values', () => {
+  it('holds a range as the ISO interval of its two instants', () => {
+    expect(
+      gridRows(
+        {
+          columns: [{ name: 'Trip', column: 'definition', kind: 'dateRange' }],
+          rows: [
+            [
+              {
+                type: 'dateRange',
+                value: {
+                  start: '2026-03-01T00:00:00Z',
+                  end: '2026-03-05T00:00:00Z',
+                },
+              },
+            ],
+            [null],
+          ],
+          rowIds: ['row-1', 'row-2'],
+          readTables: ['table'],
+          truncated: false,
+          insertedRowIds: [],
+          changesApplied: 0,
+        },
+        {
+          tables: [
+            {
+              id: 'table',
+              databaseId: 'db',
+              database: 'Travel',
+              name: 'Trips',
+              columns: [
+                {
+                  id: 'definition',
+                  placement: 'column',
+                  name: 'Trip',
+                  kind: { kind: 'dateRange' },
+                },
+              ],
+            },
+          ],
+        },
+        [
+          {
+            shared_outside_database: false,
+            column: {
+              id: 'column',
+              table_id: 'table',
+              property_definition_id: 'definition',
+              position: 'a',
+              config: null,
+              display_name: null,
+              infer_type: false,
+            },
+            sql_name: '"Trip"',
+            writable: true,
+            definition: {
+              definition: {
+                id: 'definition',
+                owner: { scope: 'database', database_id: 'db' },
+                display_name: 'Trip',
+                data_type: 'DATE_RANGE',
+                is_multi_select: false,
+                specific_entity_type: null,
+                created_at: '',
+                updated_at: '',
+                is_system: false,
+                is_metadata: false,
+              },
+              property_options: [],
+            },
+          },
+        ]
+      )
+    ).toEqual([
+      {
+        rowId: 'row-1',
+        cells: { column: '2026-03-01T00:00:00Z/2026-03-05T00:00:00Z' },
+      },
+      { rowId: 'row-2', cells: { column: null } },
+    ]);
+  });
+});
+
 describe('a new read of rows the grid already shows', () => {
   it('hands back the shown row for each row whose cells read the same', () => {
     const ada = { rowId: 'ada', cells: { name: 'Ada', guests: 2 } };

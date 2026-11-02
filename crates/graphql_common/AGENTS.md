@@ -37,12 +37,16 @@ schema types (entity type, owner type, property filters).
 
 - Add a shared filter/input type: `src/property_filter.rs` or
   `src/filter_input.rs` → used from the domain crate's input types.
+- Keep property DATE bounds nullable RFC3339 strings and normalize offsets to UTC; an open `dateRange` means present and outer `not` means absent.
+- Translate `CALL_RECORD` property filters to their canonical scope; reference-only `CONTACT` values remain unsupported filter targets.
 - Change the request context: `src/request_context.rs` → `src/extract.rs` →
   every domain crate that reads a new field from it.
 
 ## Checks
 
 - `cargo test -p graphql_common`.
+
+- `ExternalChat` (`EXTERNAL_CHAT`) is a canonical GraphQL entity type; Soup registration remains deferred.
 
 ## Related
 

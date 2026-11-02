@@ -68,10 +68,11 @@ export function MeetingNotesView(props: {
             linkedIds={
               props.source.notes().data?.map((note) => note.documentId) ?? []
             }
+            linksReady={props.source.notes().data !== undefined}
             teamId={controller.teamId()}
             onTeam={controller.setTeamId}
             saving={controller.saving()}
-            error={controller.error()}
+            error={controller.error() ?? props.source.notes().error}
             onSave={() =>
               fireAndForget(controller.save(), 'calendar.notes.save')
             }

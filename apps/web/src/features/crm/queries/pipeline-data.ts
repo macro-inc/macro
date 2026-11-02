@@ -6,6 +6,7 @@ import type { PropertyValue } from '@service-storage/generated/schemas/propertyV
 import { err, errAsync, ok, ResultAsync } from 'neverthrow';
 import { match } from 'ts-pattern';
 import type { DatabaseApi } from '../../database/core/api';
+import { toCellRange } from '../../database/core/cell-date-range';
 import type { DatabaseCellValue } from '../../database/core/database-view';
 import { UNAVAILABLE_OPTION } from '../../database/core/grid-cells';
 import { toViewColumn } from '../../database/queries/column-detail';
@@ -30,6 +31,7 @@ export function pipelineCell(
       { type: 'Date' },
       ({ value }) => value
     )
+    .with({ type: 'DateRange' }, ({ value }) => toCellRange(value))
     .with({ type: 'Link' }, ({ value }) => listed(value))
     .with({ type: 'EntityReference' }, ({ value }) =>
       listed(value.map((ref) => ref.entity_id))

@@ -55,6 +55,7 @@ export default defineConfig(({ command }) => ({
           'cache-recovery.html',
           'notification-projection.html',
           'mail-projection.html',
+          'mail-reconciliation.html',
           'query-write-scope.html',
           'email-participants.html',
           'search-buckets.html',

@@ -73,7 +73,10 @@ function DriveComposition(props: { route: DriveRouteState }) {
   );
   const searchText = () => view.value().search;
   const selection = () => ({ ...viewState(), search: searchText() });
-  const sidebar = createDriveSidebarSource();
+  const sidebar = createDriveSidebarSource({
+    databasesEnabled: () => databasesFlag().enabled,
+    formsEnabled: () => formsFlag().enabled,
+  });
   const source = withSplitPanelOwner(listOwnedSlotName('data-source'), () =>
     createDriveDataSource({
       selection,

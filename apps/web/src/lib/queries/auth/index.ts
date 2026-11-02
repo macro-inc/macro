@@ -12,6 +12,7 @@ export {
   useChangePlanMutation,
   useCreateAiCreditCheckoutMutation,
   useIncludedAiCentsByTier,
+  usePurchaseAiCreditsMutation,
   useSubscriptionStatusQuery,
   useUpdateAiAutoReloadMutation,
   useUpdateAiOverageMutation,
@@ -36,6 +37,10 @@ export {
   useTrialEligibilityQuery,
 } from './stripe-checkout';
 export type { UserInfoData } from './user-info';
+export {
+  useSetUserLanguageMutation,
+  useUserLanguageQuery,
+} from './user-language';
 export {
   normalizeUserNameQueryId,
   userNameQueryOptions,

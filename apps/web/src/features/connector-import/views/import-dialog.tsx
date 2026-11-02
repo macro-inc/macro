@@ -1,7 +1,7 @@
 import { LogoStack } from '@app/features/sidebar-promotion/components/logo-stack';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CaretRightIcon from '@phosphor/caret-right.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import { ActionDialogShell, Dialog } from '@ui';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';

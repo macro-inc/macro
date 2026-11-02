@@ -1,5 +1,5 @@
 import { EntityIcon } from '@core/component/EntityIcon';
-import CaretDown from '@phosphor/caret-down.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
 import { Badge, badgeTriggerClasses } from '@ui/components/Badge';
 import { Checkbox } from '@ui/components/Checkbox';
 import { Tooltip } from '@ui/components/Tooltip';

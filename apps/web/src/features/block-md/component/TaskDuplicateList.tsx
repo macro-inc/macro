@@ -3,8 +3,8 @@ import { TaskListEntity } from '@app/features/next-soup/soup-view/views/tasks/Ta
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { enableTaskDuplicates } from '@core/constant/featureFlags';
 import { ListLayoutProvider } from '@entity';
-import CaretRightIcon from '@phosphor/caret-right.svg';
-import CopyIcon from '@phosphor/copy.svg';
+import CaretRightIcon from '@icon/system/regular/caret-right.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
 import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
 import { useSoupItemsQuery } from '@queries/soup/items';
 import { useTaskSimilaritySearchQuery } from '@queries/storage/task-duplicates';

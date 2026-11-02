@@ -43,3 +43,13 @@ pub trait RoutineSessions: Send + Sync + 'static {
         command: RoutineSessionAction,
     ) -> impl Future<Output = Result<(), RoutineSessionError>> + Send;
 }
+
+/// The Pipedream apps a user has connected and enabled for tool use, which
+/// is what the egress proxy treats as connected.
+pub trait ConnectedApps: Send + Sync + 'static {
+    /// App slugs of the user's enabled connections.
+    fn connected_app_slugs(
+        &self,
+        user: &macro_user_id::user_id::MacroUserIdStr<'static>,
+    ) -> impl Future<Output = anyhow::Result<Vec<String>>> + Send;
+}

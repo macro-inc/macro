@@ -116,6 +116,14 @@ export const TOKENS = {
     zoomReset: 'global.zoomReset',
   },
 
+  // desktop tabs
+  tabs: {
+    new: 'tabs.new',
+    close: 'tabs.close',
+    next: 'tabs.next',
+    previous: 'tabs.previous',
+  },
+
   // sidebar navigation
   sidebar: {
     goToLeader: 'sidebar.goToLeader',
@@ -134,6 +142,7 @@ export const TOKENS = {
       channels: 'sidebar.goTo.channels',
       calls: 'sidebar.goTo.calls',
       reviews: 'sidebar.goTo.reviews',
+      external: 'sidebar.goTo.external',
       companies: 'sidebar.goTo.companies',
       folders: 'sidebar.goTo.folders',
     },

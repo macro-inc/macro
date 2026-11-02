@@ -1,4 +1,6 @@
 import * as datadog from '@pulumi/datadog';
+import { goalertWebhooks } from './goalert';
+import { notify, RENOTIFY_MINUTES } from './notify';
 
 // The only external probe of the product. It owns its own alert monitor
 // (19726068, "Macro App is Down") through `optionsList.monitorName` — that
@@ -11,8 +13,8 @@ import * as datadog from '@pulumi/datadog';
 // here.
 //
 // `message` below is Datadog's default synthetics notification template,
-// reproduced verbatim from the live test. Backticks are escaped for the
-// template literal; the rendered text is unchanged.
+// reproduced from the live test with its notification handles replaced by
+// `notify`. Backticks are escaped for the template literal.
 export const appWelcomeHealthCheck = new datadog.SyntheticsTest(
   'app-welcome-health-check',
   {
@@ -43,11 +45,12 @@ export const appWelcomeHealthCheck = new datadog.SyntheticsTest(
       httpVersion: 'any',
       retry: { count: 0, interval: 300 },
       monitorName: 'Macro App is Down',
-      monitorOptions: { notificationPresetName: 'show_all' },
+      monitorOptions: {
+        notificationPresetName: 'show_all',
+        renotifyInterval: RENOTIFY_MINUTES,
+      },
     },
     message: `{{! Test result details }}
-
-@slack-holy-shit-alarms  @hutch@macro.com @teo@macro.com
 
 Your test {{#is_alert}}failed{{else}}recovered{{/is_alert}} after running for {{eval "synthetics.attributes.result.duration/1000" }}s on the {{#if synthetics.attributes.location.privateLocation}}Private{{else}}Managed{{/if}} Location {{synthetics.attributes.location.id}}.
 
@@ -98,7 +101,9 @@ The test successfully extracted the following variables:
 {{#each synthetics.attributes.result.variables.extracted}}
 * **Name:** \`{{name}}\` (Global Variable ID: \`{{id}}\`)
 Value: {{#if secure}}*Obfuscated (value hidden)*{{else}}\`{{{val}}}\`{{/if}}{{/each}}
-{{/if}}`,
+{{/if}}
+
+${notify({ pages: true })}`,
   },
-  { protect: true }
+  { protect: true, dependsOn: goalertWebhooks }
 );

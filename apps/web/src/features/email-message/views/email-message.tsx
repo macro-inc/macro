@@ -6,7 +6,7 @@ import type { EmailMessage } from '@app/features/email-message/core/email-messag
 import { EmailMessageBody } from '@app/features/email-message/views/email-message-body';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { VideoPreview } from '@core/component/VideoPreview';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { Key } from '@solid-primitives/keyed';
 import type { JSX } from 'solid-js';
 import { createMemo, createSignal, For, Show } from 'solid-js';
@@ -19,6 +19,8 @@ import {
 } from '../core/calendar-invitation';
 import { type EmailAttachment, isCalendarFile } from '../core/email-message';
 import { inlineContentIds, normalizeContentId } from '../core/inline-images';
+import type { ReadReceipt } from '../core/read-receipt';
+
 export interface InvitationRenderOptions {
   /** Called before a card action opens something else in the app. */
   onNavigate?: () => void;
@@ -35,6 +37,8 @@ export interface EmailMessageViewProps {
   ) => JSX.Element;
   renderOperation?: (message: EmailMessage) => JSX.Element;
   renderAvatar?: (message: EmailMessage) => JSX.Element;
+  readReceipt?: ReadReceipt;
+  showReadReceiptPixel?: boolean;
   viewerEmail?: string;
   isTouch: boolean;
   isPersonal: boolean;
@@ -111,6 +115,7 @@ export function EmailMessageView(props: EmailMessageViewProps) {
         setFocusedMessageId={() => props.onSelect?.()}
         showFullContent={props.showFullContent}
         isFocused={props.isSelected}
+        showReadReceiptPixel={props.showReadReceiptPixel}
       />
     </div>
   );
@@ -186,6 +191,7 @@ export function EmailMessageView(props: EmailMessageViewProps) {
             onReply={props.onReply}
             isTouch={props.isTouch}
             viewerEmail={props.viewerEmail}
+            readReceipt={props.readReceipt}
             hiddenActions={
               props.onReply ? undefined : ['reply', 'reply-all', 'forward']
             }
