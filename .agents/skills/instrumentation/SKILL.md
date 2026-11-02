@@ -152,6 +152,11 @@ can repeat forever reports counters instead of lines: each item logs a failure
 class once, and `graphql.mutation_queue.summary` flushes counters every five
 minutes only when something non-routine happened.
 
+## Reading production
+
+To find slow flows in Datadog from these spans, use the `perf-investigation`
+skill.
+
 ## Verify
 
 Run the flow on the local stack and find its trace (see the `live-debug`

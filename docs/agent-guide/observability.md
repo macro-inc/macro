@@ -274,7 +274,9 @@ Every perf trace has one root. Phases are `<area>.<phase>` (`channel.messages`,
 `doc.load.context`); nested flows for a mounted subtree end in `.view` when the
 area has several (`channel.messages.view`). Names are static: no ids, counts or
 content in a name. In Datadog the span name is `resource_name` (the
-`operation_name` is the span kind, such as `Internal`).
+`operation_name` is the span kind, such as `Internal`), except HTTP client
+spans, whose `resource_name` is the method and whose path is `@http.url`. The
+`perf-investigation` skill has verified Datadog query shapes.
 
 | Root | `flow.kind` | Started by | `route.id` |
 | --- | --- | --- | --- |
