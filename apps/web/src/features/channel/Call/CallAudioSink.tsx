@@ -24,15 +24,17 @@ export function CallAudioSink() {
 
   const remoteAudioTracks = () => {
     // Subscribe to trackVersion so audio subscribe / unsubscribe / replace
-    // events propagate (same reactivity pattern as ParticipantTile).
+    // events propagate (same reactivity pattern as ParticipantTile). <For>
+    // keys by the Track itself, so one share starting or stopping leaves the
+    // other audio elements mounted.
     callCtx.trackVersion();
     return Array.from(callCtx.remoteParticipants().values())
       .filter((p) => !p.isAgent)
       .flatMap((p) =>
-        REMOTE_AUDIO_SOURCES.map((source) => ({
-          id: `${p.identity}:${source}`,
-          track: p.getTrackPublication(source)?.track,
-        }))
+        REMOTE_AUDIO_SOURCES.flatMap((source) => {
+          const track = p.getTrackPublication(source)?.track;
+          return track ? [track] : [];
+        })
       );
   };
 
@@ -43,7 +45,7 @@ export function CallAudioSink() {
         aria-hidden="true"
       >
         <For each={remoteAudioTracks()}>
-          {(entry) => <TrackView track={entry.track} />}
+          {(track) => <TrackView track={track} />}
         </For>
       </div>
     </Show>
