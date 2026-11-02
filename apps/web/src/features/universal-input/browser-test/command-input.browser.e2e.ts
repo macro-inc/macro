@@ -267,7 +267,7 @@ test('Shift+Enter keeps Universal Input search open while browsing a result', as
   const dialog = await openMenu(page);
   await dialog
     .getByPlaceholder('Search...', { exact: true })
-    .fill('find how blowholes work');
+    .fill('find notes on how blowholes work');
   const input = dialog.getByRole('textbox', {
     name: 'Your input',
     exact: true,
@@ -287,7 +287,7 @@ test('Shift+Enter keeps Universal Input search open while browsing a result', as
   await expect(page.getByTestId('opened-search-result')).toHaveText('');
   await page.keyboard.type('in the ocean');
   await expect(input.locator('p')).toHaveText([
-    'find how blowholes work',
+    'find notes on how blowholes work',
     'in the ocean',
   ]);
   await input.press('ArrowDown');
@@ -306,7 +306,7 @@ test('the type selector uses the shared dropdown and Escape leaves Command K ope
   const dialog = await openMenu(page);
   await dialog
     .getByPlaceholder('Search...', { exact: true })
-    .fill('find how blowholes work');
+    .fill('find notes on how blowholes work');
   const type = dialog.getByLabel('Content type');
   await expect(type).toHaveText('Auto · Search');
   await type.click();
@@ -317,7 +317,7 @@ test('the type selector uses the shared dropdown and Escape leaves Command K ope
   await expect(type).toHaveText('Task');
   await expect(
     dialog.getByRole('textbox', { name: 'Your input', exact: true })
-  ).toHaveText('find how blowholes work');
+  ).toHaveText('find notes on how blowholes work');
   await type.click();
   await expect(
     page.getByRole('option', { name: 'Task', exact: true })
@@ -339,7 +339,7 @@ test('Escape closes the calendar date picker before the Command K composer', asy
   const dialog = await openMenu(page);
   await dialog
     .getByPlaceholder('Search...', { exact: true })
-    .fill('Call John at 3pm tomorrow');
+    .fill('Call John at 3pm tomorrow afternoon');
   const startDate = page.getByRole('button', {
     name: 'Edit event start date',
     exact: true,

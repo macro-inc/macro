@@ -12,7 +12,7 @@ describe('mobile search session', () => {
     const session = state.session();
     state.setQuery('short search');
     expect(session.universalInputActive()).toBe(false);
-    state.setQuery('create a task');
+    state.setQuery('create a task for the launch plan');
     expect(session.universalInputActive()).toBe(true);
     state.setQuery('short');
     expect(session.universalInputActive()).toBe(true);

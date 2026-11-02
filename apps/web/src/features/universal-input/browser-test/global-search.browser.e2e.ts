@@ -15,7 +15,7 @@ async function compose(page: Page, text: string) {
 test('search messages from Julia prepopulates the global Channels and From facets, including a filter-only search', async ({
   page,
 }) => {
-  const dialog = await compose(page, 'search messages from julia');
+  const dialog = await compose(page, 'search all messages from julia');
   await expect(
     dialog.getByLabel('Search filters').getByText('Channels', { exact: true })
   ).toBeVisible();
@@ -185,7 +185,7 @@ test('formatted main-input queries keep updating and search DMs use the full cha
 test('the Documents filter rejects task hits from a full-text response', async ({
   page,
 }) => {
-  const dialog = await compose(page, 'search documents about Scope');
+  const dialog = await compose(page, 'search all documents about Scope');
   const results = dialog.getByRole('listbox', {
     name: 'Search results',
     exact: true,

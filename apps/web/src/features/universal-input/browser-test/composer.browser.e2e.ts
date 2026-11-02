@@ -597,7 +597,7 @@ test('keeps Command K open while searching and choosing an AI model', async ({
   await page
     .getByRole('button', { name: 'Open Command K', exact: true })
     .click();
-  const text = 'Help me plan the launch';
+  const text = 'Help me plan the product launch';
   await page.getByPlaceholder('Search...', { exact: true }).fill(text);
   const dialog = page.getByRole('dialog');
   const input = dialog.getByRole('textbox', {

@@ -16,12 +16,15 @@ const answers: Record<string, SearchExtraction> = {
     },
   'find hiring': { type: 'all', query: 'hiring' },
   'find hiring plan': { type: 'all', query: 'hiring plan' },
-  'find how blowholes work': { type: 'all', query: 'how blowholes work' },
+  'find notes on how blowholes work': {
+    type: 'all',
+    query: 'how blowholes work',
+  },
   'find how blowholes work in the ocean': {
     type: 'all',
     query: 'how blowholes work in the ocean',
   },
-  'search messages from julia': {
+  'search all messages from julia': {
     query: null,
     type: 'channels',
     from: ['Julia'],
@@ -75,7 +78,10 @@ const answers: Record<string, SearchExtraction> = {
     in: ['Julia direct message'],
     from: [],
   },
-  'search documents about Scope': { query: 'Scope', type: 'document-or-file' },
+  'search all documents about Scope': {
+    query: 'Scope',
+    type: 'document-or-file',
+  },
 };
 
 export function fixtureSearchFields(text: string) {

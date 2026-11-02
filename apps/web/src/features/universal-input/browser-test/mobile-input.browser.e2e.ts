@@ -131,7 +131,7 @@ test('keeps mobile email unsent until Send and submits the visible draft once', 
     name: 'Search or create',
     exact: true,
   });
-  await input.fill('Email John that I’ll be late');
+  await input.fill('Email John that I’ll be late today');
   const send = page.getByRole('button', { name: 'Send email', exact: true });
   await expect(send).toBeEnabled();
   await expect(page.getByTestId('command-submission-count')).toHaveText('0');

@@ -1242,8 +1242,8 @@ Opens a dialog with a focused `Search...` textbox and bubble-style category radi
 the top hit. Also exposes commands: `Create`, `Change theme`, `MCP setup`. Keys: Tab cycles
 category, Esc closes. The category strip and footer have transparent backgrounds.
 
-With PostHog **enable-universal-input** enabled, typing at least **3 words or 24
-characters** turns the menu into the shared Universal Input composer. The current
+With PostHog **enable-universal-input** enabled, typing at least **29 characters**
+(word count does not matter) turns the menu into the shared Universal Input composer. The current
 text and insertion point transfer to its rich input in the same header row, with
 the same type size and padding. There is no additional title. The Macro logo hides
 when the rich input wraps or contains multiple lines, then returns on one line;
