@@ -36,12 +36,12 @@ static and readable in compact rows. When composing a project icon separately,
 pass `hideIcon` to `Property.Text` to avoid duplicate glyphs.
 Status, Priority, and Date icons share a 12px default. List date icons use the
 existing 16px compact-column override instead of stretching to the cell width.
-Inline task and document title pills use 12px icons on desktop and 16px value
-and empty-state icons on touch. Task title pills omit the `Due date:` prefix
-and order Due date before Project and Assignees. Side-panel Status/Priority
-values use explicit 16px icons. Side-panel Project icons, including empty
-values, use 16px on touch and retain their desktop sizes. Other callers can
-override the size.
+Inline task and document title pills use 12px non-avatar icons on desktop and
+16px on touch; assignee avatars retain their own sizing. Task title pills omit
+the `Due date:` prefix and order Due date before Project and Assignees.
+Side-panel Status/Priority values use explicit 16px icons. Side-panel Project
+icons, including empty values, use 16px on touch and retain their desktop sizes.
+Other callers can override the size.
 `Property.UserStack` overlaps assignee avatars and their overflow count by 8px;
 other avatar groups retain their shared spacing.
 Editable list cells use the shared ghost `Property.Pill` styling. Project hover
@@ -60,8 +60,9 @@ chip count stable while a picker or its nested editor is active so resizing
 cannot discard the editing session. Hosts without a controller retain their
 explicit or default chip limit.
 Tag chips, overflow chips, and inline tag pills retain their compact desktop
-height on touch instead of adopting the shared button touch minimum, except
-the task-detail title-row tags selector, which retains the 36px touch target.
+height on touch instead of adopting the shared button touch minimum. Only
+the task-detail title-row tags selector uses the 36px touch target; document
+title-row tags retain their compact height.
 
 ## Side-panel collections
 

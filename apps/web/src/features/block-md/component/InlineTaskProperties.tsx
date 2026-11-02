@@ -182,7 +182,7 @@ export function InlineTaskProperties() {
             entityType={entityType}
             variant="secondary"
             size="xs"
-            class="touch:min-h-9"
+            class={documentKind === 'task' ? 'touch:min-h-9' : undefined}
             showAddButton={documentKind === 'document' && canEdit()}
           />
           {/* A placeholder keeps its chip, and a pick in it, when saving assigns its ID. */}
