@@ -411,6 +411,11 @@ adds only what is missing; several rows for one new record add separate entries
 (deals), as an export of such a pipeline lists them. Relation and non-person entity columns are skipped,
 and a value that does not fit its column is left empty.
 
+Agent CSV imports report ambiguous contact emails as unresolved records with an
+actionable reason and continue the valid rows. They never create another contact
+for an ambiguous email; select the intended contact by ID when adding it to the
+pipeline. Storage and authorization failures during lookup still fail the import.
+
 CRM lists are currently disabled by `enableCrmLists` (default `false`). The sidebar
 Lists section, list editor, and company membership controls only mount when enabled.
 Existing list data is preserved; a restored list view returns to All companies while

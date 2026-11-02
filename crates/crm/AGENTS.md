@@ -73,6 +73,8 @@ tools/HTTP/GraphQL surfaces over them.
 - Keep CRM write locks ordered: domain advisory locks, parent team `KEY SHARE`,
   settings `SHARE`, then company/contact rows. Hold them through commit so
   disable/purge and team deletion cannot race creation.
+- Keep ambiguous CSV contact lookups unresolved without creating records for
+  them; continue valid rows, but propagate lookup storage and authorization failures.
 
 - Company names/logos live in the global `crm_domain_directory`. Only the
   email pubsub workers carry a real `CompanyMetadataResolver`; every other

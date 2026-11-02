@@ -36,7 +36,10 @@ The existing People listing still displays one representative per email; each
 company's contact list retains its own records. Email-only API and agent lookups
 surface ambiguity errors. The current UI CSV importer counts failed lookups as
 skipped rows, so per-row error reporting and ID-based recovery remain part of
-the import redesign.
+the import redesign. Agent CSV imports report ambiguous emails as unresolved
+records with the lookup's reason and continue importing valid rows. Refused
+lookups never create a company or contact; storage and authorization failures
+during lookup still fail the import.
 
 Existing IDs, pipeline rows, custom properties, files, tasks, calls, discussions
 and grants are untouched. There is no schema or data migration. Rollback is an
