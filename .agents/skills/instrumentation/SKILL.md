@@ -41,10 +41,9 @@ import OpenTelemetry directly.
 - `Telemetry.span(name, fn)` for a phase; `span.span(name, fn)` for a child.
   `Telemetry.span(name, { kind: 'client' })` for an outbound call, then
   `span.injectTraceHeaders(headers)`.
-- `sampling: 'perf'` (in `Telemetry.span`'s options, `<TraceFlow>` and
-  `beginInteraction`) puts a trace in a sampling class; the web app's classes
-  are in `apps/web/src/observability/sampling.ts`. Spans without one are
-  always kept, and leave a dropped perf trace for their own.
+- `Telemetry.span(name, { sampling: 'perf' })` puts a trace in a sampling
+  class; without one it is always kept. See
+  [What gets exported](#what-gets-exported).
 - `span.setAttr(key, value)` for ids and counts; `span.error(message)` on
   failure; manual spans must `end()` on every path.
 - The browser uses a synchronous `StackContextManager`, so after an `await`
@@ -102,13 +101,7 @@ hold releases.
   `finally`. The window is synchronous; flows created inside it join it. Use
   `startUiOperation` directly only for a measured action that mounts no flow (a
   cell commit, a submit), calling `afterPaint()` once the UI updated.
-- **Sampling.** Flows, interactions and `startUiOperation` are the `perf`
-  sampling class (`<TraceFlow sampling>`, `beginInteraction(name, { sampling })`
-  and `Telemetry.span(name, { sampling })` choose another). Each class is kept
-  per user, per week (`perf` for 5% of production users, everyone elsewhere;
-  classes in `apps/web/src/observability/sampling.ts`). Phases are dropped with
-  their trace; `Telemetry.span` without a class (requests, lifecycle work)
-  leaves a dropped perf trace and is always kept.
+- **Sampling** is per trace; see [What gets exported](#what-gets-exported).
 - `flow.kind`, `route.id`, `flow.root`, `flow.outcome`, `<phase>.waited`,
   `macro.sampling.*` and the `ui.*` timing fields come from the owners; never
   set them per call site. Keep names static and attributes to opaque ids,
@@ -152,6 +145,55 @@ the cache; phase durations are `resource_name:database.rows
 `perf-investigation` skill has the tested query shapes, and the
 [observability walkthrough](../../../docs/agent-guide/observability.md#web-performance-traces)
 lists every root and attribute.
+
+## What gets exported
+
+Four layers decide whether a span reaches Datadog:
+
+1. **The global gate.** Built apps (browser and desktop) export only where
+   the `enable-browser-otel` PostHog flag is on; the Vite dev server exports
+   whenever a collector is configured, and `VITE_ENABLE_BROWSER_OTEL`
+   overrides both (`observability/browser.ts`). Spans are buffered from boot
+   and exported once enablement resolves; nothing is sent before it.
+2. **Unclassed spans: always exported** once the gate is open. A
+   `Telemetry.span(name)` with no `sampling` option. Use this for requests,
+   errors, mutations, background work and anything a backend trace hangs off:
+   `safeFetch` HTTP spans, `graphql.mutation_queue.attempt`, `channel.send`.
+3. **Sampling classes**, declared by the app in
+   `apps/web/src/observability/sampling.ts` with their rates:
+   - `perf` (5% of production users, every user elsewhere): performance
+     measurement. Flows, `beginInteraction`, `startUiOperation`,
+     `app.boot`, `input.typing_burst`, `app.runtime.sample`,
+     `urql.reconcile`. This is the default for `<TraceFlow>`,
+     `beginInteraction` and `startUiOperation`.
+   - `always` (every user): a span that must survive a dropped `perf` trace
+     under a class of its own.
+
+   Each class is decided once per user per class at enablement, from the user
+   id (the `frontend_instance_id` before sign-in) salted with the week, so the
+   cohort rotates weekly; `Telemetry.config.sampled('perf')` reads it, and
+   explicit native recordings keep every class. Exported spans in a classed
+   trace carry `macro.sampling.class` and `macro.sampling.rate` (weight counts
+   by `1 / rate`).
+
+   Nesting: a span joins its parent's trace when that trace is exported.
+   Otherwise a phase (`span.span`, `usePending`, `flow.task`) is dropped with
+   its root, and any other span starts its own trace when its own class is kept
+   (an unclassed span always is) and is dropped when it is not. So requests
+   started inside an unsampled perf trace still export as their own traces,
+   and their backend spans are never lost to perf sampling.
+4. **Backend.** Rust services and workers do not sample themselves: they
+   follow the incoming `traceparent`'s sampled flag (OpenTelemetry's default
+   parent-based sampler) and export the rest. Datadog then indexes a subset of
+   ingested spans; the perf retention filter in
+   `infra/stacks/monitoring/dashboards/web-performance.ts` keeps exported perf
+   traces searchable.
+
+**Picking a class.** Timing a view, phase or user action to rank or compare
+latency: use a flow or interaction (`perf`). Something that must be there to
+debug one user's failure, or that a backend trace joins: leave it unclassed. A
+new class belongs in `sampling.ts` with a rate, and only for a new kind of
+telemetry with its own volume budget.
 
 ## Rust services
 
