@@ -142,16 +142,17 @@ This routine's shared template, or `undefined` when it isn't shared.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ScheduledActionResponse`](../../../../../generated/scheduled-action/types.gen/type-aliases/ScheduledActionResponse.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ScheduledActionResponse`](../../../../../generated/scheduled-action/types.gen/type-aliases/ScheduledActionResponse.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`ScheduledActionResponse`](../../../../../generated/scheduled-action/types.gen/type-aliases/ScheduledActionResponse.md); `id`: `string`; \}
+\{ `detail?`: [`ScheduledActionResponse`](../../../../../generated/scheduled-action/types.gen/type-aliases/ScheduledActionResponse.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`ScheduledActionResponse`](../../../../../generated/scheduled-action/types.gen/type-aliases/ScheduledActionResponse.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 
@@ -174,6 +175,18 @@ Replace the routine's task and trigger configuration.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### webUrl()
+
+> **webUrl**(): `string`
+
+The routine's URL in the Macro web app.
+
+#### Returns
+
+`string`
 
 ***
 

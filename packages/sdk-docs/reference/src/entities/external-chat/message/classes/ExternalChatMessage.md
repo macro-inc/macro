@@ -31,16 +31,17 @@ Message in an added external chat.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ExternalChatMessage`](../../../../../generated/storage/types.gen/type-aliases/ExternalChatMessage.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ExternalChatMessage`](../../../../../generated/storage/types.gen/type-aliases/ExternalChatMessage.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`ExternalChatMessage`](../../../../../generated/storage/types.gen/type-aliases/ExternalChatMessage.md); `id`: `string`; \}
+\{ `detail?`: [`ExternalChatMessage`](../../../../../generated/storage/types.gen/type-aliases/ExternalChatMessage.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`ExternalChatMessage`](../../../../../generated/storage/types.gen/type-aliases/ExternalChatMessage.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

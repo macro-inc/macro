@@ -31,19 +31,20 @@ Reload after a running generation changes or finishes.
 
 ### toJSON()
 
-> **toJSON**(): \{ `chatId`: `string`; `detail?`: [`ChatMessageWithAttachments`](../../../../../generated/cognition/types.gen/type-aliases/ChatMessageWithAttachments.md); `id`: `string`; \}
+> **toJSON**(): \{ `chatId`: `string`; `detail?`: [`ChatMessageWithAttachments`](../../../../../generated/cognition/types.gen/type-aliases/ChatMessageWithAttachments.md); `id`: `string`; `url?`: `string`; \}
 
 Serialize scoped identity and any loaded message.
 
 #### Returns
 
-\{ `chatId`: `string`; `detail?`: [`ChatMessageWithAttachments`](../../../../../generated/cognition/types.gen/type-aliases/ChatMessageWithAttachments.md); `id`: `string`; \}
+\{ `chatId`: `string`; `detail?`: [`ChatMessageWithAttachments`](../../../../../generated/cognition/types.gen/type-aliases/ChatMessageWithAttachments.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `chatId` | `string` |
 | `detail?` | [`ChatMessageWithAttachments`](../../../../../generated/cognition/types.gen/type-aliases/ChatMessageWithAttachments.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Overrides
 

@@ -240,16 +240,17 @@ value when `value` is omitted.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ChatResponse`](../../../../../generated/cognition/types.gen/type-aliases/ChatResponse.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ChatResponse`](../../../../../generated/cognition/types.gen/type-aliases/ChatResponse.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`ChatResponse`](../../../../../generated/cognition/types.gen/type-aliases/ChatResponse.md); `id`: `string`; \}
+\{ `detail?`: [`ChatResponse`](../../../../../generated/cognition/types.gen/type-aliases/ChatResponse.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`ChatResponse`](../../../../../generated/cognition/types.gen/type-aliases/ChatResponse.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

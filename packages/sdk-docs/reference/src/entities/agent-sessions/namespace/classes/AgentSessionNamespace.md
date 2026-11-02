@@ -73,7 +73,7 @@ What the caller's new coding sessions are told to do beyond their assignment.
 
 > **createManaged**(`opts?`): `Promise`\<[`AgentSession`](../../agent-session/classes/AgentSession.md)\>
 
-Create a managed agent session.
+Create a managed agent session; link the user to it with its `webUrl()`.
 
 #### Parameters
 

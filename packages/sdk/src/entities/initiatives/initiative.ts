@@ -42,6 +42,15 @@ export class Initiative extends MacroEntity<InitiativeDetail> {
     return new Initiative(client, record.id, record);
   }
 
+  /** The initiative's URL in the Macro web app. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/initiative/${this.id}`;
+  }
+
+  protected override webLink(): string {
+    return this.webUrl();
+  }
+
   protected async fetch(): Promise<InitiativeDetail> {
     return unwrap(
       await this.client.storage.getInitiative({

@@ -31,16 +31,17 @@ Remove the host.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`Harness`](../../../../../generated/storage/types.gen/type-aliases/Harness.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`Harness`](../../../../../generated/storage/types.gen/type-aliases/Harness.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`Harness`](../../../../../generated/storage/types.gen/type-aliases/Harness.md); `id`: `string`; \}
+\{ `detail?`: [`Harness`](../../../../../generated/storage/types.gen/type-aliases/Harness.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`Harness`](../../../../../generated/storage/types.gen/type-aliases/Harness.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

@@ -48,6 +48,15 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   /** Favorites identify CRM contacts as `crm_contact`. */
   readonly entityType = 'crm_contact';
 
+  /** The contact's URL in the Macro web app. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/contact/${this.id}`;
+  }
+
+  protected override webLink(): string {
+    return this.webUrl();
+  }
+
   protected async fetch(): Promise<ContactDetail> {
     return unwrap(
       await this.client.storage.getContact({

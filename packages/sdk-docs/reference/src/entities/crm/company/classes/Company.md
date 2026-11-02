@@ -337,16 +337,17 @@ A mixed message and activity timeline page.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`CrmCompanyResponse`](../../../../../generated/storage/types.gen/type-aliases/CrmCompanyResponse.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`CrmCompanyResponse`](../../../../../generated/storage/types.gen/type-aliases/CrmCompanyResponse.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`CrmCompanyResponse`](../../../../../generated/storage/types.gen/type-aliases/CrmCompanyResponse.md); `id`: `string`; \}
+\{ `detail?`: [`CrmCompanyResponse`](../../../../../generated/storage/types.gen/type-aliases/CrmCompanyResponse.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`CrmCompanyResponse`](../../../../../generated/storage/types.gen/type-aliases/CrmCompanyResponse.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 
@@ -401,6 +402,18 @@ Apply multi-select option deltas atomically across this entity's properties.
 #### Inherited from
 
 [`PropertiedEntity`](../../../entity/classes/PropertiedEntity.md).[`updatePropertyOptions`](../../../entity/classes/PropertiedEntity.md#updatepropertyoptions)
+
+***
+
+### webUrl()
+
+> **webUrl**(): `string`
+
+The company's URL in the Macro web app.
+
+#### Returns
+
+`string`
 
 ***
 

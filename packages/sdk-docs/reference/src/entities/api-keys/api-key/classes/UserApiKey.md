@@ -30,16 +30,17 @@ Revoke this key.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`UserApiKeyInfo`](../../../../../generated/storage/types.gen/type-aliases/UserApiKeyInfo.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`UserApiKeyInfo`](../../../../../generated/storage/types.gen/type-aliases/UserApiKeyInfo.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`UserApiKeyInfo`](../../../../../generated/storage/types.gen/type-aliases/UserApiKeyInfo.md); `id`: `string`; \}
+\{ `detail?`: [`UserApiKeyInfo`](../../../../../generated/storage/types.gen/type-aliases/UserApiKeyInfo.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`UserApiKeyInfo`](../../../../../generated/storage/types.gen/type-aliases/UserApiKeyInfo.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

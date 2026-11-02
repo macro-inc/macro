@@ -31,16 +31,17 @@ Discard cached connection state and load its current value.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`WhatsAppAccount`](../../../../../generated/storage/types.gen/type-aliases/WhatsAppAccount.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`WhatsAppAccount`](../../../../../generated/storage/types.gen/type-aliases/WhatsAppAccount.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`WhatsAppAccount`](../../../../../generated/storage/types.gen/type-aliases/WhatsAppAccount.md); `id`: `string`; \}
+\{ `detail?`: [`WhatsAppAccount`](../../../../../generated/storage/types.gen/type-aliases/WhatsAppAccount.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`WhatsAppAccount`](../../../../../generated/storage/types.gen/type-aliases/WhatsAppAccount.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

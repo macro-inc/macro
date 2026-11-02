@@ -38,16 +38,17 @@ behind a server-side lock).
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`Attachment`](../../../../../generated/email/types.gen/type-aliases/Attachment.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`Attachment`](../../../../../generated/email/types.gen/type-aliases/Attachment.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`Attachment`](../../../../../generated/email/types.gen/type-aliases/Attachment.md); `id`: `string`; \}
+\{ `detail?`: [`Attachment`](../../../../../generated/email/types.gen/type-aliases/Attachment.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`Attachment`](../../../../../generated/email/types.gen/type-aliases/Attachment.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

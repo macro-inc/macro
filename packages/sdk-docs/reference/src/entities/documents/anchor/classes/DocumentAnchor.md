@@ -49,19 +49,20 @@ Edit a placeable comment's position and display settings.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`PdfAnchor`](../../../../../generated/storage/types.gen/type-aliases/PdfAnchor.md); `documentId`: `string`; `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`PdfAnchor`](../../../../../generated/storage/types.gen/type-aliases/PdfAnchor.md); `documentId`: `string`; `id`: `string`; `url?`: `string`; \}
 
 Serialize identity with its owning resource.
 
 #### Returns
 
-\{ `detail?`: [`PdfAnchor`](../../../../../generated/storage/types.gen/type-aliases/PdfAnchor.md); `documentId`: `string`; `id`: `string`; \}
+\{ `detail?`: [`PdfAnchor`](../../../../../generated/storage/types.gen/type-aliases/PdfAnchor.md); `documentId`: `string`; `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`PdfAnchor`](../../../../../generated/storage/types.gen/type-aliases/PdfAnchor.md) |
 | `documentId` | `string` |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Overrides
 

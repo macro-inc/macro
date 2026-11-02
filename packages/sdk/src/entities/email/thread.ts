@@ -135,6 +135,15 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
   /** The properties service identifies email threads as `THREAD`. */
   protected readonly propertyEntityType = 'THREAD';
 
+  /** The thread's URL in the Macro web app. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/email/${this.id}`;
+  }
+
+  protected override webLink(): string {
+    return this.webUrl();
+  }
+
   protected async fetch(): Promise<ThreadDetail> {
     const { thread } = unwrap(
       await this.client.email.getThread({

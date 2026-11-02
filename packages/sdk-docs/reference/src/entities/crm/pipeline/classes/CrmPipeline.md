@@ -153,16 +153,17 @@ Read the backing table through the pipeline's authorization boundary.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`AccessiblePipeline`](../../../../../generated/storage/types.gen/type-aliases/AccessiblePipeline.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`AccessiblePipeline`](../../../../../generated/storage/types.gen/type-aliases/AccessiblePipeline.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`AccessiblePipeline`](../../../../../generated/storage/types.gen/type-aliases/AccessiblePipeline.md); `id`: `string`; \}
+\{ `detail?`: [`AccessiblePipeline`](../../../../../generated/storage/types.gen/type-aliases/AccessiblePipeline.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`AccessiblePipeline`](../../../../../generated/storage/types.gen/type-aliases/AccessiblePipeline.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 
@@ -185,6 +186,18 @@ Update sharing grants.
 #### Returns
 
 `Promise`\<[`SharePermissionV2`](../../../../../generated/storage/types.gen/type-aliases/SharePermissionV2.md)\>
+
+***
+
+### webUrl()
+
+> **webUrl**(): `string`
+
+The pipeline's URL in the Macro web app.
+
+#### Returns
+
+`string`
 
 ***
 

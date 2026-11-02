@@ -92,9 +92,22 @@ export abstract class MacroEntity<Detail> {
       );
   }
 
-  toJSON(): { id: string; detail?: Detail } {
+  /**
+   * The entity's page in the Macro web app, serialized as `url`. Entities
+   * with a page return their public `webUrl()` here; the rest have none.
+   */
+  protected webLink(): string | undefined {
+    return undefined;
+  }
+
+  toJSON(): { id: string; url?: string; detail?: Detail } {
+    const url = this.webLink();
     const detail = this.detail.peek();
-    return detail === undefined ? { id: this.id } : { id: this.id, detail };
+    return {
+      id: this.id,
+      ...(url === undefined ? {} : { url }),
+      ...(detail === undefined ? {} : { detail }),
+    };
   }
 
   /** Run a write, unwrap it, and drop the cached detail so reads refetch. */

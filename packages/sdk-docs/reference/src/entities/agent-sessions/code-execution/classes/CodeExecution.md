@@ -59,16 +59,17 @@ The session this execution belongs to.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ExecutionRecord`](../../../../../generated/agent-harness/types.gen/type-aliases/ExecutionRecord.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ExecutionRecord`](../../../../../generated/agent-harness/types.gen/type-aliases/ExecutionRecord.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`ExecutionRecord`](../../../../../generated/agent-harness/types.gen/type-aliases/ExecutionRecord.md); `id`: `string`; \}
+\{ `detail?`: [`ExecutionRecord`](../../../../../generated/agent-harness/types.gen/type-aliases/ExecutionRecord.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`ExecutionRecord`](../../../../../generated/agent-harness/types.gen/type-aliases/ExecutionRecord.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

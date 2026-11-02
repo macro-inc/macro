@@ -442,16 +442,17 @@ A mixed message and activity timeline page.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ApiChannelDetail`](../../../../../generated/storage/types.gen/type-aliases/ApiChannelDetail.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ApiChannelDetail`](../../../../../generated/storage/types.gen/type-aliases/ApiChannelDetail.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`ApiChannelDetail`](../../../../../generated/storage/types.gen/type-aliases/ApiChannelDetail.md); `id`: `string`; \}
+\{ `detail?`: [`ApiChannelDetail`](../../../../../generated/storage/types.gen/type-aliases/ApiChannelDetail.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`ApiChannelDetail`](../../../../../generated/storage/types.gen/type-aliases/ApiChannelDetail.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

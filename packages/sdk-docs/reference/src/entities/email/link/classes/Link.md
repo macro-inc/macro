@@ -37,16 +37,17 @@ Read category and sender-policy changes for this inbox.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`Link`](../../../../../generated/email/types.gen/type-aliases/Link.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`Link`](../../../../../generated/email/types.gen/type-aliases/Link.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`Link`](../../../../../generated/email/types.gen/type-aliases/Link.md); `id`: `string`; \}
+\{ `detail?`: [`Link`](../../../../../generated/email/types.gen/type-aliases/Link.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`Link`](../../../../../generated/email/types.gen/type-aliases/Link.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

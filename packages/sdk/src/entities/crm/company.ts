@@ -53,6 +53,15 @@ export class Company extends PropertiedEntity<CompanyDetail> {
   /** The properties service identifies CRM companies as `COMPANY`. */
   protected readonly propertyEntityType = 'COMPANY';
 
+  /** The company's URL in the Macro web app. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/company/${this.id}`;
+  }
+
+  protected override webLink(): string {
+    return this.webUrl();
+  }
+
   protected async fetch(): Promise<CompanyDetail> {
     return unwrap(
       await this.client.storage.getCompany({

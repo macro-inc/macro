@@ -36,13 +36,13 @@ Delete the entire thread, including replies.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ThreadState`](../../../../../generated/storage/types.gen/type-aliases/ThreadState.md); `id`: `string`; `parentId`: `string`; `parentType`: `"channel"` \| `"document"` \| `"call"` \| `"crm_company"` \| `"crm_contact"`; \}
+> **toJSON**(): \{ `detail?`: [`ThreadState`](../../../../../generated/storage/types.gen/type-aliases/ThreadState.md); `id`: `string`; `parentId`: `string`; `parentType`: `"channel"` \| `"document"` \| `"call"` \| `"crm_company"` \| `"crm_contact"`; `url?`: `string`; \}
 
 Serialize identity with its owning resource.
 
 #### Returns
 
-\{ `detail?`: [`ThreadState`](../../../../../generated/storage/types.gen/type-aliases/ThreadState.md); `id`: `string`; `parentId`: `string`; `parentType`: `"channel"` \| `"document"` \| `"call"` \| `"crm_company"` \| `"crm_contact"`; \}
+\{ `detail?`: [`ThreadState`](../../../../../generated/storage/types.gen/type-aliases/ThreadState.md); `id`: `string`; `parentId`: `string`; `parentType`: `"channel"` \| `"document"` \| `"call"` \| `"crm_company"` \| `"crm_contact"`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
@@ -50,6 +50,7 @@ Serialize identity with its owning resource.
 | `id` | `string` |
 | `parentId` | `string` |
 | `parentType` | `"channel"` \| `"document"` \| `"call"` \| `"crm_company"` \| `"crm_contact"` |
+| `url?` | `string` |
 
 #### Overrides
 

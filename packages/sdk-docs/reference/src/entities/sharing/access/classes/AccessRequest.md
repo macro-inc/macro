@@ -39,16 +39,17 @@ Approve with an access level, or decline by omitting it.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`AccessRequest`](../../../../../generated/storage/types.gen/type-aliases/AccessRequest.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`AccessRequest`](../../../../../generated/storage/types.gen/type-aliases/AccessRequest.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`AccessRequest`](../../../../../generated/storage/types.gen/type-aliases/AccessRequest.md); `id`: `string`; \}
+\{ `detail?`: [`AccessRequest`](../../../../../generated/storage/types.gen/type-aliases/AccessRequest.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`AccessRequest`](../../../../../generated/storage/types.gen/type-aliases/AccessRequest.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

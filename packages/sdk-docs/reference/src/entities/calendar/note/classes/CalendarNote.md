@@ -40,16 +40,17 @@ Change the extra team view grant; omit the team to remove it. Requires document 
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`MeetingNote`](../../../../../generated/calendar/types.gen/type-aliases/MeetingNote.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`MeetingNote`](../../../../../generated/calendar/types.gen/type-aliases/MeetingNote.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`MeetingNote`](../../../../../generated/calendar/types.gen/type-aliases/MeetingNote.md); `id`: `string`; \}
+\{ `detail?`: [`MeetingNote`](../../../../../generated/calendar/types.gen/type-aliases/MeetingNote.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`MeetingNote`](../../../../../generated/calendar/types.gen/type-aliases/MeetingNote.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

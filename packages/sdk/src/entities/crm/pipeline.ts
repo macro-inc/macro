@@ -36,6 +36,15 @@ export class CrmPipeline extends MacroEntity<AccessiblePipeline> {
     return new CrmPipeline(client, record.id, record);
   }
 
+  /** The pipeline's URL in the Macro web app. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/pipeline/${this.id}`;
+  }
+
+  protected override webLink(): string {
+    return this.webUrl();
+  }
+
   protected async fetch(): Promise<AccessiblePipeline> {
     return unwrap(
       await this.client.storage.getCrmPipeline({ path: { id: this.id } }),

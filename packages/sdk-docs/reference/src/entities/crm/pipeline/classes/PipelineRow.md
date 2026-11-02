@@ -30,19 +30,20 @@ Reload this row after an operation batch.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`StorageRow`](../../../../../generated/storage/types.gen/type-aliases/StorageRow.md); `id`: `string`; `pipelineId`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`StorageRow`](../../../../../generated/storage/types.gen/type-aliases/StorageRow.md); `id`: `string`; `pipelineId`: `string`; `url?`: `string`; \}
 
 Serialize identity within its pipeline.
 
 #### Returns
 
-\{ `detail?`: [`StorageRow`](../../../../../generated/storage/types.gen/type-aliases/StorageRow.md); `id`: `string`; `pipelineId`: `string`; \}
+\{ `detail?`: [`StorageRow`](../../../../../generated/storage/types.gen/type-aliases/StorageRow.md); `id`: `string`; `pipelineId`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`StorageRow`](../../../../../generated/storage/types.gen/type-aliases/StorageRow.md) |
 | `id` | `string` |
 | `pipelineId` | `string` |
+| `url?` | `string` |
 
 #### Overrides
 

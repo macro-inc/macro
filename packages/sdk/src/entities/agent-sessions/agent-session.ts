@@ -120,7 +120,10 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
     return new AgentSession(client, id);
   }
 
-  /** Create a managed session, optionally delivering its first prompt. */
+  /**
+   * Create a managed session, optionally delivering its first prompt. Link
+   * the user to it with {@link AgentSession.webUrl}.
+   */
   static async createManaged(
     client: MacroClient,
     opts?: CreateManagedSessionOptions,
@@ -189,6 +192,15 @@ export class AgentSession extends MacroEntity<AgentSessionResponse> {
       await client.agentHarness.chooseAgentMode({ body: { prompt } }),
     );
     return mode;
+  }
+
+  /** The session's URL in the Macro web app. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/agent/${this.id}`;
+  }
+
+  protected override webLink(): string {
+    return this.webUrl();
   }
 
   protected async fetch(): Promise<AgentSessionResponse> {

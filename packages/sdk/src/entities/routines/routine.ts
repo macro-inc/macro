@@ -97,6 +97,15 @@ export class Routine extends MacroEntity<ScheduledActionResponse> {
     return new Routine(client, record.id, record);
   }
 
+  /** The routine's URL in the Macro web app. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/routines/${this.id}`;
+  }
+
+  protected override webLink(): string {
+    return this.webUrl();
+  }
+
   protected async fetch(): Promise<ScheduledActionResponse> {
     return unwrap(
       await this.client.scheduledAction.getScheduledAction({

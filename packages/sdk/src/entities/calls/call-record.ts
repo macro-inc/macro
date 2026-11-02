@@ -71,6 +71,15 @@ export class CallRecord extends FavoritableEntity<CallRecordDetail> {
   /** Favorites identify call records as `call`. */
   readonly entityType = 'call';
 
+  /** The call's URL in the Macro web app. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/call/${this.id}`;
+  }
+
+  protected override webLink(): string {
+    return this.webUrl();
+  }
+
   protected async fetch(): Promise<CallRecordDetail> {
     return unwrap(
       await this.client.storage.getCallRecord({ path: { call_id: this.id } }),

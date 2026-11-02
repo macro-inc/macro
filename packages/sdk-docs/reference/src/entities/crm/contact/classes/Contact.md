@@ -176,16 +176,17 @@ A mixed message and activity timeline page.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`CrmContactResponse`](../../../../../generated/storage/types.gen/type-aliases/CrmContactResponse.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`CrmContactResponse`](../../../../../generated/storage/types.gen/type-aliases/CrmContactResponse.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`CrmContactResponse`](../../../../../generated/storage/types.gen/type-aliases/CrmContactResponse.md); `id`: `string`; \}
+\{ `detail?`: [`CrmContactResponse`](../../../../../generated/storage/types.gen/type-aliases/CrmContactResponse.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`CrmContactResponse`](../../../../../generated/storage/types.gen/type-aliases/CrmContactResponse.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 
@@ -218,6 +219,18 @@ Un-hide the contact, restoring it to CRM listings.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### webUrl()
+
+> **webUrl**(): `string`
+
+The contact's URL in the Macro web app.
+
+#### Returns
+
+`string`
 
 ***
 

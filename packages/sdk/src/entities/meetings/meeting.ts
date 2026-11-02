@@ -109,6 +109,16 @@ export class Meeting extends MacroEntity<MeetingRecord> {
 
   /** Shareable meeting link. */
   async webUrl(): Promise<string> {
-    return `${this.client.webAppUrl}/app/meet/join/${encodeURIComponent((await this.detail.get()).shareToken)}`;
+    return this.joinUrl((await this.detail.get()).shareToken);
+  }
+
+  /** The join link once the share token is loaded; serialization never fetches. */
+  protected override webLink(): string | undefined {
+    const shareToken = this.detail.peek()?.shareToken ?? this.lookupToken;
+    return shareToken === undefined ? undefined : this.joinUrl(shareToken);
+  }
+
+  private joinUrl(shareToken: string): string {
+    return `${this.client.webAppUrl}/app/meet/join/${encodeURIComponent(shareToken)}`;
   }
 }

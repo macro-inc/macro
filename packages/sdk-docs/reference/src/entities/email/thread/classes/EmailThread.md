@@ -395,16 +395,17 @@ The thread's subject, from its first message with one.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ApiThread`](../../../../../generated/email/types.gen/type-aliases/ApiThread.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ApiThread`](../../../../../generated/email/types.gen/type-aliases/ApiThread.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`ApiThread`](../../../../../generated/email/types.gen/type-aliases/ApiThread.md); `id`: `string`; \}
+\{ `detail?`: [`ApiThread`](../../../../../generated/email/types.gen/type-aliases/ApiThread.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`ApiThread`](../../../../../generated/email/types.gen/type-aliases/ApiThread.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 
@@ -485,6 +486,18 @@ Update provider-neutral read, trash, spam, or star state.
 #### Returns
 
 `Promise`\<`void`\>
+
+***
+
+### webUrl()
+
+> **webUrl**(): `string`
+
+The thread's URL in the Macro web app.
+
+#### Returns
+
+`string`
 
 ***
 

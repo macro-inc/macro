@@ -158,6 +158,10 @@ export class Chat extends PropertiedEntity<ChatDetail> implements Mentionable {
     return `${this.client.webAppUrl}/app/chat/${this.id}`;
   }
 
+  protected override webLink(): string {
+    return this.webUrl();
+  }
+
   /** Search chats by name and content, most relevant first, auto-paginated. */
   static search = entitySearch({
     filters: { chat_filters: {} },

@@ -256,16 +256,17 @@ Record the requester's RSVP and return a handle to the synced record.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`CalendarEvent`](../../../../../generated/calendar/types.gen/type-aliases/CalendarEvent.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`CalendarEvent`](../../../../../generated/calendar/types.gen/type-aliases/CalendarEvent.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`CalendarEvent`](../../../../../generated/calendar/types.gen/type-aliases/CalendarEvent.md); `id`: `string`; \}
+\{ `detail?`: [`CalendarEvent`](../../../../../generated/calendar/types.gen/type-aliases/CalendarEvent.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`CalendarEvent`](../../../../../generated/calendar/types.gen/type-aliases/CalendarEvent.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

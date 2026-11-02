@@ -82,16 +82,17 @@ Submit the saved pending drafts. Never retries a conflict or ambiguous send.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ReviewRecord`](../../../../../generated/agent-harness/types.gen/type-aliases/ReviewRecord.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ReviewRecord`](../../../../../generated/agent-harness/types.gen/type-aliases/ReviewRecord.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`ReviewRecord`](../../../../../generated/agent-harness/types.gen/type-aliases/ReviewRecord.md); `id`: `string`; \}
+\{ `detail?`: [`ReviewRecord`](../../../../../generated/agent-harness/types.gen/type-aliases/ReviewRecord.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`ReviewRecord`](../../../../../generated/agent-harness/types.gen/type-aliases/ReviewRecord.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

@@ -36,16 +36,17 @@ Delete this label.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ApiLabel`](../../../../../generated/email/types.gen/type-aliases/ApiLabel.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ApiLabel`](../../../../../generated/email/types.gen/type-aliases/ApiLabel.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`ApiLabel`](../../../../../generated/email/types.gen/type-aliases/ApiLabel.md); `id`: `string`; \}
+\{ `detail?`: [`ApiLabel`](../../../../../generated/email/types.gen/type-aliases/ApiLabel.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`ApiLabel`](../../../../../generated/email/types.gen/type-aliases/ApiLabel.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

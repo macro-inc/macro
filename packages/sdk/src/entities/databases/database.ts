@@ -254,6 +254,15 @@ export class Database extends MacroEntity<DatabaseDetail> {
   /** Access requests and direct user grants. */
   readonly access = new EntityAccess(this.client, 'database', this);
 
+  /** The database's URL in the Macro web app. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/database/${this.id}`;
+  }
+
+  protected override webLink(): string {
+    return this.webUrl();
+  }
+
   protected async fetch(): Promise<DatabaseDetail> {
     return unwrap(
       await this.client.storage.getDatabase({ path: { id: this.id } }),

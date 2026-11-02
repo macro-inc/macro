@@ -92,16 +92,17 @@ Reply in the call's canonical thread, including when this is a reply.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`Message`](../../../../../generated/storage/types.gen/type-aliases/Message.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`Message`](../../../../../generated/storage/types.gen/type-aliases/Message.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`Message`](../../../../../generated/storage/types.gen/type-aliases/Message.md); `id`: `string`; \}
+\{ `detail?`: [`Message`](../../../../../generated/storage/types.gen/type-aliases/Message.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`Message`](../../../../../generated/storage/types.gen/type-aliases/Message.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

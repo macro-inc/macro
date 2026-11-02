@@ -34,6 +34,15 @@ export class Message extends FavoritableEntity<MessageRecord> {
     return { parent_type: 'channel', parent_id: this.channelId, id: this.id };
   }
 
+  /** The message's URL in the Macro web app, opened in its channel. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/channel/${this.channelId}?channel_message_id=${this.id}`;
+  }
+
+  protected override webLink(): string {
+    return this.webUrl();
+  }
+
   protected async fetch(): Promise<MessageRecord> {
     return unwrap(
       await this.client.storage.entityMessageGetMessage({ path: this.path }),

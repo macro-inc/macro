@@ -95,16 +95,17 @@ The id of the thread this comment belongs to: its root, or itself for a root.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`Message`](../../../../../generated/storage/types.gen/type-aliases/Message.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`Message`](../../../../../generated/storage/types.gen/type-aliases/Message.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`Message`](../../../../../generated/storage/types.gen/type-aliases/Message.md); `id`: `string`; \}
+\{ `detail?`: [`Message`](../../../../../generated/storage/types.gen/type-aliases/Message.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`Message`](../../../../../generated/storage/types.gen/type-aliases/Message.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

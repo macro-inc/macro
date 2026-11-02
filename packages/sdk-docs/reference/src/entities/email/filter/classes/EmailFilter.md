@@ -49,16 +49,17 @@ Change the importance for the same sender selector.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ApiEmailFilter`](../../../../../generated/email/types.gen/type-aliases/ApiEmailFilter.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ApiEmailFilter`](../../../../../generated/email/types.gen/type-aliases/ApiEmailFilter.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`ApiEmailFilter`](../../../../../generated/email/types.gen/type-aliases/ApiEmailFilter.md); `id`: `string`; \}
+\{ `detail?`: [`ApiEmailFilter`](../../../../../generated/email/types.gen/type-aliases/ApiEmailFilter.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`ApiEmailFilter`](../../../../../generated/email/types.gen/type-aliases/ApiEmailFilter.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

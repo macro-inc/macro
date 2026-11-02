@@ -81,16 +81,17 @@ Invite Macro users.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`Meeting`](../../../../../generated/storage/types.gen/type-aliases/Meeting.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`Meeting`](../../../../../generated/storage/types.gen/type-aliases/Meeting.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`Meeting`](../../../../../generated/storage/types.gen/type-aliases/Meeting.md); `id`: `string`; \}
+\{ `detail?`: [`Meeting`](../../../../../generated/storage/types.gen/type-aliases/Meeting.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`Meeting`](../../../../../generated/storage/types.gen/type-aliases/Meeting.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

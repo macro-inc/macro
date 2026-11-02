@@ -39,16 +39,17 @@ Approve this pairing.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`PairingDetails`](../../../../../generated/storage/types.gen/type-aliases/PairingDetails.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`PairingDetails`](../../../../../generated/storage/types.gen/type-aliases/PairingDetails.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`PairingDetails`](../../../../../generated/storage/types.gen/type-aliases/PairingDetails.md); `id`: `string`; \}
+\{ `detail?`: [`PairingDetails`](../../../../../generated/storage/types.gen/type-aliases/PairingDetails.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`PairingDetails`](../../../../../generated/storage/types.gen/type-aliases/PairingDetails.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

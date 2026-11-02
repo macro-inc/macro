@@ -45,16 +45,17 @@ Inspect the original intent for reconciliation; never resubmit an unknown outcom
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ExternalChatSendProgress`](../../../../../generated/storage/types.gen/type-aliases/ExternalChatSendProgress.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ExternalChatSendProgress`](../../../../../generated/storage/types.gen/type-aliases/ExternalChatSendProgress.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`ExternalChatSendProgress`](../../../../../generated/storage/types.gen/type-aliases/ExternalChatSendProgress.md); `id`: `string`; \}
+\{ `detail?`: [`ExternalChatSendProgress`](../../../../../generated/storage/types.gen/type-aliases/ExternalChatSendProgress.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`ExternalChatSendProgress`](../../../../../generated/storage/types.gen/type-aliases/ExternalChatSendProgress.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

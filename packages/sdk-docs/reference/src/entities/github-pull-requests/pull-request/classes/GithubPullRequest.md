@@ -31,16 +31,17 @@ Captured change metadata, when available.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`StoredGithubPullRequest`](../../../../../generated/storage/types.gen/type-aliases/StoredGithubPullRequest.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`StoredGithubPullRequest`](../../../../../generated/storage/types.gen/type-aliases/StoredGithubPullRequest.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`StoredGithubPullRequest`](../../../../../generated/storage/types.gen/type-aliases/StoredGithubPullRequest.md); `id`: `string`; \}
+\{ `detail?`: [`StoredGithubPullRequest`](../../../../../generated/storage/types.gen/type-aliases/StoredGithubPullRequest.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`StoredGithubPullRequest`](../../../../../generated/storage/types.gen/type-aliases/StoredGithubPullRequest.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

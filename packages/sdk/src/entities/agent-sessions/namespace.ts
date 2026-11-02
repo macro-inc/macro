@@ -19,7 +19,7 @@ export class AgentSessionNamespace {
     return AgentSession.byId(this.client, id);
   }
 
-  /** Create a managed agent session. */
+  /** Create a managed agent session; link the user to it with its `webUrl()`. */
   createManaged(opts?: CreateManagedSessionOptions): Promise<AgentSession> {
     return AgentSession.createManaged(this.client, opts);
   }

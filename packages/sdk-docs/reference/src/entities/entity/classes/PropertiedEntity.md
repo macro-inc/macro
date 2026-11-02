@@ -156,16 +156,17 @@ value when `value` is omitted.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: `Detail`; `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: `Detail`; `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: `Detail`; `id`: `string`; \}
+\{ `detail?`: `Detail`; `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | `Detail` |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

@@ -655,6 +655,10 @@ export class Form extends MacroEntity<FormDetail> {
     return `${this.client.webAppUrl}/app/form/${this.id}`;
   }
 
+  protected override webLink(): string {
+    return this.webUrl();
+  }
+
   /** The respondent page, which public forms also expose without signing in. */
   respondUrl(): string {
     return `${this.client.webAppUrl}/app/form/${this.id}/respond`;

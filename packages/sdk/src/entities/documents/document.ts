@@ -502,6 +502,10 @@ export class Document
     return `${this.client.webAppUrl}/app/md/${this.id}`;
   }
 
+  protected override webLink(): string {
+    return this.webUrl();
+  }
+
   /** Search documents by name and content, most relevant first, auto-paginated. */
   static search = entitySearch({
     filters: { document_filters: {} },

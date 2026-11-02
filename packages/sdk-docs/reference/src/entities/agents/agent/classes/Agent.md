@@ -21,16 +21,17 @@ A configurable agent backed by a bot identity.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`Agent`](../../../../../generated/storage/types.gen/type-aliases/Agent.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`Agent`](../../../../../generated/storage/types.gen/type-aliases/Agent.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`Agent`](../../../../../generated/storage/types.gen/type-aliases/Agent.md); `id`: `string`; \}
+\{ `detail?`: [`Agent`](../../../../../generated/storage/types.gen/type-aliases/Agent.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`Agent`](../../../../../generated/storage/types.gen/type-aliases/Agent.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

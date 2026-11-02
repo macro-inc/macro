@@ -219,16 +219,17 @@ Toggle the server's share-with-team setting and return its new value.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`CallRecord`](../../../../../generated/storage/types.gen/type-aliases/CallRecord.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`CallRecord`](../../../../../generated/storage/types.gen/type-aliases/CallRecord.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`CallRecord`](../../../../../generated/storage/types.gen/type-aliases/CallRecord.md); `id`: `string`; \}
+\{ `detail?`: [`CallRecord`](../../../../../generated/storage/types.gen/type-aliases/CallRecord.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`CallRecord`](../../../../../generated/storage/types.gen/type-aliases/CallRecord.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 
@@ -249,6 +250,18 @@ Remove this entity from the user's favorites. Returns this handle for chaining.
 #### Inherited from
 
 [`FavoritableEntity`](../../../entity/classes/FavoritableEntity.md).[`unfavorite`](../../../entity/classes/FavoritableEntity.md#unfavorite)
+
+***
+
+### webUrl()
+
+> **webUrl**(): `string`
+
+The call's URL in the Macro web app.
+
+#### Returns
+
+`string`
 
 ***
 

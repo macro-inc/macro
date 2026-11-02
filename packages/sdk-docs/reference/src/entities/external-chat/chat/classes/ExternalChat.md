@@ -221,16 +221,17 @@ Read only the caller's pending, uncertain or failed sends.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ExternalChatDetail`](../../../../../generated/storage/types.gen/type-aliases/ExternalChatDetail.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ExternalChatDetail`](../../../../../generated/storage/types.gen/type-aliases/ExternalChatDetail.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`ExternalChatDetail`](../../../../../generated/storage/types.gen/type-aliases/ExternalChatDetail.md); `id`: `string`; \}
+\{ `detail?`: [`ExternalChatDetail`](../../../../../generated/storage/types.gen/type-aliases/ExternalChatDetail.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`ExternalChatDetail`](../../../../../generated/storage/types.gen/type-aliases/ExternalChatDetail.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 
@@ -287,6 +288,18 @@ Stage a supported attachment for a deliberate send.
 #### Returns
 
 `Promise`\<[`ExternalChatUpload`](../../upload/classes/ExternalChatUpload.md)\>
+
+***
+
+### webUrl()
+
+> **webUrl**(): `string`
+
+The chat's URL in the Macro web app.
+
+#### Returns
+
+`string`
 
 ***
 

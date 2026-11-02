@@ -161,16 +161,17 @@ The thread rooted at this message.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`Message`](../../../../../generated/storage/types.gen/type-aliases/Message.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`Message`](../../../../../generated/storage/types.gen/type-aliases/Message.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`Message`](../../../../../generated/storage/types.gen/type-aliases/Message.md); `id`: `string`; \}
+\{ `detail?`: [`Message`](../../../../../generated/storage/types.gen/type-aliases/Message.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`Message`](../../../../../generated/storage/types.gen/type-aliases/Message.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 
@@ -209,6 +210,18 @@ Remove one of your emoji reactions from this message.
 #### Returns
 
 `Promise`\<`Message`\>
+
+***
+
+### webUrl()
+
+> **webUrl**(): `string`
+
+The message's URL in the Macro web app, opened in its channel.
+
+#### Returns
+
+`string`
 
 ***
 

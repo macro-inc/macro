@@ -29,13 +29,13 @@ Current column label.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ColumnDetail`](../../../../../generated/storage/types.gen/type-aliases/ColumnDetail.md); `id`: `string`; `pipelineId`: `string`; `tableId`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ColumnDetail`](../../../../../generated/storage/types.gen/type-aliases/ColumnDetail.md); `id`: `string`; `pipelineId`: `string`; `tableId`: `string`; `url?`: `string`; \}
 
 Serialize identity within its pipeline.
 
 #### Returns
 
-\{ `detail?`: [`ColumnDetail`](../../../../../generated/storage/types.gen/type-aliases/ColumnDetail.md); `id`: `string`; `pipelineId`: `string`; `tableId`: `string`; \}
+\{ `detail?`: [`ColumnDetail`](../../../../../generated/storage/types.gen/type-aliases/ColumnDetail.md); `id`: `string`; `pipelineId`: `string`; `tableId`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
@@ -43,6 +43,7 @@ Serialize identity within its pipeline.
 | `id` | `string` |
 | `pipelineId` | `string` |
 | `tableId` | `string` |
+| `url?` | `string` |
 
 #### Overrides
 

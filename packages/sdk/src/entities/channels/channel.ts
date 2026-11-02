@@ -339,6 +339,10 @@ export class Channel extends PropertiedEntity<ChannelDetail> {
     return `${this.client.webAppUrl}/app/channel/${this.id}`;
   }
 
+  protected override webLink(): string {
+    return this.webUrl();
+  }
+
   /** Search channels by content, most relevant first, auto-paginated. */
   static search = entitySearch({
     type: 'channel',

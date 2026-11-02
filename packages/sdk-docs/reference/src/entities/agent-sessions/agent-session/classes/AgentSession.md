@@ -261,16 +261,17 @@ Sharing configuration.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`AgentSessionResponse`](../../../../../generated/agent-harness/types.gen/type-aliases/AgentSessionResponse.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`AgentSessionResponse`](../../../../../generated/agent-harness/types.gen/type-aliases/AgentSessionResponse.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`AgentSessionResponse`](../../../../../generated/agent-harness/types.gen/type-aliases/AgentSessionResponse.md); `id`: `string`; \}
+\{ `detail?`: [`AgentSessionResponse`](../../../../../generated/agent-harness/types.gen/type-aliases/AgentSessionResponse.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`AgentSessionResponse`](../../../../../generated/agent-harness/types.gen/type-aliases/AgentSessionResponse.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 
@@ -345,6 +346,18 @@ Replace sharing grants.
 
 ***
 
+### webUrl()
+
+> **webUrl**(): `string`
+
+The session's URL in the Macro web app.
+
+#### Returns
+
+`string`
+
+***
+
 ### byId()
 
 > `static` **byId**(`client`, `id`): `AgentSession`
@@ -408,7 +421,8 @@ What the caller's new coding sessions are told to do beyond their assignment.
 
 > `static` **createManaged**(`client`, `opts?`): `Promise`\<`AgentSession`\>
 
-Create a managed session, optionally delivering its first prompt.
+Create a managed session, optionally delivering its first prompt. Link
+the user to it with [AgentSession.webUrl](#weburl).
 
 #### Parameters
 

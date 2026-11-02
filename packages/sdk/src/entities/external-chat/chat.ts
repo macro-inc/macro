@@ -43,6 +43,15 @@ export class ExternalChat extends FavoritableEntity<ExternalChatDetail> {
     return new ExternalChat(client, id);
   }
 
+  /** The chat's URL in the Macro web app. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/external/chat/${this.id}`;
+  }
+
+  protected override webLink(): string {
+    return this.webUrl();
+  }
+
   protected async fetch(): Promise<ExternalChatDetail> {
     return unwrap(
       await this.client.storage.externalChat({ path: { chat_id: this.id } }),

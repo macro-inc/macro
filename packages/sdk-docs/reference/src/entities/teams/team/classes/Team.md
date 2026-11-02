@@ -34,16 +34,17 @@ the caller's current team, so this rejects for any other team.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`Team`](../../../../../generated/auth/types.gen/type-aliases/Team.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`Team`](../../../../../generated/auth/types.gen/type-aliases/Team.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`Team`](../../../../../generated/auth/types.gen/type-aliases/Team.md); `id`: `string`; \}
+\{ `detail?`: [`Team`](../../../../../generated/auth/types.gen/type-aliases/Team.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`Team`](../../../../../generated/auth/types.gen/type-aliases/Team.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

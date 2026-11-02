@@ -46,16 +46,17 @@ Set whether this calendar contributes to the caller's availability.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`VisibleCalendar`](../../../../../generated/calendar/types.gen/type-aliases/VisibleCalendar.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`VisibleCalendar`](../../../../../generated/calendar/types.gen/type-aliases/VisibleCalendar.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`VisibleCalendar`](../../../../../generated/calendar/types.gen/type-aliases/VisibleCalendar.md); `id`: `string`; \}
+\{ `detail?`: [`VisibleCalendar`](../../../../../generated/calendar/types.gen/type-aliases/VisibleCalendar.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`VisibleCalendar`](../../../../../generated/calendar/types.gen/type-aliases/VisibleCalendar.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

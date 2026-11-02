@@ -187,16 +187,17 @@ value when `value` is omitted.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`UserName`](../../../../../generated/auth/types.gen/type-aliases/UserName.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`UserName`](../../../../../generated/auth/types.gen/type-aliases/UserName.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`UserName`](../../../../../generated/auth/types.gen/type-aliases/UserName.md); `id`: `string`; \}
+\{ `detail?`: [`UserName`](../../../../../generated/auth/types.gen/type-aliases/UserName.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`UserName`](../../../../../generated/auth/types.gen/type-aliases/UserName.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

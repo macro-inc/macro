@@ -59,19 +59,20 @@ Rows from the authorized pipeline surface.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`TableDetail`](../../../../../generated/storage/types.gen/type-aliases/TableDetail.md); `id`: `string`; `pipelineId`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`TableDetail`](../../../../../generated/storage/types.gen/type-aliases/TableDetail.md); `id`: `string`; `pipelineId`: `string`; `url?`: `string`; \}
 
 Serialize identity within its pipeline.
 
 #### Returns
 
-\{ `detail?`: [`TableDetail`](../../../../../generated/storage/types.gen/type-aliases/TableDetail.md); `id`: `string`; `pipelineId`: `string`; \}
+\{ `detail?`: [`TableDetail`](../../../../../generated/storage/types.gen/type-aliases/TableDetail.md); `id`: `string`; `pipelineId`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`TableDetail`](../../../../../generated/storage/types.gen/type-aliases/TableDetail.md) |
 | `id` | `string` |
 | `pipelineId` | `string` |
+| `url?` | `string` |
 
 #### Overrides
 

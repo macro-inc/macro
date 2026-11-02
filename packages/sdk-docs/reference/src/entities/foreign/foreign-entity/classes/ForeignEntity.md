@@ -70,16 +70,17 @@ Read the caller's effective permission on this entity.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ForeignEntity`](../../../../../generated/storage/types.gen/type-aliases/ForeignEntity.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ForeignEntity`](../../../../../generated/storage/types.gen/type-aliases/ForeignEntity.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`ForeignEntity`](../../../../../generated/storage/types.gen/type-aliases/ForeignEntity.md); `id`: `string`; \}
+\{ `detail?`: [`ForeignEntity`](../../../../../generated/storage/types.gen/type-aliases/ForeignEntity.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`ForeignEntity`](../../../../../generated/storage/types.gen/type-aliases/ForeignEntity.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

@@ -256,16 +256,17 @@ The thread this message belongs to.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`ParsedMessage`](../../../../../generated/email/types.gen/type-aliases/ParsedMessage.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`ParsedMessage`](../../../../../generated/email/types.gen/type-aliases/ParsedMessage.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`ParsedMessage`](../../../../../generated/email/types.gen/type-aliases/ParsedMessage.md); `id`: `string`; \}
+\{ `detail?`: [`ParsedMessage`](../../../../../generated/email/types.gen/type-aliases/ParsedMessage.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`ParsedMessage`](../../../../../generated/email/types.gen/type-aliases/ParsedMessage.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

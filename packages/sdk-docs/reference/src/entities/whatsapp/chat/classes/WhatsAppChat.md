@@ -54,16 +54,17 @@ Reload the chat's list entry.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`WhatsAppChat`](../../../../../generated/storage/types.gen/type-aliases/WhatsAppChat.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`WhatsAppChat`](../../../../../generated/storage/types.gen/type-aliases/WhatsAppChat.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`WhatsAppChat`](../../../../../generated/storage/types.gen/type-aliases/WhatsAppChat.md); `id`: `string`; \}
+\{ `detail?`: [`WhatsAppChat`](../../../../../generated/storage/types.gen/type-aliases/WhatsAppChat.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`WhatsAppChat`](../../../../../generated/storage/types.gen/type-aliases/WhatsAppChat.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 

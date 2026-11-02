@@ -475,16 +475,17 @@ The table with the given display name, or `undefined` if there is none.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`DatabaseDetail`](../../../../../generated/storage/types.gen/type-aliases/DatabaseDetail.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`DatabaseDetail`](../../../../../generated/storage/types.gen/type-aliases/DatabaseDetail.md); `id`: `string`; `url?`: `string`; \}
 
 #### Returns
 
-\{ `detail?`: [`DatabaseDetail`](../../../../../generated/storage/types.gen/type-aliases/DatabaseDetail.md); `id`: `string`; \}
+\{ `detail?`: [`DatabaseDetail`](../../../../../generated/storage/types.gen/type-aliases/DatabaseDetail.md); `id`: `string`; `url?`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`DatabaseDetail`](../../../../../generated/storage/types.gen/type-aliases/DatabaseDetail.md) |
 | `id` | `string` |
+| `url?` | `string` |
 
 #### Inherited from
 
@@ -537,6 +538,18 @@ The database's webhooks, oldest first. Takes edit access.
 #### Returns
 
 `Promise`\<[`DatabaseWebhook`](../../webhook/classes/DatabaseWebhook.md)[]\>
+
+***
+
+### webUrl()
+
+> **webUrl**(): `string`
+
+The database's URL in the Macro web app.
+
+#### Returns
+
+`string`
 
 ***
 

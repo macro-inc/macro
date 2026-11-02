@@ -42,6 +42,15 @@ export class Project extends PropertiedEntity<ProjectDetail> {
   /** The properties service identifies projects as `PROJECT`. */
   protected readonly propertyEntityType = 'PROJECT';
 
+  /** The project's URL in the Macro web app. */
+  webUrl(): string {
+    return `${this.client.webAppUrl}/app/project/${this.id}`;
+  }
+
+  protected override webLink(): string {
+    return this.webUrl();
+  }
+
   protected async fetch(): Promise<ProjectDetail> {
     const { data } = unwrap(
       await this.client.storage.getProjectHandler({
