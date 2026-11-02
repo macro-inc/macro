@@ -53,6 +53,7 @@ impl JwtValidator for Tokens {
             origin: macro_authorization::CredentialOrigin::Session,
             identity: ValidatedIdentity {
                 agent_id: None,
+                agent_via: None,
                 user_id: user_id.to_string(),
                 fusion_user_id: format!("fusion-{jwt}"),
                 organization_id: None,

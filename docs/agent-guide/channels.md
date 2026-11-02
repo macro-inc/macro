@@ -324,14 +324,17 @@ verify that its tool response includes the matching attachment URLs.
 
 ## Messages sent through an MCP client
 
-A message a user's MCP client (Claude Code, Cursor, ChatGPT) sends through
-Macro MCP's `SendChannelMessage` is posted by the Macro bot with a
-**from <user> via <client>** pill under the sender name, where the client is the
-name it registered with Macro's OAuth broker. A self-hosted agent's message
-shows the agent as the sender with **from <user>**, and a message sent with a
-pasted Macro API key shows the Macro bot with **from <user>**. To check this,
-connect an MCP client over OAuth, ask it to post in a channel, and confirm the
-pill names both you and the client on desktop and at phone width.
+A message, comment, or thread reply a user's MCP client (Claude Code, Cursor,
+ChatGPT) posts through Macro MCP, with a direct tool such as
+`SendChannelMessage` or from code mode (`ExecuteCode`), shows the client as its
+sender: **Claude Code · Agent** with the client's initial as its avatar and a
+**from <user>** pill underneath. The client is the name it registered with
+Macro's OAuth broker, or "MCP client" if it registered none. Notifications name
+the client as the sender too. A self-hosted agent's message shows the agent as
+the sender with **from <user>**, and a message sent with a pasted Macro API key
+shows the Macro bot with **from <user>**. To check this, connect an MCP client
+over OAuth, ask it to post in a channel and to comment on a document, and
+confirm both show the client and the user on desktop and at phone width.
 
 ## Message composer
 

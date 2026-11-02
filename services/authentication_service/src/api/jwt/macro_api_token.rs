@@ -94,6 +94,7 @@ pub async fn handler(
                 .user
                 .agent_id
                 .map(|agent| agent.as_uuid()),
+            agent_via: authorization.authorization.user.agent_via.clone(),
             macro_user_id,
             fusionauth_id: user_context.fusion_user_id.clone(),
             organization_id, // TOOD: get from user profile
