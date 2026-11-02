@@ -2,36 +2,36 @@ import { afterEach, expect, test } from 'bun:test';
 import type { AgentSessionResponse } from '../generated/agent-harness/types.gen';
 import { Macro } from '../src/macro';
 
-const originalFetch = globalThis.fetch;
+const ORIGINAL_FETCH = globalThis.fetch;
 
 afterEach(() => {
-  globalThis.fetch = originalFetch;
+  globalThis.fetch = ORIGINAL_FETCH;
 });
 
-const macro = new Macro({ token: 'token', webAppUrl: 'https://web.test' });
+const MACRO = new Macro({ token: 'token', webAppUrl: 'https://web.test' });
 
 test('entities with a web page return its url and serialize it', () => {
   const pages = [
-    [macro.agentSessions.byId('s-1'), 'https://web.test/app/agent/s-1'],
-    [macro.documents.byId('d-1'), 'https://web.test/app/md/d-1'],
-    [macro.tasks.byId('t-1'), 'https://web.test/app/task/t-1'],
-    [macro.channels.byId('c-1'), 'https://web.test/app/channel/c-1'],
+    [MACRO.agentSessions.byId('s-1'), 'https://web.test/app/agent/s-1'],
+    [MACRO.documents.byId('d-1'), 'https://web.test/app/md/d-1'],
+    [MACRO.tasks.byId('t-1'), 'https://web.test/app/task/t-1'],
+    [MACRO.channels.byId('c-1'), 'https://web.test/app/channel/c-1'],
     [
-      macro.channels.byId('c-1').message('m-1'),
+      MACRO.channels.byId('c-1').message('m-1'),
       'https://web.test/app/channel/c-1?channel_message_id=m-1',
     ],
-    [macro.chats.byId('ch-1'), 'https://web.test/app/chat/ch-1'],
-    [macro.forms.byId('f-1'), 'https://web.test/app/form/f-1'],
-    [macro.databases.byId('db-1'), 'https://web.test/app/database/db-1'],
-    [macro.routines.byId('r-1'), 'https://web.test/app/routines/r-1'],
-    [macro.projects.byId('p-1'), 'https://web.test/app/project/p-1'],
-    [macro.initiatives.byId('i-1'), 'https://web.test/app/initiative/i-1'],
-    [macro.calls.byId('call-1'), 'https://web.test/app/call/call-1'],
-    [macro.email.byId('e-1'), 'https://web.test/app/email/e-1'],
-    [macro.crm.companyById('co-1'), 'https://web.test/app/company/co-1'],
-    [macro.crm.contactById('ct-1'), 'https://web.test/app/contact/ct-1'],
-    [macro.crm.pipelines.byId('pl-1'), 'https://web.test/app/pipeline/pl-1'],
-    [macro.externalChats.byId('x-1'), 'https://web.test/app/external/chat/x-1'],
+    [MACRO.chats.byId('ch-1'), 'https://web.test/app/chat/ch-1'],
+    [MACRO.forms.byId('f-1'), 'https://web.test/app/form/f-1'],
+    [MACRO.databases.byId('db-1'), 'https://web.test/app/database/db-1'],
+    [MACRO.routines.byId('r-1'), 'https://web.test/app/routines/r-1'],
+    [MACRO.projects.byId('p-1'), 'https://web.test/app/project/p-1'],
+    [MACRO.initiatives.byId('i-1'), 'https://web.test/app/initiative/i-1'],
+    [MACRO.calls.byId('call-1'), 'https://web.test/app/call/call-1'],
+    [MACRO.email.byId('e-1'), 'https://web.test/app/email/e-1'],
+    [MACRO.crm.companyById('co-1'), 'https://web.test/app/company/co-1'],
+    [MACRO.crm.contactById('ct-1'), 'https://web.test/app/contact/ct-1'],
+    [MACRO.crm.pipelines.byId('pl-1'), 'https://web.test/app/pipeline/pl-1'],
+    [MACRO.externalChats.byId('x-1'), 'https://web.test/app/external/chat/x-1'],
   ] as const;
 
   for (const [entity, url] of pages) {
@@ -44,7 +44,7 @@ test('entities with a web page return its url and serialize it', () => {
 });
 
 test('entities without a web page serialize no url', () => {
-  expect(JSON.parse(JSON.stringify(macro.users.byId('u-1')))).toEqual({
+  expect(JSON.parse(JSON.stringify(MACRO.users.byId('u-1')))).toEqual({
     id: 'u-1',
   });
 });
