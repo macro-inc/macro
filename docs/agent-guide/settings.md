@@ -111,6 +111,26 @@ Trace signature actions under `email.signature.save`, `email.signature.clear`,
 or `email.signature.import`; the REST write and `email.settings.refresh` run
 under that action, including the account catalog's durable refresh.
 
+### Workspace export and import
+
+**Settings → Account → Workspace data** has **Export** and **Import**. Export
+lists everything the user can access (all mail, agent sessions, projects and
+CRM contacts included), shows `Listing N…` then `Exporting X of Y…`, and
+downloads `macro-workspace-YYYY-MM-DD.tar.gz`. The archive is a standard
+tar.gz: `manifest.json`, then `entities/<kind>/<id>/` with each item's
+listing data (`entity.json`) and content (Markdown and `collab.loro`,
+`content.canvas`, `original` file bytes, `messages.json`, `chat.json`, email
+`thread.json` plus one `.eml` per message), then `summary.json`. The format
+and its compatibility rules are documented at the top of
+`apps/web/src/features/workspace-archive/core/archive.ts`.
+
+Import reads a chosen archive and recreates folders, notes, tasks, snippets,
+skills, canvases and files, private to the importer; the toast says how many
+were restored and how many synced or shared items stayed in the archive
+without being recreated. A file that isn't an archive, a truncated download,
+or an archive from a newer Macro fails with a toast and creates nothing
+further. Import against a throwaway account: it creates real items.
+
 ### Email read receipts
 
 Behind `enable-email-read-receipts` (on in dev), **Settings → Email → Read
