@@ -88,6 +88,13 @@ function PollCardBody(props: {
       </Show>
       <Show when={voting.hasVoters() && showingResults()}>
         <PollResults
+          ref={(element) =>
+            // A card in a message is a fixed-height embed: bring the opened
+            // results into view instead of leaving them below its fold.
+            requestAnimationFrame(() =>
+              element.scrollIntoView?.({ block: 'nearest' })
+            )
+          }
           bars={voting.bars()}
           summary={voting.summary()}
           viewerId={context.viewer.userId()}

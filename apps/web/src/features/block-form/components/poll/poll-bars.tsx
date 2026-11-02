@@ -170,6 +170,7 @@ export function PollBars(props: {
  * marked as "you". Shown only when the tally names voters to this viewer.
  */
 export function PollResults(props: {
+  ref?: (element: HTMLElement) => void;
   bars: readonly PollBar[];
   summary: string;
   /** The viewer, marked among the voters. */
@@ -180,6 +181,7 @@ export function PollResults(props: {
 }) {
   return (
     <section
+      ref={props.ref}
       aria-label="Poll results"
       class="flex flex-col gap-3 rounded-lg border border-edge-muted bg-panel px-3 py-2.5"
     >
