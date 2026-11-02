@@ -22,6 +22,7 @@ import {
   ReviewNotesDock,
 } from '@app/features/changes/changes';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
+import { LocalRuntimePrompt } from '@app/features/settings/components/local-runtime-prompt';
 import { SidePanel } from '@components/app/side-panel';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
 import {
@@ -291,6 +292,7 @@ function SessionContent(props: {
                     >
                       <ChangesHandoff />
                       <ReviewNotesDock />
+                      <LocalRuntimePrompt />
                       <AgentComposer
                         autofocus={!searchTarget()}
                         input={ChatSessionInput}

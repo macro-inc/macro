@@ -101,6 +101,14 @@ export async function invalidateGithubLinkStatus() {
   return queryClient.prefetchQuery({ ...options, staleTime: 0 });
 }
 
+/**
+ * The GitHub authorization URL that links the user's account, or relinks one
+ * whose token stopped working; the callback returns to `originalUrl`.
+ */
+export async function githubLinkAuthorizationUrl(originalUrl: string) {
+  return await throwOnErr(() => authServiceClient.initGithubLink(originalUrl));
+}
+
 export function useInitGithubLinkMutation() {
   return useMutation(() => ({
     mutationFn: async (originalUrl?: string) =>

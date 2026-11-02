@@ -11,18 +11,18 @@ spec.loader.exec_module(relay)
 
 DATADOG_DETAILS = """https://us5.datadoghq.com/event/event?id=8876996053944573810
 
-🔴 CRITICAL: 2631.578 (threshold 1800.0)
+🔴 CRITICAL: oldest transaction >= 1800s
 
-The oldest open transaction on macro-db-prod.ctkwyjgndnfr.us-east-1.rds.amazonaws.com is 2631.578 seconds old. Long transactions hold locks and stop vacuum.
+The oldest open transaction on macro-db-prod.ctkwyjgndnfr.us-east-1.rds.amazonaws.com, "SELECT * FROM events WHERE id = ?", is at least 1800 seconds old. Long transactions hold locks and stop vacuum.
 
 Runbook: https://github.com/macro-inc/macro/blob/main/docs/runbooks/macrodb.md#locks
 Dashboard: https://us5.datadoghq.com/dashboard/42x-f55-h6z/macrodb-alerts
 
 @webhook-goalert-notify
 
-`avg(last_10m):max:postgresql.activity.xact_start_age{host:macro-db-prod*} by {host} > 1800`
+`database-monitoring("dbm_type:activity host:macro-db-prod* @duration:>1800s").rollup("count").by("host,@db.statement").last("10m") > 0`
 
-Metric value: 2631.578
+Metric value: 1
 
 Metric Graph: https://us5.datadoghq.com/monitors/23404621?group=host · Monitor Status: https://us5.datadoghq.com/monitors/23404621"""
 
@@ -57,8 +57,8 @@ class AlertPostTest(unittest.TestCase):
         })
         self.assertEqual(post, """---
 🔔 · **macro-db-prod long-running transaction — macro-db-prod**
-🔴 critical: 2631.578 (threshold 1800.0)
-The oldest open transaction on macro-db-prod is 2631.578 seconds old. Long transactions hold locks and stop vacuum.
+🔴 critical: oldest transaction >= 1800s
+The oldest open transaction on macro-db-prod, "SELECT * FROM events WHERE id = ?", is at least 1800 seconds old. Long transactions hold locks and stop vacuum.
 [Acknowledge](https://oncall.macro-internal.com/alerts/130) · [Graph](https://us5.datadoghq.com/dashboard/42x-f55-h6z/macrodb-alerts) · [Runbook](https://github.com/macro-inc/macro/blob/main/docs/runbooks/macrodb.md#locks)""")
 
     def test_grafana_page(self):

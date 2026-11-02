@@ -392,6 +392,12 @@ after the first three (five participants shows **+2**).
 Drag the handle, tap the backdrop, or press Escape to dismiss without starting a
 call. Only confirming notifies participants; joining a live call skips the sheet.
 Check both DMs and channels, including long names, in light and dark themes.
+On phones, a collapsed composer with attachments shows a thumbnail of the
+first one between `+` and the draft, with the number of attachments over it
+when there are two or more; a document shows its file icon. It shows with or
+without draft text, and tapping it opens the composer with the attachments
+below the editor. Check one image, several mixed attachments, and a document
+alone, with and without text, in light and dark themes.
 Input action and formatting buttons show the app tooltip without a second
 native browser tooltip.
 On desktop, select draft text to open the floating formatting toolbar. Its
@@ -479,7 +485,9 @@ event is created — no invitation goes out from the initial request. It cannot 
 email at all. A bot or agent reply posted for a person shares, as that person, the linked items
 (chips or attachments) that the replying bot created for them while answering: those with a
 `created` activity row by that bot on the person's behalf since the person's latest message in
-the thread before the reply. Activity arrives asynchronously, so missing rows are re-checked
+the thread before the reply, or, for a bot message that starts its own thread (a poll card
+posted top-level), their latest message in the channel. Forms an agent creates through code
+mode (its SDK token) are attributed to its bot like native tool creations. Activity arrives asynchronously, so missing rows are re-checked
 after 5 and 30 seconds. Existing items it links, plain URLs, and bot posts with no person
 behind them share nothing. The bot never asks whether to share; it calls `ShareWithChannel` when asked to
 share an existing item. Private and confidential calendar events stay unshared, and a

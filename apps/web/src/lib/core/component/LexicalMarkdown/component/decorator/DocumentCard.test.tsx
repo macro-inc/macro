@@ -45,7 +45,7 @@ const mocks = vi.hoisted(() => {
     disposed: 0,
     created: [] as string[],
     read: undefined as (() => void) | undefined,
-    accessible: true,
+    access: 'access' as 'access' | 'no_access' | 'does_not_exist',
   };
 });
 
@@ -53,21 +53,24 @@ vi.mock('@core/component/ItemPreview', () => ({
   useItemPreviewData: () => ({
     item: () => {
       mocks.read?.();
+      if (mocks.access !== 'access')
+        return {
+          id: 'form-1',
+          type: 'form',
+          loading: false,
+          access: mocks.access,
+        };
       return {
         id: 'form-1',
         name: 'Lunch?',
         type: 'form',
         loading: false,
-        access: 'view',
+        access: 'access',
       };
     },
     ItemEntityIcon: () => null,
     documentProperties: () => undefined,
   }),
-}));
-vi.mock('@queries/preview', async (importOriginal) => ({
-  ...(await importOriginal<typeof import('@queries/preview')>()),
-  isAccessiblePreviewItem: () => mocks.accessible,
 }));
 vi.mock('@core/orchestrator', async (importOriginal) => ({
   ...(await importOriginal<typeof import('@core/orchestrator')>()),
@@ -112,7 +115,46 @@ vi.mock('@ui', async (importOriginal) => {
 afterEach(() => {
   cleanup();
   mocks.read = undefined;
-  mocks.accessible = true;
+  mocks.access = 'access';
+});
+
+it('tells a channel member without access to a posted poll that they have no access, instead of an empty card', async () => {
+  mocks.access = 'no_access';
+  render(() => (
+    <MarkdownHostContext.Provider value="channel">
+      <DocumentCard
+        key="node-1"
+        documentId="form-1"
+        documentName="Lunch?"
+        blockName="form"
+        blockParams={{}}
+        previewData={{ poll: { optionCount: 2 } }}
+        theme={{}}
+      />
+    </MarkdownHostContext.Provider>
+  ));
+  expect(
+    await screen.findByText('You don’t have access to this poll')
+  ).toBeTruthy();
+  expect(mocks.created).not.toContain('form form-1');
+});
+
+it('says a deleted poll was deleted, instead of an empty card', async () => {
+  mocks.access = 'does_not_exist';
+  render(() => (
+    <MarkdownHostContext.Provider value="channel">
+      <DocumentCard
+        key="node-1"
+        documentId="form-1"
+        documentName="Lunch?"
+        blockName="form"
+        blockParams={{}}
+        previewData={{ poll: { optionCount: 2 } }}
+        theme={{}}
+      />
+    </MarkdownHostContext.Provider>
+  ));
+  expect(await screen.findByText('This poll was deleted')).toBeTruthy();
 });
 
 it('mounts a form card’s body in a channel message, with no block and no editor around it, and disposes it with the card', async () => {
@@ -202,7 +244,7 @@ it('reserves a poll’s height across suspended metadata loading', async () => {
 });
 
 it('reserves no poll height once the form turns out to be unavailable', async () => {
-  mocks.accessible = false;
+  mocks.access = 'no_access';
   render(() => (
     <MarkdownHostContext.Provider value="channel">
       <DocumentCard
@@ -216,8 +258,8 @@ it('reserves no poll height once the form turns out to be unavailable', async ()
       />
     </MarkdownHostContext.Provider>
   ));
-  const card = document.querySelector<HTMLElement>('.rounded-xl');
-  expect(card?.style.minHeight).toBe('');
+  const message = await screen.findByText('You don’t have access to this poll');
+  expect(message.closest<HTMLElement>('.rounded-xl')?.style.minHeight).toBe('');
 });
 
 it.each(['code', 'canvas', 'pdf'] as const)(
