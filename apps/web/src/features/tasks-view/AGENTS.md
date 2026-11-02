@@ -23,7 +23,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Keep desktop and tablet task rows on the shared column grid at every pane width with the column header mounted; use the headerless narrow row layout only on phones.
 - Set task-list horizontal padding from its container width: 8px below 640px, 12px from 640px, and 4px on phones.
 - Render phone task rows with the narrow layout, an 8px unread-only rail, no checkbox column, 4px outer list padding, and 44px row height; preserve row selection handlers and 36px property-editor touch targets.
-- Keep leading task status icons at 18px and priority icons at 16px desktop/20px phone without flex shrinking; use the shared 12px property default elsewhere unless a surface overrides it, and preserve 16px group-header carets and existing hit targets.
+- Keep leading task status icons at 18px and priority icons at 16px desktop/20px phone without flex shrinking; use 16px Status/Priority selector icons, the shared 12px property default elsewhere unless a surface overrides it, and preserve 16px group-header carets and existing hit targets.
 - Give list Due date glyphs the shared 12px base size and the existing 16px compact-column override; never leave calendar SVG dimensions implicit.
 - Use the matching `task-status-*` theme token for each status icon and group-header tint; default Completed to accent while preserving explicit theme overrides and independent global colors.
 - Edit priority then status through leading `TaskPropertyControl` icons on desktop and mobile; place status directly beside the title, and keep separate Status/Priority columns and duplicate trailing mobile pills removed.
@@ -39,6 +39,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Register task-row collapse items with the shared `src/components/priority-collapse/` controller and sensor, not split-layout wrappers.
 - Show at most three individual tag chips; keep a sole tag as its named chip even in collapsed layouts, otherwise collapse the folder path first, then more tags on measured overflow, and truncate the title last while preserving open tag editors.
 - Keep the tag chip or collapsed multi-tag overflow after the title on phone rows instead of dropping tags with the desktop columns.
+- Tab and Shift+Tab cycle sidebar tabs only over a list. Keep `TasksSidebar`'s key-time check for an open project or task: the sidebar remounts whenever the view crosses its layout breakpoint, so it registers after an open pane and eclipses any override the pane holds.
 
 - Save filters, relative due dates or valid calendar bounds, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.
 - Preserve stable tag/property bindings when labels disappear; skip unsupported or malformed conditions without discarding supported filters.
