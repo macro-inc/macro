@@ -7,7 +7,10 @@ import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isDesktopPlatform } from '@core/util/platform';
 import { Telemetry } from '@macro-inc/observability';
-import { invalidateGithubLinkStatus } from '@queries/auth';
+import {
+  githubLinkAuthorizationUrl,
+  invalidateGithubLinkStatus,
+} from '@queries/auth';
 
 /**
  * Where GitHub consent started from the desktop app returns. The system
@@ -69,4 +72,15 @@ export function handleGithubLinkCallback(path: string): boolean {
   if (path !== GITHUB_LINK_CALLBACK_PATH) return false;
   fireAndForget(invalidateGithubLinkStatus(), 'github-link');
   return true;
+}
+
+/**
+ * Link the user's GitHub account, or relink one whose token stopped working.
+ * The link also authorizes GitHub for Macro AI. Resolves as
+ * {@link authorizeGithub} does.
+ */
+export async function linkGithubAccount(
+  failureMessage: string
+): Promise<boolean> {
+  return await authorizeGithub(githubLinkAuthorizationUrl, failureMessage);
 }

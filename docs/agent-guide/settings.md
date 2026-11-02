@@ -643,6 +643,13 @@ category) among the integrations in use, not with the custom MCP servers at
 the top; native servers wait for the overlay list before rendering so one never
 jumps. Verify with an overlaid app such as Sentry or Asana; completing a
 Pipedream connection for one answers 409.
+GitHub is overlaid onto `api.githubcopilot.com/mcp`, but its server is
+authorized by the GitHub account link (the same GitHub App), so connecting
+GitHub anywhere (catalog, chat connect card, import dialog, the GitHub AI
+provider page) runs the account link, and a linked account shows GitHub
+connected for Macro AI with no second consent. Disconnecting GitHub on its AI
+provider page unlinks the account. Verify by linking GitHub from its row and
+checking the GitHub catalog entry reads connected.
 The Agents workspace opens this same Integrations page. The list includes featured providers, a searchable catalog,
 and `Add Custom`. Pipedream Slack OAuth is available in production and
 development from the featured Slack provider. Connecting Slack here grants tool
