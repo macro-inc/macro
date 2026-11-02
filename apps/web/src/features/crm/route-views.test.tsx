@@ -18,6 +18,9 @@ vi.mock('@components/app/split-layout/split-router/app-route-shell', () => ({
 vi.mock('@components/app/split-layout/view-restoration', () => ({
   useViewRestoration: () => {},
 }));
+vi.mock('@components/app/split-layout/layoutUtils', () => ({
+  useSplitPanel: () => ({ handle: { captureEntryState: vi.fn() } }),
+}));
 vi.mock('@core/constant/featureFlags', () => ({
   enableCrm: 'crm',
   isFeatureEnabled: () => true,

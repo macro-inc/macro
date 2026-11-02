@@ -46,6 +46,10 @@ import {
 import { ok, type Result, ResultAsync } from 'neverthrow';
 import { $insertNodesAndSplitList } from '../../utils';
 import { mapRegisterDelete } from '../shared';
+import {
+  $insertImageIntoListItem,
+  registerListItemImages,
+} from './listItemImages';
 
 type DSSMedia = {
   type: 'dss';
@@ -258,6 +262,8 @@ function $safeInsertMediaNode(node: ImageNode | VideoNode) {
     return;
   }
 
+  if ($isImageNode(node) && $insertImageIntoListItem(node)) return;
+
   if ($isRangeSelection(selection)) {
     if (selection.isCollapsed()) {
       const { focus } = selection;
@@ -394,6 +400,7 @@ function registerMediaPlugin(editor: LexicalEditor) {
   return mergeRegister(
     followCreated(ImageNode, 'image'),
     followCreated(VideoNode, 'video'),
+    registerListItemImages(editor),
 
     editor.registerCommand(
       INSERT_MEDIA_COMMAND,

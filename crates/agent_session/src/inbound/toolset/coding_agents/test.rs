@@ -12,6 +12,25 @@ struct Service {
 }
 
 impl CodingAgentService for Service {
+    fn list_updates(
+        &self,
+        user_id: MacroUserIdStr<'static>,
+    ) -> Pin<
+        Box<
+            dyn Future<Output = Result<crate::domain::updates::AgentUpdates, CodingAgentError>>
+                + Send
+                + '_,
+        >,
+    > {
+        Box::pin(async move {
+            self.list_callers.lock().unwrap().push(user_id);
+            Ok(crate::domain::updates::AgentUpdates {
+                items: Vec::new(),
+                truncated: false,
+                truncation_notice: None,
+            })
+        })
+    }
     fn create(
         &self,
         command: DispatchCodingAgentRequest,
@@ -63,6 +82,16 @@ async fn tools_always_use_the_authenticated_request_identity() {
     assert!(listed.agents.is_empty());
     assert_eq!(*service.list_callers.lock().unwrap(), vec![caller.clone()]);
 
+    let updates = ListAgentUpdates {}
+        .call(context.clone(), request.clone())
+        .await
+        .unwrap();
+    assert!(updates.items.is_empty());
+    assert_eq!(
+        *service.list_callers.lock().unwrap(),
+        vec![caller.clone(), caller.clone()]
+    );
+
     let tool = DispatchCodingAgent {
         agent_id: macro_uuid::generate_uuid_v7(),
         prompt: "Implement repository issue 123".into(),
@@ -82,6 +111,12 @@ fn tools_reject_an_ai_supplied_user_identity() {
         serde_json::from_value::<ListCodingAgents>(serde_json::json!({
             "user_id": "macro|another@example.com"
         }))
+        .is_err()
+    );
+    assert!(
+        serde_json::from_value::<ListAgentUpdates>(
+            serde_json::json!({"user_id": "macro|another@example.com"})
+        )
         .is_err()
     );
     assert!(

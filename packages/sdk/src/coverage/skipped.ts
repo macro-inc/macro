@@ -81,6 +81,7 @@ export const authExcluded = [
   'getSubscriptionStatus',
   'getTeamByInviteLink',
   'getTeamInviteLink',
+  'getSystemStatus',
   'getTeamInvites',
   // Introductory offers belong to the app's subscription checkout flow.
   'getTrialEligibility',
@@ -103,6 +104,7 @@ export const authExcluded = [
   'listCodexEnvironments',
   'listCursorModels',
   'listGtmInviteLinks',
+  'listSystemStatusHistory',
   'logout',
   'mergeGithubPullRequest',
   'oauth2Callback',
@@ -118,6 +120,7 @@ export const authExcluded = [
   'patchUserTutorial',
   'pollCodexLogin',
   'postProfilePictures',
+  'purchaseAiCredits',
   'putAgentApiKey',
   'putCursorApiKey',
   'putCursorDefaultModel',
@@ -132,11 +135,13 @@ export const authExcluded = [
   'resolveGtmInviteLink',
   'revokeGtmInviteLink',
   'sendMobileWelcomeEmail',
+  'sendTeamDomainNotice',
   'sendReferralCode',
   'sessionCreation',
   'sessionLogin',
   'setGithubPullRequestDraft',
   'setGithubPullRequestState',
+  'setSystemStatus',
   'ssoLogin',
   'startCodexLogin',
   'toggleTeamAutoJoinDomain',
@@ -212,6 +217,7 @@ export const cognitionBacklog =
 
 export const connectionExcluded = [
   'batchSendMessageHandler',
+  'broadcastMessageHandler',
   'getEntityHandler',
   'sendMessageHandler',
 ] as const satisfies readonly (keyof ConnectionSdk)[];

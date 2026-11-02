@@ -217,10 +217,11 @@ export function createAppOnboardingContext(): OnboardingContext {
         },
       };
     },
-    createTeam: async ({ name, invites }) => {
+    createTeam: async ({ name, invites, allowDomainJoin }) => {
       await createTeam.mutateAsync({
         name,
         invites: invites.map((email) => ({ email })),
+        allowDomainJoin,
       });
     },
     joinTeam: async (inviteId) => {
