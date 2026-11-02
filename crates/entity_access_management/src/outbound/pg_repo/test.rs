@@ -130,13 +130,14 @@ async fn walk_up_nonexistent_project_returns_empty(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("project_tree_test_data"))
 )]
 async fn source_entities_returns_direct_shares_across_projects(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
 
-    let result = repo
-        .get_all_source_entities_for_projects(&mut tx, &[ROOT_PROJECT_ID, CHILD_PROJECT_ID])
-        .await
-        .unwrap();
+    let result = entity_access_db_utils::project_grants::project_grant_sources(
+        &mut tx,
+        &[ROOT_PROJECT_ID, CHILD_PROJECT_ID],
+    )
+    .await
+    .unwrap();
 
     // 3 direct shares: user/edit on root, team/view on root, channel/comment on child
     assert_eq!(result.len(), 3);
@@ -174,14 +175,13 @@ async fn source_entities_returns_direct_shares_across_projects(pool: Pool<Postgr
     fixtures(path = "../../../fixtures", scripts("project_tree_test_data"))
 )]
 async fn source_entities_excludes_inherited_access(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
 
     // Child project has one direct share (channel/comment) and one inherited (user/view with granted_from_project_id)
-    let result = repo
-        .get_all_source_entities_for_projects(&mut tx, &[CHILD_PROJECT_ID])
-        .await
-        .unwrap();
+    let result =
+        entity_access_db_utils::project_grants::project_grant_sources(&mut tx, &[CHILD_PROJECT_ID])
+            .await
+            .unwrap();
 
     assert_eq!(result.len(), 1);
     assert_eq!(result[0].source_id, "channel-one");
@@ -196,14 +196,13 @@ async fn source_entities_excludes_inherited_access(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("project_tree_test_data"))
 )]
 async fn source_entities_excludes_non_project_entity_type(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
 
     // Root project has 2 direct project shares + 1 document row (should be excluded)
-    let result = repo
-        .get_all_source_entities_for_projects(&mut tx, &[ROOT_PROJECT_ID])
-        .await
-        .unwrap();
+    let result =
+        entity_access_db_utils::project_grants::project_grant_sources(&mut tx, &[ROOT_PROJECT_ID])
+            .await
+            .unwrap();
 
     assert_eq!(result.len(), 2);
     assert!(
@@ -219,13 +218,14 @@ async fn source_entities_excludes_non_project_entity_type(pool: Pool<Postgres>) 
     fixtures(path = "../../../fixtures", scripts("project_tree_test_data"))
 )]
 async fn source_entities_empty_for_project_without_access(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
 
-    let result = repo
-        .get_all_source_entities_for_projects(&mut tx, &[GRANDCHILD_PROJECT_ID])
-        .await
-        .unwrap();
+    let result = entity_access_db_utils::project_grants::project_grant_sources(
+        &mut tx,
+        &[GRANDCHILD_PROJECT_ID],
+    )
+    .await
+    .unwrap();
 
     assert!(result.is_empty());
 }
@@ -235,14 +235,13 @@ async fn source_entities_empty_for_project_without_access(pool: Pool<Postgres>) 
     fixtures(path = "../../../fixtures", scripts("project_tree_test_data"))
 )]
 async fn source_entities_empty_for_nonexistent_project(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
     let nonexistent = Uuid::new_v4();
 
-    let result = repo
-        .get_all_source_entities_for_projects(&mut tx, &[nonexistent])
-        .await
-        .unwrap();
+    let result =
+        entity_access_db_utils::project_grants::project_grant_sources(&mut tx, &[nonexistent])
+            .await
+            .unwrap();
 
     assert!(result.is_empty());
 }
@@ -280,7 +279,6 @@ async fn source_entities_empty_for_nonexistent_project(pool: Pool<Postgres>) {
     fixtures(path = "../../../fixtures", scripts("complex_project_tree_test_data"))
 )]
 async fn source_entities_for_full_tree_walk_returns_only_direct_shares(pool: Pool<Postgres>) {
-    let repo = PgRepository::new(pool.clone());
     let mut tx = pool.begin().await.unwrap();
 
     let project_a = Uuid::parse_str("aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa").unwrap();
@@ -288,10 +286,12 @@ async fn source_entities_for_full_tree_walk_returns_only_direct_shares(pool: Poo
     let project_c = Uuid::parse_str("cccccccc-cccc-cccc-cccc-cccccccccccc").unwrap();
 
     // Simulates walk_up_project_tree from PROJECT_C → [A, B, C]
-    let result = repo
-        .get_all_source_entities_for_projects(&mut tx, &[project_a, project_b, project_c])
-        .await
-        .unwrap();
+    let result = entity_access_db_utils::project_grants::project_grant_sources(
+        &mut tx,
+        &[project_a, project_b, project_c],
+    )
+    .await
+    .unwrap();
 
     // 6 direct shares total: 3 users + 1 team + 2 channels
     // All 6 inherited rows (granted_from_project_id IS NOT NULL) should be excluded
@@ -872,3 +872,4 @@ async fn move_project_from_a_to_d_updates_inherited_access(pool: Pool<Postgres>)
         2
     );
 }
+
