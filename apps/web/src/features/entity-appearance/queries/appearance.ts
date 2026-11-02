@@ -1,9 +1,12 @@
 import { t } from '@app/lib/i18n';
 import { fireAndForget } from '@core/util/fireAndForget';
+import {
+  readRecordsByKeys,
+  selectRecords,
+} from '@graphql-cache/exchange/record-selection';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
 import { setPreviewAppearance } from '@queries/preview';
-import { readCachedGraphqlItemPreviewFromHost } from '@queries/preview/graphql';
 import { previewKeys } from '@queries/preview/keys';
 import {
   getSoupEntityById,
@@ -20,6 +23,7 @@ import type { Form } from '@service-storage/generated/schemas/form';
 import type { FormDetail } from '@service-storage/generated/schemas/formDetail';
 import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
 import type { ListedForm } from '@service-storage/generated/schemas/listedForm';
+import { EntityAppearanceFieldsFragmentDoc } from '@service-storage/graphql/generated/graphql';
 import type { QueryClient, QueryKey } from '@tanstack/solid-query';
 import { err, ok, type Result } from 'neverthrow';
 import { match } from 'ts-pattern';
@@ -28,11 +32,38 @@ import type { EntityData } from '../../entity/types/entity';
 import { scheduledActionKeys } from '../../routines/queries/keys';
 import {
   type EntityAppearance,
+  readEntityAppearance,
   sameAppearance,
   supportsEntityAppearance,
 } from '../core/appearance';
+import {
+  type AppearanceMutationVariables,
+  ENTITY_APPEARANCE_MUTATION_KEY,
+} from './pending-appearance';
 
 type Rollback = () => void;
+
+const appearanceSelection = selectRecords(EntityAppearanceFieldsFragmentDoc);
+
+async function readCachedAppearance(
+  host: Pick<CacheHost, 'readRecordsByKeys'>,
+  entity: EntityData
+) {
+  const type =
+    entity.type === 'initiative'
+      ? 'GraphqlSoupInitiative'
+      : 'GraphqlSoupDocument';
+  const result = await readRecordsByKeys(host, appearanceSelection, [
+    `${type}:${entity.id}`,
+  ]);
+  const record = result.records[0]?.record;
+  if (
+    record?.__typename === 'GraphqlSoupDocument' ||
+    record?.__typename === 'GraphqlSoupInitiative'
+  ) {
+    return { appearance: readEntityAppearance(record.appearance) };
+  }
+}
 
 function patchRestReaders(
   queryClient: QueryClient,
@@ -223,6 +254,7 @@ export function createSaveEntityAppearance(sources: {
     id: string,
     appearance: EntityAppearance
   ) => Promise<Result<unknown, unknown>>;
+  refreshUncached?: (entity: EntityData) => Promise<void>;
 }) {
   // Keep only overlapping writes. Their rollback closures change appearance fields,
   // never entire query snapshots or unrelated metadata.
@@ -243,10 +275,11 @@ export function createSaveEntityAppearance(sources: {
     writeQueues.set(key, settled);
     return next;
   }
-  return function saveEntityAppearance(
+  function saveEntityAppearance(
     entity: EntityData,
     appearance: EntityAppearance,
-    isCurrent: () => boolean
+    isCurrent: () => boolean,
+    onRevalidationError: () => void
   ): Promise<Result<void, string>> {
     return Telemetry.span('entity.appearance.apply', async (span) => {
       span.setAttr('entity.id', entity.id);
@@ -328,18 +361,13 @@ export function createSaveEntityAppearance(sources: {
         entity,
         appearance
       );
-      let graphPrevious: Awaited<
-        ReturnType<typeof readCachedGraphqlItemPreviewFromHost>
-      >;
+      let graphPrevious: Awaited<ReturnType<typeof readCachedAppearance>>;
       const rollback = async () => {
         rollbackRest();
         const prior = graphPrevious;
         if (host && prior && host === sources.cacheHost() && !host.disabled) {
           await queueWrite(`cache:${key}`, async () => {
-            const current = await readCachedGraphqlItemPreviewFromHost(host, {
-              id: entity.id,
-              type: entity.type === 'initiative' ? 'initiative' : 'document',
-            });
+            const current = await readCachedAppearance(host, entity);
             if (
               isCurrent() &&
               host === sources.cacheHost() &&
@@ -365,10 +393,7 @@ export function createSaveEntityAppearance(sources: {
           (entity.type !== 'document' && entity.type !== 'initiative')
         )
           return;
-        graphPrevious = await readCachedGraphqlItemPreviewFromHost(host, {
-          id: entity.id,
-          type: entity.type,
-        });
+        graphPrevious = await readCachedAppearance(host, entity);
         // Only patch loaded records; a failed save must not leave a partial cache entry.
         if (graphPrevious && isCurrent() && host === sources.cacheHost()) {
           await host.writeQuery(appearanceCacheWrite(entity, appearance));
@@ -378,7 +403,24 @@ export function createSaveEntityAppearance(sources: {
       // Keep server writes ordered while newer choices are already visible locally.
       const result = await queueWrite(`server:${key}`, async () => {
         if (!isCurrent()) return err(t('appearance.saveFailed'));
-        return sources.update(type, entity.id, appearance);
+        const result = await sources.update(type, entity.id, appearance);
+        await cache;
+        if (
+          result.isOk() &&
+          isCurrent() &&
+          (!host || host.disabled || !graphPrevious)
+        ) {
+          const refreshed = await Promise.allSettled([
+            sources.refreshUncached?.(entity),
+          ]);
+          if (refreshed[0]?.status === 'rejected') {
+            onRevalidationError();
+            Telemetry.warn('appearance fallback reconciliation failed', {
+              entity_type: entity.type,
+            });
+          }
+        }
+        return result;
       });
       if (result.isOk() && isCurrent()) readers.confirmed = appearance;
       const cacheResults = await cache;
@@ -434,5 +476,56 @@ export function createSaveEntityAppearance(sources: {
       }
       return ok(undefined);
     });
+  }
+  const mutationFn = (variables: AppearanceMutationVariables) =>
+    saveEntityAppearance(
+      variables.entity,
+      variables.appearance,
+      variables.isCurrent,
+      () => {
+        variables.retainAfterSave = true;
+      }
+    );
+  return async (
+    entity: EntityData,
+    appearance: EntityAppearance,
+    isCurrent: () => boolean
+  ): Promise<Result<void, string>> => {
+    const mutation = sources.queryClient
+      .getMutationCache()
+      .build(sources.queryClient, {
+        mutationKey: ENTITY_APPEARANCE_MUTATION_KEY,
+        mutationFn,
+        retry: false,
+      });
+    const variables: AppearanceMutationVariables = {
+      entity,
+      appearance,
+      isCurrent,
+    };
+    try {
+      const result = await mutation.execute(variables);
+      if (result.isOk()) {
+        const cache = sources.queryClient.getMutationCache();
+        for (const previous of cache.findAll({
+          mutationKey: ENTITY_APPEARANCE_MUTATION_KEY,
+          status: 'success',
+        })) {
+          const previousVariables = previous.state.variables as
+            | AppearanceMutationVariables
+            | undefined;
+          if (
+            previous.mutationId < mutation.mutationId &&
+            previousVariables?.entity.id === entity.id &&
+            previousVariables.entity.type === entity.type
+          )
+            cache.remove(previous);
+        }
+      }
+      return result;
+    } finally {
+      if (!variables.retainAfterSave)
+        sources.queryClient.getMutationCache().remove(mutation);
+    }
   };
 }

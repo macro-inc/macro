@@ -313,6 +313,69 @@ it('keeps a committed REST write successful when GraphQL cache reconciliation fa
   queryClient.clear();
 });
 
+it.each(['document', 'initiative'] as const)(
+  'updates a cached %s without requiring unrelated preview fields',
+  async (type) => {
+    const queryClient = new QueryClient();
+    const patched = Promise.withResolvers<void>();
+    const response =
+      Promise.withResolvers<Awaited<ReturnType<UpdateAppearance>>>();
+    const record = {
+      __typename:
+        type === 'document' ? 'GraphqlSoupDocument' : 'GraphqlSoupInitiative',
+      id: entity.id,
+      appearance: null as EntityAppearance | null,
+    };
+    const host = {
+      disabled: false,
+      readRecordsByKeys: vi.fn<CacheHost['readRecordsByKeys']>(
+        async ({ document }) => ({
+          revision: INITIAL_CACHE_REVISION,
+          // The engine cannot project a preview when only appearance is loaded.
+          records: document.includes('displayName')
+            ? []
+            : [
+                {
+                  recordKey: `${record.__typename}:${record.id}`,
+                  record: { ...record },
+                },
+              ],
+        })
+      ),
+      writeQuery: vi.fn<CacheHost['writeQuery']>(async (write) => {
+        const data = write.data as {
+          soupUpdates: { item: { appearance: EntityAppearance | null } };
+        };
+        record.appearance = data.soupUpdates.item.appearance;
+        patched.resolve();
+        return {
+          revision: INITIAL_CACHE_REVISION,
+          revisionAdvanced: true,
+          changed: [],
+          affectedOps: [],
+          reset: false,
+        };
+      }),
+    };
+    const save = createSaveEntityAppearance({
+      queryClient,
+      cacheHost: () => host,
+      update: () => response.promise,
+    });
+    const target =
+      type === 'document'
+        ? entity
+        : { type, id: entity.id, name: entity.name, ownerId: entity.ownerId };
+    const pending = save(target, appearance, () => true);
+    await patched.promise;
+    expect(record.appearance).toEqual(appearance);
+    response.resolve(err([]));
+    expect((await pending).isErr()).toBe(true);
+    expect(record.appearance).toBeNull();
+    queryClient.clear();
+  }
+);
+
 it('serializes normalized cache rollback when overlapping edits both fail', async () => {
   const queryClient = new QueryClient();
   const response =

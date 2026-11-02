@@ -1,3 +1,4 @@
+import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import type { CombinedError } from '@urql/core';
@@ -92,6 +93,7 @@ export function createSoupLiveQuery(
   options: Accessor<SoupLiveQueryOptions> = () => ({})
 ) {
   const pendingDeleteIds = usePendingGraphqlSoupDeleteIds();
+  const pendingAppearance = usePendingEntityAppearance();
   const offline = createBrowserOfflineSignal();
   const [fetchingMailPage, setFetchingMailPage] = createSignal(false);
   // The position of the last local Mail row loaded (a page's `endCursor`).
@@ -1006,7 +1008,23 @@ export function createSoupLiveQuery(
     localOptimistic: () => displayLocalProjection()?.mail?.optimistic ?? false,
     data: createMemo(() => {
       const records = displayData();
-      return records && withoutPendingSoupEntities(records, pendingDeleteIds());
+      return (
+        records &&
+        withoutPendingSoupEntities(
+          records.map((record) => {
+            const type =
+              record.__typename === 'GraphqlSoupDocument'
+                ? 'document'
+                : record.__typename === 'GraphqlSoupInitiative'
+                  ? 'initiative'
+                  : undefined;
+            const appearance =
+              type && pendingAppearance(type, record.id, Boolean(query.error));
+            return appearance ? { ...record, appearance } : record;
+          }),
+          pendingDeleteIds()
+        )
+      );
     }),
     fetchedRecords: () => query.data?.records() ?? [],
     cachedMail,

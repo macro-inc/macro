@@ -1,3 +1,4 @@
+import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
 import { createUrqlInfiniteQuery } from '@app/lib/urql-solid';
 import { isResponseFreeNetworkError } from '@core/util/request-error';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
@@ -120,6 +121,7 @@ export function createProjectSoupSource(
   filters: Accessor<ProjectFilters>,
   enabled: Accessor<boolean>
 ): ProjectsSource {
+  const pendingAppearance = usePendingEntityAppearance();
   const input = createMemo(() => projectSoupInput(filters()));
   const client = createMemo(soupClient);
   const query = createUrqlInfiniteQuery<
@@ -188,7 +190,18 @@ export function createProjectSoupSource(
       // last authorized pages without triggering a Solid resource suspension.
       const data = query.data;
       return data
-        ? projectSoupRows(data.pages.flatMap((page) => page.user.soup.items))
+        ? projectSoupRows(
+            data.pages.flatMap((page) => page.user.soup.items)
+          ).map((row) => {
+            const appearance = pendingAppearance(
+              'initiative',
+              row.project.id,
+              Boolean(query.error)
+            );
+            return appearance
+              ? { ...row, project: { ...row.project, appearance } }
+              : row;
+          })
         : undefined;
     },
     loading: () => enabled() && query.isPending,

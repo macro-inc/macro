@@ -1,4 +1,5 @@
 import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { usePendingEntityAppearance } from '@app/features/entity-appearance/queries/pending-appearance';
 import {
   type CacheHost,
   readRecordsByKeys,
@@ -652,6 +653,7 @@ export function createGraphqlItemPreviewQuery(
   enabled: Accessor<boolean>,
   includeProperties = true
 ): GraphqlItemPreviewQuery {
+  const pendingAppearance = usePendingEntityAppearance();
   // Hover popup props derive from another live preview. Snapshot only the
   // entity identity so cache/fetch updates cannot release and reacquire the
   // same batch, clear its data, or feed another update back upstream.
@@ -693,7 +695,17 @@ export function createGraphqlItemPreviewQuery(
   });
   const cachedPreview = () =>
     group()?.cached().get(normalizedRecordKey(item())!);
-  const data = () => livePreview() ?? cachedPreview();
+  const data = () => {
+    const preview = livePreview() ?? cachedPreview();
+    if (!preview || preview.loading || preview.access !== 'access')
+      return preview;
+    const appearance = pendingAppearance(
+      preview.type,
+      preview.id,
+      Boolean(result()?.isError)
+    );
+    return appearance ? { ...preview, appearance } : preview;
+  };
   const refetch = async () => {
     await (await ready)?.refresh();
   };
