@@ -31,6 +31,7 @@ function createSplitTaskComposerHost(): TaskComposerHost {
     userId: useUserId(),
     resolveAppLink: useMacroMentionLinkResolver(),
     isPopover: () => splitPanel.handle.isPopover(),
+    fillSheet: () => splitPanel.fillDrawer?.(),
     setDisplayName: (name) => splitPanel.handle.setDisplayName(name),
     close: () => splitPanel.handle.close(),
     openComposer: (params) =>

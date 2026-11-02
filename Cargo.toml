@@ -132,6 +132,7 @@ members = [
   "crates/system_skills",
   "crates/task_dedup",
   "crates/unfurl",
+  "crates/upstream_error",
   "crates/user_api_key",
   "crates/user_language",
   "crates/webhook_signature",

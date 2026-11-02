@@ -4,7 +4,7 @@ use item_filters::SharedEmailFilter;
 
 /// Stable, separately versioned Mail projection; existing Soup profiles remain usable.
 pub fn profile() -> Profile {
-    Profile::new(token("soup-mail-v2"))
+    Profile::new(token("soup-mail-v5"))
 }
 /// Email thread partition.
 pub fn partition() -> Token {
@@ -117,8 +117,12 @@ pub fn compile(
             ),
         }
     };
-    for gate in [scope, boolean("mail-has-message", true)] {
-        predicate = PredicateExpr::And(Box::new(predicate), Box::new(gate));
+    predicate = PredicateExpr::And(Box::new(predicate), Box::new(scope));
+    if matches!(view, "ALL" | "INBOX") {
+        predicate = PredicateExpr::And(
+            Box::new(predicate),
+            Box::new(boolean("mail-has-message", true)),
+        );
     }
     if view == "INBOX" {
         predicate = PredicateExpr::And(

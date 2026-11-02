@@ -81,6 +81,7 @@ entity_registry = { path = "../../crates/entity_registry/entity_registry", featu
 ] }
 foreign_entity = { path = "../../crates/foreign_entity" }
 favorites = { path = "../../crates/favorites", features = ["postgres"] }
+feature_flags = { path = "../../crates/feature_flags" }
 fusionauth = { path = "../../crates/fusionauth" }
 futures = { workspace = true }
 generic_email_domains = { path = "../../crates/generic_email_domains" }
@@ -177,6 +178,7 @@ tower = { workspace = true }
 tower-cookies = { version = "0.11.0" }
 tower-http = { workspace = true }
 tracing = { workspace = true }
+upstream_error = { path = "../../crates/upstream_error" }
 url = { workspace = true }
 urlencoding = { workspace = true }
 user_language = { path = "../../crates/user_language", features = ["inbound", "postgres"] }

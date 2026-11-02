@@ -3,7 +3,8 @@
 //! (the required status check) covers it without a ruleset change. Web
 //! bundles ship over the air, but native changes only reach users through
 //! the App Store, so a PR whose bundle depends on new native code must not
-//! merge before that native build is actually downloadable. The gate:
+//! merge before Apple has approved that native build; the prod deploy that
+//! ships the bundle releases it (`ios-app-store.mjs publish`). The gate:
 //!
 //! 1. Detects native changes: a path filter over `apps/web/tauri/**`,
 //!    minus what never reaches the iOS binary (anything Android-only by
@@ -18,14 +19,14 @@
 //!    file outside it, i.e. everything.
 //! 2. Verifies the PR bumped the iOS release numbers (`just ios-bump`):
 //!    marketing version, build number, and `min-native-build.json`.
-//! 3. Asks the App Store Connect API whether exactly that version + build is
-//!    live on the App Store, built from the native tree this PR's current
-//!    merge result has (fetched through the API, so native code that landed
-//!    on main after the release also fails it, even on a re-run: the
-//!    shipped build lacks it), and fails with instructions otherwise — add the
-//!    `ios-update` label to run the `iOS App Store Release` workflow and
-//!    wait for Apple's approval; `iOS Release Watch` re-runs this job once
-//!    the release is live.
+//! 3. Asks the App Store Connect API whether Apple approved exactly that
+//!    version + build (held for release, or live), built from the native
+//!    tree this PR's current merge result has (fetched through the API, so
+//!    native code that landed on main after the release also fails it, even
+//!    on a re-run: the approved build lacks it), and fails with instructions
+//!    otherwise — add the `ios-update` label to run the `iOS App Store
+//!    Release` workflow and wait for Apple's approval; `iOS Release Watch`
+//!    re-runs this job once Apple approves.
 //!
 //! The App Store Connect key comes from Doppler (`ios-release/prd` via the
 //! `IOS_RELEASE_DOPPLER_TOKEN` secret), shared with the release workflow.
@@ -76,7 +77,7 @@ pub(super) fn job() -> Job {
         .add_step(setup_bun())
         .add_step(verify_bump())
         .add_step(fetch_credentials())
-        .add_step(require_live_version())
+        .add_step(require_approved_version())
         .add_step(skip_notice())
         .add_step(pr_comment())
 }
@@ -218,14 +219,14 @@ fn fetch_credentials() -> Step<Run> {
         .add_env(("DOPPLER_TOKEN", vars::IOS_RELEASE_DOPPLER_TOKEN))
 }
 
-/// Compares the live build's stamp against the native tree of the PR's
+/// Compares the approved build's stamp against the native tree of the PR's
 /// *current* merge result — exactly what the floor derived from this build
 /// claims ships. Asked through the API rather than taken from the checkout:
 /// a re-run (the watcher's, the label workflow's, a human's) checks out the
 /// merge commit as of the run's original event, which may predate native
 /// code landing on main.
-fn require_live_version() -> Step<Run> {
-    Step::new("Require the App Store release to be live")
+fn require_approved_version() -> Step<Run> {
+    Step::new("Require Apple's approval of the App Store release")
         .run(concat!(
             include_str!("../scripts/ios_native_tree.sh"),
             include_str!("../scripts/pr_merge_commit.sh"),

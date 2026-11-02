@@ -2,6 +2,8 @@
 //! Only group traffic becomes [`InboundEvent`]s; the account runner then drops
 //! everything outside adopted groups.
 
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
 use external_chat::domain::rich::SystemLine;
 use external_chat::domain::{
@@ -11,9 +13,10 @@ use external_chat::domain::{
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    ChatUpdate, HistoryPage, InboundEvent, InboundKind, Media, Message, MessageAnchor, MessageKind,
-    Receipt, ReceiptState, Target,
+    ChatUpdate, HistoryPage, InboundEvent, InboundKind, LookupAnswer, Media, Message,
+    MessageAnchor, MessageKind, Receipt, ReceiptState, Target,
 };
+use whatsapp_linked::domain::jid::PhoneNumber;
 use whatsapp_linked::domain::models::Identity;
 use whatsmeow::Event;
 use whatsmeow::download::{DownloadableMessage, MediaType};
@@ -25,7 +28,10 @@ use whatsmeow::proto::wa_history_sync::{Conversation, HistorySync, Pushname};
 use whatsmeow::proto::wa_web::WebMessageInfo;
 use whatsmeow::store::{ContactStore, LidStore, StoreError};
 use whatsmeow::types::events::GroupInfo;
-use whatsmeow::types::{DEFAULT_USER_SERVER, GROUP_SERVER, HIDDEN_USER_SERVER, Jid, MessageSource};
+use whatsmeow::types::{
+    ContactInfo, DEFAULT_USER_SERVER, GROUP_SERVER, HIDDEN_USER_SERVER, IsOnWhatsAppResponse, Jid,
+    MessageSource,
+};
 
 use crate::domain::ports::SessionEvent;
 
@@ -1228,6 +1234,8 @@ pub fn chat_setting(event: &Event) -> Option<ChatUpdate> {
             })
             .filter(|chat| chat.kind == ExternalChatKind::Direct)
         }
+        // A saved contact is someone to start a chat with, so it is listed
+        // even before anyone wrote.
         Event::Contact(contact) => {
             let action = contact.action.as_ref()?;
             let name = action
@@ -1235,10 +1243,68 @@ pub fn chat_setting(event: &Event) -> Option<ChatUpdate> {
                 .as_deref()
                 .or(action.first_name.as_deref())
                 .filter(|name| !name.trim().is_empty())?;
-            setting_chat(&contact.jid, |chat| chat.name = Some(name.to_owned()))
-                .filter(|chat| chat.kind == ExternalChatKind::Direct)
+            setting_chat(&contact.jid, |chat| {
+                chat.name = Some(name.to_owned());
+                chat.create = true;
+            })
+            .filter(|chat| chat.kind == ExternalChatKind::Direct)
         }
         _ => None,
+    }
+}
+
+/// The address book's saved contacts as direct chats with no activity, so
+/// the chat list offers people never written to. People only seen with a
+/// WhatsApp or business name (in groups, say) are not saved contacts.
+pub fn contact_chats(contacts: &HashMap<Jid, ContactInfo>) -> Vec<ChatUpdate> {
+    contacts
+        .iter()
+        .filter_map(|(jid, contact)| {
+            let name = [&contact.full_name, &contact.first_name]
+                .into_iter()
+                .find(|name| !name.trim().is_empty())?;
+            setting_chat(jid, |chat| {
+                chat.name = Some(name.clone());
+                chat.create = true;
+            })
+            .filter(|chat| chat.kind == ExternalChatKind::Direct)
+        })
+        .collect()
+}
+
+/// WhatsApp's answer to `IsOnWhatsApp` for one number: registered numbers
+/// are found as their phone-number chat, named like any chat (address book,
+/// else the verified business or WhatsApp name).
+pub async fn lookup_answer(
+    lids: &dyn LidStore,
+    contacts: &dyn ContactStore,
+    phone: &PhoneNumber,
+    answers: &[IsOnWhatsAppResponse],
+) -> LookupAnswer {
+    let Some(answer) = answers.iter().find(|answer| answer.is_in) else {
+        return LookupAnswer::NotOnWhatsApp;
+    };
+    let business = answer
+        .verified_name
+        .as_ref()
+        .and_then(|verified| verified.details.as_ref())
+        .and_then(|details| details.verified_name.clone())
+        .filter(|name| !name.trim().is_empty());
+    let mut chats = [ChatUpdate {
+        jid: phone.jid(),
+        kind: ExternalChatKind::Direct,
+        name: business,
+        last_activity_at: None,
+        archived: None,
+        pinned: None,
+        anchor: None,
+        create: true,
+    }];
+    complete_chats(lids, contacts, &mut chats).await;
+    let [chat] = chats;
+    LookupAnswer::Found {
+        jid: chat.jid,
+        name: chat.name,
     }
 }
 

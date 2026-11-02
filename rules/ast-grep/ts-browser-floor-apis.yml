@@ -1,0 +1,69 @@
+id: ts-browser-floor-apis
+language: typescript
+# Twin of tsx-browser-floor-apis — ast-grep rules are single-language, and
+# `tsx` only scans .tsx files.
+severity: error
+message: This API is newer than the browsers in apps/web/package.json `browserslist` (Safari/iOS 16.4, Chrome 111, Firefox 128). Guard it with `typeof` or a `??` fallback, or use a helper such as `anyAbortSignal` from `@core/util/abort-signal`.
+note: |-
+  The iOS app's WebKit follows the device's iOS version, and esbuild lowers
+  syntax to the floor but never adds missing APIs. Below Safari 17.4,
+  `AbortSignal.any` threw before every list request, so mail and Home never
+  loaded. Each API below is missing from at least one browser in the floor,
+  according to MDN browser-compat-data (checked November 2026). Allowed: a
+  `typeof X.y` check, and `X.y ?? fallback`. Replace `Promise.withResolvers`
+  with `new Promise`. Add an API when one turns out to be newer than the floor,
+  and update this list when the floor moves.
+files:
+  - apps/web/src/**
+  - packages/collaboration/src/**
+  - packages/email-renderer/src/**
+  - packages/graphics/src/**
+  - packages/lexical-core/**
+  - packages/loro-mirror/src/**
+  - packages/machine/src/**
+  - packages/observability/src/**
+  - packages/spreadsheet/src/**
+ignores:
+  # Tests and browser harnesses run in Node or current Chromium, not the
+  # supported webviews.
+  - '**/*.test.ts'
+  - '**/*.spec.ts'
+  - '**/*.e2e.ts'
+  - '**/*.d.ts'
+  - '**/__tests__/**'
+  - '**/browser-test/**'
+  - '**/fuzz/**'
+  - '**/tests/**'
+  - '**/test-utils/**'
+  - '**/scripts/**'
+  - '**/testing.ts'
+rule:
+  any:
+    - pattern: AbortSignal.any
+    - pattern: Array.fromAsync
+    - pattern: Atomics.waitAsync
+    - pattern: Error.isError
+    - pattern: Intl.DurationFormat
+    - pattern: Iterator.from
+    - pattern: Map.groupBy
+    - pattern: Math.sumPrecise
+    - pattern: Object.groupBy
+    - pattern: Promise.try
+    - pattern: Promise.withResolvers
+    - pattern: RegExp.escape
+    - pattern: Response.json
+    - pattern: URL.canParse
+    - pattern: URL.parse
+    - pattern: Uint8Array.fromBase64
+    - pattern: Uint8Array.fromHex
+  not:
+    any:
+      - inside:
+          pattern: typeof $API
+      # `X.y ?? fallback`: only when the API is the left operand.
+      - inside:
+          kind: binary_expression
+          field: left
+          has:
+            field: operator
+            regex: ^\?\?$

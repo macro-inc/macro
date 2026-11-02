@@ -102,6 +102,7 @@ fn visible_calendar_maps_its_link() {
         is_primary: true,
         is_writable: true,
         is_subscription: false,
+        contributes_to_availability: true,
         sync_error: None,
         provider: CalendarProvider::Google,
         capabilities: CalendarCapabilities::google(),

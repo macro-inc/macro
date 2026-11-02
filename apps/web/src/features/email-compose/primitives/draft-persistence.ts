@@ -162,8 +162,10 @@ export function createDraftPersistence(options: {
     },
     /** The draft has no content left: delete its row and drop its identity. */
     async remove(input: { inboxId?: string; completingThread?: boolean }) {
-      const removed = Promise.withResolvers<void>();
-      removal = removed.promise;
+      let removed!: () => void;
+      removal = new Promise<void>((resolve) => {
+        removed = resolve;
+      });
       try {
         const draftId = session.draftId();
         const epoch = session.epoch();
@@ -183,7 +185,7 @@ export function createDraftPersistence(options: {
         if (session.isStale(epoch)) return;
         session.dispatch({ type: 'emptied' });
       } finally {
-        removed.resolve();
+        removed();
       }
     },
 

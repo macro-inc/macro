@@ -30,6 +30,7 @@ pub trait SoupRepo: Send + Sync + 'static {
     type Err;
     /// Iterator returned by grouped Soup queries.
     type GroupedItems: Iterator<Item = ItemGroupingInfo> + Send;
+
     /// Fetch expanded soup items for a simple sorted cursor query.
     fn expanded_generic_cursor_soup<'a>(
         &self,
@@ -142,6 +143,8 @@ pub enum SoupOutput<T, Item = SoupItem<()>> {
     Touched(PaginatedCursor<Item, String, TouchedByMe, T>),
     /// Page of a notified-at query.
     Notified(PaginatedCursor<Item, String, NotifiedAt, T>),
+    /// Page sorted by a selected property's numeric key.
+    Property(PaginatedCursor<Item, String, super::models::DynamicSort, T>),
 }
 
 impl<T, Item> SoupOutput<T, Item> {
@@ -152,6 +155,7 @@ impl<T, Item> SoupOutput<T, Item> {
     {
         match self {
             SoupOutput::Simple(page) => SoupOutput::Simple(page.map(f)),
+            SoupOutput::Property(page) => SoupOutput::Property(page.map(f)),
             SoupOutput::Frecency(page) => SoupOutput::Frecency(page.map(f)),
             SoupOutput::Touched(page) => SoupOutput::Touched(page.map(f)),
             SoupOutput::Notified(page) => SoupOutput::Notified(page.map(f)),
@@ -162,6 +166,7 @@ impl<T, Item> SoupOutput<T, Item> {
     pub fn into_items(self) -> Vec<Item> {
         match self {
             SoupOutput::Simple(page) => page.items,
+            SoupOutput::Property(page) => page.items,
             SoupOutput::Frecency(page) => page.items,
             SoupOutput::Touched(page) => page.items,
             SoupOutput::Notified(page) => page.items,
@@ -172,7 +177,10 @@ impl<T, Item> SoupOutput<T, Item> {
     pub fn into_simple(self) -> Option<PaginatedCursor<Item, String, SimpleSortMethod, T>> {
         match self {
             SoupOutput::Simple(page) => Some(page),
-            SoupOutput::Frecency(_) | SoupOutput::Touched(_) | SoupOutput::Notified(_) => None,
+            SoupOutput::Frecency(_)
+            | SoupOutput::Touched(_)
+            | SoupOutput::Notified(_)
+            | SoupOutput::Property(_) => None,
         }
     }
 
@@ -180,7 +188,10 @@ impl<T, Item> SoupOutput<T, Item> {
     pub fn into_frecency(self) -> Option<PaginatedCursor<Item, String, Frecency, T>> {
         match self {
             SoupOutput::Frecency(page) => Some(page),
-            SoupOutput::Simple(_) | SoupOutput::Touched(_) | SoupOutput::Notified(_) => None,
+            SoupOutput::Property(_)
+            | SoupOutput::Simple(_)
+            | SoupOutput::Touched(_)
+            | SoupOutput::Notified(_) => None,
         }
     }
 
@@ -188,7 +199,10 @@ impl<T, Item> SoupOutput<T, Item> {
     pub fn into_touched(self) -> Option<PaginatedCursor<Item, String, TouchedByMe, T>> {
         match self {
             SoupOutput::Touched(page) => Some(page),
-            SoupOutput::Simple(_) | SoupOutput::Frecency(_) | SoupOutput::Notified(_) => None,
+            SoupOutput::Property(_)
+            | SoupOutput::Simple(_)
+            | SoupOutput::Frecency(_)
+            | SoupOutput::Notified(_) => None,
         }
     }
 
@@ -196,7 +210,10 @@ impl<T, Item> SoupOutput<T, Item> {
     pub fn into_notified(self) -> Option<PaginatedCursor<Item, String, NotifiedAt, T>> {
         match self {
             SoupOutput::Notified(page) => Some(page),
-            SoupOutput::Simple(_) | SoupOutput::Frecency(_) | SoupOutput::Touched(_) => None,
+            SoupOutput::Property(_)
+            | SoupOutput::Simple(_)
+            | SoupOutput::Frecency(_)
+            | SoupOutput::Touched(_) => None,
         }
     }
 }
@@ -205,6 +222,7 @@ impl<T, Item> TypeEraseCursor<Item> for SoupOutput<T, Item> {
     fn type_erase(self) -> PaginatedOpaqueCursor<Item> {
         match self {
             SoupOutput::Simple(page) => page.type_erase(),
+            SoupOutput::Property(page) => page.type_erase(),
             SoupOutput::Frecency(page) => page.type_erase(),
             SoupOutput::Touched(page) => page.type_erase(),
             SoupOutput::Notified(page) => page.type_erase(),
@@ -251,6 +269,7 @@ pub trait SoupService: Send + Sync + 'static {
                 output.map(|item| SoupProjectionHydration {
                     item,
                     document_server_facts: None,
+                    sort_key: None,
                 })
             })
         }
@@ -296,6 +315,7 @@ pub trait SoupService: Send + Sync + 'static {
                     output.map(|item| SoupProjectionHydration {
                         item,
                         document_server_facts: None,
+                        sort_key: None,
                     })
                 })
         }

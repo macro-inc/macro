@@ -251,16 +251,19 @@ export function executeGraphqlSetFavoriteMutation(
   ).toPromise();
 }
 
-/** Read an accepted toggle's own payload, never a mounted query's snapshot. */
+/** Whether a favorites write committed remotely or was accepted by the offline queue. */
+export type FavoriteWriteResult =
+  | { kind: 'committed' }
+  | { kind: 'queued'; transactionId: string };
+
 export function graphqlSetFavoriteResult(
   result: OperationResult<SetFavoriteMutation, SetFavoriteMutationVariables>
-): Favorite | undefined {
+): FavoriteWriteResult {
   const disposition = optimisticMutationDispositionOf(result);
   // Superseded operations intentionally carry no data. They are accepted via
   // their replacement, not missing-data errors. Also supports older queued work.
   if (disposition?.kind === 'queued') {
-    const favorite = result.data?.setFavorite.favorite;
-    return favorite ? mapGraphqlFavorite(favorite) : undefined;
+    return { kind: 'queued', transactionId: disposition.transactionId };
   }
   if (disposition?.kind === 'permanently-failed') throw disposition.error;
   if (result.error) throw result.error;
@@ -269,7 +272,7 @@ export function graphqlSetFavoriteResult(
   if (payload.result.__typename === 'GraphqlMutationError') {
     throw new Error(payload.result.message);
   }
-  return payload.favorite ? mapGraphqlFavorite(payload.favorite) : undefined;
+  return { kind: 'committed' };
 }
 
 /**
@@ -278,11 +281,6 @@ export function graphqlSetFavoriteResult(
  */
 const REORDER_FAVORITES_OPTIMISTIC_UUID =
   '86cc4bfe-c45a-4e28-880a-6ba5ca921d35';
-
-/** Whether the reorder committed remotely or was accepted by the offline queue. */
-export type ReorderFavoritesResult =
-  | { kind: 'committed' }
-  | { kind: 'queued'; transactionId: string };
 
 /** Submit a durable optimistic GraphQL favorites reorder. */
 export function executeGraphqlReorderFavoritesMutation(
@@ -345,7 +343,7 @@ export function graphqlReorderFavoritesResult(
     ReorderFavoritesMutation,
     ReorderFavoritesMutationVariables
   >
-): ReorderFavoritesResult {
+): FavoriteWriteResult {
   const disposition = optimisticMutationDispositionOf(result);
   if (disposition?.kind === 'queued') {
     return {

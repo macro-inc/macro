@@ -16,11 +16,13 @@ Play as the source of truth — is described in `docs/development/android.md`.)
 Web bundles ship to installed apps over the air (see
 `tauri/macro_bundle_updater_plugin`), but native code — anything under
 `apps/web/tauri/` — only reaches users through the App Store. A bundle that
-depends on new native code must therefore never be deployed before the
-matching native build is downloadable, and users on older native builds must
-be pushed to update before they receive that bundle.
+depends on new native code must therefore only reach native builds that have
+it, and users on older native builds must be pushed to update instead of
+receiving that bundle. Apple must approve the matching native build before
+its PR merges; Apple then holds it until the prod deploy that ships the
+bundle releases it on the App Store.
 
-Four generated workflows (plus a gate job in the web app PR checks) and a
+Generated workflows (plus a gate job in the web app PR checks) and a
 checked-in `min-native-build.json` enforce this end to end.
 
 Keep the iOS app named `macro` and retain its unbadged icon assets in
@@ -35,7 +37,8 @@ icon and app-name branding are Android-only.
    ruleset change is needed. If the PR touches the iOS native code (see
    "What counts as native code" below) it requires:
    - the iOS release numbers to be bumped relative to `main`, and
-   - that exact version + build to be **live on the App Store**.
+   - Apple to have **approved** that exact version + build (held for
+     release, or already live).
 
    Until both hold, the check fails and the PR cannot merge. On same-repo
    PRs, the gate maintains one status comment with the version/build, current
@@ -72,7 +75,8 @@ icon and app-name branding are Android-only.
    the PR head on the Namespace macOS runner inside the Nix dev shell (like
    the `ios-preview` label), uploads it to TestFlight, waits for App Store
    Connect processing + export compliance, and submits it for App Review
-   (release type: automatic after approval). It comments the outcome
+   (release type: manual, so Apple's approval holds it as "Pending
+   Developer Release" until step 5). It comments the outcome
    on the PR. To merge the moment Apple approves, click **Enable
    auto-merge** (squash) on the PR: GitHub then merges it as soon as
    `iOS Native Check` passes. (The workflow doesn't enable auto-merge
@@ -89,25 +93,44 @@ icon and app-name branding are Android-only.
    resolve the conflicts and re-add it. On a mergeable PR that workflow
    instead comments that the release started, with the version in flight
    and a link to the run.
-4. Wait for Apple to approve. The version releases automatically, and the
-   **`iOS Release Watch`** workflow (`.github/workflows/ios-release-watch.yml`,
-   every 30 minutes) notices: for each open PR labeled `ios-update` it asks
-   App Store Connect whether the version + build at the PR head is live and,
-   when it is, re-runs the PR's failed `iOS Native Check` job and comments. The
+4. Wait for Apple to approve. The **`iOS Release Watch`** workflow
+   (`.github/workflows/ios-release-watch.yml`, every 30 minutes) notices: for
+   each open PR labeled `ios-update` it asks App Store Connect whether Apple
+   approved the version + build at the PR head and, when it did, re-runs the
+   PR's failed `iOS Native Check` job and comments. The
    gate turns green on its own and the PR merges if auto-merge is on.
    (Re-running the job by hand works too. The watcher stops after two
    automatic re-runs — counted by its own comments on the PR — so a check
    failing for another reason doesn't retry forever, and GitHub refuses to
    re-run runs older than 30 days: after a review that long, push a commit to
    get a fresh run.)
-5. The next prod web deploy (`just build-prod`) reads both platform floors
-   from `min-native-build.json` into `MIN_NATIVE_BUILD_ANDROID` /
-   `MIN_NATIVE_BUILD_IOS`, so `dist/bundle-manifest.json` carries
-   `minNativeBuilds.ios` = the new build number. Installed apps on older
-   native builds stop applying OTA bundles and show the "update from the
-   App Store" prompt instead (`NativeUpdateRequired` in
-   `src/lib/tauri/TauriProvider.tsx`). The Android floor is independent:
-   `just android-bump` raises it; see `docs/development/android.md`.
+5. The next prod deploy (`.github/workflows/release-production.yml`) ships
+   the web bundle, then releases the App Store version:
+   - The web build (`just build-prod`) reads both platform floors from
+     `min-native-build.json` into `MIN_NATIVE_BUILD_ANDROID` /
+     `MIN_NATIVE_BUILD_IOS`, so `dist/bundle-manifest.json` carries
+     `minNativeBuilds.ios` = the new build number. Installed apps on older
+     native builds stop applying OTA bundles and show the "update from the
+     App Store" prompt instead (`NativeUpdateRequired` in
+     `src/lib/tauri/TauriProvider.tsx`). The Android floor is independent:
+     `just android-bump` raises it; see `docs/development/android.md`.
+   - Once the web deploy succeeds, the **`iOS App Store Publish`** workflow
+     (`.github/workflows/ios-app-store-publish.yml`) runs
+     `ios-app-store.mjs publish`, which releases the version + build
+     committed at the deployed commit if it is held for release. A held
+     version whose PR is not in the deploy (approved, not merged yet) stays
+     held, and an already-live one is left alone. A failed web deploy skips
+     the publish, so the native build never goes live ahead of its bundle;
+     a failed publish leaves the deploy alone. To retry, re-run the failed
+     job in the `Deploy Production Release` run, or release the version in
+     App Store Connect. A manual dispatch must run from the deployed release
+     tag (**Use workflow from** → the tag) and refuses a branch: `main` may
+     already commit another native PR's held version, whose bundle has not
+     deployed.
+
+   Because the App Store release starts after the web deploy, older
+   installs can see the update prompt shortly before the App Store offers
+   the update. They keep running their current bundle meanwhile.
 
 The bump is deliberately a local command rather than something the label
 workflow pushes: a `GITHUB_TOKEN` push never re-triggers required checks, so
@@ -161,8 +184,8 @@ Two things:
   `crates/client` as native, the gate uses the version the team already
   bumps when a cache change must ship: a PR that moves it (compared with
   the base branch on the merge ref) is a native PR, and the version is part
-  of the provenance hash, so a build is only "live" for the version it was
-  built with. The Android gate and release apply the same rule through
+  of the provenance hash, so a build only satisfies the gate for the
+  version it was built with. The Android gate and release apply the same rule through
   `scripts/android-native.mjs`.
 
 The hash recipe is defined once, in `scripts/ios_native_tree.sh` next to the
@@ -193,7 +216,7 @@ code" is defined above. The checks:
   compares `main`'s native tree with the PR's branch point instead: if
   `main`'s native code hasn't moved, merging can only carry the PR's own,
   whatever files the conflicts are in, and the release goes ahead.
-- **Live check** (the gate): the live build's stamp must equal the native
+- **Approval check** (the gate): the approved build's stamp must equal the native
   tree of the PR's **current merge result** (fetched through the API, so a
   re-run of the job evaluates today's `main`, not the one the run started
   with).
@@ -207,15 +230,17 @@ code" is defined above. The checks:
   result's hash, so that release has to be bumped and redone after merging
   `main`.
 - **One version in flight**: App Store Connect allows one iOS version in
-  review at a time, so the second PR's `submit` fails naming the version
-  that blocks it. Once that one ships (or is removed from review in App
-  Store Connect), remove and re-add `ios-update`; the uploaded build is
-  reused. A rejected or abandoned submission blocks everyone until someone
-  removes it from review.
+  flight at a time, from review until release, so the second PR's `submit`
+  fails naming the version that blocks it. An approved version stays in
+  flight until the next prod deploy releases it. Once that one ships (or is
+  removed in App Store Connect), remove and re-add `ios-update`; the
+  uploaded build is reused. A rejected or abandoned submission blocks
+  everyone until someone removes it from review.
 
 In practice: native PRs ship through Apple one at a time, each with its own
 number, and the first to release wins its number; the others are told to
-re-bump at the earliest check that can know.
+re-bump at the earliest check that can know. The next native PR can submit
+only after the prod deploy that releases the previous one.
 
 ## Pushing to a PR after the label
 
@@ -226,7 +251,7 @@ release only starts on a PR that is ready to merge. Pushes afterwards:
   stays green, and the reviewed build's embedded web bundle is replaced over
   the air after the merge like every other OTA update.
 - **Native commits** make the uploaded build stale, and a stale build Apple
-  approves would go straight to the App Store. The
+  approves would block the PR's next submission. The
   **`iOS Release Drift`** workflow (`.github/workflows/ios-release-drift.yml`)
   runs on every push to a labeled PR and, when `apps/web/tauri` changed,
   cancels any release run still building, withdraws the PR's submission from
@@ -241,9 +266,13 @@ release only starts on a PR that is ready to merge. Pushes afterwards:
   (the marketing version stays, the build number moves), commit, push, and
   re-add the label; `submit` takes the withdrawn version record over, so no
   App Store Connect visit is needed. If Apple had already approved the stale
-  build (with automatic release that means it is live or minutes away),
-  nothing can be withdrawn: the comment says so, and the follow-up release
-  should ship as soon as possible.
+  build, nothing can be withdrawn. It is held for release, so it never goes
+  live on its own (the prod deploy only releases the version + build
+  committed on `main`), but it blocks the next submission: the comment asks
+  you to remove it in App Store Connect (Developer Reject) before re-adding
+  the label. A version created before releases were held may still release
+  on approval; the comment then says it is going live, and the follow-up
+  release should ship as soon as possible.
 
 ## Credentials note
 
@@ -252,7 +281,8 @@ result with the same App Manager key the release uses, on every same-repo
 PR with native changes (fork PRs get no secrets and fail the gate closed).
 A collaborator branch could therefore drive App Store Connect with that
 key. If that matters, give the gate a second, Developer-role key in Doppler
-(reads suffice for `status`); the watcher's `withdraw` needs App Manager.
+(reads suffice for `status`); the watcher's `withdraw` and the prod
+deploy's `publish` need App Manager.
 
 ## Manual / TestFlight-only releases
 
@@ -266,7 +296,10 @@ it from the Nix dev shell like any other iOS build. See the header of
 `scripts/ios-release.sh` for the credentials it needs (`doppler run --project
 ios-release --config prd -- just ios-release` covers them), and
 `scripts/ios-app-store.mjs` for the underlying App Store Connect commands
-(`wait-build`, `submit`, `status`).
+(`wait-build`, `submit`, `status`, `publish`). `submit` holds the approved
+version for release; `publish` releases only the committed version + build,
+so a held version whose build number was moved by a hand release must be
+released from App Store Connect.
 
 `just ios-build` and `just ios-release` export frontend traces and logs to the
 production OTLP proxy

@@ -1727,10 +1727,22 @@
     "path": "/email/threads/{thread_id}/project",
     "write": true
   },
+  "email.getThreadReadReceipts": {
+    "label": "Get Thread Read Receipts",
+    "method": "GET",
+    "path": "/email/threads/{thread_id}/read-receipts",
+    "write": false
+  },
   "email.healthHandler": {
     "label": "Health",
     "method": "GET",
     "path": "/health",
+    "write": false
+  },
+  "email.getReadReceiptPixel": {
+    "label": "Get Read Receipt Pixel",
+    "method": "GET",
+    "path": "/opens/{token}",
     "write": false
   },
   "notification.healthHandler": {
@@ -3988,6 +4000,24 @@
     "method": "POST",
     "path": "/whatsapp/disconnect",
     "write": true
+  },
+  "storage.whatsappImportHistory": {
+    "label": "Whatsapp Import History",
+    "method": "POST",
+    "path": "/whatsapp/history-import",
+    "write": true
+  },
+  "storage.whatsappStartLookup": {
+    "label": "Whatsapp Start Lookup",
+    "method": "POST",
+    "path": "/whatsapp/lookups",
+    "write": true
+  },
+  "storage.whatsappLookup": {
+    "label": "Whatsapp Lookup",
+    "method": "GET",
+    "path": "/whatsapp/lookups/{id}",
+    "write": false
   },
   "storage.whatsappCancelPairing": {
     "label": "Whatsapp Cancel Pairing",

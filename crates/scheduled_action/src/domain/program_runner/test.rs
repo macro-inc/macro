@@ -382,6 +382,7 @@ async fn a_task_status_change_hands_the_agent_the_task_instead_of_its_ids() {
             }],
             project: None,
         },
+        pull_request: None,
     };
     let agents = Arc::new(Agents::default());
     let runner: Runner = ProgramRunner::new(

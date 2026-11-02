@@ -46,7 +46,7 @@ jobs:
         # natively, and the team bumps that version when a cache change must ship, so
         # the bump — not every edit under crates/client — is the native signal. The
         # release stamps uploaded builds with the hash, the merge gate compares the
-        # live build's stamp against the merge result's, and the drift / head guards
+        # approved build's stamp against the merge result's, and the drift / head guards
         # compare commits with it. Must match nativeTreeHash() in
         # apps/web/scripts/ios-app-store.mjs and the iOS Native Check's change
         # detection (web_app_check_main/ios_native_check.rs).
@@ -232,6 +232,8 @@ jobs:
         bump='cd apps/web && doppler run --project ios-release --config prd -- just ios-bump'
         if [[ "$WITHDRAW_OUTCOME" != "success" ]]; then
           body="🚨 Native changes were pushed to this PR after its App Store release started, but withdrawing the App Review submission **failed** (see the [workflow run](${RUN_URL})). If a submission is pending, remove it from review in App Store Connect by hand so the stale build cannot go live. The \`ios-update\` label was removed; when the PR is ready again, bump (\`${bump}\`), commit, push, and re-add \`ios-update\`."
+        elif [[ -n "$HELD" ]]; then
+          body="📱 Native changes were pushed to this PR after Apple had already approved iOS ${HELD}. That build is held for release, so it will not go live on its own, but it blocks the next submission: remove it in App Store Connect (Developer Reject). Then bump (\`${bump}\`), commit, push, and re-add \`ios-update\`. The label was removed."
         elif [[ -n "$LIVE" ]]; then
           body="🚨 Native changes were pushed to this PR after Apple had already approved iOS ${LIVE}, so that build is (or is about to be) live with native code this PR no longer matches. Bump (\`${bump}\`), commit, re-add the \`ios-update\` label, and ship the follow-up as soon as possible. The label was removed."
         else
@@ -240,6 +242,7 @@ jobs:
         gh pr comment "$PR_NUMBER" --repo "$GH_REPO" --body "$body"
       shell: bash
       env:
+        HELD: ${{ steps.withdraw.outputs.held }}
         LIVE: ${{ steps.withdraw.outputs.live }}
         WITHDRAW_OUTCOME: ${{ steps.withdraw.outcome }}
         RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}

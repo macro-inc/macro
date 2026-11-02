@@ -2171,6 +2171,7 @@ dependencies = [
  "entity_access",
  "entity_registry",
  "favorites",
+ "feature_flags",
  "foreign_entity",
  "fusionauth",
  "futures",
@@ -2247,6 +2248,7 @@ dependencies = [
  "tower-cookies",
  "tower-http",
  "tracing",
+ "upstream_error",
  "url",
  "urlencoding",
  "user_language",
@@ -3718,7 +3720,7 @@ dependencies = [
 
 [[package]]
 name = "cache-wasm"
-version = "0.6.52"
+version = "0.6.53"
 dependencies = [
  "async-lock",
  "cache-core",
@@ -4584,6 +4586,7 @@ dependencies = [
  "agent_session",
  "agent_trigger",
  "arboard",
+ "base64 0.22.1",
  "bot_id",
  "channel_sender",
  "channels",
@@ -4903,6 +4906,7 @@ dependencies = [
  "dashmap",
  "doppler-config",
  "ensure_exists",
+ "entity_access",
  "frecency",
  "futures",
  "http-body-util",
@@ -5358,6 +5362,7 @@ dependencies = [
  "messages",
  "model-error-response",
  "models_databases",
+ "models_pagination",
  "models_permissions",
  "models_properties",
  "properties",
@@ -6585,6 +6590,7 @@ dependencies = [
  "macro_config",
  "macro_cors",
  "macro_db_client",
+ "macro_db_migrator",
  "macro_entrypoint",
  "macro_env",
  "macro_env_var",
@@ -6671,6 +6677,7 @@ dependencies = [
  "uuid",
  "webhook",
  "whatsapp_linked",
+ "wiremock",
  "work_feed",
  "workspace-hack",
  "zip 9.0.5",
@@ -7229,6 +7236,7 @@ dependencies = [
  "models_email",
  "models_pagination",
  "non_empty",
+ "rand 0.9.4",
  "recursion",
  "redis",
  "reqwest 0.13.4",
@@ -8451,6 +8459,7 @@ dependencies = [
  "thiserror 2.0.18",
  "tokio",
  "tracing",
+ "upstream_error",
  "urlencoding",
  "uuid",
  "wiremock",
@@ -8891,6 +8900,7 @@ dependencies = [
  "model_owner",
  "model_user",
  "models_permissions",
+ "models_properties",
  "notification",
  "redis",
  "regex",
@@ -8905,6 +8915,7 @@ dependencies = [
  "tokio",
  "tower 0.5.3",
  "tracing",
+ "upstream_error",
  "url",
  "urlencoding",
  "utoipa",
@@ -9104,6 +9115,7 @@ dependencies = [
  "async-graphql",
  "axum",
  "axum-extra",
+ "chrono",
  "filter_ast",
  "item_filters",
  "macro_authorization",
@@ -13308,7 +13320,10 @@ name = "models_grouping"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "models_pagination",
+ "models_properties",
  "serde",
+ "utoipa",
  "uuid",
  "workspace-hack",
 ]
@@ -15714,7 +15729,9 @@ dependencies = [
  "document_sub_type",
  "entity_access",
  "entity_access_db_utils",
+ "filter_ast",
  "futures",
+ "item_filters",
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",
@@ -15725,6 +15742,7 @@ dependencies = [
  "model-entity",
  "model_notifications",
  "model_owner",
+ "models_pagination",
  "models_permissions",
  "models_properties",
  "notification",
@@ -17631,6 +17649,7 @@ dependencies = [
  "anyhow",
  "aws-sdk-secretsmanager",
  "axum",
+ "calendar_events",
  "channels",
  "chrono",
  "comms_db_client",
@@ -21188,6 +21207,23 @@ dependencies = [
  "sqs_client",
  "tokio",
  "tracing",
+ "workspace-hack",
+]
+
+[[package]]
+name = "upstream_error"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "http 1.4.0",
+ "http-body-util",
+ "reqwest 0.13.4",
+ "serde",
+ "serde_json",
+ "thiserror 2.0.18",
+ "tokio",
+ "utoipa",
+ "wiremock",
  "workspace-hack",
 ]
 

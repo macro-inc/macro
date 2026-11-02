@@ -185,25 +185,34 @@ export function CalendarView(props: CalendarViewProps) {
     occurrencesQuery
   );
 
+  const markEventRead = (eventId: string) => {
+    fireAndForget(
+      markNotificationsForEntityAsRead(notificationSource, {
+        type: 'calendar_event',
+        id: eventId,
+      }),
+      'calendar-notification-read'
+    );
+  };
+
   const setFocusedEventId = (eventId: string | undefined) => {
     const next = eventId ?? '';
     if (aimingEventId !== undefined) {
       if (!next) return;
       const landed = next === aimingEventId;
       aimingEventId = undefined;
-      // List activation already marks its row; landing must not send a second
-      // overlapping read write that could interfere with optimistic rollback.
-      if (landed) return;
+      if (landed) {
+        // List activation already marks its row; landing must not send a second
+        // overlapping read write that could interfere with optimistic rollback.
+        // A link has no row behind it, so its landing marks the event instead.
+        const openedByLink =
+          !panel.isInlinePreview &&
+          contentTarget().focusRequestId === undefined;
+        if (openedByLink) markEventRead(next);
+        return;
+      }
     }
-    if (eventId) {
-      fireAndForget(
-        markNotificationsForEntityAsRead(notificationSource, {
-          type: 'calendar_event',
-          id: eventId,
-        }),
-        'calendar-notification-read'
-      );
-    }
+    if (eventId) markEventRead(eventId);
     // Inline, a dismissed popover is not a destination change: the host's
     // selection still names this event, and clearing it would make the next
     // request for the same event a navigation.

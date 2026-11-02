@@ -1,6 +1,7 @@
 import { createHeadlessEditor } from '@lexical/headless';
 import { $convertToMarkdownString } from '@lexical/markdown';
 import { $createParagraphNode, $getRoot } from 'lexical';
+import { PENDING_REPLY_TEXT } from '../constants';
 import { NodeReplacements, SupportedNodeTypes } from '../node-list';
 import {
   $createAgentActivityNode,
@@ -16,8 +17,7 @@ import { ALL_TRANSFORMERS } from '../transformers';
  */
 export const AGENT_SESSION_LINK_LABEL = 'Agent session';
 
-/** The spinner's caption while a chat agent's turn runs. */
-export const PENDING_REPLY_TEXT = 'Thinking…';
+export { PENDING_REPLY_TEXT };
 
 /**
  * One segment of an agent's reply, as a message shows it: a passage as the
@@ -45,7 +45,10 @@ export type AgentChatReplyBody =
   | {
       kind: 'segments';
       segments: AgentReplySegment[];
-      /** Show the spinner after the segments: the turn is still running. */
+      /**
+       * The turn is still running: the spinner follows the segments, unless
+       * they end in an open run of steps, which shows the turn working itself.
+       */
       pending?: boolean;
       /** A closing line the harness wrote: stopped, failed, said nothing. */
       footer?: string;
@@ -145,7 +148,10 @@ export function composeAgentChatReply(reply: AgentChatReply): string {
     return [head, body.markdown].filter(Boolean).join('\n\n');
   }
   const head = chrome(reply, false);
-  const tail = body.pending ? chrome({ ...reply, link: false }, true) : '';
+  const last = body.segments.at(-1);
+  const working = last?.kind === 'activity' && !last.sealed;
+  const tail =
+    body.pending && !working ? chrome({ ...reply, link: false }, true) : '';
   return [
     head,
     ...body.segments.map((segment) =>

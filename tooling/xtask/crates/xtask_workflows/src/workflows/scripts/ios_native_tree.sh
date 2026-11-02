@@ -16,7 +16,7 @@
 # natively, and the team bumps that version when a cache change must ship, so
 # the bump — not every edit under crates/client — is the native signal. The
 # release stamps uploaded builds with the hash, the merge gate compares the
-# live build's stamp against the merge result's, and the drift / head guards
+# approved build's stamp against the merge result's, and the drift / head guards
 # compare commits with it. Must match nativeTreeHash() in
 # apps/web/scripts/ios-app-store.mjs and the iOS Native Check's change
 # detection (web_app_check_main/ios_native_check.rs).
