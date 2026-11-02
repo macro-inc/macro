@@ -26,6 +26,16 @@ export function registerEmailHotkeys(
     displayPriority: 9,
   });
 
+  if (handlers.replyToSenderOfFocusedMessage) {
+    registerHotkey({
+      scopeId: scopeId,
+      description: 'Reply to sender',
+      keyDownHandler: handlers.replyToSenderOfFocusedMessage,
+      hotkeyToken: TOKENS.email.replyToSender,
+      displayPriority: 8,
+    });
+  }
+
   registerHotkey({
     hotkey: 'f',
     scopeId: scopeId,

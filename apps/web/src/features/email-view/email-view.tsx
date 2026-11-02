@@ -34,6 +34,7 @@ import { emailTour } from './tour';
 import type { EmailTab, EmailViewStateOptions } from './types';
 import { useEmailViewHotkeys } from './use-email-view-hotkeys';
 import { useReadingPaneHotkey } from './use-reading-pane-hotkey';
+import { useSuperhumanHotkeys } from './use-superhuman-hotkeys';
 import { useVisibleEmailTab } from './use-visible-email-tab';
 
 export type EmailViewProps = {
@@ -233,18 +234,26 @@ function EmailViewRoot() {
     setReadingPane,
   });
 
+  // Beside the reading pane the list stays on screen with a thread open;
+  // without it an open thread replaces the list.
+  const listHasKeyboard = () => {
+    const pane = listPane();
+    return pane ? !pane.readerHasKeyboard() : selectedThread() === undefined;
+  };
+
   useEmailViewHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: () => panel.isPanelActive() && !isTouchDevice(),
     tab: () => state.tab,
     setTab,
-    // Beside the reading pane the list stays on screen with a thread open;
-    // without it an open thread replaces the list.
-    listHasKeyboard: () => {
-      const pane = listPane();
-      return pane ? !pane.readerHasKeyboard() : selectedThread() === undefined;
-    },
+    listHasKeyboard,
     hasSelection: () => listController.selection.count() > 0,
+  });
+
+  useSuperhumanHotkeys({
+    scopeId: panel.splitHotkeyScope,
+    enabled: () => panel.isPanelActive() && !isTouchDevice(),
+    listHasKeyboard,
   });
 
   const list = () => (
