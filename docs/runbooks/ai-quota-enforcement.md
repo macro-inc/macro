@@ -165,10 +165,44 @@ automatic reload is enabled and not reload-suspended, settlement compares the
 credit balance net of the period's
 uncovered usage with the payer's minimum balance and, below it, reloads up to the
 target balance. The minimum, target, and optional monthly spend limit are stored
-per payer on `ai_billing_account` (defaults `$10`, `$100`, and no limit). The
-monthly limit counts reloads Stripe may still collect (pending, paid, or failed
-with an invoice) within the UTC calendar month, independent of the Stripe period
-anchor; a remainder under the Stripe minimum charge is skipped. Each reload is one `ai_credit_reload` row reserved under the
+per payer on `ai_billing_account` (column defaults `$5`, `$25`, and no limit).
+Clients start an off Auto-Reload from the plan catalog: `auto_reload_defaults`
+and each plan's `auto_reload_default_monthly_limit_cents` ($200 Pro, $1,000 Max). The
+monthly limit is the team's monthly credit limit: it counts automatic reloads and
+one-time card purchases Stripe may still collect (pending, paid, or failed with
+an invoice) within the UTC calendar month, independent of the Stripe period
+anchor; a remainder under the Stripe minimum charge is skipped.
+
+One-time purchases (`POST /ai-billing/credits/purchase`, packs $25 / $50 / $100)
+charge the payer's card on file through the same invoice path and are
+`ai_credit_reload` rows with `kind = 'purchase'` and `purchased_by` set to the
+buyer. Any paid, metered seat may buy. The payer's purchases are capped by their
+monthly limit when set; a team member's always are, falling back to the plan
+default when the owner set none. A declined purchase is marked failed with its
+invoice kept open; buying the same pack again pays that invoice instead of
+charging twice, while picking a different pack voids it first so the buyer is
+never charged an amount they did not choose. A retried invoice found void or
+uncollectible in Stripe is retired the same way and a fresh purchase reserved.
+Purchases never suspend automatic reloads. Provider and storage errors are
+returned as errors (the app asks the buyer to try again), never reported as a
+declined card; the row keeps any invoice it opened, so the next attempt retries
+it. If the collector dies after Stripe finalized an invoice but before the row
+recorded it, the `invoice.paid` webhook matches the row by the
+`macro_reload_id` stamped on the invoice and books the credits; such a stale
+pending purchase stops counting toward the monthly limit after 10 minutes.
+Purchase credits are labelled `Credit purchase` in `ai_credit_ledger`. Automatic reloads and the settlement sweep
+only consider `kind = 'automatic'` rows. Before reserving, a purchase checks
+that Stripe has a card to charge (the subscription's or customer's default
+payment method, or a legacy default source); without one it reserves nothing
+and returns `payment_method_required`, and the app sends the payer to the Stripe
+Checkout credit endpoint (`/ai-billing/credits/checkout`) for the same pack. A
+card that needs 3-D Secure can't be charged off-session: the purchase's invoice
+is voided and it returns `authentication_required`, with the same checkout
+fallback. Before either fallback, open invoices from declined purchases are
+voided (rows become `failed` with no invoice), so a card added later can't
+collect them on top of the checkout payment; one Stripe collected first is
+booked instead. Checkout purchases are booked by the webhook and are not
+counted against the monthly limit. Each reload is one `ai_credit_reload` row reserved under the
 payer lock and collected as a one-off Stripe invoice stamped
 `macro_purpose = ai_credit_reload`; a paid invoice books an `ai_credit_ledger`
 purchase, idempotent on the invoice id. A declined invoice stays pending, which
@@ -274,6 +308,8 @@ inspect the content type and code rather than assuming every 503 is billing.
 - Optional chat/session naming is independently admitted as ChatRename, an exempt
   feature, so the gate does no quota billing I/O and never charges the user; a
   refusal retains the existing/default title without failing successful primary work.
+  Post-turn session retitling (the Jev check and the Haiku retitle) is admitted the
+  same way, once per finished turn, before either model runs.
   Optional bot/trigger inference (including image captions) skips classification
   on failure, without AI fallback or implied approval. Explicit mentions still
   route deterministically; downstream execution has its own gate and failures.
@@ -318,7 +354,7 @@ requests settlement). Admission itself never records usage or calls settlement.
 | Notion page imports / Import | [import admission](../../crates/import/src/domain/service/admission.rs), [execution/rechecks](../../crates/import/src/domain/service.rs) | DCS main, wrapped recorder | [delayed/deterministic cases](../../crates/import/src/domain/service/test/admission.rs), [HTTP](../../crates/import/src/inbound/axum_router/test.rs) |
 | Channel responder / ChannelBot | [bot service](../../crates/channel_bots/src/domain/service.rs) | [DSS main](../../services/document_storage_service/src/main.rs), common context T | [response refusal](../../crates/channel_bots/src/domain/service/tests.rs) |
 | Optional channel classification / ChannelBot | [trigger detector](../../crates/channel_bots/src/domain/trigger_detector.rs) | DSS main, independent R for classifier | [explicit routing and inference skip](../../crates/channel_bots/src/domain/trigger_detector/tests.rs) |
-| Trigger inference and image captions / Automation | [trigger service](../../crates/agent_trigger/src/domain/service.rs) | [standalone trigger main](../../services/agent_trigger_service/src/main.rs) R; [harness trigger](../../services/agent_harness_service/src/trigger.rs) receives the harness's settling recorder from harness main | [classification/caption refusal](../../crates/agent_trigger/src/domain/service/test/admission.rs), [no system fallback](../../crates/agent_trigger/src/outbound/fast_model_judge/test.rs) |
+| Trigger inference and image captions / Automation | [trigger service](../../crates/agent_trigger/src/domain/service.rs) | [standalone trigger main](../../services/agent_trigger_service/src/main.rs) R; [harness trigger](../../services/agent_harness_service/src/trigger.rs) receives the harness's settling recorder from harness main | [classification/caption refusal](../../crates/agent_trigger/src/domain/service/test/admission.rs), [no system fallback](../../crates/agent_trigger/src/outbound/jev_judge/test.rs) |
 | Managed session ingress/dispatch/queue / AgentSession | [harness admission](../../crates/agent_harness/src/domain/service/admission.rs) | [harness main](../../services/agent_harness_service/src/main.rs): one `pg_settling_recorder` shared with T for in-memory; managed sandbox inference has **no `ai_usage` producer** | [owner, authorization, runtime funding, restart, queue rejection/outage](../../crates/agent_harness/src/domain/service/test/quota.rs), [HTTP](../../crates/agent_session/src/inbound/axum_router/test.rs), [event shape](../../crates/agent_session/src/domain/events/test.rs) |
 | Direct in-memory ACP/provider commands / AgentSession | [admit_turn](../../crates/agent_inmem/src/domain/admission.rs), [agent execution](../../crates/agent_inmem/src/domain/agent.rs) | Harness main → manager → `RigTurnEngine`, the harness's settling recorder passed into T | [direct ACP, queue, cancel, history](../../crates/agent_inmem/src/domain/agent/test.rs), [manager](../../crates/agent_inmem/src/outbound/manager/test.rs) |
 | Session naming / ChatRename | [name generator gate](../../crates/agent_session/src/domain/name_generation.rs) | Harness main, the same settling recorder for `HaikuAgentSessionNameGenerator` (exempt, so never counted or settled) | [fallback without provider calls](../../crates/agent_session/src/domain/name_generation/test.rs) |

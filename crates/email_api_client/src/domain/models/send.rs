@@ -1,6 +1,8 @@
 use mail_builder::MessageBuilder;
 use mail_builder::headers::address::Address;
+use mail_builder::mime::{BodyPart, MimePart};
 use models_email::email::service::address::ContactInfo;
+use models_email::email::service::attachment::AttachmentToSend;
 use models_email::email::service::message::MessageToSend;
 
 #[cfg(feature = "ports")]
@@ -52,8 +54,16 @@ impl SendRequest {
         if let Some(html_body) = &self.message.body_html {
             builder = builder.html_body(html_body);
         }
+        let mut calendar_body = None;
         if let Some(attachments) = &self.message.attachments {
             for attachment in attachments {
+                if is_calendar_body(attachment) {
+                    calendar_body = Some(MimePart::new(
+                        attachment.content_type.as_str(),
+                        BodyPart::Text(String::from_utf8_lossy(&attachment.data)),
+                    ));
+                    continue;
+                }
                 // Borrow the attachment buffers: cloning them would double
                 // peak memory for large-attachment sends.
                 builder = if attachment.is_inline {
@@ -76,11 +86,53 @@ impl SendRequest {
             }
         }
 
+        if let Some(calendar) = calendar_body {
+            builder.body = Some(with_calendar_body(&mut builder, calendar));
+        }
+
         builder
             .write_to_vec()
             .map_err(|error| EmailApiError::Permanent {
                 message: format!("failed to build MIME message: {error}"),
             })
+    }
+}
+
+/// Whether `attachment` is the message's calendar body rather than a file:
+/// an inline `text/calendar` part with no Content-ID, which no HTML body
+/// can reference. That is how an invitation (RFC 6047) is sent, and the
+/// form Gmail and Outlook answer with Yes, Maybe and No.
+fn is_calendar_body(attachment: &AttachmentToSend) -> bool {
+    attachment.is_inline
+        && attachment.content_id.is_none()
+        && attachment
+            .content_type
+            .trim_start()
+            .to_ascii_lowercase()
+            .starts_with("text/calendar")
+}
+
+/// The body of a message carrying a calendar part: the calendar is the last
+/// alternative to the text and HTML bodies, as Google's own invitations
+/// send it, with any files after them.
+fn with_calendar_body<'x>(
+    builder: &mut MessageBuilder<'x>,
+    calendar: MimePart<'x>,
+) -> MimePart<'x> {
+    let mut alternatives: Vec<MimePart<'x>> = [builder.text_body.take(), builder.html_body.take()]
+        .into_iter()
+        .flatten()
+        .collect();
+    alternatives.push(calendar);
+    let alternative = MimePart::new("multipart/alternative", alternatives);
+    match builder.attachments.take() {
+        Some(files) if !files.is_empty() => {
+            let mut parts = Vec::with_capacity(files.len() + 1);
+            parts.push(alternative);
+            parts.extend(files);
+            MimePart::new("multipart/mixed", parts)
+        }
+        _ => alternative,
     }
 }
 

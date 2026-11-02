@@ -44,8 +44,7 @@ import {
   useMessageInboxQuery,
 } from '@queries/email/link';
 import { queryReadyGate } from '@queries/gate';
-import { fetchDocumentMetadata } from '@queries/storage/document-metadata';
-import { entityKeys } from '@queries/storage/keys';
+import { documentMetadataQueryOptions } from '@queries/storage/document-metadata';
 import type { SendEmail } from '@service-cognition/generated/tools/types';
 import { FileTypeMap } from '@service-storage/fileTypeMap';
 import { debounce } from '@solid-primitives/scheduled';
@@ -242,11 +241,9 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
   const describeDocument = async (
     documentId: string
   ): Promise<DocumentDescription> => {
-    const metadata = await queryClient.fetchQuery({
-      queryKey: entityKeys.documentMetadata(documentId).queryKey,
-      queryFn: () => fetchDocumentMetadata(documentId),
-      staleTime: 60 * 1000,
-    });
+    const metadata = await queryClient.fetchQuery(
+      documentMetadataQueryOptions(documentId)
+    );
     const fileType = metadata.fileType ?? undefined;
     return {
       fileName: documentAttachmentFileName(metadata.documentName, fileType),
@@ -511,7 +508,7 @@ export function EmailDraftComposer(props: EmailDraftComposerProps) {
                   <Show when={canRetrySender()}>
                     <Button
                       size="sm"
-                      variant="outline"
+                      variant="secondary"
                       disabled={uiDisabled()}
                       onClick={retrySender}
                     >

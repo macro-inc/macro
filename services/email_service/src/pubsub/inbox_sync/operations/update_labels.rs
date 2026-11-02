@@ -1,3 +1,4 @@
+use super::pending_labels;
 use crate::pubsub::context::PubSubContext;
 use crate::pubsub::inbox_sync::email_api_error::handle_operation_error;
 use crate::pubsub::util::{
@@ -92,11 +93,25 @@ pub async fn update_labels(
                 })
             })?;
 
-    let provider_labels = ctx
-        .email_api
-        .get_message_label_ids(link.id, &payload.provider_message_id)
-        .await;
-    let gmail_message_labels = match provider_labels {
+    // After the database labels: a write accepted in between has its marker
+    // in place with its label change.
+    let provider_labels = pending_labels::read_around(
+        &ctx.db,
+        db_message.db_id,
+        Box::pin(
+            ctx.email_api
+                .get_message_label_ids(link.id, &payload.provider_message_id),
+        ),
+    )
+    .await
+    .map_err(|e| {
+        ProcessingError::Retryable(DetailedError {
+            reason: FailureReason::DatabaseQueryFailed,
+            source: anyhow::Error::from(e).context("Failed to get pending label writes from db"),
+        })
+    })?;
+    let pending_label_ids = provider_labels.untrusted_labels();
+    let gmail_message_labels = match provider_labels.value {
         Ok(Some(labels)) => labels,
         Err(error) => {
             return Err(handle_operation_error(
@@ -114,21 +129,24 @@ pub async fn update_labels(
         }
     };
 
-    let labels_to_add: Vec<String> = gmail_message_labels
+    let db_label_ids: Vec<String> = db_message_labels
         .iter()
-        .filter(|gmail_label| {
-            !db_message_labels
-                .iter()
-                .any(|db_label| &db_label.provider_label_id == *gmail_label)
-        })
-        .cloned()
-        .collect();
-
-    let labels_to_delete: Vec<String> = db_message_labels
-        .iter()
-        .filter(|db_label| !gmail_message_labels.contains(&db_label.provider_label_id))
         .map(|label| label.provider_label_id.clone())
         .collect();
+    let LabelDiff {
+        labels_to_add,
+        labels_to_delete,
+        kept_pending,
+    } = label_diff(&gmail_message_labels, &db_label_ids, &pending_label_ids);
+
+    if !kept_pending.is_empty() {
+        tracing::info!(
+            link_id = %link.id,
+            db_message_id = %db_message.db_id,
+            kept_labels = ?kept_pending,
+            "Kept local labels with a pending Gmail write over the provider's labels"
+        );
+    }
 
     let has_label_changes = !labels_to_add.is_empty() || !labels_to_delete.is_empty();
 
@@ -175,6 +193,39 @@ pub async fn update_labels(
     }
 
     Ok(())
+}
+
+/// How one message's database labels change to match Gmail's.
+#[derive(Debug, PartialEq, Eq)]
+struct LabelDiff {
+    labels_to_add: Vec<String>,
+    labels_to_delete: Vec<String>,
+    /// Labels Gmail disagrees on that keep their local state, because Macro's
+    /// own write to them has not reached Gmail yet.
+    kept_pending: Vec<String>,
+}
+
+fn label_diff(
+    gmail_labels: &[String],
+    db_labels: &[String],
+    pending_labels: &[String],
+) -> LabelDiff {
+    let (kept_additions, labels_to_add): (Vec<String>, Vec<String>) = gmail_labels
+        .iter()
+        .filter(|label| !db_labels.contains(label))
+        .cloned()
+        .partition(|label| pending_labels.contains(label));
+    let (kept_deletions, labels_to_delete): (Vec<String>, Vec<String>) = db_labels
+        .iter()
+        .filter(|label| !gmail_labels.contains(label))
+        .cloned()
+        .partition(|label| pending_labels.contains(label));
+
+    LabelDiff {
+        labels_to_add,
+        labels_to_delete,
+        kept_pending: [kept_additions, kept_deletions].concat(),
+    }
 }
 
 /// System labels that never appear in a `thread_labels_updated` event:
@@ -385,14 +436,22 @@ pub async fn add_message_labels(
     })?;
 
     let result = async {
-        insert::insert_message_labels(&mut tx, link.id, message_db_id, provider_label_ids, false)
-            .await
-            .map_err(|e| {
-                ProcessingError::Retryable(DetailedError {
-                    reason: FailureReason::DatabaseQueryFailed,
-                    source: e.context("Failed to insert message labels".to_string()),
-                })
-            })?;
+        // `label_diff` already left pending labels out of `provider_label_ids`.
+        insert::insert_message_labels(
+            &mut tx,
+            link.id,
+            message_db_id,
+            provider_label_ids,
+            false,
+            &[],
+        )
+        .await
+        .map_err(|e| {
+            ProcessingError::Retryable(DetailedError {
+                reason: FailureReason::DatabaseQueryFailed,
+                source: e.context("Failed to insert message labels".to_string()),
+            })
+        })?;
 
         // if we are adding unread label, mark message as not read
         if provider_label_ids

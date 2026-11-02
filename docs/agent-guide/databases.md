@@ -18,11 +18,13 @@ Databases open at
 `/app/database/<uuid>`; from Drive (its list, favorites, or **New → Database**)
 they open inline at `/app/drive/database/<uuid>` with Drive's sidebar in place.
 A database contains tables; records belong to a table and
-its properties describe each record. The database name in the split header is an
-static label, matching other blocks. Choose **Rename** in Database actions to
-edit it. Enter or leaving the input saves and closes it; Escape cancels. Saving
-a title does not enter the grid, and a failed rename shows a toast. Viewers without edit access see the
-split header's `viewer` badge instead.
+its properties describe each record. The database name in the split header is a
+static label until edited. Double-click it or choose **Rename** in Database actions
+to edit the same inline title with the current name selected. On touch devices,
+use **Database actions → Rename**. Enter or leaving the input saves and closes it; Escape cancels. Saving
+a title does not enter the grid, and a failed rename shows a toast. Reload to verify
+the saved name persists. Viewers cannot enter rename from either entry point and
+see the split header's `viewer` badge instead.
 
 Reopening a loaded table or view shows its cached rows while a background read
 checks for changes. Wait for refreshing to finish before asserting server
@@ -155,7 +157,10 @@ puts the typing cursor in that column's first cell, without waiting for creation
 or renaming to finish. Escape keeps the default name.
 There is no creation dialog. Double-click a header, press F2 while it is focused,
 or choose **Rename column** from its arrow or right-click menu to rename it later.
-Its type icon stays in place while editing. SQL refers to tables and columns by
+Its type icon stays in place while editing. A rename updates the cached column
+label before the save finishes and keeps the same header mounted; the old name
+must not flash back while the schema refreshes. Reload to confirm it persisted.
+SQL refers to tables and columns by
 their display names (double-quoted), so a rename changes the name a saved query
 must use.
 
@@ -216,7 +221,12 @@ text. Choosing Text explicitly disables inference. Populated columns never infer
 new type. Reference cells use Macro’s native mention menu, limited to the selected
 kind (for example, People shows users, Tasks shows tasks). Arrow keys navigate and
 Enter chooses; Escape returns without changing the value. Delete clears a selected
-reference cell. Text supports markdown and inline native mentions such as
+reference cell. Click a populated document/file reference (or press Enter) to open
+it in another split while keeping the database open. On touch, tapping uses the
+app's normal forward navigation. Right-click a populated editable reference to
+choose a replacement; F2 also opens the picker, and Escape cancels. Empty
+references still open the picker on click. Read-only references can be opened but
+not changed. Text supports markdown and inline native mentions such as
 `Say hi to @Maya`, stored using the same mention encoding as documents. A mention
 inside a sentence preserves Text.
 
@@ -363,6 +373,9 @@ not at all. New tables, columns and options carry ids the client mints, so
 later ops of the same batch can name them. Agents and MCP write SQL,
 which the same engine turns into those ops on the server, and their schema
 tools send the same ops.
+When databases share a table name, a selected database takes precedence for
+unqualified table names. Database-qualified names still select that database;
+without a selection, duplicate table names are ambiguous.
 Rows keep the table's order unless the view sorts them. After each of your own
 edits the grid reads its rows again, and another viewer's edit reaches an open
 grid or answer within a moment through the gateway's table-changed message; a
@@ -643,15 +656,24 @@ answers still load when they approach the viewport. The empty input rotates thro
 uses its actual table and column names. Typing hides these hints, and reduced-motion
 preferences keep them static. Use the searchable source picker below the question to
 choose a database; the entire chosen database is in scope, without a table
-prerequisite. **Automatic** finds a relevant accessible database from the question
-with the discovery tools and inspects all its tables. The answer's `QueryDatabase`
-runs with view access only, so asking a question never changes data, even for an
-editor. Both discovery and final answer formatting receive the registered database
-tool reference, including the current SQL dialect. Verify an Automatic question
-that needs ListDatabases, DescribeDatabase, and QueryDatabase completes with live
-results; repeat with an explicit source and an aggregate using an AS alias. The
-formatting step must preserve tool-call/result names and ids without another tool
-execution. If matching sources are
+prerequisite. An explicit source also disambiguates databases with identical names
+when previewing or refreshing an answer. **Automatic** finds a relevant accessible
+database from the question with permission-checked schema discovery and inspects all
+its tables. Only schema discovery tools are available to the question agent. The
+host's SQL engine refuses writes, so asking a question never changes data, even for
+an editor. Document questions use the specialized `/cognition/database-query`
+endpoint. An explicit source with a loaded schema proposes SQL in one model call; the
+browser's read-only engine validates and executes it. Automatic discovery reuses the
+agent's final JSON when valid, avoiding a second formatting call. Both paths receive
+the shared SQL dialect reference. A parse or name-resolution failure gets at most one
+repair using the engine error; network and permission failures are never retried by
+the question composer. Verify Automatic completes with live results; repeat with an
+explicit source and an aggregate using an AS alias. Verify a failed repair keeps the
+previous saved answer. Each endpoint request has a 90-second deadline. In DevTools,
+`[database-query]` summaries separate generation, catalog loading, and browser reads;
+`[database-sql]` shows row fetches and engine time. Backend spans record source mode,
+model, tool count, discovery and formatting durations, and whether formatting fell
+back to another model call. If matching sources are
 ambiguous, the assistant asks for clarification. Type to search the
 source menu, use the arrow keys and Enter to choose, or Escape to return without
 changing it. The displayed source is checked against the query's actual table
@@ -693,13 +715,18 @@ instead of the engine's message. For development, start the web app with
 back the SQL toggle and editor, **View SQL**, the raw error under **Technical
 details**, and the server's summary on query tool rows.
 
+SQL conditions may nest parentheses up to 64 levels. Deeper input returns a
+parse error asking the assistant to simplify the condition.
+
 ## Sharing and files
 
 **Share** opens Macro's standard sharing dialog. The owner can share with people
 or channels and change or remove their access, and an owner on a team sets
 **Team access** (view, comment, or edit for the owner's team; rows follow the
 database). Databases do not offer a public link. **Share** and viewer avatars (other people currently looking at the
-database) sit at the right of the split header, like other entities.
+database) sit at the right of the split header, like other entities. From Drive,
+the row context menu offers the same Share action, plus Rename (edit or owner),
+Favorite, Copy Link, and Delete (owner).
 
 The toolbar's **Database actions** (`…`) menu, beside **AI**, contains **Rename**,
 **Import CSV**, **Webhooks**, **Download**, and owner-only **Delete**. Rename focuses the inline
@@ -717,14 +744,24 @@ type menu afterward to convert it. The limit is 8 MB, 100 columns, and 10,000 ro
 A failed response offers **Retry import** with the same request, so retrying a
 completed import does not create a second table.
 
-**Webhooks** (editors only) opens a dialog for the current table. **Create
-webhook** shows its URL once, with a copy button and a `curl` example built from
-the table's columns; the list below shows each webhook's token prefix and a
-delete button. POSTing a JSON object to the URL inserts one row (an array inserts
+**Webhooks** (editors only) opens a dialog for the current table (a drawer on
+phones). After a fresh list response confirms the table has no webhooks,
+opening it creates the first webhook and shows its URL directly, with a copy
+button and a `curl` example built from the table's columns. Automatic creation
+waits while the list request is paused offline. If webhooks already exist, it
+opens management without creating another. Changing the active table resets
+the dialog to that table. **Create webhook** creates another URL or retries a
+failed creation. The dialog stays open while creation is pending. Each new URL is
+shown only once; copy it before closing. The list
+below shows each webhook's token prefix and a delete button. Deleting the last
+webhook does not create a replacement until the dialog is reopened. POSTing a JSON object to the URL inserts one row (an array inserts
 one per object, up to 100). Keys name columns, ignoring case; `null` leaves a
 cell empty; unknown keys or values that do not fit refuse the whole call with a
 400 listing every problem. The row is written as the webhook's creator, and the
 webhook stops working if they lose edit access.
+
+Browser examples: [desktop](media/database-webhooks/desktop.png) and
+[phone](media/database-webhooks/phone.png).
 
 ## Side panel and activity
 

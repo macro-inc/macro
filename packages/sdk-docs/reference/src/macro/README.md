@@ -376,6 +376,24 @@ Re-exports [FormSubmissionOutcome](../entities/forms/form/type-aliases/FormSubmi
 
 ***
 
+### GeneratedImage
+
+Re-exports [GeneratedImage](../entities/images/image/classes/GeneratedImage.md)
+
+***
+
+### GenerateImageAspectRatio
+
+Re-exports [GenerateImageAspectRatio](../../generated/cognition/types.gen/type-aliases/GenerateImageAspectRatio.md)
+
+***
+
+### GenerateImageOptions
+
+Re-exports [GenerateImageOptions](../entities/images/namespace/interfaces/GenerateImageOptions.md)
+
+***
+
 ### GithubPullRequest
 
 Re-exports [GithubPullRequest](../entities/github-pull-requests/pull-request/classes/GithubPullRequest.md)
@@ -409,6 +427,12 @@ Re-exports [Initiative](../entities/initiatives/initiative/classes/Initiative.md
 ### InitiativeOptions
 
 Re-exports [InitiativeOptions](../entities/initiatives/initiative/interfaces/InitiativeOptions.md)
+
+***
+
+### InitiativeSummary
+
+Re-exports [InitiativeSummary](../entities/initiatives/namespace/interfaces/InitiativeSummary.md)
 
 ***
 
@@ -616,6 +640,12 @@ Re-exports [SingleRoutineTrigger](../entities/routines/routine/type-aliases/Sing
 
 ***
 
+### StaticImage
+
+Re-exports [StaticImage](../entities/images/image/classes/StaticImage.md)
+
+***
+
 ### StructuredCompletionRequest
 
 Re-exports [StructuredCompletionRequest](../../generated/cognition/types.gen/type-aliases/StructuredCompletionRequest.md)
@@ -625,6 +655,12 @@ Re-exports [StructuredCompletionRequest](../../generated/cognition/types.gen/typ
 ### StructuredCompletionResponse
 
 Re-exports [StructuredCompletionResponse](../../generated/cognition/types.gen/type-aliases/StructuredCompletionResponse.md)
+
+***
+
+### TaskSummary
+
+Re-exports [TaskSummary](../entities/tasks/task/interfaces/TaskSummary.md)
 
 ***
 

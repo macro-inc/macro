@@ -29,7 +29,7 @@ export function RecoverTaskDrafts(props: {
         <For each={props.drafts}>
           {(draft) => (
             <Button
-              variant="outline"
+              variant="secondary"
               class="mt-2 max-w-full"
               tooltip={draft.draft.title || 'Untitled task'}
               disabled={pending().includes(draft.id)}

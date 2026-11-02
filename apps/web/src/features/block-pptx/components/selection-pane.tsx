@@ -228,12 +228,13 @@ export function SelectionPane(props: {
       <div class="flex h-9 items-center justify-between border-edge-muted border-b px-3">
         <span class="font-semibold text-ink text-sm">Selection</span>
         <Button
+          aria-label="Close"
+          tooltip="Close"
           size="icon-sm"
           variant="ghost"
-          label="Close"
           onClick={props.onClose}
         >
-          <X />
+          <X class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <div class="flex items-center gap-1 border-edge-muted border-b px-2 py-1.5">
@@ -257,9 +258,9 @@ export function SelectionPane(props: {
         </Button>
         <div class="flex-1" />
         <Button
+          aria-label="Bring forward"
           size="icon-sm"
           variant="ghost"
-          label="Bring forward"
           tooltip="Bring Forward"
           data-testid="pptx-selection-forward"
           disabled={
@@ -272,12 +273,12 @@ export function SelectionPane(props: {
             if (id !== undefined) props.onMove(id, 1);
           }}
         >
-          <ArrowUp />
+          <ArrowUp class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
         <Button
+          aria-label="Send backward"
           size="icon-sm"
           variant="ghost"
-          label="Send backward"
           tooltip="Send Backward"
           data-testid="pptx-selection-backward"
           disabled={ro() || !position() || position()!.index === 0}
@@ -286,7 +287,7 @@ export function SelectionPane(props: {
             if (id !== undefined) props.onMove(id, -1);
           }}
         >
-          <ArrowDown />
+          <ArrowDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <div

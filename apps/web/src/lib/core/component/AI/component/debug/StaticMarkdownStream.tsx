@@ -198,25 +198,25 @@ export default function StaticMarkdownStreamDebug() {
           </div>
           <div class="flex items-center gap-2">
             <Button
-              variant="accent"
+              variant="primary"
               size="sm"
               onClick={startStream}
               disabled={isStreaming()}
             >
-              <PlayIcon />
+              <PlayIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               Stream
             </Button>
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               onClick={stopRun}
               disabled={!isStreaming()}
             >
-              <StopIcon />
+              <StopIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               Stop
             </Button>
             <Button variant="ghost" size="sm" onClick={resetOutput}>
-              <TrashIcon />
+              <TrashIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               Reset
             </Button>
           </div>

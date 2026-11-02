@@ -4,7 +4,12 @@ import { authServiceClient } from '@service-auth/client';
 import type { AvailabilityCalendarsResponse } from '@service-calendar/generated/schemas/availabilityCalendarsResponse';
 import type { TeamCalendarSharingBody } from '@service-calendar/generated/schemas/teamCalendarSharingBody';
 import { emailClient } from '@service-email/client';
-import { type QueryKey, useMutation, useQuery } from '@tanstack/solid-query';
+import {
+  type QueryKey,
+  queryOptions,
+  useMutation,
+  useQuery,
+} from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import { queryClient } from '../client';
 import { ensureTeamCalendarExpiry } from './team-cache';
@@ -23,42 +28,61 @@ const freshness = {
   refetchOnReconnect: 'always' as const,
 };
 
+function calendarTeamIdentityQueryOptions(
+  userId: string | undefined,
+  enabled: boolean
+) {
+  return queryOptions({
+    queryKey: calendarTeamKeys.identity(userId ?? '').queryKey,
+    queryFn: () => throwOnErr(() => authServiceClient.getTeam()),
+    enabled: Boolean(userId) && enabled,
+    ...freshness,
+  });
+}
+
 /** A viewer-scoped roster read avoids the legacy current-team singleton cache. */
 export function useCalendarTeamIdentityQuery(
   userId: Accessor<string | undefined>,
   enabled: Accessor<boolean>
 ) {
   ensureTeamCalendarExpiry();
-  return useQuery(() => ({
-    queryKey: calendarTeamKeys.identity(userId() ?? '').queryKey,
-    queryFn: () => throwOnErr(() => authServiceClient.getTeam()),
-    enabled: Boolean(userId()) && enabled(),
+  return useQuery(() => calendarTeamIdentityQueryOptions(userId(), enabled()));
+}
+
+function teamCalendarSharingQueryOptions(
+  identity: CalendarTeamIdentity | undefined
+) {
+  return queryOptions({
+    queryKey: calendarTeamKeys.sharing(identity).queryKey,
+    queryFn: ({ signal }) =>
+      throwOnErr(() => emailClient.getTeamCalendarSharing(signal)),
+    enabled: identity !== undefined,
     ...freshness,
-  }));
+  });
 }
 
 export function useTeamCalendarSharingQuery(
   identity: Accessor<CalendarTeamIdentity | undefined>
 ) {
-  return useQuery(() => ({
-    queryKey: calendarTeamKeys.sharing(identity()).queryKey,
+  return useQuery(() => teamCalendarSharingQueryOptions(identity()));
+}
+
+function availabilityCalendarsQueryOptions(
+  identity: CalendarTeamIdentity | undefined
+) {
+  return queryOptions({
+    queryKey: calendarTeamKeys.availabilityCalendars(identity).queryKey,
     queryFn: ({ signal }) =>
-      throwOnErr(() => emailClient.getTeamCalendarSharing(signal)),
-    enabled: identity() !== undefined,
+      throwOnErr(() => emailClient.getAvailabilityCalendars(signal)),
+    enabled: identity !== undefined,
     ...freshness,
-  }));
+  });
 }
 
 export function useAvailabilityCalendarsQuery(
   identity: Accessor<CalendarTeamIdentity | undefined>
 ) {
-  return useQuery(() => ({
-    queryKey: calendarTeamKeys.availabilityCalendars(identity()).queryKey,
-    queryFn: ({ signal }) =>
-      throwOnErr(() => emailClient.getAvailabilityCalendars(signal)),
-    enabled: identity() !== undefined,
-    ...freshness,
-  }));
+  return useQuery(() => availabilityCalendarsQueryOptions(identity()));
 }
 
 /** Update one cached query now and restore it if the save fails; never blank it. */

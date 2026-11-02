@@ -250,17 +250,13 @@ describe('CallOverlay muted microphone badges', () => {
         '[data-testid="track-local-camera"]'
       )
     ).not.toBeNull();
-    expect(fullTileBadge.parentElement?.parentElement?.className).not.toContain(
-      'bottom-4'
-    );
+    expect(fullTileBadge.closest('.bottom-4')).toBeNull();
 
     const remote = createRemoteParticipant('alex', {});
     controls.setParticipants(new Map([[remote.identity, remote]]));
 
     const pipBadge = screen.getByRole('status', { name: 'You are muted' });
-    expect(pipBadge.parentElement?.parentElement?.className).toContain(
-      'bottom-4'
-    );
+    expect(pipBadge.closest('.bottom-4')).not.toBeNull();
 
     controls.setAudioMuted(false);
     expect(screen.queryByRole('status', { name: 'You are muted' })).toBeNull();

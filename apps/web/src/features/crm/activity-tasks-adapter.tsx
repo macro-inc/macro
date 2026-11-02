@@ -13,17 +13,26 @@ import {
 } from '@app/features/tasks-view/tasks-view-context';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import EmptyStateTasksGraphic from '@design/empty-state-tasks.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import { TagSetsQueryProvider } from '@property/tags/tag-sets-context';
 import { Button } from '@ui';
 import { type JSX, Show } from 'solid-js';
+import {
+  CrmListEmpty,
+  CrmListError,
+  CrmListSearchEmpty,
+  CrmListSkeleton,
+} from './components/list-state';
 import { useCrmContext } from './context/crm-context';
+import { useCrmWorkspace } from './context/workspace-context';
 
 /** Production Tasks layouts for the workspace-wide CRM activity scope. */
 export function CrmActivityTasks(props: { title?: JSX.Element }) {
   const crm = useCrmContext();
   const layout = useSplitLayout();
+  const workspace = useCrmWorkspace();
   return (
     <TagSetsQueryProvider>
       <TasksViewProvider
@@ -31,6 +40,19 @@ export function CrmActivityTasks(props: { title?: JSX.Element }) {
         restoreEntryState
         scopeKey="crm:activity:tasks"
         onOpenTask={(task, options) => {
+          if (
+            workspace.host.record.openItem(
+              {
+                type: 'document',
+                id: task.id,
+                name: task.fallbackName ?? 'Task',
+                fileType: 'md',
+                subType: { type: 'task' },
+              },
+              options?.event
+            )
+          )
+            return true;
           layout.openWithSplit(
             { type: 'task', id: task.id },
             { preferNewSplit: options?.event?.shiftKey }
@@ -67,14 +89,14 @@ function ActivityTasksBody(props: {
       <Show
         when={!isTouchDevice()}
         fallback={
-          <Button variant="outline" onClick={() => props.onCreateTask()}>
+          <Button variant="secondary" onClick={() => props.onCreateTask()}>
             <PlusIcon class="size-4" />
             New task
           </Button>
         }
       >
         <ViewCreateButton
-          label="New task"
+          aria-label="New task"
           onClick={() => props.onCreateTask()}
         />
       </Show>
@@ -110,19 +132,32 @@ function ActivityTasksBody(props: {
           />
         </ListHeader>
       </Show>
-      <Show when={source.paginationError?.()}>
-        <div
-          role="alert"
-          class="flex items-center gap-3 px-3 py-2 text-sm text-ink-muted"
-        >
-          Some tasks could not be loaded.
-          <Button size="sm" onClick={() => source.retryPagination?.()}>
-            Try again
-          </Button>
-        </div>
-      </Show>
       <div class="min-h-0 flex-1">
         <TasksContent
+          loadingContent={<CrmListSkeleton label="Loading tasks" />}
+          errorContent={
+            <CrmListError
+              title="Tasks couldn’t be loaded."
+              onRetry={() => source.refresh()}
+            />
+          }
+          emptyContent={
+            state.search.trim() && source.hasMore() ? (
+              <span>Search more results to find matching tasks.</span>
+            ) : state.search.trim() ? (
+              <CrmListSearchEmpty
+                title="No tasks match this search"
+                onClearSearch={() => setState('search', '')}
+              />
+            ) : (
+              <CrmListEmpty
+                title="No tasks linked yet"
+                graphic={EmptyStateTasksGraphic}
+                description="Create a task and choose a company or person to keep your follow-ups here."
+                action={{ label: 'New task', onClick: props.onCreateTask }}
+              />
+            )
+          }
           ref={(element) => {
             listElement = element;
           }}

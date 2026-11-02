@@ -11,6 +11,7 @@ use call::domain::events::CallMacroEvent;
 use channels::domain::broker_events::ChannelMacroEvent;
 use documents::domain::events::DocumentMacroEvent;
 use email::domain::events::EmailMacroEvent;
+use github::broker::GithubWebhookMacroEvent;
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer};
 use macro_event_broker::{
     EventBrokerError, EventConsumer, KafkaConsumerAdapter, MacroEvent as _,
@@ -32,14 +33,15 @@ macro_event_broker::declare_topics!(
     MessageMacroEvent,
     PropertyMacroEvent,
     EmailMacroEvent,
-    CallMacroEvent
+    CallMacroEvent,
+    GithubWebhookMacroEvent
 );
 
 struct ScheduledActionEventIngestionGroup;
 
 impl GroupName for ScheduledActionEventIngestionGroup {
     const GROUP_NAME: &'static str = "scheduled-action-event-ingestion";
-    // Topics such as `macro.messages` and `macro.calls` joined this group's
+    // Topics such as `macro.messages`, `macro.calls` and `macro.github_webhooks` joined this group's
     // subscription with no committed offset; starting at their head avoids
     // replaying each topic's retention.
     const INITIAL_OFFSET: InitialOffset = InitialOffset::Latest;
@@ -114,6 +116,14 @@ fn incoming_event(event: DeclaredMacroEvent) -> IncomingEvent {
                 event_id: envelope.event_id,
                 schema_version: envelope.schema_version,
                 payload: EventPayload::Call(envelope.event.clone()),
+            }
+        }
+        DeclaredMacroEvent::GithubWebhookMacroEvent(event) => {
+            let envelope = event.event();
+            IncomingEvent {
+                event_id: envelope.event_id,
+                schema_version: envelope.schema_version,
+                payload: EventPayload::Github(envelope.event.clone()),
             }
         }
     }

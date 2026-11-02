@@ -975,6 +975,12 @@ export type ApiEntityFilterAst = {
      */
     ghprf?: unknown;
     /**
+     * Filters applied to initiatives (wire key `if`). Opt-in like agent
+     * sessions: an omitted filter returns no initiatives, and any literal,
+     * a notification state included, opts them in.
+     */
+    if?: unknown;
+    /**
      * the filters that should be applied to the project entity
      */
     pf?: unknown;
@@ -992,6 +998,7 @@ export type ApiGroupByField = 'date' | 'entity_type' | 'project' | {
      * Group by a property value (e.g., status, priority, or custom properties)
      */
     property: {
+        bucketing?: null | PropertyBucketing;
         entity_type?: null | ApiPropertyEntityType;
         /**
          * The property definition UUID to group by
@@ -1047,7 +1054,7 @@ export type ApiParticipantRole = 'owner' | 'admin' | 'member';
 /**
  * Entity type for property lookups (API representation).
  */
-export type ApiPropertyEntityType = 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
+export type ApiPropertyEntityType = 'CALL_RECORD' | 'CALENDAR_EVENT' | 'DATABASE_ROW' | 'INITIATIVE' | 'CHANNEL' | 'CHAT' | 'COMPANY' | 'DOCUMENT' | 'PROJECT' | 'TASK' | 'THREAD' | 'USER';
 
 /**
  * What a committed batch answers: a result per op, and the journal's change
@@ -1925,6 +1932,10 @@ export type CalendarMentionEvent = {
      * Entity update time of the previewed copy.
      */
     updatedAt: string;
+    /**
+     * The calendars holding `viewer_event_id`, the canonical copy's first.
+     */
+    viewerCalendarIds?: Array<string>;
     viewerCopy?: null | CalendarMentionViewerCopy;
     /**
      * The requester's own event entity for the mentioned meeting. Differs
@@ -2769,6 +2780,11 @@ export type ChannelLabelRule = {
 };
 
 /**
+ * Requested label namespace. Omission retains the deployed automatic selection.
+ */
+export type ChannelLabelScopeSelection = 'personal' | 'team';
+
+/**
  * The authorized scope's labels in manual order.
  */
 export type ChannelLabelsList = {
@@ -2776,6 +2792,10 @@ export type ChannelLabelsList = {
      * Every label of the scope, whether or not the caller sees channels in it.
      */
     labels: Array<ChannelLabel>;
+    /**
+     * Resolved label namespace.
+     */
+    scope: ChannelLabelScopeSelection;
     /**
      * Team scope, or `None` for private labels.
      */
@@ -4071,11 +4091,12 @@ export type CreateChannelScopedBotResponse = {
  */
 export type CreateCrmCompanyRequest = {
     /**
-     * The company's email domain, e.g. "acme.com". Must be a bare
+     * Optional company domain, e.g. "acme.com". Omit for a name-only
+     * company. When supplied, must be a bare
      * domain (no scheme, path, or email) and not a generic email
      * provider domain.
      */
-    domain: string;
+    domain?: string | null;
     /**
      * Display name for the company. Team-scoped: overrides the
      * domain-directory name on every read path.
@@ -4088,8 +4109,8 @@ export type CreateCrmCompanyRequest = {
  */
 export type CreateCrmContactRequest = {
     /**
-     * The contact's email address, e.g. "jane@acme.com". Its domain
-     * must be one of the company's domains (400 otherwise).
+     * The contact's email address, including personal email providers.
+     * It need not match a company domain.
      */
     email: string;
     /**
@@ -8912,7 +8933,12 @@ export type GroupedInitialParams = {
      * Limit the number of items returned per group. Defaults to 20. Max 500.
      */
     per_group_limit?: number | null;
+    sort_direction?: null | SoupApiSortDirection;
     sort_method?: null | GroupedSoupSort;
+    /**
+     * Property definition selected for numeric property sorting.
+     */
+    sort_property_definition_id?: string | null;
 };
 
 /**
@@ -8931,7 +8957,12 @@ export type GroupedPageParams = {
      * Limit the number of items returned. Defaults to 20. Max 500.
      */
     limit?: number | null;
+    sort_direction?: null | SoupApiSortDirection;
     sort_method?: null | GroupedSoupSort;
+    /**
+     * Property definition selected for numeric property sorting.
+     */
+    sort_property_definition_id?: string | null;
 };
 
 /**
@@ -8981,7 +9012,7 @@ export type GroupedSoupPage = (GroupedSoupInitialPage & {
 /**
  * Sort method for grouped queries (frecency not supported).
  */
-export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated';
+export type GroupedSoupSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'property';
 
 /**
  * Guest-safe message projection: no account identities, attachments, or entity grants.
@@ -9522,7 +9553,8 @@ export type InitiativeFilters = {
     /**
      * Opt this query into initiatives at all. Initiatives are off by
      * default — see [`crate::ast::initiative::InitiativeLiteral::Include`].
-     * Asking for specific `initiative_ids` or `owners` also opts in.
+     * Asking for specific `initiative_ids`, `owners` or `notification_filters`
+     * also opts in.
      */
     include?: boolean;
     /**
@@ -9534,9 +9566,13 @@ export type InitiativeFilters = {
      */
     name?: string | null;
     /**
-     * Filter by initiative owner principal — a user ('macro|user1@user.com'), a bot
-     * ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
-     * owner.
+     * Filter by initiative notification state.
+     */
+    notification_filters?: NotificationFilters;
+    /**
+     * Filter by initiative owner principal — a user ('macro|user@example.com'), a
+     * bot ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include
+     * every owner.
      */
     owners?: Array<string>;
 };
@@ -10045,6 +10081,11 @@ export type Message = {
      */
     triggered_by?: string | null;
     /**
+     * Self-reported name of the client the user triggered it through, such
+     * as "Claude Code"; a display label only.
+     */
+    triggered_via?: string | null;
+    /**
      * Last persisted update.
      */
     updated_at: string;
@@ -10443,6 +10484,7 @@ export type MessagePatchedMetadata = {
      * Actor that patched the message.
      */
     actor: ChannelSender;
+    completed_reply?: null | MessagePostedMetadata;
     /**
      * Macro Markdown body after the patch.
      */
@@ -11081,6 +11123,10 @@ export type Params = {
     limit?: number | null;
     sort_direction?: null | SoupApiSortDirection;
     sort_method?: null | SoupApiSort;
+    /**
+     * Property definition selected for numeric property sorting.
+     */
+    sort_property_definition_id?: string | null;
 };
 
 /**
@@ -11582,6 +11628,59 @@ export type ProjectPreviewData = {
 };
 
 /**
+ * Caller-defined, ordered UTC date ranges and a separate missing-value key.
+ */
+export type PropertyBucketing = PropertyDateRanges & {
+    type: 'date_ranges';
+};
+
+/**
+ * UTC timestamp interval. Lower bounds are inclusive; upper bounds are exclusive.
+ */
+export type PropertyDateFilterRange = {
+    /**
+     * Exclusive UTC upper bound, omitted for an open end.
+     */
+    end?: string | null;
+    /**
+     * Inclusive UTC lower bound, omitted for an open start.
+     */
+    start?: string | null;
+};
+
+/**
+ * A half-open UTC interval. An absent start or end extends to infinity.
+ */
+export type PropertyDateRange = {
+    /**
+     * Exclusive end, or positive infinity.
+     */
+    end?: string | null;
+    /**
+     * Unique caller-supplied group key.
+     */
+    key: string;
+    /**
+     * Inclusive start, or negative infinity.
+     */
+    start?: string | null;
+};
+
+/**
+ * A complete partition of present dates plus one bucket for absent values.
+ */
+export type PropertyDateRanges = {
+    /**
+     * Caller-supplied group key for entities with no date value.
+     */
+    missing_value_bucket_key: string;
+    /**
+     * Ordered, contiguous ranges covering every present date.
+     */
+    ranges: Array<PropertyDateRange>;
+};
+
+/**
  * Property definition model (service representation).
  */
 export type PropertyDefinition = {
@@ -11621,6 +11720,7 @@ export type PropertyDefinitionWithOptions = {
  * Multiple filters are AND'd together.
  */
 export type PropertyFilter = {
+    date_range?: null | PropertyDateFilterRange;
     /**
      * Entity reference IDs to match. Multiple values are OR'd together.
      */
@@ -11630,6 +11730,10 @@ export type PropertyFilter = {
      * When None, matches across all entity types.
      */
     entity_type?: string | null;
+    /**
+     * Flat Soup/search presence filter: true expands to an open date range, false to its negation.
+     */
+    has_date?: boolean | null;
     /**
      * Select option UUIDs to match. Multiple values are OR'd together.
      */
@@ -13015,7 +13119,7 @@ export type SoupApiItem = SoupItem & {
 /**
  * Sort options accepted by non-grouped soup API endpoints.
  */
-export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at';
+export type SoupApiSort = 'viewed_at' | 'created_at' | 'updated_at' | 'viewed_updated' | 'frecency' | 'touched_by_me' | 'notified_at' | 'property';
 
 /**
  * Sort direction accepted by non-grouped soup API endpoints.
@@ -14973,6 +15077,53 @@ export type TaskFilters = {
 };
 
 /**
+ * A similar existing task computed for an unsaved draft, returned to the task
+ * composer without persisting any embedding or match state.
+ */
+export type TaskSimilarityResult = {
+    /**
+     * The matching existing task.
+     */
+    taskId: string;
+    /**
+     * The matching task's display name.
+     */
+    taskName: string;
+    /**
+     * Cosine similarity from vector search.
+     */
+    vectorScore: number;
+};
+
+/**
+ * Request body for searching tasks similar to an unsaved draft.
+ */
+export type TaskSimilaritySearchRequest = {
+    /**
+     * Draft task body as embedding-format markdown. The composer produces it
+     * client-side with lexical-core's `markdownToEmbeddingText` (the same
+     * format lexical-service's `/markdown/{id}?target=embedding` renders), so
+     * this latency-sensitive endpoint embeds the text as-is without a
+     * lexical-service round trip.
+     */
+    markdown?: string | null;
+    /**
+     * Draft task title.
+     */
+    taskName: string;
+};
+
+/**
+ * Response for searching tasks similar to an unsaved draft.
+ */
+export type TaskSimilaritySearchResponse = {
+    /**
+     * Existing tasks similar to the draft.
+     */
+    results: Array<TaskSimilarityResult>;
+};
+
+/**
  * Disjoint busy/detail shapes prevent new event fields leaking by default.
  */
 export type TeamCalendarContent = {
@@ -16485,7 +16636,8 @@ export type WhatsAppChat = {
     kind: ExternalChatKind;
     /**
      * Newest activity WhatsApp reported (message or history sync); `null`
-     * when unknown. The list is sorted by it, newest first, unknown last.
+     * when unknown, as for saved contacts never messaged. The list is
+     * sorted by it, newest first, unknown last.
      */
     lastActivityAt?: string | null;
     /**
@@ -16493,6 +16645,11 @@ export type WhatsAppChat = {
      * contact or WhatsApp name, else `+<phone>`. Always non-empty.
      */
     name: string;
+    /**
+     * The other person's phone number (`+<digits>`) of a direct chat, when
+     * WhatsApp told us it.
+     */
+    phoneNumber?: string | null;
     /**
      * Pinned in WhatsApp.
      */
@@ -16540,6 +16697,54 @@ export type WhatsAppDisconnectRequest = {
      */
     authorizationGeneration: number;
 };
+
+/**
+ * Result of the owner's Import.
+ */
+export type WhatsAppHistoryImport = {
+    /**
+     * Chats that started importing earlier messages from the phone.
+     */
+    started: number;
+};
+
+/**
+ * The owner asking whether a phone number has a WhatsApp account, to start
+ * a direct chat with it.
+ */
+export type WhatsAppLookup = {
+    /**
+     * Found: the direct chat's JID, now addable from the chat list.
+     */
+    chatJid?: string | null;
+    /**
+     * Poll `GET /whatsapp/lookups/{id}` with it.
+     */
+    id: string;
+    /**
+     * The number asked about, E.164 (`+<digits>`).
+     */
+    phoneNumber: string;
+    /**
+     * Progress.
+     */
+    state: WhatsAppLookupState;
+};
+
+/**
+ * A phone number to start a direct chat with.
+ */
+export type WhatsAppLookupRequest = {
+    /**
+     * E.164: `+`, the country code and the number, without spacing.
+     */
+    phoneNumber: string;
+};
+
+/**
+ * Where a phone-number lookup is.
+ */
+export type WhatsAppLookupState = 'pending' | 'found' | 'not_on_whatsapp' | 'failed';
 
 /**
  * Owner-only pairing status. Deliberately has no `Debug` implementation: the
@@ -18045,7 +18250,12 @@ export type IngestTranscriptResponses = {
 export type ListChannelLabelsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels';
 };
 
@@ -18066,7 +18276,12 @@ export type ListChannelLabelsResponse = ListChannelLabelsResponses[keyof ListCha
 export type CreateChannelLabelData = {
     body: CreateChannelLabelRequest;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels';
 };
 
@@ -18095,7 +18310,12 @@ export type SetChannelLabelData = {
          */
         channel_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/channels/{channel_id}';
 };
 
@@ -18118,7 +18338,12 @@ export type SetChannelLabelResponse = SetChannelLabelResponses[keyof SetChannelL
 export type PreviewSmartTagData = {
     body: ChannelLabelRule;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/preview';
 };
 
@@ -18145,7 +18370,12 @@ export type DeleteChannelLabelData = {
          */
         label_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/{label_id}';
 };
 
@@ -18172,7 +18402,12 @@ export type RenameChannelLabelData = {
          */
         label_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/{label_id}';
 };
 
@@ -19211,6 +19446,9 @@ export type GetContactByEmailData = {
 };
 
 export type GetContactByEmailErrors = {
+    /**
+     * Invalid email or multiple visible contacts match; choose a contact ID.
+     */
     400: ErrorResponse;
     401: ErrorResponse;
     500: ErrorResponse;
@@ -20790,6 +21028,34 @@ export type GetBatchPreviewHandlerResponses = {
 };
 
 export type GetBatchPreviewHandlerResponse = GetBatchPreviewHandlerResponses[keyof GetBatchPreviewHandlerResponses];
+
+export type TaskSimilaritySearchHandlerData = {
+    body: TaskSimilaritySearchRequest;
+    path?: never;
+    query?: never;
+    url: '/documents/similarity_search';
+};
+
+export type TaskSimilaritySearchHandlerErrors = {
+    401: ErrorResponse;
+    500: ErrorResponse;
+};
+
+export type TaskSimilaritySearchHandlerError = TaskSimilaritySearchHandlerErrors[keyof TaskSimilaritySearchHandlerErrors];
+
+export type TaskSimilaritySearchHandlerResponses = {
+    /**
+     * Response for searching tasks similar to an unsaved draft.
+     */
+    200: {
+        /**
+         * Existing tasks similar to the draft.
+         */
+        results: Array<TaskSimilarityResult>;
+    };
+};
+
+export type TaskSimilaritySearchHandlerResponse = TaskSimilaritySearchHandlerResponses[keyof TaskSimilaritySearchHandlerResponses];
 
 export type GetDocumentByTeamSlugData = {
     body?: never;
@@ -23105,20 +23371,22 @@ export type GetItemsSoupData = {
          */
         limit?: number;
         /**
-         * Sort method. Options are viewed_at, created_at, updated_at,
-         * viewed_updated, frecency, touched_by_me, notified_at. Defaults to
-         * viewed_at.
+         * Sort method. Property ordering supports DATE, NUMBER, BOOLEAN, SELECT and TAG.
+         * Missing definitions, unsupported types, and mismatched values sort as missing.
+         * Flat property sorts omit calendar events, email, channels, calls, companies, and agent sessions.
+         * Defaults to viewed_at.
          */
         sort_method?: SoupApiSort;
         /**
+         * Property definition selected for numeric property sorting.
+         */
+        sort_property_definition_id?: string;
+        /**
          * Sort direction. Options are asc, desc. Defaults to desc.
          *
-         * Re-send this with every page: it is not carried in the cursor.
-         *
-         * Applies to the timestamp sort methods only. `asc` combined with
-         * `frecency` is rejected rather than ignored: frecency pages are ordered
-         * by relevance score and the cursor comparison assumes descending, so
-         * there is no ascending frecency order to give.
+         * Timestamp sorts require this parameter again on each page. Property
+         * cursors preserve their direction and always put missing values last.
+         * Ascending frecency, touched-by-me, and notified-at sorts are unsupported.
          */
         sort_direction?: SoupApiSortDirection;
         /**
@@ -24891,6 +25159,47 @@ export type WhatsappDisconnectResponses = {
 };
 
 export type WhatsappDisconnectResponse = WhatsappDisconnectResponses[keyof WhatsappDisconnectResponses];
+
+export type WhatsappImportHistoryData = {
+    body?: never;
+    path?: never;
+    query?: never;
+    url: '/whatsapp/history-import';
+};
+
+export type WhatsappImportHistoryResponses = {
+    200: WhatsAppHistoryImport;
+};
+
+export type WhatsappImportHistoryResponse = WhatsappImportHistoryResponses[keyof WhatsappImportHistoryResponses];
+
+export type WhatsappStartLookupData = {
+    body: WhatsAppLookupRequest;
+    path?: never;
+    query?: never;
+    url: '/whatsapp/lookups';
+};
+
+export type WhatsappStartLookupResponses = {
+    200: WhatsAppLookup;
+};
+
+export type WhatsappStartLookupResponse = WhatsappStartLookupResponses[keyof WhatsappStartLookupResponses];
+
+export type WhatsappLookupData = {
+    body?: never;
+    path: {
+        id: string;
+    };
+    query?: never;
+    url: '/whatsapp/lookups/{id}';
+};
+
+export type WhatsappLookupResponses = {
+    200: WhatsAppLookup;
+};
+
+export type WhatsappLookupResponse = WhatsappLookupResponses[keyof WhatsappLookupResponses];
 
 export type WhatsappCancelPairingData = {
     body?: never;

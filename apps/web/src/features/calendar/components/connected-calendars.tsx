@@ -48,7 +48,7 @@ export function ConnectedCalendars(props: {
     >
       <SettingsCard>
         <SettingsRow
-          label="Google Calendar"
+          label="Calendar accounts"
           description={
             <Show
               when={accountNeedingPermission()}
@@ -64,7 +64,7 @@ export function ConnectedCalendars(props: {
               <Show when={props.canConnect}>
                 <Button
                   size="sm"
-                  variant="outline"
+                  variant="secondary"
                   disabled={props.connecting}
                   onClick={props.onConnect}
                 >
@@ -77,7 +77,7 @@ export function ConnectedCalendars(props: {
             {(account) => (
               <Button
                 size="sm"
-                variant="cta"
+                variant="primary"
                 disabled={props.connecting}
                 onClick={() => props.onEnable(account())}
               >
@@ -97,7 +97,7 @@ export function ConnectedCalendars(props: {
             class="flex items-center justify-between gap-3 px-6 py-4 text-sm text-ink-muted"
           >
             Could not load calendars.
-            <Button size="sm" variant="outline" onClick={props.onRetry}>
+            <Button size="sm" variant="secondary" onClick={props.onRetry}>
               Retry
             </Button>
           </div>

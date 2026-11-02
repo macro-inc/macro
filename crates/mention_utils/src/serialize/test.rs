@@ -26,6 +26,11 @@ fn native_links_and_channels_round_trip_untrusted_labels() {
         let (rest, parsed) = ParsedDocumentMention::parse(&channel).unwrap();
         assert!(rest.is_empty());
         assert_eq!(parsed.document_name, label);
+        let task = task_mention("task-id", label).unwrap();
+        assert!(task.contains(r#""blockName":"task""#));
+        let (rest, parsed) = ParsedDocumentMention::parse(&task).unwrap();
+        assert!(rest.is_empty());
+        assert_eq!(parsed.document_name, label);
         let bot = bot_mention(bot_id::MACRO_AI_BOT_ID, label).unwrap();
         let (rest, parsed) = ParsedUserMention::parse(&bot).unwrap();
         assert!(rest.is_empty());

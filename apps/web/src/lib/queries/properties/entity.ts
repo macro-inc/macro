@@ -37,6 +37,7 @@ import {
   optimisticUpdateSoupEntity,
   type SoupTransaction,
 } from '../soup/cache';
+import { refreshPropertyQueries } from '../soup/property-queries';
 import { type MutationCallbacks, withCallbacks } from '../utils';
 import {
   type AddEntityPropertyInput,
@@ -448,6 +449,9 @@ export function useDeleteEntityPropertyMutation(
         onSuccess: (_data, variables) => {
           // The removed row may have been a Companies or Contacts value.
           fireAndForget(refreshCrmAssociatedSoupQueries(), 'entity-properties');
+          invalidateSoupEntity(variables.entityId);
+          // Deletion carries an assignment ID, not its definition; refresh property-dependent lists.
+          fireAndForget(refreshPropertyQueries(), 'entity-properties');
           return invalidatePropertiesForEntity(
             variables.entityType,
             variables.entityId,
@@ -637,6 +641,10 @@ function entityPropertyOptionCallbacks(
       },
       onSuccess: (_data, variables) => {
         invalidateSoupEntity(variables.entityId);
+        fireAndForget(
+          refreshPropertyQueries(getPropertyDefinitionId(variables.property)),
+          'entity-properties'
+        );
         return invalidatePropertiesForEntity(
           variables.entityType,
           variables.entityId,
@@ -861,6 +869,12 @@ export function useBulkUpdateEntityPropertyOptionsMutation(
             })
           );
           invalidateSoupEntity(variables.entityId);
+          for (const selection of selections) {
+            fireAndForget(
+              refreshPropertyQueries(selection.propertyDefinitionId),
+              'entity-properties'
+            );
+          }
           return invalidatePropertiesForEntity(
             variables.entityType,
             variables.entityId,
@@ -977,6 +991,10 @@ function invalidatePropertySaveCaches(
     'entity-properties'
   );
   invalidateSoupEntity(item.entityId);
+  fireAndForget(
+    refreshPropertyQueries(getPropertyDefinitionId(item.property)),
+    'entity-properties'
+  );
   // CRM record lists resolve membership on the server, not from these rows.
   if (
     CRM_ASSOCIATION_PROPERTY_IDS.includes(

@@ -6,7 +6,7 @@ import { invalidateCalendarEventPreviews } from '@queries/calendar/mention-previ
 import { invalidateCalendarOccurrences } from '@queries/calendar/occurrences';
 import type { CalendarReplacementView } from '@service-calendar/generated/schemas';
 import { emailClient } from '@service-email/client';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import type { EventReplacementSource } from '../context/event-replacement-source';
 import type {
@@ -84,24 +84,28 @@ export function useEventReplacementSource(
   };
 }
 
-/** Mounted inside the small provider-action Suspense boundary, never the calendar viewport. */
-export function useCalendarProviderUrl(
-  target: Accessor<EventReplacementTarget>
-) {
-  return useQuery(() => ({
+function calendarProviderUrlQueryOptions(target: EventReplacementTarget) {
+  return queryOptions({
     queryKey: [
       ...calendarKeys._def,
       'provider-url',
-      target().eventId,
-      target().calendarId,
-      target().recurrenceId,
+      target.eventId,
+      target.calendarId,
+      target.recurrenceId,
     ],
     queryFn: async () =>
       (
         await throwOnErr(() =>
-          emailClient.calendarEventProviderUrl(target().eventId, target())
+          emailClient.calendarEventProviderUrl(target.eventId, target)
         )
       ).url,
     staleTime: 60_000,
-  }));
+  });
+}
+
+/** Mounted inside the small provider-action Suspense boundary, never the calendar viewport. */
+export function useCalendarProviderUrl(
+  target: Accessor<EventReplacementTarget>
+) {
+  return useQuery(() => calendarProviderUrlQueryOptions(target()));
 }

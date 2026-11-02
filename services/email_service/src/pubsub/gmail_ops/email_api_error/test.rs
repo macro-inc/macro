@@ -32,16 +32,24 @@ fn rate_limits_use_queue_routing_policy() {
 }
 
 #[test]
-fn transient_failures_are_retried() {
+fn transient_failures_are_deferred_like_rate_limits() {
     let error = EmailApiError::Transient {
         message: "provider unavailable".to_string(),
     };
 
     assert_eq!(error_policy(&error), ErrorPolicy::Retry);
+    // Moved to the retry queue from the primary worker, redelivered there.
+    assert!(matches!(
+        processing_error(error.clone(), false),
+        ProcessingError::NonRetryable(DetailedError {
+            reason: FailureReason::GmailApiUnavailable,
+            ..
+        })
+    ));
     assert!(matches!(
         processing_error(error, true),
         ProcessingError::Retryable(DetailedError {
-            reason: FailureReason::GmailApiFailed,
+            reason: FailureReason::GmailApiUnavailable,
             ..
         })
     ));

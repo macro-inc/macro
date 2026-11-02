@@ -1,10 +1,6 @@
 use super::*;
-use crate::domain::timeline::TimelineRepository;
 use crate::domain::{
-    events::*,
-    ports::{EffectsRepository, GroupEffect, GroupPublisher, Origin, SendRateLimiter},
-    service::LinkedService,
-    session::SessionService,
+    events::*, provider::WhatsAppProvider, service::WhatsAppService, session::SessionService,
 };
 use async_trait::async_trait;
 use chrono::{Duration, Utc};
@@ -14,6 +10,12 @@ use entity_access::domain::models::{
 use entity_access::domain::models::{
     Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
 };
+use external_chat::domain::{
+    ports::{ChatEffect, ChatPublisher, EffectsRepository, Origin, SendRateLimiter},
+    service::ExternalChatService,
+    timeline::TimelineRepository,
+};
+use external_chat::outbound::pg::PgExternalChatRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use std::sync::Arc;
 
@@ -40,10 +42,28 @@ const CUSTOMER_JID: &str = "15558880001@s.whatsapp.net";
 
 struct Allow;
 
-fn services(pool: &PgPool) -> (LinkedService, SessionService, Arc<PgLinkedRepository>) {
-    let repository = Arc::new(PgLinkedRepository::new(pool.clone()));
+/// DSS's use cases over one pool: the WhatsApp account and chat list, and
+/// external chats with WhatsApp as their provider.
+struct Linked {
+    whatsapp: WhatsAppService,
+    chats: ExternalChatService<WhatsAppProvider>,
+    /// The external chat tables.
+    store: Arc<PgExternalChatRepository>,
+}
+
+fn services(pool: &PgPool) -> (Linked, SessionService, Arc<PgWhatsAppRepository>) {
+    let repository = Arc::new(PgWhatsAppRepository::new(pool.clone()));
+    let store = Arc::new(PgExternalChatRepository::new(pool.clone()));
     (
-        LinkedService::new(repository.clone(), Arc::new(Allow)),
+        Linked {
+            whatsapp: WhatsAppService::new(repository.clone()),
+            chats: ExternalChatService::new(
+                Arc::new(WhatsAppProvider::new(repository.clone())),
+                store.clone(),
+                Arc::new(Allow),
+            ),
+            store,
+        },
         SessionService::new(repository.clone()),
         repository,
     )
@@ -101,13 +121,9 @@ async fn workspace(pool: &PgPool) -> Uuid {
 }
 
 /// Pair `user` as `jid` through the DSS and session-service paths.
-async fn pair(
-    linked: &LinkedService,
-    session: &SessionService,
-    user: &str,
-    jid: &str,
-) -> SessionScope {
+async fn pair(linked: &Linked, session: &SessionService, user: &str, jid: &str) -> SessionScope {
     let pairing = linked
+        .whatsapp
         .connect(&person(user), false, SendAuthority::Human)
         .await
         .unwrap();
@@ -200,10 +216,10 @@ fn receipt<T: entity_access::domain::models::RequiredPermission>(
 async fn adopted(
     pool: &PgPool,
 ) -> (
-    LinkedService,
+    Linked,
     SessionService,
-    Arc<PgLinkedRepository>,
-    Binding,
+    Arc<PgWhatsAppRepository>,
+    ChatRef,
     SessionScope,
     SessionScope,
 ) {
@@ -221,7 +237,8 @@ async fn adopted(
         .await
         .unwrap();
     let binding = linked
-        .adopt(
+        .chats
+        .add(
             &person(ALICE),
             &AddChat {
                 provider: ExternalChatProvider::WhatsApp,
@@ -253,7 +270,7 @@ async fn adopted(
 async fn adoption_creates_a_shared_entity_and_leaving_whatsapp_keeps_view_access(pool: PgPool) {
     let (linked, session, _, binding, _, bob) = adopted(&pool).await;
     assert_eq!(binding.user_id, ALICE);
-    let mine = &linked.chats(&person(ALICE)).await.unwrap().chats[0];
+    let mine = &linked.whatsapp.chats(&person(ALICE)).await.unwrap().chats[0];
     assert_eq!(
         (mine.added.clone(), mine.shared.clone()),
         (
@@ -264,7 +281,7 @@ async fn adoption_creates_a_shared_entity_and_leaving_whatsapp_keeps_view_access
             None
         )
     );
-    let shared = &linked.chats(&person(BOB)).await.unwrap().chats[0];
+    let shared = &linked.whatsapp.chats(&person(BOB)).await.unwrap().chats[0];
     assert_eq!(
         (shared.added.clone(), shared.shared.clone()),
         (
@@ -278,7 +295,8 @@ async fn adoption_creates_a_shared_entity_and_leaving_whatsapp_keeps_view_access
     );
     assert!(
         linked
-            .group_detail(&receipt::<MessageView>(BOB, binding.id))
+            .chats
+            .detail(&receipt::<MessageView>(BOB, binding.id))
             .await
             .unwrap()
             .chat
@@ -301,10 +319,11 @@ async fn adoption_creates_a_shared_entity_and_leaving_whatsapp_keeps_view_access
     let mut left = text(9, BOB_JID, "unused", "");
     left.kind = InboundKind::Left;
     session.ingest_event(bob, &left).await.unwrap();
-    assert_eq!(linked.adopted_groups(&person(BOB)).await.unwrap().len(), 1);
+    assert_eq!(linked.chats.list(&person(BOB)).await.unwrap().len(), 1);
     assert!(
         !linked
-            .group_detail(&receipt::<MessageView>(BOB, binding.id))
+            .chats
+            .detail(&receipt::<MessageView>(BOB, binding.id))
             .await
             .unwrap()
             .chat
@@ -321,17 +340,19 @@ async fn each_person_adds_their_own_group_once(pool: PgPool) {
         kind: ExternalChatKind::Group,
     };
     let again = linked
-        .adopt(&person(ALICE), &request, SendAuthority::Human)
+        .chats
+        .add(&person(ALICE), &request, SendAuthority::Human)
         .await
         .unwrap();
     assert_eq!(again.id, binding.id, "adding twice returns the same group");
     let bobs = linked
-        .adopt(&person(BOB), &request, SendAuthority::Human)
+        .chats
+        .add(&person(BOB), &request, SendAuthority::Human)
         .await
         .unwrap();
     assert_ne!(bobs.id, binding.id);
     assert_eq!(bobs.user_id, BOB);
-    let listed = &linked.chats(&person(BOB)).await.unwrap().chats[0];
+    let listed = &linked.whatsapp.chats(&person(BOB)).await.unwrap().chats[0];
     assert_eq!(
         (listed.added.as_ref().map(|g| g.id), listed.shared.clone()),
         (Some(bobs.id), None),
@@ -339,17 +360,18 @@ async fn each_person_adds_their_own_group_once(pool: PgPool) {
     );
     assert!(matches!(
         linked
-            .adopt(&person(CAROL), &request, SendAuthority::Human)
+            .chats
+            .add(&person(CAROL), &request, SendAuthority::Human)
             .await
             .unwrap_err()
             .current_context(),
-        LinkedError::Disconnected
+        ExternalChatError::Disconnected
     ));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn observers_converge_on_one_group_message_and_unadopted_groups_are_dropped(pool: PgPool) {
-    let (_, session, repository, binding, alice, bob) = adopted(&pool).await;
+    let (linked, session, _, binding, alice, bob) = adopted(&pool).await;
     assert_eq!(
         session.observed_groups(alice).await.unwrap(),
         vec![GROUP.to_owned()]
@@ -384,15 +406,16 @@ async fn observers_converge_on_one_group_message_and_unadopted_groups_are_droppe
     .await
     .unwrap();
     assert_eq!(observations, 2);
-    let effects = repository.pending_effects(10).await.unwrap();
+    let effects = linked.store.pending_effects(10).await.unwrap();
     assert_eq!(effects.len(), 1);
     assert!(effects[0].first_publication);
     assert_eq!(effects[0].origin, Origin::Remote);
-    repository
+    linked
+        .store
         .published(effects[0].message_id, effects[0].revision)
         .await
         .unwrap();
-    assert!(repository.pending_effects(10).await.unwrap().is_empty());
+    assert!(linked.store.pending_effects(10).await.unwrap().is_empty());
 
     let mut elsewhere = text(3, CUSTOMER_JID, "3EB0BBBB", "private chat");
     elsewhere.group_jid = "120363999999999999@g.us".into();
@@ -505,7 +528,7 @@ async fn a_quarantined_lid_sender_ingests_once_the_roster_pairs_it(pool: PgPool)
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_reaction_before_its_message_is_deferred_and_replayed(pool: PgPool) {
-    let (_, session, repository, binding, alice, _) = adopted(&pool).await;
+    let (linked, session, _, binding, alice, _) = adopted(&pool).await;
     let reaction = InboundEvent {
         kind: InboundKind::Message(Message {
             source_id: "3EB0REACT".into(),
@@ -551,8 +574,9 @@ async fn a_reaction_before_its_message_is_deferred_and_replayed(pool: PgPool) {
     .fetch_one(&pool)
     .await
     .unwrap();
-    let page = repository
-        .messages(binding.id, BOB, None, 50)
+    let page = linked
+        .store
+        .messages(&binding, BOB, None, 50)
         .await
         .unwrap();
     assert_eq!(page.messages[0].id, message);
@@ -637,6 +661,7 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
     };
     assert!(matches!(
         linked
+            .chats
             .send_reply(
                 &receipt::<MessageWrite>(ALICE, binding.id),
                 &request,
@@ -646,7 +671,7 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
             .err()
             .unwrap()
             .current_context(),
-        LinkedError::Forbidden
+        ExternalChatError::Forbidden
     ));
     let bot_receipt = EntityAccessReceipt::<MessageWrite>::try_new(
         EntityAccessAuth::Bot(entity_access::domain::models::BotReceiptAuth::new(
@@ -670,16 +695,18 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
     assert!(
         matches!(
             linked
+                .chats
                 .send_reply(&bot_receipt, &request, SendAuthority::UserApiToken)
                 .await
                 .err()
                 .unwrap()
                 .current_context(),
-            LinkedError::Forbidden
+            ExternalChatError::Forbidden
         ),
         "a bot acting for Alice still cannot send from her connection"
     );
     let progress = linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(ALICE, binding.id),
             &request,
@@ -689,6 +716,7 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
         .unwrap();
     assert_eq!(progress.state, DeliveryState::Pending);
     let replay = linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(ALICE, binding.id),
             &request,
@@ -726,6 +754,7 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
             .is_empty()
     );
     let state = linked
+        .chats
         .delivery(&receipt::<MessageView>(ALICE, binding.id), &[progress.id])
         .await
         .unwrap();
@@ -746,6 +775,7 @@ async fn a_dispatched_send_becomes_unknown_after_takeover_and_settles_from_its_e
     assert_eq!(rows[0].id, progress.id);
     assert_eq!(rows[0].sender_id.as_deref(), Some(ALICE));
     let state = linked
+        .chats
         .delivery(&receipt::<MessageView>(ALICE, binding.id), &[progress.id])
         .await
         .unwrap();
@@ -767,6 +797,7 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
     .await
     .unwrap();
     let progress = linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(BOB, binding.id),
             &SendReply {
@@ -833,6 +864,7 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
 
     // Bob may edit his own recent message but not the customer's.
     let edit_customer = linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(BOB, binding.id),
             &SendReply {
@@ -850,9 +882,10 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
         .unwrap_err();
     assert!(matches!(
         edit_customer.current_context(),
-        LinkedError::Forbidden
+        ExternalChatError::Forbidden
     ));
     linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(BOB, binding.id),
             &SendReply {
@@ -874,6 +907,7 @@ async fn an_accepted_send_writes_the_group_message_and_its_echo_converges(pool: 
 async fn disconnecting_fails_undispatched_sends_and_stops_observation(pool: PgPool) {
     let (linked, session, _, binding, alice, _) = adopted(&pool).await;
     let progress = linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(ALICE, binding.id),
             &SendReply {
@@ -888,8 +922,14 @@ async fn disconnecting_fails_undispatched_sends_and_stops_observation(pool: PgPo
         )
         .await
         .unwrap();
-    let account = linked.account(&person(ALICE)).await.unwrap().unwrap();
+    let account = linked
+        .whatsapp
+        .account(&person(ALICE))
+        .await
+        .unwrap()
+        .unwrap();
     let result = linked
+        .whatsapp
         .disconnect(
             &person(ALICE),
             account.authorization_generation,
@@ -900,6 +940,7 @@ async fn disconnecting_fails_undispatched_sends_and_stops_observation(pool: PgPo
     assert!(result.remote_unlink_requested);
     assert!(
         !linked
+            .whatsapp
             .disconnect(
                 &person(ALICE),
                 account.authorization_generation,
@@ -911,6 +952,7 @@ async fn disconnecting_fails_undispatched_sends_and_stops_observation(pool: PgPo
         "a retried disconnect is a no-op"
     );
     let state = linked
+        .chats
         .delivery(&receipt::<MessageView>(ALICE, binding.id), &[progress.id])
         .await
         .unwrap();
@@ -943,11 +985,13 @@ async fn stored_group_facts_authorize_adoption_and_sending_however_old(pool: PgP
         kind: ExternalChatKind::Group,
     };
     let binding = linked
-        .adopt(&person(ALICE), &request, SendAuthority::Human)
+        .chats
+        .add(&person(ALICE), &request, SendAuthority::Human)
         .await
         .unwrap();
     let detail = linked
-        .group_detail(&receipt::<MessageView>(ALICE, binding.id))
+        .chats
+        .detail(&receipt::<MessageView>(ALICE, binding.id))
         .await
         .unwrap();
     assert!(detail.chat.can_send);
@@ -956,6 +1000,7 @@ async fn stored_group_facts_authorize_adoption_and_sending_however_old(pool: PgP
         "unnamed groups show members"
     );
     let progress = linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(ALICE, binding.id),
             &SendReply {
@@ -985,7 +1030,8 @@ async fn stored_group_facts_authorize_adoption_and_sending_however_old(pool: PgP
         .unwrap();
     assert!(matches!(
         linked
-            .adopt(
+            .chats
+            .add(
                 &person(ALICE),
                 &AddChat {
                     provider: ExternalChatProvider::WhatsApp,
@@ -997,7 +1043,7 @@ async fn stored_group_facts_authorize_adoption_and_sending_however_old(pool: PgP
             .await
             .unwrap_err()
             .current_context(),
-        LinkedError::CannotAdd(CannotAdd::Community)
+        ExternalChatError::CannotAdd(CannotAdd::Community)
     ));
 }
 
@@ -1032,7 +1078,10 @@ async fn messages_stamped_around_adoption_follow_the_second_granular_boundary(po
 
 #[async_trait]
 impl SendRateLimiter for Allow {
-    async fn check(&self, _: &macro_user_id::user_id::MacroUserIdStr<'_>) -> LinkedResult<()> {
+    async fn check(
+        &self,
+        _: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> ExternalChatResult<()> {
         Ok(())
     }
 }
@@ -1043,13 +1092,20 @@ async fn rate_limited_send_never_creates_a_dispatchable_intent(pool: PgPool) {
 
     #[async_trait]
     impl SendRateLimiter for Denied {
-        async fn check(&self, _: &macro_user_id::user_id::MacroUserIdStr<'_>) -> LinkedResult<()> {
-            Err(LinkedError::RateLimited.into())
+        async fn check(
+            &self,
+            _: &macro_user_id::user_id::MacroUserIdStr<'_>,
+        ) -> ExternalChatResult<()> {
+            Err(ExternalChatError::RateLimited.into())
         }
     }
 
-    let (_, session, repository, binding, alice, _) = adopted(&pool).await;
-    let linked = LinkedService::new(repository, Arc::new(Denied));
+    let (linked, session, repository, binding, alice, _) = adopted(&pool).await;
+    let chats = ExternalChatService::new(
+        Arc::new(WhatsAppProvider::new(repository)),
+        linked.store,
+        Arc::new(Denied),
+    );
     let request = SendReply {
         idempotency_key: Uuid::now_v7(),
         message: ReplyContent::Text {
@@ -1058,7 +1114,7 @@ async fn rate_limited_send_never_creates_a_dispatchable_intent(pool: PgPool) {
         },
         reply_to: None,
     };
-    let error = linked
+    let error = chats
         .send_reply(
             &receipt::<MessageWrite>(ALICE, binding.id),
             &request,
@@ -1066,10 +1122,11 @@ async fn rate_limited_send_never_creates_a_dispatchable_intent(pool: PgPool) {
         )
         .await
         .unwrap_err();
-    assert_eq!(error.current_context(), &LinkedError::RateLimited);
+    assert_eq!(error.current_context(), &ExternalChatError::RateLimited);
     assert!(session.claim_sends(alice, 8).await.unwrap().is_empty());
 }
 
 mod chats;
 mod communities;
 mod direct;
+mod lookups;

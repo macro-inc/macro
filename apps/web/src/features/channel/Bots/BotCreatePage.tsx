@@ -186,7 +186,7 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
           disabled={pending()}
           onClick={leave}
         >
-          <CaretLeftIcon />
+          <CaretLeftIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
           Back to bots
         </Button>
         <Show when={stage() !== 'ready'}>
@@ -308,7 +308,7 @@ export function BotCreate(props: { channelId?: string; onBack: () => void }) {
                 <Button type="button" variant="ghost" size="sm" onClick={leave}>
                   Cancel
                 </Button>
-                <Button type="submit" variant="cta" size="sm">
+                <Button type="submit" variant="primary" size="sm">
                   Create bot
                 </Button>
               </div>

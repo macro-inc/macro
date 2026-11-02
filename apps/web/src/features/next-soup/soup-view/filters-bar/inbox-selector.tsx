@@ -65,16 +65,15 @@ export function InboxSelector() {
     >
       <Combobox.Trigger
         as={Button}
-        variant="outline"
+        variant="secondary"
         size="sm"
-        depth={2}
         aria-label={selectorProps.hideLabel ? label() : undefined}
         class={cn(
           'bg-surface gap-1',
           selectorProps.hideLabel ? 'px-1' : 'max-w-50'
         )}
       >
-        <TrayIcon />
+        <TrayIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         <Show when={!selectorProps.hideLabel}>
           <span class="truncate">{label()}</span>
         </Show>
@@ -85,9 +84,8 @@ export function InboxSelector() {
 
   const ConnectAnotherAccount = (buttonProps: { hideLabel?: boolean }) => (
     <Button
-      variant="outline"
+      variant="secondary"
       size="sm"
-      depth={2}
       aria-label={
         buttonProps.hideLabel ? t('viewMenus.connectAnotherAccount') : undefined
       }
@@ -97,7 +95,7 @@ export function InboxSelector() {
       class={cn('bg-surface gap-1', buttonProps.hideLabel && 'px-1')}
       onClick={() => addInbox()}
     >
-      <TrayIcon />
+      <TrayIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
       <Show when={!buttonProps.hideLabel}>
         <span class="truncate">{t('viewMenus.connectAnotherAccount')}</span>
       </Show>

@@ -23,6 +23,22 @@ vi.mock('@entity', () => ({
   ListLayoutProvider: (props: ParentProps) => props.children,
 }));
 vi.mock('@ui', () => ({
+  cn: (...classes: (string | undefined)[]) => classes.filter(Boolean).join(' '),
+  EmptyStatePanel: (props: {
+    title?: string;
+    description?: string;
+    primaryAction?: { label: string; onClick: () => void };
+  }) => (
+    <div>
+      <h2>{props.title}</h2>
+      <p>{props.description}</p>
+      {props.primaryAction && (
+        <button type="button" onClick={props.primaryAction.onClick}>
+          {props.primaryAction.label}
+        </button>
+      )}
+    </div>
+  ),
   Button: (props: ParentProps<{ onClick: () => void }>) => (
     <button type="button" onClick={props.onClick}>
       {props.children}
@@ -67,7 +83,7 @@ it('replaces cached rows and retries the query after a failed refetch', () => {
 
   expect(screen.queryByText('Kickoff notes')).toBeNull();
   screen.getByText("Couldn't load this list.");
-  fireEvent.click(screen.getByText('Retry'));
+  fireEvent.click(screen.getByText('Try again'));
   expect(failed.refetch).toHaveBeenCalledTimes(1);
   expect(failed.fetchNextPage).not.toHaveBeenCalled();
 });
@@ -114,10 +130,34 @@ it('only declares no search results after the final page', () => {
       empty="Nothing"
     />
   ));
-  screen.getByText('Searching more…');
+  screen.getByRole('status', { name: 'Searching more items' });
   expect(screen.queryByText('No matching items.')).toBeNull();
 });
 
+it('clears a finished search without hiding loaded rows', () => {
+  const clear = vi.fn();
+  render(() => (
+    <RecordItemList
+      source={source({ hasNextPage: false })}
+      search="missing"
+      onClearSearch={clear}
+    />
+  ));
+  fireEvent.click(screen.getByText('Clear search'));
+  expect(clear).toHaveBeenCalledTimes(1);
+});
+
+it('keeps an empty first page pageable until more results arrive', () => {
+  render(() => (
+    <RecordItemList
+      source={source({ data: { entities: [] }, hasNextPage: true })}
+      search="missing"
+      empty="Nothing"
+    />
+  ));
+  screen.getByRole('status', { name: 'Searching more items' });
+  expect(screen.queryByText('Nothing')).toBeNull();
+});
 it('keeps the paging marker mounted when a local filter removes an entire page', () => {
   const view = render(() => (
     <RecordItemList
@@ -125,7 +165,7 @@ it('keeps the paging marker mounted when a local filter removes an entire page',
       empty="Nothing"
     />
   ));
-  screen.getByText('Searching more…');
+  screen.getByRole('status', { name: 'Searching more items' });
   expect(screen.queryByText('Nothing')).toBeNull();
   expect(view.container.querySelector('.h-px')).not.toBeNull();
 });

@@ -379,6 +379,7 @@ export const ConsolidatedFilterChip = (props: ConsolidatedFilterChipProps) => {
         <ChipDivider mobile={props.mobile} />
 
         <Button
+          variant="ghost"
           class={cn(
             'rounded-none h-full not-disabled:hover:text-failure',
             props.mobile && 'bg-active border-none'

@@ -95,7 +95,9 @@ export const useBlockEntityCommands = (
   });
   const renameAction = makeRenameAction({ userId: () => userId() });
   const copyAction = makeCopyAction();
-  const moveToProjectAction = makeMoveToProjectAction();
+  const moveToProjectAction = makeMoveToProjectAction({
+    userId: () => userId(),
+  });
   const copyLinkAction = makeCopyLinkAction();
   const copyBranchNameAction = makeCopyBranchNameAction();
   const copyEntityIdAction = makeCopyEntityIdAction();

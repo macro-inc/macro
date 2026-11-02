@@ -1,20 +1,35 @@
-import type { SplitManager } from '@components/app/split-layout/layoutManager';
+import type {
+  SplitHandle,
+  SplitManager,
+} from '@components/app/split-layout/layoutManager';
 import { triggerFocusInput } from '@core/directive/focusInput';
 
 /** Open the new-conversation page, including when its split is already mounted. */
 export function openAgentComposer(
   layout: Pick<SplitManager, 'openWithSplit'>,
-  preferNewSplit = false
+  preferNewSplit = false,
+  seed?: {
+    /** Unsent composer text, such as an @mention of the entity being asked about. */
+    draft?: string;
+    /** Open in this split instead of placing a new one. */
+    handle?: SplitHandle;
+  }
 ) {
   const content = {
     type: 'component' as const,
     id: 'agents',
     preserveParams: true,
-    params: { focusComposer: crypto.randomUUID() },
+    params: {
+      focusComposer: crypto.randomUUID(),
+      ...(seed?.draft !== undefined ? { draft: seed.draft } : {}),
+    },
   };
   const split = layout.openWithSplit(content, {
     referredFrom: 'launcher',
     preferNewSplit,
+    // Replace the given split even when another Agents split is open, so that
+    // split keeps its own draft.
+    ...(seed?.handle ? { handle: seed.handle, allowDuplicate: true } : {}),
   }).split;
   if (!split) return;
   // Opening an existing split activates it without updating its params.

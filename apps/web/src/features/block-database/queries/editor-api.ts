@@ -15,8 +15,9 @@ import type {
 import { gridRows } from '../../database/core/grid-cells';
 import { allRecordsView } from '../../database/core/views';
 import type { DatabaseReadFailure } from '../../database/core/write-failure';
+import { toViewColumn } from '../../database/queries/column-detail';
 import { rowsByIdStatement } from '../sql';
-import { toViewColumn } from './table-rows';
+import { patchDetail } from './detail-cache';
 
 export function editorTable(table: TableDetail): DatabaseTableSchema {
   return {
@@ -82,9 +83,77 @@ export function createMacroDatabaseApi(
           );
         }
       ),
-    applyOps: ({ ops, baseVersions }) =>
-      applyDatabaseOps(databaseId, ops, baseVersions).map((results) => ({
-        results,
-      })),
+    applyOps: ({ ops, baseVersions }) => {
+      const renames = ops.flatMap((op) =>
+        op.kind === 'column' && op.change.kind === 'rename'
+          ? [{ table: op.table, column: op.column, name: op.change.name }]
+          : []
+      );
+      const apply = () => applyDatabaseOps(databaseId, ops, baseVersions);
+      if (!renames.length) return apply().map((results) => ({ results }));
+      return ResultAsync.fromSafePromise(
+        patchDetail(
+          databaseId,
+          (detail) => ({
+            ...detail,
+            tables: detail.tables.map((table) => ({
+              ...table,
+              columns: table.columns.map((column) => {
+                let name = column.column.display_name;
+                for (const op of renames)
+                  if (
+                    op.table === table.table.id &&
+                    op.column === column.column.id
+                  )
+                    name = op.name;
+                return name === column.column.display_name
+                  ? column
+                  : {
+                      ...column,
+                      column: { ...column.column, display_name: name },
+                    };
+              }),
+            })),
+          }),
+          client,
+          (current, previous) => ({
+            ...current,
+            tables: current.tables.map((table) => ({
+              ...table,
+              columns: table.columns.map((column) => {
+                const rename = renames.findLast(
+                  (op) =>
+                    op.table === table.table.id &&
+                    op.column === column.column.id
+                );
+                if (!rename || column.column.display_name !== rename.name)
+                  return column;
+                const before = previous.tables
+                  .find((entry) => entry.table.id === table.table.id)
+                  ?.columns.find(
+                    (entry) => entry.column.id === column.column.id
+                  );
+                return before
+                  ? {
+                      ...column,
+                      column: {
+                        ...column.column,
+                        display_name: before.column.display_name,
+                      },
+                    }
+                  : column;
+              }),
+            })),
+          })
+        )
+      ).andThen((rollback) =>
+        apply()
+          .map((results) => ({ results }))
+          .mapErr((failure) => {
+            rollback();
+            return failure;
+          })
+      );
+    },
   };
 }

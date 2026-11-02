@@ -36,6 +36,10 @@ pub struct Config {
     pub internal_api_key: String,
     /// Key required by document storage's internal endpoints.
     pub document_storage_service_auth_key: String,
+    /// TypeSafe credential for the Jev classifier that routes unmentioned
+    /// thread replies to agents. Optional: while unset, only mentions and
+    /// explicit replies reach agents.
+    pub typesafe_api_key: jev::outbound::TypesafeApiKey,
 }
 
 impl Config {

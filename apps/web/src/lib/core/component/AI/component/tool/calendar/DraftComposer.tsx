@@ -266,7 +266,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
                   <>
                     <span>Could not load your calendars.</span>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       onClick={retryCalendarData}
                     >
@@ -288,7 +288,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
                   <Show when={requestedNeedsAccess() && requestedInbox()}>
                     {(link) => (
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         onClick={() =>
                           fireAndForget(
@@ -306,7 +306,7 @@ function CalendarDraftComposerContent(props: CalendarDraftComposerProps) {
                   </Show>
                   <Show when={!requestedInbox()}>
                     <Button
-                      variant="outline"
+                      variant="secondary"
                       size="sm"
                       onClick={() =>
                         fireAndForget(

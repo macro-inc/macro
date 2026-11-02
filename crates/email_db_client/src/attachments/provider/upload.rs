@@ -147,9 +147,14 @@ pub async fn thread_media_atts_for_backfill(
 /// of job completion, as we don't know everyone the user has sent messages to until all their
 /// messages have been backfilled.
 ///
-/// There will be overlap between the attachments returned by this query and the ones returned by
-/// fetch_attachment_threads_for_backfill, but the BackfillAttachment job has logic to ensure
-/// duplicate attachments are not inserted by checking the DocumentEmail table.
+/// Attachments that already have a live document are left out, using the same check the
+/// BackfillAttachment job runs before importing. Imports from
+/// fetch_attachment_threads_for_backfill that are still in flight can still overlap; the job's
+/// check skips those.
+///
+/// This reads the whole mailbox once per backfill, so it starts from the mailbox's document
+/// attachments and only reads the threads that hold them, instead of every message in every
+/// thread with an attachment.
 #[tracing::instrument(skip(db), err)]
 #[allow(clippy::disallowed_methods, reason = "legacy code. fix later")]
 pub async fn fetch_job_attachments_for_backfill(
@@ -159,74 +164,99 @@ pub async fn fetch_job_attachments_for_backfill(
     let query = format!(
         r#"
         WITH
-        eligible_threads AS (
-            SELECT DISTINCT thread_id
-            FROM public.email_messages
-            WHERE link_id = $1
-                AND has_attachments = true
+        -- Attachment rows only exist on messages flagged has_attachments, so
+        -- the partial index on that flag finds every document. Carrying the
+        -- output columns here avoids reading each message row a second time.
+        mailbox_documents AS MATERIALIZED (
+            SELECT
+                a.id AS attachment_db_id,
+                m.provider_id AS email_provider_id,
+                a.provider_attachment_id,
+                a.filename,
+                a.mime_type,
+                m.internal_date_ts,
+                m.id AS message_db_id,
+                m.thread_id AS thread_db_id,
+                m.from_contact_id,
+                m.subject
+            FROM public.email_messages m
+            JOIN public.email_attachments a ON a.message_id = m.id
+            WHERE m.link_id = $1
+                AND m.has_attachments = true
+                AND a.filename IS NOT NULL
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM public.document_email de
+                    JOIN public."Document" d ON d.id = de.document_id
+                    WHERE de.email_attachment_id = a.id
+                        AND d."deletedAt" IS NULL
+                )
+                -- attachment mime type filters injected below
+                {}
         ),
-        self_contact AS (
-            SELECT c.id
-            FROM public.email_links l
-            JOIN public.email_contacts c
-                ON c.link_id = l.id
-                AND LOWER(c.email_address) = LOWER(l.email_address)
-            WHERE l.id = $1
-        ),
-        contacted AS (
-            SELECT DISTINCT emr.contact_id
+        -- Everyone the user has sent mail to, except the user.
+        contacted AS MATERIALIZED (
+            SELECT DISTINCT recipient.contact_id
             FROM public.email_messages sent_message
-            JOIN public.email_message_recipients emr ON emr.message_id = sent_message.id
+            JOIN public.email_message_recipients recipient ON recipient.message_id = sent_message.id
             WHERE sent_message.link_id = $1
                 AND sent_message.is_sent = true
+                AND NOT EXISTS (
+                    SELECT 1
+                    FROM public.email_links l
+                    JOIN public.email_contacts c
+                        ON c.link_id = l.id
+                        AND LOWER(c.email_address) = LOWER(l.email_address)
+                    WHERE l.id = $1
+                        AND c.id = recipient.contact_id
+                )
         ),
-        participants AS (
-            SELECT message.thread_id, message.from_contact_id AS contact_id
-            FROM eligible_threads eligible
-            JOIN public.email_messages message ON message.thread_id = eligible.thread_id
-            WHERE message.from_contact_id IS NOT NULL
-
-            -- UNION ALL, not UNION: `qualified_threads` already applies
-            -- SELECT DISTINCT to this result, so a set-union dedupe here
-            -- sorts the whole participant set only to have the work thrown
-            -- away. Duplicates cannot change the final thread set.
-            UNION ALL
-
-            SELECT message.thread_id, recipient.contact_id
-            FROM eligible_threads eligible
-            JOIN public.email_messages message ON message.thread_id = eligible.thread_id
-            JOIN public.email_message_recipients recipient ON recipient.message_id = message.id
+        document_threads AS MATERIALIZED (
+            SELECT DISTINCT thread_db_id AS thread_id
+            FROM mailbox_documents
         ),
+        -- Senders come from an index alone; most threads qualify here.
+        sender_qualified_threads AS MATERIALIZED (
+            SELECT DISTINCT sender_message.thread_id
+            FROM document_threads
+            JOIN public.email_messages sender_message ON sender_message.thread_id = document_threads.thread_id
+            JOIN contacted ON contacted.contact_id = sender_message.from_contact_id
+        ),
+        -- Recipients need each message row, so only check the threads no
+        -- sender qualified.
         qualified_threads AS (
-            SELECT DISTINCT participant.thread_id
-            FROM participants participant
-            JOIN contacted ON contacted.contact_id = participant.contact_id
+            SELECT thread_id
+            FROM sender_qualified_threads
+
+            UNION
+
+            SELECT thread_message.thread_id
+            FROM document_threads
+            JOIN public.email_messages thread_message ON thread_message.thread_id = document_threads.thread_id
+            JOIN public.email_message_recipients recipient ON recipient.message_id = thread_message.id
+            JOIN contacted ON contacted.contact_id = recipient.contact_id
             WHERE NOT EXISTS (
                 SELECT 1
-                FROM self_contact
-                WHERE self_contact.id = participant.contact_id
+                FROM sender_qualified_threads
+                WHERE sender_qualified_threads.thread_id = document_threads.thread_id
             )
         )
 
         SELECT
-            a.id AS attachment_db_id,
-            m.provider_id as email_provider_id,
-            a.provider_attachment_id as provider_attachment_id,
-            a.filename as filename,
-            a.mime_type as mime_type,
-            m.internal_date_ts as internal_date_ts,
-            m.id as message_db_id,
-            m.thread_id as thread_db_id,
-            from_contact.email_address as sender_email,
-            m.subject as subject
-        FROM public.email_attachments a
-        JOIN public.email_messages m ON a.message_id = m.id
-        JOIN public.email_contacts from_contact ON m.from_contact_id = from_contact.id
-        WHERE m.thread_id IN (SELECT thread_id FROM qualified_threads)
-            -- attachment mime type filters injected below
-            {}
-            AND a.filename IS NOT NULL
-        ORDER BY m.internal_date_ts DESC
+            document.attachment_db_id,
+            document.email_provider_id,
+            document.provider_attachment_id,
+            document.filename,
+            document.mime_type,
+            document.internal_date_ts,
+            document.message_db_id,
+            document.thread_db_id,
+            from_contact.email_address AS sender_email,
+            document.subject
+        FROM mailbox_documents document
+        JOIN qualified_threads ON qualified_threads.thread_id = document.thread_db_id
+        JOIN public.email_contacts from_contact ON from_contact.id = document.from_contact_id
+        ORDER BY document.internal_date_ts DESC
         "#,
         ATTACHMENT_MIME_TYPE_FILTERS
     );

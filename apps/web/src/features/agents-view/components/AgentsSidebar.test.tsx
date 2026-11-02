@@ -393,17 +393,8 @@ describe('mixed Agents sidebar', () => {
     expect(
       sessionMenu.getByRole('menuitem', { name: 'Copy Link' })
     ).toBeTruthy();
-    expect(sessionMenu.getByRole('menuitem', { name: 'Archive' })).toBeTruthy();
-
+    // Archive and Unarchive come from the shared entity menu, like Search's.
     expect(screen.getByText('Archived')).toBeTruthy();
-    const archived = screen.getByRole('button', { name: /Old session/ });
-    fireEvent.contextMenu(archived);
-    const archivedMenu = within(
-      archived.closest('[data-entity-context-menu]') as HTMLElement
-    );
-    expect(
-      archivedMenu.getByRole('menuitem', { name: 'Unarchive' })
-    ).toBeTruthy();
 
     const chat = screen.getByRole('button', { name: /Plan launch/ });
     fireEvent.contextMenu(chat);

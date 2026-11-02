@@ -1,13 +1,29 @@
 //! External chats (WhatsApp is the one provider): composition of the
-//! `whatsapp_linked` crate with DSS's entity access, notification and static file
-//! clients, the notification outbox worker, and the `external_chat_changed`
-//! pushes to open pages. The session service runs the WhatsApp sockets; it
-//! reaches DSS only through MacroDB rows and `NOTIFY`.
+//! `external_chat` crate, with `whatsapp_linked` as its provider, and DSS's
+//! entity access, notification and static file clients; the notification
+//! outbox worker, and the `external_chat_changed` pushes to open pages. The
+//! session service runs the WhatsApp sockets; it reaches DSS only through
+//! MacroDB rows and `NOTIFY`.
 
 use crate::api::context::{AuthorizationService, EntityAccessService, NotificationIngressType};
 use async_trait::async_trait;
 use connection_gateway_client::client::ConnectionGatewayClient;
 use entity_access::domain::ports::EntityAccessService as _;
+use external_chat::{
+    domain::{
+        effects::EffectsService,
+        media::MediaService,
+        models::ExternalChatError,
+        ports::{
+            AudienceRepository, ChatEffect, ChatPublisher, ExternalChatResult, FileImport,
+            FileStore, Origin, SendRateLimiter,
+        },
+        service::ExternalChatService,
+    },
+    inbound::router::ExternalChatRouterState,
+    outbound::pg::PgExternalChatRepository,
+    signals::{self, Change, ChangeSignal, trace_context},
+};
 use macro_user_id::user_id::MacroUserIdStr;
 use model_entity::EntityType;
 use notification::domain::{models::SendNotificationRequestBuilder, service::NotificationIngress};
@@ -18,23 +34,19 @@ use tokio_util::{sync::CancellationToken, task::TaskTracker};
 use tracing::Instrument as _;
 use uuid::Uuid;
 use whatsapp_linked::{
-    domain::{
-        effects::EffectsService,
-        media::MediaService,
-        models::LinkedError,
-        ports::{
-            AudienceRepository, FileImport, FileStore, GroupEffect, GroupPublisher, LinkedResult,
-            Origin, SendRateLimiter,
-        },
-        service::LinkedService,
-    },
-    inbound::router::LinkedRouterState,
-    outbound::pg::PgLinkedRepository,
-    signals::{self, Change, ChangeSignal, trace_context},
+    domain::{provider::WhatsAppProvider, service::WhatsAppService},
+    inbound::router::WhatsAppRouterState,
+    outbound::pg::PgWhatsAppRepository,
 };
 
-/// Router state mounted at `/external-chats` and `/whatsapp`.
-pub(crate) type State = LinkedRouterState<EntityAccessService, AuthorizationService>;
+/// Router states mounted at `/external-chats` and `/whatsapp`.
+#[derive(Clone)]
+pub(crate) struct State {
+    /// Added chats of every provider.
+    pub chats: ExternalChatRouterState<WhatsAppProvider, EntityAccessService, AuthorizationService>,
+    /// The caller's WhatsApp account, pairing and chat list.
+    pub whatsapp: WhatsAppRouterState<AuthorizationService>,
+}
 
 /// Clients the linked composition needs from DSS.
 pub(crate) struct Dependencies {
@@ -62,14 +74,17 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
         tracker,
         cancellation,
     } = dependencies;
-    let repository = Arc::new(PgLinkedRepository::new(pool.clone()));
-    let publisher = Arc::new(DssGroupPublisher {
+    let whatsapp_repository = Arc::new(PgWhatsAppRepository::new(pool.clone()));
+    let repository = Arc::new(PgExternalChatRepository::new(pool.clone()));
+    let publisher = Arc::new(DssChatPublisher {
         audience: repository.clone(),
         access: access.clone(),
         notifications,
     });
     let media = MediaService::new(repository.clone(), Arc::new(StaticFiles(static_files)));
-    let service = LinkedService::new(
+    let whatsapp = Arc::new(WhatsAppService::new(whatsapp_repository.clone()));
+    let service = ExternalChatService::new(
+        Arc::new(WhatsAppProvider::new(whatsapp_repository)),
         repository.clone(),
         Arc::new(SendRequestLimiter(rate_limit::RateLimitServiceImpl {
             repo: rate_limit::RedisRateLimitAdapter { redis },
@@ -79,6 +94,7 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
         ChangePusher {
             pool: pool.clone(),
             audience: repository.clone(),
+            whatsapp: whatsapp.clone(),
             access: access.clone(),
             gateway: connection_gateway,
         },
@@ -88,12 +104,19 @@ pub(crate) fn build(dependencies: Dependencies) -> State {
         pool,
         EffectsService::new(repository, publisher),
         media,
+        whatsapp.clone(),
         cancellation,
     ));
-    LinkedRouterState {
-        service: Arc::new(service),
-        entity_access_service: access,
-        authorization_state: authorization,
+    State {
+        chats: ExternalChatRouterState {
+            service: Arc::new(service),
+            entity_access_service: access,
+            authorization_state: authorization.clone(),
+        },
+        whatsapp: WhatsAppRouterState {
+            service: whatsapp,
+            authorization_state: authorization,
+        },
     }
 }
 
@@ -103,6 +126,7 @@ async fn publish(
     pool: PgPool,
     effects: EffectsService,
     media: MediaService,
+    whatsapp: Arc<WhatsAppService>,
     cancellation: CancellationToken,
 ) {
     let Some(mut listener) = listen(
@@ -133,7 +157,7 @@ async fn publish(
         };
         let span = tracing::info_span!("external_chat.drain");
         trace_context::adopt(&span, traceparent.as_deref());
-        drain(&effects, &media).instrument(span).await;
+        drain(&effects, &media, &whatsapp).instrument(span).await;
     }
 }
 
@@ -164,9 +188,9 @@ async fn listen(
     }
 }
 
-/// Import ready attachments, delete released files, expire unsent uploads and
-/// publish notifications.
-async fn drain(effects: &EffectsService, media: &MediaService) {
+/// Import ready attachments, delete released files, expire unsent uploads,
+/// old receipts and pairings, and publish notifications.
+async fn drain(effects: &EffectsService, media: &MediaService, whatsapp: &WhatsAppService) {
     loop {
         match media.import_pending().await {
             Ok(0) => break,
@@ -193,10 +217,16 @@ async fn drain(effects: &EffectsService, media: &MediaService) {
             }
         }
     }
-    if let Err(error) = media.expire_retained().await {
+    if let Err(error) = media.expire_uploads().await {
         tracing::warn!(
             code = error.current_context().code(),
-            "Expiring WhatsApp uploads and receipts will retry"
+            "Expiring unsent uploads will retry"
+        );
+    }
+    if let Err(error) = whatsapp.expire_retained().await {
+        tracing::warn!(
+            code = error.current_context().code(),
+            "Expiring WhatsApp receipts and pairings will retry"
         );
     }
     loop {
@@ -222,17 +252,18 @@ const CHANGED_MESSAGE: &str = "external_chat_changed";
 /// view a chat. No data travels; the page re-fetches.
 struct ChangePusher {
     pool: PgPool,
-    audience: Arc<PgLinkedRepository>,
+    audience: Arc<PgExternalChatRepository>,
+    whatsapp: Arc<WhatsAppService>,
     access: Arc<EntityAccessService>,
     gateway: Arc<ConnectionGatewayClient>,
 }
 
 impl ChangePusher {
     /// Users who see this change.
-    async fn recipients(&self, change: Change) -> LinkedResult<Vec<String>> {
+    async fn recipients(&self, change: Change) -> ExternalChatResult<Vec<String>> {
         match change {
             Change::Chats { account_id } => Ok(self
-                .audience
+                .whatsapp
                 .account_owner(account_id)
                 .await?
                 .into_iter()
@@ -261,7 +292,7 @@ impl ChangePusher {
         err,
         fields(scope, chat_id, account_id, recipients)
     )]
-    async fn push(&self, change: Change) -> LinkedResult<()> {
+    async fn push(&self, change: Change) -> ExternalChatResult<()> {
         let span = tracing::Span::current();
         let message = match change {
             Change::Chats { account_id } => {
@@ -332,26 +363,26 @@ async fn push_changes(pusher: ChangePusher, cancellation: CancellationToken) {
     }
 }
 
-fn unavailable(error: impl std::fmt::Display) -> rootcause::Report<LinkedError> {
-    rootcause::report!("{error}").context(LinkedError::Unavailable)
+fn unavailable(error: impl std::fmt::Display) -> rootcause::Report<ExternalChatError> {
+    rootcause::report!("{error}").context(ExternalChatError::Unavailable)
 }
 
 /// Generic notifications for shared external chat messages. Revisions,
 /// reactions, history and replays never create a second notification.
-struct DssGroupPublisher {
-    audience: Arc<PgLinkedRepository>,
+struct DssChatPublisher {
+    audience: Arc<PgExternalChatRepository>,
     access: Arc<EntityAccessService>,
     notifications: Arc<NotificationIngressType>,
 }
 #[async_trait]
-impl GroupPublisher for DssGroupPublisher {
+impl ChatPublisher for DssChatPublisher {
     #[tracing::instrument(
         name = "external_chat.notify",
         skip_all,
         err,
         fields(chat_id = %effect.chat_id, message_id = %effect.message_id)
     )]
-    async fn publish(&self, effect: &GroupEffect) -> LinkedResult<()> {
+    async fn publish(&self, effect: &ChatEffect) -> ExternalChatResult<()> {
         if !effect.first_publication || effect.origin == Origin::History {
             return Ok(());
         }
@@ -379,7 +410,7 @@ impl GroupPublisher for DssGroupPublisher {
             .into_iter()
             .filter(|u| effect.associated_user.as_deref() != Some(u.as_ref()))
             .map(|u| MacroUserIdStr::try_from(u.to_string()).map_err(unavailable))
-            .collect::<LinkedResult<HashSet<_>>>()?;
+            .collect::<ExternalChatResult<HashSet<_>>>()?;
         if recipient_ids.is_empty() {
             return Ok(());
         }
@@ -418,7 +449,7 @@ impl FileStore for StaticFiles {
         err,
         fields(blob_id = %import.blob_id, chat_id = %import.chat_id, size = bytes.len(), file_id)
     )]
-    async fn store(&self, import: &FileImport, bytes: Vec<u8>) -> LinkedResult<Uuid> {
+    async fn store(&self, import: &FileImport, bytes: Vec<u8>) -> ExternalChatResult<Uuid> {
         let stored = self
             .0
             .put_named_bytes_for_user(&import.owner, &import.filename, bytes.into(), &import.mime)
@@ -429,7 +460,7 @@ impl FileStore for StaticFiles {
     }
 
     #[tracing::instrument(name = "external_chat.delete_file", skip(self), err)]
-    async fn delete(&self, file_id: Uuid) -> LinkedResult<()> {
+    async fn delete(&self, file_id: Uuid) -> ExternalChatResult<()> {
         match self.0.delete_file(&file_id.to_string()).await {
             Ok(_) => Ok(()),
             Err(error)
@@ -452,7 +483,7 @@ struct SendRequestLimiter<R>(R);
 #[async_trait]
 impl<R: rate_limit::RateLimitService> SendRateLimiter for SendRequestLimiter<R> {
     #[tracing::instrument(name = "external_chat.send_rate_limit", skip_all, err)]
-    async fn check(&self, user: &MacroUserIdStr<'_>) -> LinkedResult<()> {
+    async fn check(&self, user: &MacroUserIdStr<'_>) -> ExternalChatResult<()> {
         let key = rate_limit::RateLimitKey::builder(&"whatsapp-linked-send")
             .append(&user.as_ref())
             .finish();
@@ -463,10 +494,10 @@ impl<R: rate_limit::RateLimitService> SendRateLimiter for SendRequestLimiter<R> 
                 rate_limit::RateLimitConfig::new(1, Duration::from_secs(1)),
             )
             .await
-            .map_err(|error| error.context(LinkedError::Unavailable))?;
+            .map_err(|error| error.context(ExternalChatError::Unavailable))?;
         result
             .map(|_| ())
-            .map_err(|_| LinkedError::RateLimited.into())
+            .map_err(|_| ExternalChatError::RateLimited.into())
     }
 }
 

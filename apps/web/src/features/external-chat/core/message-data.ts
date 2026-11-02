@@ -3,8 +3,9 @@ import type { ChatProvider } from '../providers';
 import type { ChatMessage } from './chat';
 
 /**
- * A chat message in the shape the shared channel rows render. Senders show
- * their provider name; Macro users keep their Macro avatar.
+ * A chat message in the shape the shared channel rows render. Macro users
+ * show as themselves (Macro name and avatar); everyone else by their
+ * provider name.
  */
 export function chatMessageData(
   message: ChatMessage,
@@ -16,11 +17,10 @@ export function chatMessageData(
     id: message.id,
     content: message.deleted ? '' : toMarkdown(message.body, message.mentions),
     sender_id: message.sender.userId ?? '',
-    // The provider's name for everyone, Macro users included: a Macro profile
-    // without a name would otherwise show its email.
-    imported_author: message.sender.name.trim()
-      ? { name: message.sender.name }
-      : null,
+    imported_author:
+      !message.sender.userId && message.sender.name.trim()
+        ? { name: message.sender.name }
+        : null,
     created_at: message.sentAt,
     updated_at: message.sentAt,
     edited_at: message.edited ? message.sentAt : null,

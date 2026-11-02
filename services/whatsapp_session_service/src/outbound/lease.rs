@@ -17,7 +17,7 @@ use tokio_util::sync::CancellationToken;
 use tokio_util::task::TaskTracker;
 use uuid::Uuid;
 
-use whatsapp_linked::domain::models::LinkedError;
+use external_chat::domain::models::ExternalChatError;
 use whatsapp_linked::domain::session::SessionService;
 
 use crate::domain::ports::{AccountDirectory, AccountLocks, FleetHealth, LeaseError};
@@ -217,7 +217,7 @@ impl PgAccountDirectory {
     }
 }
 
-fn domain_error(report: rootcause::Report<LinkedError>) -> LeaseError {
+fn domain_error(report: rootcause::Report<ExternalChatError>) -> LeaseError {
     LeaseError::Internal(report.into_dynamic())
 }
 

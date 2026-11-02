@@ -9,14 +9,18 @@
 use pptx_engine::Presentation;
 use pptx_engine::collab::Entries;
 use pptx_engine::fidelity::corpus::{
-    Baseline, Deck, FINGERPRINT_WIDTH, default_corpus, discover, fingerprint_changed,
-    is_lfs_pointer,
+    Baseline, Deck, FINGERPRINT_WIDTH, discover, fingerprint_changed, is_lfs_pointer,
 };
 use pptx_engine::fidelity::fingerprint;
 use pptx_engine::font::FontDb;
 use pptx_engine::opc::Package;
+use std::path::{Path, PathBuf};
 use std::sync::Mutex;
 use std::sync::atomic::{AtomicUsize, Ordering};
+
+fn default_corpus() -> PathBuf {
+    Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/corpus")
+}
 
 /// The bundled fonts, read from the crate's `fonts/` directory.
 fn fonts() -> FontDb {

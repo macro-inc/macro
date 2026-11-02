@@ -182,26 +182,26 @@ export function LayersPanel(props: { viewer: AiViewer; editor: AiEditor }) {
           {viewer.rows().filter((r) => r.depth === 0).length} layers
         </span>
         <Button
+          aria-label="New layer"
           variant="ghost"
           size="icon-sm"
-          label="New layer"
           tooltip="New layer"
           data-testid="ai-layer-new"
           disabled={!editor.enabled()}
           onClick={() => fireAndForget(editor.newLayer(), 'ai-editor')}
         >
-          <Plus />
+          <Plus class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
         <Button
+          aria-label="Delete selection"
           variant="ghost"
           size="icon-sm"
-          label="Delete selection"
           tooltip="Delete selection"
           data-testid="ai-layer-delete"
           disabled={!editor.enabled() || viewer.selected().length === 0}
           onClick={deleteSelected}
         >
-          <Trash />
+          <Trash class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <div

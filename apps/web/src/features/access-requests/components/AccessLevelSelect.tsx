@@ -13,7 +13,7 @@ export function AccessLevelSelect(props: {
   return (
     <Dropdown>
       <Dropdown.Trigger
-        variant="outline"
+        variant="secondary"
         disabled={props.disabled}
         aria-label={props.label}
       >

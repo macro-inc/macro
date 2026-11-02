@@ -1,6 +1,6 @@
 //! `external_chat_changed` signals: only for real changes, and to the right scope.
 use super::*;
-use signals::{Change, ChangeSignal};
+use external_chat::signals::{self as signals, Change, ChangeSignal};
 use sqlx::postgres::PgListener;
 
 async fn listen(pool: &PgPool) -> PgListener {
@@ -40,7 +40,8 @@ async fn rosters_signal_only_real_changes_and_rename_the_owners_group(pool: PgPo
         }
     );
     let detail = linked
-        .group_detail(&receipt::<MessageView>(ALICE, binding.id))
+        .chats
+        .detail(&receipt::<MessageView>(ALICE, binding.id))
         .await
         .unwrap();
     assert_eq!(detail.chat.name, "Escalations, renamed");
@@ -61,6 +62,7 @@ async fn rosters_signal_only_real_changes_and_rename_the_owners_group(pool: PgPo
     );
     assert!(
         linked
+            .whatsapp
             .chats(&person(ALICE))
             .await
             .unwrap()
@@ -69,7 +71,8 @@ async fn rosters_signal_only_real_changes_and_rename_the_owners_group(pool: PgPo
             .all(|chat| !chat.can_add)
     );
     let detail = linked
-        .group_detail(&receipt::<MessageView>(ALICE, binding.id))
+        .chats
+        .detail(&receipt::<MessageView>(ALICE, binding.id))
         .await
         .unwrap();
     assert_eq!(detail.chat.send_reason, Some(ReplyBlock::NotAdded));
@@ -90,6 +93,7 @@ async fn messages_and_send_outcomes_signal_their_group(pool: PgPool) {
         }
     );
     let progress = linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(ALICE, binding.id),
             &SendReply {
@@ -140,6 +144,7 @@ async fn a_retried_send_returns_the_original_whatever_happened_since(pool: PgPoo
     };
     let access = receipt::<MessageWrite>(ALICE, binding.id);
     let original = linked
+        .chats
         .send_reply(&access, &request, SendAuthority::Human)
         .await
         .unwrap();
@@ -155,6 +160,7 @@ async fn a_retried_send_returns_the_original_whatever_happened_since(pool: PgPoo
     // Alice is no longer in the group: a new send would be refused.
     session.group_left(alice, GROUP, Utc::now()).await.unwrap();
     let retried = linked
+        .chats
         .send_reply(&access, &request, SendAuthority::Human)
         .await
         .unwrap();
@@ -170,20 +176,25 @@ async fn a_retried_send_returns_the_original_whatever_happened_since(pool: PgPoo
     };
     assert_eq!(
         linked
+            .chats
             .send_reply(&access, &changed, SendAuthority::Human)
             .await
             .unwrap_err()
             .current_context(),
-        &LinkedError::Conflict
+        &ExternalChatError::Conflict
     );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn change_audiences_come_from_the_store(pool: PgPool) {
-    use crate::domain::ports::{AudienceRepository, MessageNotice};
-    let (linked, session, repository, binding, alice, _) = adopted(&pool).await;
+    use external_chat::domain::ports::{AudienceRepository, MessageNotice};
+    let (linked, session, _, binding, alice, _) = adopted(&pool).await;
     assert_eq!(
-        repository.account_owner(alice.account_id).await.unwrap(),
+        linked
+            .whatsapp
+            .account_owner(alice.account_id)
+            .await
+            .unwrap(),
         Some(ALICE.to_owned())
     );
     session
@@ -191,6 +202,7 @@ async fn change_audiences_come_from_the_store(pool: PgPool) {
         .await
         .unwrap();
     let message = linked
+        .chats
         .messages(&receipt::<MessageView>(ALICE, binding.id), None, Some(1))
         .await
         .unwrap()
@@ -204,7 +216,11 @@ async fn change_audiences_come_from_the_store(pool: PgPool) {
     .await
     .unwrap();
     assert_eq!(
-        repository.message_notice(binding.id, stored).await.unwrap(),
+        linked
+            .store
+            .message_notice(binding.id, stored)
+            .await
+            .unwrap(),
         Some(MessageNotice {
             provider: ExternalChatProvider::WhatsApp,
             chat_name: "Customer escalations".into(),
@@ -212,7 +228,8 @@ async fn change_audiences_come_from_the_store(pool: PgPool) {
         })
     );
     assert!(
-        repository
+        linked
+            .store
             .link_viewers(binding.id)
             .await
             .unwrap()

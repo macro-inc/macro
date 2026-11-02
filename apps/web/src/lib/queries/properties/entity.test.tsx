@@ -68,6 +68,10 @@ const soupPropertyToPropertyMock = vi.hoisted(() => vi.fn());
 const rollbackMock = vi.hoisted(() => vi.fn());
 const optimisticUpdateSoupEntityMock = vi.hoisted(() => vi.fn());
 const invalidateSoupEntityMock = vi.hoisted(() => vi.fn());
+const refreshPropertyQueriesMock = vi.hoisted(() => vi.fn(async () => {}));
+vi.mock('../soup/property-queries', () => ({
+  refreshPropertyQueries: refreshPropertyQueriesMock,
+}));
 const graphqlSoupEnabledMock = vi.hoisted(() => vi.fn(() => true));
 const toastFailureMock = vi.hoisted(() => vi.fn());
 const trackMock = vi.hoisted(() => vi.fn());
@@ -778,6 +782,7 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     expect(rollbackMock).not.toHaveBeenCalled();
     expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
     expect(testQueryClient.invalidateQueries).toHaveBeenCalled();
+    expect(refreshPropertyQueriesMock).toHaveBeenCalledWith('status-def');
     expect(toastFailureMock).not.toHaveBeenCalled();
   });
 
@@ -821,6 +826,7 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
       { input: buildGraphqlEntitySoupInput('INITIATIVE', 'initiative-1')! },
       { requestPolicy: 'network-only' }
     );
+    expect(refreshPropertyQueriesMock).toHaveBeenCalledOnce();
   });
 
   it('invalidates REST projections after delete and option writes', async () => {
@@ -838,6 +844,9 @@ describe('useBulkSaveEntityPropertiesMutation dispositions', () => {
     });
 
     expect(testQueryClient.invalidateQueries).toHaveBeenCalledTimes(4);
+    expect(invalidateSoupEntityMock).toHaveBeenCalledWith('task-1');
+    expect(refreshPropertyQueriesMock).toHaveBeenCalledTimes(2);
+    expect(refreshPropertyQueriesMock).toHaveBeenCalledWith('status-def');
   });
 
   it.each(['delete', 'options'] as const)(

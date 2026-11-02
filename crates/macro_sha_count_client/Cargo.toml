@@ -17,3 +17,7 @@ redis = { workspace = true, features = [
 tokio = { workspace = true }
 tracing = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+macro_env_var = { path = "../macro_env_var" }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -400,7 +400,7 @@ export function HomeTab() {
     <>
       <RibbonGroup label="Clipboard">
         <RibbonButton
-          label="Paste"
+          aria-label="Paste"
           tooltip="Paste (⌘V)"
           disabled={ro()}
           onClick={env.paste}
@@ -408,21 +408,21 @@ export function HomeTab() {
           <ClipboardIcon />
         </RibbonButton>
         <RibbonButton
-          label="Cut"
+          aria-label="Cut"
           tooltip="Cut (⌘X)"
           disabled={ro()}
           onClick={env.cut}
         >
           <Scissors />
         </RibbonButton>
-        <RibbonButton label="Copy" tooltip="Copy (⌘C)" onClick={env.copy}>
+        <RibbonButton aria-label="Copy" tooltip="Copy (⌘C)" onClick={env.copy}>
           <CopyIcon />
         </RibbonButton>
         <RibbonButton
-          label="Format Painter"
+          aria-label="Format Painter"
           tooltip="Format Painter: click to paint once, double-click to keep painting (⇧⌘C / ⇧⌘V)"
           disabled={ro() || env.selection().length === 0}
-          active={env.formatPainter.active()}
+          aria-pressed={env.formatPainter.active()}
           data-testid="pptx-format-painter"
           onClick={() => {
             if (env.formatPainter.active()) env.formatPainter.cancel();
@@ -437,7 +437,7 @@ export function HomeTab() {
       </RibbonGroup>
       <RibbonGroup label="Slides">
         <RibbonTextButton
-          label="New slide"
+          aria-label="New slide"
           tooltip="New slide (⌘M)"
           disabled={ro()}
           data-testid="pptx-new-slide"
@@ -493,7 +493,7 @@ export function HomeTab() {
         </RibbonPopover>
         <SectionMenu />
         <RibbonButton
-          label="Duplicate slide"
+          aria-label="Duplicate slide"
           tooltip="Duplicate slide"
           disabled={ro()}
           onClick={() => fireAndForget(c.duplicateSlide(), 'pptx-editor')}
@@ -501,7 +501,7 @@ export function HomeTab() {
           <CopySimple />
         </RibbonButton>
         <RibbonButton
-          label="Delete slide"
+          aria-label="Delete slide"
           tooltip="Delete slide"
           disabled={ro() || (env.deck()?.slides.length ?? 0) <= 1}
           onClick={() => {
@@ -526,7 +526,7 @@ export function HomeTab() {
           onPick={(size) => fireAndForget(c.setFontSize(size), 'pptx-editor')}
         />
         <RibbonButton
-          label="Increase font size"
+          aria-label="Increase font size"
           tooltip="Increase font size (⇧⌘>)"
           disabled={!text()}
           onClick={() => fireAndForget(c.stepSize(1), 'pptx-editor')}
@@ -536,7 +536,7 @@ export function HomeTab() {
           </span>
         </RibbonButton>
         <RibbonButton
-          label="Decrease font size"
+          aria-label="Decrease font size"
           tooltip="Decrease font size (⇧⌘<)"
           disabled={!text()}
           onClick={() => fireAndForget(c.stepSize(-1), 'pptx-editor')}
@@ -546,7 +546,7 @@ export function HomeTab() {
           </span>
         </RibbonButton>
         <RibbonButton
-          label="Clear formatting"
+          aria-label="Clear formatting"
           tooltip="Clear all formatting"
           disabled={!text()}
           onClick={() => fireAndForget(c.clearFormatting(), 'pptx-editor')}
@@ -554,47 +554,47 @@ export function HomeTab() {
           <Eraser />
         </RibbonButton>
         <RibbonButton
-          label="Bold"
+          aria-label="Bold"
           tooltip="Bold (⌘B)"
           data-testid="pptx-bold"
           disabled={!text()}
-          active={text() && f().bold}
+          aria-pressed={text() && f().bold}
           onClick={() => fireAndForget(c.toggle('bold'), 'pptx-editor')}
         >
           <TextB />
         </RibbonButton>
         <RibbonButton
-          label="Italic"
+          aria-label="Italic"
           tooltip="Italic (⌘I)"
           disabled={!text()}
-          active={text() && f().italic}
+          aria-pressed={text() && f().italic}
           onClick={() => fireAndForget(c.toggle('italic'), 'pptx-editor')}
         >
           <TextItalic />
         </RibbonButton>
         <RibbonButton
-          label="Underline"
+          aria-label="Underline"
           tooltip="Underline (⌘U)"
           disabled={!text()}
-          active={text() && f().underline}
+          aria-pressed={text() && f().underline}
           onClick={() => fireAndForget(c.toggle('underline'), 'pptx-editor')}
         >
           <TextUnderline />
         </RibbonButton>
         <RibbonButton
-          label="Strikethrough"
+          aria-label="Strikethrough"
           tooltip="Strikethrough"
           disabled={!text()}
-          active={text() && f().strike}
+          aria-pressed={text() && f().strike}
           onClick={() => fireAndForget(c.toggle('strike'), 'pptx-editor')}
         >
           <TextStrikethrough />
         </RibbonButton>
         <RibbonButton
-          label="Superscript"
+          aria-label="Superscript"
           tooltip="Superscript (⇧⌘=)"
           disabled={!text()}
-          active={text() && (f().baseline ?? 0) > 0}
+          aria-pressed={text() && (f().baseline ?? 0) > 0}
           onClick={() =>
             fireAndForget(c.toggleBaseline('super'), 'pptx-editor')
           }
@@ -602,10 +602,10 @@ export function HomeTab() {
           <TextSuperscript />
         </RibbonButton>
         <RibbonButton
-          label="Subscript"
+          aria-label="Subscript"
           tooltip="Subscript (⌘=)"
           disabled={!text()}
-          active={text() && (f().baseline ?? 0) < 0}
+          aria-pressed={text() && (f().baseline ?? 0) < 0}
           onClick={() => fireAndForget(c.toggleBaseline('sub'), 'pptx-editor')}
         >
           <TextSubscript />
@@ -698,10 +698,10 @@ export function HomeTab() {
       </RibbonGroup>
       <RibbonGroup label="Paragraph">
         <RibbonButton
-          label="Bullets"
+          aria-label="Bullets"
           tooltip="Bullets"
           disabled={!text()}
-          active={text() && f().bullet}
+          aria-pressed={text() && f().bullet}
           onClick={() => fireAndForget(c.toggleBullets(), 'pptx-editor')}
         >
           <ListBullets />
@@ -739,7 +739,7 @@ export function HomeTab() {
           )}
         </RibbonPopover>
         <RibbonButton
-          label="Numbering"
+          aria-label="Numbering"
           tooltip="Numbering"
           disabled={!text()}
           onClick={() => fireAndForget(c.toggleNumbering(), 'pptx-editor')}
@@ -776,7 +776,7 @@ export function HomeTab() {
           )}
         </RibbonPopover>
         <RibbonButton
-          label="Decrease list level"
+          aria-label="Decrease list level"
           tooltip="Decrease list level (⇧Tab)"
           disabled={!text()}
           onClick={() => fireAndForget(c.indent(-1), 'pptx-editor')}
@@ -784,7 +784,7 @@ export function HomeTab() {
           <TextOutdent />
         </RibbonButton>
         <RibbonButton
-          label="Increase list level"
+          aria-label="Increase list level"
           tooltip="Increase list level (Tab)"
           disabled={!text()}
           onClick={() => fireAndForget(c.indent(1), 'pptx-editor')}
@@ -831,10 +831,10 @@ export function HomeTab() {
         >
           {([value, label, Icon]) => (
             <RibbonButton
-              label={label.split(' (')[0]}
+              aria-label={label.split(' (')[0]}
               tooltip={label}
               disabled={!text()}
-              active={text() && f().align === value}
+              aria-pressed={text() && f().align === value}
               onClick={() => fireAndForget(c.align(value), 'pptx-editor')}
             >
               <Icon />
@@ -924,14 +924,14 @@ export function HomeTab() {
       </RibbonGroup>
       <RibbonGroup label="Editing">
         <RibbonButton
-          label="Find"
+          aria-label="Find"
           tooltip="Find (⌘F)"
           onClick={() => env.find(false)}
         >
           <MagnifyingGlass />
         </RibbonButton>
         <RibbonTextButton
-          label="Replace"
+          aria-label="Replace"
           tooltip="Replace (⌘H)"
           disabled={ro()}
           onClick={() => env.find(true)}
@@ -939,7 +939,7 @@ export function HomeTab() {
           Replace
         </RibbonTextButton>
         <RibbonButton
-          label="Select all"
+          aria-label="Select all"
           tooltip="Select all (⌘A)"
           onClick={() => c.selectAll()}
         >

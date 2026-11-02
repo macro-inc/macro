@@ -1,7 +1,7 @@
 import { ListHeader } from '@app/components/view-shell/ListHeader';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { Button, Tabs } from '@ui';
+import { ButtonGroup, Tabs } from '@ui';
 import { createSignal, type JSX, Show } from 'solid-js';
 import type { PublicProfile } from '../core/types';
 import { Field, TextArea, TextInput } from './fields';
@@ -43,7 +43,7 @@ export function BookingPageEditor(props: {
         <div class="pointer-events-auto flex items-center gap-2 touch:rounded-lg touch:bg-panel">
           <HeaderActionGroup label="Booking page changes">
             <Show when={props.canEdit && props.hasChanges}>
-              <Button
+              <ButtonGroup.Button
                 type="button"
                 variant="ghost"
                 aria-label="Revert booking page changes"
@@ -51,18 +51,18 @@ export function BookingPageEditor(props: {
                 onClick={props.onRevert}
               >
                 Revert
-              </Button>
+              </ButtonGroup.Button>
             </Show>
-            <Button
+            <ButtonGroup.Button
               type="submit"
-              variant="strong"
+              variant="primary"
               aria-label={
                 props.saving ? 'Saving booking page' : 'Save booking page'
               }
               disabled={!props.canEdit || !props.hasChanges || props.saving}
             >
               {props.saving ? 'Saving…' : 'Save'}
-            </Button>
+            </ButtonGroup.Button>
           </HeaderActionGroup>
         </div>
       </Show>

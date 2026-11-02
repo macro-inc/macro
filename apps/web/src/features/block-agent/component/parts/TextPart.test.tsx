@@ -6,9 +6,9 @@
  * each re-render rebuilds its DOM, reloading every image in it.
  */
 
-import { render } from '@solidjs/testing-library';
+import { cleanup, render } from '@solidjs/testing-library';
 import { createEffect, createSignal } from 'solid-js';
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { TextPart } from './TextPart';
 
 const parses = vi.hoisted((): string[] => []);
@@ -28,7 +28,35 @@ vi.mock('@core/component/LexicalMarkdown/theme', () => ({
   channelTheme: {},
 }));
 
+afterEach(cleanup);
+
 describe('TextPart', () => {
+  it('keeps an unfinished agent chip hidden when the stream settles', () => {
+    parses.length = 0;
+    const [inFlight, setInFlight] = createSignal(true);
+    render(() => (
+      <TextPart
+        text={'See <m-document-mention>{"documentId":"unfinished'}
+        hideIncompleteXml
+        inFlight={inFlight()}
+      />
+    ));
+    setInFlight(false);
+    expect(parses).toEqual(['See ']);
+  });
+
+  it('preserves complete chips and surrounding text in settled replies', () => {
+    parses.length = 0;
+    const complete =
+      '<m-document-mention>{"documentId":"abc","documentName":"Notes","blockName":"md","blockParams":{}}</m-document-mention>';
+    render(() => (
+      <TextPart
+        text={`Before ${complete} after. Next <m-user-mention>{"userId":`}
+        hideIncompleteXml
+      />
+    ));
+    expect(parses).toEqual([`Before ${complete} after. Next `]);
+  });
   it('hands mounted markdown DOM to its observer and cleans up when unmounted', () => {
     const stop = vi.fn();
     const observe = vi.fn((element: HTMLElement) => {

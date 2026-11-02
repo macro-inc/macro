@@ -24,7 +24,8 @@
 //!   writes responses and notifications to any writer. Nothing else ever
 //!   touches that writer. Stdio is one instantiation; an in-process client over a
 //!   `tokio::io::duplex` pipe is another.
-//! - [`outbound`] holds journal storage. Standalone sessions leave the
+//! - [`outbound`] holds journal storage, artifact storage, and public prompt-image
+//!   fetching. Standalone sessions leave the
 //!   repository unset; hosted sessions use the harness repository chooser.
 //!
 //! The translation is deliberately a state machine

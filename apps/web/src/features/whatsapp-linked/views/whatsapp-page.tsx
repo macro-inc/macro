@@ -3,12 +3,17 @@ import { ViewSkeleton } from '@app/components/view-shell/ViewSkeleton';
 import { toast } from '@core/component/Toast/Toast';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
+import NotePencilIcon from '@phosphor/note-pencil.svg';
 import { Button, ConfirmDialog } from '@ui';
 import { createSignal, Match, onMount, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import { AccountStrip, ConnectCard } from '../components/account-card';
 import { ChatList, UnsupportedChatList } from '../components/chat-list';
-import { ConversationSectionList } from '../components/conversation-sections';
+import {
+  ConversationSection,
+  ConversationSectionList,
+} from '../components/conversation-sections';
+import { NewChatDialog } from '../components/new-chat-dialog';
 import { PairingDialog, type PasskeyMode } from '../components/pairing-dialog';
 import { useWhatsAppLinked } from '../context/whatsapp-linked-context';
 import { accountStatus } from '../core/account';
@@ -19,6 +24,9 @@ import {
   type WhatsAppChat,
 } from '../core/chat';
 import { createPairingFlow } from '../primitives/pairing-flow';
+
+/** The Contacts section's id for its remembered open state. */
+const CONTACTS_SECTION = 'contacts';
 
 function Notice(props: { children: string }) {
   return (
@@ -32,7 +40,12 @@ function LoadFailure(props: { what: string; onRetry: () => void }) {
   return (
     <div class="flex items-center gap-3 px-4 py-2 text-sm text-ink-muted">
       <span role="alert">Couldn't load {props.what}.</span>
-      <Button type="button" size="sm" variant="outline" onClick={props.onRetry}>
+      <Button
+        type="button"
+        size="sm"
+        variant="secondary"
+        onClick={props.onRetry}
+      >
         Try again
       </Button>
     </div>
@@ -82,6 +95,7 @@ export function WhatsAppPage(props: {
       .exhaustive();
   };
   const [confirmingDisconnect, setConfirmingDisconnect] = createSignal(false);
+  const [startingChat, setStartingChat] = createSignal(false);
   const [adding, setAdding] = createSignal<ReadonlySet<string>>(new Set());
   const [addErrors, setAddErrors] = createSignal<Record<string, string>>({});
 
@@ -141,14 +155,26 @@ export function WhatsAppPage(props: {
           {(current) => (
             <>
               <div class="sticky top-0 z-10 flex flex-col gap-2 bg-panel px-4 pt-4 pb-1 touch:static">
-                <div class="flex min-w-0 items-center gap-3 touch:flex-col-reverse touch:items-stretch">
-                  <SearchBar
-                    label="Search WhatsApp chats"
-                    placeholder="Search chats"
-                    value={query()}
-                    onValueChange={setQuery}
-                    class="max-w-md flex-1 touch:max-w-none"
-                  />
+                <div class="flex min-w-0 flex-wrap items-center gap-3 touch:flex-col-reverse touch:flex-nowrap touch:items-stretch">
+                  <div class="flex min-w-64 max-w-md flex-1 items-center gap-2 touch:min-w-0 touch:max-w-none">
+                    <SearchBar
+                      label="Search WhatsApp chats"
+                      placeholder="Search chats and contacts"
+                      value={query()}
+                      onValueChange={setQuery}
+                      class="min-w-0 flex-1"
+                    />
+                    <Button
+                      type="button"
+                      variant="secondary"
+                      size="sm"
+                      aria-label="New chat"
+                      onClick={() => setStartingChat(true)}
+                    >
+                      <NotePencilIcon class="size-3.5" />
+                      <span class="mobile:hidden">New chat</span>
+                    </Button>
+                  </div>
                   <div class="ml-auto min-w-0 touch:ml-0">
                     <AccountStrip
                       account={current().account}
@@ -196,10 +222,46 @@ export function WhatsAppPage(props: {
                             )}
                           />
                         </div>
-                        <Show when={!sections().listed.length}>
+                        <Show when={sections().contacts.length}>
+                          <div class="px-2 pt-(--sidebar-section-gap)">
+                            <ConversationSection
+                              title="Contacts"
+                              open={
+                                searching() ||
+                                whatsapp.sections.isOpen(CONTACTS_SECTION)
+                              }
+                              onOpenChange={(open) =>
+                                whatsapp.sections.setOpen(
+                                  CONTACTS_SECTION,
+                                  open
+                                )
+                              }
+                            >
+                              <ChatList
+                                label="Contacts"
+                                chats={sections().contacts}
+                                adding={adding()}
+                                errors={addErrors()}
+                                onAdd={(chat) =>
+                                  fireAndForget(
+                                    add(chat),
+                                    'whatsapp-linked.add'
+                                  )
+                                }
+                                onOpenChat={whatsapp.openChat}
+                              />
+                            </ConversationSection>
+                          </div>
+                        </Show>
+                        <Show
+                          when={
+                            !sections().listed.length &&
+                            !sections().contacts.length
+                          }
+                        >
                           <p class="px-4 py-2 text-sm text-ink-extra-muted">
                             {searching()
-                              ? 'No chats to add match your search.'
+                              ? 'No chats or contacts match your search. To message someone else, start a new chat with their number.'
                               : 'Every WhatsApp chat you can add is already in Macro.'}
                           </p>
                         </Show>
@@ -220,6 +282,15 @@ export function WhatsAppPage(props: {
                   <LoadFailure what="your chats" onRetry={chats.refetch} />
                 </Match>
               </Switch>
+              <NewChatDialog
+                open={startingChat()}
+                onOpenChange={setStartingChat}
+                onStart={(phoneNumber) =>
+                  whatsapp
+                    .startChat(phoneNumber)
+                    .map(({ chatId }) => whatsapp.openChat(chatId))
+                }
+              />
               <ConfirmDialog
                 open={confirmingDisconnect()}
                 onOpenChange={setConfirmingDisconnect}

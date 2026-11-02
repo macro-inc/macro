@@ -1,0 +1,71 @@
+[package]
+edition = "2024"
+name = "external_chat"
+publish = false
+version = "0.1.0"
+
+[features]
+default = []
+# Port traits and the domain services built on them.
+ports = [
+  "dep:async-trait",
+  "dep:entity_access",
+  "dep:image",
+  "dep:macro_user_id",
+  "dep:nom",
+  "dep:rootcause",
+  "dep:sha2",
+  "entity_access/ports",
+]
+# Postgres adapters.
+outbound = [
+  "dep:entity_access",
+  "dep:entity_access_db_utils",
+  "dep:share_permission_db_utils",
+  "dep:opentelemetry",
+  "dep:sqlx",
+  "dep:tracing-opentelemetry",
+  "entity_access/ports",
+  "entity_access/outbound",
+  "ports",
+]
+# DSS HTTP routes.
+inbound = [
+  "dep:axum",
+  "dep:entity_access",
+  "dep:macro_authorization",
+  "entity_access/inbound",
+  "ports",
+  "schema",
+]
+schema = ["dep:utoipa"]
+
+[dependencies]
+async-trait = { workspace = true, optional = true }
+axum = { workspace = true, features = ["multipart"], optional = true }
+chrono = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false, optional = true }
+entity_access_db_utils = { path = "../entity_access_db_utils", optional = true }
+image = { workspace = true, optional = true }
+macro_authorization = { path = "../macro_authorization", default-features = false, features = ["axum"], optional = true }
+macro_user_id = { path = "../macro_user_id", optional = true }
+model-entity = { path = "../model-entity" }
+models_permissions = { path = "../models_permissions" }
+nom = { workspace = true, optional = true }
+opentelemetry = { workspace = true, features = ["trace"], optional = true }
+rootcause = { workspace = true, optional = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+sha2 = { workspace = true, optional = true }
+share_permission_db_utils = { path = "../share_permission_db_utils", optional = true }
+sqlx = { workspace = true, optional = true }
+strum = { workspace = true }
+thiserror = { workspace = true }
+tracing = { workspace = true }
+tracing-opentelemetry = { workspace = true, optional = true }
+utoipa = { workspace = true, optional = true }
+uuid = { workspace = true }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+
+[dev-dependencies]
+tokio = { workspace = true, features = ["macros", "rt-multi-thread"] }

@@ -137,3 +137,13 @@ fn the_gateway_url_is_the_api_base_with_a_websocket_scheme() {
         "https://macro.com/app/settings/harness?pair=KX7M-4QHD",
     );
 }
+
+#[test]
+fn updates_are_on_unless_the_config_turns_them_off() {
+    let config: Config = toml::from_str(EXAMPLE).expect("example config parses");
+    assert!(config.update.auto);
+
+    let opted_out: Config =
+        toml::from_str(&format!("{EXAMPLE}\n[update]\nauto = false\n")).expect("opt-out parses");
+    assert!(!opted_out.update.auto);
+}

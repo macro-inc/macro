@@ -146,22 +146,46 @@ impl<'a> Converter<'a> {
         if values.len() > 1 && !self.target_is_multi() {
             return Err(Misfit::SeveralValues);
         }
-        let cell = if takes_options(self.target.data_type) {
-            ConvertedCell::Options(
-                values
-                    .into_iter()
-                    .map(|value| self.label(value))
-                    .collect::<Result<_, _>>()?,
-            )
-        } else if self.target.data_type == DataType::Link {
-            ConvertedCell::Value(PropertyValue::Link(
-                values.into_iter().map(url).collect::<Result<_, _>>()?,
-            ))
-        } else {
-            let value = values.into_iter().next().ok_or(Misfit::NotOption)?;
-            ConvertedCell::Value(self.scalar(value)?)
+        let value = match self.target.data_type {
+            DataType::SelectString | DataType::SelectNumber | DataType::Tag => {
+                return Ok(ConvertedCell::Options(
+                    values
+                        .into_iter()
+                        .map(|value| self.label(value))
+                        .collect::<Result<_, _>>()?,
+                ));
+            }
+            DataType::Link => {
+                PropertyValue::Link(values.into_iter().map(url).collect::<Result<_, _>>()?)
+            }
+            DataType::String => text(single(values)?)
+                .map(PropertyValue::Str)
+                .ok_or(Misfit::NotText)?,
+            DataType::Number => number(single(values)?).map(PropertyValue::Num)?,
+            DataType::Boolean => match single(values)? {
+                PropertyValue::Bool(value) => PropertyValue::Bool(value),
+                PropertyValue::Str(value) if value == "true" || value == "false" => {
+                    PropertyValue::Bool(value == "true")
+                }
+                _ => return Err(Misfit::NotCheckbox),
+            },
+            DataType::Date => match single(values)? {
+                PropertyValue::Date(value) => PropertyValue::Date(value),
+                PropertyValue::Str(value) => date(&value).map(PropertyValue::Date)?,
+                _ => return Err(Misfit::NotDate),
+            },
+            DataType::DateRange => match single(values)? {
+                PropertyValue::DateRange(range) => PropertyValue::DateRange(range),
+                PropertyValue::Date(date) => PropertyValue::DateRange(DateRange::at(date)),
+                PropertyValue::Str(value) => date_range(&value).map(PropertyValue::DateRange)?,
+                _ => return Err(Misfit::NotDateRange),
+            },
+            DataType::Entity => {
+                single(values)?;
+                return Err(Misfit::OtherReference);
+            }
         };
-        Ok(cell)
+        Ok(ConvertedCell::Value(value))
     }
 
     fn convert_references(
@@ -237,36 +261,6 @@ impl<'a> Converter<'a> {
         Ok(label)
     }
 
-    /// One value as a text, number, checkbox or date cell.
-    fn scalar(&self, value: PropertyValue) -> Result<PropertyValue, Misfit> {
-        match self.target.data_type {
-            DataType::String => text(value).map(PropertyValue::Str).ok_or(Misfit::NotText),
-            DataType::Number => number(value).map(PropertyValue::Num),
-            DataType::Boolean => match value {
-                PropertyValue::Bool(value) => Ok(PropertyValue::Bool(value)),
-                PropertyValue::Str(value) if value == "true" || value == "false" => {
-                    Ok(PropertyValue::Bool(value == "true"))
-                }
-                _ => Err(Misfit::NotCheckbox),
-            },
-            DataType::Date => match value {
-                PropertyValue::Date(value) => Ok(PropertyValue::Date(value)),
-                PropertyValue::Str(value) => date(&value).map(PropertyValue::Date),
-                _ => Err(Misfit::NotDate),
-            },
-            DataType::DateRange => match value {
-                PropertyValue::DateRange(range) => Ok(PropertyValue::DateRange(range)),
-                PropertyValue::Date(date) => Ok(PropertyValue::DateRange(DateRange::at(date))),
-                PropertyValue::Str(value) => date_range(&value).map(PropertyValue::DateRange),
-                _ => Err(Misfit::NotDateRange),
-            },
-            DataType::Entity => Err(Misfit::OtherReference),
-            DataType::Link | DataType::SelectString | DataType::SelectNumber | DataType::Tag => {
-                unreachable!("options and links are converted by convert")
-            }
-        }
-    }
-
     /// A cell's value as a refusal quotes it.
     fn example(&self, value: &PropertyValue) -> String {
         let text = match value {
@@ -299,6 +293,11 @@ pub(super) fn is_empty(value: &PropertyValue) -> bool {
 }
 
 /// A number, written exactly: no padding, rounding or leading zeros.
+/// The one value a scalar type takes.
+fn single(values: Vec<PropertyValue>) -> Result<PropertyValue, Misfit> {
+    values.into_iter().next().ok_or(Misfit::NotOption)
+}
+
 fn number(value: PropertyValue) -> Result<f64, Misfit> {
     match value {
         PropertyValue::Num(value) if value.is_finite() => Ok(value),

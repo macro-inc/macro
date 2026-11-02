@@ -11,3 +11,7 @@
 # violations are burned down.
 ruleDirs:
   - rules/ast-grep
+# Native permission rules read Apple property lists, which parse as HTML.
+languageGlobs:
+  html:
+    - '*.plist'

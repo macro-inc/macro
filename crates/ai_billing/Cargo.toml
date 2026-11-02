@@ -41,5 +41,9 @@ workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
 macro_db_migrator = { path = "../macro_db_migrator" }
+roles_and_permissions = { path = "../roles_and_permissions", default-features = false, features = [
+  "outbound",
+] }
+teams = { path = "../teams", default-features = false, features = ["outbound"] }
 tracing-subscriber = { workspace = true }
 wiremock = { workspace = true }

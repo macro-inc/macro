@@ -22,7 +22,8 @@ use crate::domain::models::{
     WrittenObject,
 };
 use crate::domain::ports::{
-    NotionLinks, NotionPageLink, NotionUserLink, SharedEntity, WorkspaceWriter, WrittenObjects,
+    NotionLinks, NotionPageLink, NotionUserLink, SharedEntity, SourceDates, WorkspaceWriter,
+    WrittenObjects,
 };
 
 use super::values::{PeopleMap, capped_name, derived_id, task_body, task_properties};
@@ -415,6 +416,7 @@ pub(super) async fn write_tasks<Api: NotionApi, Writer: WorkspaceWriter, Store: 
                             links,
                             &properties,
                             Some(tasks_folder),
+                            Some(SourceDates::from(&row)),
                         )
                         .await?;
                     progress.record_for(WrittenKind::Task, &row.id, id).await?;

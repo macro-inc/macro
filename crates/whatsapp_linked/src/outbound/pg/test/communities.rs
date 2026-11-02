@@ -49,7 +49,7 @@ async fn disappearing_and_community_groups_are_added_like_any_other(pool: PgPool
         .await
         .unwrap();
 
-    let chats = linked.chats(&person(ALICE)).await.unwrap().chats;
+    let chats = linked.whatsapp.chats(&person(ALICE)).await.unwrap().chats;
     let listed = |jid: &str| {
         let chat = chats.iter().find(|chat| chat.jid == jid).unwrap();
         (chat.can_add, chat.cannot_add_reason, chat.community.clone())
@@ -73,19 +73,21 @@ async fn disappearing_and_community_groups_are_added_like_any_other(pool: PgPool
         let linked = &linked;
         async move {
             linked
-                .adopt(&person(ALICE), &request, SendAuthority::Human)
+                .chats
+                .add(&person(ALICE), &request, SendAuthority::Human)
                 .await
         }
     };
     assert!(matches!(
         adopt(COMMUNITY).await.unwrap_err().current_context(),
-        LinkedError::CannotAdd(CannotAdd::Community)
+        ExternalChatError::CannotAdd(CannotAdd::Community)
     ));
-    let detail = |binding: Binding| {
+    let detail = |binding: ChatRef| {
         let linked = &linked;
         async move {
             linked
-                .group_detail(&receipt::<MessageView>(ALICE, binding.id))
+                .chats
+                .detail(&receipt::<MessageView>(ALICE, binding.id))
                 .await
                 .unwrap()
         }
@@ -108,7 +110,7 @@ async fn disappearing_and_community_groups_are_added_like_any_other(pool: PgPool
     assert_eq!(notices.chat.send_reason, Some(ReplyBlock::NotAllowed));
 
     // The list carries the community too, so it can group the chats.
-    let listed = linked.adopted_groups(&person(ALICE)).await.unwrap();
+    let listed = linked.chats.list(&person(ALICE)).await.unwrap();
     let community_of = |id: Uuid| {
         listed
             .iter()
@@ -130,6 +132,7 @@ async fn disappearing_and_community_groups_are_added_like_any_other(pool: PgPool
         IngestOutcome::Applied
     );
     let kept = linked
+        .chats
         .messages(&receipt::<MessageView>(ALICE, vanishing.id), None, Some(10))
         .await
         .unwrap()
@@ -143,6 +146,7 @@ async fn disappearing_and_community_groups_are_added_like_any_other(pool: PgPool
 
     // Macro's sends carry the group's timer.
     linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(ALICE, vanishing.id),
             &SendReply {

@@ -66,10 +66,11 @@ function LinkedSessionRow(props: { sessionId: string; url: string }) {
       </Tooltip>
       <Show when={linkedByPerson()}>
         <Button
+          aria-label={`Unlink ${label()}`}
+          tooltip={`Unlink ${label()}`}
           variant="ghost"
           size="icon-xs"
           class="ml-auto"
-          label={`Unlink ${label()}`}
           disabled={unlink.isPending}
           onClick={() =>
             unlink.mutate(
@@ -81,7 +82,7 @@ function LinkedSessionRow(props: { sessionId: string; url: string }) {
             )
           }
         >
-          <XIcon />
+          <XIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </Show>
     </div>
@@ -107,8 +108,13 @@ function LinkSessionPicker(props: {
     <ListFilterDropdown
       label="Link agent session"
       customTrigger={
-        <Dropdown.Trigger variant="ghost" size="xs" label="Link agent session">
-          <PlusIcon />
+        <Dropdown.Trigger
+          aria-label="Link agent session"
+          tooltip="Link agent session"
+          variant="ghost"
+          size="xs"
+        >
+          <PlusIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
           Link session
         </Dropdown.Trigger>
       }

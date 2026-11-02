@@ -162,6 +162,7 @@ fn notification_content(
     subtitle: Option<&str>,
     body: Option<&str>,
     thread_id: Option<&str>,
+    play_sound: bool,
 ) -> Retained<UNMutableNotificationContent> {
     let content = UNMutableNotificationContent::new();
     content.setTitle(&NSString::from_str(title));
@@ -173,7 +174,10 @@ fn notification_content(
     if let Some(thread_id) = thread_id {
         content.setThreadIdentifier(&NSString::from_str(thread_id));
     }
-    content.setSound(Some(&UNNotificationSound::defaultSound()));
+    // Silent when the app plays its own notification sound for this alert.
+    if play_sound {
+        content.setSound(Some(&UNNotificationSound::defaultSound()));
+    }
     content
 }
 
@@ -217,6 +221,7 @@ pub async fn send_macos_notification(
     subtitle: Option<String>,
     thread_id: Option<String>,
     sender: Option<communication::Sender>,
+    silent: Option<bool>,
 ) -> Result<(), NotificationError> {
     let span = tracing::Span::current();
     if let Some(notification_id) = &notification_id {
@@ -235,6 +240,7 @@ pub async fn send_macos_notification(
             subtitle.as_deref(),
             body.as_deref(),
             thread_id.as_deref(),
+            !silent.unwrap_or(false),
         );
         let content = match &sender {
             Some(sender) => communication::from_sender(

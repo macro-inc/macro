@@ -41,7 +41,7 @@ async fn a_direct_chat_is_added_kept_and_sent_to_only_by_its_owner(pool: PgPool)
         .await
         .unwrap();
 
-    let listed = linked.chats(&person(ALICE)).await.unwrap().chats;
+    let listed = linked.whatsapp.chats(&person(ALICE)).await.unwrap().chats;
     let chat = listed.iter().find(|chat| chat.jid == CUSTOMER_JID).unwrap();
     assert_eq!(
         (chat.kind, chat.can_add, chat.cannot_add_reason),
@@ -54,11 +54,12 @@ async fn a_direct_chat_is_added_kept_and_sent_to_only_by_its_owner(pool: PgPool)
     };
     assert!(matches!(
         linked
-            .adopt(&person(ALICE), &own, SendAuthority::Human)
+            .chats
+            .add(&person(ALICE), &own, SendAuthority::Human)
             .await
             .unwrap_err()
             .current_context(),
-        LinkedError::CannotAdd(CannotAdd::OwnChat)
+        ExternalChatError::CannotAdd(CannotAdd::OwnChat)
     ));
     let as_group = AddChat {
         provider: ExternalChatProvider::WhatsApp,
@@ -67,11 +68,12 @@ async fn a_direct_chat_is_added_kept_and_sent_to_only_by_its_owner(pool: PgPool)
     };
     assert!(matches!(
         linked
-            .adopt(&person(ALICE), &as_group, SendAuthority::Human)
+            .chats
+            .add(&person(ALICE), &as_group, SendAuthority::Human)
             .await
             .unwrap_err()
             .current_context(),
-        LinkedError::Invalid(_)
+        ExternalChatError::Invalid(_)
     ));
     let request = AddChat {
         provider: ExternalChatProvider::WhatsApp,
@@ -79,13 +81,15 @@ async fn a_direct_chat_is_added_kept_and_sent_to_only_by_its_owner(pool: PgPool)
         kind: ExternalChatKind::Direct,
     };
     let binding = linked
-        .adopt(&person(ALICE), &request, SendAuthority::Human)
+        .chats
+        .add(&person(ALICE), &request, SendAuthority::Human)
         .await
         .unwrap();
     assert_eq!(binding.kind, ExternalChatKind::Direct);
     assert_eq!(
         linked
-            .adopt(&person(ALICE), &request, SendAuthority::Human)
+            .chats
+            .add(&person(ALICE), &request, SendAuthority::Human)
             .await
             .unwrap()
             .id,
@@ -94,7 +98,8 @@ async fn a_direct_chat_is_added_kept_and_sent_to_only_by_its_owner(pool: PgPool)
     );
 
     let detail = linked
-        .group_detail(&receipt::<MessageView>(ALICE, binding.id))
+        .chats
+        .detail(&receipt::<MessageView>(ALICE, binding.id))
         .await
         .unwrap();
     assert_eq!(
@@ -106,7 +111,7 @@ async fn a_direct_chat_is_added_kept_and_sent_to_only_by_its_owner(pool: PgPool)
         (ExternalChatKind::Direct, "Customer", true)
     );
     assert!(detail.members.is_none());
-    let bobs_list = linked.chats(&person(BOB)).await.unwrap().chats;
+    let bobs_list = linked.whatsapp.chats(&person(BOB)).await.unwrap().chats;
     let bobs = bobs_list
         .iter()
         .find(|chat| chat.jid == CUSTOMER_JID)
@@ -128,6 +133,7 @@ async fn a_direct_chat_is_added_kept_and_sent_to_only_by_its_owner(pool: PgPool)
         );
     }
     let messages = linked
+        .chats
         .messages(&receipt::<MessageView>(ALICE, binding.id), None, Some(10))
         .await
         .unwrap()
@@ -170,7 +176,8 @@ async fn a_direct_chat_is_added_kept_and_sent_to_only_by_its_owner(pool: PgPool)
     tx.commit().await.unwrap();
     session.update_groups(bob, &[], true).await.unwrap();
     let bobs_view = linked
-        .group_detail(&receipt::<MessageView>(BOB, binding.id))
+        .chats
+        .detail(&receipt::<MessageView>(BOB, binding.id))
         .await
         .unwrap();
     assert_eq!(
@@ -187,6 +194,7 @@ async fn a_direct_chat_is_added_kept_and_sent_to_only_by_its_owner(pool: PgPool)
     };
     assert!(
         linked
+            .chats
             .send_reply(
                 &receipt::<MessageWrite>(BOB, binding.id),
                 &send(BOB),
@@ -196,6 +204,7 @@ async fn a_direct_chat_is_added_kept_and_sent_to_only_by_its_owner(pool: PgPool)
             .is_err()
     );
     linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(ALICE, binding.id),
             &send(ALICE),
@@ -221,7 +230,8 @@ async fn a_direct_chat_is_added_kept_and_sent_to_only_by_its_owner(pool: PgPool)
     session.update_groups(alice, &[], true).await.unwrap();
     assert_eq!(
         linked
-            .group_detail(&receipt::<MessageView>(ALICE, binding.id))
+            .chats
+            .detail(&receipt::<MessageView>(ALICE, binding.id))
             .await
             .unwrap()
             .chat

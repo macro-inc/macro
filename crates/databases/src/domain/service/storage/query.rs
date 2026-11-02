@@ -52,6 +52,7 @@ pub(super) fn rows(
     request: &StorageRowsQuery,
 ) -> Result<Vec<RowId>, DatabaseError> {
     let catalog = Catalog {
+        scope: None,
         tables: vec![engine_table(entry, "")],
     };
     let query = if request.row_ids.is_some() {

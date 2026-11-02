@@ -15,6 +15,8 @@ and usage metering.
   behind `model/router.rs`, plus `predefined_model.rs`/`speed.rs` (the
   product-facing model/speed vocabulary) and `metering.rs` (usage recording
   hook into `ai_usage`).
+- `AgentLoop::with_streamed_tool_calls` opts hosts into early tool-call
+  announcements and argument deltas; the accumulator persists only final calls.
 - `src/stream.rs`: `StreamPart`/`ChatCompletionStream`, the wire shape
   callers consume.
 - `src/completion.rs`: one-shot, non-looping completions (no tools).

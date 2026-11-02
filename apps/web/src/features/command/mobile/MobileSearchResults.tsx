@@ -9,6 +9,7 @@ import { useSplitLayout } from '@components/app/split-layout/layout';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { toast } from '@core/component/Toast/Toast';
+import type { QuickAccessItem } from '@core/context/quickAccess';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { isTransientRequestError } from '@core/util/request-error';
@@ -28,10 +29,7 @@ import { type VirtualizerHandle, VList } from 'virtua/solid';
 import { useUniversalInputEnabled } from '../../universal-input/use-universal-input';
 import { ItemDisplay } from '../CommandItem';
 import { commandSearchResultKey } from '../contact-items';
-import {
-  type EntitySearchItem,
-  useEntitySearch,
-} from '../queries/entity-search';
+import { useEntitySearch } from '../queries/entity-search';
 import { createMobileFullTextSearch } from '../queries/mobile-full-text-search';
 import { createMobileSearchEntry } from './create-mobile-search-entry';
 import { createSearchPagination } from './create-search-pagination';
@@ -56,7 +54,7 @@ function MobileNameResults(props: {
   const incoming = createMemo(() =>
     source.rankItems(source.items(), state.query())
   );
-  const itemKey = (item: EntitySearchItem) =>
+  const itemKey = (item: QuickAccessItem) =>
     commandSearchResultKey(item, props.accountId);
   const results = createSearchResultWindow({
     key: 'mobileSearch.nameOrder',
@@ -125,11 +123,11 @@ function MobileNameResults(props: {
   const { openWithSplit } = useSplitLayout();
   const panel = useSplitPanelOrThrow();
   const directMessage = useGetOrCreateDirectMessageMutation();
-  const open = async (item: EntitySearchItem) => {
+  const open = async (item: QuickAccessItem) => {
     await Telemetry.span('mobile.search.open', async (span) => {
       span.setAttr('entity.id', item.id);
       span.setAttr('entity.type', item.bucket);
-      if (item.kind === 'initiative') {
+      if (item.kind === 'entity' && item.bucket === 'initiative') {
         openWithSplit({
           type: 'component',
           id: projectRouteId({ id: item.id, section: 'overview' }),
@@ -149,7 +147,7 @@ function MobileNameResults(props: {
       }
     });
   };
-  const select = async (item: EntitySearchItem) => {
+  const select = async (item: QuickAccessItem) => {
     results.preserveOrder();
     try {
       await open(item);
@@ -353,6 +351,7 @@ function MobileFullTextResults(props: {
           {t('commandMenu.searchFailed')}
         </p>
         <Button
+          variant="ghost"
           onClick={() => fireAndForget(search.refetch(), 'mobile-search')}
         >
           {t('commandMenu.retry')}

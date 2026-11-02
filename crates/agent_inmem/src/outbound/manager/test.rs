@@ -183,6 +183,7 @@ fn manager(repo: &InMemoryAgentSessionRepo, engine: Arc<ScriptedEngine>) -> InMe
 
 fn facts(id: AgentSessionId) -> SessionFacts {
     SessionFacts {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         id,
         owner: Owner::User(owner()),
         model: "anthropic/claude-sonnet-5-5".to_owned(),
@@ -195,6 +196,7 @@ fn facts(id: AgentSessionId) -> SessionFacts {
 /// The same facts, with the session's row carrying `instructions`.
 fn facts_with_instructions(id: AgentSessionId, instructions: &str) -> SessionFacts {
     SessionFacts {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         instructions: Some(instructions.to_owned()),
         ..facts(id)
     }
@@ -202,6 +204,7 @@ fn facts_with_instructions(id: AgentSessionId, instructions: &str) -> SessionFac
 
 fn facts_with_identity(id: AgentSessionId, name: &str, handle: &str) -> SessionFacts {
     SessionFacts {
+        delivery: crate::domain::engine::ReplyDelivery::Streamed,
         identity: Some(AgentIdentity {
             bot: BotId::TEST_A,
             name: name.to_owned(),
@@ -569,6 +572,7 @@ async fn a_restarted_manager_rebuilds_the_conversation_from_the_log() {
         let transport = after
             .attach(
                 SessionFacts {
+                    delivery: crate::domain::engine::ReplyDelivery::Streamed,
                     acp_session_id: row.acp_session_id.clone(),
                     ..facts(id)
                 },

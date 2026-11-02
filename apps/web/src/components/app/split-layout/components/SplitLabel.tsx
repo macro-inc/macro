@@ -311,7 +311,7 @@ export function BlockItemSplitLabel(props: {
               </Show>
             }
           >
-            {props.title}
+            {(title) => title()}
           </Show>
           {props.trailingBadges}
           <div

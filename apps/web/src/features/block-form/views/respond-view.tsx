@@ -209,7 +209,7 @@ export function RespondView(props: {
                 }
                 footer={
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     class="self-start"
                     onClick={() => {
                       respond.restartPreview();
@@ -236,7 +236,7 @@ export function RespondView(props: {
                 />
                 <Show when={step().preview}>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     class="self-start"
                     onClick={() => {
                       respond.restartPreview();
@@ -283,7 +283,7 @@ export function RespondView(props: {
                   Your saved response couldn’t be loaded.
                 </p>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   class="self-start"
                   disabled={unavailable().retrying}
                   aria-busy={unavailable().retrying}
@@ -308,7 +308,7 @@ export function RespondView(props: {
                 Nothing you entered was submitted. Try again in a moment.
               </p>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 class="mt-2 self-start"
                 onClick={() => fireAndForget(retry(), 'form-respond')}
@@ -385,7 +385,7 @@ export function RespondView(props: {
                   <>
                     <Show when={confirmation().booking}>
                       <Button
-                        variant="cta"
+                        variant="primary"
                         class="self-start"
                         onClick={() => {
                           respond.openBooking();
@@ -611,7 +611,7 @@ export function RespondView(props: {
                   </Show>
                   <Button
                     type="submit"
-                    variant="cta"
+                    variant="primary"
                     size="md"
                     disabled={answering().submitting || answering().uploading}
                     aria-busy={answering().submitting}

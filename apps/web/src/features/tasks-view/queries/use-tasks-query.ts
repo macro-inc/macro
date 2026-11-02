@@ -9,7 +9,6 @@ import {
   isSoupRowVisible,
   type SoupGroup,
   type SoupRow,
-  sortItems,
   tagFacetReady,
   useSearchContext,
 } from '@app/features/soup';
@@ -22,30 +21,47 @@ import {
   type TaskEntityWithProperties,
 } from '@entity';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { toPropertyDefinitionDomain } from '@property/utils/transforms';
+import { useListPropertiesQuery } from '@queries/properties/definitions';
 import { createGroupedSoupQueries } from '@queries/soup/grouped/create-grouped-soup-queries';
-import { useSoupAstItemsQuery } from '@queries/soup/items';
+import {
+  type SoupApiItemFilter,
+  useSoupAstItemsQuery,
+} from '@queries/soup/items';
 import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
 import type { TagSetResponse } from '@service-properties/generated/schemas/tagSetResponse';
 import { type Accessor, createMemo } from 'solid-js';
-import { TASK_SORT_DEFINITIONS } from '../constants';
+import { sortTasks } from '../constants';
+import {
+  type DateBucketBoundaries,
+  TASK_DUE_DATE_BUCKETS,
+  taskDueDatePredicate,
+} from '../core/task-due-date';
+import { isProjectTab } from '../core/task-navigation';
 import type { TaskFacetContext } from '../filters/task-facets';
 import {
   type TaskViewContext,
   taskMatchesView,
 } from '../filters/task-predicates';
+import { createDateBucketBoundariesSignal } from '../primitives/create-date-bucket-boundaries';
 import type {
   TaskCrmScope,
   TaskReferenceScope,
   TasksViewState,
 } from '../types';
-import { createAutomaticTaskPagination } from './automatic-task-pagination';
 import { createScopedTaskSearch } from './scoped-task-search';
 import { buildTaskQuery } from './task-query';
 import { buildTaskSearchRequest } from './task-search';
 
 export type TasksDataSourceInput = Pick<
   TasksViewState,
-  'tab' | 'search' | 'groupBy' | 'sort' | 'facets' | 'savedViewActive'
+  | 'tab'
+  | 'search'
+  | 'groupBy'
+  | 'sort'
+  | 'facets'
+  | 'dueDate'
+  | 'savedViewActive'
 >;
 
 export type UseTasksDataSourceOptions = {
@@ -64,17 +80,14 @@ export type UseTasksDataSourceOptions = {
   crm?: Accessor<TaskCrmScope>;
   enabled?: Accessor<boolean>;
   networkPaused?: Accessor<boolean>;
-  /** Project lists drain all cursors instead of requiring per-group Load More. */
-  loadAll?: boolean;
   board?: Accessor<boolean>;
+  calendar?: Accessor<DateBucketBoundaries>;
 };
 
 export type TasksDataSourceItem = SoupRow<TaskEntityWithProperties>;
 
 export type TasksDataSource = ListDataSource<TasksDataSourceItem> & {
   loadMoreGroup: (groupId: string) => Promise<void>;
-  paginationError?: Accessor<unknown>;
-  retryPagination?: () => void;
   /** Uncollapsed rows for alternative layouts; the query owner is shared. */
   boardRows?: Accessor<TasksDataSourceItem[]>;
   boardSearching?: Accessor<boolean>;
@@ -114,12 +127,40 @@ function namesCrmRecord(task: TaskEntityWithProperties, crm: TaskCrmScope) {
   ).includes(crm.id);
 }
 
+/** A plain copy of the view's facet store, safe to keep in cached options. */
+function copyFacets(
+  facets: TaskViewContext['facets']
+): TaskViewContext['facets'] {
+  return Object.fromEntries(
+    Object.entries(facets).map(([facet, values]) => [facet, [...values]])
+  );
+}
+
+/** Admits an optimistic row only where this scoped view shows it. */
+function taskInsertFilter(
+  context: TaskViewContext,
+  reference: TaskReferenceScope | undefined,
+  crm: TaskCrmScope | undefined
+): SoupApiItemFilter {
+  return (item) => {
+    const entity = mapApiSoupItemToEntity(item);
+    return (
+      isTaskEntity(entity) &&
+      taskMatchesView(entity, context) &&
+      (!reference || referencesEntity(entity, reference)) &&
+      (!crm || namesCrmRecord(entity, crm))
+    );
+  };
+}
+
 /** Query, service search, and row assembly owned by the production Tasks view. */
 export function useTasksDataSource(
   state: TasksDataSourceInput,
   options: UseTasksDataSourceOptions
 ): TasksDataSource {
   const notificationSource = useGlobalNotificationSource();
+  const calendar = options.calendar ?? createDateBucketBoundariesSignal();
+  const dueDate = () => taskDueDatePredicate(state.dueDate, calendar());
   const attachNotifications = (entity: TaskEntityWithProperties) =>
     withEntityNotifications(entity, notificationSource);
 
@@ -132,7 +173,7 @@ export function useTasksDataSource(
   );
   const facetOptionsReady = () =>
     (options.enabled?.() ?? true) &&
-    state.tab !== 'projects' &&
+    !isProjectTab(state.tab) &&
     (state.savedViewActive
       ? Boolean(options.userId())
       : tagFacetReady(state.facets, options.tagSetsReady()));
@@ -149,38 +190,36 @@ export function useTasksDataSource(
       crm: options.crm?.(),
       nameContains,
       board: options.board?.(),
+      dueDate: dueDate(),
+      calendar: calendar(),
+      searching: !!state.search.trim(),
     });
   const queryArgs = () => queryArgsFor();
 
   const scoped = Boolean(options.reference || options.crm);
-  const query = useSoupAstItemsQuery(queryArgs, () => ({
-    enabled: facetOptionsReady(),
-    networkPaused: options.networkPaused?.(),
-    keepPreviousData: scoped,
-    // Scoped lists admit optimistic rows only where this view shows them.
-    meta: scoped
-      ? {
-          insertFilter: (item) => {
-            const entity = mapApiSoupItemToEntity(item);
-            const reference = options.reference?.();
-            const crm = options.crm?.();
-            return (
-              isTaskEntity(entity) &&
-              taskMatchesView(entity, viewContext()) &&
-              (!reference || referencesEntity(entity, reference)) &&
-              (!crm || namesCrmRecord(entity, crm))
-            );
-          },
-        }
-      : undefined,
-  }));
-
   const viewContext = (): TaskViewContext => ({
     tab: state.tab,
     userId: options.userId(),
     facets: state.facets,
     facetContext: facetContext(),
+    dueDate: dueDate(),
   });
+
+  const query = useSoupAstItemsQuery(queryArgs, () => ({
+    enabled: facetOptionsReady(),
+    networkPaused: options.networkPaused?.(),
+    keepPreviousData: scoped,
+    onBeforeGraphqlRefresh: () => groupedQueries.resetToInitialPage(),
+    meta: scoped
+      ? {
+          insertFilter: taskInsertFilter(
+            { ...viewContext(), facets: copyFacets(state.facets) },
+            options.reference?.(),
+            options.crm?.()
+          ),
+        }
+      : undefined,
+  }));
 
   const transformEntities = (entities: EntityData[]) => {
     const selected: TaskEntityWithProperties[] = [];
@@ -195,15 +234,33 @@ export function useTasksDataSource(
     }
     return selected;
   };
+  const definitions = useListPropertiesQuery(
+    () => ({ scope: 'system', includeOptions: true }),
+    () =>
+      facetOptionsReady() && ['status', 'priority'].includes(state.sort[0]?.id)
+  );
+  const propertyDefinitions = createMemo(
+    () =>
+      new Map(
+        (definitions.isSuccess ? definitions.data : []).map((item) => {
+          const definition = 'definition' in item ? item.definition : item;
+          const options =
+            'property_options' in item ? item.property_options : [];
+          return [
+            definition.id,
+            toPropertyDefinitionDomain(definition, options),
+          ];
+        })
+      )
+  );
 
   const baseTasks = createMemo<TaskEntityWithProperties[]>((previous) => {
     if (query.isLoading) return previous;
     if (query.isPlaceholderData && previous.length > 0) return previous;
-
-    return sortItems(
+    return sortTasks(
       transformEntities(query.data?.entities ?? []),
       state.sort,
-      TASK_SORT_DEFINITIONS
+      propertyDefinitions()
     );
   }, []);
 
@@ -241,6 +298,7 @@ export function useTasksDataSource(
             facets: state.facets,
             facetContext: facetContext(),
             reference: options.reference?.(),
+            dueDate: dueDate(),
           }),
       });
 
@@ -267,56 +325,6 @@ export function useTasksDataSource(
 
   const groupQueryFor = (groupKey: string) =>
     groupedQueries.map().get(groupKey);
-
-  const automatic = createAutomaticTaskPagination({
-    enabled: () =>
-      Boolean(options.loadAll) &&
-      facetOptionsReady() &&
-      !options.networkPaused?.(),
-    scope: () =>
-      JSON.stringify([
-        queryArgs(),
-        state.search,
-        options.userId(),
-        options.enabled?.(),
-      ]),
-    sources: () => {
-      if (search.isSearching()) {
-        return [
-          {
-            id: 'search',
-            hasMore: search.hasNextPage(),
-            pending: search.isFetching(),
-            load: async () => {
-              await search.fetchNextPage();
-            },
-            error: search.error,
-          },
-        ];
-      }
-      if (query.isPending || query.isPlaceholderData) return [];
-      return [
-        {
-          id: 'list',
-          hasMore: query.hasNextPage,
-          pending: query.isFetching,
-          load: async () => {
-            await query.fetchNextPage();
-          },
-          error: () => query.error,
-        },
-        ...[...groupedQueries.map().values()].map((group) => ({
-          id: `group:${group.key}`,
-          hasMore: group.hasNextPage(),
-          pending: group.isFetchingNextPage(),
-          load: async () => {
-            await group.fetchNextPage();
-          },
-          error: group.error,
-        })),
-      ];
-    },
-  });
 
   const continuations: TaskGroupContinuationReader = {
     entities: (groupKey) =>
@@ -376,19 +384,23 @@ export function useTasksDataSource(
               (!reference || referencesEntity(task, reference)) &&
               taskMatchesView(task, viewContext())
           );
-        const entities = sortItems(
+        const entities = sortTasks(
           deduplicateSoupEntities([...initialTasks, ...continuationTasks]),
           state.sort,
-          TASK_SORT_DEFINITIONS
+          propertyDefinitions()
         );
         const taskGroup: SoupGroup<TaskEntityWithProperties> = {
           id: group.key,
-          label: group.label,
+          label:
+            state.groupBy === 'due_date'
+              ? (TASK_DUE_DATE_BUCKETS.find((bucket) => bucket.id === group.key)
+                  ?.label ?? group.label)
+              : group.label,
           entities,
           count: group.totalCount,
         };
 
-        if (!options.loadAll && continuations.hasMore(group.key)) {
+        if (continuations.hasMore(group.key)) {
           taskGroup.loadMore = {
             scopeId: `tasks:${group.key}`,
             isLoading: continuations.isLoading(group.key),
@@ -436,7 +448,6 @@ export function useTasksDataSource(
   };
 
   const hasMore = () => {
-    if (options.loadAll) return false;
     if (usesServiceSearch()) return search.hasNextPage();
     return query.hasNextPage;
   };
@@ -505,7 +516,5 @@ export function useTasksDataSource(
     loadMoreGroup: continuations.loadMore,
     loadMore,
     refresh,
-    paginationError: automatic.error,
-    retryPagination: automatic.retry,
   } satisfies TasksDataSource;
 }
