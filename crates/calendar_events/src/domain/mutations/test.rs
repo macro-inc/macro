@@ -1387,6 +1387,37 @@ async fn a_write_that_changed_nothing_sends_no_refresh_nudge() {
 }
 
 #[tokio::test]
+async fn deleting_clears_team_ooo_rows_only_for_an_out_of_office_event() {
+    for out_of_office in [false, true] {
+        let event_id = Uuid::now_v7();
+        let repo = FakeRepo {
+            mutation_target: Some(mutation_target(false)),
+            retired_events: vec![RetiredCalendarEvent {
+                event_id,
+                owner_id: "macro|owner".to_string(),
+                deleted: true,
+                team_ooo_changed: out_of_office,
+            }],
+            ..FakeRepo::default()
+        };
+        let refresh = RecordingRefreshNotifier::default();
+        service_with_refresh(
+            repo,
+            FakeProvider::new(FakeProviderBehavior::Echo),
+            FakeTokens::ok(),
+            refresh.clone(),
+        )
+        .delete_event("macro|user", event_id, None, CalendarDeletionScope::All)
+        .await
+        .unwrap();
+
+        let notified = refresh.notified.lock().expect("notifier lock").clone();
+        assert_eq!(notified.len(), 1);
+        assert_eq!(notified[0].2, out_of_office);
+    }
+}
+
+#[tokio::test]
 async fn deleting_a_series_publishes_deleted_per_removed_event() {
     // Retiring a recurring master's source also retires its expanded
     // instances, so every affected event announces its own fate — not just
@@ -1401,17 +1432,20 @@ async fn deleting_a_series_publishes_deleted_per_removed_event() {
                 event_id: master,
                 owner_id: "macro|owner".to_string(),
                 deleted: true,
+                team_ooo_changed: false,
             },
             RetiredCalendarEvent {
                 event_id: instance,
                 owner_id: "macro|owner".to_string(),
                 deleted: true,
+                team_ooo_changed: false,
             },
             // Still backed by another source, so the row was rewritten.
             RetiredCalendarEvent {
                 event_id: survivor,
                 owner_id: "macro|owner".to_string(),
                 deleted: false,
+                team_ooo_changed: false,
             },
         ],
         ..FakeRepo::default()

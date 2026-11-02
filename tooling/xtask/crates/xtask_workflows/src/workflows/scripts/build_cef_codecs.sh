@@ -40,6 +40,8 @@ curl -fsSL --retry 5 \
 
 export GN_DEFINES="is_official_build=true proprietary_codecs=true ffmpeg_branding=Chrome chrome_pgo_phase=0 symbol_level=0"
 export CEF_ARCHIVE_FORMAT=tar.bz2
+# make_distrib copies the macOS framework out of cefclient.app, so building
+# only cefsimple yields an archive with headers but no framework.
 python3 "$work/automate-git.py" \
   --download-dir="$work/code" \
   --depot-tools-dir="$work/depot_tools" \
@@ -50,7 +52,7 @@ python3 "$work/automate-git.py" \
   --minimal-distrib-only \
   --no-distrib-docs \
   --no-chromium-history \
-  --build-target=cefsimple
+  --build-target=cefclient
 
 distrib="$work/code/chromium/src/cef/binary_distrib"
 built="$distrib/cef_binary_${cef_version}_macosarm64_minimal.tar.bz2"
@@ -69,6 +71,13 @@ for arg in 'proprietary_codecs *= *true' 'ffmpeg_branding *= *"Chrome"'; do
     exit 1
   fi
 done
+
+framework="Release/Chromium Embedded Framework.framework/Chromium Embedded Framework"
+listing=$(tar -tjf "$built")
+if ! grep -qF "/$framework" <<<"$listing"; then
+  echo "$built has no $framework" >&2
+  exit 1
+fi
 
 mkdir -p "$RUNNER_TEMP/out"
 cp "$built" "$RUNNER_TEMP/out/$asset"

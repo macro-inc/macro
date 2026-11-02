@@ -193,6 +193,7 @@ vi.mock('../components/pipeline-dialog', () => ({
 vi.mock('./activity', () => ({
   CrmActivityView: (props: { tab: string }) => <div>{props.tab} feed</div>,
 }));
+vi.mock('./item-detail', () => ({ CrmItemDetail: () => null }));
 vi.mock('./record-detail', () => ({
   CrmRecordDetail: (props: {
     viewName: string;
@@ -294,6 +295,9 @@ function setup(
     records,
     section: () => undefined,
     commentTarget: () => undefined,
+    item: () => undefined,
+    openItem: vi.fn(),
+    closeItem: vi.fn(),
     open: vi.fn(setRecords),
     setSection: vi.fn(),
     close: vi.fn(() => setRecords([])),
