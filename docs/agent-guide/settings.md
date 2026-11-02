@@ -119,9 +119,10 @@ notification provider; macOS uses its system permission dialog. The Android app
 says **Enable Notifications** and requests the Android notification permission
 through the same native provider. The web prompt says **Enable Browser
 Notifications** and uses browser permissions.
-Select **Hide** to dismiss the prompt. It waits in the same region as other
-prompts, one card at a time. On phones it stays under open sheets and their
-pickers.
+**Enable** is its only action; closing the prompt (its corner **Close** on
+desktop, a swipe on phones) counts as a decline and stops it returning on the
+next load. It waits in the same region as other prompts, one card at a time. On
+phones it stays under open sheets and their pickers.
 
 ### Notification snoozes
 
