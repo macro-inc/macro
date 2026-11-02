@@ -29,6 +29,7 @@ vi.mock('@queries/notification/user-notifications', () => ({
   useMarkNotificationsAsDoneMutation: () => ({ mutateAsync: vi.fn() }),
   useUserNotificationsQuery: () => ({
     transport: 'graphql',
+    isStarted: false,
     isLoading: false,
     get data() {
       return mocks.feed();
@@ -42,11 +43,14 @@ vi.mock('@queries/notification/unsubscribes', () => ({
   useMuteItemMutation: () => ({ mutateAsync: vi.fn() }),
   useUnmuteItemMutation: () => ({ mutateAsync: vi.fn() }),
 }));
-vi.mock('@queries/notification/entity-mutations', () => ({
-  toNotificationEntityRef: (entity: { type: string; id: string }) => entity,
+vi.mock('@queries/soup/graphql/active-queries', () => ({
+  refreshActiveGraphqlSoupQueries: vi.fn(),
+}));
+vi.mock('@service-storage/graphql-notifications', () => ({
   updateNotificationsForEntities: mocks.entitySeen,
 }));
 vi.mock('@service-storage/graphql-soup', () => ({
+  graphqlCacheEnabled: () => true,
   mapGraphqlNotification: (value: unknown) => value,
 }));
 vi.mock('@service-storage/graphql-soup-websocket', () => ({
@@ -200,21 +204,35 @@ describe.each([COMPANY, CONTACT])('opening $type notifications', (record) => {
     }
   });
 
-  it('marks the entity when no row notifications are loaded', async () => {
-    mocks.entitySeen.mockResolvedValueOnce(undefined);
-    const { source, dispose } = createRoot((dispose) => ({
-      source: createNotificationSource({} as ConnectionGatewayWebsocket),
-      dispose,
-    }));
-    try {
-      markCrmNotificationsSeenOnOpen({ ...record, notifications: [] }, source);
-      expect(mocks.entitySeen).toHaveBeenLastCalledWith({
-        entities: [{ type: record.type, id: record.id }],
-        operation: 'MARK_SEEN',
-        expectedNotificationIds: [],
-      });
-    } finally {
-      dispose();
+  it.each(['absent', 'empty'] as const)(
+    'marks the entity with %s row notifications without loading the global feed',
+    async (shape) => {
+      mocks.entitySeen.mockResolvedValueOnce([]);
+      mocks.feed.mockClear();
+      const { source, dispose } = createRoot((dispose) => ({
+        source: createNotificationSource({} as ConnectionGatewayWebsocket),
+        dispose,
+      }));
+      try {
+        markCrmNotificationsSeenOnOpen(
+          { ...record, notifications: shape === 'empty' ? [] : undefined },
+          source
+        );
+        expect(mocks.entitySeen).toHaveBeenLastCalledWith({
+          entities: [
+            {
+              entityType:
+                record.type === 'crm_company' ? 'CRM_COMPANY' : 'CRM_CONTACT',
+              entityId: record.id,
+            },
+          ],
+          operation: 'MARK_SEEN',
+          expectedNotificationIds: [],
+        });
+        expect(mocks.feed).not.toHaveBeenCalled();
+      } finally {
+        dispose();
+      }
     }
-  });
+  );
 });

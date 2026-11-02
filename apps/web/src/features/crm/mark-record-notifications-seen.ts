@@ -16,10 +16,14 @@ export function markCrmNotificationsSeenOnOpen(
 ) {
   if (entity.type !== 'crm_company' && entity.type !== 'crm_contact') return;
 
-  const notifications = getEntityNotifications(
-    entity,
-    notificationSource
-  ).filter((notification) => !notificationIsRead(notification));
+  const hasLoadedNotifications =
+    entity.notifications !== undefined ||
+    notificationSource._notificationsQuery.isStarted;
+  const notifications = hasLoadedNotifications
+    ? getEntityNotifications(entity, notificationSource).filter(
+        (notification) => !notificationIsRead(notification)
+      )
+    : [];
 
   fireAndForget(
     Telemetry.span('crm.notifications.mark_read', async (span) => {
