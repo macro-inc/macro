@@ -2047,6 +2047,8 @@ pub fn no_op_schedule_context() -> RoutineToolContext {
 /// Individual tools should extract only the clients they need via `FromRef`.
 #[derive(Clone, FromRef)]
 pub struct ToolServiceContext {
+    /// Private explicit memory edits and current-team activity reads.
+    pub memory_tool_context: crate::memory::ToolMemoryContext,
     /// Read-only discovery of connectors the caller has not yet authorized.
     pub connector_tool_context: ToolConnectorToolContext,
     pub search_service_client: Arc<search_service_client::SearchServiceClient>,

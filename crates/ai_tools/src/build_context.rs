@@ -670,6 +670,10 @@ pub async fn build_tool_service_context_from_env(
     };
 
     Ok(ToolServiceContext {
+        memory_tool_context: crate::memory::build_memory_tool_context(
+            pool.clone(),
+            recorder.clone(),
+        ),
         connector_tool_context: crate::tool_context::build_connector_tool_context(
             pool.clone(),
             pipedream_client.clone(),

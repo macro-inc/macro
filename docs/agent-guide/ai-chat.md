@@ -2410,3 +2410,21 @@ report's error text. The row stays on one line and
 truncates on phones.
 
 The desktop Agents sidebar New menu offers Conversation, Work agent, Coding agent, and Routine, with short descriptions. Conversation opens the existing composer; Work agent and Coding agent open the agent editor with that kind preselected, including when a runtime setup page was previously open. Routine opens its unsaved composer. Canceling creation returns to the existing management flow.
+
+
+## Explicit memory and activity
+
+Ask the agent to remember a nonsensitive preference, such as “remember that I prefer
+concise answers.” It reads private memory, applies a revision-checked edit, and shows
+an expandable **Update memory** row with the saved content. Expand it on desktop
+and mobile to inspect the result. Ask to forget that preference and verify the
+updated content no longer contains it. A rejected or conflicting edit must never
+show Saved; reread memory before retrying a conflict.
+
+Ask what you or a current teammate worked on in a date range to use **Read activity**.
+Expand the result to see each report's granularity, dates, and text. Empty reports
+mean no stored evidence. A user outside your current teams must be refused. Explicit
+preferences are private and cannot be read by targeting another user.
+
+Activity is generated for completed UTC days in the background. Local environments
+require an intentional CLI refresh; ordinary memory reads do not invoke a model.
