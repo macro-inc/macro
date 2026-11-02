@@ -2,6 +2,7 @@ import { t } from '@app/lib/i18n';
 import { isMobile } from '@core/mobile/isMobile';
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { storeListingUrl } from '@core/mobile/native-update-link';
+import { storePlatform } from '@core/mobile/storePlatform';
 import { useCopyLink } from '@core/util/useCopyLink';
 import AppStoreQr from '@design/app-store.svg';
 import PlayStoreQr from '@design/play-store.svg';
@@ -70,11 +71,16 @@ export function MobileApp() {
   );
 }
 
-/** A phone can't scan its own screen, so phones get the store links instead. */
+/**
+ * A phone can't scan its own screen, so phones get store links instead: just
+ * their own store's when the browser says which phone it is, both otherwise.
+ */
 function StoreLinks() {
+  const detected = storePlatform(navigator.userAgent, navigator.maxTouchPoints);
+
   return (
     <div class="flex flex-col gap-2 p-4">
-      <For each={PLATFORMS}>
+      <For each={detected ? [detected] : PLATFORMS}>
         {(platform) => (
           <a
             href={storeListingUrl(platform)}

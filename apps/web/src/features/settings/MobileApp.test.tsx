@@ -6,7 +6,8 @@ import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { MobileApp } from './MobileApp';
 
-vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
+const device = vi.hoisted(() => ({ phone: false }));
+vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => device.phone }));
 vi.mock('@core/component/Toast/Toast', () => ({
   toast: { success: vi.fn(), failure: vi.fn() },
 }));
@@ -22,7 +23,7 @@ vi.mock('@design/play-store.svg', () => ({
   default: () => '<svg data-testid="play-store-qr"></svg>',
 }));
 vi.mock('@icon/system/regular/arrow-up-right.svg', () => ({
-  default: () => '<svg></svg>',
+  default: () => null,
 }));
 vi.mock('@icon/system/regular/link.svg', () => ({
   default: () => '<svg></svg>',
@@ -52,6 +53,9 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup();
+  device.phone = false;
+  Reflect.deleteProperty(navigator, 'userAgent');
+  Reflect.deleteProperty(navigator, 'maxTouchPoints');
   motionStyles.remove();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
@@ -144,5 +148,44 @@ describe('MobileApp', () => {
     await vi.waitFor(() => {
       expect(toast.failure).toHaveBeenCalledWith('Could not copy link');
     });
+  });
+
+  it.each([
+    [
+      'an iPhone',
+      'Mozilla/5.0 (iPhone; CPU iPhone OS 18_0 like Mac OS X)',
+      [['App Store', APP_STORE_URL]],
+    ],
+    [
+      'an Android phone',
+      'Mozilla/5.0 (Linux; Android 14; Pixel 8)',
+      [['Google Play', PLAY_STORE_URL]],
+    ],
+    [
+      'an unrecognized phone',
+      'Mozilla/5.0 (Mobile; rv:48.0)',
+      [
+        ['App Store', APP_STORE_URL],
+        ['Google Play', PLAY_STORE_URL],
+      ],
+    ],
+  ])('links %s to its store without a QR code', (_, userAgent, expected) => {
+    device.phone = true;
+    Object.defineProperty(navigator, 'userAgent', {
+      value: userAgent,
+      configurable: true,
+    });
+    Object.defineProperty(navigator, 'maxTouchPoints', {
+      value: 5,
+      configurable: true,
+    });
+    render(() => <MobileApp />);
+
+    expect(
+      screen
+        .getAllByRole('link')
+        .map((link) => [link.textContent, link.getAttribute('href')])
+    ).toEqual(expected);
+    expect(screen.queryByRole('radio')).toBeNull();
   });
 });

@@ -306,8 +306,9 @@ native mobile never shows it.
 
 The **Mobile App** page is titled **Mobile app**. In a desktop browser an
 **iPhone** / **Android** switch picks which phone and QR code to show (App Store
-or Google Play), with **Copy link** for that store's URL. Phone browsers show
-**App Store** and **Google Play** buttons instead, with no QR codes. Inside the
+or Google Play), with **Copy link** for that store's URL. Phone browsers get a
+store button instead, with no QR codes: **App Store** on an iPhone, **Google
+Play** on an Android phone, and both when the user agent names neither. Inside the
 iOS and Android apps it shows the same Version, Build date, and Bundle date card
 as the desktop app, and the sidebar's **Get the mobile app** button stays hidden.
 
