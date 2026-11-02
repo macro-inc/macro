@@ -332,8 +332,8 @@ export function createBuilder(options: BuilderOptions) {
     if (committed && pruned > 0)
       options.notify.success(
         pruned === 1
-          ? 'Removed 1 gate rule that checked it.'
-          : `Removed ${pruned} gate rules that checked it.`
+          ? 'Removed 1 rule that checked it.'
+          : `Removed ${pruned} rules that checked it.`
       );
     return committed;
   }
@@ -1040,8 +1040,8 @@ export function createBuilder(options: BuilderOptions) {
       return commit((current) => moveLayoutSection(current, sectionId, index));
     },
 
-    /** Drop the gate's rules that test questions no longer asked before it. */
-    repairGate(sectionId: string) {
+    /** Drop the section's rules that test questions no longer asked before it. */
+    repairRules(sectionId: string) {
       commitPruned((current) => pruneBrokenRules(current, sectionId));
     },
 

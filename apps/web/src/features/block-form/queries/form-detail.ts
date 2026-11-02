@@ -231,6 +231,7 @@ export function toLayoutDocument(layout: FormLayout): WireFormLayout {
           id: section.id,
           title: section.title,
           description: section.description,
+          ...(section.showWhen ? { showWhen: section.showWhen } : {}),
           questions: section.questions.map((question) => ({
             id: question.id,
             column: question.columnId,
