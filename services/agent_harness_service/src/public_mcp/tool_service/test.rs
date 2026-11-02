@@ -553,6 +553,7 @@ mod code_mode {
         assert!(flagged_instructions.contains("Code mode is on"));
         assert!(flagged_instructions.contains("ExecuteCode"));
         assert!(flagged_instructions.contains("DescribeCodeTools"));
+        assert!(flagged_instructions.contains("as few ExecuteCode calls as possible"));
         for leaked in [
             "NameSearch",
             "ReadContent",

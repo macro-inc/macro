@@ -217,3 +217,42 @@ fn symbols_from_an_index_read_as_their_own_references() {
             .is_err()
     );
 }
+
+/// The first ```javascript block of `markdown` that mentions `needle`.
+fn program_mentioning<'a>(markdown: &'a str, needle: &str) -> Option<&'a str> {
+    markdown
+        .split("```javascript")
+        .skip(1)
+        .filter_map(|rest| rest.split("```").next())
+        .find(|program| program.contains(needle))
+}
+
+#[test]
+fn both_execute_code_descriptions_ask_for_the_whole_workflow_in_one_program() {
+    for description in [
+        toolset().tools["ExecuteCode"].description.clone(),
+        user_toolset().tools["ExecuteCode"].description.clone(),
+    ] {
+        assert!(description.contains("as few ExecuteCode calls as possible"));
+        assert!(description.contains("Put conditionals in the program"));
+        assert!(description.contains("Promise.all"));
+    }
+}
+
+#[test]
+fn examples_check_for_a_duplicate_and_create_the_task_in_one_program() {
+    let skill = include_str!("../../../SKILL.md");
+    let program = program_mentioning(skill, "macro.tasks.findSimilar").unwrap();
+    assert!(program.contains("macro.tasks.create"));
+    assert!(program.contains("if ("));
+}
+
+#[test]
+fn find_similar_reference_shows_the_single_program_pattern() {
+    let read = ReadCodeDocs {
+        symbols: vec!["TaskNamespace.findSimilar".into()],
+    }
+    .read()
+    .unwrap();
+    assert!(read.references[0].reference.contains("same program"));
+}

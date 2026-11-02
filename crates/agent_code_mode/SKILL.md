@@ -22,6 +22,27 @@ Return an object with data; reviews is optional and defaults to []. Include revi
 
 macro, session and execution are real SDK handles. You can instead import {Macro} from '@macro-inc/sdk' and construct it with main's token and hosts. Do not log, return, persist or transmit that credential elsewhere. It is a short-lived normal user credential, with the user's API permissions. SDK operations make real HTTP calls. Messages are attributed to the session's agent, with the selected acting account recorded as the requesting user; do not supply sender identities yourself. No custom sdk.ToolName dispatcher, TypeScript transpilation, runtime help or package installation is involved.
 
+## One execution per request
+
+Do the whole request in as few ExecuteCode calls as possible, ideally one: each call costs a model turn. Put the decision in the program instead of checking in one execution and acting in the next. Run independent reads together with Promise.all, and return what the answer needs (ids, URLs, failures) so no follow-up call is needed. Split only where the user must decide, or where you must see a result before you can write the next step.
+
+Checking for a duplicate and creating a task is one program, not two:
+
+```javascript
+export async function main({macro}) {
+  const title = 'Fix the login redirect loop';
+  const markdown = 'Users bounce between /login and /app after SSO.';
+  const similar = await macro.tasks.findSimilar({title, body: markdown});
+  if (similar.length > 0) {
+    return {data:{created:false, similar:similar.map(({task, name, similarity}) => ({id:task.id, url:task.webUrl(), name, similarity}))}};
+  }
+  const task = await macro.tasks.create({name:title, markdown});
+  return {data:{created:true, id:task.id, url:task.webUrl()}};
+}
+```
+
+When it returns matches, tell the user nothing was created and ask; do not create the task in a second call unless they say to.
+
 ## Useful workflows
 
 - For a workspace overview, use the direct ListEntities tool, including agent_session when the user asks about agent work. Use NameSearch for mixed-entity name searches and ContentSearch for session history. Return compact metadata and preserve pagination and source-scope limits. A sample is not a category total. Tasks use includeTypes:["document"], df:{l:{dst:"task"}}. AST & and | are binary; a single filter stays a leaf.
