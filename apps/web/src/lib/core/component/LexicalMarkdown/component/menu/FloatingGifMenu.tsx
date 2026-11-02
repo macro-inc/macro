@@ -1,6 +1,5 @@
 import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCanEdit } from '@core/signal/permissions';
 import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
@@ -8,10 +7,12 @@ import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn, InputGroup, Surface } from '@ui';
 import {
+  $addUpdateTag,
   $getRoot,
   $getSelection,
   $setSelection,
   type BaseSelection,
+  SKIP_DOM_SELECTION_TAG,
 } from 'lexical';
 import {
   type Accessor,
@@ -20,6 +21,8 @@ import {
   createSignal,
   For,
   Match,
+  onCleanup,
+  onMount,
   Show,
   Switch,
   untrack,
@@ -38,6 +41,7 @@ import {
   searchGifs,
 } from '../../plugins/gif';
 import PoweredByKlipy from '../../plugins/gif/powered-by-klipy.svg';
+import { registerRootEventListener } from '../../plugins/shared/utils';
 import { useMenuKeyboardNavigation } from './useMenuKeyboardNavigation';
 
 false && floatWithSelection;
@@ -46,15 +50,15 @@ false && clickOutside;
 const COLUMNS = 2;
 const RESULT_LIMIT = 30;
 // Search field, padding, and "Powered by" row around the grid.
-const PANEL_CHROME_HEIGHT = 76;
+const PANEL_CHROME_HEIGHT = 100;
 const MAX_GRID_HEIGHT = 360;
 
 /**
  * GIF search, opened via TRY_INSERT_GIF_COMMAND (`/gif` or a composer's +).
- * Desktop focuses the search field; touch leaves the composer focused so the
- * picker does not vanish. Arrows move through the grid, Enter inserts,
- * Escape closes. Portalled like the slash menu so the editor shell's click
- * and keydown handlers don't swallow the picker's events.
+ * Focuses search on open while keeping the insertion caret in the editor.
+ * Arrows move through the grid, Enter inserts, Escape closes. Portalled like
+ * the slash menu, with an event boundary so composer handlers cannot steal
+ * focus from search.
  */
 export function FloatingGifMenu(
   props: { canEdit?: Accessor<boolean>; portalScope?: PortalScope } = {}
@@ -124,14 +128,9 @@ export function FloatingGifMenu(
       return;
     }
     insertAt = $getSelection()?.clone() ?? null;
-    // Defer past the keystroke that ran the command, as FloatingTableMenu does.
-    setTimeout(() => {
-      if (!canEdit() || !editor()?.isEditable()) return;
-      setMenuOpen(true);
-      // Autofocusing search on touch moves focus out of the composer and
-      // lets iOS hide the caret — the picker then vanishes. Tap to search.
-      if (!isTouchDevice()) inputRef?.focus();
-    }, 0);
+    // Keep Lexical's commit from reclaiming focus after the command returns.
+    $addUpdateTag(SKIP_DOM_SELECTION_TAG);
+    setMenuOpen(true);
   });
 
   const insertGif = (gif: Gif) => {
@@ -194,7 +193,23 @@ export function FloatingGifMenu(
     <Show when={menuOpen()}>
       <ScopedPortal scope={props.portalScope}>
         <div
+          ref={(panel) => {
+            const currentEditor = editor();
+            if (!currentEditor) return;
+            // Search belongs to this composer even though its DOM is portalled.
+            onCleanup(
+              registerRootEventListener(currentEditor, 'focusout', (event) => {
+                if (
+                  event.relatedTarget instanceof Node &&
+                  panel.contains(event.relatedTarget)
+                ) {
+                  event.stopPropagation();
+                }
+              })
+            );
+          }}
           data-holds-prompts
+          data-keep-keyboard
           class="w-[28rem] mobile:w-[calc(100cqw-1rem-2px)] max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content menu-open-animation"
           use:floatWithSelection={{
             selection: untrack(() => window.getSelection()),
@@ -208,19 +223,27 @@ export function FloatingGifMenu(
           // pointerdown and mousedown; iOS still emits the latter.
           on:pointerdown={(event) => {
             if (event.target !== inputRef) event.preventDefault();
+            event.stopPropagation();
           }}
           on:mousedown={(event) => {
             if (event.target !== inputRef) event.preventDefault();
+            event.stopPropagation();
           }}
+          onClick={(event) => event.stopPropagation()}
         >
           <Surface
             depth={2}
             hideBorder
             class="menu-surface rounded-xl flex flex-col gap-1.5 p-1.5"
           >
-            <InputGroup size="sm">
+            <InputGroup size="xl" onClick={() => inputRef?.focus()}>
               <InputGroup.Input
-                ref={inputRef}
+                ref={(element) => {
+                  inputRef = element;
+                  onMount(() => {
+                    if (menuOpen() && canEdit()) element.focus();
+                  });
+                }}
                 type="search"
                 value={searchTerm()}
                 onInput={(event) => updateSearch(event.currentTarget.value)}
@@ -233,7 +256,7 @@ export function FloatingGifMenu(
             </InputGroup>
 
             <div
-              class="overflow-y-auto overscroll-contain scrollbar-hidden"
+              class="overflow-y-auto overscroll-contain scrollbar-hidden scroll-p-1"
               style={{ height: `${gridMaxHeight()}px` }}
             >
               <Switch>
@@ -262,7 +285,7 @@ export function FloatingGifMenu(
                 <Match when={true}>
                   <div
                     ref={gridRef}
-                    class="grid grid-cols-2 auto-rows-28 gap-1.5 p-0.5"
+                    class="grid grid-cols-2 auto-rows-28 gap-1.5 p-1"
                   >
                     <For each={gifList()}>
                       {(gif, index) => (

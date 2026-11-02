@@ -426,10 +426,12 @@ composer on phones and stays visible after you choose the action, including
 with the iOS keyboard open. Both the `/` formatting menu and the GIF picker
 span the available chat width on phones, using the mentions menu's side gutters.
 The larger desktop GIF picker stays within the viewport on narrow screens.
-Trending GIFs show first; tap search to filter, then tap a
-GIF to insert it without sending the draft. On desktop, arrow keys move through
-the two-column grid and scroll the selected GIF into view; Enter inserts it and
-Escape closes the picker. Check that GIFs animate in the picker, in the draft,
+Trending GIFs show first, with the large search field focused on both desktop
+and phones. Search keeps the composer expanded, and tapping anywhere in the
+search field keeps focus there. Tap a GIF to insert it without sending the draft.
+On desktop, arrow keys move through the two-column grid and scroll the full
+selection outline into view; Enter inserts it and Escape closes the picker.
+Check that GIFs animate in the picker, in the draft,
 after sending, and in the enlarged image viewer. Public Klipy GIFs load directly
 with CORS instead of depending on image-proxy authentication.
 

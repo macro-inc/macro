@@ -1,16 +1,27 @@
 /** @vitest-environment jsdom */
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import { $createParagraphNode, $getRoot } from 'lexical';
-import { createSignal, onCleanup } from 'solid-js';
+import {
+  $createParagraphNode,
+  $createTextNode,
+  $getRoot,
+  $getSelection,
+  $isRangeSelection,
+} from 'lexical';
+import { createSignal, onCleanup, onMount } from 'solid-js';
 import { afterEach, expect, it, vi } from 'vitest';
 import {
   createLexicalWrapper,
   LexicalWrapperContext,
 } from '../../context/LexicalWrapperContext';
 import { TRY_INSERT_GIF_COMMAND } from '../../plugins/gif';
+import { FocusClickTarget } from '../core/FocusClickTarget';
 import { FloatingGifMenu } from './FloatingGifMenu';
 
 const insertGif = vi.hoisted(() => vi.fn());
+const touchDevice = vi.hoisted(() => vi.fn(() => false));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: touchDevice,
+}));
 vi.mock('../../plugins/gif', async (original) => ({
   ...(await original<typeof import('../../plugins/gif')>()),
   $insertGifNode: insertGif,
@@ -67,11 +78,13 @@ vi.mock('@service-storage/websocket', () => ({
 afterEach(() => {
   cleanup();
   insertGif.mockClear();
+  touchDevice.mockReturnValue(false);
   vi.useRealTimers();
 });
 
 function mountPicker() {
   const [canEdit, setCanEdit] = createSignal(true);
+  const leaveComposer = vi.fn();
   let wrapper: ReturnType<typeof createLexicalWrapper>;
   render(() => {
     wrapper = createLexicalWrapper({
@@ -82,12 +95,29 @@ function mountPicker() {
     onCleanup(wrapper.cleanup);
     return (
       <LexicalWrapperContext.Provider value={wrapper}>
-        <FloatingGifMenu canEdit={canEdit} />
+        <FocusClickTarget
+          editor={wrapper.editor}
+          onFocusOut={(event) => {
+            const next = event.relatedTarget;
+            if (next instanceof Node && event.currentTarget.contains(next))
+              return;
+            leaveComposer();
+          }}
+        >
+          <div
+            ref={(element) =>
+              onMount(() => wrapper.editor.setRootElement(element))
+            }
+            contentEditable
+          />
+          <FloatingGifMenu canEdit={canEdit} />
+        </FocusClickTarget>
       </LexicalWrapperContext.Provider>
     );
   });
   const editor = wrapper!.editor;
   const open = () => {
+    editor.getRootElement()?.focus();
     editor.update(
       () => {
         $getRoot().append($createParagraphNode());
@@ -97,7 +127,7 @@ function mountPicker() {
       { discrete: true }
     );
   };
-  return { editor, open, setCanEdit };
+  return { editor, open, setCanEdit, leaveComposer };
 }
 
 it('opens the picker when the editor has no selection', async () => {
@@ -109,6 +139,60 @@ it('opens the picker when the editor has no selection', async () => {
     { discrete: true }
   );
   expect(await screen.findByRole('searchbox')).toBeTruthy();
+});
+
+it.each([false, true])(
+  'focuses search during opening and keeps composer clicks out on touch=%s',
+  async (touch) => {
+    touchDevice.mockReturnValue(touch);
+    const { open, leaveComposer } = mountPicker();
+    open();
+    const input = screen.getByRole('searchbox');
+    expect(document.activeElement).toBe(input);
+    expect(leaveComposer).not.toHaveBeenCalled();
+
+    expect(fireEvent.pointerDown(input)).toBe(true);
+    expect(fireEvent.mouseDown(input)).toBe(true);
+    expect(fireEvent.click(input)).toBe(true);
+    expect(document.activeElement).toBe(input);
+
+    input.blur();
+    fireEvent.click(screen.getByRole('group'));
+    expect(document.activeElement).toBe(input);
+    fireEvent.input(input, { target: { value: 'hello' } });
+    expect(input).toHaveProperty('value', 'hello');
+
+    fireEvent.click(await screen.findByRole('button', { name: 'Audit GIF' }));
+    expect(insertGif).toHaveBeenCalledOnce();
+    expect(screen.queryByRole('searchbox')).toBeNull();
+  }
+);
+
+it('preserves native blur and outside focus while search owns composer focus', () => {
+  const { editor, open, leaveComposer } = mountPicker();
+  const nativeBlur = vi.fn();
+  editor.getRootElement()!.addEventListener('blur', nativeBlur);
+  render(() => <input aria-label="Outside composer" />);
+  open();
+  expect(nativeBlur).toHaveBeenCalledOnce();
+  expect(leaveComposer).not.toHaveBeenCalled();
+
+  screen.getByRole('textbox', { name: 'Outside composer' }).focus();
+  expect(leaveComposer).toHaveBeenCalledOnce();
+
+  editor.getRootElement()!.focus();
+  screen.getByRole('textbox', { name: 'Outside composer' }).focus();
+  expect(leaveComposer).toHaveBeenCalledTimes(2);
+});
+
+it('removes the composer focus guard when the picker closes', () => {
+  const { editor, open, leaveComposer } = mountPicker();
+  open();
+  const input = screen.getByRole('searchbox');
+  fireEvent.pointerDown(document.body);
+  expect(screen.queryByRole('searchbox')).toBeNull();
+  fireEvent.focusOut(editor.getRootElement()!, { relatedTarget: input });
+  expect(leaveComposer).toHaveBeenCalledOnce();
 });
 
 it('inserts a GIF when the editor has no saved caret', async () => {
@@ -130,6 +214,29 @@ it('inserts a selected GIF while editing remains allowed', async () => {
   fireEvent.click(await screen.findByRole('button', { name: 'Audit GIF' }));
   expect(insertGif).toHaveBeenCalledOnce();
   expect(screen.queryByRole('searchbox')).toBeNull();
+});
+it('restores the insertion caret after searching outside the editor', async () => {
+  const { editor } = mountPicker();
+  editor.update(
+    () => {
+      const text = $createTextNode('hello');
+      $getRoot().append($createParagraphNode().append(text));
+      text.select(2, 2);
+      editor.dispatchCommand(TRY_INSERT_GIF_COMMAND, undefined);
+    },
+    { discrete: true }
+  );
+  const input = screen.getByRole('searchbox');
+  fireEvent.click(input);
+  fireEvent.input(input, { target: { value: 'hello' } });
+  let offset: number | undefined;
+  insertGif.mockImplementationOnce(() => {
+    const selection = $getSelection();
+    if ($isRangeSelection(selection)) offset = selection.anchor.offset;
+  });
+  fireEvent.click(await screen.findByRole('button', { name: 'Audit GIF' }));
+  expect(insertGif).toHaveBeenCalledOnce();
+  expect(offset).toBe(2);
 });
 
 it('steps through grid rows, scrolls only on keyboard movement, and inserts the selected GIF', async () => {
@@ -186,7 +293,7 @@ it('closes an open picker when send locking removes edit permission', async () =
   expect(insertGif).not.toHaveBeenCalled();
 });
 
-it('does not open a deferred picker after send locking', () => {
+it('closes the picker when send locking removes edit permission immediately after opening', () => {
   vi.useFakeTimers();
   const { open, setCanEdit } = mountPicker();
   open();
