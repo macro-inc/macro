@@ -30,6 +30,7 @@ export function InlineLinkEditor() {
   const [hoveredLink, setHoveredLink] = createSignal<string | null>(null);
   const [isSaving, setIsSaving] = createSignal(false);
   const [badLinks, setBadLinks] = createStore<Record<string, true>>({});
+  let addButton: HTMLButtonElement | undefined;
 
   const property = () => ctx.property();
   const isReadOnly = () => property().isMetadata || !ctx.canEdit();
@@ -65,6 +66,7 @@ export function InlineLinkEditor() {
   };
 
   const handleAddLink = async () => {
+    if (isSaving()) return;
     const raw = inputValue().trim();
     if (!raw) {
       cancelAdding();
@@ -111,13 +113,28 @@ export function InlineLinkEditor() {
     }
   };
 
+  // Enter and Escape remove the focused input, which drops focus to the page.
+  // A single link has no add button left, so focus goes to its chip.
+  const returnFocus = () => {
+    if (document.activeElement !== document.body) return;
+    if (addButton?.isConnected) addButton.focus();
+    else ctx.closeEditor();
+  };
+
+  const addFromKeyboard = async () => {
+    await handleAddLink();
+    if (!isAdding()) returnFocus();
+  };
+
   const handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
-      fireAndForget(handleAddLink(), 'property-editor');
+      fireAndForget(addFromKeyboard(), 'property-editor');
     } else if (e.key === 'Escape') {
+      if (isSaving()) return;
       e.preventDefault();
       cancelAdding();
+      returnFocus();
     } else if (error()) {
       setError(null);
     }
@@ -156,6 +173,7 @@ export function InlineLinkEditor() {
           fallback={
             <Show when={property().isMultiSelect || links().length === 0}>
               <button
+                ref={addButton}
                 type="button"
                 class={ADD_BUTTON_CLASS}
                 onClick={startAdding}
@@ -179,7 +197,7 @@ export function InlineLinkEditor() {
               }, 100);
             }}
             placeholder="Enter URL..."
-            disabled={isSaving()}
+            readOnly={isSaving()}
             class="text-left px-2 py-0.5 bg-transparent focus:outline-none text-ink inline-block shrink-0 rounded-sm"
           />
           <Show when={error()}>

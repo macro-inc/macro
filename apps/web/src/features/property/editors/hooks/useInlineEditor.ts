@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { type Accessor, createSignal, type Setter } from 'solid-js';
 import { NUMBER_DECIMAL_PLACES } from '../../constants';
 import { useProperty } from '../../core/context';
@@ -16,8 +17,8 @@ export function useInlineEditor(): {
   setInputValue: Setter<string>;
   isSaving: Accessor<boolean>;
   startEdit: () => void;
-  cancelEdit: () => void;
   save: () => Promise<void>;
+  handleKeyDown: (e: KeyboardEvent) => void;
 } {
   const ctx = useProperty();
   const [isEditing, setIsEditing] = createSignal(false);
@@ -81,13 +82,35 @@ export function useInlineEditor(): {
     }
   };
 
+  // Enter and Escape remove the focused field, which drops focus to the page.
+  // Tabbing or clicking away already put focus where the user wanted it.
+  const returnFocus = () => {
+    if (document.activeElement === document.body) ctx.closeEditor();
+  };
+
+  const saveFromKeyboard = async () => {
+    await save();
+    if (!isEditing()) returnFocus();
+  };
+
+  const handleKeyDown = (e: KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      fireAndForget(saveFromKeyboard(), 'property-editor');
+    } else if (e.key === 'Escape' && !isSaving()) {
+      e.preventDefault();
+      cancelEdit();
+      returnFocus();
+    }
+  };
+
   return {
     isEditing,
     inputValue,
     setInputValue,
     isSaving,
     startEdit,
-    cancelEdit,
     save,
+    handleKeyDown,
   };
 }
