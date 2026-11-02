@@ -75,3 +75,8 @@ thin binary over `../src-tauri` (`app_lib::run_with`) that selects
 - Keep `tauri.conf.json` aligned with `../src-tauri/tauri.conf.json` and
   `tauri.macos.conf.json`: the CLI bundles from this file, while the app's
   runtime config still comes from `../src-tauri`.
+- Keep `SecretStorage::Mock` in `src/main.rs`. With the system store, Chromium
+  keeps its cookie key in a "Chromium Safe Storage" keychain item and macOS asks
+  for keychain access on launch. The app's sign-in uses the native HTTP cookie
+  jar, so Chromium's own cookies (embeds) are all the mock key covers;
+  switching key sources drops those cookies once.
