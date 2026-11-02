@@ -8,10 +8,7 @@ import {
 } from '@core/component/ContextMenu';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { ChannelEntity } from '@entity';
-import BellIcon from '@icon/system/regular/bell.svg';
-import BellSlashIcon from '@icon/system/regular/bell-slash.svg';
 import ChecksIcon from '@icon/system/regular/checks.svg';
-import ClockIcon from '@icon/system/regular/clock.svg';
 import PencilSimpleIcon from '@icon/system/regular/pencil-simple.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import TagIcon from '@icon/system/regular/tag.svg';
@@ -120,10 +117,6 @@ export function ChannelLabelRow(props: { label: ChannelLabel }) {
 
 function ChannelLabelActions(props: { label: ChannelLabel }) {
   const rail = useChannelsRail();
-  const notificationsDisabled = () =>
-    !rail.labelsAvailable() ||
-    rail.labelNotificationsPending() ||
-    props.label.channelIds.length === 0;
 
   return (
     <>
@@ -145,31 +138,6 @@ function ChannelLabelActions(props: { label: ChannelLabel }) {
           text={t('channelLabels.markAllAsRead')}
           disabled={rail.labelUnreadCount(props.label) === 0}
           onClick={() => rail.markLabelRead(props.label)}
-        />
-      </MenuGroup>
-      <MenuSeparator />
-      <MenuGroup>
-        <MenuItem
-          icon={BellSlashIcon}
-          text={t('channelSections.muteAllChannels')}
-          disabled={notificationsDisabled()}
-          onClick={() =>
-            fireAndForget(rail.muteLabel(props.label, true), 'channels-view')
-          }
-        />
-        <MenuItem
-          icon={BellIcon}
-          text={t('channelSections.unmuteAllChannels')}
-          disabled={notificationsDisabled()}
-          onClick={() =>
-            fireAndForget(rail.muteLabel(props.label, false), 'channels-view')
-          }
-        />
-        <MenuItem
-          icon={ClockIcon}
-          text={t('channelSections.snoozeAllChannels')}
-          disabled={notificationsDisabled()}
-          onClick={() => rail.snoozeLabel(props.label)}
         />
       </MenuGroup>
       <MenuSeparator />

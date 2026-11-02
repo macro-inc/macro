@@ -1,4 +1,5 @@
 import type { ChannelEntity } from '@entity/types/entity';
+import type { ApiChannelWithLatest } from '@service-storage/channel-list-types';
 import { QueryClient } from '@tanstack/query-core';
 import { createMemo, createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
@@ -16,6 +17,11 @@ const useSoupAstItemsQuery = vi.hoisted(() =>
     })
   )
 );
+
+const fetchAllChannels = vi.hoisted(() =>
+  vi.fn<(signal?: AbortSignal) => Promise<ApiChannelWithLatest[]>>()
+);
+vi.mock('@queries/channel/channels', () => ({ fetchAllChannels }));
 
 const graphqlSoup = vi.hoisted(() => ({ enabled: false }));
 const createChannelDetailQuery = vi.hoisted(() =>
@@ -45,7 +51,11 @@ vi.mock('@entity', () => ({
 vi.mock('@core/context/user', () => ({ useUserId: () => () => 'user-1' }));
 
 import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
-import { resolveReferencedChannels, useChannelsSources } from './queries';
+import {
+  fetchChannelGroupIds,
+  resolveReferencedChannels,
+  useChannelsSources,
+} from './queries';
 
 const channelEntity = (id: string) =>
   ({
@@ -56,6 +66,79 @@ const channelEntity = (id: string) =>
     channelType: 'team',
   }) as ChannelEntity;
 
+describe('built-in section notification membership', () => {
+  it('keeps joined channels in their section and excludes custom-section assignments', async () => {
+    fetchAllChannels.mockResolvedValue([
+      {
+        id: 'private',
+        channel_type: 'private',
+        is_participant: true,
+        created_at: '',
+        updated_at: '',
+        owner_id: '',
+        auto_join_team: false,
+        participants: [],
+        latest_message: null,
+      },
+      {
+        id: 'assigned',
+        channel_type: 'private',
+        is_participant: true,
+        created_at: '',
+        updated_at: '',
+        owner_id: '',
+        auto_join_team: false,
+        participants: [],
+        latest_message: null,
+      },
+      {
+        id: 'team',
+        channel_type: 'team',
+        is_participant: true,
+        created_at: '',
+        updated_at: '',
+        owner_id: '',
+        auto_join_team: false,
+        participants: [],
+        latest_message: null,
+      },
+      {
+        id: 'unjoined',
+        channel_type: 'team',
+        is_participant: false,
+        created_at: '',
+        updated_at: '',
+        owner_id: '',
+        auto_join_team: false,
+        participants: [],
+        latest_message: null,
+      },
+      {
+        id: 'dm',
+        channel_type: 'direct_message',
+        is_participant: true,
+        created_at: '',
+        updated_at: '',
+        owner_id: '',
+        auto_join_team: false,
+        participants: [],
+        latest_message: null,
+      },
+    ]);
+    const signal = new AbortController().signal;
+
+    expect(
+      await fetchChannelGroupIds('channels', ['assigned'], signal)
+    ).toEqual(['private']);
+    expect(
+      await fetchChannelGroupIds('team_channels', ['assigned'], signal)
+    ).toEqual(['team']);
+    expect(await fetchChannelGroupIds('direct_messages', [], signal)).toEqual([
+      'dm',
+    ]);
+    expect(fetchAllChannels).toHaveBeenLastCalledWith(signal);
+  });
+});
 describe('channel list query selection', () => {
   it('refreshes a newly cached full edge instead of reusing it for 30 seconds', async () => {
     useSoupAstItemsQuery.mockClear();

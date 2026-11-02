@@ -21,6 +21,8 @@ export default {
   muteAllChannels: 'Mute all channels',
   unmuteAllChannels: 'Unmute all channels',
   snoozeAllChannels: 'Snooze all channels…',
+  notificationsFailed:
+    'Could not update section notifications. Please try again.',
   deleteForEveryone: 'Delete for everyone',
   sectionName: 'Section name',
   manageSections: 'Manage sections',

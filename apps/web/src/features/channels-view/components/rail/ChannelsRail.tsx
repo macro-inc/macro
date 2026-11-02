@@ -108,6 +108,7 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import { useChannelCalls } from './hooks/useChannelCalls';
 import { useChannelLabelActions } from './hooks/useChannelLabelActions';
 import { useChannelRailActivity } from './hooks/useChannelRailActivity';
+import { useChannelSectionNotifications } from './hooks/useChannelSectionNotifications';
 
 const LABEL_KEY_PREFIX = 'label:';
 const BROWSE_QUERY_SCOPES = [
@@ -155,7 +156,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
   const labelDialogOwner = createMemo(() => {
     userId();
     sectionsEnabled();
-    return channelTagsEnabled() ? getOwner() : undefined;
+    channelTagsEnabled();
+    return getOwner();
   });
 
   const panel = useSplitPanelOrThrow();
@@ -1018,9 +1020,6 @@ export function ChannelsRail(props: ChannelsRailProps) {
     deleteLabel,
     setChannelLabel,
     markLabelRead,
-    muteLabel,
-    snoozeLabel,
-    labelNotificationsPending,
     canLabelChannelId,
     labelChannelById,
   } = useChannelLabelActions({
@@ -1036,6 +1035,15 @@ export function ChannelsRail(props: ChannelsRailProps) {
     setGroupOpen,
     setLabelOpen,
   });
+
+  const { muteSection, snoozeSection, sectionNotificationsDisabled } =
+    useChannelSectionNotifications({
+      enabled: sectionsEnabled,
+      labelsAvailable: () => !channelTagsEnabled() || labelsAvailable(),
+      labels,
+      favorites,
+      dialogOwner: labelDialogOwner,
+    });
 
   // Drops are resolved here rather than per row so a channel dragged from
   // anywhere in the section lands the same way.
@@ -1233,9 +1241,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
     setChannelLabel,
     activeDropTarget,
     markLabelRead,
-    muteLabel,
-    snoozeLabel,
-    labelNotificationsPending,
+    muteSection,
+    snoozeSection,
+    sectionNotificationsDisabled,
     sortBy: (group) => state.sortBy[group],
     setSortBy,
     sectionPreferences: (section) => {

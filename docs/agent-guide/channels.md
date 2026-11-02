@@ -1015,14 +1015,19 @@ Filtered-out channels retain their membership and do not reappear ungrouped.
 Shared name and rule edits apply to the team; personal edits affect only the account.
 Deleting a section does not delete its conversations or change channel access.
 
-Custom-section menus also offer **Mute all channels**, **Unmute all channels**,
-and **Snooze all channels…**. These update only your notifications, including
-for shared sections. Each action uses the section's complete current membership,
-including filtered-out and unloaded channels; channels added later do not inherit
-the change. Snooze uses the usual duration/date picker and resumes notifications
-at the chosen time. A partial failure keeps successful updates and reports the
-failures; snooze retries only failed channels. Empty or unavailable sections
-disable these actions. Built-in groups and mobile remain unchanged.
+Every desktop section menu, including **Favorites**, **Channels**,
+**[team name] channels**, and **Direct messages**, offers **Mute all channels**,
+**Unmute all channels**, and **Snooze all channels…**. These update only your
+notifications, including for shared sections. Each action uses the section's
+complete current membership, including filtered-out and unloaded channels;
+channels added later do not inherit the change. Built-in lists resolve all pages
+before applying an action, exclude channels assigned to custom sections just as
+the sidebar does, and never include unjoined channels. Favorites targets only
+channel favorites, not documents or other favorite types. Snooze uses the usual
+duration/date picker and resumes notifications at the chosen time. A partial
+failure keeps successful updates and reports the failures; snooze retries only
+failed channels. Empty or unavailable custom sections and empty Favorites disable
+these actions. Mobile remains unchanged.
 
 Use a channel's Add to section menu to change the personal or shared assignment.
 Each section uses a checkbox: checking moves the channel into that section,

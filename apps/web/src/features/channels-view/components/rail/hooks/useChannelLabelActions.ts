@@ -8,7 +8,6 @@ import type { ChannelEntity } from '@entity';
 import { notificationIsRead } from '@entity/utils/notification';
 import { Telemetry } from '@macro-inc/observability';
 import { ensureNotificationSourceLoaded } from '@notifications/notification-helpers';
-import { openSnoozeNotifications } from '@notifications/SnoozeNotificationsDialog';
 import {
   useCreateChannelLabelMutation,
   useDeleteChannelLabelMutation,
@@ -19,7 +18,7 @@ import type { ChannelLabel } from '@service-storage/generated/schemas/channelLab
 import type { ChannelLabelRule } from '@service-storage/generated/schemas/channelLabelRule';
 import type { ChannelLabelScopeSelection } from '@service-storage/generated/schemas/channelLabelScopeSelection';
 import { confirmDialog } from '@ui';
-import { type Accessor, createSignal, type Owner } from 'solid-js';
+import type { Accessor, Owner } from 'solid-js';
 import {
   canLabelChannel,
   filterChannelLabelMembers,
@@ -46,12 +45,6 @@ type ChannelLabelActionsOptions = {
 export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
   const userId = useUserId();
   const notificationSource = useGlobalNotificationSource();
-  const [pendingNotificationUpdate, setPendingNotificationUpdate] =
-    createSignal<{ actorId: string }>();
-  const labelNotificationsPending = () => {
-    const pending = pendingNotificationUpdate();
-    return pending !== undefined && pending.actorId === userId();
-  };
 
   const {
     sectionsEnabled,
@@ -453,108 +446,6 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     );
   };
 
-  const notificationChannelIds = (label: ChannelLabel) => {
-    if (
-      !sectionsEnabled() ||
-      !channelTagsEnabled() ||
-      !labelsAvailable() ||
-      labelNotificationsPending()
-    ) {
-      return [];
-    }
-
-    const current = labels().find((entry) => entry.id === label.id);
-    return [...new Set(current?.channelIds ?? [])];
-  };
-
-  const muteLabel = async (label: ChannelLabel, muted: boolean) => {
-    const actorId = userId();
-    const channelIds = notificationChannelIds(label);
-
-    if (!actorId || channelIds.length === 0) {
-      return;
-    }
-
-    const request = { actorId };
-    setPendingNotificationUpdate(request);
-
-    try {
-      await Telemetry.span('channels.section.notifications', async (span) => {
-        span.setAttr('section.id', label.id);
-        span.setAttr('channel.ids', channelIds);
-        span.setAttr('notification.action', muted ? 'mute' : 'unmute');
-        span.setAttr('notification.count', channelIds.length);
-
-        const results = await Promise.allSettled(
-          channelIds.map((id) =>
-            span.span('channels.section.notification.update', async (child) => {
-              child.setAttr('channel.id', id);
-
-              if (muted) {
-                await notificationSource.muteEntity({ type: 'channel', id });
-              } else {
-                await notificationSource.unmuteEntity({ type: 'channel', id });
-              }
-            })
-          )
-        );
-        const failed = results.filter(
-          (result) => result.status === 'rejected'
-        ).length;
-        const succeeded = results.length - failed;
-
-        span.setAttr('notification.failed_count', failed);
-
-        if (failed > 0) {
-          span.error('Some channel notification updates failed');
-        }
-
-        if (actorId !== userId()) {
-          return;
-        }
-
-        if (failed > 0) {
-          toast.failure(
-            t(
-              muted
-                ? 'entityActions.toastMutedSome'
-                : 'entityActions.toastUnmutedSome',
-              { succeeded, count: results.length, failed }
-            )
-          );
-          return;
-        }
-
-        toast.success(
-          t(
-            muted
-              ? 'entityActions.toastMutedCount'
-              : 'entityActions.toastUnmutedCount',
-            { count: succeeded }
-          )
-        );
-      });
-    } finally {
-      setPendingNotificationUpdate((current) =>
-        current === request ? undefined : current
-      );
-    }
-  };
-
-  const snoozeLabel = (label: ChannelLabel) => {
-    const channelIds = notificationChannelIds(label);
-    const owner = labelDialogOwner();
-
-    if (!userId() || channelIds.length === 0 || !owner) {
-      return;
-    }
-
-    openSnoozeNotifications(
-      channelIds.map((id) => ({ item_type: 'channel', item_id: id })),
-      { owner }
-    );
-  };
-
   const markLabelRead = async (label: ChannelLabel) => {
     if (!channelTagsEnabled()) {
       return;
@@ -593,9 +484,6 @@ export function useChannelLabelActions(options: ChannelLabelActionsOptions) {
     deleteLabel,
     setChannelLabel,
     markLabelRead,
-    muteLabel,
-    snoozeLabel,
-    labelNotificationsPending,
     canLabelChannelId,
     labelChannelById,
   };

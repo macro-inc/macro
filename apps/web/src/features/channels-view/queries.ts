@@ -16,6 +16,7 @@ import {
   registerChannelListNotificationRefresh,
   useChannelsByIdsQuery,
 } from '@queries/channel/by-ids';
+import { fetchAllChannels } from '@queries/channel/channels';
 
 export {
   channelsByIdsQueryArgs,
@@ -33,6 +34,7 @@ import { sortChannels } from './core/channel-sort';
 import { channelThreadsQueryArgs } from './core/channel-threads-query';
 import type {
   ChannelListSort,
+  ChannelsGroup,
   ChannelsQueryScope,
   ChannelsSortGroup,
 } from './types';
@@ -131,6 +133,36 @@ export function filterChannelsForScope(
   channels: readonly ChannelEntity[]
 ): ChannelEntity[] {
   return channels.filter(CHANNELS_QUERY_DEFINITIONS[scope].matches);
+}
+
+/** Resolve full built-in membership without changing the rail's loaded pages. */
+export async function fetchChannelGroupIds(
+  group: ChannelsGroup,
+  excludedIds: readonly string[],
+  signal?: AbortSignal
+): Promise<string[]> {
+  const excluded = new Set(excludedIds);
+  const channels = await fetchAllChannels(signal);
+  const members = channels.filter((channel) => {
+    if (!channel.is_participant || excluded.has(channel.id)) {
+      return false;
+    }
+
+    if (group === 'team_channels') {
+      return channel.channel_type === 'team';
+    }
+
+    if (group === 'direct_messages') {
+      return channel.channel_type === 'direct_message';
+    }
+
+    return (
+      channel.channel_type !== 'team' &&
+      channel.channel_type !== 'direct_message'
+    );
+  });
+
+  return [...new Set(members.map((channel) => channel.id))];
 }
 
 /**
