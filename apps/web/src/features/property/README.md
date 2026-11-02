@@ -60,9 +60,13 @@ tags. For multiple tags, label the overflow chip “N tags” when every tag is
 collapsed; use “+N tags” only when individual tag chips remain visible.
 Hidden tags keep the existing overflow picker and hover actions. Keep the visible
 chip count stable while a picker or its nested editor is active so resizing
-cannot discard the editing session. Key visible chips by option ID so refreshed
-tag objects do not remount a picker or leave overflow collapsing paused.
-Release active-picker state when a live update removes its chip or overflow trigger.
+cannot discard the editing session. A live sorted insertion keeps the active
+chip visible within that count, then restores normal order on close. Key visible
+chips by option ID so refreshed tag objects do not remount a picker or leave
+collapse paused. Release active-picker state when a live update deletes its chip
+or overflow trigger. While the tag picker is open, reconcile remote selections
+and deleted options without resetting staged additions or removals. Preserve
+staged intent through deletion rollbacks; exclude missing options when saving.
 When editing ends, immediately re-evaluate new tags against the title's full
 width, even if the title is already truncated.
 Hosts without a controller retain their explicit or default chip limit.
