@@ -83,7 +83,9 @@ export function createBlockPreloader(options: Options) {
   }
 
   async function warmNext(component: unknown) {
-    const span = Telemetry.perfSpan('block.preload.background');
+    const span = Telemetry.span('block.preload.background', {
+      sampling: 'perf',
+    });
     span.setAttr('preload.queue_remaining', queue.length);
     try {
       warmed.add(component);

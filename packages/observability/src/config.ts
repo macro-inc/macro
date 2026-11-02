@@ -4,6 +4,7 @@ import type {
 } from '@opentelemetry/api';
 import type { DetectedResourceAttributes } from '@opentelemetry/resources';
 import type { TelemetryTracingProviderFactory } from './provider';
+import type { SamplingClass, TraceSampling } from './sampling';
 
 export type Attribute = OtelAttributeValue;
 export type Attributes = Record<string, Attribute | undefined>;
@@ -17,7 +18,23 @@ export interface TelemetryStartupOptions {
   recording: boolean;
 }
 
-export interface TelemetryInitConfig {
+/**
+ * Per-class sampling. Each class is kept for a share of users, decided once
+ * per user per class at enablement; spans that ask for no class are kept.
+ */
+export type TelemetrySamplingConfig<Classes extends string> =
+  | {
+      /** Share of users, 0 to 1, whose traces of each class are exported. */
+      sampling: Readonly<Record<Classes, number>>;
+      /** The stable identity a decision is made for, read at enablement. */
+      samplingKey: () => string;
+    }
+  | { sampling?: undefined; samplingKey?: undefined };
+
+export type TelemetryInitConfig<Classes extends string = SamplingClass> =
+  TelemetryBaseConfig & TelemetrySamplingConfig<Classes>;
+
+interface TelemetryBaseConfig {
   serviceName: string;
   environment: string;
   tracesUrl?: string;
@@ -33,9 +50,7 @@ export interface TelemetryInitConfig {
   resourceAttributes?: ResourceAttributes;
   /** Snapshot of live diagnostics, read synchronously at span start/end. */
   spanAttributes?: () => Attributes;
-  /** Share of sessions, 0 to 1, whose perf-class traces are exported. */
-  perfSampleRate?: number;
-  /** Explicit diagnostic recordings capture all emitted spans. */
+  /** Explicit diagnostic recordings keep every sampling class. */
   recording?: boolean;
   /** Resolve exporter and recording settings without blocking provider registration. */
   startup?: Promise<TelemetryStartupOptions>;
@@ -45,19 +60,18 @@ export interface TelemetryInitConfig {
 /** Mutable attributes applied to telemetry created after they change. */
 export class TelemetryRuntimeConfig {
   #userId: string | undefined;
-  #perfSampled = true;
+  readonly #sampling: TraceSampling;
 
-  /**
-   * The normal perf sampling decision, shared by all runtime providers.
-   * Explicit recordings override it, including recordings resolved during
-   * native startup. Do not gate early recording capture on this value.
-   */
-  get perfSampled(): boolean {
-    return this.#perfSampled;
+  constructor(sampling: TraceSampling) {
+    this.#sampling = sampling;
   }
 
-  decidePerfSampling(rate: number): void {
-    this.#perfSampled = Math.random() < rate;
+  /**
+   * Whether this runtime exports traces of a sampling class. False until the
+   * class is decided at enablement, and while telemetry is disabled.
+   */
+  sampled(samplingClass: SamplingClass): boolean {
+    return this.#sampling.kept(samplingClass) === true;
   }
 
   get userId(): string | undefined {

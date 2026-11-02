@@ -39,8 +39,12 @@ Use the `@macro-inc/observability` facade (`packages/observability`); never
 import OpenTelemetry directly.
 
 - `Telemetry.span(name, fn)` for a phase; `span.span(name, fn)` for a child.
-  `Telemetry.clientSpan(name)` for an outbound call, then
+  `Telemetry.span(name, { kind: 'client' })` for an outbound call, then
   `span.injectTraceHeaders(headers)`.
+- `sampling: 'perf'` (in `Telemetry.span`'s options, `<TraceFlow>` and
+  `beginInteraction`) puts a trace in a sampling class; the web app's classes
+  are in `apps/web/src/observability/sampling.ts`. Spans without one are
+  always kept, and leave a dropped perf trace for their own.
 - `span.setAttr(key, value)` for ids and counts; `span.error(message)` on
   failure; manual spans must `end()` on every path.
 - The browser uses a synchronous `StackContextManager`, so after an `await`
@@ -59,8 +63,8 @@ import OpenTelemetry directly.
 
 Use `@app/observability/flow` for user-visible loading. Router commits start a
 `navigation` interaction and every routed view is already a `view.<route id>`
-`<TraceFlow>` keyed on its params. Flows are perf-class traces, sampled per
-session.
+`<TraceFlow>` keyed on its params. Flows are `perf`-class traces, sampled per
+user per week.
 
 - `usePending('channel.messages', () => query.isLoading)` right after creating
   the query adds a phase that holds the flow while it is true. Read status only:

@@ -261,7 +261,7 @@ it('retains the row array when a delta repeats unchanged ordering keys', async (
 });
 
 it('does not create root performance spans for repeated cache evaluations', async () => {
-  const perfSpan = vi.spyOn(Telemetry, 'perfSpan');
+  const span = vi.spyOn(Telemetry, 'span');
   try {
     const state = setup();
     state.requests[0].resolve(snapshot());
@@ -272,9 +272,11 @@ it('does not create root performance spans for repeated cache evaluations', asyn
       await flush();
     }
     expect(state.query.data()?.revision).toBe('101');
-    expect(perfSpan).not.toHaveBeenCalled();
+    expect(span).not.toHaveBeenCalledWith('urql.reconcile', {
+      sampling: 'perf',
+    });
   } finally {
-    perfSpan.mockRestore();
+    span.mockRestore();
   }
 });
 

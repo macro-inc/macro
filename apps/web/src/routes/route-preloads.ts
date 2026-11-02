@@ -49,7 +49,7 @@ export function preloadRouteReference(
 ): Promise<void> | undefined {
   if (!context.reference || context.signal.aborted) return;
   const type = fileTypeToResolvedBlockName(context.reference.type);
-  const span = Telemetry.perfSpan('block.preload');
+  const span = Telemetry.span('block.preload', { sampling: 'perf' });
   span.setAttr('block.type', type);
   const code = warmCode(blocks[type].component, span);
   const data =

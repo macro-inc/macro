@@ -3,6 +3,7 @@ import { resourceFromAttributes } from '@opentelemetry/resources';
 import type { InMemorySpanExporter } from '@opentelemetry/sdk-trace-base';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { TelemetryInitConfig, TelemetryStartupOptions } from './config';
+import { TraceSampling } from './sampling';
 import { Tracing } from './tracing';
 import { createWebTracingProvider, StackContextManager } from './web';
 
@@ -38,7 +39,6 @@ it('registers immediately, retains early recording spans, and waits for its dest
   const config: TelemetryInitConfig = {
     serviceName: 'test',
     environment: 'prod',
-    perfSampleRate: 0,
     startup,
     enabled: async () => true,
     contextManager: new StackContextManager(),
@@ -46,20 +46,22 @@ it('registers immediately, retains early recording spans, and waits for its dest
   const resource = resourceFromAttributes({
     'service.instance.id': startup.then(() => 'launch-1'),
   });
+  const sampling = new TraceSampling();
+  sampling.configure({ perf: 0 });
   const provider = createWebTracingProvider(
     config,
     resource,
     () => undefined,
-    false
+    sampling
   );
   const tracing = new Tracing();
   tracing.init(
     { ...config, tracingProvider: () => provider },
     resource,
     () => undefined,
-    false
+    sampling
   );
-  const root = tracing.perfSpan('early-recording');
+  const root = tracing.span('early-recording', { sampling: 'perf' });
   const child = root.span('early-child');
   child.end();
   root.end();
@@ -69,6 +71,8 @@ it('registers immediately, retains early recording spans, and waits for its dest
     recording: true,
     tracesUrl: 'http://localhost:4318/custom/v1/traces',
   });
+  // A recording keeps every class.
+  sampling.decide(() => true);
   await tracing.flush();
   expect(destinations).toEqual(['http://localhost:4318/custom/v1/traces']);
   const spans = exporters[0].getFinishedSpans();
@@ -96,7 +100,6 @@ it('drops normal unsampled early spans and late children and normalizes both pro
   const config: TelemetryInitConfig = {
     serviceName: 'test',
     environment: 'prod',
-    perfSampleRate: 0,
     startup,
     tracesUrl: 'http://localhost/v1/traces',
     enabled: async () => true,
@@ -104,19 +107,22 @@ it('drops normal unsampled early spans and late children and normalizes both pro
   };
   const tracing = new Tracing();
   const resource = resourceFromAttributes({});
+  const sampling = new TraceSampling();
+  sampling.configure({ perf: 0.05 });
   tracing.init(
     {
       ...config,
-      tracingProvider: (resource, user, sampled) =>
-        createWebTracingProvider(config, resource, user, sampled),
+      tracingProvider: (resource, user, sampling) =>
+        createWebTracingProvider(config, resource, user, sampling),
     },
     resource,
     () => undefined,
-    false
+    sampling
   );
-  const early = tracing.perfSpan('normal-perf');
+  const early = tracing.span('normal-perf', { sampling: 'perf' });
   early.span('early-child').end();
   resolve({ recording: false, tracesUrl: config.tracesUrl });
+  sampling.decide(() => false);
   await tracing.flush();
   expect(early.traceparent()).toMatch(/-00$/);
   const headers: Record<string, string> = {};
@@ -145,7 +151,7 @@ it('constructs no exporter when enablement is denied, including a resolved nativ
     },
     resourceFromAttributes({}),
     () => undefined,
-    false
+    new TraceSampling()
   );
   provider.getTracer('test').startSpan('early').end();
   await provider.forceFlush();
@@ -161,25 +167,27 @@ it('preserves sampled normal roots and children across startup resolution', asyn
   const config: TelemetryInitConfig = {
     serviceName: 'test',
     environment: 'prod',
-    perfSampleRate: 1,
     startup,
     enabled: async () => true,
     contextManager: new StackContextManager(),
   };
   const tracing = new Tracing();
+  const sampling = new TraceSampling();
+  sampling.configure({ perf: 0.05 });
   tracing.init(
     {
       ...config,
-      tracingProvider: (resource, user, sampled) =>
-        createWebTracingProvider(config, resource, user, sampled),
+      tracingProvider: (resource, user, sampling) =>
+        createWebTracingProvider(config, resource, user, sampling),
     },
     resourceFromAttributes({}),
     () => undefined,
-    true
+    sampling
   );
-  const early = tracing.perfSpan('sampled-perf');
+  const early = tracing.span('sampled-perf', { sampling: 'perf' });
   early.span('early-child').end();
   resolve({ recording: false, tracesUrl: 'http://localhost/v1/traces' });
+  sampling.decide(() => true);
   await tracing.flush();
   early.span('late-child').end();
   early.end();
@@ -207,7 +215,7 @@ it('fails closed when native startup settings reject', async () => {
     },
     resourceFromAttributes({}),
     () => undefined,
-    false
+    new TraceSampling()
   );
   provider.getTracer('test').startSpan('early').end();
   reject(new Error('unavailable'));

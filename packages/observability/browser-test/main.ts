@@ -42,7 +42,8 @@ window.runExporterProbe = async (collector) => {
     serviceName: 'webview-export-probe',
     environment: 'test',
     enabled: async () => true,
-    perfSampleRate: 0,
+    sampling: { perf: 0 },
+    samplingKey: () => 'webview-export-probe',
     tracesUrl: 'http://invalid.example/fallback/v1/traces',
     logsUrl: 'http://invalid.example/fallback/v1/logs',
     startup,
@@ -59,12 +60,12 @@ window.runExporterProbe = async (collector) => {
   try {
     const ready = Telemetry.init({
       ...config,
-      tracingProvider: (resource, getUserId, perfSampled) =>
-        createWebTracingProvider(config, resource, getUserId, perfSampled),
+      tracingProvider: (resource, getUserId, sampling) =>
+        createWebTracingProvider(config, resource, getUserId, sampling),
     });
-    Telemetry.perfSpan('export.early').end();
+    Telemetry.span('export.early', { sampling: 'perf' }).end();
     await ready;
-    Telemetry.perfSpan('export.ready').end();
+    Telemetry.span('export.ready', { sampling: 'perf' }).end();
     Telemetry.info('export.log');
     await Telemetry.flush();
   } catch {

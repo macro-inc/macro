@@ -62,17 +62,20 @@ describe('createTauriCacheHost', () => {
   });
 
   it('samples request tracing without creating a span for each notification', async () => {
-    const performance = vi.spyOn(Telemetry, 'perfSpan');
-    const ordinary = vi.spyOn(Telemetry, 'span');
+    const span = vi.spyOn(Telemetry, 'span');
     const host = createTauriCacheHost({ scope: 'scope-1' });
     await host.readQuery({ query: '{ x }' });
-    expect(performance).toHaveBeenCalledTimes(3); // Initialization, queue probe, read.
+    // Initialization, queue probe, read.
+    expect(span.mock.calls).toEqual([
+      ['graphql_cache.ipc.request', { sampling: 'perf' }],
+      ['graphql_cache.ipc.request', { sampling: 'perf' }],
+      ['graphql_cache.ipc.request', { sampling: 'perf' }],
+    ]);
     const notify = eventCallbacks.get('graphql-cache://cache-changed')!;
     for (let revision = 1; revision <= 100; revision++) {
       notify({ payload: { revision: String(revision) } });
     }
-    expect(performance).toHaveBeenCalledTimes(3);
-    expect(ordinary).not.toHaveBeenCalled();
+    expect(span).toHaveBeenCalledTimes(3);
     host.dispose();
   });
 

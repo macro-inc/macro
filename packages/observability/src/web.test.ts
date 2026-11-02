@@ -8,6 +8,7 @@ import {
 import { resourceFromAttributes } from '@opentelemetry/resources';
 import type { InMemorySpanExporter } from '@opentelemetry/sdk-trace-base';
 import { afterEach, expect, test, vi } from 'vitest';
+import { TraceSampling } from './sampling';
 import { Tracing } from './tracing';
 import { createWebTracingProvider } from './web';
 
@@ -34,6 +35,8 @@ afterEach(() => {
 
 test('recording exports even unsampled-parent spans with launch identity and memory at both boundaries', async () => {
   let memory = 100;
+  const sampling = new TraceSampling();
+  sampling.decide(() => true);
   const provider = createWebTracingProvider(
     {
       serviceName: 'web-app',
@@ -49,7 +52,7 @@ test('recording exports even unsampled-parent spans with launch identity and mem
       'macro.recording.id': 'recording-1',
     }),
     () => 'user-1',
-    true
+    sampling
   );
   const parent = trace.setSpanContext(ROOT_CONTEXT, {
     traceId: '11111111111111111111111111111111',
@@ -78,6 +81,8 @@ test('recording exports even unsampled-parent spans with launch identity and mem
 });
 
 test('buffered samples retain their native timestamp and values despite live enrichment', async () => {
+  const sampling = new TraceSampling();
+  sampling.decide(() => true);
   const provider = createWebTracingProvider(
     {
       serviceName: 'web-app',
@@ -88,7 +93,7 @@ test('buffered samples retain their native timestamp and values despite live enr
     },
     resourceFromAttributes({}),
     () => undefined,
-    true
+    sampling
   );
   new Tracing().recordSample(
     'app.memory.sample',
@@ -103,136 +108,175 @@ test('buffered samples retain their native timestamp and values despite live enr
   await provider.shutdown();
 });
 
-test('an unsampled session drops perf traces with their children but keeps other traces', async () => {
+test('an unsampled perf class drops its traces with their phases but keeps unclassed traces', async () => {
+  const sampling = new TraceSampling();
+  sampling.configure({ perf: 0.05 });
+  sampling.decide(() => false);
   const provider = createWebTracingProvider(
     {
       serviceName: 'web-app',
       environment: 'test',
       enabled: async () => true,
       tracesUrl: 'http://localhost/v1/traces',
-      perfSampleRate: 0,
     },
     resourceFromAttributes({}),
     () => undefined,
-    false
+    sampling
   );
   const tracing = new Tracing();
-  const flow = tracing.perfSpan('home.load');
+  tracing.init(
+    {
+      serviceName: 'web-app',
+      environment: 'test',
+      enabled: async () => true,
+      tracingProvider: () => provider,
+    },
+    resourceFromAttributes({}),
+    () => undefined,
+    sampling
+  );
+  const flow = tracing.span('home.load', { sampling: 'perf' });
   flow.span('home.load.soup').end();
   flow.end();
   tracing.span('doc.open').end();
-  await provider.forceFlush();
+  await tracing.flush();
   expect(
     exporters
       .at(-1)
       ?.getFinishedSpans()
       .map((span) => span.name)
   ).toEqual(['doc.open']);
+  expect(flow.traceparent()).toMatch(/-00$/);
   await provider.shutdown();
 });
 
-test('a sampled session exports perf traces tagged with their class', async () => {
+test('every span in a kept classed trace carries its class and rate, including requests started in it', async () => {
+  const sampling = new TraceSampling();
+  sampling.configure({ always: 1, perf: 0.05 });
+  sampling.decide(() => true);
   const provider = createWebTracingProvider(
     {
       serviceName: 'web-app',
       environment: 'test',
       enabled: async () => true,
       tracesUrl: 'http://localhost/v1/traces',
-      perfSampleRate: 1,
     },
     resourceFromAttributes({}),
     () => undefined,
-    true
-  );
-  new Tracing().perfSpan('home.load').end();
-  await provider.forceFlush();
-  expect(exporters.at(-1)?.getFinishedSpans()[0]?.attributes).toMatchObject({
-    'macro.trace.class': 'perf',
-  });
-  await provider.shutdown();
-});
-
-test('descendants of a perf span carry its class, including client spans in its context', async () => {
-  const provider = createWebTracingProvider(
-    {
-      serviceName: 'web-app',
-      environment: 'test',
-      enabled: async () => true,
-      tracesUrl: 'http://localhost/v1/traces',
-      perfSampleRate: 1,
-    },
-    resourceFromAttributes({}),
-    () => undefined,
-    true
+    sampling
   );
   const tracing = new Tracing();
-  const flow = tracing.perfSpan('view.home');
+  tracing.init(
+    {
+      serviceName: 'web-app',
+      environment: 'test',
+      enabled: async () => true,
+      tracingProvider: () => provider,
+    },
+    resourceFromAttributes({}),
+    () => undefined,
+    sampling
+  );
+  const flow = tracing.span('view.home', { sampling: 'perf' });
   const phase = flow.span('home.items');
-  phase.run(() => tracing.clientSpan('http GET /items').end());
+  phase.run(() => tracing.span('http GET /items', { kind: 'client' }).end());
+  phase.run(() => tracing.span('cache.write', { sampling: 'always' }).end());
   phase.end();
   flow.end();
   tracing.span('doc.open').end();
-  await provider.forceFlush();
-  const classes = Object.fromEntries(
+  await tracing.flush();
+  const tags = Object.fromEntries(
     (exporters.at(-1)?.getFinishedSpans() ?? []).map((span) => [
       span.name,
-      span.attributes['macro.trace.class'],
+      [
+        span.attributes['macro.sampling.class'],
+        span.attributes['macro.sampling.rate'],
+      ],
     ])
   );
-  expect(classes).toEqual({
-    'http GET /items': 'perf',
-    'home.items': 'perf',
-    'view.home': 'perf',
-    'doc.open': undefined,
+  expect(tags).toEqual({
+    'http GET /items': ['perf', 0.05],
+    'cache.write': ['always', 1],
+    'home.items': ['perf', 0.05],
+    'view.home': ['perf', 0.05],
+    'doc.open': [undefined, undefined],
   });
   await provider.shutdown();
 });
 
-test('an unsampled perf trace leaves requests started in it as their own traces', async () => {
+test('a span in a dropped trace starts its own trace when its class is kept, and is dropped when it is not', async () => {
+  const sampling = new TraceSampling();
+  sampling.configure({ always: 1, perf: 0.05 });
+  sampling.decide((samplingClass) => samplingClass === 'always');
   const provider = createWebTracingProvider(
     {
       serviceName: 'web-app',
       environment: 'test',
       enabled: async () => true,
       tracesUrl: 'http://localhost/v1/traces',
-      perfSampleRate: 0,
     },
     resourceFromAttributes({}),
     () => undefined,
-    false
+    sampling
   );
   const tracing = new Tracing();
-  const flow = tracing.perfSpan('view.home');
+  tracing.init(
+    {
+      serviceName: 'web-app',
+      environment: 'test',
+      enabled: async () => true,
+      tracingProvider: () => provider,
+    },
+    resourceFromAttributes({}),
+    () => undefined,
+    sampling
+  );
+  const flow = tracing.span('view.home', { sampling: 'perf' });
   const phase = flow.span('home.items');
-  phase.run(() => tracing.clientSpan('http GET /items').end());
+  phase.run(() => {
+    const request = tracing.span('http GET /items', { kind: 'client' });
+    request.span('http GET /items.retry').end();
+    request.end();
+    tracing.span('cache.write', { sampling: 'always' }).end();
+    tracing.span('urql.reconcile', { sampling: 'perf' }).end();
+  });
   phase.end();
   flow.end();
-  await provider.forceFlush();
-  const [request] = exporters.at(-1)?.getFinishedSpans() ?? [];
-  expect(request?.name).toBe('http GET /items');
-  expect(request?.parentSpanContext).toBeUndefined();
-  expect(request?.attributes['macro.trace.class']).toBeUndefined();
+  await tracing.flush();
+  const spans = exporters.at(-1)?.getFinishedSpans() ?? [];
+  expect(spans.map((span) => span.name)).toEqual([
+    'http GET /items.retry',
+    'http GET /items',
+    'cache.write',
+  ]);
+  const [retry, request, write] = spans;
+  expect(request.parentSpanContext).toBeUndefined();
+  expect(retry.parentSpanContext?.spanId).toBe(request.spanContext().spanId);
+  expect(retry.spanContext().traceId).toBe(request.spanContext().traceId);
+  expect(write.parentSpanContext).toBeUndefined();
+  expect(write.spanContext().traceId).not.toBe(request.spanContext().traceId);
+  expect(write.attributes['macro.sampling.class']).toBe('always');
+  expect(request.attributes['macro.sampling.class']).toBeUndefined();
   await provider.shutdown();
 });
 
-test('early spans keep explicit async parentage and wait for exporter enablement', async () => {
+test('a span started in a perf trace before the decision leaves it at export when perf is dropped', async () => {
   let decide: (enabled: boolean) => void = () => {};
   const decision = new Promise<boolean>((resolve) => {
     decide = resolve;
   });
-  const count = exporters.length;
-  const { StackContextManager } = await import('./web');
+  const sampling = new TraceSampling();
+  sampling.configure({ perf: 0.05 });
   const provider = createWebTracingProvider(
     {
       serviceName: 'web-app',
       environment: 'test',
-      tracesUrl: 'http://localhost/v1/traces',
       enabled: () => decision,
-      contextManager: new StackContextManager(),
+      tracesUrl: 'http://localhost/v1/traces',
     },
     resourceFromAttributes({}),
     () => undefined,
-    true
+    sampling
   );
   const tracing = new Tracing();
   tracing.init(
@@ -244,16 +288,89 @@ test('early spans keep explicit async parentage and wait for exporter enablement
     },
     resourceFromAttributes({}),
     () => undefined,
-    true
+    sampling
   );
-  const boot = tracing.perfSpan('app.boot', 1700000000000);
+  const boot = tracing.span('app.boot', { sampling: 'perf' });
+  const request = boot.run(() =>
+    tracing.span('http GET /items', { kind: 'client' })
+  );
+  const parse = request.span('http GET /items.parse');
+  parse.end();
+  boot.end();
+  decide(true);
+  sampling.decide(() => false);
+  await tracing.flush();
+  const headers: Record<string, string> = {};
+  request.injectTraceHeaders(headers);
+  const late = request.span('http GET /items.read');
+  late.end();
+  request.end();
+  await tracing.flush();
+  const spans = exporters.at(-1)?.getFinishedSpans() ?? [];
+  expect(spans.map((span) => span.name)).toEqual([
+    'http GET /items.parse',
+    'http GET /items.read',
+    'http GET /items',
+  ]);
+  const [early, read, root] = spans;
+  const traceId = root.spanContext().traceId;
+  expect(traceId).not.toBe(boot.traceparent()?.split('-')[1]);
+  expect(root.parentSpanContext).toBeUndefined();
+  expect(early.spanContext().traceId).toBe(traceId);
+  expect(read.spanContext().traceId).toBe(traceId);
+  expect(read.parentSpanContext?.spanId).toBe(root.spanContext().spanId);
+  expect(headers.traceparent).toBe(
+    `00-${traceId}-${root.spanContext().spanId}-01`
+  );
+  await provider.shutdown();
+});
+
+test('early spans keep explicit async parentage and wait for exporter enablement', async () => {
+  let decide: (enabled: boolean) => void = () => {};
+  const decision = new Promise<boolean>((resolve) => {
+    decide = resolve;
+  });
+  const count = exporters.length;
+  const { StackContextManager } = await import('./web');
+  const sampling = new TraceSampling();
+  sampling.configure({ perf: 0.05 });
+  const provider = createWebTracingProvider(
+    {
+      serviceName: 'web-app',
+      environment: 'test',
+      tracesUrl: 'http://localhost/v1/traces',
+      enabled: () => decision,
+      contextManager: new StackContextManager(),
+    },
+    resourceFromAttributes({}),
+    () => undefined,
+    sampling
+  );
+  const tracing = new Tracing();
+  tracing.init(
+    {
+      serviceName: 'web-app',
+      environment: 'test',
+      enabled: () => decision,
+      tracingProvider: () => provider,
+    },
+    resourceFromAttributes({}),
+    () => undefined,
+    sampling
+  );
+  const boot = tracing.span('app.boot', {
+    sampling: 'perf',
+    startTime: 1700000000000,
+  });
   const document = boot.span('doc.open');
   await Promise.resolve();
   const load = document.span('doc.load');
   load.end();
   const mutation = boot.span('graphql.mutation_queue.attempt');
   await Promise.resolve();
-  const transport = mutation.run(() => tracing.clientSpan('graphql.transport'));
+  const transport = mutation.run(() =>
+    tracing.span('graphql.transport', { kind: 'client' })
+  );
   const headers: Record<string, string> = {};
   transport.injectTraceHeaders(headers);
   expect(headers).toEqual({});
@@ -265,6 +382,7 @@ test('early spans keep explicit async parentage and wait for exporter enablement
   boot.end(1700000000100);
   expect(exporters).toHaveLength(count);
   decide(true);
+  sampling.decide(() => true);
   await tracing.flush();
   expect(boot.traceparent()).toBeDefined();
   const spans = exporters.at(-1)?.getFinishedSpans() ?? [];

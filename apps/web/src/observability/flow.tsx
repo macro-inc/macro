@@ -15,6 +15,7 @@ import {
   untrack,
   useContext,
 } from 'solid-js';
+import type { SamplingClass } from './sampling';
 import {
   currentRoute,
   type FlowKind,
@@ -275,13 +276,14 @@ function joinInteraction(
 function openNode(
   parent: FlowScope | undefined,
   name: string,
-  attributes: Attributes | undefined
+  attributes: Attributes | undefined,
+  sampling: SamplingClass | undefined
 ): FlowNode {
   if (parent && !parent.node.settled)
     return childNode(parent.node, name, attributes);
   const interaction = activeInteraction();
   if (interaction) return joinInteraction(interaction, name, attributes);
-  return rootNode(name, 'view', { attributes });
+  return rootNode(name, 'view', { attributes, sampling });
 }
 
 /**
@@ -290,7 +292,8 @@ function openNode(
  * The flow stays open while any nested `<TraceFlow>`, `usePending`, or
  * `useFlow().task` holds it. Nested flows
  * become child phases. A flow with no open parent joins the interaction that
- * opened it (see {@link beginInteraction}) or starts its own perf trace.
+ * opened it (see {@link beginInteraction}) or starts its own trace, of class
+ * `sampling` (`perf` by default).
  * When `key` changes, such as a view showing a different entity in place, the
  * flow starts again. Unmounting before it settles records it as cancelled.
  *
@@ -301,6 +304,8 @@ export function TraceFlow(props: {
   name: string;
   attributes?: Attributes;
   key?: Accessor<unknown>;
+  /** The sampling class of the trace it starts as a root. Defaults to `perf`. */
+  sampling?: SamplingClass;
   children: JSX.Element;
 }): JSX.Element {
   const parent = useContext(FlowContext);
@@ -308,7 +313,8 @@ export function TraceFlow(props: {
     openNode(
       parent,
       untrack(() => props.name),
-      untrack(() => props.attributes)
+      untrack(() => props.attributes),
+      untrack(() => props.sampling)
     );
   const [current, setCurrent] = createSignal(start());
   const scope: FlowScope = {

@@ -29,7 +29,7 @@ function interval(
 ): void {
   if (start < 0 || end <= start) return;
   const span = boot.run(() =>
-    Telemetry.spanAt(name, performance.timeOrigin + start)
+    Telemetry.span(name, { startTime: performance.timeOrigin + start })
   );
   for (const [key, value] of Object.entries(attributes ?? {}))
     span.setAttr(key, value);
