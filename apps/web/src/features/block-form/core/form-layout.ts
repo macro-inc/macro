@@ -26,6 +26,11 @@ export type LayoutRefusal =
       kind: 'gate-before-question';
       gateSectionId: string;
       columnId: string;
+    }
+  | {
+      kind: 'condition-before-question';
+      sectionId: string;
+      columnId: string;
     };
 
 export type QuestionPatch = Partial<
@@ -35,11 +40,16 @@ export type QuestionPatch = Partial<
 export type SectionPatch = Partial<
   Pick<
     FormSection,
-    'title' | 'description' | 'gateRules' | 'gateMessage' | 'bookingTarget'
+    | 'title'
+    | 'description'
+    | 'gateRules'
+    | 'gateMessage'
+    | 'showWhen'
+    | 'bookingTarget'
   >
 >;
 
-/** A layout edit that also dropped gate conditions naming columns it took off the form. */
+/** A layout edit that also dropped rule conditions naming columns it took off the form. */
 export type PrunedLayout = { layout: FormLayout; prunedConditions: number };
 
 function clamp(index: number, length: number) {
@@ -92,10 +102,19 @@ function replaceSection(
   };
 }
 
+/** A section's rules: a gate's, or the condition a questions section is shown on. */
+export function sectionRules(section: FormSection): GateRules | null {
+  return match(section.kind)
+    .with('gate', () => section.gateRules)
+    .with('questions', () => section.showWhen)
+    .with('booking', () => null)
+    .exhaustive();
+}
+
 /**
  * Everything wrong with a layout: each booking step not last (of two, the
- * first is never last), then each column a gate names that is not asked
- * before it.
+ * first is never last), then each column a gate or condition names that is
+ * not asked before it.
  */
 function layoutProblems(layout: FormLayout): LayoutRefusal[] {
   const problems: LayoutRefusal[] = layout.sections.flatMap(
@@ -105,15 +124,20 @@ function layoutProblems(layout: FormLayout): LayoutRefusal[] {
         : []
   );
   for (const section of layout.sections) {
-    if (section.kind !== 'gate' || !section.gateRules) continue;
-    const allowed = new Set(gateColumns(layout, section.id));
-    for (const columnId of columnsNamed(section.gateRules))
-      if (!allowed.has(columnId))
-        problems.push({
-          kind: 'gate-before-question',
-          gateSectionId: section.id,
-          columnId,
-        });
+    for (const columnId of brokenRuleColumns(layout, section.id))
+      problems.push(
+        section.kind === 'gate'
+          ? {
+              kind: 'gate-before-question',
+              gateSectionId: section.id,
+              columnId,
+            }
+          : {
+              kind: 'condition-before-question',
+              sectionId: section.id,
+              columnId,
+            }
+      );
   }
   return problems;
 }
@@ -162,16 +186,40 @@ function pruneRules(
   return { rules: { conjunction: rules.conjunction, conditions }, pruned };
 }
 
-function pruneGates(
+/**
+ * The section with its rules pruned. A condition left empty goes, so the
+ * section is always shown; a gate keeps its empty rules.
+ */
+function withPrunedRules(
+  section: FormSection,
+  columns: ReadonlySet<string>
+): { section: FormSection; pruned: number } {
+  const current = sectionRules(section);
+  if (!current) return { section, pruned: 0 };
+  const { rules, pruned } = pruneRules(current, columns);
+  if (pruned === 0) return { section, pruned };
+  return match(section.kind)
+    .with('gate', () => ({ section: { ...section, gateRules: rules }, pruned }))
+    .with('questions', () => ({
+      section: {
+        ...section,
+        showWhen: rules.conditions.length > 0 ? rules : null,
+      },
+      pruned,
+    }))
+    .with('booking', () => ({ section, pruned: 0 }))
+    .exhaustive();
+}
+
+function pruneSectionRules(
   layout: FormLayout,
   columns: ReadonlySet<string>
 ): PrunedLayout {
   let prunedConditions = 0;
-  const sections = layout.sections.map((section) => {
-    if (!section.gateRules) return section;
-    const { rules, pruned } = pruneRules(section.gateRules, columns);
+  const sections = layout.sections.map((before) => {
+    const { section, pruned } = withPrunedRules(before, columns);
     prunedConditions += pruned;
-    return pruned > 0 ? { ...section, gateRules: rules } : section;
+    return section;
   });
   return { layout: { sections }, prunedConditions };
 }
@@ -224,7 +272,7 @@ export function removeQuestion(
     ...section,
     questions: section.questions.filter((item) => item.id !== questionId),
   }));
-  return ok(pruneGates(without, new Set([found.question.columnId])));
+  return ok(pruneSectionRules(without, new Set([found.question.columnId])));
 }
 
 export function updateQuestion(
@@ -259,7 +307,7 @@ export function swapQuestionColumn(
       item.id === questionId ? { ...item, columnId } : item
     ),
   }));
-  return ok(pruneGates(swapped, new Set([found.question.columnId])));
+  return ok(pruneSectionRules(swapped, new Set([found.question.columnId])));
 }
 
 /**
@@ -317,7 +365,7 @@ export function removeSection(
   const section = layout.sections.find((item) => item.id === sectionId);
   if (!section) return err({ kind: 'unknown-section', sectionId });
   return ok(
-    pruneGates(
+    pruneSectionRules(
       { sections: layout.sections.filter((item) => item.id !== sectionId) },
       new Set(section.questions.map((question) => question.columnId))
     )
@@ -346,8 +394,8 @@ export function questionNumbers(layout: FormLayout): Map<string, number> {
   return numbers;
 }
 
-/** Columns a gate may test: questions of the questions sections before it. */
-export function gateColumns(layout: FormLayout, sectionId: string): string[] {
+/** Columns a gate or condition may test: questions of the questions sections before it. */
+export function ruleColumns(layout: FormLayout, sectionId: string): string[] {
   const index = layout.sections.findIndex((item) => item.id === sectionId);
   if (index < 0) return [];
   return layout.sections
@@ -359,36 +407,33 @@ export function gateColumns(layout: FormLayout, sectionId: string): string[] {
 }
 
 /**
- * Columns a gate's rules test that no earlier question asks: the question
+ * Columns a section's rules test that no earlier question asks: the question
  * went in the grid (its column deleted or retyped) and the rule stayed.
  */
-export function brokenGateColumns(
+export function brokenRuleColumns(
   layout: FormLayout,
   sectionId: string
 ): string[] {
   const section = layout.sections.find((item) => item.id === sectionId);
-  if (!section?.gateRules) return [];
-  const asked = new Set(gateColumns(layout, sectionId));
-  return columnsNamed(section.gateRules).filter((column) => !asked.has(column));
+  const rules = section && sectionRules(section);
+  if (!rules) return [];
+  const asked = new Set(ruleColumns(layout, sectionId));
+  return columnsNamed(rules).filter((column) => !asked.has(column));
 }
 
-/** The gate without its broken rules (see `brokenGateColumns`). */
+/** The section without its broken rules (see `brokenRuleColumns`). */
 export function pruneBrokenRules(
   layout: FormLayout,
   sectionId: string
 ): Result<PrunedLayout, LayoutRefusal> {
-  const section = layout.sections.find((item) => item.id === sectionId);
-  if (!section) return err({ kind: 'unknown-section', sectionId });
-  if (!section.gateRules) return ok({ layout, prunedConditions: 0 });
-  const { rules, pruned } = pruneRules(
-    section.gateRules,
-    new Set(brokenGateColumns(layout, sectionId))
+  const found = layout.sections.find((item) => item.id === sectionId);
+  if (!found) return err({ kind: 'unknown-section', sectionId });
+  const { section, pruned } = withPrunedRules(
+    found,
+    new Set(brokenRuleColumns(layout, sectionId))
   );
   return ok({
-    layout: replaceSection(layout, sectionId, (item) => ({
-      ...item,
-      gateRules: rules,
-    })),
+    layout: replaceSection(layout, sectionId, () => section),
     prunedConditions: pruned,
   });
 }

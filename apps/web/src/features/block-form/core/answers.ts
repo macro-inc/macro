@@ -1,5 +1,5 @@
 import { match } from 'ts-pattern';
-import { brokenGateColumns } from './form-layout';
+import { brokenRuleColumns } from './form-layout';
 import type {
   FormAnswers,
   FormCellValue,
@@ -125,19 +125,47 @@ export function sectionProblems(
   });
 }
 
-/** Answers by the column each question writes, as gates read them. */
-export function answersByColumn(
+/**
+ * The questions sections `answers` skip. In order, a section with a
+ * condition is shown only when the answers of the shown sections before it
+ * pass it, as strictly as a gate. Answers typed into a section skipped since
+ * stay in memory, but nothing reads or sends them.
+ */
+export function skippedSections(
+  layout: FormLayout,
+  answers: FormAnswers
+): Set<string> {
+  const skipped = new Set<string>();
+  const byColumn = new Map<string, FormCellValue>();
+  for (const section of layout.sections) {
+    if (section.showWhen && !gatePasses(section.showWhen, byColumn)) {
+      skipped.add(section.id);
+      continue;
+    }
+    for (const question of section.questions) {
+      const value = answers[question.id];
+      if (isAnswered(value)) byColumn.set(question.columnId, trimmed(value));
+    }
+  }
+  return skipped;
+}
+
+/** Answers of the shown sections by the column each question writes, as gates read them. */
+function answersByColumn(
   layout: FormLayout,
   answers: FormAnswers
 ): Map<string, FormCellValue> {
   // Exactly what a submission would carry, so a local gate check agrees
   // with the server's.
+  const skipped = skippedSections(layout, answers);
   const byColumn = new Map<string, FormCellValue>();
-  for (const section of layout.sections)
+  for (const section of layout.sections) {
+    if (skipped.has(section.id)) continue;
     for (const question of section.questions) {
       const value = answers[question.id];
       if (isAnswered(value)) byColumn.set(question.columnId, trimmed(value));
     }
+  }
   return byColumn;
 }
 
@@ -145,28 +173,31 @@ export function answersByColumn(
 export type FormStep =
   | { kind: 'section'; index: number }
   | { kind: 'stop'; sectionId: string; message: string }
-  /** A gate tests a question no longer before it: the form is mid-edit. */
+  /** A gate or condition tests a question no longer before it: the form is mid-edit. */
   | { kind: 'updating' }
   | { kind: 'submit' };
 
 /**
- * The next questions section after `from`, evaluating every gate passed on
- * the way. A failing gate stops the respondent there.
+ * The next shown questions section after `from`, evaluating every gate
+ * passed on the way. A failing gate stops the respondent there.
  */
 export function nextStep(
   layout: FormLayout,
   from: number,
   answers: FormAnswers
 ): FormStep {
+  const skipped = skippedSections(layout, answers);
   const byColumn = answersByColumn(layout, answers);
   for (let index = from + 1; index < layout.sections.length; index++) {
     const section = layout.sections[index];
+    if (brokenRuleColumns(layout, section.id).length > 0)
+      return { kind: 'updating' };
     const step = match(section.kind)
       .returnType<FormStep | undefined>()
-      .with('questions', () => ({ kind: 'section', index }))
+      .with('questions', () =>
+        skipped.has(section.id) ? undefined : { kind: 'section', index }
+      )
       .with('gate', () => {
-        if (brokenGateColumns(layout, section.id).length > 0)
-          return { kind: 'updating' };
         if (section.gateRules && !gatePasses(section.gateRules, byColumn))
           return {
             kind: 'stop',
@@ -188,36 +219,42 @@ export function endsWithBooking(layout: FormLayout): boolean {
   return layout.sections.some((section) => section.kind === 'booking');
 }
 
-/** The questions section before `from`, if any. */
+/** The shown questions section before `from`, if any. */
 export function previousSectionIndex(
   layout: FormLayout,
-  from: number
+  from: number,
+  answers: FormAnswers
 ): number | undefined {
-  for (let index = from - 1; index >= 0; index--)
-    if (layout.sections[index].kind === 'questions') return index;
-  return undefined;
+  const shown = questionSectionIndices(layout, answers);
+  return shown.findLast((index) => index < from);
 }
 
-/** The questions sections, in order, as indices of the layout. */
-export function questionSectionIndices(layout: FormLayout): number[] {
+/** The questions sections `answers` show, in order, as indices of the layout. */
+export function questionSectionIndices(
+  layout: FormLayout,
+  answers: FormAnswers
+): number[] {
+  const skipped = skippedSections(layout, answers);
   return layout.sections.flatMap((section, index) =>
-    section.kind === 'questions' ? [index] : []
+    section.kind === 'questions' && !skipped.has(section.id) ? [index] : []
   );
 }
 
 /**
- * The answers to send. A first submission carries what was answered; an edit
- * carries every question, clearing the ones emptied since.
+ * The answers to send. A first submission carries what was answered in the
+ * shown sections; an edit carries every question, clearing the ones emptied
+ * or skipped since.
  */
 export function submissionAnswers(
   layout: FormLayout,
   answers: FormAnswers,
   mode: 'create' | 'edit'
 ): SubmittedAnswer[] {
+  const skipped = skippedSections(layout, answers);
   return layout.sections.flatMap((section) =>
     section.questions.flatMap((question): SubmittedAnswer[] => {
       const value = answers[question.id];
-      if (isAnswered(value))
+      if (!skipped.has(section.id) && isAnswered(value))
         return [{ question: question.id, value: trimmed(value) }];
       return mode === 'edit'
         ? [{ question: question.id, value: { type: 'clear' } }]

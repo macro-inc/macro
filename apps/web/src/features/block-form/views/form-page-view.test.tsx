@@ -66,6 +66,7 @@ const detail: FormDetail = {
         kind: 'questions',
         gateRules: null,
         gateMessage: '',
+        showWhen: null,
         bookingTarget: null,
         questions: [],
       },

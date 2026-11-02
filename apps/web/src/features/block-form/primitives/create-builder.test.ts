@@ -81,6 +81,7 @@ const startingLayout: FormLayout = {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      showWhen: null,
       bookingTarget: null,
       questions: [
         {
@@ -119,6 +120,7 @@ const startingLayout: FormLayout = {
         ],
       },
       gateMessage: 'Employees only.',
+      showWhen: null,
       bookingTarget: null,
       questions: [],
     },
@@ -129,6 +131,7 @@ const startingLayout: FormLayout = {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      showWhen: null,
       bookingTarget: null,
       questions: [],
     },
@@ -801,6 +804,7 @@ describe('the booking step', () => {
         kind: 'booking',
         gateRules: null,
         gateMessage: '',
+        showWhen: null,
         bookingTarget: INTRO_CALL,
         questions: [],
       });

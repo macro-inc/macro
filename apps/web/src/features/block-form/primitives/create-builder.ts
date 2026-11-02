@@ -474,6 +474,7 @@ export function createBuilder(options: BuilderOptions) {
       gateRules:
         kind === 'gate' ? { conjunction: 'and', conditions: [] } : null,
       gateMessage: kind === 'gate' ? DEFAULT_GATE_MESSAGE : '',
+      showWhen: null,
       bookingTarget: null,
       questions: [],
     };
@@ -1015,6 +1016,7 @@ export function createBuilder(options: BuilderOptions) {
         kind: 'booking',
         gateRules: null,
         gateMessage: '',
+        showWhen: null,
         bookingTarget: target,
         questions: [],
       };

@@ -83,8 +83,8 @@ import type { Box, MeasuredSection } from '../core/drop-target';
 import { placementOf, stepPlacement } from '../core/drop-target';
 import {
   bookingStep,
-  brokenGateColumns,
-  gateColumns,
+  brokenRuleColumns,
+  ruleColumns,
   type QuestionPlacement,
   questionNumbers,
 } from '../core/form-layout';
@@ -823,13 +823,13 @@ function BuilderCanvas(
                                 dragging={drag.isDragging(sectionTarget)}
                                 editingRules={editingRules() === sectionId}
                                 brokenRules={
-                                  brokenGateColumns(layout(), sectionId).length
+                                  brokenRuleColumns(layout(), sectionId).length
                                 }
                                 onRepair={() => builder.repairGate(sectionId)}
                                 handle={handle()}
                                 menu={menu()}
                                 noQuestionsBefore={
-                                  gateColumns(layout(), sectionId).length === 0
+                                  ruleColumns(layout(), sectionId).length === 0
                                 }
                                 onEditRules={() => setEditingRules(sectionId)}
                                 onTitle={(title) =>
@@ -849,7 +849,7 @@ function BuilderCanvas(
                                       untrack(() =>
                                         context.ui.renderConditionEditor({
                                           get columns() {
-                                            return gateColumns(
+                                            return ruleColumns(
                                               layout(),
                                               sectionId
                                             ).flatMap(

@@ -46,6 +46,7 @@ function offsite(): FormDetail {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: null,
           questions: [
             {
@@ -84,6 +85,7 @@ function offsite(): FormDetail {
             ],
           },
           gateMessage: 'The offsite is for employees.',
+          showWhen: null,
           bookingTarget: null,
           questions: [],
         },
@@ -94,6 +96,7 @@ function offsite(): FormDetail {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: null,
           questions: [
             {
@@ -473,6 +476,7 @@ describe('RespondView', () => {
           kind: 'booking',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: target,
           questions: [],
         },

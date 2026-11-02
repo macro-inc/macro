@@ -113,6 +113,7 @@ function rsvp(): FormDetail {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: null,
           questions: [
             {
@@ -618,6 +619,7 @@ describe('BuilderView', () => {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
+      showWhen: null,
       bookingTarget: null,
       questions: [],
     });
@@ -925,6 +927,7 @@ describe('BuilderView', () => {
         kind: 'booking',
         gateRules: null,
         gateMessage: '',
+        showWhen: null,
         bookingTarget: INTRO_CALL,
         questions: [],
       });
@@ -1000,6 +1003,7 @@ describe('BuilderView', () => {
           kind: 'booking',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: INTRO_CALL,
           questions: [],
         },
@@ -1010,6 +1014,7 @@ describe('BuilderView', () => {
           kind: 'booking',
           gateRules: null,
           gateMessage: '',
+          showWhen: null,
           bookingTarget: REVIEW_CALL,
           questions: [],
         }
@@ -1067,6 +1072,7 @@ describe('BuilderView', () => {
         kind: 'booking',
         gateRules: null,
         gateMessage: '',
+        showWhen: null,
         bookingTarget: INTRO_CALL,
         questions: [],
       });
