@@ -24,6 +24,7 @@ fn records_serialize_flat_with_their_kind() {
         result: StepResult::Code {
             calls: Vec::new(),
             calls_truncated: false,
+            waited_ms: None,
             output: Some(json!({ "count": 2 })),
             error: None,
         },

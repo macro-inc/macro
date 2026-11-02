@@ -145,6 +145,7 @@ where
                         result: StepResult::Code {
                             calls: outcome.calls,
                             calls_truncated: outcome.calls_truncated,
+                            waited_ms: outcome.waited_ms,
                             output,
                             error: error.clone(),
                         },

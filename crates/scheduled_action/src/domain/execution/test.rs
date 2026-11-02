@@ -378,6 +378,7 @@ impl ScheduledAgentRunner for Runner {
             result: routine_program::StepResult::Code {
                 calls: Vec::new(),
                 calls_truncated: false,
+                waited_ms: None,
                 output: None,
                 error: None,
             },

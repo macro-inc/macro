@@ -59,6 +59,10 @@ pub enum StepResult {
         /// More calls ran than are recorded.
         #[serde(default, skip_serializing_if = "std::ops::Not::not")]
         calls_truncated: bool,
+        /// How long it waited for a free slot before it ran, when that was
+        /// a second or more.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        waited_ms: Option<u32>,
         /// What `main` returned.
         #[serde(default, skip_serializing_if = "Option::is_none")]
         output: Option<serde_json::Value>,

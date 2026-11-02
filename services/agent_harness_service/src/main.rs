@@ -175,6 +175,9 @@ use runtime_commands::consume_runtime_commands;
 struct AgentHarnessConsumerGroup;
 
 const RUNTIME_COMMAND_CONSUMER_ATTEMPTS: usize = 5;
+/// Routine code programs the harness runs at once. Steps beyond it wait for a
+/// slot before their credential is minted, so they never queue in the executor.
+const ROUTINE_CODE_SLOTS: usize = 4;
 
 impl GroupName for AgentHarnessConsumerGroup {
     const GROUP_NAME: &'static str = "agent-harness-service";
@@ -613,7 +616,7 @@ async fn run() -> anyhow::Result<()> {
             let routines = code_execution::domain::ExecutionService::new(
                 Arc::clone(&runner),
                 code_execution::domain::Limits {
-                    max_running: 4,
+                    max_running: ROUTINE_CODE_SLOTS,
                     max_queued: 16,
                     max_cpu: Some(std::time::Duration::from_secs(10)),
                     background: true,
@@ -642,21 +645,24 @@ async fn run() -> anyhow::Result<()> {
     };
     // Routine code steps run as their owner on the routines' executor.
     let routine_code = match &code_runner {
-        Some((_, _, routines, checker)) => Some(routine_code::SdkRoutineCode::new(
-            Arc::new(routines.clone()),
-            Arc::clone(checker) as Arc<dyn code_execution::domain::ProgramChecker>,
-            MacroApiTokenSigner::new(
-                pool.clone(),
-                config.macro_api_token_issuer.as_ref(),
-                config.macro_api_token_private_secret_key.as_ref(),
-            ),
-            code_mode::sdk_hosts()?,
-            Arc::clone(&recorder),
-            tool_context.cognition_tool_context.service.clone(),
-            Arc::new(routine_code::CalendarTimeZones(Arc::clone(
-                &tool_context.calendar_tool_context.occurrences,
-            ))),
-        )),
+        Some((_, _, routines, checker)) => Some(
+            routine_code::SdkRoutineCode::new(
+                Arc::new(routines.clone()),
+                Arc::clone(checker) as Arc<dyn code_execution::domain::ProgramChecker>,
+                MacroApiTokenSigner::new(
+                    pool.clone(),
+                    config.macro_api_token_issuer.as_ref(),
+                    config.macro_api_token_private_secret_key.as_ref(),
+                ),
+                code_mode::sdk_hosts()?,
+                Arc::clone(&recorder),
+                tool_context.cognition_tool_context.service.clone(),
+                Arc::new(routine_code::CalendarTimeZones(Arc::clone(
+                    &tool_context.calendar_tool_context.occurrences,
+                ))),
+            )
+            .with_slots(ROUTINE_CODE_SLOTS),
+        ),
         None => None,
     };
     let service_shutdown = tokio_util::sync::CancellationToken::new();

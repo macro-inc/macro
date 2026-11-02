@@ -48,6 +48,10 @@ Pulumi stacks; they do not host extra agent processes.
   A routine's code steps are checked together, one file each; the owner's
   time zone for `run.timezone` comes from their primary calendar
   (`CalendarTimeZones`).
+  A step waits up to five minutes for one of `ROUTINE_CODE_SLOTS` before its
+  credential is minted, so its token and 30-second limit start when it runs;
+  a step that never gets one fails with "Macro was busy running other
+  routines".
 - `src/preview.rs` + `src/preview/`: preview control routes, public HTTP and SSH listeners;
   lease/ticket and authorization logic lives in `crates/agent_preview`. The shared
   pool stores replica ownership and credential hashes; startup and ten-second

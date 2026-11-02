@@ -498,6 +498,8 @@ pub struct CodeOutcome {
     pub calls: Vec<routine_program::CallRecord>,
     /// More calls ran than `calls` records.
     pub calls_truncated: bool,
+    /// How long it waited for a free slot, when that was a second or more.
+    pub waited_ms: Option<u32>,
 }
 
 /// Hosts without an SDK executor: code steps fail with a reason.
@@ -526,6 +528,7 @@ impl RoutineCode for NoRoutineCode {
             result: Err(NO_CODE.to_owned()),
             calls: Vec::new(),
             calls_truncated: false,
+            waited_ms: None,
         }
     }
 

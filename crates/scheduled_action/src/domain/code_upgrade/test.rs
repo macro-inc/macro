@@ -75,6 +75,7 @@ impl RoutineCode for Code {
             },
             calls: Vec::new(),
             calls_truncated: false,
+            waited_ms: None,
         }
     }
 

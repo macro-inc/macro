@@ -28,13 +28,21 @@ use scheduled_action::domain::ports::{
 };
 use serde::Deserialize;
 use serde_json::{Map, Value, json};
+use tokio::sync::Semaphore;
 use tokio_util::sync::CancellationToken;
+use tracing::Instrument;
 
 #[cfg(test)]
 mod test;
 
 /// A step's whole budget, including waiting for an executor slot.
 const STEP_TIMEOUT_MS: u64 = 30_000;
+/// Longest a step waits for a free slot on the routine executor. Within the
+/// run's own deadline; a full pool otherwise fails event runs that would
+/// succeed a minute later.
+const SLOT_WAIT: Duration = Duration::from_secs(5 * 60);
+/// Waits shorter than this aren't worth recording on the step.
+const NOTABLE_WAIT: Duration = Duration::from_secs(1);
 /// The credential outlives the step's deadline by a margin; it expires rather
 /// than being revoked.
 const TOKEN_LIFETIME_SECONDS: usize = 60;
@@ -101,6 +109,10 @@ pub struct SdkRoutineCode<Credentials = MacroApiTokenSigner> {
     /// Chooses the SDK entities relevant to a task, as code mode does.
     cognition: Option<Arc<dyn cognition::domain::Cognition>>,
     time_zones: Arc<dyn OwnerTimeZones>,
+    /// One permit per program the executor runs at once: a step waits here,
+    /// before its credential is minted, rather than queueing in the executor,
+    /// so its credential and time limit start when it runs.
+    slots: Arc<Semaphore>,
 }
 
 impl<Credentials> SdkRoutineCode<Credentials> {
@@ -124,7 +136,15 @@ impl<Credentials> SdkRoutineCode<Credentials> {
             recorder,
             cognition,
             time_zones,
+            slots: Arc::new(Semaphore::new(Semaphore::MAX_PERMITS)),
         }
+    }
+
+    /// Run at most `slots` programs at once, the executor's running limit;
+    /// more steps wait for a slot, up to five minutes each.
+    pub fn with_slots(mut self, slots: usize) -> Self {
+        self.slots = Arc::new(Semaphore::new(slots));
+        self
     }
 }
 
@@ -196,9 +216,31 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
     #[tracing::instrument(name = "routine.code", skip_all, fields(
         dry_run = run.dry_run,
         source_bytes = run.step.source.len(),
+        waited_ms = tracing::field::Empty,
         outcome = tracing::field::Empty,
     ))]
     async fn run(&self, owner: &MacroUserIdStr<'static>, run: CodeRun<'_>) -> CodeOutcome {
+        // Tokio's clock, so the wait follows the runtime's time.
+        let queued = tokio::time::Instant::now();
+        let slot = tokio::time::timeout(SLOT_WAIT, self.slots.acquire())
+            .instrument(tracing::info_span!("routine.code_slot"))
+            .await;
+        let waited = queued.elapsed();
+        tracing::Span::current().record("waited_ms", waited.as_millis() as u64);
+        let waited_ms =
+            (waited >= NOTABLE_WAIT).then(|| u32::try_from(waited.as_millis()).unwrap_or(u32::MAX));
+        let Ok(Ok(_slot)) = slot else {
+            tracing::Span::current().record("outcome", "busy");
+            return CodeOutcome {
+                result: Err(format!(
+                    "Macro was busy running other routines; this run waited {} minutes for a turn.",
+                    SLOT_WAIT.as_secs() / 60
+                )),
+                calls: Vec::new(),
+                calls_truncated: false,
+                waited_ms,
+            };
+        };
         let token = match self.credentials.mint(owner).await {
             Ok(token) => token,
             Err(error) => {
@@ -207,6 +249,7 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
                     result: Err("This step's credential couldn't be issued.".to_owned()),
                     calls: Vec::new(),
                     calls_truncated: false,
+                    waited_ms,
                 };
             }
         };
@@ -271,6 +314,7 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
             result,
             calls: journal.calls,
             calls_truncated: journal.truncated,
+            waited_ms,
         }
     }
 

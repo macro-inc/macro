@@ -160,6 +160,118 @@ fn rewrites_read_the_declarations_the_errors_name() {
     );
 }
 
+/// Runs nothing; counts the programs it was given.
+#[derive(Default)]
+struct Programs(std::sync::Mutex<usize>);
+
+#[async_trait::async_trait]
+impl ProgramExecutor for Programs {
+    async fn execute_program(
+        &self,
+        _: code_execution::domain::ExecuteRequest,
+        _: code_execution::domain::RunEnvironment,
+        _: CancellationToken,
+    ) -> Outcome {
+        *self.0.lock().unwrap() += 1;
+        Outcome::Succeeded { value: json!({}) }
+    }
+}
+
+/// Checks nothing.
+struct NoChecks;
+
+#[async_trait::async_trait]
+impl ProgramChecker for NoChecks {
+    fn sdk_fingerprint(&self) -> &str {
+        "0.3.0+fixture"
+    }
+
+    async fn check_files(
+        &self,
+        _: &[code_execution::domain::SourceFile],
+        _: &str,
+    ) -> Result<Vec<code_execution::domain::Diagnostic>, code_execution::domain::CheckError> {
+        Ok(Vec::new())
+    }
+}
+
+/// Counts the credentials it mints.
+#[derive(Default)]
+struct CountedTokens(std::sync::atomic::AtomicUsize);
+
+impl RoutineCredentials for CountedTokens {
+    async fn mint(&self, _: &MacroUserIdStr<'static>) -> anyhow::Result<String> {
+        self.0.fetch_add(1, std::sync::atomic::Ordering::SeqCst);
+        Ok("fixture-routine-token".into())
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_step_waits_for_a_free_slot_before_its_credential_and_gives_up_after_five_minutes() {
+    let programs = Arc::new(Programs::default());
+    let code = Arc::new(
+        SdkRoutineCode::new(
+            Arc::clone(&programs) as Arc<dyn ProgramExecutor>,
+            Arc::new(NoChecks),
+            CountedTokens::default(),
+            BTreeMap::new(),
+            Arc::new(ai_usage::NoOpUsageRecorder),
+            None,
+            Arc::new(NoTimeZones),
+        )
+        .with_slots(1),
+    );
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@example.com").unwrap();
+    let step = routine_program::CodeStep {
+        id: None,
+        title: "Label invoices".into(),
+        summary: String::new(),
+        source: "export async function main() {}".into(),
+        writes: Vec::new(),
+    };
+    let context = json!({ "run": {} });
+    let run = |code: Arc<SdkRoutineCode<CountedTokens>>| {
+        let (owner, step, context) = (owner.clone(), step.clone(), context.clone());
+        async move {
+            code.run(
+                &owner,
+                CodeRun {
+                    step: &step,
+                    context: &context,
+                    steps: &json!({}),
+                    dry_run: false,
+                },
+            )
+            .await
+        }
+    };
+
+    // While every slot is taken, a step waits without minting a credential.
+    let held = Arc::clone(&code.slots).acquire_owned().await.unwrap();
+    let waiting = tokio::spawn(run(Arc::clone(&code)));
+    tokio::time::sleep(Duration::from_secs(60)).await;
+    assert_eq!(code.credentials.0.load(std::sync::atomic::Ordering::SeqCst), 0);
+    // A slot that frees up within five minutes runs it, and the wait is kept.
+    drop(held);
+    let ran = waiting.await.unwrap();
+    assert_eq!(ran.result, Ok(json!({})));
+    assert_eq!(ran.waited_ms, Some(60_000));
+    assert_eq!(*programs.0.lock().unwrap(), 1);
+
+    // One that doesn't fails the step with the reason, and never runs it.
+    let _held = Arc::clone(&code.slots).acquire_owned().await.unwrap();
+    let busy = run(Arc::clone(&code)).await;
+    assert_eq!(
+        busy.result,
+        Err(
+            "Macro was busy running other routines; this run waited 5 minutes for a turn."
+                .to_owned()
+        )
+    );
+    assert_eq!(busy.waited_ms, Some(300_000));
+    assert_eq!(*programs.0.lock().unwrap(), 1);
+}
+
 /// Owners without calendars: every owner reads UTC.
 struct NoTimeZones;
 

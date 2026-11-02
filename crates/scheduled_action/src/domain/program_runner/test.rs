@@ -216,6 +216,7 @@ async fn an_agent_after_code_opens_its_session_late_and_sees_what_it_returned() 
         result: Ok(json!({ "documentId": "doc-9" })),
         calls: Vec::new(),
         calls_truncated: false,
+        waited_ms: None,
     }]));
     let fixture = Fixture::new(Agents::default());
     let runner = fixture
@@ -611,6 +612,7 @@ impl RoutineCode for Code {
                 result: Ok(Value::Null),
                 calls: Vec::new(),
                 calls_truncated: false,
+                waited_ms: None,
             })
     }
 
@@ -666,6 +668,7 @@ async fn code_steps_get_the_trigger_and_hand_their_output_to_later_steps() {
             routine_program::CallStatus::Completed,
         )],
         calls_truncated: false,
+        waited_ms: None,
     }]));
     let fixture = Fixture::new(Agents::default());
     let runner = fixture
@@ -732,6 +735,7 @@ async fn a_failed_code_step_stops_the_run_and_keeps_its_calls() {
             routine_program::CallStatus::Failed,
         )],
         calls_truncated: true,
+        waited_ms: None,
     }]));
     let fixture = Fixture::new(Agents::default());
     let runner = fixture
@@ -767,6 +771,7 @@ async fn a_failed_code_step_stops_the_run_and_keeps_its_calls() {
                 routine_program::CallStatus::Failed
             )],
             calls_truncated: true,
+            waited_ms: None,
             output: None,
             error: Some("Error: no such label".into()),
         }
