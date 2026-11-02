@@ -1,0 +1,27 @@
+id: tsx-connect-public-sdk
+language: tsx
+severity: error
+message: Macro reaches Macro Connect only through `@macro-connect/sdk`, as any customer would.
+note: |-
+  Macro Connect (connect/) is a separate product built as if it lived in its
+  own repository. Import its public SDK; if it lacks what you need, add it
+  there. See connect/AGENTS.md#boundary.
+files:
+  - apps/**
+  - packages/**
+rule:
+  kind: string
+  all:
+    - any:
+        - all:
+            - regex: ^['"]@macro-connect/
+            - not:
+                regex: ^['"]@macro-connect/sdk(['"/])
+        - regex: ^['"](\.\./)+connect/
+    - any:
+        - inside:
+            kind: import_statement
+            field: source
+        - inside:
+            kind: export_statement
+            field: source

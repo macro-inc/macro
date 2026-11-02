@@ -1,0 +1,10 @@
+id = "linear"
+name = "Linear"
+description = "Find, create, and update issues, projects, and comments."
+access = ["mcp"]
+mcp_url = "https://mcp.linear.app/mcp"
+client_registration = "cimd"
+scopes = ["read", "write"]
+pipedream_app_slugs = ["linear"]
+status = "live"
+probed = 2026-10-30

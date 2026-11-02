@@ -1,0 +1,10 @@
+id = "stripe"
+name = "Stripe"
+description = "Look up customers, payments, and subscriptions, and search Stripe docs."
+access = ["mcp"]
+mcp_url = "https://mcp.stripe.com"
+client_registration = "dcr"
+scopes = []
+pipedream_app_slugs = ["stripe"]
+status = "pending"
+probed = 2026-10-30

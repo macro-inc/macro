@@ -546,7 +546,7 @@ pub async fn build(
                 .with_enforcement(config.enable_ai_usage_enforcement),
             ),
             ai_billing.clone(),
-            ai_billing::outbound::HttpSettlementTrigger::new(auth_service_client),
+            ai_billing::outbound::HttpSettlementTrigger::new(auth_service_client.clone()),
             config.enable_ai_usage_billing,
         ));
 
@@ -580,8 +580,14 @@ pub async fn build(
     )
     .context("invalid MCP credentials encryption key")?;
     let granola_signing_key = *mcp_encryption_key.as_bytes();
-    let mcp_server_repo =
-        mcp_client::outbound::pg_server_repo::PgServerRepo::new(db.clone(), mcp_encryption_key);
+    let mcp_server_repo = mcp_client::outbound::NativeServerStore::new(
+        mcp_client::outbound::pg_server_repo::PgServerRepo::new(db.clone(), mcp_encryption_key),
+        Some(Arc::new(
+            mcp_client::outbound::auth_service_github_tokens::AuthServiceGithubTokens::new(
+                (*auth_service_client).clone(),
+            ),
+        )),
+    );
 
     // The Pipedream MCP stack, fully separate from the native one above
     // (own endpoints, own table, own toolset). Without credentials its
@@ -825,6 +831,10 @@ pub async fn build(
         ai_tools::FormsToolConfig {
             app_origin: macro_service_urls::AppServiceUrl::new()?.to_string(),
             editing_worker_url: config.ai_editing_worker_url.clone(),
+            static_files: static_file_service_client::StaticFileServiceClient::new(
+                internal_api_key.clone(),
+                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+            ),
         },
     );
 

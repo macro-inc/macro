@@ -1,0 +1,19 @@
+{
+  "name": "macro-connect-infra",
+  "private": true,
+  "scripts": {
+    "check": "tsc --noEmit && biome check ."
+  },
+  "dependencies": {
+    "@pulumi/aws": "^7.34.0",
+    "@pulumi/awsx": "^3.1.0",
+    "@pulumi/pulumi": "^3.209.0",
+    "smol-toml": "^1.5.2"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "2.4.12",
+    "@types/node": "^20.8.10",
+    "typescript": "^5.2.2"
+  },
+  "packageManager": "bun@1.2.0"
+}
