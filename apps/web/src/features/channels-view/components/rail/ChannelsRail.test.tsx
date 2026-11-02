@@ -901,7 +901,7 @@ describe('section notification actions', () => {
 
       expect(mocks.fetchGroupIds).toHaveBeenCalledExactlyOnceWith(
         section,
-        section === 'direct_messages' ? [] : label.channelIds,
+        section === 'channels' ? label.channelIds : [],
         expect.any(AbortSignal)
       );
       expect(mocks.source.unmuteEntity.mock.calls).toEqual([

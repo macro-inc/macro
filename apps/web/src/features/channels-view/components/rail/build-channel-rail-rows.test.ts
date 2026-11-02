@@ -6,6 +6,7 @@ import {
   buildChannelSectionRows,
 } from './build-channel-rail-rows';
 import {
+  buildChannelSectionRows as buildSectionedChannelRows,
   buildChannelRailRows as buildSectionedRailRows,
   groupChannelRailSections,
   orderChannelRailSections,
@@ -508,15 +509,66 @@ it('keeps overlapping section members and loading rows in their own scroll regio
     'channel:deals',
     'status:direct_messages',
   ]);
-  expect(
-    grouped
-      .get('team_channels')
-      ?.rows.every((row) => row.kind !== 'conversation')
-  ).toBe(true);
+  expect(grouped.get('team_channels')?.rows.map((row) => row.id)).toEqual([
+    'channel:acme',
+    'status:team_channels',
+  ]);
   expect(
     rows.filter((row) => row.kind === 'conversation').map((row) => row.id)
-  ).toEqual(['channel:deals', 'channel:acme:label:first']);
+  ).toEqual(['channel:deals', 'channel:acme', 'channel:acme:label:first']);
 });
+
+it.each([true, false])(
+  'keeps assigned team channels in the built-in section when custom sections are open=%s',
+  (open) => {
+    const labels: ChannelLabel[] = [
+      label('manual', 'Manual', ['acme']),
+      {
+        ...label('smart', 'Smart', ['zeta']),
+        rule: { attribute: 'name', contains: 'support' },
+      },
+    ];
+    const sections = buildSectionedChannelRows({
+      labels,
+      channels: [acme, zeta, deals],
+      channelsById: byId,
+      isLabelOpen: () => open,
+    });
+    const rows = buildSectionedRailRows(
+      'browse',
+      {
+        favorites: true,
+        direct_messages: true,
+        team_channels: true,
+        channels: true,
+      },
+      {
+        favorites: [],
+        direct_messages: [],
+        team_channels: [acme, zeta, deals],
+        channels: [],
+        recents: [],
+        threads: [],
+      },
+      sections
+    );
+    const grouped = groupChannelRailSections(rows);
+
+    expect(grouped.get('team_channels')?.rows.map((row) => row.id)).toEqual([
+      'channel:acme',
+      'channel:zeta',
+      'channel:deals',
+      'status:team_channels',
+    ]);
+    expect(grouped.get('label:manual')?.rows.map((row) => row.id)).toEqual(
+      open ? ['channel:acme:label:manual'] : []
+    );
+    expect(grouped.get('label:smart')?.rows.map((row) => row.id)).toEqual(
+      open ? ['channel:zeta:label:smart'] : []
+    );
+    expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
+  }
+);
 
 it('keeps section membership and navigation together after reordering with stale or duplicate keys', () => {
   const rows = buildSectionedRailRows(

@@ -958,12 +958,15 @@ With the flag on, desktop Chat has one conversation sidebar, without All, Recent
 or Threads view tabs. The default order is Favorites, Direct messages, the
 team's channels, custom sections, then **All channels**. The team heading is
 **[Team name] channels**, with **Team channels** as the fallback while the name
-is unavailable. All channels is the renamed remaining-public/private list:
-its membership is unchanged, so it excludes team channels and channels assigned
-to custom sections. Each custom section is a top-level heading, independent of
-the Team channels disclosure. Empty sections use compact dashed-border containers
-with an action; empty Favorites explains how to add a favorite. Private conversations use a lock icon in
-the sidebar and mobile feed, including favorited private conversations.
+is unavailable. The team section always shows joined team channels, including
+channels assigned to manual or smart custom sections. All channels is the renamed
+remaining-public/private list: its membership is unchanged, so it excludes team
+channels and channels assigned to custom sections. Each custom section is a
+top-level heading, independent of the Team channels disclosure. Empty sections
+use padded, bordered cards like saved views, with a subtle background and secondary
+actions; empty Favorites explains how to add a favorite. Private conversations
+use a lock icon in the sidebar and mobile feed, including favorited private
+conversations.
 All section headers use the shared collapsible-section styling without leading
 icons or top padding; the section stack supplies a compact 2px flex gap.
 Custom-section drop zones and highlights cover both the header and its content, including the
@@ -993,8 +996,9 @@ the saved preference. Search covers channels and DMs regardless of section
 placement and restores the selected row in its section when closed. Mobile
 retains the recent-conversation feed below.
 
-Use the drag grip before the section name to reorder sections, or focus the grip and use
-Up/Down. An insertion line shows the destination. Section order is a personal
+Use the drag grip in the left gutter before the section name to reorder sections,
+or focus the grip and use Up/Down. The grip does not shift the header's text or
+controls. An insertion line shows the destination. Section order is a personal
 preference, including for shared sections, and survives reloads. The dragged
 section appears as a card preview while its source is subdued. Other sections
 animate into their new positions on drop or keyboard reorder, except with reduced
@@ -1080,9 +1084,10 @@ Every desktop section menu, including **Favorites**, **All channels**,
 notifications, including for shared sections. Each action uses the section's
 complete current membership, including filtered-out and unloaded channels;
 channels added later do not inherit the change. Built-in lists resolve all pages
-before applying an action, exclude channels assigned to custom sections just as
-the sidebar does, and never include unjoined channels. Favorites targets only
-channel favorites, not documents or other favorite types. Snooze uses the usual
+before applying an action and never include unjoined channels. The team section
+includes custom-section members; only All channels excludes those assignments.
+Favorites targets only channel favorites, not documents or other favorite types.
+Snooze uses the usual
 duration/date picker and resumes notifications at the chosen time. A partial
 failure keeps successful updates and reports the failures; snooze retries only
 failed channels. Empty or unavailable custom sections and empty Favorites disable

@@ -288,7 +288,7 @@ export function buildChannelRailRows(
 
   for (const group of ['team_channels', 'channels'] as const) {
     const channels = items[group].filter(
-      (channel) => !labelledIds.has(channel.id)
+      (channel) => group === 'team_channels' || !labelledIds.has(channel.id)
     );
 
     if (group === 'channels' && channels.length === 0) {
