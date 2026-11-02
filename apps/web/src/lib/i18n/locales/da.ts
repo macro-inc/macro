@@ -809,7 +809,6 @@ export default {
     goForward: 'Gå frem',
     createNewSplit: 'Opret nyt panel',
     close: 'Luk',
-    returnToList: 'Tilbage til listen',
     previousItem: 'Forrige element',
     nextItem: 'Næste element',
     itemNavigation: 'Elementnavigation',
