@@ -1548,7 +1548,7 @@ impl<S: Storage> Engine<S> {
     /// Stores a network response and returns only fields not marked
     /// `@cacheOnly`. Projection is taken directly from the validated network
     /// payload, so hydration never denormalizes the response back out of
-    /// storage. Soup page wrappers are transient; their normalized descendants
+    /// storage. Soup/contact page wrappers are transient; their normalized descendants
     /// and projections are persisted without retaining cursor-qualified pages.
     pub async fn hydrate_query(
         &mut self,

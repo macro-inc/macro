@@ -1175,14 +1175,29 @@ wildcards still scan selected buckets. Storage schema 12 makes the browse index
 covering by appending search text and source hashes. This is an incompatible
 cutover, not a migration: native caches reset, including queued mutations;
 browsers open a fresh `s4.v4.t12` file and do not replay older files' queues.
-Existing cleanup safeguards for those older files remain. The wire API, record
-format, schema epoch, and search projection version are unchanged. See
+Existing cleanup safeguards for those older files remain. That streaming-search
+cutover did not change the record format or schema epoch. See
 [streaming text search](../../../crates/client/README.md#streaming-text-search)
 for the memory boundary and native/OPFS verification.
 
+## Contact cache foundation
+
+Projection 5 indexes only viewer-scoped `GraphqlContact` records into `person`;
+public profiles and the authenticated viewer record do not establish directory
+membership. Names and emails share the existing streamed matcher. Search replies
+advertise `projectionVersion`, absent on older native engines, so future callers
+can gate contact search rather than interpreting unsupported projection as empty.
+
+`ContactDirectoryBackfill` persists nodes through hydration and returns the
+generated cursor-only projection. Hydration omits viewer contact-page and exact
+lookup wrappers. Foreground contact query variants share Soup's 64-page / 512 KiB
+budget; retention version 2 compacts older viewers without clearing entities,
+queue state, or storage generation. Background synchronization and UI migration
+are still pending; see [the contacts checklist](../../../docs/design/disk-backed-contacts.md).
+
 ## Cached email Quick Access
 
-The disposable Quick Access projection is version 4; version 4 added task
+The disposable Quick Access projection is version 5; version 4 added task
 projects (`GraphqlSoupInitiative`, bucket `initiative`), searched on their display
 name with viewed-first recency read from their embedded `metadata`. Email rows index the thread
 subject, latest sender name/address, and embedded `senders` names/addresses, so an

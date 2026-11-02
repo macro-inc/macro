@@ -1,10 +1,12 @@
 # Disk-backed contacts
 
-**Status:** phase 1 backend contract implemented: enriched pages, bounded search,
-and membership-scoped exact ID/email lookup. The frontend still uses the full
-directory; the generated operations have no UI consumer yet.
-**Next step:** phase 2, bounded hydration and the first cached search consumer,
-with hydration-page retention handled explicitly.
+**Status:** phase 1 backend contract implemented. Phase 2 now has cache-side
+contact hydration, bounded page retention, a `person` projection, and a generated
+cursor-only backfill result. No background contact runner or UI consumer is wired;
+the frontend still retains the full directory.
+**Next step:** wire account/generation-guarded, checkpointed hydration, then the
+first bounded cached contact consumer. Reject stale payloads before cache writes,
+not merely when saving their continuation.
 
 ## Goal and scope
 
@@ -120,13 +122,16 @@ bounded point reads before resolving names.
 
 - [ ] Hydrate one bounded page at a time, persist it, then release its payload.
   Keep checkpoints scoped to the account and durable storage generation.
-- [ ] Do not accumulate response pages or a root record containing all contact IDs.
-  `@cacheOnly` limits returned fields; it does not by itself prevent retained page
-  wrappers. Extend the relevant hydration-retention policy deliberately.
-- [ ] Project the new contact type into `person`, using the existing covering index
-  and borrowed-row ranker. Include names and emails in matching. Materialized
-  `IUser.id` must remain the target `userId`; the viewer-scoped `GraphqlContact.id`
-  is the normalized cache key, not a DM/navigation target.
+- [x] Omit contact page and exact-lookup wrappers during core hydration. Foreground
+  contact queries share the existing 64-page / 512 KiB viewer-snapshot budget
+  with Soup. `ContactDirectoryBackfill` marks nodes `@cacheOnly` and generates
+  its cursor-only result; this alone is not an account-safe background runner.
+- [x] Project `GraphqlContact` names/emails into `person` through the existing
+  covering index and borrowed-row ranker (projection version 5). Public `User` /
+  `GraphqlUser` profiles no longer imply contact membership. No timestamps are
+  invented from relationship metadata.
+- [ ] Materialize bounded `IUser` windows with target `userId` as `IUser.id`;
+  the viewer-scoped `GraphqlContact.id` is a cache key, not a DM/navigation target.
 - [ ] Preserve DM recency, deduplication, and secondary-inbox exclusions. Ranking
   facts needed to choose the top results must apply before the result limit;
   relationship `updated_at` is not automatically equivalent to DM activity.
@@ -140,6 +145,8 @@ bounded point reads before resolving names.
 - [ ] Account for older native engines: runtime GraphQL metadata can accept a new
   type, but its handwritten search projection still needs a rebuilt native binary.
   Gate local contact-search capability rather than treating missing support as no matches.
+  Search responses now advertise `projectionVersion`; missing or below 5 means
+  the engine lacks contact projection/retention. Frontend gating is not wired yet.
 - [ ] Wire Quick Access `person` materialization and query-driven shared recipient
   selection; remove global contact indexing and full-directory recipient transforms.
 

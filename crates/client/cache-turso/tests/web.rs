@@ -13,8 +13,47 @@ use wasm_bindgen_test::*;
 
 wasm_bindgen_test_configure!(run_in_dedicated_worker);
 
+#[path = "common/contacts.rs"]
+mod contacts;
 #[path = "common/search.rs"]
 mod search_streaming;
+
+#[wasm_bindgen_test(async)]
+async fn bounded_contact_hydration_and_search_over_opfs() {
+    let owner = OpfsOwner::acquire("cache-turso-contacts.db")
+        .await
+        .unwrap()
+        .recovery_wipe()
+        .await
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("fresh contact storage must open")
+    };
+    let storage = TursoStorage::from_opfs_session(session.connect().unwrap(), "contacts").unwrap();
+    let mut engine = Engine::with_capacity(storage, 16);
+    contacts::hydrate_contacts(&mut engine, 3).await;
+    let generation = engine.current_storage_generation().await.unwrap();
+    let owner = healthy_close(engine.into_storage().try_close().unwrap())
+        .preserve()
+        .unwrap();
+    let OpenResult::Ready(session) = owner.open().await.unwrap() else {
+        panic!("contact storage must reopen")
+    };
+    let storage = TursoStorage::from_opfs_session(session.connect().unwrap(), "contacts").unwrap();
+    let mut engine = Engine::with_capacity(storage, 16);
+    assert_eq!(
+        engine.current_storage_generation().await.unwrap(),
+        generation
+    );
+    contacts::assert_contact_search(&mut engine, 1_500).await;
+    contacts::assert_account_reset(&mut engine).await;
+    healthy_close(engine.into_storage().try_close().unwrap())
+        .preserve()
+        .unwrap()
+        .release()
+        .await
+        .unwrap();
+}
 
 #[wasm_bindgen_test(async)]
 async fn streaming_sql_search_matches_reference_ranking_over_opfs() {

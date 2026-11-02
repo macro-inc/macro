@@ -10,6 +10,38 @@ fn string_record(fields: &[(&str, &str)]) -> Record {
 }
 
 #[test]
+fn only_directory_contacts_prove_person_membership() {
+    for typename in ["GraphqlUser", "User", "GraphqlContact"] {
+        let mut record = string_record(&[
+            ("__typename", typename),
+            ("name", "  CAFÉ   Person "),
+            ("email", "PERSON@example.com"),
+            ("userId", "macro|person@example.com"),
+        ]);
+        let key = EntityKey::entity(typename, &["viewer-scoped-record"]);
+        let documents = project_search_documents(&key, &record);
+        if typename != "GraphqlContact" {
+            assert!(
+                documents.is_empty(),
+                "a profile alone is not directory membership"
+            );
+            continue;
+        }
+        assert_eq!(documents[0].bucket, "person");
+        assert_eq!(documents[0].search_text, "café person | person@example.com");
+        assert_eq!(
+            documents[0].timestamp_ms, 0,
+            "relationship recency is not DM activity"
+        );
+        record.fields.insert("name".into(), CacheValue::Null);
+        assert_eq!(
+            project_search_documents(&key, &record)[0].search_text,
+            "person@example.com"
+        );
+    }
+}
+
+#[test]
 fn projects_quick_access_document_without_decoding_other_records() {
     let mut record = string_record(&[
         ("__typename", "GraphqlSoupDocument"),

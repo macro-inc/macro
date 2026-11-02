@@ -5,6 +5,19 @@ fragment ContactDirectoryFields on GraphqlContact {
   name
 }
 
+# Hydration persists normalized contacts but returns only the cursor projection.
+query ContactDirectoryBackfill($limit: Int, $after: String) {
+  user {
+    id
+    contacts(limit: $limit, after: $after) {
+      nodes @cacheOnly {
+        ...ContactDirectoryFields
+      }
+      nextCursor
+    }
+  }
+}
+
 query ContactDirectoryByUserIds($userIds: [ID!]!) {
   user {
     id

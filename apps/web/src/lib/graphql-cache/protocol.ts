@@ -103,6 +103,9 @@ export type SearchCacheArgs = {
 };
 
 export type SearchCachePage = {
+  /** Engine projection revision; absent on older native binaries. Contact
+   * ingestion/search requires revision 5 (including page-retention support). */
+  projectionVersion?: number;
   documents: SearchDocumentWire[];
   nextCursor: SearchCursor | null;
 };

@@ -156,6 +156,10 @@ pub struct SearchRequest {
 #[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 pub struct SearchPage {
+    /// Revision of the projection maintained by this engine. Older native
+    /// engines omit this field; callers must not mistake unsupported contact
+    /// projection for an empty directory.
+    pub projection_version: u32,
     /// Ranked compact documents.
     pub documents: Vec<SearchDocument>,
     /// Empty-query continuation cursor when more cached documents exist.
@@ -178,7 +182,7 @@ pub enum SearchError {
 
 /// Revision of the derived Quick Access rows. Storage adapters rebuild existing
 /// rows when this changes; normalized records and pending writes remain valid.
-pub const QUICK_ACCESS_PROJECTION_VERSION: u32 = 4;
+pub const QUICK_ACCESS_PROJECTION_VERSION: u32 = 5;
 
 /// Normalized entity types used by the Quick Access projection. Storage rebuilds
 /// restrict decoding to this set so unrelated payloads do not delay readiness.
@@ -191,8 +195,7 @@ pub const QUICK_ACCESS_TYPENAMES: &[&str] = &[
     "GraphqlSoupCrmCompany",
     "GraphqlSoupCrmContact",
     "GraphqlSoupInitiative",
-    "GraphqlUser",
-    "User",
+    "GraphqlContact",
 ];
 
 /// Maximum number of compact documents returned by one RPC.
@@ -257,7 +260,9 @@ fn quick_access_fields<'a>(
         "GraphqlSoupCrmCompany" => ("crm_company", &["crmCompanyName", "name", "domains"]),
         "GraphqlSoupCrmContact" => ("crm_contact", &["crmContactName", "name", "email"]),
         "GraphqlSoupInitiative" => ("initiative", &["displayName"]),
-        "GraphqlUser" | "User" => ("person", &["name", "email"]),
+        // Only the viewer-scoped directory record proves membership. Public
+        // profiles (including the authenticated viewer) are not contact rows.
+        "GraphqlContact" => ("person", &["name", "email"]),
         _ => return None,
     };
 

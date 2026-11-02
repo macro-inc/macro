@@ -27,8 +27,9 @@ GraphQL response shape for callers. A concrete `Storage` impl (e.g.
 - `src/store.rs`: the `Storage` trait every backend (e.g. `cache-turso`) implements.
 - `src/predicate.rs` + `src/record_selection.rs`: the predicate/projection IR
   used to select which cached records satisfy a query.
-- `src/search.rs`: disposable Quick Access projection (version 4); email matches subjects and all embedded senders, never snippets or bodies; task projects (`GraphqlSoupInitiative`) index their display name with recency from `metadata`; whitespace and commas separate query tokens, as in the server's channel name search, and each token matches independently, so any order works.
+- `src/search.rs`: disposable Quick Access projection (version 5); email matches subjects and all embedded senders, never snippets or bodies; task projects (`GraphqlSoupInitiative`) index their display name with recency from `metadata`; whitespace and commas separate query tokens, as in the server's channel name search, and each token matches independently, so any order works.
 - `src/search/ranking.rs`: incremental top-K ranking over borrowed storage rows and optimistic shadows; copy only winners and never retain a full text-search bucket. Unicode normalization and subsequence matching live in the WASM-safe `subsequence_match` crate shared with server contact search.
+- `src/page_retention.rs`: shared Soup/database/contact snapshot budget; hydration drops viewer page/lookup wrappers, not normalized descendants. Public profiles do not prove contact membership; only `GraphqlContact` projects into `person`.
 - `src/queue.rs`: the optimistic mutation queue.
 - `tests/`: the primary spec for engine behavior — one file per concern
   (optimistic updates, calendar range, search, subscriptions, fuzz).
