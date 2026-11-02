@@ -68,6 +68,12 @@ prompt under an open sheet and its picker, above a transient notice, and that
 notice on top of the sheet:
 `bunx playwright test --config src/components/app/mobile/browser-test/playwright.config.ts`.
 
+CRM creation has backend-free desktop/phone coverage for name-only companies,
+personal-email contacts and explicit company selection:
+`bunx playwright test --config src/features/crm/browser-test/creation/playwright.config.ts`.
+Nested picker selection must keep its containing drawer open when the option
+unmounts during the tap; drawer dismissal checks the original event path.
+
 Composer typeahead menus choosing the side with room for their full list
 (`floatWithSelection`'s `fullHeight`), above a composer at the bottom of a
 phone screen and below one near the top, and the floating format menu staying
@@ -331,6 +337,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 `agent_session` rather than enabling legacy block tracking of placeholder IDs.
 
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
+- CRM creation accepts name-only companies and full contact email addresses.
+  Company selection is explicit; a matching domain only suggests a company.
+  Keep the standalone and pipeline forms consistent (see
+  `docs/agent-guide/crm.md` at the repository root).
+
 - Empty human DMs use the shared centered conversations graphic and explain email delivery to nonusers; keep this state out of agent DMs, loading/error states, and populated timelines.
 - Keep CRM database discovery row-linked and permission-scoped; use horizontally
   centered actionable list states raised toward the toolbar and shared skeletons,
