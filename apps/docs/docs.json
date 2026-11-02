@@ -98,6 +98,7 @@
         "pages": [
           "AI/recipes",
           "AI/bring-your-own",
+          "AI/cursor",
           "AI/mcp/overview",
           {
             "group": "Tool Reference",
