@@ -6,7 +6,7 @@ import {
   openDialog,
   Panel,
 } from '@ui';
-import { type Owner, Show } from 'solid-js';
+import { type Owner, onCleanup, runWithOwner, Show } from 'solid-js';
 
 export type EmailProvider = 'GMAIL' | 'OUTLOOK';
 
@@ -84,12 +84,22 @@ export function EmailProviderDialog(
 export async function selectEmailProvider(
   owner: Owner | null
 ): Promise<EmailProvider | undefined> {
+  // Registered before the read: a caller gone by the time it answers must not
+  // be sent to a consent screen.
+  let disposed = false;
+  if (owner)
+    runWithOwner(owner, () =>
+      onCleanup(() => {
+        disposed = true;
+      })
+    );
   let outlookAvailable = false;
   try {
     outlookAvailable = (await fetchEmailConnectionProviders()).outlook;
   } catch {
     /* Gmail remains available when the availability read fails. */
   }
+  if (disposed) return undefined;
   if (!outlookAvailable) return 'GMAIL';
   let selected: EmailProvider | undefined;
   const handle = openDialog(
