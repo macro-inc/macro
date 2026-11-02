@@ -71,11 +71,11 @@ async fn subscription_responses_from(
         Arc::new(NoOpEmailService),
         NoOpEntityAccessService,
     );
-    let hydration_loader = graphql_soup::PrimarySoupItemLoader(graphql_soup::soup_item_loader(
+    let hydration_loader = graphql_soup::PrimarySoupItemLoader::new(
         primary,
         Arc::new(NoOpEmailService),
         NoOpEntityAccessService,
-    ));
+    );
     let schema: RealtimeSchema = build_schema_with_services(
         replica,
         TestRealtimeSubscriptionService {

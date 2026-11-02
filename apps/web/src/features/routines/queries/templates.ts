@@ -10,7 +10,7 @@ import {
 import { type MutationCallbacks, withCallbacks } from '@queries/utils';
 import { scheduledActionClient } from '@service-scheduled-action/client';
 import type {
-  CreateScheduledAction,
+  ActionConfiguration,
   RoutineTemplate,
   ScheduledAction,
 } from '@service-scheduled-action/generated/schemas';
@@ -112,7 +112,7 @@ export function useActivateTemplateMutation(
     Error,
     {
       templateId: string;
-      body: CreateScheduledAction;
+      body: ActionConfiguration;
       parentSpan?: TraceContext;
     }
   >
@@ -120,7 +120,7 @@ export function useActivateTemplateMutation(
   return useMutation(() => ({
     mutationFn: (args: {
       templateId: string;
-      body: CreateScheduledAction;
+      body: ActionConfiguration;
       parentSpan?: TraceContext;
     }) =>
       (args.parentSpan ?? Telemetry.captureContext()).run(() =>

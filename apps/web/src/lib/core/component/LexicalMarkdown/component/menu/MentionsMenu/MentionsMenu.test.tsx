@@ -373,8 +373,7 @@ it('only paginates an open mobile menu and resumes on reopen', async () => {
       menu={menu}
       editor={editor}
       users={() => []}
-      sources={['users']}
-      includeContacts
+      sources={['crm']}
     />
   ));
   expect(mocks.loadMoreContacts).not.toHaveBeenCalled();
