@@ -70,6 +70,13 @@ export function extendCellRange(
   };
 }
 
+const isPlainArrow = (event: KeyboardEvent) =>
+  event.key.startsWith('Arrow') &&
+  !event.shiftKey &&
+  !event.metaKey &&
+  !event.ctrlKey &&
+  !event.altKey;
+
 /** Mouse and keyboard ranges leave ordinary clicks and open cell editors to their existing controls. */
 export function createCellSelection(options: {
   rows: () => string[];
@@ -112,6 +119,51 @@ export function createCellSelection(options: {
     !!target.closest(
       'input:not([type="checkbox"]), textarea, [contenteditable="true"], [role="menu"], [role="dialog"]'
     );
+  /** Cmd/Ctrl+A on a cell takes in every loaded, selectable cell. */
+  const selectAll = (event: KeyboardEvent) => {
+    if (
+      !(event.metaKey || event.ctrlKey) ||
+      event.shiftKey ||
+      event.altKey ||
+      event.key.toLowerCase() !== 'a' ||
+      !options.cellAt(event.target)
+    )
+      return false;
+    const rows = selectableRows();
+    const columns = options.columns();
+    if (!rows.length || !columns.length) return false;
+    anchor = { rowId: rows[0]!, columnId: columns[0]! };
+    select({
+      anchor,
+      focus: { rowId: rows.at(-1)!, columnId: columns.at(-1)! },
+    });
+    return true;
+  };
+  /** Shift+Arrow/Home/End move the focus corner, starting from the focused cell. */
+  const extend = (event: KeyboardEvent) => {
+    if (!event.shiftKey || event.altKey || !RANGE_KEYS.has(event.key))
+      return false;
+    const cell = options.cellAt(event.target);
+    const current = range() ?? (cell && { anchor: cell, focus: cell });
+    if (!current) return false;
+    const next = extendCellRange(
+      current,
+      {
+        key: event.key as CellRangeMove['key'],
+        toEdge: event.metaKey || event.ctrlKey,
+      },
+      selectableRows(),
+      options.columns()
+    );
+    const moved =
+      next.focus.rowId !== current.focus.rowId ||
+      next.focus.columnId !== current.focus.columnId;
+    if (!range() && !moved) return true;
+    anchor = next.anchor;
+    select(next);
+    options.focusCell(next.focus);
+    return true;
+  };
   const pointerDown = (event: PointerEvent) => {
     if (
       event.button !== 0 ||
@@ -197,57 +249,13 @@ export function createCellSelection(options: {
     },
     keyDown: (event: KeyboardEvent) => {
       if (event.isComposing || isEditor(event.target)) return;
-      const command = event.metaKey || event.ctrlKey;
-      if (
-        command &&
-        !event.shiftKey &&
-        !event.altKey &&
-        event.key.toLowerCase() === 'a' &&
-        options.cellAt(event.target)
-      ) {
-        const rows = selectableRows();
-        const columns = options.columns();
-        if (!rows.length || !columns.length) return;
+      if (selectAll(event) || extend(event)) {
         event.preventDefault();
         event.stopPropagation();
-        anchor = { rowId: rows[0]!, columnId: columns[0]! };
-        select({
-          anchor,
-          focus: { rowId: rows.at(-1)!, columnId: columns.at(-1)! },
-        });
-        return;
-      }
-      if (event.shiftKey && !event.altKey && RANGE_KEYS.has(event.key)) {
-        const cell = options.cellAt(event.target);
-        const current = range() ?? (cell && { anchor: cell, focus: cell });
-        if (!current) return;
-        event.preventDefault();
-        event.stopPropagation();
-        const next = extendCellRange(
-          current,
-          { key: event.key as CellRangeMove['key'], toEdge: command },
-          selectableRows(),
-          options.columns()
-        );
-        if (
-          !range() &&
-          next.focus.rowId === current.focus.rowId &&
-          next.focus.columnId === current.focus.columnId
-        )
-          return;
-        anchor = next.anchor;
-        select(next);
-        options.focusCell(next.focus);
         return;
       }
       // A plain arrow collapses the range; the grid then moves focus as usual.
-      if (
-        event.key.startsWith('Arrow') &&
-        !event.shiftKey &&
-        !command &&
-        !event.altKey &&
-        range()
-      ) {
+      if (isPlainArrow(event) && range()) {
         select(undefined);
         return;
       }
