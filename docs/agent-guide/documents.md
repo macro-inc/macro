@@ -2625,8 +2625,8 @@ appear below the header. Long titles wrap in place without a full-name tooltip.
 
 A reference to something deleted reads `Deleted`, and one the viewer can't open
 reads `No Access`. Clicking either keeps its card open instead of doing nothing,
-and on a touch device a tap opens the same card as a bottom sheet. The card names
-the item: `This document was deleted or doesn't exist.`, `This channel was deleted
+and on a touch device a tap opens the same card as an opaque bottom sheet. The
+card names the item: `This document was deleted or doesn't exist.`, `This channel was deleted
 or doesn't exist.`, `You don't have access to this event`, and so on (a calendar
 event's reads `This event was deleted or cancelled.`). Skill, task and snippet
 references name their kind rather than "document". Database, form and routine

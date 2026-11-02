@@ -1172,7 +1172,7 @@ export function DocumentPreviewContent(props: DocumentPreviewContentProps) {
                   </div>
                 </Show>
                 {noAccessItem().access === 'no_access' ? (
-                  <Unauthorized noun={itemNoun()} />
+                  <Unauthorized compact noun={itemNoun()} />
                 ) : (
                   <NotFound message={deletedMessage()} />
                 )}
