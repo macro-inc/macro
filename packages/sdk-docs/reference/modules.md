@@ -99,6 +99,8 @@
 - [src/entities/harnesses/harness](src/entities/harnesses/harness/README.md)
 - [src/entities/harnesses/namespace](src/entities/harnesses/namespace/README.md)
 - [src/entities/harnesses/pairing](src/entities/harnesses/pairing/README.md)
+- [src/entities/images/image](src/entities/images/image/README.md)
+- [src/entities/images/namespace](src/entities/images/namespace/README.md)
 - [src/entities/initiatives/initiative](src/entities/initiatives/initiative/README.md)
 - [src/entities/initiatives/namespace](src/entities/initiatives/namespace/README.md)
 - [src/entities/meetings/meeting](src/entities/meetings/meeting/README.md)

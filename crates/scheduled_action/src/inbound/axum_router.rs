@@ -32,7 +32,7 @@ use serde::{Deserialize, Serialize};
 use utoipa::{IntoParams, ToSchema};
 
 #[cfg(test)]
-mod test;
+pub(crate) mod test;
 
 /// Canonical trigger plus deprecated cron fields for existing clients. Event
 /// responses omit legacy fields rather than inventing a schedule or timezone.
@@ -519,7 +519,8 @@ impl IntoResponse for ScheduledActionApiError {
                 ActionPolicyError::UpdateConflict => StatusCode::CONFLICT,
                 ActionPolicyError::NoFutureFirings
                 | ActionPolicyError::EventManagementDisabled
-                | ActionPolicyError::ConditionsDisabled => StatusCode::BAD_REQUEST,
+                | ActionPolicyError::ConditionsDisabled
+                | ActionPolicyError::GithubNotLinked => StatusCode::BAD_REQUEST,
             };
             return (status, policy.to_string()).into_response();
         }

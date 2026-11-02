@@ -1,7 +1,10 @@
 //! Types exchanged in-process with the WhatsApp session service. They carry no
 //! whatsmeow types: the session service maps protocol events onto them.
 
-use super::models::{Identity, PairingState};
+use super::{
+    jid::PhoneNumber,
+    models::{Identity, PairingState},
+};
 use chrono::{DateTime, Utc};
 use external_chat::domain::{
     models::{
@@ -469,4 +472,30 @@ pub struct HistoryPage {
     pub oldest: Option<MessageAnchor>,
     /// The phone says there is nothing older.
     pub complete: bool,
+}
+
+/// A phone-number lookup the account's session should answer.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct LookupWork {
+    /// The lookup.
+    pub id: Uuid,
+    /// The number to ask WhatsApp about.
+    pub phone_number: PhoneNumber,
+}
+
+/// What WhatsApp answered about a number.
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub enum LookupAnswer {
+    /// Registered as this phone-number JID, with the name WhatsApp or the
+    /// address book gives it.
+    Found {
+        /// Phone-number JID.
+        jid: String,
+        /// Business, address-book or WhatsApp name, when known.
+        name: Option<String>,
+    },
+    /// No WhatsApp account has this number.
+    NotOnWhatsApp,
+    /// The question could not be asked or was not answered.
+    Failed,
 }

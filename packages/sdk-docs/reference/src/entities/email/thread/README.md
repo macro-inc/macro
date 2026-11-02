@@ -6,4 +6,5 @@
 
 ## Interfaces
 
+- [EmailReadReceipt](interfaces/EmailReadReceipt.md)
 - [ReplyEmailOptions](interfaces/ReplyEmailOptions.md)

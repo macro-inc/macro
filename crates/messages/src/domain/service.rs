@@ -368,7 +368,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         {
             return Err(MessageError::Invalid(error));
         }
-        self.validate_references(&access, &input.mentions, &input.attachments)
+        input.mentions = self
+            .validate_references(&access, input.mentions, &input.attachments)
             .await?;
         let canonical_root_id = match parent {
             MessageParent::Call(call_id) => {
@@ -488,12 +489,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 "a message needs content or an attachment",
             ));
         }
-        self.validate_references(
-            &access,
-            &input.mentions,
-            input.attachments.as_deref().unwrap_or_default(),
-        )
-        .await?;
+        input.mentions = self
+            .validate_references(
+                &access,
+                input.mentions,
+                input.attachments.as_deref().unwrap_or_default(),
+            )
+            .await?;
         // Reconciliation may repeat a bot's final reply after a process died
         // between patching it and recording success. Identical content must
         // not produce another edit event or completion notification.
@@ -759,12 +761,16 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
         Ok(resolved)
     }
 
+    /// Rejects malformed references and attachments the sender cannot view, and
+    /// returns the mentions to record. A mention of something the sender cannot
+    /// view stays in the content but is not recorded, so it shares, notifies,
+    /// and triggers nothing.
     async fn validate_references(
         &self,
         access: &EntityAccessReceipt<MessageWrite>,
-        mentions: &[SimpleMention],
+        mentions: Vec<SimpleMention>,
         attachments: &[NewAttachment],
-    ) -> Result<(), MessageError> {
+    ) -> Result<Vec<SimpleMention>, MessageError> {
         if attachments.len() > 10 || mentions.len() > 100 {
             return Err(MessageError::Invalid("too many message references"));
         }
@@ -775,7 +781,8 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
             }
         }
         let mut checked = std::collections::HashSet::new();
-        for (kind, id, mention) in mentions
+        let mut hidden = std::collections::HashSet::new();
+        for (raw_kind, id, mention) in mentions
             .iter()
             .map(|m| (m.entity_type.as_str(), m.entity_id.as_str(), true))
             .chain(
@@ -784,13 +791,13 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                     .map(|a| (a.entity_type.as_str(), a.entity_id.as_str(), false)),
             )
         {
-            if !checked.insert((kind, id, mention)) {
+            if !checked.insert((raw_kind, id, mention)) {
                 continue;
             }
             // Editors also emit display-only chips (dates, contacts, colors) as
             // mentions. They name nothing that can be authorized, so they are
             // stored as written, exactly as the channel writer did before.
-            let Some(kind) = MessageReferenceKind::parse(kind) else {
+            let Some(kind) = MessageReferenceKind::parse(raw_kind) else {
                 continue;
             };
             let entity_type = match kind {
@@ -848,10 +855,16 @@ impl<R: MessageRepository, E: MessageEventPublisher> MessageService<R, E> {
                 .can_view(access.auth(), entity_type, id)
                 .await?
             {
-                return Err(MessageError::Forbidden);
+                if !mention {
+                    return Err(MessageError::Forbidden);
+                }
+                hidden.insert((raw_kind.to_owned(), id.to_owned()));
             }
         }
-        Ok(())
+        Ok(mentions
+            .into_iter()
+            .filter(|m| !hidden.contains(&(m.entity_type.clone(), m.entity_id.clone())))
+            .collect())
     }
 
     async fn ensure_parent(&self, parent: &MessageParent) -> Result<(), MessageError> {

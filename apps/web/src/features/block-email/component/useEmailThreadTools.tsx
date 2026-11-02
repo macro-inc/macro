@@ -314,21 +314,27 @@ export function useEmailThreadTools(props: EmailThreadToolsOptions) {
       label: 'Sender → Signal',
       icon: SignalIcon,
       action: () => emailCtx.markSenderSignal(),
-      condition: () => isOwnThread() && senderBucket() !== 'signal',
+      condition: () =>
+        isOwnThread() &&
+        emailCtx.canActOnSender() &&
+        senderBucket() !== 'signal',
     },
     {
       group: 'sender',
       label: 'Sender → Noise',
       icon: NoiseIcon,
       action: () => emailCtx.markSenderNoise(),
-      condition: () => isOwnThread() && senderBucket() !== 'noise',
+      condition: () =>
+        isOwnThread() &&
+        emailCtx.canActOnSender() &&
+        senderBucket() !== 'noise',
     },
     {
       group: 'sender',
       label: 'Block Sender',
       icon: ProhibitIcon,
       action: () => emailCtx.blockSender(),
-      condition: isOwnThread,
+      condition: () => isOwnThread() && emailCtx.canActOnSender(),
     },
   ];
 

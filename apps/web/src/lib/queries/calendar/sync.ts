@@ -9,8 +9,8 @@ import { refreshTeamCalendarQueries } from './team-cache';
 /**
  * Refetches everything the calendar UI reads: every mounted occurrence
  * viewport, the calendar list (which also carries per-calendar colors and
- * names), teammates' out-of-office overlays, and the cached previews behind
- * calendar mention chips.
+ * names), teammates' out-of-office overlays, the cached previews behind
+ * calendar mention chips, and open event details' requests to join.
  */
 export function invalidateCalendarViews(): void {
   fireAndForget(refreshTeamCalendarQueries(), 'calendar-sync');
@@ -20,6 +20,9 @@ export function invalidateCalendarViews(): void {
   queryClient.invalidateQueries({
     queryKey: calendarKeys.visibleCalendars.queryKey,
   });
+  queryClient.invalidateQueries({
+    queryKey: calendarKeys.joinRequests._def,
+  });
 }
 
 /**
@@ -28,17 +31,27 @@ export function invalidateCalendarViews(): void {
  * including the acting tab — committed changes for one of the viewer's
  * (owned or delegated) inboxes, so mounted calendar viewports refetch. The
  * calendar list is invalidated too, since a sync discovers new calendars
- * and renames/recolors existing ones.
+ * and renames/recolors existing ones, and so are requests to join, since
+ * those viewers read and answer them. `join_request_answered` goes to the
+ * requester, who views the event through a channel share, so only the
+ * event's previews refetch: they carry the request's status.
  */
 export function handleRefreshCalendar(payload: unknown): void {
   const event =
     typeof payload === 'object' && payload !== null
       ? (payload as {
           event?: unknown;
+          event_id?: unknown;
           link_id?: unknown;
           team_ooo_changed?: unknown;
         })
       : undefined;
+  if (event?.event === 'join_request_answered') {
+    if (typeof event.event_id === 'string') {
+      invalidateCalendarEventPreviews(event.event_id);
+    }
+    return;
+  }
   if (event?.event === 'team_sharing_changed') {
     fireAndForget(
       refreshTeamCalendarQueries({
@@ -67,5 +80,8 @@ export function handleRefreshCalendar(payload: unknown): void {
   invalidateCalendarEventPreviews();
   queryClient.invalidateQueries({
     queryKey: calendarKeys.visibleCalendars.queryKey,
+  });
+  queryClient.invalidateQueries({
+    queryKey: calendarKeys.joinRequests._def,
   });
 }

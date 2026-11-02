@@ -446,10 +446,14 @@ export type CursorModelsResponse = {
 export type DenyReason = 'allowance_exhausted' | 'free_allowance_exhausted' | 'overage_limit_reached' | 'overage_payment_failed';
 
 /**
- * Actual deployment availability for the provider selector.
+ * What the provider selector offers the requesting user.
  */
 export type EmailConnectionProviders = {
     gmail: boolean;
+    /**
+     * Whether this user may start a new Outlook connection: the deployment
+     * switch and their `enable-outlook` flag.
+     */
     outlook: boolean;
     /**
      * Where a Microsoft 365 administrator approves Macro for their whole
@@ -1915,6 +1919,26 @@ export type UpdateOverageRequest = {
 };
 
 /**
+ * What kind of upstream failure a 502 or 503 reports, for clients that
+ * branch on it.
+ */
+export type UpstreamErrorCode = 'upstream_unavailable' | 'upstream_rate_limited' | 'upstream_invalid_response';
+
+/**
+ * The body of a 502 or 503 caused by a third-party service.
+ */
+export type UpstreamErrorResponse = {
+    /**
+     * The kind of failure.
+     */
+    code: UpstreamErrorCode;
+    /**
+     * What failed and what to do about it, written for the user.
+     */
+    message: string;
+};
+
+/**
  * The payer's current-period position, as shown in Billing settings and used
  * by the gate.
  */
@@ -2625,6 +2649,8 @@ export type SetGithubPullRequestDraftErrors = {
     422: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type SetGithubPullRequestDraftError = SetGithubPullRequestDraftErrors[keyof SetGithubPullRequestDraftErrors];
@@ -2647,6 +2673,8 @@ export type EnrichGithubPullRequestsErrors = {
     404: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type EnrichGithubPullRequestsError = EnrichGithubPullRequestsErrors[keyof EnrichGithubPullRequestsErrors];
@@ -2681,6 +2709,8 @@ export type MergeGithubPullRequestErrors = {
     422: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type MergeGithubPullRequestError = MergeGithubPullRequestErrors[keyof MergeGithubPullRequestErrors];
@@ -2710,6 +2740,8 @@ export type GetGithubPullRequestMergeabilityErrors = {
     422: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type GetGithubPullRequestMergeabilityError = GetGithubPullRequestMergeabilityErrors[keyof GetGithubPullRequestMergeabilityErrors];
@@ -2743,6 +2775,8 @@ export type SetGithubPullRequestStateErrors = {
     422: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type SetGithubPullRequestStateError = SetGithubPullRequestStateErrors[keyof SetGithubPullRequestStateErrors];
@@ -3002,6 +3036,7 @@ export type EmailConnectionProvidersData = {
 
 export type EmailConnectionProvidersErrors = {
     400: ErrorResponse;
+    401: ErrorResponse;
 };
 
 export type EmailConnectionProvidersError = EmailConnectionProvidersErrors[keyof EmailConnectionProvidersErrors];
@@ -3023,6 +3058,8 @@ export type DeleteGithubLinkErrors = {
     400: ErrorResponse;
     401: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type DeleteGithubLinkError = DeleteGithubLinkErrors[keyof DeleteGithubLinkErrors];
@@ -3050,6 +3087,8 @@ export type InitGithubLinkErrors = {
     401: ErrorResponse;
     429: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type InitGithubLinkError = InitGithubLinkErrors[keyof InitGithubLinkErrors];
@@ -3072,6 +3111,8 @@ export type CheckGithubLinkStatusErrors = {
     404: ErrorResponse;
     428: ErrorResponse;
     500: ErrorResponse;
+    502: UpstreamErrorResponse;
+    503: UpstreamErrorResponse;
 };
 
 export type CheckGithubLinkStatusError = CheckGithubLinkStatusErrors[keyof CheckGithubLinkStatusErrors];

@@ -65,6 +65,8 @@ pub enum QueryType<'a> {
     HasChild(HasChildQuery<'a>),
     /// nested query (returns parents whose nested objects match)
     Nested(NestedQuery<'a>),
+    /// Match documents with an indexed value for this field.
+    Exists(Cow<'a, str>),
 }
 
 impl<'a> ToOpenSearchJson for QueryType<'a> {
@@ -83,6 +85,7 @@ impl<'a> ToOpenSearchJson for QueryType<'a> {
             QueryType::SimpleQueryString(simple_query_string) => simple_query_string.to_json(),
             QueryType::HasChild(has_child) => has_child.to_json(),
             QueryType::Nested(nested) => nested.to_json(),
+            QueryType::Exists(field) => serde_json::json!({ "exists": { "field": field } }),
         }
     }
 }
@@ -171,6 +174,7 @@ impl<'a> QueryType<'a> {
             QueryType::SimpleQueryString(sqs) => QueryType::SimpleQueryString(sqs.to_owned()),
             QueryType::HasChild(has_child) => QueryType::HasChild(has_child.to_owned()),
             QueryType::Nested(nested) => QueryType::Nested(nested.to_owned()),
+            QueryType::Exists(field) => QueryType::Exists(Cow::Owned(field.to_string())),
         }
     }
 }

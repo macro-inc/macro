@@ -3,6 +3,14 @@
   "version": "2.5.0",
   "private": true,
   "type": "module",
+  "browserslist": [
+    "safari >= 16.4",
+    "ios_saf >= 16.4",
+    "chrome >= 111",
+    "and_chr >= 111",
+    "edge >= 111",
+    "firefox >= 128"
+  ],
   "scripts": {
     "dev": "bun run dev:prepare && bun run dev:server",
     "dev:prepare": "just ensure-cache-wasm && just ensure-agent-fold-wasm && just ensure-database-sql-wasm && just ensure-pptx-engine-wasm && just ensure-docx-engine-wasm && just ensure-fig-engine-wasm && just ensure-psd-engine-wasm && just ensure-ai-engine-wasm",

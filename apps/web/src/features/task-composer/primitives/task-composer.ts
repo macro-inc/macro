@@ -28,10 +28,8 @@ import { initializeEditorEmpty } from '@core/component/LexicalMarkdown/utils';
 import type { PortalScope } from '@core/component/ScopedPortal';
 import { toast } from '@core/component/Toast/Toast';
 import { registerHotkey, useHotkeyDOMScope } from '@core/hotkey/hotkeys';
+import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
-import { buildSimpleEntityUrl } from '@core/util/url';
-import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
-import SplitIcon from '@icon/system/regular/square-half.svg';
 import { Telemetry } from '@macro-inc/observability';
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import type { PropertyApiValues } from '@property/types';
@@ -51,6 +49,7 @@ import {
 import { reconcile, unwrap } from 'solid-js/store';
 import { tabbable } from 'tabbable';
 import type { ComposeTaskProps, ComposeTaskSuccess } from '../core/types';
+import { showTaskCreatedToast } from './taskCreatedToast';
 
 type ComposerTagLayoutMode = 'bottom' | 'title';
 
@@ -63,6 +62,11 @@ export type TaskComposerHost = {
   resolveAppLink: MentionLinkResolver | undefined;
   /** Whether the composer floats over the layout rather than filling a split. */
   isPopover: Accessor<boolean>;
+  /**
+   * Opens the touch sheet at a fixed height for as long as the calling owner
+   * lives, so the composer's body can fill it.
+   */
+  fillSheet(): void;
   setDisplayName(name: string): void;
   close(): void;
   /** Opens another composer on a recovered submission. */
@@ -333,40 +337,6 @@ export function createTaskComposer(
     return true;
   };
 
-  const showTaskCreatedToast = async (
-    documentId: string,
-    optimisticSnapshot: Uint8Array | undefined
-  ) => {
-    // Auto-copy link to clipboard
-    const url = buildSimpleEntityUrl({ type: 'task', id: documentId });
-    let linkCopied = false;
-    try {
-      await navigator.clipboard.writeText(url);
-      linkCopied = true;
-    } catch {
-      toast.failure('Failed to copy link to clipboard');
-    }
-
-    const task = { id: documentId, optimisticSnapshot };
-    toast.success('Task created', {
-      subtext: linkCopied ? 'Link copied' : undefined,
-      actions: [
-        {
-          label: 'Open',
-          icon: ArrowSquareOutIcon,
-          onClick: () =>
-            host.openTask(task, { newSplit: false, referredFrom: null }),
-        },
-        {
-          label: 'Open (New Split)',
-          icon: SplitIcon,
-          onClick: () =>
-            host.openTask(task, { newSplit: true, referredFrom: null }),
-        },
-      ],
-    });
-  };
-
   const recoverDraft = (id: string) => {
     if (currentUserId() !== draftOwner) return;
     host.openComposer({
@@ -499,10 +469,7 @@ export function createTaskComposer(
     } else if (props.onSuccess) {
       props.onSuccess({ documentId, title: taskTitle, content: taskContent });
     } else {
-      fireAndForget(
-        showTaskCreatedToast(documentId, initialSnapshot),
-        'compose-task'
-      );
+      showTaskCreatedToast(documentId, initialSnapshot, host.openTask);
     }
     linkCreatedTask({ documentId, title: taskTitle, content: taskContent });
     props.onCreateTask?.(taskTitle, taskContent);
@@ -575,10 +542,6 @@ export function createTaskComposer(
     if (container) {
       attachHotkeys(container);
     }
-    // An empty title (e.g. a task started from an email) waits for the user.
-    if (!title().trim()) {
-      requestAnimationFrame(() => titleEditorRoot?.focus());
-    }
   });
 
   registerHotkey({
@@ -640,9 +603,17 @@ export function createTaskComposer(
     setTitleEditorRoot: (el: HTMLDivElement) => {
       titleEditorRoot = el;
     },
+    /**
+     * Whether the title takes focus as the composer opens. Always on touch,
+     * where the opening tap raised the keyboard for it
+     * (`raiseKeyboardForNewTaskTitle`); elsewhere a title that already has
+     * text (a task started from an email) waits for the user.
+     */
+    autofocusTitle: isTouchDevice() || !title().trim(),
     editorConfig,
     portalScope,
     isPopover: host.isPopover,
+    fillSheet: host.fillSheet,
     isCreating,
     errorMessage,
     setErrorMessage,

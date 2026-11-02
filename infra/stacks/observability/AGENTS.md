@@ -29,6 +29,8 @@ us-east-1. `README.md` is the full operations guide.
 From this directory:
 - `nix build --dry-run .#nixosConfigurations.observability.config.system.build.toplevel`
 - `nix fmt -- <changed .nix files>`; `python3 -m py_compile` on changed Python.
+- `python3 -m unittest test_macro_alerts_relay` from `nixos/goalert/` when the
+  relay's channel post format changes.
 
 From `infra/`: `bun run check`, then Biome on changed `.ts`.
 

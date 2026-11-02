@@ -625,3 +625,44 @@ describe('forwarding image attachments', () => {
     }
   );
 });
+
+describe('forwarding an inline reference', () => {
+  it('prepares each destination and sends the reference in the text, not as an attachment', async () => {
+    const prepare = vi.fn().mockResolvedValue(undefined);
+    const onSubmit = vi.fn();
+    mocks.sendToChannel.mockImplementation(async ({ beforeSend }) => {
+      await beforeSend('channel-1');
+      return { channelId: 'channel-1', navigateToChannel: vi.fn() };
+    });
+    let submit: (() => void) | undefined;
+    render(() => (
+      <ForwardToChannel
+        name="Weekly digest"
+        entity={{ entity_type: 'automation', entity_id: 'routine-1' }}
+        inlineReference={{
+          markdown: '<m-document-mention>routine-1</m-document-mention>',
+          mention: { entity_type: 'automation', entity_id: 'routine-1' },
+        }}
+        prepareChannel={prepare}
+        onSubmit={onSubmit}
+        ref={(controls) => {
+          submit = controls.handleSubmit;
+        }}
+      />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Select recipients' }));
+
+    await submit?.();
+
+    expect(prepare).toHaveBeenCalledWith('channel-1', 'view');
+    expect(mocks.sendToChannel).toHaveBeenCalledWith(
+      expect.objectContaining({
+        channelId: 'channel-1',
+        content: '<m-document-mention>routine-1</m-document-mention>',
+        mentions: [{ entity_type: 'automation', entity_id: 'routine-1' }],
+        attachments: [],
+      })
+    );
+    expect(onSubmit).toHaveBeenCalled();
+  });
+});
