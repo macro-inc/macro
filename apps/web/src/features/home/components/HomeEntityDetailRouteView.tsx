@@ -7,6 +7,7 @@ import type { EntityDetailTarget } from '@app/components/entity-detail/entity-de
 import { ViewBreadcrumbs, ViewShell } from '@app/components/view-shell';
 import { channelsSearch } from '@app/features/channels-view/channels-route';
 import type { EntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { EntityAppearanceTrigger } from '@app/features/entity-appearance/entity-appearance';
 import { useDocumentAppearance } from '@app/features/entity-appearance/queries/document-appearance';
 import { createSearchParams, useParams } from '@app/lib/split-router';
 import { URL_PARAMS as CHANNEL_URL_PARAMS } from '@block-channel/constants';
@@ -33,7 +34,7 @@ import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useDocumentShareModal } from '@core/component/TopBar/shareModal';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
-import { buildEntityData } from '@entity';
+import { buildEntityData, type EntityData } from '@entity';
 import {
   type Accessor,
   createMemo,
@@ -58,6 +59,8 @@ function HomeEntityBreadcrumb(props: {
   value: Accessor<string>;
   fileMenu?: JSX.Element;
   appearance?: EntityAppearance | null;
+  appearanceEntity?: Accessor<EntityData | undefined>;
+  canEditAppearance?: Accessor<boolean>;
 }) {
   useSplitDisplayName(props.name);
 
@@ -69,6 +72,22 @@ function HomeEntityBreadcrumb(props: {
     >
       {(item) => (
         <div class="flex min-w-0 items-center">
+          <Show
+            when={
+              props.canEditAppearance?.()
+                ? props.appearanceEntity?.()
+                : undefined
+            }
+          >
+            {(entity) => (
+              <span class="shrink-0">
+                <EntityAppearanceTrigger
+                  entity={entity()}
+                  editable={props.canEditAppearance?.() ?? false}
+                />
+              </span>
+            )}
+          </Show>
           <ViewBreadcrumbs.Button
             class="gap-1.5"
             isActive={item.isActive()}
@@ -76,21 +95,27 @@ function HomeEntityBreadcrumb(props: {
             tooltip={props.name()}
           >
             <Show
-              when={
-                props.target.type === 'channel' ? props.target.id : undefined
-              }
-              fallback={
-                <EntityIcon
-                  targetType={entityDetailBlockType(props.target) ?? 'unknown'}
-                  size="xs"
-                  appearance={props.appearance}
-                  class="shrink-0"
-                />
-              }
+              when={!props.canEditAppearance?.() || !props.appearanceEntity?.()}
             >
-              {(channelId) => (
-                <ChannelTitleIcon channelId={channelId()} suppressClick />
-              )}
+              <Show
+                when={
+                  props.target.type === 'channel' ? props.target.id : undefined
+                }
+                fallback={
+                  <EntityIcon
+                    targetType={
+                      entityDetailBlockType(props.target) ?? 'unknown'
+                    }
+                    size="xs"
+                    appearance={props.appearance}
+                    class="shrink-0"
+                  />
+                }
+              >
+                {(channelId) => (
+                  <ChannelTitleIcon channelId={channelId()} suppressClick />
+                )}
+              </Show>
             </Show>
             <span class="truncate">{props.name()}</span>
           </ViewBreadcrumbs.Button>
@@ -150,6 +175,8 @@ function HomeMarkdownBreadcrumb(props: {
       target={props.target}
       value={props.value}
       appearance={appearance()}
+      appearanceEntity={headerEntity}
+      canEditAppearance={permissions.canEdit}
       fileMenu={
         <SplitFileMenu
           id={documentId()}

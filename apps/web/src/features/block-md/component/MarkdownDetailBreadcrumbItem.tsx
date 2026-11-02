@@ -1,6 +1,7 @@
 import { DocumentTitleHoverCard } from '@app/components/entity-detail/DocumentTitleHoverCard';
 import { ViewBreadcrumbs } from '@app/components/view-shell';
 import type { EntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { EntityAppearanceTrigger } from '@app/features/entity-appearance/entity-appearance';
 import { useDocumentAppearance } from '@app/features/entity-appearance/queries/document-appearance';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { SplitFileMenu } from '@components/app/split-layout/components/SplitFileMenu';
@@ -14,6 +15,7 @@ import { Permissions } from '@core/component/SharePermissions';
 import { blockNameToDefaultFile } from '@core/constant/allBlocks';
 import { useUserId } from '@core/context/user';
 import { buildEntityData } from '@entity';
+import { Show } from 'solid-js';
 import { useMarkdownDocument } from '../context/markdown-document-context';
 import type { MarkdownDocumentKind } from '../types';
 import { useMarkdownName } from './MarkdownNameProvider';
@@ -96,6 +98,16 @@ export function MarkdownDetailBreadcrumbItem(props: {
     >
       {(item) => (
         <div class="flex min-w-0 items-center motion-safe:animate-[dialog-overlay-open_150ms_ease-out]">
+          <Show when={permissions.canEdit() ? headerEntity() : undefined}>
+            {(entity) => (
+              <span class="shrink-0">
+                <EntityAppearanceTrigger
+                  entity={entity()}
+                  editable={permissions.canEdit()}
+                />
+              </span>
+            )}
+          </Show>
           <DocumentTitleHoverCard
             documentId={props.documentId}
             name={documentName()}
@@ -109,12 +121,14 @@ export function MarkdownDetailBreadcrumbItem(props: {
                 focusDocument();
               }}
             >
-              <EntityIcon
-                targetType={blockName()}
-                appearance={appearance()}
-                size="xs"
-                class="shrink-0"
-              />
+              <Show when={!permissions.canEdit() || !headerEntity()}>
+                <EntityIcon
+                  targetType={blockName()}
+                  appearance={appearance()}
+                  size="xs"
+                  class="shrink-0"
+                />
+              </Show>
               <span class="truncate">{documentName()}</span>
             </ViewBreadcrumbs.Button>
           </DocumentTitleHoverCard>
