@@ -137,6 +137,7 @@ async function authorizedDssGraphqlFetch(
   input: RequestInfo | URL,
   init?: RequestInit
 ): Promise<Response> {
+  const parent = Telemetry.captureContext();
   if (ENABLE_BEARER_TOKEN_AUTH) {
     const apiToken = await getMacroApiToken();
     return await platformFetch(input, {
@@ -153,7 +154,7 @@ async function authorizedDssGraphqlFetch(
   let response = await fetchWithCredentials();
   if (response.status !== 401) return response;
 
-  const tokenResult = await fetchToken();
+  const tokenResult = await parent.run(fetchToken);
   if (tokenResult.isErr()) return response;
 
   response = await fetchWithCredentials();
@@ -345,7 +346,9 @@ export async function dssGraphqlFetch(
         }),
       };
       span.event('request_dispatch');
-      const response = await authorizedDssGraphqlFetch(input, transportInit);
+      const response = await span.run(() =>
+        authorizedDssGraphqlFetch(input, transportInit)
+      );
       span.setAttr('graphql.response_headers_ms', performance.now() - started);
       span.setAttr('http.response.status_code', response.status);
       span.event('response_headers');
@@ -374,7 +377,7 @@ export async function dssGraphqlFetch(
       // metadata field and suppress v2 local authority for this session. Backfill
       // still refuses to checkpoint missing required Document supplements.
       soupProjectionServerSupported = false;
-      return await authorizedDssGraphqlFetch(input, legacyInit);
+      return await span.run(() => authorizedDssGraphqlFetch(input, legacyInit));
     } catch (error) {
       // Transport errors may contain query URLs; record a category only.
       span.setAttr('graphql.transport_failed', true);

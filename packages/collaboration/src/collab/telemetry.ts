@@ -40,22 +40,30 @@ function setDocumentSpanAttributes(documentId: string, span: Span): void {
 export function telemetrySpan<T>(
   documentId: string,
   name: string,
-  operation: SpanOperation<T>
+  operation: SpanOperation<T>,
+  parentSpan?: Span
 ): Promise<T>;
-export function telemetrySpan(documentId: string, name: string): Span;
+export function telemetrySpan(
+  documentId: string,
+  name: string,
+  operation?: undefined,
+  parentSpan?: Span
+): Span;
 export function telemetrySpan<T>(
   documentId: string,
   name: string,
-  operation?: SpanOperation<T>
+  operation?: SpanOperation<T>,
+  parentSpan?: Span
 ): Span | Promise<T> {
+  const tracer = parentSpan ?? Telemetry;
   if (operation) {
-    return Telemetry.span(name, async (span) => {
+    return tracer.span(name, async (span) => {
       setDocumentSpanAttributes(documentId, span);
       return operation(span);
     });
   }
 
-  const span = Telemetry.span(name);
+  const span = tracer.span(name);
   setDocumentSpanAttributes(documentId, span);
   return span;
 }

@@ -20,11 +20,13 @@ the spans. This skill is how to meet it.
 Before writing code, sketch the trace you want to read during an incident:
 
 ```text
-doc.open                      (browser, root, document.id)
-├─ doc.load
-│  └─ doc.load.context        (HTTP → DSS, traceparent header)
-├─ doc.seed / doc.sync.catchup
-└─ sync-service connect       (WebSocket, traceparent query param)
+navigation                    (browser interaction)
+└─ view.<route>               (caller-owned loading flow)
+   ├─ document.load / block.data
+   │  └─ doc.load → doc.load.context (HTTP → DSS)
+   ├─ doc.snapshot.*
+   └─ doc.editor
+      └─ doc.editor.initialize (initial sync → editor ready)
 ```
 
 One root span per user action, one child per phase a reader would ask about
@@ -41,13 +43,52 @@ import OpenTelemetry directly.
   `span.injectTraceHeaders(headers)`.
 - `span.setAttr(key, value)` for ids and counts; `span.error(message)` on
   failure; manual spans must `end()` on every path.
-- A flow that spans components or outlives one call keeps its root span in a
-  registry keyed by entity id and resumes it later (see the document example).
+- The browser uses a synchronous `StackContextManager`, so after an `await`
+  call `parent.span(...)`, or wrap later dispatch in `parent.run(...)`; see the
+  rule for `Telemetry.captureContext()`.
+- Share a caller-owned span through flow context and explicit client
+  parameters (`parentSpan`). Never keep entity-keyed span registries or end
+  another owner's span.
 - Transports without headers carry `span.traceparent()` another way, such as a
   WebSocket query parameter.
 - Workers wrap their handler with `instrument()` and `createWorkerTraceConfig`
   from `@macro-inc/observability/worker`, which adopts the incoming
   `traceparent`.
+
+## Frontend view loading
+
+Use `@app/observability/flow` for user-visible loading. Router commits start a
+`navigation` interaction and every routed view is already a `view.<route id>`
+`<TraceFlow>` keyed on its params. Flows are perf-class traces, sampled per
+session.
+
+- `usePending('channel.messages', () => query.isLoading)` right after creating
+  the query adds a phase that holds the flow while it is true. Read status only:
+  reading pending `query.data` suspends the enclosing shell. Track initial
+  loading, not background refreshes or a disabled query that cannot complete.
+- `<TraceFlow name="doc.editor">` around an independently loaded subtree, placed
+  **inside** its Suspense boundary, adds a nested flow; outside it, the flow can
+  settle while the fallback is visible. Pass `key` to restart it when the
+  subtree shows a different entity in place.
+- `const flow = useFlow()` during component setup; then
+  `flow.task('block.data', async (span) => ...)` for imperative loading. It
+  holds the flow until the promise settles and runs the synchronous start in
+  the child's context; use `span.span(...)` after an await. `flow.span` passes
+  the flow to lifecycle code and clients. A span alone does not hold the flow
+  open; give that work a `usePending` or `task` too.
+- For in-view actions that mount content without navigation,
+  `beginInteraction('channel.tab')`, update state, then `.end()` in a `finally`.
+  The window is synchronous: don't hold it across an unrelated await. Flows
+  created inside it join it; wrap the newly mounted content in a flow.
+- Use `startUiOperation` directly only for a measured action that mounts no
+  flow (a cell commit, a submit); call `afterPaint()` once the UI updated.
+- Keep names static and attributes to opaque ids, categories and counts. No
+  flow per message, row or cell; measure the containing view.
+
+Flows never schedule application work; preloading and warm-up own their own
+gates. Reading the resulting traces (`.ready` events, overlapping phases,
+`ui.*` fields, sampling) is covered in the
+[observability walkthrough](../../../docs/agent-guide/observability.md#web-performance-traces).
 
 ## Rust services
 
@@ -65,11 +106,12 @@ import OpenTelemetry directly.
 ## Worked examples
 
 **Document open lifecycle (web → DSS → sync-service).**
-`apps/web/src/features/block-md/definition.ts` starts or resumes `doc.open`
-(`document.id`, `doc.type`) and times `doc.load` → `doc.load.context`.
-`apps/web/src/features/block-md/observability.ts` keeps open document spans by
-id so the launcher's `doc.create`, the collab provider, and the sync client all
-attach to one trace. `packages/collaboration/src/collab/telemetry.ts` stamps
+`BlockLoader` and `FileDetailLoadGate` own loading tasks and pass their span to
+Markdown loaders. The loader times `doc.load` → `doc.load.context` and passes
+context to its sync source. The editor and collaboration adapter use the
+nearest flow context; collaboration reports ready without ending the caller's
+span. No `doc.open` root or document-id span registry is created.
+`packages/collaboration/src/collab/telemetry.ts` stamps
 `document.id` and `session.id` on `doc.seed`, `doc.sync.catchup`, and
 `edit.apply`. The sync WebSocket carries `traceparent` as a query parameter,
 which sync-service reads with `worker_rs_otel::traceparent_from_request`.

@@ -1,3 +1,4 @@
+import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
   batch,
@@ -88,7 +89,12 @@ export function createBaseQuery<
           }
         }
         previous = next;
-        setState(reconcile(reconciled));
+        const span = Telemetry.perfSpan('urql.reconcile');
+        try {
+          setState(reconcile(reconciled));
+        } finally {
+          span.end();
+        }
       })
     );
   };

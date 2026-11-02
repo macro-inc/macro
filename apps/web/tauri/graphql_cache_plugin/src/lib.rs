@@ -119,16 +119,15 @@ fn emit_ops_affected<R: Runtime>(
     if op_ids.is_empty() {
         return;
     }
-    app.emit(
+    emit_cache_event(
+        app,
         OPS_AFFECTED_EVENT,
         OpsAffectedEvent {
             field_changes: field_changes.cloned(),
             op_ids: op_ids.to_vec(),
             keys: keys.to_vec(),
         },
-    )
-    .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql cache change event"))
-    .ok();
+    );
 }
 
 fn emit_cache_changed<R: Runtime>(app: &AppHandle<R>, revision: &str, reset: bool) {
@@ -141,7 +140,8 @@ fn emit_cache_changed_with_search_changes<R: Runtime>(
     reset: bool,
     search_changed_buckets: Option<&std::collections::BTreeSet<String>>,
 ) {
-    app.emit(
+    emit_cache_event(
+        app,
         CACHE_CHANGED_EVENT,
         CacheChangedEvent {
             search_changed_buckets: if reset {
@@ -152,9 +152,7 @@ fn emit_cache_changed_with_search_changes<R: Runtime>(
             revision: revision.to_owned(),
             reset: reset.then_some(true),
         },
-    )
-    .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql cache change event"))
-    .ok();
+    );
 }
 
 fn emit_mutation_settled<R: Runtime>(
@@ -166,7 +164,8 @@ fn emit_mutation_settled<R: Runtime>(
     error_code: Option<String>,
     replacement_transaction_id: Option<String>,
 ) {
-    app.emit(
+    emit_cache_event(
+        app,
         MUTATION_SETTLED_EVENT,
         MutationSettledEvent {
             transaction_id,
@@ -176,7 +175,23 @@ fn emit_mutation_settled<R: Runtime>(
             error_code,
             replacement_transaction_id,
         },
-    )
-    .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql mutation settlement"))
-    .ok();
+    );
+}
+
+/// Serialize notifications once, recording their wire size without copying the
+/// payload back through a second JSON encoder for diagnostics.
+#[tracing::instrument(
+    name = "graphql_cache.ipc.notification",
+    skip_all,
+    fields(event.name = event, graphql_cache.ipc.payload_bytes = tracing::field::Empty)
+)]
+fn emit_cache_event<R: Runtime, S: Serialize>(app: &AppHandle<R>, event: &str, payload: S) {
+    let emit = || -> tauri::Result<()> {
+        let json = serde_json::to_string(&payload)?;
+        tracing::Span::current().record("graphql_cache.ipc.payload_bytes", json.len());
+        app.emit_str(event, json)
+    };
+    emit()
+        .inspect_err(|e| tracing::error!(error=?e, "failed to emit graphql cache event"))
+        .ok();
 }

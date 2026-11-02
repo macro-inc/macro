@@ -1,3 +1,4 @@
+import { usePending } from '@app/observability/flow';
 import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { refreshInBackground } from '@queries/database-sql/create-database-sql-query';
@@ -257,6 +258,7 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
     }),
     relations
   );
+  usePending('database.rows', source.loading);
   // Embedded grids have no database BlockContainer to subscribe for them.
   // Tracking is reference-counted across grids and full database blocks.
   useDatabaseSubscription(databaseId, () => refreshInBackground(source));

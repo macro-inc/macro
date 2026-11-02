@@ -7,24 +7,44 @@ import {
 } from '@opentelemetry/api';
 import type { Resource } from '@opentelemetry/resources';
 import type { Attributes, TelemetryInitConfig } from './config';
-import { INSTRUMENTATION_SCOPE_NAME } from './constants';
+import {
+  ATTR_TRACE_CLASS,
+  INSTRUMENTATION_SCOPE_NAME,
+  PERF_TRACE_CLASS,
+} from './constants';
 import { suppressUserId } from './privacy';
 import type { TelemetryTracingProvider } from './provider';
-import { type Span, SpanImpl } from './span';
+import { type Span, SpanImpl, type TraceContext } from './span';
 
 export class Tracing {
   #provider: TelemetryTracingProvider | undefined;
+  #propagationEnabled = false;
+  #enablement: Promise<void> | undefined;
 
   init(
     config: TelemetryInitConfig,
     resource: Resource,
-    getUserId: () => string | undefined
+    getUserId: () => string | undefined,
+    perfSampled: boolean
   ): void {
-    this.#provider = config.tracingProvider?.(resource, getUserId);
+    this.#propagationEnabled = false;
+    this.#enablement = this.#enablePropagation(config);
+    this.#provider = config.tracingProvider?.(resource, getUserId, perfSampled);
   }
 
-  span(name: string): Span {
-    return this.#startSpan(name, context.active());
+  captureContext(): TraceContext {
+    const parent = context.active();
+    return { run: (operation) => context.with(parent, operation) };
+  }
+
+  span(name: string, startTime?: number): Span {
+    return this.#startSpan(
+      name,
+      context.active(),
+      undefined,
+      undefined,
+      startTime
+    );
   }
 
   /** Starts a detached root span tree with user enrichment suppressed. */
@@ -34,6 +54,19 @@ export class Tracing {
 
   clientSpan(name: string): Span {
     return this.#startSpan(name, context.active(), SpanKind.CLIENT);
+  }
+
+  /** Starts a span the sampler may drop as a whole performance trace. */
+  perfSpan(name: string, startTime?: number): Span {
+    return this.#startSpan(
+      name,
+      context.active(),
+      undefined,
+      {
+        [ATTR_TRACE_CLASS]: PERF_TRACE_CLASS,
+      },
+      startTime
+    );
   }
 
   /** Export a timestamped measurement without retaining a long-lived span. */
@@ -47,6 +80,7 @@ export class Tracing {
   }
 
   async flush(): Promise<void> {
+    await this.#enablement;
     await this.#provider?.forceFlush();
   }
 
@@ -55,14 +89,35 @@ export class Tracing {
     this.#provider = undefined;
   }
 
-  #startSpan(name: string, parent: Context, kind?: SpanKind): Span {
+  #startSpan(
+    name: string,
+    parent: Context,
+    kind?: SpanKind,
+    attributes?: Attributes,
+    startTime?: number
+  ): Span {
     const otelSpan = trace
       .getTracer(INSTRUMENTATION_SCOPE_NAME)
-      .startSpan(name, kind === undefined ? undefined : { kind }, parent);
+      .startSpan(name, { kind, attributes, startTime }, parent);
+    const provider = this.#provider;
     return new SpanImpl(
       otelSpan,
       trace.setSpan(parent, otelSpan),
-      (childName, childParent) => this.#startSpan(childName, childParent)
+      (childName, childParent) => this.#startSpan(childName, childParent),
+      () => this.#propagationEnabled,
+      () =>
+        trace.setSpanContext(
+          parent,
+          provider?.resolveSpanContext?.(otelSpan) ?? otelSpan.spanContext()
+        )
     );
+  }
+  async #enablePropagation(config: TelemetryInitConfig): Promise<void> {
+    try {
+      const [enabled] = await Promise.all([config.enabled(), config.startup]);
+      this.#propagationEnabled = enabled;
+    } catch {
+      this.#propagationEnabled = false;
+    }
   }
 }

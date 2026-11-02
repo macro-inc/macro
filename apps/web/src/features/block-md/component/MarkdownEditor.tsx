@@ -1,3 +1,4 @@
+import { usePending } from '@app/observability/flow';
 import { MessageCommentsProvider } from '@block-md/comments/MessageCommentsProvider';
 import { URL_PARAMS } from '@block-md/constants';
 import { keyNavigationPlugin } from '@block-md/plugins/keyboardNavigation';
@@ -227,6 +228,7 @@ export function MarkdownEditor(props: {
   ];
 
   const [editorReady, setEditorReady] = createSignal<boolean>(false);
+  usePending('doc.editor.initialize', () => !editorReady() && !editorError());
 
   const [highlightLayerRef, setHighlightLayerRef] =
     createSignal<HTMLDivElement>();

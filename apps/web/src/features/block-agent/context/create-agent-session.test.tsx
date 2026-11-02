@@ -7,8 +7,20 @@
  */
 
 import { err, ok } from 'neverthrow';
-import { Show, Suspense } from 'solid-js';
+import { batch, createSignal, Show, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+
+const readiness = vi.hoisted(() => ({ painted: vi.fn(), cancelled: vi.fn() }));
+vi.mock('@app/observability/ui-operation', async () => {
+  const { NOOP_SPAN } = await import('@macro-inc/observability');
+  return {
+    startUiOperation: () => ({
+      span: NOOP_SPAN,
+      afterPaint: readiness.painted,
+      cancel: readiness.cancelled,
+    }),
+  };
+});
 
 const fold = vi.hoisted(() => ({
   pushSession: vi.fn(),
@@ -50,6 +62,7 @@ vi.mock('@queries/agent-session/session-metadata-sync', () => ({
 const { cleanup, render, screen } = await import('@solidjs/testing-library');
 const { AgentSession } = await import('@core/agent-session/AgentSession');
 const { createAgentSession } = await import('./create-agent-session');
+const { TraceFlow } = await import('@app/observability/flow');
 
 const SESSION = '01a0ced3-b839-75ee-bc9b-7b0a11ce0789';
 const bot = { id: 'bot-id', name: 'Agent', handle: 'agent' };
@@ -57,7 +70,10 @@ const session = { id: SESSION, name: 'A session', canEdit: true };
 
 /** Reads the session row the way a pane's title does — outside any error gate. */
 function Pane() {
-  const live = createAgentSession(() => SESSION, { userId: () => 'me' });
+  const live = createAgentSession(() => SESSION, {
+    userId: () => 'me',
+    provisioning: () => false,
+  });
   return (
     <>
       <h1>{live.session()?.name ?? 'untitled'}</h1>
@@ -148,4 +164,55 @@ describe('createAgentSession', () => {
     expect(await screen.findByText('no access')).toBeTruthy();
     expect(screen.queryByText('loading')).toBeNull();
   });
+});
+
+it('keeps view readiness pending through provisioning and the first transcript load', async () => {
+  const [id, setId] = createSignal<string>();
+  const [pending, setPending] = createSignal(true);
+  const log = deferred<{ bot: typeof bot; rows: never[] }>();
+  logSource.fetched.mockReturnValue(log.promise);
+  function ProvisionedPane() {
+    const live = createAgentSession(id, {
+      userId: () => 'me',
+      provisioning: pending,
+    });
+    return <h1>{live.session()?.name ?? 'Provisioning'}</h1>;
+  }
+  render(() => (
+    <TraceFlow name="view.agent">
+      <ProvisionedPane />
+    </TraceFlow>
+  ));
+  await Promise.resolve();
+  expect(readiness.painted).not.toHaveBeenCalled();
+  batch(() => {
+    setId(SESSION);
+    setPending(false);
+  });
+  await Promise.resolve();
+  expect(readiness.painted).not.toHaveBeenCalled();
+  log.resolve({ bot, rows: [] });
+  await screen.findByText('A session');
+  expect(readiness.painted).toHaveBeenCalledOnce();
+});
+
+it('settles view readiness when provisioning fails without a session id', async () => {
+  const [pending, setPending] = createSignal(true);
+  function FailedPane() {
+    createAgentSession(() => undefined, {
+      userId: () => 'me',
+      provisioning: pending,
+    });
+    return null;
+  }
+  render(() => (
+    <TraceFlow name="view.agent">
+      <FailedPane />
+    </TraceFlow>
+  ));
+  await Promise.resolve();
+  expect(readiness.painted).not.toHaveBeenCalled();
+  setPending(false);
+  await Promise.resolve();
+  expect(readiness.painted).toHaveBeenCalledOnce();
 });

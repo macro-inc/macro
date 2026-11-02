@@ -1,6 +1,6 @@
 import { catchToResult, throwOnErr } from '@core/util/result';
 import { matchesTokenSubsequences } from '@core/util/string';
-import { Telemetry } from '@macro-inc/observability';
+import { type Span, Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import { queryReadyGate } from '@queries/gate';
 import { useCurrentTeamQuery } from '@queries/team/teams';
@@ -95,35 +95,45 @@ function pickerOptions(
   };
 }
 
-type NoteWrite = NoteTarget & { documentId: string; teamId?: string };
+type NoteWrite = NoteTarget & {
+  documentId: string;
+  teamId?: string;
+  parentSpan?: Span;
+};
 
 function linkNote(input: NoteWrite) {
-  return Telemetry.span('calendar.notes.link', async (span) => {
-    span.setAttr('event.id', input.eventId);
-    span.setAttr('document.id', input.documentId);
-    await throwOnErr(() =>
-      calendarNotesClient.link(
-        input.eventId,
-        input.occurrenceKey,
-        input.documentId,
-        { teamId: input.teamId ?? null }
-      )
-    );
-  });
+  return (input.parentSpan ?? Telemetry).span(
+    'calendar.notes.link',
+    async (span) => {
+      span.setAttr('event.id', input.eventId);
+      span.setAttr('document.id', input.documentId);
+      await throwOnErr(() =>
+        calendarNotesClient.link(
+          input.eventId,
+          input.occurrenceKey,
+          input.documentId,
+          { teamId: input.teamId ?? null }
+        )
+      );
+    }
+  );
 }
 
 function unlinkNote(input: NoteWrite) {
-  return Telemetry.span('calendar.notes.unlink', async (span) => {
-    span.setAttr('event.id', input.eventId);
-    span.setAttr('document.id', input.documentId);
-    await throwOnErr(() =>
-      calendarNotesClient.unlink(
-        input.eventId,
-        input.occurrenceKey,
-        input.documentId
-      )
-    );
-  });
+  return (input.parentSpan ?? Telemetry).span(
+    'calendar.notes.unlink',
+    async (span) => {
+      span.setAttr('event.id', input.eventId);
+      span.setAttr('document.id', input.documentId);
+      await throwOnErr(() =>
+        calendarNotesClient.unlink(
+          input.eventId,
+          input.occurrenceKey,
+          input.documentId
+        )
+      );
+    }
+  );
 }
 
 function refreshNotes() {
@@ -142,11 +152,13 @@ export function createNotesSource(
   const notes = useQuery(() => notesOptions(userId(), target()));
   const link = useMutation(() => ({
     mutationFn: linkNote,
-    onSuccess: refreshNotes,
+    onSuccess: (_result: void, input: NoteWrite) =>
+      (input.parentSpan ?? Telemetry.captureContext()).run(refreshNotes),
   }));
   const unlink = useMutation(() => ({
     mutationFn: unlinkNote,
-    onSuccess: refreshNotes,
+    onSuccess: (_result: void, input: NoteWrite) =>
+      (input.parentSpan ?? Telemetry.captureContext()).run(refreshNotes),
   }));
   return {
     notes: () => ({
@@ -187,7 +199,11 @@ export function createNotesSource(
           } satisfies NoteCreateFailure);
         }
         const linked = await catchToResult(() =>
-          link.mutateAsync({ ...destination, documentId: document.documentId })
+          link.mutateAsync({
+            ...destination,
+            documentId: document.documentId,
+            parentSpan: span,
+          })
         );
         if (linked.isErr()) {
           span.setAttr('calendar.notes.outcome', 'created_unlinked');
@@ -295,11 +311,13 @@ export function createDocumentNotesSource(
   const team = useCurrentTeamQuery();
   const link = useMutation(() => ({
     mutationFn: linkNote,
-    onSuccess: refreshNotes,
+    onSuccess: (_result: void, input: NoteWrite) =>
+      (input.parentSpan ?? Telemetry.captureContext()).run(refreshNotes),
   }));
   const unlink = useMutation(() => ({
     mutationFn: unlinkNote,
-    onSuccess: refreshNotes,
+    onSuccess: (_result: void, input: NoteWrite) =>
+      (input.parentSpan ?? Telemetry.captureContext()).run(refreshNotes),
   }));
   return {
     links: () => ({

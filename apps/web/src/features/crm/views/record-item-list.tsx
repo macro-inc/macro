@@ -1,6 +1,7 @@
 import { DateGroupHeading } from '@app/features/next-soup/soup-view/date-group-heading';
 import { dateBucket } from '@app/features/soup/collection/date-buckets';
 import { createKeyedProjection } from '@app/lib/queries/soup/create-keyed-projection';
+import { usePending } from '@app/observability/flow';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   ListEntity,
@@ -97,6 +98,7 @@ export function RecordItemList(props: {
   // paused requests; a disabled one shows the empty state instead.
   const loading = () =>
     props.pending || (props.source.isPending && props.source.isEnabled);
+  usePending('crm.items', () => Boolean(loading()));
 
   return (
     <div class="flex min-h-0 w-full flex-1 flex-col">

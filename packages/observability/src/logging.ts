@@ -44,7 +44,10 @@ export class Logging {
           shutdown: () => Promise.resolve(),
         },
         new BatchLogRecordProcessor({
-          exporter: new OTLPLogExporter({ url: config.logsUrl }),
+          exporter: new OTLPLogExporter({
+            url: config.logsUrl,
+            fetch: config.exportFetch,
+          }),
         }),
       ],
     });

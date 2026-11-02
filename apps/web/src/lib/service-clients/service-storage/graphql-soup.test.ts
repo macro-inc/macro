@@ -464,8 +464,10 @@ vi.mock('@macro-inc/observability', () => ({
   Telemetry: {
     error: mocks.telemetryError,
     warn: mocks.telemetryWarn,
+    captureContext: () => ({ run: <T>(work: () => T) => work() }),
     span: (_name: string, work: (span: unknown) => Promise<unknown>) =>
       work({
+        run: <T>(work: () => T) => work(),
         event: vi.fn(),
         setAttr: vi.fn(),
         injectTraceHeaders: (headers: Record<string, string>) => {

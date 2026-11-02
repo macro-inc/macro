@@ -135,6 +135,12 @@ pub async fn graphql_cache_current_storage_generation(
 }
 
 /// Attempts a cache read; registers `op_id` as active when given.
+#[tracing::instrument(
+    name = "graphql_cache.ipc.receive",
+    skip_all,
+    fields(graphql_cache.ipc.command = "read", upstream.trace_id = traceparent.as_deref().and_then(|parent| parent.split('-').nth(1))),
+    err
+)]
 #[tauri::command]
 pub async fn graphql_cache_read(
     state: State<'_, CacheState>,
@@ -143,6 +149,7 @@ pub async fn graphql_cache_read(
     operation_name: Option<String>,
     variables: Option<Variables>,
     entity_resolvers: Option<Vec<EntityResolver>>,
+    traceparent: Option<String>,
 ) -> Result<ReadResultWire, String> {
     engine_handle(&state)?
         .read(
@@ -156,6 +163,16 @@ pub async fn graphql_cache_read(
 }
 
 /// Incrementally project an ordinary query through cache-core.
+#[tracing::instrument(
+    name = "graphql_cache.ipc.receive",
+    skip_all,
+    fields(graphql_cache.ipc.command = "watch", upstream.trace_id = traceparent.as_deref().and_then(|parent| parent.split('-').nth(1))),
+    err
+)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Tauri command fields preserve the existing flat IPC wire contract"
+)]
 #[tauri::command]
 pub async fn graphql_cache_watch(
     state: State<'_, CacheState>,
@@ -165,6 +182,7 @@ pub async fn graphql_cache_watch(
     variables: Option<Variables>,
     entity_resolvers: Option<Vec<EntityResolver>>,
     since: Option<String>,
+    traceparent: Option<String>,
 ) -> Result<cache_core::engine::watch_query::QueryUpdate, String> {
     engine_handle(&state)?
         .watch(
@@ -202,9 +220,16 @@ pub async fn graphql_cache_search(
 
 /// Evaluates Soup filters over native projections, including cached Mail pages.
 #[tauri::command]
+#[tracing::instrument(
+    name = "graphql_cache.native.entity_filter",
+    skip_all,
+    fields(graphql_cache.ipc.command = "entity_filter", upstream.trace_id = traceparent.as_deref().and_then(|parent| parent.split('-').nth(1))),
+    err
+)]
 pub async fn graphql_cache_entity_filter(
     state: State<'_, CacheState>,
     request: EntityFilterRequest,
+    traceparent: Option<String>,
 ) -> Result<EntityFilterResult, String> {
     engine_handle(&state)?.entity_filter(request).await
 }
@@ -257,6 +282,12 @@ pub struct WriteRegistrationWire {
 
 /// Normalizes and stores a network response; broadcasts affected operations
 /// to every webview.
+#[tracing::instrument(
+    name = "graphql_cache.ipc.receive",
+    skip_all,
+    fields(graphql_cache.ipc.command = "write", upstream.trace_id = traceparent.as_deref().and_then(|parent| parent.split('-').nth(1))),
+    err
+)]
 #[tauri::command]
 pub async fn graphql_cache_write<R: Runtime>(
     app: AppHandle<R>,
@@ -268,6 +299,7 @@ pub async fn graphql_cache_write<R: Runtime>(
     variables: Option<Variables>,
     data: serde_json::Value,
     identity: Option<String>,
+    traceparent: Option<String>,
 ) -> Result<WriteResultWire, String> {
     let result = engine_handle(&state)?
         .write(WriteRequest {
@@ -333,6 +365,16 @@ pub enum HydrationResultWire {
 /// Normalizes and stores a background hydration response and returns only
 /// fields not marked `@cacheOnly`. Ordinary hydration remains silent to
 /// foreground subscribers; identity-changing resets are still broadcast.
+#[tracing::instrument(
+    name = "graphql_cache.ipc.receive",
+    skip_all,
+    fields(graphql_cache.ipc.command = "hydrate", upstream.trace_id = traceparent.as_deref().and_then(|parent| parent.split('-').nth(1))),
+    err
+)]
+#[expect(
+    clippy::too_many_arguments,
+    reason = "Tauri command fields preserve the existing flat IPC wire contract"
+)]
 #[tauri::command]
 pub async fn graphql_cache_hydrate<R: Runtime>(
     app: AppHandle<R>,
@@ -342,6 +384,7 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
     variables: Option<Variables>,
     data: serde_json::Value,
     identity: Option<String>,
+    traceparent: Option<String>,
 ) -> Result<HydrationResultWire, String> {
     let result = engine_handle(&state)?
         .hydrate_query(

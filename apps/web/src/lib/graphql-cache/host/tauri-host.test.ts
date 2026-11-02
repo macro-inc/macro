@@ -1,3 +1,4 @@
+import { Telemetry } from '@macro-inc/observability';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const invokeMock = vi.hoisted(() => vi.fn());
@@ -45,6 +46,8 @@ describe('createTauriCacheHost', () => {
 
   afterEach(async () => {
     await vi.dynamicImportSettled();
+    vi.useRealTimers();
+    vi.restoreAllMocks();
   });
 
   beforeEach(() => {
@@ -56,6 +59,21 @@ describe('createTauriCacheHost', () => {
       eventCallbacks.set(event, cb);
       return Promise.resolve(unlisten);
     });
+  });
+
+  it('samples request tracing without creating a span for each notification', async () => {
+    const performance = vi.spyOn(Telemetry, 'perfSpan');
+    const ordinary = vi.spyOn(Telemetry, 'span');
+    const host = createTauriCacheHost({ scope: 'scope-1' });
+    await host.readQuery({ query: '{ x }' });
+    expect(performance).toHaveBeenCalledTimes(3); // Initialization, queue probe, read.
+    const notify = eventCallbacks.get('graphql-cache://cache-changed')!;
+    for (let revision = 1; revision <= 100; revision++) {
+      notify({ payload: { revision: String(revision) } });
+    }
+    expect(performance).toHaveBeenCalledTimes(3);
+    expect(ordinary).not.toHaveBeenCalled();
+    host.dispose();
   });
 
   it('reads the database generation after native initialization', async () => {

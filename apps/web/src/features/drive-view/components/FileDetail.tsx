@@ -4,6 +4,7 @@ import {
 } from '@app/features/access-requests/access-requests';
 import { shareEntity } from '@app/features/access-requests/core/types';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
+import { useFlow, usePending } from '@app/observability/flow';
 import {
   DocumentFileSidePanelSections,
   SidePanel,
@@ -16,6 +17,7 @@ import {
 } from '@core/component/SharePermissions';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import type { Span } from '@macro-inc/observability';
 import type { AccessLevel } from '@service-storage/generated/schemas/accessLevel';
 import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
 import { Button } from '@ui';
@@ -103,14 +105,22 @@ export function FileDetailLoadGate<
   /** The block the document opens as, reported on `open_entity`. */
   entityType: string;
   label: string;
-  load: (documentId: string) => Promise<T>;
+  load: (documentId: string, parentSpan?: Span) => Promise<T>;
   children: (data: T) => JSX.Element;
 }) {
   const analytics = useAnalytics();
+  const flow = useFlow();
   const [document, { refetch, mutate }] = createResource(
     () => props.documentId,
-    props.load
+    (documentId) => {
+      return flow.task('document.load', (span) => {
+        span.setAttr('doc.type', props.entityType);
+        span.setAttr('document.id', documentId);
+        return props.load(documentId, span);
+      });
+    }
   );
+  usePending('document.resource', () => document.loading);
   // Counts the open once per document, as BlockLoader does for blocks; access
   // changes and retries reload the same document without reopening it.
   let trackedDocumentId: string | undefined;

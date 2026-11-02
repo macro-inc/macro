@@ -1,3 +1,4 @@
+import { useFlow, usePending } from '@app/observability/flow';
 /**
  * The Solid face of {@link AgentSession}: the shared session for whatever id
  * the block currently shows, as a reconciled ordered store of folded messages
@@ -113,6 +114,8 @@ export function createAgentSession(
   options: {
     /** The viewer, so a speculated prompt is attributed as the log will. */
     userId: Accessor<string | undefined>;
+    /** Keeps initial readiness open while a new session is provisioned. */
+    provisioning: Accessor<boolean>;
     /** This view now owns a reference; a pending navigation may release its own. */
     onAcquire?: () => void;
   }
@@ -129,6 +132,7 @@ export function createAgentSession(
   // time, and the detach blanks the transcript and drops the caret to
   // `<body>`. Absent is a state it already renders — that is the whole point
   // of the placeholder — so report that for the first fetch instead.
+  const loadSpan = useFlow().span;
   const openedPending = sessionId() === undefined;
 
   const [list, setList] = createStore<FoldedMessage[]>([]);
@@ -202,7 +206,7 @@ export function createAgentSession(
   const live = createMemo(() => {
     const id = sessionId();
     if (!id) return undefined;
-    const session = AgentSession.acquire(id);
+    const session = loadSpan.run(() => AgentSession.acquire(id));
     const unsubscribe = session.subscribe(applyEvents);
     onCleanup(() => {
       unsubscribe();
@@ -285,6 +289,11 @@ export function createAgentSession(
       );
       return cached.session;
     }
+  );
+
+  usePending(
+    'agent.transcript',
+    () => options.provisioning() || resource.loading
   );
 
   async function settleInBackground(

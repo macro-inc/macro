@@ -15,10 +15,6 @@ const mapGraphqlGroupedSoupPageMock = vi.hoisted(() =>
   vi.fn((data: { page: unknown }) => data.page)
 );
 
-vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { error: vi.fn() },
-}));
-
 vi.mock('@queries/soup/grouped/api', () => ({
   makeGroupComparator: () => (left: { key: string }, right: { key: string }) =>
     left.key.localeCompare(right.key),

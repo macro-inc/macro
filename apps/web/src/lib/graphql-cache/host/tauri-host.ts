@@ -10,6 +10,7 @@ import type { MutationInspection } from '../protocol';
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
+import { Telemetry } from '@macro-inc/observability';
 import { invoke } from '@tauri-apps/api/core';
 import { emit, listen, type UnlistenFn } from '@tauri-apps/api/event';
 import type {
@@ -161,30 +162,45 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     return true;
   }
 
-  function request<T>(
+  async function request<T>(
     command: string,
     args: Record<string, unknown>,
     timeout = true
   ): Promise<T> {
-    return new Promise<T>((resolve, reject) => {
-      const timer = timeout
-        ? setTimeout(() => {
-            reject(new Error(`graphql cache ipc timeout: ${command}`));
-          }, requestTimeoutMs)
+    const span = Telemetry.perfSpan('graphql_cache.ipc.request');
+    span.setAttr('graphql_cache.ipc.command', command);
+    const traceparent = span.traceparent();
+    const wireArgs = traceparent ? { ...args, traceparent } : args;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let timedOut = false;
+    try {
+      const operation = span.run(() => invoke<T>(command, wireArgs));
+      const deadline = timeout
+        ? new Promise<never>((_, reject) => {
+            timer = setTimeout(() => {
+              timedOut = true;
+              reject(new Error(`graphql cache ipc timeout: ${command}`));
+            }, requestTimeoutMs);
+          })
         : undefined;
-      invoke<T>(command, args).then(
-        (value) => {
-          if (timer !== undefined) clearTimeout(timer);
-          resolve(value);
-        },
-        (error) => {
-          if (timer !== undefined) clearTimeout(timer);
-          // Command errors cross the boundary as strings; normalize to
-          // Error for parity with worker-host rejections.
-          reject(error instanceof Error ? error : new Error(String(error)));
-        }
+      const value = await (deadline
+        ? Promise.race([operation, deadline])
+        : operation);
+      span.setAttr('graphql_cache.ipc.outcome', 'ok');
+      return value;
+    } catch (error) {
+      span.setAttr('graphql_cache.ipc.outcome', timedOut ? 'timeout' : 'error');
+      span.error(
+        timedOut
+          ? 'Native cache request timed out'
+          : 'Native cache request failed'
       );
-    });
+      // Native command errors cross the boundary as strings.
+      throw error instanceof Error ? error : new Error(String(error));
+    } finally {
+      clearTimeout(timer);
+      span.end();
+    }
   }
 
   // Failure tolerated: reads/writes still work, only push-driven

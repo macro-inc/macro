@@ -25,7 +25,12 @@ export const agentReviewClient = {
     try {
       const result = await fetchWithToken<ReviewRecord>(
         `${host}/agent-sessions/${session}/reviews/${review}`,
-        { method: 'POST', headers, body: JSON.stringify(decision) }
+        {
+          method: 'POST',
+          headers,
+          body: JSON.stringify(decision),
+          trace: { parentSpan: span },
+        }
       );
       if (result.isErr()) span.error('Review decision failed');
       return result;

@@ -8,7 +8,7 @@ import {
 } from './config';
 import { ATTR_DEPLOYMENT_ENVIRONMENT, CONSOLE_PREFIX } from './constants';
 import { Logging } from './logging';
-import type { Span } from './span';
+import type { Span, TraceContext } from './span';
 import { Tracing } from './tracing';
 
 type SpanOperation<T> = (span: Span) => Promise<T>;
@@ -22,7 +22,7 @@ export class Telemetry {
 
   static readonly config = new TelemetryRuntimeConfig();
 
-  /** Initialize providers once, after the optional async enablement decision. */
+  /** Initialize providers once, with an optional buffer while enablement resolves. */
   static init(config: TelemetryInitConfig): Promise<void> {
     Telemetry.#initialization ??= Telemetry.#initialize(config);
     return Telemetry.#initialization;
@@ -55,6 +55,28 @@ export class Telemetry {
       Telemetry.#tracing.anonymousSpan(name),
       operation
     );
+  }
+
+  /**
+   * Start a span whose trace is performance telemetry: the web sampler keeps
+   * it for a fixed share of sessions. Inside an active span it is a child and
+   * follows that trace's sampling.
+   */
+  static perfSpan(name: string, startTime?: number): Span {
+    return Telemetry.#tracing.perfSpan(name, startTime);
+  }
+
+  /** Start a historical phase at Unix time in milliseconds. */
+  static spanAt(name: string, startTime: number): Span {
+    return Telemetry.#tracing.span(name, startTime);
+  }
+
+  /**
+   * Capture at synchronous transport/queue admission, before its first await.
+   * Prefer a known Span directly; a captured context creates/ends no span.
+   */
+  static captureContext(): TraceContext {
+    return Telemetry.#tracing.captureContext();
   }
 
   /** Start an HTTP client span. Callers must end the returned span. */
@@ -114,20 +136,37 @@ export class Telemetry {
   }
 
   static async #initialize(config: TelemetryInitConfig): Promise<void> {
-    try {
-      if (!(await config.enabled())) return;
-    } catch (error) {
-      console.warn(`${CONSOLE_PREFIX} Failed to resolve enablement`, error);
-      return;
-    }
-
+    // A single shared decision gates both the buffered tracing exporter and logs.
+    const enabled = Telemetry.#enabled(config);
+    const tracingConfig = { ...config, enabled: () => enabled };
     const resource = resourceFromAttributes({
       ...config.resourceAttributes,
       [ATTR_SERVICE_NAME]: config.serviceName,
       [ATTR_DEPLOYMENT_ENVIRONMENT]: config.environment,
     });
     const getUserId = () => Telemetry.config.userId;
-    Telemetry.#tracing.init(config, resource, getUserId);
-    Telemetry.#logging.init(config, resource, getUserId);
+    Telemetry.config.decidePerfSampling(
+      config.recording ? 1 : (config.perfSampleRate ?? 1)
+    );
+    Telemetry.#tracing.init(
+      tracingConfig,
+      resource,
+      getUserId,
+      Telemetry.config.perfSampled
+    );
+    if (!(await enabled)) return;
+    const resolved = config.startup
+      ? { ...config, ...(await config.startup) }
+      : config;
+    Telemetry.#logging.init(resolved, resource, getUserId);
+  }
+  static async #enabled(config: TelemetryInitConfig): Promise<boolean> {
+    try {
+      const [enabled] = await Promise.all([config.enabled(), config.startup]);
+      return enabled;
+    } catch (error) {
+      console.warn(`${CONSOLE_PREFIX} Failed to resolve enablement`, error);
+      return false;
+    }
   }
 }

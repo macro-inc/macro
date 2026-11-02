@@ -1,5 +1,6 @@
 import { verifyBlockName } from '@core/constant/allBlocks';
 import { throwOnErr } from '@core/util/result';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import {
   getItemPreview,
@@ -75,6 +76,7 @@ function setTemplate(scheduleId: string, template: RoutineTemplate | null) {
 export async function publishRoutineTemplate(
   scheduleId: string
 ): Promise<RoutineTemplate> {
+  const parent = Telemetry.captureContext();
   const [routine, shared] = await Promise.all([
     queryClient.fetchQuery(routineQueryOptions(scheduleId)),
     queryClient.fetchQuery(routineTemplateQueryOptions(scheduleId)),
@@ -85,7 +87,7 @@ export async function publishRoutineTemplate(
     shared,
   });
   const template = await throwOnErr(() =>
-    scheduledActionClient.shareTemplate({ scheduleId, body })
+    parent.run(() => scheduledActionClient.shareTemplate({ scheduleId, body }))
   );
   setTemplate(scheduleId, template);
   return template;
@@ -108,12 +110,27 @@ export function useActivateTemplateMutation(
   callbacks?: MutationCallbacks<
     ScheduledAction,
     Error,
-    { templateId: string; body: CreateScheduledAction }
+    {
+      templateId: string;
+      body: CreateScheduledAction;
+      parentSpan?: TraceContext;
+    }
   >
 ) {
   return useMutation(() => ({
-    mutationFn: (args: { templateId: string; body: CreateScheduledAction }) =>
-      throwOnErr(() => scheduledActionClient.activateTemplate(args)),
+    mutationFn: (args: {
+      templateId: string;
+      body: CreateScheduledAction;
+      parentSpan?: TraceContext;
+    }) =>
+      (args.parentSpan ?? Telemetry.captureContext()).run(() =>
+        throwOnErr(() =>
+          scheduledActionClient.activateTemplate({
+            templateId: args.templateId,
+            body: args.body,
+          })
+        )
+      ),
     ...withCallbacks(
       {
         onSuccess: async (_routine, { templateId }) => {
@@ -127,7 +144,8 @@ export function useActivateTemplateMutation(
           ]);
         },
       },
-      callbacks
+      callbacks,
+      (variables) => variables.parentSpan
     ),
   }));
 }

@@ -353,3 +353,99 @@ test('Escape closes the calendar date picker before the Command K composer', asy
     page.getByRole('textbox', { name: 'Your input', exact: true })
   ).toBeVisible();
 });
+
+test('rapid search inputs cancel old flows and hold the latest through debounce', async ({
+  page,
+}) => {
+  const spans: {
+    name: string;
+    traceId: string;
+    spanId: string;
+    parentSpanId?: string;
+    startTimeUnixNano: string;
+    endTimeUnixNano: string;
+    attributes: {
+      key: string;
+      value: { stringValue?: string; intValue?: string };
+    }[];
+  }[] = [];
+  await page.route('**/traces', async (route) => {
+    const data = route.request().postDataJSON();
+    for (const resource of data.resourceSpans ?? [])
+      for (const scope of resource.scopeSpans ?? []) spans.push(...scope.spans);
+    await route.fulfill({ json: {} });
+  });
+  await page.goto('/?command-menu&trace');
+  await page
+    .getByRole('button', { name: 'Open Command K', exact: true })
+    .click();
+  const input = page.getByPlaceholder('Search...', { exact: true });
+  // Dispatch in one task: the debounce is continuously pending across keys.
+  await input.evaluate((element) => {
+    if (!(element instanceof HTMLTextAreaElement))
+      throw new Error('Expected search textarea');
+    for (const value of ['p', 'pr', 'project']) {
+      element.value = value;
+      element.dispatchEvent(
+        new InputEvent('input', { bubbles: true, data: value })
+      );
+    }
+  });
+  await expect(input).toHaveValue('project');
+  await expect
+    .poll(
+      () => spans.filter((span) => span.name === 'quick_access.input').length,
+      { timeout: 15000 }
+    )
+    .toBe(3);
+  const inputs = spans.filter((span) => span.name === 'quick_access.input');
+  const latest = inputs.find((span) =>
+    span.attributes.some(
+      (attr) =>
+        attr.key === 'search.query_length' && Number(attr.value.intValue) === 7
+    )
+  );
+  expect(latest).toBeDefined();
+  expect(
+    spans.some(
+      (span) =>
+        span.name === 'quick_access.debounce' &&
+        span.traceId === latest!.traceId
+    )
+  ).toBe(true);
+  expect(
+    spans.some(
+      (span) =>
+        span.name === 'quick_access.results' && span.traceId === latest!.traceId
+    )
+  ).toBe(true);
+  const results = spans.filter((span) => span.name === 'quick_access.results');
+  expect(
+    results.filter((span) =>
+      span.attributes.some(
+        (attr) =>
+          attr.key === 'flow.outcome' && attr.value.stringValue === 'cancelled'
+      )
+    ).length
+  ).toBeGreaterThanOrEqual(2);
+  const latestResults = results.find(
+    (span) => span.parentSpanId === latest!.spanId
+  );
+  expect(latestResults).toBeDefined();
+  const debounce = spans.find(
+    (span) =>
+      span.name === 'quick_access.debounce' &&
+      span.parentSpanId === latestResults!.spanId
+  );
+  expect(debounce).toBeDefined();
+  expect(
+    (Number(debounce!.endTimeUnixNano) - Number(debounce!.startTimeUnixNano)) /
+      1e6
+  ).toBeGreaterThanOrEqual(50);
+  await test.info().attach('rapid-input-traces', {
+    body: JSON.stringify(spans, null, 2),
+    contentType: 'application/json',
+  });
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('dialog')).toHaveCount(0);
+});

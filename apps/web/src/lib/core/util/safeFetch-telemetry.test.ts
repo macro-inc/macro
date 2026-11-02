@@ -11,12 +11,16 @@ const mocks = vi.hoisted(() => ({
   },
   clientSpan: vi.fn(),
 }));
-vi.mock('@core/constant/servers', () => ({
+vi.mock('@core/constant/servers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/servers')>()),
   SERVER_HOSTS: { calls: 'https://gateway.example' },
   SYNC_SERVICE_HOSTS: { worker: 'https://sync.example' },
 }));
 vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { clientSpan: mocks.clientSpan },
+  Telemetry: {
+    clientSpan: mocks.clientSpan,
+    captureContext: () => ({ run: <T>(work: () => T) => work() }),
+  },
 }));
 vi.mock('./platformFetch', () => ({ platformFetch: mocks.fetch }));
 

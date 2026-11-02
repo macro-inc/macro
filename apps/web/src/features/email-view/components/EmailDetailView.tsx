@@ -5,6 +5,7 @@ import type { EmailThreadHost } from '@app/features/email-thread/context/email-t
 import { createEmailThreadSource } from '@app/features/email-thread/queries/thread-source';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import { createSearchParams, useRouteParams } from '@app/lib/split-router';
+import { usePending } from '@app/observability/flow';
 import { emailThreadRoute } from '@app/routes/routes';
 import {
   EmailThreadControlGroups,
@@ -129,6 +130,7 @@ export function EmailDetailView(props: {
   const threadQuery = useThreadQuery(threadId, () => ({
     enabled: !!threadId(),
   }));
+  usePending('email.thread', () => threadQuery.isLoading);
   const source = createEmailThreadSource(threadId, threadQuery);
   const threadData = source.thread;
   const title = () => {

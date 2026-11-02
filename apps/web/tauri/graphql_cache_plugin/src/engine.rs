@@ -514,6 +514,7 @@ impl EngineHandle {
     }
 
     /// Cache read; registers `op_id` as active when given.
+    #[tracing::instrument(name = "graphql_cache.native.read", skip_all, err)]
     pub async fn read(
         &self,
         op_id: Option<String>,
@@ -542,6 +543,7 @@ impl EngineHandle {
     }
 
     /// Incrementally project a query; operation teardown releases its bindings.
+    #[tracing::instrument(name = "graphql_cache.native.watch", skip_all, err)]
     pub async fn watch(
         &self,
         op_id: String,
@@ -667,6 +669,7 @@ impl EngineHandle {
     }
 
     /// Normalizes and stores a network response.
+    #[tracing::instrument(name = "graphql_cache.native.write", skip_all, err)]
     pub async fn write(&self, request: WriteRequest) -> Result<WriteResultWire, String> {
         let WriteRequest {
             origin_op_id,
@@ -718,6 +721,7 @@ impl EngineHandle {
 
     /// Stores a query response and returns only fields not marked
     /// `@cacheOnly`.
+    #[tracing::instrument(name = "graphql_cache.native.hydrate_query", skip_all, err)]
     pub async fn hydrate_query(
         &self,
         query: String,

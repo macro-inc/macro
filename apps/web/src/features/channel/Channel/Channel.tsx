@@ -6,6 +6,7 @@ import {
 import { AgentConversationsProvider } from '@app/features/agent-conversations/agent-conversations-provider';
 import { AgentDmComposer } from '@app/features/agent-dms/agent-dm-composer';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
+import { usePending } from '@app/observability/flow';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { useStartChannelCall } from '@channel/Call/use-start-channel-call';
 import { DebugSuspense } from '@channel/DebugSuspense';
@@ -234,6 +235,7 @@ export function Channel(props: ChannelProps) {
     () => ({ type: 'channel', id: (() => props.channelId)() }),
     targetMessageController.loadAroundMessageId
   );
+  usePending('channel.messages', () => messagesQuery.isLoading);
   const isTargetMessageMissing = () =>
     targetMessageController.loadAroundMessageId() !== undefined &&
     isMissingMessageError(messagesQuery.error);
@@ -692,6 +694,7 @@ export function Channel(props: ChannelProps) {
         span.setAttr('channel.id', channelId);
         try {
           await sendMessageMutation.mutateAsync({
+            parentSpan: span,
             parent: { type: 'channel', id: channelId },
             senderId,
             optimisticId,

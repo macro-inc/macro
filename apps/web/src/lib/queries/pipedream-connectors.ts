@@ -403,10 +403,12 @@ async function connectOverlaidApp(
     const deadline = Date.now() + OVERLAY_AUTH_TIMEOUT_MS;
     while (Date.now() < deadline && currentUserId() === userId) {
       const closed = popup?.closed ?? false;
-      const servers = await queryClient.fetchQuery({
-        ...mcpServersQueryOptions(),
-        staleTime: 0,
-      });
+      const servers = await consent.run(() =>
+        queryClient.fetchQuery({
+          ...mcpServersQueryOptions(),
+          staleTime: 0,
+        })
+      );
       if (overlaidSlugsConnected([overlay], servers).length > 0) {
         return 'connected';
       }

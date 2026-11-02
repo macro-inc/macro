@@ -1,4 +1,9 @@
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { usePending } from '@app/observability/flow';
+import {
+  startUiOperation,
+  type UiOperation,
+} from '@app/observability/ui-operation';
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowLeft from '@icon/system/regular/arrow-left.svg';
 import ArrowRight from '@icon/system/regular/arrow-right.svg';
@@ -73,7 +78,15 @@ export function RespondView(props: {
       context.responses.editMine(props.detail.form.id, answers),
     now: () => new Date(),
   });
+  usePending('form.response', () => respond.view().kind === 'loading');
   let root: HTMLDivElement | undefined;
+  let submission: UiOperation | undefined;
+  let disposed = false;
+  onCleanup(() => {
+    disposed = true;
+    submission?.cancel();
+    submission = undefined;
+  });
 
   const form = () => props.detail.form;
   const isPublic = () => form().audience === 'public';
@@ -92,6 +105,7 @@ export function RespondView(props: {
 
   function revealTop() {
     queueMicrotask(() => {
+      if (disposed) return;
       const container = props.scrollContainer?.();
       if (container) container.scrollTo({ top: 0, behavior: 'smooth' });
       else root?.scrollIntoView({ block: 'start', behavior: 'smooth' });
@@ -101,6 +115,7 @@ export function RespondView(props: {
   /** Bring the first refused question into view and focus it. */
   function revealProblem() {
     queueMicrotask(() => {
+      if (disposed) return;
       const first = Object.keys(respond.problems())[0];
       if (!first) return;
       const field = document.getElementById(fieldId(scope, first));
@@ -109,10 +124,30 @@ export function RespondView(props: {
     });
   }
 
-  async function submitAndReveal() {
-    await respond.submit();
-    revealProblem();
-    if (respond.view().kind !== 'answering') revealTop();
+  async function submitAndReveal(event: Event) {
+    submission?.cancel();
+    const operation = startUiOperation('form.submit', {
+      event,
+      onFinish: () => {
+        if (submission === operation) submission = undefined;
+      },
+      attributes: {
+        'form.id': props.detail.form.id,
+        'form.preview': !!props.preview,
+      },
+    });
+    submission = operation;
+    try {
+      await operation.run(() => respond.submit());
+      if (disposed) return;
+      revealProblem();
+      if (respond.view().kind !== 'answering') revealTop();
+      if (respond.failure()) operation.finish('error');
+      else operation.afterPaint();
+    } catch (error) {
+      operation.finish('error');
+      throw error;
+    }
   }
 
   /** From the update notice: read the form again, then back to the answers. */
@@ -419,7 +454,7 @@ export function RespondView(props: {
                 onSubmit={(event) => {
                   event.preventDefault();
                   if (answering().isLast) {
-                    fireAndForget(submitAndReveal(), 'form-respond');
+                    fireAndForget(submitAndReveal(event), 'form-respond');
                     return;
                   }
                   if (respond.next()) revealTop();

@@ -1034,3 +1034,15 @@ version mechanism, preserving normalized records, pending mutations, and storage
 generation. This does not expand hydration: automatic backfill remains 90 days of
 signal email and 30 days of noise email, plus any other cached threads. Explicit
 full-text search reaches older uncached mail.
+
+### Native IPC transport
+
+`graphql_cache.ipc.request` uses `Telemetry.perfSpan` to record command and
+outcome under the performance sampler. The webview does not re-encode read
+arguments to count bytes or create spans for notification callbacks.
+`graphql_cache.ipc.notification` in the native emitter measures serialization and
+emission, recording the single serialized payload's byte count. Native read, watch,
+write, and hydration spans are children of their receive spans. Native receive spans
+carry the originating webview trace id, since the native logger does not adopt
+the browser OpenTelemetry context. No payload content is
+recorded.

@@ -276,3 +276,14 @@ includes the target form ID; inspect it and make targeted repairs.
 Forms tool UI follows the existing `enable-forms` feature flag; server execution
 uses the same authenticated user/delegated-agent permissions as the rest of Forms.
 Owners can still close a form or remove access when its draft needs repair.
+
+For timing Build → Responses → Settings, inspect `form.tab` and its panel phase
+in the same trace. Response counts and the database grid have separate waits.
+Switch back to Build and verify that its editing state/layout session survives.
+
+On the respondent route (spans in the
+[observability guide](observability.md#navigation-and-view-phases)), failed
+`form.submit` saves record an error outcome and retain answers;
+retry after restoring transport and verify there is still one saved response.
+Leaving the respondent view cancels its UI measurement; an in-flight save
+still finishes without scrolling or measuring a different view.

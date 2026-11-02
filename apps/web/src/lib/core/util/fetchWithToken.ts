@@ -121,7 +121,7 @@ export async function fetchToken(): Promise<TokenResult> {
   if (tokenPromise == null) {
     const generation = refreshGeneration;
     tokenPromise = (async () => {
-      perfMark('auth.refresh-start');
+      perfMark('auth.refresh-start', { generation });
       try {
         const result = await fetchWithCredentials(
           `${SERVER_HOSTS['auth-service']}/jwt/refresh`,
@@ -136,7 +136,7 @@ export async function fetchToken(): Promise<TokenResult> {
           }
         );
 
-        perfMark('auth.refresh-end', { ok: result.isOk() });
+        perfMark('auth.refresh-end', { generation, ok: result.isOk() });
         if (result.isErr()) {
           const failure = err(result.error);
           if (
@@ -203,8 +203,15 @@ export async function fetchWithToken<
   input: RequestInfo,
   init?: FetchWithTokenInit<CustomErrorCode>
 ): Promise<Result<T, ResultError<BaseFetchErrorCode | CustomErrorCode>[]>> {
+  const requestInit = {
+    ...init,
+    trace: {
+      ...init?.trace,
+      parentSpan: init?.trace?.parentSpan ?? Telemetry.captureContext(),
+    },
+  };
   if (ENABLE_BEARER_TOKEN_AUTH) {
-    const result = await fetchWithAuth<T, CustomErrorCode>(input, init);
+    const result = await fetchWithAuth<T, CustomErrorCode>(input, requestInit);
     if (result.isErr()) {
       Telemetry.error('fetchWithToken: fetchWithAuth failed', {
         input: telemetryUrl(input),
@@ -216,13 +223,18 @@ export async function fetchWithToken<
     return result;
   }
 
-  let result = await fetchWithCredentials<T, CustomErrorCode>(input, init);
+  let result = await fetchWithCredentials<T, CustomErrorCode>(
+    input,
+    requestInit
+  );
 
   if (
     result.isErr() &&
     result.error.some((error) => error.code === 'UNAUTHORIZED')
   ) {
-    const tokenResult = await fetchToken();
+    const tokenResult = await requestInit.trace.parentSpan.run(() =>
+      fetchToken()
+    );
     if (tokenResult.isErr()) {
       // A definitive rejection already carries UNAUTHORIZED; transient refresh
       // failures surface as-is so callers don't treat an outage as a dead
@@ -231,7 +243,7 @@ export async function fetchWithToken<
     }
 
     // Retry the original request
-    result = await fetchWithCredentials<T, CustomErrorCode>(input, init);
+    result = await fetchWithCredentials<T, CustomErrorCode>(input, requestInit);
   }
 
   return result;

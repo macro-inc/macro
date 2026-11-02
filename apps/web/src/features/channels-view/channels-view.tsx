@@ -5,6 +5,7 @@ import { MaybeSoupEntityActionDrawerManager } from '@app/features/soup';
 import { withEntityNotifications } from '@app/features/soup/entity-notifications';
 import { ViewTour } from '@app/features/tours/ViewTour';
 import { SplitRouter } from '@app/lib/split-router';
+import { usePending } from '@app/observability/flow';
 import { ChannelLoading } from '@channel/Channel/ChannelLoading';
 import { useChannelByIdQuery } from '@channel/Channel/channel-entity';
 import { DebugSuspense } from '@channel/DebugSuspense';
@@ -324,6 +325,10 @@ function ChannelDetailRouteContent() {
       notificationSource
     );
   });
+  usePending(
+    'channel.detail',
+    () => channelId() !== undefined && detail.view().status === 'loading'
+  );
   const unavailable = () => detail.view().status === 'unavailable';
   const retry = async () => {
     try {

@@ -1,7 +1,8 @@
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
+import { Telemetry } from '@macro-inc/observability';
 import { gql } from '@urql/core';
 import { createComputed, createRoot, createSignal } from 'solid-js';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import { selectRecords } from '../../../graphql-cache/exchange/record-selection';
 import { createNoopCacheHost } from '../../../graphql-cache/host/noop-host';
 import type {
@@ -243,4 +244,22 @@ it('does not recreate held rows when host setup reads an unrelated signal', asyn
   await flush();
   expect(state.requests).toHaveLength(1);
   expect(state.query.data()!.records).toBe(rows);
+});
+
+it('does not create root performance spans for repeated cache evaluations', async () => {
+  const perfSpan = vi.spyOn(Telemetry, 'perfSpan');
+  try {
+    const state = setup();
+    state.requests[0].resolve(snapshot());
+    await flush();
+    for (let index = 1; index <= 100; index++) {
+      state.query.refresh();
+      state.requests[index].resolve(patch(String(index + 1)));
+      await flush();
+    }
+    expect(state.query.data()?.revision).toBe('101');
+    expect(perfSpan).not.toHaveBeenCalled();
+  } finally {
+    perfSpan.mockRestore();
+  }
 });

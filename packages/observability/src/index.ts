@@ -1,9 +1,12 @@
 export type {
-	Attribute,
-	Attributes,
-	LogAttributes,
-	TelemetryInitConfig,
-} from "./config";
-export { TelemetryRuntimeConfig } from "./config";
-export type { Span } from "./span";
-export { Telemetry } from "./telemetry";
+  Attribute,
+  Attributes,
+  LogAttributes,
+  ResourceAttributes,
+  TelemetryInitConfig,
+  TelemetryStartupOptions,
+} from './config';
+export { TelemetryRuntimeConfig } from './config';
+export type { Span, TraceContext } from './span';
+export { NOOP_SPAN } from './span-noop';
+export { Telemetry } from './telemetry';

@@ -4,7 +4,7 @@ import { toast } from '@core/component/Toast/Toast';
 import type { DateValue } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { markMessageSent } from '@core/util/message-send-motion';
-import { Telemetry } from '@macro-inc/observability';
+import { Telemetry, type TraceContext } from '@macro-inc/observability';
 import {
   messageReferencesCrmRecord,
   refreshCrmAssociatedSoupQueries,
@@ -401,6 +401,7 @@ export function newMessageId(): string {
 }
 
 type SendMessageParams = {
+  parentSpan?: TraceContext;
   parent: MessageParent;
   message: PostMessage;
   optimisticAttachments?: readonly OptimisticPostMessageAttachment[];
@@ -432,11 +433,13 @@ export function useSendMessageMutation(
     mutationFn: async (vars: SendMessageParams) => {
       // The server keeps optimisticId as the message id, so the optimistic
       // message never changes id; it is also the nonce the server echoes.
-      return entityMessagesClient.post(vars.parent, {
-        ...vars.message,
-        id: vars.optimisticId,
-        nonce: vars.optimisticId,
-      });
+      return (vars.parentSpan ?? Telemetry.captureContext()).run(() =>
+        entityMessagesClient.post(vars.parent, {
+          ...vars.message,
+          id: vars.optimisticId,
+          nonce: vars.optimisticId,
+        })
+      );
     },
     ...withCallbacks<
       EntityMessage,
@@ -541,7 +544,8 @@ export function useSendMessageMutation(
           );
         },
       },
-      callbacks
+      callbacks,
+      (variables) => variables.parentSpan
     ),
   }));
 }
