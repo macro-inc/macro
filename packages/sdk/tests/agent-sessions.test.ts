@@ -384,7 +384,12 @@ describe('AgentSession', () => {
     });
 
     const created = await macro.agentSessions.createManaged({
+      agent: macro.agents.byId(session.botId),
       prompt: 'Fix it',
+      instructions: 'Prefer small diffs.',
+      model: 'claude-sonnet',
+      repoUrl: 'https://github.com/org/project',
+      repoBranch: 'main',
     });
     await expect(created.name()).resolves.toBe('Agent Session');
     await expect(created.control({ type: 'stop' })).resolves.toEqual({
@@ -400,6 +405,40 @@ describe('AgentSession', () => {
       'GET',
       'DELETE',
     ]);
+    await expect(requests[0]?.json()).resolves.toEqual({
+      botId: session.botId,
+      prompt: 'Fix it',
+      instructions: 'Prefer small diffs.',
+      model: 'claude-sonnet',
+      repoUrl: 'https://github.com/org/project',
+      repoBranch: 'main',
+    });
+  });
+
+  test('createManaged omits botId when no persona is named', async () => {
+    let body: unknown;
+    globalThis.fetch = (async (input) => {
+      const request = input instanceof Request ? input : new Request(input);
+      if (request.method === 'POST' && request.url.endsWith('/agent-sessions')) {
+        body = await request.json();
+        return Response.json({ session }, { status: 201 });
+      }
+      return new Response(null, { status: 200 });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+
+    await macro.agentSessions.createManaged({
+      prompt: 'Fix it',
+      repoUrl: 'https://github.com/org/project',
+    });
+
+    expect(body).toEqual({
+      prompt: 'Fix it',
+      repoUrl: 'https://github.com/org/project',
+    });
   });
 
   test('prompt is sugar over control and reports queueing', async () => {
