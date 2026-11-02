@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { useProperty } from '../../core/context';
 import { PropertyEmpty } from '../../extractors/PropertyEmpty';
 import { formatPropertyValue } from '../../utils';
@@ -9,7 +9,7 @@ import { useInlineEditor } from '../hooks/useInlineEditor';
  * button (matches existing CondensedPropertyValue / panel pill look); editing
  * mode swaps to a field-sizing textarea that grows with content.
  */
-export function InlineTextEditor() {
+export function InlineTextEditor(props: { emptyValue?: JSX.Element }) {
   const ctx = useProperty();
   const editor = useInlineEditor();
 
@@ -37,7 +37,10 @@ export function InlineTextEditor() {
             'text-ink-muted': !supportsInline(),
           }}
         >
-          <Show when={hasValue()} fallback={<PropertyEmpty label="Empty" />}>
+          <Show
+            when={hasValue()}
+            fallback={props.emptyValue ?? <PropertyEmpty label="Empty" />}
+          >
             <span class="block max-w-full">
               {formatPropertyValue(property(), property().value as string)}
             </span>

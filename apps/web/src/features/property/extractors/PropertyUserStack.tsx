@@ -28,7 +28,7 @@ export function PropertyUserStack(props: Props) {
 
   return (
     <Show when={isUser()}>
-      <AvatarGroup size="sm">
+      <AvatarGroup size="sm" class="-space-x-2">
         <Key each={display()} by="entity_id">
           {(entity) => (
             <UserIcon

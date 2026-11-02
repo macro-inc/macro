@@ -13,7 +13,9 @@ use macro_event_broker::MacroEventBroker;
 use model_entity::Entity;
 
 use super::models::FormError;
-use super::ports::{Clock, FormAccessDirectory, FormEventPublisher, FormsRepo, FormsService};
+use super::ports::{
+    Clock, FormAccessDirectory, FormEventPublisher, FormImageFiles, FormsRepo, FormsService,
+};
 use super::service::FormsServiceImpl;
 
 impl From<FormError> for EntityMutationErrorCode {
@@ -37,6 +39,7 @@ impl From<FormError> for EntityMutationErrorCode {
             | FormError::InvalidLayout(_)
             | FormError::InvalidName(_)
             | FormError::InvalidSharing(_)
+            | FormError::InvalidBranding(_)
             | FormError::TallyHidden) => Self::invalid(rootcause::report!(error)),
             error @ (FormError::Database(_)
             | FormError::Repository(_)
@@ -48,8 +51,8 @@ impl From<FormError> for EntityMutationErrorCode {
     }
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker, Drafts> RenameEntity
-    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images> RenameEntity
+    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
 where
     Repository: FormsRepo + FormDraftRepository,
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
@@ -58,6 +61,7 @@ where
     Now: Clock,
     Broker: MacroEventBroker,
     Drafts: FormDraftStore,
+    Images: FormImageFiles,
 {
     type Receipt = EditAccessLevel;
 
@@ -72,8 +76,8 @@ where
     }
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker, Drafts> TrashEntity
-    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images> TrashEntity
+    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
 where
     Repository: FormsRepo + FormDraftRepository,
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
@@ -82,6 +86,7 @@ where
     Now: Clock,
     Broker: MacroEventBroker,
     Drafts: FormDraftStore,
+    Images: FormImageFiles,
 {
     type Receipt = OwnerAccessLevel;
 
@@ -95,8 +100,8 @@ where
     }
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker, Drafts> RestoreEntity
-    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images> RestoreEntity
+    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
 where
     Repository: FormsRepo + FormDraftRepository,
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
@@ -105,6 +110,7 @@ where
     Now: Clock,
     Broker: MacroEventBroker,
     Drafts: FormDraftStore,
+    Images: FormImageFiles,
 {
     type Receipt = OwnerAccessLevel;
 
@@ -118,8 +124,8 @@ where
     }
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker, Drafts> DeleteEntityPermanently
-    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images> DeleteEntityPermanently
+    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
 where
     Repository: FormsRepo + FormDraftRepository,
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
@@ -128,6 +134,7 @@ where
     Now: Clock,
     Broker: MacroEventBroker,
     Drafts: FormDraftStore,
+    Images: FormImageFiles,
 {
     type Receipt = OwnerAccessLevel;
 

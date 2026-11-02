@@ -1034,6 +1034,19 @@ describe('normalizedCacheExchange', () => {
     }
   });
 
+  it('publishes a network result it was asked not to persist without writing it', async () => {
+    const { ops, results } = harness(host, () => ({
+      data: { user: { emailThread: null } },
+    }));
+    const op = makeOp(902, 'network-only');
+    ops.next(
+      makeOperation('query', op, { ...op.context, persistResult: false })
+    );
+    await tick();
+    expect(host.cacheActions).toEqual([]);
+    expect(results.at(-1)?.data).toEqual({ user: { emailThread: null } });
+  });
+
   it('evicts inferred missing records after writing the network response', async () => {
     const deletedRecordKeys = vi.fn(() => ['GraphqlSoupEmailThread:gone']);
     const { ops, results } = harness(

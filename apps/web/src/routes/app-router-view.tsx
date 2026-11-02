@@ -132,6 +132,7 @@ import {
   homeSplitRoute,
   inboxLinkCallbackRoute,
   internalInviteLinksRoute,
+  internalSystemStatusRoute,
   inviteRoute,
   legacyContentRoute,
   loginPopupSuccessRoute,
@@ -185,6 +186,10 @@ const BookingLinksRouteView = lazyNamed(
 const ExternalRouteView = lazyNamed(
   () => import('@app/features/external-view/route-views'),
   'ExternalRouteView'
+);
+const SystemStatusDashboard = lazyNamed(
+  () => import('@app/features/system-status/views/SystemStatusDashboard'),
+  'SystemStatusDashboard'
 );
 
 /** Debug views stay behind the registry's lazy import. */
@@ -270,6 +275,10 @@ export function AppRouterView() {
         <Route
           definition={internalInviteLinksRoute}
           component={InviteLinksPortal}
+        />
+        <Route
+          definition={internalSystemStatusRoute}
+          component={SystemStatusDashboard}
         />
         <Route definition={teamInviteRoute} component={TeamInviteAcceptance} />
         <Route

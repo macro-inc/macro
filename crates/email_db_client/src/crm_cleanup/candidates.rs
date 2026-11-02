@@ -11,6 +11,9 @@ use sqlx::types::Uuid;
 /// populate still in flight. Keeping the original timestamp would let the
 /// clock expire while that populate is pending.
 ///
+/// Rows are written in email order, so two deletes that share contacts lock
+/// them in the same order and wait instead of deadlocking.
+///
 /// Returns the number of rows recorded (inserted or refreshed).
 #[tracing::instrument(skip(executor, contact_emails), err)]
 pub async fn insert_candidates<'e, E>(
@@ -28,7 +31,9 @@ where
     let result = sqlx::query!(
         r#"
         INSERT INTO crm_cleanup_candidates (link_id, contact_email)
-        SELECT $1, unnest($2::text[])
+        SELECT $1, contact_email
+        FROM unnest($2::text[]) AS contact_email
+        ORDER BY contact_email
         ON CONFLICT (link_id, contact_email) DO UPDATE SET created_at = now()
         "#,
         link_id,

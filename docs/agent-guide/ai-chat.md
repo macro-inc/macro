@@ -333,6 +333,15 @@ you can follow up there. Reloading the chat restores the same session card.
 Failed dispatches do not show a successful session card. If no coding agents are
 available, configure one in Agents before retrying.
 
+Ask a chat agent what your coding agents need from you and it calls
+`ListAgentUpdates`: your non-archived coding sessions waiting on a permission,
+question, or tool approval, plus sessions running with no activity for 20
+minutes (at most 25 sessions; the result says when it was truncated). The
+result shows the same live cards as the Agents home, so you answer in place;
+agents cannot answer for you. To send a coding agent instructions the chat uses
+`ManageAgentSession`, and to recall earlier decisions it searches past agent
+conversations with `ContentSearch` and reads them with `ReadAgentSession`.
+
 ## Where chats live
 
 The Agents conversation list shows row skeletons after a short delay on first
@@ -399,6 +408,10 @@ the shimmer.
   Pull request filters; choices within a category are ORed and categories are
   ANDed. Grouping and filters are remembered per user. Clear filters from the menu
   or an empty filtered list.
+  With the `enable-agent-updates` flag, an **Open PRs** section sits above
+  Conversations: your non-archived coding sessions whose pull request is open or
+  draft, newest first, using the same rows (they stay in Conversations too). It
+  is hidden when empty.
   Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
   pull request is linked). Home and the Agents sidebar share these agent rows.
   Rows have no agent or runtime-status subtext. A session that is starting or
@@ -537,7 +550,20 @@ the shimmer.
   A checkmark identifies the selected model,
   including when it is the agent’s configured default; there is no separate default row.
   Disconnected Cursor offers **Connect Cursor**, opening Settings → Agents → Runtimes.
+  An agent whose paired machine is away is greyed out, carries an **Offline**
+  badge, and offers **Reconnect runtime** instead of a model submenu; the same
+  badge appears in the `@` menu, where offline agents cannot be mentioned at all
+  (clicking or pressing Enter leaves the menu open and inserts nothing).
   The built-in sandbox and paired macrod runtimes are not offered here.
+- With the `enable-agent-updates` flag, the New conversation page shows a stack
+  of pending updates from your coding sessions under the composer: one card per
+  permission request, question, or tool approval of a blocked session, plus
+  sessions running with no activity for 20 minutes. The stack rests collapsed
+  (front card plus two peeking) so the page does not scroll; click it or **Show
+  all** to unstack. Cards answer in place with the session's own options, and
+  every card has **Chat about this** (adds a mention of that session to the
+  composer draft) and **Open session**. Answered cards leave once the session
+  stops waiting. Check with a coding session blocked on a permission prompt.
 - Selecting an agent changes the heading: **What should we work on?** for chat
   agents and **What should we build?** for coding agents. The draft stays intact
   when changing agents. Unsent New conversation text and attachments also come
@@ -655,12 +681,23 @@ the shimmer.
   field focused on open, and a default model picker that enables once the key is
   saved. Connected, the same page shows the saved date, **Disconnect**, and
   **Done**. **Manage** on a paired machine opens **Runtimes** (Back returns to
-  Agents): built-in providers, **New runtime**, and the **Paired runtimes** list,
-  which appears once you have a paired runtime.
+  Agents): **Connected runtimes** (shown only once a paired machine is connected;
+  it then lists every paired machine, connected ones first, each with
+  **Connected** or **Offline** and **Remove**), built-in providers, and
+  **New runtime**.
   On the desktop app, **Runtimes** opens with a **This computer** card that sets
   up the bundled macrod daemon in one click: **Set up** detects installed agents,
   then **Start running agents here** configures, pairs (auto-approved, no code),
-  and starts it. The manual flow below remains for pairing other machines.
+  and starts it. Before this computer is paired, a dismissible **Run agents on
+  this computer** invitation appears above the Home input and the Agents
+  new-conversation and active-session inputs. Clicking it opens Runtimes;
+  dismissing it affects only this desktop installation and signed-in user.
+  Runtimes is available on desktop even when the newer Agents view is still
+  rolling out. Each paired computer keeps its own runtime identity and appears
+  separately under Connected runtimes. The manual flow below remains for pairing
+  other machines. In the agent form, a runtime whose machine is away is labelled
+  **· Offline** but stays selectable: binding an agent to a sleeping computer is
+  normal.
   **New runtime** shows three steps: install macrod with the shown `curl … |
   sh` (macOS, Linux) or `irm … | iex` (Windows) command, run `macrod` and
   configure your agent in Quickstart, then enter your pairing
@@ -914,8 +951,32 @@ for Premium, `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`, and
 used up and no credits or usage billing cover the request, sending a message
 answers HTTP 402 and the app opens the **AI usage limit** dialog (title
 `You've used this month's included AI`, or the spending-limit / failed-charge
-variants). It shows **Monthly limit**, the message `Add additional credits to
-keep going.`, and an `Open usage settings` button. Credit purchases live in
+variants). It says when the included AI resets. When the viewer is the payer
+on a paid plan, it offers **One-time** and, while Auto-Reload is off or
+suspended, **Auto-reload**:
+
+- **One-time** picks a credit pack ($25 / $50 / $100 from the plan catalog) and
+  **Buy $25 in credits** charges the card on file right away, closing with an
+  `Added $25 in credits. Resend your message.` toast. Team members see it too:
+  it charges the team owner's card, shows **Team monthly limit** (`$X of $Y
+  left`), and disables packs over what is left. A declined card shows inline;
+  the payer gets **Add payment method**, a member is told to ask the owner.
+  With no card on file (for example, removed in the billing portal), or a card
+  that needs 3-D Secure, nothing is charged: the payer is sent to Stripe
+  Checkout for the same pack and returns to the same page (Settings → Usage on
+  the web origin from the native app, which opens Stripe in the system
+  browser). A member is asked to have the owner add or update the card.
+- **Auto-reload** shows the reload (`$25 when below $5`), an editable
+  **Monthly limit** prefilled with the plan default ($200 Pro, $1,000 Max; blank
+  means no limit), and **Turn on auto-reload**, which enables it in one click.
+  Enabling reloads right away when the balance is low; on success the dialog
+  closes with an `Auto-reload is on` toast and the user resends. If the card on
+  file can't be charged, the button becomes **Add payment method** (Stripe
+  billing portal, returning to Settings → Usage).
+
+The primary action uses the black-and-white `primary` Button; **Usage settings** and
+**Dismiss** are ghost buttons. Team members who don't pay see `Open usage
+settings` only when they cannot buy (no paid, metered plan). Credit purchases and Auto-Reload thresholds also live in
 Settings → Usage; subscription changes live in Settings → Billing.
 
 The free plan is a hard cap: when its monthly allowance is used up, requests

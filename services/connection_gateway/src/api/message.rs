@@ -1,7 +1,7 @@
 use crate::{
     context::{AppState, AuthorizationService},
     model::message::Message,
-    service::sender::send_message_to_entity,
+    service::{redis::post_broadcast, sender::send_message_to_entity},
 };
 use axum::{
     Json as JsonResponse, Router,
@@ -30,7 +30,46 @@ where
             "/batch_send_unique",
             post(batch_send_unique_messages_handler),
         )
+        .route("/broadcast", post(broadcast_message_handler))
         .with_state(state)
+}
+
+/// Sends a message to every open connection on every instance. Delivery is
+/// best-effort and asynchronous, so there are no receipts.
+#[utoipa::path(
+    post,
+    path = "/message/broadcast",
+    security(("internal-api-key" = [])),
+    request_body = SendMessageBody,
+    responses(
+        (status = 202, description = "Broadcast accepted"),
+        (status = 401, body = String),
+        (status = 500, body = String),
+    )
+)]
+#[tracing::instrument(
+    skip(_internal_authorization, ctx, body),
+    fields(message_type = %body.message_type),
+    err(Debug)
+)]
+pub async fn broadcast_message_handler(
+    _internal_authorization: MacroAuthorizationExtractor<AuthorizationService, InternalOnly>,
+    State(ctx): State<AppState>,
+    Json(body): Json<SendMessageBody>,
+) -> Result<StatusCode, (StatusCode, String)> {
+    post_broadcast(
+        ctx.context.redis_connection.clone(),
+        Message::new(body.message_type, body.message.to_string()),
+    )
+    .await
+    .map_err(|_| {
+        (
+            StatusCode::INTERNAL_SERVER_ERROR,
+            "unable to broadcast message".to_string(),
+        )
+    })?;
+
+    Ok(StatusCode::ACCEPTED)
 }
 
 #[utoipa::path(

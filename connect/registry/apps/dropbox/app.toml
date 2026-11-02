@@ -1,0 +1,10 @@
+id = "dropbox"
+name = "Dropbox"
+description = "Search, read, and organize files and folders."
+access = ["mcp"]
+mcp_url = "https://mcp.dropbox.com/mcp"
+client_registration = "dcr"
+scopes = []
+pipedream_app_slugs = ["dropbox"]
+status = "pending"
+probed = 2026-10-30
