@@ -70,16 +70,19 @@ Search. New has the same options as the sidebar.
 
 People lists contacts across every CRM-enabled team the viewer belongs to, from
 the same Soup query with only CRM contacts opted in (`crmf`). The server collapses
-duplicate full email addresses (case-insensitive) to one contact. Hidden contacts
+duplicate full email addresses (case-insensitive) to one contact; contacts
+without an email never collapse. Hidden contacts
 and contacts under hidden companies are excluded. Columns are Person (name and
 email), Company and Last contacted (sortable). `Search people` matches name or
 email on the server after a short typing pause, so results include contacts not
 yet scrolled into view. The desktop header has the title, shared **New** menu,
 and expandable Search; choose **Contact** from New. On touch, **New contact**
-is unchanged. The contact dialog asks for a company through a **Choose a company** pill (searchable by name
+is unchanged. The contact dialog offers an optional **Choose a company** pill (searchable by name
 or domain, from the up to 500 most relevant companies, including name-only
-companies). Enter a full email address; personal addresses and different domains
-are accepted. **Add contact** on a company's Team tab skips the company pill.
+companies); without one the person is added with no company. The email is
+optional: personal addresses and different domains are accepted, and leaving it
+empty adds the person by name alone. Contacts without a company show no company
+pill. **Add contact** on a company's Team tab skips the company pill.
 **New company** requires a name; its domain is optional. If supplied, it must be
 a company domain, not a personal email provider. The company, contact and pipeline dialogs share the
 task/project composer layout: name on the first row beside **Close**, details
@@ -377,6 +380,15 @@ list, pipeline, or record, and highlights its sidebar item. The back arrow
 another sidebar destination, or browser Back, also leaves settings. On touch
 the back arrow is the only control in the header. It is the same page as
 Settings > CRM, with the same member and admin permissions; check both roles.
+
+Its **Email sync** section (shown while CRM is on) has **Keep personal emails
+out** (on by default) and **Blocked domains**. With the toggle off, email sync
+adds people who email from personal providers (gmail.com, outlook.com, …) as
+contacts without a company; vendor, brand and bulk-sender domains stay out.
+Blocking a domain (typed, or every domain of a company picked from the menu)
+stops email sync for it and hides its company and people; unblocking shows them
+again. Only admins and owners change either; members see them read-only.
+Contacts without a company never grant team access to email threads.
 
 `Export` opens options for companies. Choose Current view
 (respects filters/search) or All records across views (each visible record once), then

@@ -95,7 +95,7 @@ export function useSetContactNameMutation(deps: CrmRecordDependencies) {
         name,
       }: {
         contactId: string;
-        companyId: string;
+        companyId?: string | null;
         name: string;
       }) => throwOnErr(() => deps.storage.setContactName({ contactId, name })),
       onMutate: async ({ contactId, name }) => {
@@ -129,9 +129,10 @@ export function useSetContactNameMutation(deps: CrmRecordDependencies) {
           deps.client.invalidateQueries({
             queryKey: crmKeys.contact(contactId).queryKey,
           }),
-          deps.client.invalidateQueries({
-            queryKey: crmKeys.company(companyId).queryKey,
-          }),
+          companyId &&
+            deps.client.invalidateQueries({
+              queryKey: crmKeys.company(companyId).queryKey,
+            }),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
         ]);
       },

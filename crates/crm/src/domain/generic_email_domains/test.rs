@@ -1,4 +1,4 @@
-use super::is_generic_email_domain;
+use super::{is_generic_email_domain, is_personal_email_domain};
 
 #[test]
 fn matches_common_consumer_providers() {
@@ -243,4 +243,14 @@ fn empty_and_garbage_inputs_are_safe() {
     assert!(!is_generic_email_domain(""));
     assert!(!is_generic_email_domain("   "));
     assert!(!is_generic_email_domain("not-an-email"));
+}
+
+#[test]
+fn personal_email_domains_are_consumer_providers_only() {
+    for domain in ["gmail.com", " Outlook.com ", "www.yahoo.com", "icloud.com"] {
+        assert!(is_personal_email_domain(domain), "{domain}");
+    }
+    for domain in ["github.com", "stripe.com", "mailinator.com", "acme.com", ""] {
+        assert!(!is_personal_email_domain(domain), "{domain}");
+    }
 }

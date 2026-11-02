@@ -19,7 +19,7 @@ async fn email_lookup_requires_an_unambiguous_visible_contact(pool: PgPool) -> a
         .create_contact_for_company(
             &team_id,
             &first_company,
-            "jane@gmail.com",
+            Some("jane@gmail.com"),
             "Jane",
             Utc::now(),
             false,
@@ -29,7 +29,7 @@ async fn email_lookup_requires_an_unambiguous_visible_contact(pool: PgPool) -> a
         .create_contact_for_company(
             &team_id,
             &second_company,
-            "jane@gmail.com",
+            Some("jane@gmail.com"),
             "Jane",
             Utc::now(),
             false,
@@ -86,8 +86,8 @@ async fn get_contact_by_email_returns_team_contact_case_insensitively(
         .expect("contact should be returned");
 
     assert_eq!(contact.id, contact_id);
-    assert_eq!(contact.company_id, company_id);
-    assert_eq!(contact.email, "alice@acme.com");
+    assert_eq!(contact.company_id, Some(company_id));
+    assert_eq!(contact.email.as_deref(), Some("alice@acme.com"));
     Ok(())
 }
 

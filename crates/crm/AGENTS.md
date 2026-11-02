@@ -77,6 +77,13 @@ tools/HTTP/GraphQL surfaces over them.
   (NULL `enriched_at`) that `CrmServiceImpl::enrich_pending_domains` resolves
   later with bounded retries. Never store an empty entry for a domain no
   resolver answered for: resolved entries are permanent.
+- Contacts carry their own `team_id`; `company_id` and `email` are optional.
+  Scope contact reads by `ct.team_id` and LEFT JOIN the company for its
+  `hidden` flag and name. Email sync files personal-provider addresses
+  (`is_personal_email_domain`) as company-less contacts only when the team
+  turns `exclude_personal_emails` off; `crm_blocked_domains` stops sync per
+  domain. CRM-scoped email access (`crm_scope_precheck`, thread access) still
+  goes through companies, so company-less contacts never share email threads.
 - The Sales migration (`SALES_BACKFILL.md`) is forward-only and additive —
   its down migration refuses to erase completion or user edits; never revert
   it to undo a bad migration, only the application code that reads it.

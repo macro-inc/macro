@@ -69,7 +69,7 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   /** The contact's display name, if one has been observed. */
   readonly name = this.field('name');
 
-  /** The contact's email address. */
+  /** The contact's email address; absent for a contact added by name alone. */
   readonly email = this.field('email');
 
   /** The CRM company this contact belongs to. */

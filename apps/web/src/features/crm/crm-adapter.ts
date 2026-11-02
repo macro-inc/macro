@@ -84,6 +84,7 @@ import {
   useResetCrmStagesMutation,
 } from './queries/stages';
 import { useTeamCrmConfig } from './queries/team-config';
+import { useBlockedDomains } from './queries/blocked-domains';
 import { useQuickAccessCrmContactsQuery } from './record-adapter';
 import { createAppDealStages } from './stage-adapter';
 import { crmTaskComposerContext } from './task-composer';
@@ -300,6 +301,7 @@ export function createAppCrmContext(): CrmContext {
       withReadyGate(useContactQuery(deps, ...args)),
     createTeamSource: useCurrentTeamQuery,
     createTeamConfigSource: createSettings,
+    createBlockedDomains: () => useBlockedDomains(deps),
     createCapabilities: () =>
       createCrmPermissions(userId, useCurrentTeamQuery(), createSettings()),
     createDealStages: createAppDealStages,

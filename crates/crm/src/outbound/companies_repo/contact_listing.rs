@@ -19,10 +19,10 @@ use crate::domain::{
 #[derive(sqlx::FromRow)]
 struct ContactRow {
     id: Uuid,
-    company_id: Uuid,
+    company_id: Option<Uuid>,
     team_id: Uuid,
-    company_name: String,
-    email: String,
+    company_name: Option<String>,
+    email: Option<String>,
     name: Option<String>,
     hidden: bool,
     first_interaction: DateTime<Utc>,
@@ -45,22 +45,24 @@ impl CompaniesRepositoryImpl {
         sql.push_bind(viewer_id.to_owned());
         match scope {
             CrmContactListScope::Viewer(user_id) => {
-                sql.push(" JOIN team_user tu ON tu.team_id = co.team_id AND tu.user_id = ")
+                sql.push(" JOIN team_user tu ON tu.team_id = ct.team_id AND tu.user_id = ")
                     .push_bind(user_id.to_owned())
-                    .push(" WHERE (NOT (ct.hidden OR co.hidden) OR tu.team_role <> 'member')");
+                    .push(
+                        " WHERE (NOT (ct.hidden OR co.hidden IS TRUE) OR tu.team_role <> 'member')",
+                    );
             }
             CrmContactListScope::Team {
                 team_id,
                 include_hidden,
             } => {
-                sql.push(" WHERE co.team_id = ").push_bind(team_id);
+                sql.push(" WHERE ct.team_id = ").push_bind(team_id);
                 if !include_hidden {
-                    sql.push(" AND NOT (ct.hidden OR co.hidden)");
+                    sql.push(" AND NOT (ct.hidden OR co.hidden IS TRUE)");
                 }
             }
         }
         if !contact_hidden_requested(&query.filter) && !contact_ids_only(&query.filter) {
-            sql.push(" AND NOT (ct.hidden OR co.hidden)");
+            sql.push(" AND NOT (ct.hidden OR co.hidden IS TRUE)");
         }
         sql.push(" AND ");
         push_filter(&mut sql, &query.filter);
@@ -149,7 +151,7 @@ fn push_filter(sql: &mut QueryBuilder<'_, Postgres>, filter: &Expr<CrmContactLit
                 sql.push("ct.company_id = ").push_bind(*id);
             }
             CrmContactLiteral::TeamId(id) => {
-                sql.push("co.team_id = ").push_bind(*id);
+                sql.push("ct.team_id = ").push_bind(*id);
             }
             CrmContactLiteral::Email(email) => {
                 sql.push("LOWER(BTRIM(ct.email)) = ")
@@ -164,7 +166,8 @@ fn push_filter(sql: &mut QueryBuilder<'_, Postgres>, filter: &Expr<CrmContactLit
                     .push(") > 0");
             }
             CrmContactLiteral::Hidden(hidden) => {
-                sql.push("(ct.hidden OR co.hidden) = ").push_bind(*hidden);
+                sql.push("(ct.hidden OR co.hidden IS TRUE) = ")
+                    .push_bind(*hidden);
             }
         },
     }

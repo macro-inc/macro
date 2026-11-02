@@ -197,12 +197,13 @@ export function createCompanyImporter(
 }
 
 /**
- * Manually creates a contact under a company via
- * `POST /crm/companies/{id}/contacts` (a display name + email). Invalidates
- * the company detail query (contacts arrive embedded there) and soup so
- * contact listings refresh. Server-side failures worth surfacing: 409 when
- * the company already tracks the email, 404 when the company isn't
- * visible to the caller, 403 when CRM is disabled for the team.
+ * Manually creates a contact via `POST /crm/companies/{id}/contacts`, or
+ * `POST /crm/contacts` for a contact without a company (a display name +
+ * optional email). Invalidates the company detail query (contacts arrive
+ * embedded there) and soup so contact listings refresh. Server-side
+ * failures worth surfacing: 409 when the email is already tracked, 404 when
+ * the company isn't visible to the caller, 403 when CRM is disabled for the
+ * team.
  */
 export function useCreateContactMutation(deps: CrmRecordDependencies) {
   return useMutation(
@@ -212,14 +213,16 @@ export function useCreateContactMutation(deps: CrmRecordDependencies) {
         name,
         email,
       }: {
-        companyId: string;
+        companyId?: string;
         name: string;
-        email: string;
+        email?: string;
       }) =>
         Telemetry.span('crm.contact.create', async (span) => {
-          span.setAttr('crm.company.id', companyId);
+          if (companyId) span.setAttr('crm.company.id', companyId);
           const contact = await throwOnErr(() =>
-            deps.storage.createContact({ companyId, name, email })
+            companyId
+              ? deps.storage.createContact({ companyId, name, email })
+              : deps.storage.createTeamContact({ name, email })
           );
           span.setAttr('crm.contact.id', contact.id);
           return contact;
@@ -230,9 +233,10 @@ export function useCreateContactMutation(deps: CrmRecordDependencies) {
           contactId: contact.id,
         });
         return Promise.all([
-          deps.client.invalidateQueries({
-            queryKey: crmKeys.company(companyId).queryKey,
-          }),
+          companyId &&
+            deps.client.invalidateQueries({
+              queryKey: crmKeys.company(companyId).queryKey,
+            }),
           deps.client.invalidateQueries({ queryKey: soupKeys._def }),
         ]);
       },

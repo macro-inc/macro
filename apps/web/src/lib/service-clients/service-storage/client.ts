@@ -70,6 +70,8 @@ import type { CreateChannelScopedBotRequest } from './generated/schemas/createCh
 import type { CreateChannelScopedBotResponse } from './generated/schemas/createChannelScopedBotResponse';
 import type { CreateCrmCompanyRequest } from './generated/schemas/createCrmCompanyRequest';
 import type { CreateCrmContactRequest } from './generated/schemas/createCrmContactRequest';
+import type { CreateCrmTeamContactRequest } from './generated/schemas/createCrmTeamContactRequest';
+import type { CrmBlockedDomainResponse } from './generated/schemas/crmBlockedDomainResponse';
 import type { CreateDocument200 as CreateDocumentResponse } from './generated/schemas/createDocument200';
 import type { CreateDocumentRequest } from './generated/schemas/createDocumentRequest';
 import type { CreatedUserApiKey } from './generated/schemas/createdUserApiKey';
@@ -2752,6 +2754,29 @@ export const storageServiceClient = {
         method: 'POST',
         body: JSON.stringify(body),
       }
+    );
+  },
+  async createTeamContact(body: CreateCrmTeamContactRequest) {
+    return await dssFetch<CrmContactResponse>('/crm/contacts', {
+      method: 'POST',
+      body: JSON.stringify(body),
+    });
+  },
+  async listCrmBlockedDomains() {
+    return await dssFetch<CrmBlockedDomainResponse[]>('/crm/blocked-domains', {
+      method: 'GET',
+    });
+  },
+  async blockCrmDomain({ domain }: { domain: string }) {
+    return await dssFetch(
+      `/crm/blocked-domains/${encodeURIComponent(domain)}`,
+      { method: 'PUT' }
+    );
+  },
+  async unblockCrmDomain({ domain }: { domain: string }) {
+    return await dssFetch(
+      `/crm/blocked-domains/${encodeURIComponent(domain)}`,
+      { method: 'DELETE' }
     );
   },
   async getContact({ contactId }: { contactId: string }) {

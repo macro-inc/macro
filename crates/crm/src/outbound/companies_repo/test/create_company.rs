@@ -46,6 +46,25 @@ async fn create_company_inserts_company_and_domain(pool: PgPool) -> anyhow::Resu
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn create_company_without_domain(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    enable_crm_for_team(&pool, team_id).await?;
+
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    // Several domain-less companies may share a team.
+    for name in ["Jane Doe Consulting", "John Smith Studio"] {
+        let record = repo
+            .create_company_for_team(&team_id, None, name, Utc::now())
+            .await?;
+        assert_eq!(record.name.as_deref(), Some(name));
+        assert_eq!(record.company.team_id, team_id);
+        assert!(record.company.domains.is_empty());
+    }
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn create_company_name_overrides_directory_name(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
     seed_team(&pool, team_id, "macro|owner@test.com").await?;
@@ -238,7 +257,7 @@ async fn name_only_company_accepts_personal_email_without_inference(
         .create_contact_for_company(
             &team_id,
             &company.company.id,
-            "jane@gmail.com",
+            Some("jane@gmail.com"),
             "Jane",
             Utc::now(),
             false,

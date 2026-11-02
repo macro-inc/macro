@@ -44,7 +44,10 @@ async fn combines_authorized_teams_before_collapsing_email(pool: PgPool) {
     let rows = list(&repo, Expr::val(Contact::Include)).await;
     assert_eq!(ids(&rows), [1011, 1005, 1004, 1010].map(id));
     assert_eq!(rows[0].team_id, id(11));
-    assert_eq!(rows[0].company_name, "Company 101");
+    assert_eq!(
+        rows[0].company_name.as_deref().map(str::to_owned),
+        Some("Company 101".to_owned())
+    );
     assert!(
         list(&repo, Expr::val(Contact::TeamId(id(14))))
             .await
@@ -188,4 +191,26 @@ async fn keyset_pages_never_repeat_or_skip_deduplicated_contacts(pool: PgPool) {
             assert_eq!(found, ids(&expected));
         }
     }
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures("fixtures/contact_listing.sql")
+)]
+async fn email_less_contacts_never_collapse(pool: PgPool) {
+    for contact in [id(2001), id(2002)] {
+        sqlx::query(
+            "INSERT INTO crm_contacts (id, company_id, email, name, first_interaction, last_interaction, manually_created)
+             VALUES ($1, $2, NULL, 'Solo', now(), now(), TRUE)",
+        )
+        .bind(contact)
+        .bind(id(101))
+        .execute(&pool)
+        .await
+        .unwrap();
+    }
+    let repo = CompaniesRepositoryImpl::new(pool);
+    let rows = list(&repo, Expr::val(Contact::CompanyId(id(101)))).await;
+    let listed = ids(&rows);
+    assert!(listed.contains(&id(2001)) && listed.contains(&id(2002)));
 }

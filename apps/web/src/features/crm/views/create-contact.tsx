@@ -13,7 +13,9 @@ import {
   useQuickAccessCrmCompaniesQuery,
 } from './use-crm';
 
+// A plausible address; the server enforces the real rules.
 const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+const INVALID_EMAIL = 'Enter an email like jane@acme.com, or leave it empty';
 
 export function contactCreationError(cause: unknown): string {
   if (cause instanceof ThrownResultError) {
@@ -22,6 +24,9 @@ export function contactCreationError(cause: unknown): string {
     }
     if (cause.errors.some((e) => e.code === 'FORBIDDEN')) {
       return "CRM isn't enabled for your team.";
+    }
+    if (cause.errors.some((e) => e.code === 'BAD_REQUEST')) {
+      return "Use an email at the company's domain, a personal email, or none.";
     }
   }
   return 'Failed to create contact. Try again.';
@@ -76,10 +81,7 @@ export function CreateContactModal(props: {
   const contactEmail = createMemo(() => email().trim().toLowerCase());
   const canSubmit = createMemo(
     () =>
-      contactName().length > 0 &&
-      contactEmail().length > 0 &&
-      company() !== undefined &&
-      !createContactMutation.isPending
+      contactName().length > 0 && !createContactMutation.isPending
   );
 
   function reset() {
@@ -101,26 +103,21 @@ export function CreateContactModal(props: {
 
   async function submit() {
     if (createContactMutation.isPending) return;
-    const target = company();
-    if (!target) {
-      setError('Choose a company');
-      return;
-    }
     if (!contactName()) {
       setError('Enter a name');
       return;
     }
-    if (!EMAIL_PATTERN.test(contactEmail())) {
-      setError('Enter a valid email address');
+    if (contactEmail() && !EMAIL_PATTERN.test(contactEmail())) {
+      setError(INVALID_EMAIL);
       return;
     }
 
     setError(undefined);
     try {
       const { id } = await createContactMutation.mutateAsync({
-        companyId: target.companyId,
+        companyId: company()?.companyId,
         name: contactName(),
-        email: contactEmail(),
+        email: contactEmail() || undefined,
       });
       resetAndClose();
       props.onCreated(id);
@@ -198,11 +195,11 @@ export function CreateContactModal(props: {
                     <input
                       aria-label="Email"
                       type="email"
-                      placeholder="jane@example.com"
+                      placeholder="Email (optional), like jane@example.com"
                       autocomplete="off"
                       spellcheck={false}
                       data-1p-ignore
-                      aria-invalid={error() === 'Enter a valid email address'}
+                      aria-invalid={error() === INVALID_EMAIL}
                       class="ph-no-capture field-sizing-content max-w-full bg-transparent text-ink outline-none placeholder:text-ink-placeholder"
                       value={email()}
                       disabled={createContactMutation.isPending}
