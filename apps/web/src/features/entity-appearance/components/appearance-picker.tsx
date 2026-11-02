@@ -18,13 +18,21 @@ import PuzzleIcon from '@icon/system/regular/puzzle-piece.svg';
 import SmileyIcon from '@icon/system/regular/smiley.svg';
 import UsersIcon from '@icon/system/regular/users-three.svg';
 import XIcon from '@icon/system/regular/x.svg';
+import { Key } from '@solid-primitives/keyed';
+import {
+  createVirtualizer,
+  defaultRangeExtractor,
+  type Range,
+} from '@tanstack/solid-virtual';
 import { Button, InputGroup, Tabs } from '@ui';
 import {
   type Component,
+  createEffect,
   createMemo,
   createSignal,
   For,
   type JSX,
+  on,
   Show,
 } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
@@ -34,6 +42,12 @@ import {
   type EntityAppearance,
 } from '../core/appearance';
 import { ICON_SECTIONS, iconLabel, PICKER_ICON_NAMES } from '../core/catalog';
+import {
+  nextPickerOption,
+  type PickerOption,
+  type PickerSection,
+  pickerRows,
+} from '../core/picker-grid';
 
 type AppearanceIcon = NonNullable<EntityAppearance['icon']>;
 
@@ -81,9 +95,12 @@ export function AppearancePicker(props: {
     props.appearance.icon?.kind === 'emoji' ? 'emoji' : 'icons'
   );
   const [search, setSearch] = createSignal('');
-  const [category, setCategory] = createSignal('people');
+  const [category, setCategory] = createSignal(
+    props.recent.some((icon) => icon.kind === 'emoji') ? 'recent' : 'people'
+  );
+  const [focusedKey, setFocusedKey] = createSignal<string>();
+  const [focusRequest, setFocusRequest] = createSignal<string>();
   const emojiData = useEmojiData({ minimumSearchLength: 1 });
-  const sectionElements = new Map<string, HTMLElement>();
   let searchElement: HTMLInputElement | undefined;
   let grid: HTMLDivElement | undefined;
   const searching = () => search().trim().length > 0;
@@ -96,132 +113,198 @@ export function AppearancePicker(props: {
       words.every((word) => name.includes(word))
     );
   });
-  const recentMacros = () =>
-    props.recent.filter((icon) => icon.kind === 'macro');
-  const recentEmojiEntries = new Map<string, SimpleEmoji>();
-  const recentEmojis = () =>
-    props.recent.flatMap((icon) => {
-      if (icon.kind !== 'emoji') return [];
-      let entry = recentEmojiEntries.get(icon.value);
-      if (!entry) {
-        entry = {
-          emoji: icon.value,
-          slug: icon.value,
-          shortcodes: [],
-          terms: [],
-        };
-        recentEmojiEntries.set(icon.value, entry);
-      }
-      return [entry];
-    });
-  const emojiGroups = createMemo(() => {
-    const groups = emojiData.groups();
-    return EMOJI_CATEGORIES.map((category) => ({
-      id: category.id,
-      emojis:
-        category.id === 'recent'
-          ? recentEmojis()
-          : groups
-              .filter((group) => category.groups.includes(group.name))
-              .flatMap((group) => group.emojis),
-    })).filter((group) => group.emojis.length > 0);
+  const columns = () => (props.mobile ? 8 : 9);
+  const option = (
+    section: string,
+    icon: AppearanceIcon,
+    label: string
+  ): PickerOption => ({
+    key: `${section}:${JSON.stringify(icon)}`,
+    icon,
+    label,
   });
+  const macroOptions = (section: string, names: readonly string[]) =>
+    names.map((name) =>
+      option(section, { kind: 'macro', name }, iconLabel(name))
+    );
+  const emojiOptions = (section: string, emojis: readonly SimpleEmoji[]) =>
+    emojis.map((emoji) =>
+      option(
+        section,
+        { kind: 'emoji', value: emoji.emoji },
+        iconLabel(emoji.slug.replaceAll('_', '-'))
+      )
+    );
+  const recentEmojis = () =>
+    props.recent.filter((icon) => icon.kind === 'emoji');
+  const sections = createMemo((): PickerSection[] => {
+    if (searching())
+      return [
+        ...(tab() === 'icons'
+          ? [
+              {
+                key: 'icons',
+                label: t('appearance.iconCount', { count: names().length }),
+                options: macroOptions('icons', names()),
+              },
+            ]
+          : []),
+        {
+          key: 'emoji',
+          label: t('appearance.emojiCount', {
+            count: emojiData.emojis().length,
+          }),
+          options: emojiOptions('emoji', emojiData.emojis()),
+        },
+      ];
+    const recent = props.recent.filter(
+      (icon) => icon.kind === (tab() === 'icons' ? 'macro' : 'emoji')
+    );
+    const recentSection = {
+      key: 'recent',
+      label: t('appearance.section_recent'),
+      options: recent.map((icon) =>
+        option(
+          'recent',
+          icon,
+          icon.kind === 'macro' ? iconLabel(icon.name) : icon.value
+        )
+      ),
+    };
+    if (tab() === 'icons')
+      return [
+        recentSection,
+        ...ICON_SECTIONS.map((section) => ({
+          key: section.id,
+          label: t(`appearance.section_${section.id}`),
+          options: macroOptions(section.id, section.names),
+        })),
+      ];
+    const groups = emojiData.groups();
+    return [
+      recentSection,
+      ...EMOJI_CATEGORIES.filter((category) => category.id !== 'recent').map(
+        (category) => ({
+          key: category.id,
+          label: t(`appearance.section_${category.id}`),
+          options: emojiOptions(
+            category.id,
+            groups
+              .filter((group) => category.groups.includes(group.name))
+              .flatMap((group) => group.emojis)
+          ),
+        })
+      ),
+    ];
+  });
+  const rows = createMemo(() => pickerRows(sections(), columns()));
+  const focusedRow = () =>
+    rows().findIndex(
+      (row) =>
+        row.kind === 'options' &&
+        row.options.some((option) => option.key === focusedKey())
+    );
+  const virtualizer = createVirtualizer<HTMLDivElement, HTMLDivElement>({
+    get count() {
+      return rows().length;
+    },
+    get getItemKey() {
+      const keys = rows().map((row) => row.key);
+      return (index: number) => keys[index];
+    },
+    getScrollElement: () => grid ?? null,
+    estimateSize: (index) =>
+      rows()[index].kind === 'heading' ? 28 : props.mobile ? 44 : 36,
+    initialRect: { width: 344, height: 304 },
+    overscan: 3,
+    get rangeExtractor() {
+      const pinned = focusedRow();
+      return (range: Range) => {
+        const indexes = defaultRangeExtractor(range);
+        return pinned < 0 || indexes.includes(pinned)
+          ? indexes
+          : [...indexes, pinned].sort((a, b) => a - b);
+      };
+    },
+  });
+  createEffect(
+    on(
+      () => props.mobile,
+      () => virtualizer.measure(),
+      { defer: true }
+    )
+  );
+  createEffect(
+    on([focusRequest, rows, () => virtualizer.getVirtualItems()], () => {
+      const requested = focusRequest();
+      if (!requested) return;
+      const button = Array.from(
+        grid?.querySelectorAll<HTMLButtonElement>('[data-appearance-option]') ??
+          []
+      ).find((button) => button.dataset.appearanceOption === requested);
+      if (button) {
+        button.focus({ preventScroll: true });
+        setFocusRequest(undefined);
+      }
+    })
+  );
   const changeSearch = (value: string) => {
+    setFocusedKey(undefined);
+    setFocusRequest(undefined);
     setSearch(value);
     emojiData.filter(value);
-    setCategory(emojiGroups()[0]?.id ?? 'people');
-    if (grid) grid.scrollTop = 0;
+    setCategory(
+      sections().find((section) => section.options.length > 0)?.key ?? 'people'
+    );
+    virtualizer.scrollToOffset(0);
   };
   const updateCategoryFromScroll = () => {
     if (!grid || tab() !== 'emoji' || searching()) return;
-    const top = grid.getBoundingClientRect().top;
-    let visible = emojiGroups()[0]?.id ?? 'people';
-    for (const item of EMOJI_CATEGORIES) {
-      const element = sectionElements.get(item.id);
-      if (
-        element?.isConnected &&
-        element.getBoundingClientRect().top <= top + 2
-      )
-        visible = item.id;
-    }
-    setCategory(visible);
+    const visible = virtualizer
+      .getVirtualItems()
+      .findLast((item) => item.start <= (grid?.scrollTop ?? 0));
+    if (visible) setCategory(rows()[visible.index].section);
   };
-  const pick = (icon: AppearanceIcon) => {
-    props.onChange({ ...props.appearance, icon });
-    props.onPick(icon);
-    if (icon.kind === 'emoji') recordEmojiUsage(icon.value);
-  };
-  function nextGridOption(
-    options: HTMLButtonElement[],
-    index: number,
-    key: string
-  ) {
-    const forward = key === 'ArrowRight' || key === 'ArrowDown';
-    if (index < 0) return forward ? options[0] : options.at(-1);
-    if (key === 'ArrowLeft' || key === 'ArrowRight') {
-      return options[
-        Math.max(0, Math.min(options.length - 1, index + (forward ? 1 : -1)))
-      ];
+  const pick = (option: PickerOption, button?: HTMLButtonElement) => {
+    const preserveFocus = button === document.activeElement;
+    props.onChange({ ...props.appearance, icon: option.icon });
+    props.onPick(option.icon);
+    if (option.icon.kind === 'emoji') recordEmojiUsage(option.icon.value);
+    if (preserveFocus) {
+      setFocusedKey(option.key);
+      setFocusRequest(option.key);
     }
-    const groups = Array.from(
-      grid?.querySelectorAll('[data-appearance-grid]') ?? []
-    ).map((group) =>
-      Array.from(
-        group.querySelectorAll<HTMLButtonElement>('[data-appearance-option]')
-      )
-    );
-    const current = options[index];
-    const groupIndex = groups.findIndex((group) => group.includes(current));
-    const group = groups[groupIndex];
-    if (!group) return current;
-    const position = group.indexOf(current);
-    const columns = props.mobile ? 8 : 9;
-    const direction = forward ? 1 : -1;
-    const next = position + direction * columns;
-    if (next >= 0 && next < group.length) return group[next];
-    // A short final row still belongs to this section.
-    if (
-      forward &&
-      Math.floor(position / columns) < Math.floor((group.length - 1) / columns)
-    )
-      return group.at(-1);
-    const adjacent = groups[groupIndex + direction];
-    if (!adjacent) return current;
-    const rowStart = forward
-      ? 0
-      : Math.floor((adjacent.length - 1) / columns) * columns;
-    return adjacent[
-      Math.min(adjacent.length - 1, rowStart + (position % columns))
-    ];
-  }
+  };
+  const focusOption = (option: PickerOption) => {
+    setFocusedKey(option.key);
+    setFocusRequest(option.key);
+    const index = focusedRow();
+    if (index >= 0) virtualizer.scrollToIndex(index, { align: 'auto' });
+  };
   function handleKeyDown(event: KeyboardEvent) {
     if (event.isComposing || event.ctrlKey || event.metaKey || event.altKey)
       return;
-    const options = Array.from(
-      grid?.querySelectorAll<HTMLButtonElement>('[data-appearance-option]') ??
-        []
-    );
-    const index =
-      event.target instanceof HTMLButtonElement
-        ? options.indexOf(event.target)
-        : -1;
     const input = event.target === searchElement;
     if (input && (event.key === 'ArrowLeft' || event.key === 'ArrowRight'))
       return;
-    const arrows = ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'];
+    const current =
+      event.target instanceof HTMLElement
+        ? event.target.dataset.appearanceOption
+        : undefined;
     if (
-      arrows.includes(event.key) &&
-      options.length > 0 &&
-      (input || index >= 0)
+      ['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown'].includes(event.key) &&
+      (input || current)
     ) {
+      const next = nextPickerOption(rows(), current, event.key);
+      if (!next) return;
       event.preventDefault();
       event.stopPropagation();
-      const next = nextGridOption(options, index, event.key);
-      next?.focus();
-      next?.scrollIntoView({ block: 'nearest' });
-    } else if (input && event.key === 'Enter' && options.length > 0) {
+      focusOption(next);
+    } else if (input && event.key === 'Enter') {
+      const first = nextPickerOption(rows(), undefined, 'ArrowDown');
+      if (!first) return;
       event.preventDefault();
-      options[0].click();
+      pick(first);
     } else if (!input && event.key.length === 1 && event.key !== ' ') {
       event.preventDefault();
       changeSearch(search() + event.key);
@@ -230,74 +313,60 @@ export function AppearancePicker(props: {
   }
   const selected = (icon: AppearanceIcon) =>
     JSON.stringify(props.appearance.icon) === JSON.stringify(icon);
-  const option = (icon: AppearanceIcon, label: string) => (
+  const Option = (optionProps: { option: PickerOption }) => (
     <Button
       variant="ghost"
       appearance="bare"
       size={props.mobile ? 'icon-lg' : 'icon-md'}
       class="max-w-full min-w-0 rounded-md aria-pressed:bg-hover aria-pressed:border-edge-muted not-touch:hover:bg-hover touch:min-w-0"
-      data-appearance-option
-      aria-label={label}
-      aria-pressed={selected(icon)}
-      tooltip={label}
-      onClick={() => pick(icon)}
+      data-appearance-option={optionProps.option.key}
+      aria-label={optionProps.option.label}
+      aria-pressed={selected(optionProps.option.icon)}
+      tooltip={optionProps.option.label}
+      onClick={(event) => pick(optionProps.option, event.currentTarget)}
     >
       <Show
-        when={icon.kind === 'macro'}
+        when={optionProps.option.icon.kind === 'macro'}
         fallback={
           <span class="emoji text-xl mobile:text-[26px]">
-            {icon.kind === 'emoji' ? icon.value : ''}
+            {optionProps.option.icon.kind === 'emoji'
+              ? optionProps.option.icon.value
+              : ''}
           </span>
         }
       >
         <span class="size-4.5 mobile:size-5.5">
           <EntityIcon
             targetType={props.defaultIcon}
-            appearance={{ ...props.appearance, icon }}
+            appearance={{ ...props.appearance, icon: optionProps.option.icon }}
             size="fill"
           />
         </span>
       </Show>
     </Button>
   );
-  const IconGrid = (gridProps: { icons: readonly AppearanceIcon[] }) => (
-    <div
-      data-appearance-grid
-      class="grid grid-cols-9 auto-rows-9 place-items-center mobile:grid-cols-8 mobile:auto-rows-11"
-    >
-      <For each={gridProps.icons}>
-        {(icon) =>
-          option(
-            icon,
-            icon.kind === 'macro' ? iconLabel(icon.name) : icon.value
-          )
-        }
-      </For>
-    </div>
-  );
-  const EmojiGrid = (gridProps: { emojis: readonly SimpleEmoji[] }) => (
-    <div
-      data-appearance-grid
-      class="grid grid-cols-9 auto-rows-9 place-items-center mobile:grid-cols-8 mobile:auto-rows-11"
-    >
-      <For each={gridProps.emojis}>
-        {(emoji) =>
-          option(
-            { kind: 'emoji', value: emoji.emoji },
-            iconLabel(emoji.slug.replaceAll('_', '-'))
-          )
-        }
-      </For>
-    </div>
-  );
-  const heading = (label: string) => (
-    <h3 class="flex h-7 items-center px-1 text-xs text-ink-muted">{label}</h3>
-  );
 
   return (
     <div
       class="flex min-h-0 w-86 max-w-full flex-col text-sm mobile:w-full mobile:flex-1"
       onKeyDown={handleKeyDown}
+      onFocusIn={(event) => {
+        const key =
+          event.target instanceof HTMLElement
+            ? event.target.dataset.appearanceOption
+            : undefined;
+        setFocusedKey(key);
+        if (!key) setFocusRequest(undefined);
+      }}
+      onFocusOut={(event) => {
+        if (
+          event.relatedTarget instanceof Node &&
+          !event.currentTarget.contains(event.relatedTarget)
+        ) {
+          setFocusedKey(undefined);
+          setFocusRequest(undefined);
+        }
+      }}
     >
       <div class="flex shrink-0 flex-col gap-3 p-3 mobile:px-4">
         <div class="flex items-center justify-between gap-2">
@@ -434,79 +503,61 @@ export function AppearancePicker(props: {
       </div>
       <div
         ref={grid}
+        data-appearance-scroll
         onScroll={updateCategoryFromScroll}
         class="h-76 min-h-0 overflow-y-auto overscroll-contain border-t border-edge-muted px-3 pb-2 mobile:h-auto mobile:flex-1 mobile:px-4"
         data-icon-motion="none"
       >
-        <Show
-          when={searching()}
-          fallback={
-            <Show
-              when={tab() === 'icons'}
-              fallback={
-                <For each={EMOJI_CATEGORIES}>
-                  {(item) => {
-                    const emojis = () =>
-                      emojiGroups().find((group) => group.id === item.id)
-                        ?.emojis ?? [];
-                    return (
-                      <Show when={emojis().length > 0}>
-                        <section
-                          ref={(element) =>
-                            sectionElements.set(item.id, element)
-                          }
-                        >
-                          {heading(t(`appearance.section_${item.id}`))}
-                          <EmojiGrid emojis={emojis()} />
-                        </section>
-                      </Show>
-                    );
-                  }}
-                </For>
-              }
-            >
-              <Show when={recentMacros().length > 0}>
-                {heading(t('appearance.section_recent'))}
-                <IconGrid icons={recentMacros()} />
-              </Show>
-              <For each={ICON_SECTIONS}>
-                {(section) => (
-                  <section>
-                    {heading(t(`appearance.section_${section.id}`))}
-                    <IconGrid
-                      icons={section.names.map((name) => ({
-                        kind: 'macro',
-                        name,
-                      }))}
-                    />
-                  </section>
-                )}
-              </For>
-            </Show>
-          }
+        <div
+          class="relative w-full"
+          style={{ height: `${virtualizer.getTotalSize()}px` }}
         >
-          <Show when={tab() === 'icons' && names().length > 0}>
-            {heading(t('appearance.iconCount', { count: names().length }))}
-            <IconGrid
-              icons={names().map((name) => ({ kind: 'macro', name }))}
-            />
-          </Show>
-          <Show when={emojiData.emojis().length > 0}>
-            {heading(
-              t('appearance.emojiCount', { count: emojiData.emojis().length })
-            )}
-            <EmojiGrid emojis={emojiData.emojis()} />
-          </Show>
-          <Show
-            when={
-              (tab() === 'emoji' || names().length === 0) &&
-              emojiData.emojis().length === 0
-            }
-          >
-            <p class="p-4 text-center text-ink-muted">
-              {t('appearance.noMatches')}
-            </p>
-          </Show>
+          <Key each={virtualizer.getVirtualItems()} by="key">
+            {(virtualRow) => {
+              const row = () => rows()[virtualRow().index];
+              const options = () => {
+                const current = row();
+                return current?.kind === 'options' ? current.options : [];
+              };
+              const label = () => {
+                const current = row();
+                return current?.kind === 'heading' ? current.label : '';
+              };
+              return (
+                <div
+                  data-appearance-row={virtualRow().index}
+                  class="absolute left-0 top-0 w-full"
+                  style={{
+                    height: `${virtualRow().size}px`,
+                    transform: `translateY(${virtualRow().start}px)`,
+                  }}
+                >
+                  <Show
+                    when={row()?.kind === 'heading'}
+                    fallback={
+                      <div
+                        class="grid h-full grid-cols-9 place-items-center mobile:grid-cols-8"
+                        data-appearance-grid
+                      >
+                        <Key each={options()} by="key">
+                          {(option) => <Option option={option()} />}
+                        </Key>
+                      </div>
+                    }
+                  >
+                    <h3 class="flex h-full items-center px-1 text-xs text-ink-muted">
+                      {label()}
+                    </h3>
+                  </Show>
+                </div>
+              );
+            }}
+          </Key>
+        </div>
+        <Show when={searching() && rows().length === 0}>
+          <p class="p-4 text-center text-ink-muted">
+            {t('appearance.noMatches')}
+          </p>
         </Show>
       </div>
       <Show when={props.error}>
@@ -541,9 +592,11 @@ export function AppearancePicker(props: {
                 onClick={() => {
                   changeSearch('');
                   setCategory(item.id);
-                  sectionElements
-                    .get(item.id)
-                    ?.scrollIntoView({ block: 'start' });
+                  const index = rows().findIndex(
+                    (row) => row.kind === 'heading' && row.section === item.id
+                  );
+                  if (index >= 0)
+                    virtualizer.scrollToIndex(index, { align: 'start' });
                 }}
               >
                 <Dynamic component={item.icon} class="size-4 mobile:size-5" />

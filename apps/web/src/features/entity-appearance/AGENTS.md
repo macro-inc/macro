@@ -13,6 +13,7 @@ snippets, task projects (initiatives), forms, and databases.
 - `primitives/create-appearance-editor.ts`: immediate picks with guarded async settlement.
 - `primitives/create-recent-icons.ts`: account-scoped recent picks.
 - `core/catalog.ts`: picker-only catalog groups and exclusions.
+- `core/picker-grid.ts`: row projection and keyboard traversal independent of the virtual viewport.
 - `queries/appearance.ts`: domain writes and cache reconciliation.
 - `queries/pending-appearance.ts`: transient mutation intent for live GraphQL readers, including uncached lists.
 - `save-entity-appearance.ts`: lazy production clients for the mutation adapter.
@@ -40,11 +41,13 @@ snippets, task projects (initiatives), forms, and databases.
 - Keep mutations account-scoped, update every reader optimistically, and roll back rejected writes without overwriting newer edits.
 - Keep recent picks account-scoped and filter only the picker catalog; stored icon names remain valid.
 - Show colors only on Icons; Default uses the entity type color and Remove clears only the icon.
+- Virtualize both catalogs and search results; pin and restore focused choices across scrolling and Recent reordering.
 - Read only the normalized appearance fields before optimistic writes; unrelated preview fields can be absent on a loaded entity.
 - Type cache-write payloads with the generated subscription result; `soupUpdates` is a list.
 - Keep pending appearance visible through uncached GraphQL revalidation; retain confirmed intent only for failed readers until fresh data or mutation garbage collection.
 - Serialize server writes per entity, fence confirmed REST writes against older GraphQL responses, and republish confirmed appearance before releasing pending intent.
 - Render public metadata without mounting authenticated preview queries.
 - Preserve appearance in identity projections and renderers, including project list, sidebar, and picker rows; reserve type-only icons for navigation and status.
-- Pass document title identity through `MarkdownDocument` context from each host; do not read legacy block metadata inside `Notebook`.
+- Keep document header icons editable outside breadcrumb navigation buttons; content titles have no leading icon.
+- Pass document identity through `MarkdownDocument` context from each host; do not read legacy block metadata inside `Notebook`.
 - Keep initiative list queries limited to server-backed initiative fields; unrelated cache-only Mail fields prevent cache hits and optimistic icon updates.

@@ -32,7 +32,8 @@ export function AppearanceEditor(props: AppearanceEditorProps) {
   createEffect(() => {
     if (!props.isCurrent()) close();
   });
-  const content = () => (
+  // Reparent one picker when the overlay changes; retain search and keyboard state.
+  const content = (
     <AppearancePicker
       appearance={editor.appearance()}
       mobile={isMobile()}
@@ -80,7 +81,7 @@ export function AppearanceEditor(props: AppearanceEditorProps) {
                 <Popover.Title class="sr-only">
                   {t('appearance.title')}
                 </Popover.Title>
-                {content()}
+                {content}
               </Popover.Content>
             </Popover.Portal>
           </Popover>
@@ -103,7 +104,7 @@ export function AppearanceEditor(props: AppearanceEditorProps) {
               {t('appearance.title')}
             </MobileDrawer.Title>
             <MobileDrawer.ScrollBody class="overflow-hidden">
-              {content()}
+              {content}
             </MobileDrawer.ScrollBody>
           </MobileDrawer.Content>
         </MobileDrawer.Portal>

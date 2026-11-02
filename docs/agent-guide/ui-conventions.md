@@ -52,11 +52,12 @@ Inline calendar-invitation text actions remove the transparent border to keep al
 
 Ordinary Markdown, snippets, routines, task projects, forms, and databases support
 shared entity appearance. Users with edit access click the header icon or choose
-**Change icon…** after Rename in an entity menu. Row and breadcrumb icons still
-navigate; sidebar category icons do not change. Drive folders, tasks, skills, and
-internal descriptions do not have appearance editing.
-Document titles show a custom icon inline with a 40px edit target; without a
-custom icon, **Add icon** appears before the other title pills for editors.
+**Change icon…** after Rename in an entity menu. Document header icons open the
+picker separately from their breadcrumb name's navigation button; row icons
+still navigate. Sidebar category icons do not change. Drive folders, tasks,
+skills, and internal descriptions do not have appearance editing.
+Document content titles have no leading icon. Without a custom icon, **Add icon**
+appears before the other title pills for editors.
 
 Desktop uses a compact 344px anchored popover; phones use a bottom sheet with
 **Remove**, Icons/Emoji tabs, and **Done**. Picks save immediately and the picker
@@ -69,8 +70,10 @@ color) and nine theme-aware colors. The Emoji tab hides the row; emoji retain
 native colors. **Remove** clears only the icon, while Default clears only color.
 Recent picks are stored per account. The catalog is grouped and excludes layout
 and editing glyphs from the picker without invalidating existing stored icons.
-Icon search also includes matching emoji. Arrow keys move through the grid,
-Enter picks, and typing focuses search. The Emoji category bar stays pinned.
+Icon search also includes matching emoji. Both catalogs render virtualized rows,
+including search results. Arrow keys traverse all rows, not only mounted cells;
+Enter picks, and typing focuses search. Recent reordering preserves focus. The
+Emoji category bar stays pinned and jumps to unmounted sections.
 Opening the editor must not blank or remount the surrounding app.
 
 Readers, including public viewers, see saved appearance wherever an entity icon

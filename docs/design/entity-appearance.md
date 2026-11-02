@@ -31,10 +31,11 @@ wire types from the Rust schemas, not hand-written frontend DTOs.
 ## Editing
 
 Header icons and existing entity menus open the same lazy editor. Desktop uses
-a 344px anchored popover; mobile uses a bottom sheet. Document titles place a
-custom icon inline, or show Add icon before the other title pills for editors.
-Row and breadcrumb icons retain navigation behavior. Popup loading stays inside
-the dialog's Suspense boundary without suspending the surrounding app.
+a 344px anchored popover; mobile uses a bottom sheet. Document header icons are
+editable controls separate from breadcrumb name navigation. Document content
+titles have no leading icon; Add icon appears before the other title pills when
+unset. Row icons retain navigation. Popup loading stays inside the dialog's
+Suspense boundary without suspending the surrounding app.
 
 Each icon, emoji, color, or Remove pick saves immediately through the existing
 optimistic, per-entity serialized path. The picker stays open; dismissal does
@@ -43,8 +44,10 @@ choice is pending. Async completion stays scoped to the opening account.
 
 Icons are grouped, with up to nine account-scoped recent picks first. Picker-only
 curation excludes layout/editing glyphs without changing the stored catalog.
-Icon search also matches emoji; the Emoji tab groups the shared emoji catalog
-and pins category navigation. Arrow keys move between cells and Enter selects.
+Icon search also matches emoji. Both catalogs and search results use virtualized
+rows; keyboard navigation reaches unmounted rows, and focused choices survive
+Recent reordering. The Emoji tab groups the shared catalog and pins category
+navigation. Arrow keys move between cells and Enter selects.
 
 Colors appear only on Icons. Default is a ring in the entity type color, followed
 by the nine palette colors. Remove clears only the icon. There is no draft,
