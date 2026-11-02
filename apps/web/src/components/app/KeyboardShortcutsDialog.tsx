@@ -22,7 +22,8 @@ function ShortcutRow(props: {
   return (
     <li class="flex min-h-8 items-center justify-between gap-4 text-sm">
       <span class="flex min-w-0 items-center gap-2">
-        <span class="min-w-0 truncate text-ink">{props.entry.description}</span>
+        {/* Wraps rather than truncates: a row of many keys leaves it little room. */}
+        <span class="min-w-0 text-ink">{props.entry.description}</span>
         <Show when={props.showProfile && props.entry.profileLabel}>
           {(label) => (
             <span class="shrink-0 text-xs text-ink-extra-muted">{label()}</span>
