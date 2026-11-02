@@ -261,18 +261,21 @@ Sharing configuration.
 
 ### toJSON()
 
-> **toJSON**(): \{ `detail?`: [`AgentSessionResponse`](../../../../../generated/agent-harness/types.gen/type-aliases/AgentSessionResponse.md); `id`: `string`; \}
+> **toJSON**(): \{ `detail?`: [`AgentSessionResponse`](../../../../../generated/agent-harness/types.gen/type-aliases/AgentSessionResponse.md); `id`: `string`; `url`: `string`; \}
+
+Identity, loaded detail and [webUrl](#weburl), so serialized handles carry their link.
 
 #### Returns
 
-\{ `detail?`: [`AgentSessionResponse`](../../../../../generated/agent-harness/types.gen/type-aliases/AgentSessionResponse.md); `id`: `string`; \}
+\{ `detail?`: [`AgentSessionResponse`](../../../../../generated/agent-harness/types.gen/type-aliases/AgentSessionResponse.md); `id`: `string`; `url`: `string`; \}
 
 | Name | Type |
 | ------ | ------ |
 | `detail?` | [`AgentSessionResponse`](../../../../../generated/agent-harness/types.gen/type-aliases/AgentSessionResponse.md) |
 | `id` | `string` |
+| `url` | `string` |
 
-#### Inherited from
+#### Overrides
 
 [`MacroEntity`](../../../entity/classes/MacroEntity.md).[`toJSON`](../../../entity/classes/MacroEntity.md#tojson)
 
@@ -342,6 +345,18 @@ Replace sharing grants.
 #### Returns
 
 `Promise`\<[`SharePermissionV2`](../../../../../generated/agent-harness/types.gen/type-aliases/SharePermissionV2.md)\>
+
+***
+
+### webUrl()
+
+> **webUrl**(): `string`
+
+The session's URL in the Macro web app; hand it to users as the link.
+
+#### Returns
+
+`string`
 
 ***
 
