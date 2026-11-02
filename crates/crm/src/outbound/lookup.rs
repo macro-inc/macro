@@ -27,7 +27,7 @@ impl PgCrmParentReader {
     async fn company(&self, id: Uuid) -> Result<Option<CrmParentFacts>, sqlx::Error> {
         sqlx::query!(
             r#"
-            SELECT c.team_id, c.id AS company_id,
+            SELECT c.team_id, c.id AS "company_id?",
                    COALESCE(c.custom_name, dd.name, primary_domain.domain) AS name
             FROM crm_companies c
             LEFT JOIN LATERAL (
@@ -59,9 +59,8 @@ impl PgCrmParentReader {
     async fn contact(&self, id: Uuid) -> Result<Option<CrmParentFacts>, sqlx::Error> {
         sqlx::query!(
             r#"
-            SELECT c.team_id, ct.company_id, COALESCE(NULLIF(ct.name, ''), ct.email) AS "name!"
+            SELECT ct.team_id, ct.company_id, COALESCE(NULLIF(ct.name, ''), ct.email, '') AS "name!"
             FROM crm_contacts ct
-            JOIN crm_companies c ON c.id = ct.company_id
             WHERE ct.id = $1
             "#,
             id,

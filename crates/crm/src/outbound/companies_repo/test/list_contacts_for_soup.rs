@@ -44,7 +44,10 @@ async fn combines_authorized_teams_before_collapsing_email(pool: PgPool) {
     let rows = list(&repo, Expr::val(Contact::Include)).await;
     assert_eq!(ids(&rows), [1011, 1005, 1004, 1010].map(id));
     assert_eq!(rows[0].team_id, id(11));
-    assert_eq!(rows[0].company_name, "Company 101");
+    assert_eq!(
+        rows[0].company_name.as_deref().map(str::to_owned),
+        Some("Company 101".to_owned())
+    );
     assert!(
         list(&repo, Expr::val(Contact::TeamId(id(14))))
             .await

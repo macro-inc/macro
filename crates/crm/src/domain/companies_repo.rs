@@ -1,8 +1,9 @@
 //! Port for persistence operations on CRM companies.
 
 use crate::domain::model::{
-    CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError, CrmScopePrecheck,
-    CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome, DomainMetadata,
+    CrmBlockedDomain, CrmCompanyForSoup, CrmCompanyWithContacts, CrmContact, CrmError,
+    CrmScopePrecheck, CrmTeamSettings, CrmTeamSettingsPatch, DepopulateContactOutcome,
+    DomainMetadata,
 };
 use chrono::{DateTime, Utc};
 
@@ -137,6 +138,8 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     ///   `last_interaction = GREATEST(stored, $last_at)`. Upsert
     ///   `crm_contacts` with the same merge. Upsert
     ///   `crm_contact_sources`.
+    /// - **Blocked domain**: no-op when the domain is on the team's
+    ///   blocklist ([`CompaniesRepository::block_domain`]).
     /// - **`is_sent=false`**: no-op when no `crm_companies` row exists
     ///   for `(team, domain)`. When one exists, refresh only the
     ///   company's `last_interaction = GREATEST(stored, $last_at)`
@@ -167,6 +170,73 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
         first_at: DateTime<Utc>,
         last_at: DateTime<Utc>,
         is_sent: bool,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Files a personal-provider address (gmail.com etc.) as a contact
+    /// without a company, the counterpart of [`populate_contact`] for
+    /// domains no company may own. In one transaction, under the same
+    /// per-`(team, lower(domain))` advisory lock:
+    ///
+    /// 1. No-ops when the team's CRM is off, the team keeps personal
+    ///    emails out (`exclude_personal_emails`, the default), or the
+    ///    domain is on the team's blocklist.
+    /// 2. `is_sent = true` upserts the company-less contact for
+    ///    `(team, lower(email))`, merging interactions like
+    ///    [`populate_contact`]; `is_sent = false` only refreshes an
+    ///    existing one (received mail never creates a contact).
+    /// 3. Records the `crm_contact_sources` row for `link_id`.
+    ///
+    /// [`populate_contact`]: CompaniesRepository::populate_contact
+    #[allow(clippy::too_many_arguments)]
+    fn populate_unfiled_contact(
+        &self,
+        team_id: &uuid::Uuid,
+        link_id: &uuid::Uuid,
+        domain: &str,
+        email: &str,
+        name: Option<&str>,
+        first_at: DateTime<Utc>,
+        last_at: DateTime<Utc>,
+        is_sent: bool,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Manually creates a contact for `team_id` without a company, with
+    /// a display `name` and an optional `email` (any domain). Returns
+    /// [`CrmError::CrmDisabledForTeam`] when the team's CRM is off and
+    /// [`CrmError::ContactAlreadyExistsForCompany`] when the team
+    /// already has a company-less contact for the email. The row is
+    /// `manually_created`, so link teardown never deletes it.
+    fn create_contact_for_team(
+        &self,
+        team_id: &uuid::Uuid,
+        email: Option<&str>,
+        name: &str,
+        now: DateTime<Utc>,
+    ) -> impl Future<Output = Result<CrmContact, CrmError>> + Send;
+
+    /// The domains `team_id` keeps out of email sync, alphabetically.
+    fn list_blocked_domains(
+        &self,
+        team_id: &uuid::Uuid,
+    ) -> impl Future<Output = Result<Vec<CrmBlockedDomain>, CrmError>> + Send;
+
+    /// Adds `domain` (lowercase) to `team_id`'s blocklist and hides what
+    /// the CRM already holds for it: the company owning the domain with
+    /// its contacts, and company-less contacts at the domain.
+    /// Idempotent.
+    fn block_domain(
+        &self,
+        team_id: &uuid::Uuid,
+        domain: &str,
+    ) -> impl Future<Output = Result<(), CrmError>> + Send;
+
+    /// Removes `domain` (lowercase) from `team_id`'s blocklist and
+    /// un-hides what [`CompaniesRepository::block_domain`] hid.
+    /// Idempotent.
+    fn unblock_domain(
+        &self,
+        team_id: &uuid::Uuid,
+        domain: &str,
     ) -> impl Future<Output = Result<(), CrmError>> + Send;
 
     /// Manually creates a company for `team_id` with a team-scoped

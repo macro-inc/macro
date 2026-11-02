@@ -26,7 +26,7 @@ async fn get_contact_returns_owned_visible_contact(pool: PgPool) -> anyhow::Resu
         .expect("contact should be returned");
 
     assert_eq!(contact.id, contact_id);
-    assert_eq!(contact.company_id, company_id);
+    assert_eq!(contact.company_id, Some(company_id));
     assert_eq!(contact.email.as_deref(), Some("alice@acme.com"));
     assert_eq!(contact.name.as_deref(), Some("Alice Adams"));
     Ok(())

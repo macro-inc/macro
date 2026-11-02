@@ -119,6 +119,45 @@ impl CompaniesRepository for StubRepo {
         Err(CrmError::CompanyNotFoundForTeam)
     }
 
+    async fn populate_unfiled_contact(
+        &self,
+        _team_id: &uuid::Uuid,
+        _link_id: &uuid::Uuid,
+        _domain: &str,
+        _email: &str,
+        _name: Option<&str>,
+        _first_at: DateTime<Utc>,
+        _last_at: DateTime<Utc>,
+        _is_sent: bool,
+    ) -> Result<(), CrmError> {
+        unimplemented!()
+    }
+
+    async fn create_contact_for_team(
+        &self,
+        _team_id: &uuid::Uuid,
+        _email: Option<&str>,
+        _name: &str,
+        _now: DateTime<Utc>,
+    ) -> Result<CrmContact, CrmError> {
+        unimplemented!()
+    }
+
+    async fn list_blocked_domains(
+        &self,
+        _team_id: &uuid::Uuid,
+    ) -> Result<Vec<crate::domain::model::CrmBlockedDomain>, CrmError> {
+        unimplemented!()
+    }
+
+    async fn block_domain(&self, _team_id: &uuid::Uuid, _domain: &str) -> Result<(), CrmError> {
+        unimplemented!()
+    }
+
+    async fn unblock_domain(&self, _team_id: &uuid::Uuid, _domain: &str) -> Result<(), CrmError> {
+        unimplemented!()
+    }
+
     async fn lookup_domain_metadata(
         &self,
         _domain: &str,
@@ -606,6 +645,10 @@ async fn member_cannot_update_governance_fields() {
             closed_stage_ids: Some(Some(vec![uuid::Uuid::now_v7()])),
             ..Default::default()
         },
+        CrmTeamSettingsPatch {
+            exclude_personal_emails: Some(false),
+            ..Default::default()
+        },
     ] {
         let err = service()
             .update_team_settings(&access, patch)
@@ -895,5 +938,23 @@ async fn set_contact_hidden_requires_admin_role() {
             .set_contact_hidden(&contact_edit_receipt_with_role(role), true)
             .await
             .unwrap();
+    }
+}
+
+#[tokio::test]
+async fn blocking_a_domain_requires_admin_and_a_bare_domain() {
+    let err = service()
+        .set_domain_blocked(&receipt_with_role(TeamRole::Member), "acme.com", true)
+        .await
+        .unwrap_err();
+    assert!(matches!(err, CrmError::SettingsAdminRequired));
+
+    let admin = receipt_with_role(TeamRole::Admin);
+    for domain in ["", "https://acme.com", "jane@acme.com", "acme"] {
+        let err = service()
+            .set_domain_blocked(&admin, domain, true)
+            .await
+            .unwrap_err();
+        assert!(matches!(err, CrmError::InvalidRequest(_)), "{domain:?}");
     }
 }
