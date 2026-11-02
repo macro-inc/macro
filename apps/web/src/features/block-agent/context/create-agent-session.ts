@@ -15,6 +15,7 @@ import {
   type IssueResult,
 } from '@core/agent-session/AgentSession';
 import {
+  forgetRecentlyViewed,
   isRecentlyViewed,
   retainRecentlyViewed,
 } from '@core/agent-session/recently-viewed';
@@ -277,10 +278,18 @@ export function createAgentSession(
         setSettleFailure(undefined);
       });
 
+      // Held open since an earlier view: the fold is current, so it goes
+      // straight up. The row is from that view, and is read again behind it.
+      if (reused) {
+        const row = await settle(session, renameRefreshAtStart);
+        // Started as the resource resolves, so its answer cannot land first.
+        if (!superseded(session)) {
+          fireAndForget(revalidateRow(session), 'agent-session');
+        }
+        return row;
+      }
+
       const cached = await session.warm();
-      // Held open since an earlier view: the fold is current, but the row
-      // is from that load, so it is read again behind the transcript.
-      if (reused) refreshRow(session.id);
       if (!cached || superseded(session)) {
         return settle(session, renameRefreshAtStart);
       }
@@ -334,25 +343,49 @@ export function createAgentSession(
   );
 
   let updateRefresh = 0;
-  function refreshRow(id: string) {
-    const run = ++updateRefresh;
-    fireAndForget(
-      (async () => {
-        const session = await agentHarnessServiceClient.get(id);
-        if (session.isErr() || run !== updateRefresh || id !== sessionId()) {
-          return;
-        }
-        mutate((current) => (current ? session.value : current));
-      })(),
-      'agent-session'
-    );
-  }
   onCleanup(
     subscribeAgentSessionUpdated((event) => {
-      if (event.agentSessionId === sessionId())
-        refreshRow(event.agentSessionId);
+      if (event.agentSessionId !== sessionId()) return;
+      const run = ++updateRefresh;
+      fireAndForget(
+        (async () => {
+          const session = await agentHarnessServiceClient.get(
+            event.agentSessionId
+          );
+          if (
+            session.isErr() ||
+            run !== updateRefresh ||
+            event.agentSessionId !== sessionId()
+          ) {
+            return;
+          }
+          mutate((current) => (current ? session.value : current));
+        })(),
+        'agent-session'
+      );
     })
   );
+
+  /**
+   * The row of a session held open since an earlier view, read again. A
+   * refusal ends the reopen as a denied load would have; a newer rename or
+   * update wins over this read.
+   */
+  async function revalidateRow(session: AgentSession): Promise<void> {
+    const run = ++updateRefresh;
+    const renameRefreshAtStart = renameRefresh;
+    const row = await session.readRow();
+    if (run !== updateRefresh || superseded(session)) return;
+    if (row.isErr()) {
+      if (row.error === 'denied') {
+        forgetRecentlyViewed(session.id);
+        setSettleFailure(new AgentSessionAccessDenied(session.id));
+      }
+      return;
+    }
+    if (renameRefresh !== renameRefreshAtStart) return;
+    mutate((current) => (current ? row.value : current));
+  }
 
   // A first fetch would suspend; see `openedPending`.
   //

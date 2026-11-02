@@ -49,6 +49,9 @@ vi.mock('@queries/agent-session/session-metadata-sync', () => ({
 
 const { cleanup, render, screen } = await import('@solidjs/testing-library');
 const { AgentSession } = await import('@core/agent-session/AgentSession');
+const { forgetRecentlyViewed } = await import(
+  '@core/agent-session/recently-viewed'
+);
 const { createAgentSession } = await import('./create-agent-session');
 
 const SESSION = '01a0ced3-b839-75ee-bc9b-7b0a11ce0789';
@@ -77,6 +80,7 @@ const mount = () =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  forgetRecentlyViewed(SESSION);
   for (
     let leaked = AgentSession.get(SESSION);
     leaked;
@@ -147,5 +151,35 @@ describe('createAgentSession', () => {
     mount();
     expect(await screen.findByText('no access')).toBeTruthy();
     expect(screen.queryByText('loading')).toBeNull();
+  });
+
+  describe('a session viewed before', () => {
+    const viewAndLeave = async () => {
+      mount();
+      expect(await screen.findByText('A session')).toBeTruthy();
+      cleanup();
+    };
+
+    it('reopens without fetching the log again, and reads the row behind it', async () => {
+      await viewAndLeave();
+      harness.get.mockResolvedValue(ok({ ...session, name: 'Renamed' }));
+
+      mount();
+      expect(await screen.findByText('Renamed')).toBeTruthy();
+      expect(logSource.fetched).toHaveBeenCalledOnce();
+      expect(harness.get).toHaveBeenCalledTimes(2);
+    });
+
+    it('closes on a refusal of the reread row', async () => {
+      await viewAndLeave();
+      harness.get.mockResolvedValue(err([{ code: 'FORBIDDEN' }]));
+
+      mount();
+      expect(await screen.findByText('no access')).toBeTruthy();
+      expect(screen.getByText('untitled')).toBeTruthy();
+      cleanup();
+      // No longer held: nothing keeps the refused session open.
+      expect(AgentSession.get(SESSION)).toBeUndefined();
+    });
   });
 });

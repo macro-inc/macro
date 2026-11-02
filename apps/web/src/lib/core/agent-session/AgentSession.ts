@@ -52,6 +52,7 @@ import type {
 } from '@service-agent-harness/generated/schemas';
 import { subscribeGraphqlSoupReconnected } from '@service-storage/graphql-soup';
 import { CombinedError } from '@urql/core';
+import { err, ok, type Result } from 'neverthrow';
 import { v7 as uuidv7 } from 'uuid';
 import {
   type LoadFailure,
@@ -365,6 +366,19 @@ export class AgentSession {
    * afresh. The old watch is stopped first: its rows belong to a load that
    * is no longer the one in flight.
    */
+  /**
+   * Read the session row again, for a surface reopening a session that was
+   * held open since an earlier view: the fold is current, the row may not
+   * be. A refusal forgets the cached log, as a load's does.
+   */
+  async readRow(): Promise<Result<AgentSessionResponse, 'denied' | 'failed'>> {
+    const row = await agentHarnessServiceClient.get(this.id);
+    if (row.isOk()) return ok(row.value);
+    if (!accessDenied(row.error)) return err('failed');
+    this.forgetCached();
+    return err('denied');
+  }
+
   private reissueReads(): void {
     this.watch.stop();
     this.watch = this.openWatch();

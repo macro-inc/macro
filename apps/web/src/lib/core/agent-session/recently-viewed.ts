@@ -31,6 +31,14 @@ export function retainRecentlyViewed(id: string): void {
   }
 }
 
+/** Stop holding `id`, for a session the viewer may no longer see. */
+export function forgetRecentlyViewed(id: string): void {
+  const held = retained.get(id);
+  if (!held) return;
+  retained.delete(id);
+  held.release();
+}
+
 /** Whether `id` is held open from an earlier view. */
 export function isRecentlyViewed(id: string): boolean {
   return retained.has(id);
