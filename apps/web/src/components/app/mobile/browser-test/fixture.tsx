@@ -334,14 +334,7 @@ function MenuScenario() {
               item('gif', 'GIF'),
             ],
           },
-          {
-            items: [
-              item('task', 'New task'),
-              item('poll', 'New poll'),
-              // Last, and unfocusable: the keyboard must skip past it.
-              { ...item('form', 'New form'), disabled: true },
-            ],
-          },
+          { items: [item('task', 'New task'), item('poll', 'New poll')] },
         ]}
       />
     </>

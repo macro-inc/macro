@@ -1,7 +1,6 @@
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
 import Drawer, { type Size } from '@corvu/drawer';
-import { callHandler } from '@kobalte/utils';
 import { Layer } from '@ui/components/Layer';
 import { cn } from '@ui/utils/classname';
 import {
@@ -41,40 +40,9 @@ export function scrollToFocusedInput(e: FocusEvent, offset = 40) {
   }, 300);
 }
 
-/**
- * Everything Corvu's focus trap counts as a tab stop. Mirrors the trap's own
- * selector so the sheet wraps around the same elements it does.
- */
+/** Corvu's focus trap's own selector, to read the stop it would focus. */
 const FOCUSABLE_SELECTOR =
   'a[href]:not([tabindex="-1"]), button:not([tabindex="-1"]), input:not([tabindex="-1"]), textarea:not([tabindex="-1"]), select:not([tabindex="-1"]), details:not([tabindex="-1"]), [tabindex]:not([tabindex="-1"])';
-
-/** A sheet's tab stops, in order. A disabled control cannot take focus. */
-function tabStops(sheet: Element) {
-  return [...sheet.querySelectorAll<HTMLElement>(FOCUSABLE_SELECTOR)].filter(
-    (element) => !element.matches(':disabled')
-  );
-}
-
-/** What Corvu's content hands an `onKeyDown`, so the two compose. */
-type ContentKeyboardEvent = KeyboardEvent & {
-  currentTarget: EventTarget | null;
-  target: Element;
-};
-
-/**
- * The sheet itself holds focus when it opens, so Corvu's wrap handlers — which
- * sit on the first and last control — never see the first Shift+Tab. Without
- * this it would leave the sheet for the page its scrim covers.
- */
-function wrapShiftTabFromContent(event: KeyboardEvent) {
-  const content = event.currentTarget as HTMLElement;
-  if (event.key !== 'Tab' || !event.shiftKey || event.target !== content)
-    return;
-  const last = tabStops(content).at(-1);
-  if (!last) return;
-  event.preventDefault();
-  last.focus();
-}
 
 /**
  * Drop-in replacement for `Drawer.Content` that handles mobile keyboard
@@ -99,7 +67,6 @@ function MobileDrawerContent(
     'class',
     'maxHeight',
     'targetHeight',
-    'onKeyDown',
   ]);
 
   const maxHeight = () =>
@@ -117,12 +84,6 @@ function MobileDrawerContent(
       <Drawer.Content
         onFocusIn={(e: FocusEvent) => {
           scrollToFocusedInput(e);
-        }}
-        // Composed, not spread with the rest: a sheet with keys of its own
-        // must not silently take the Shift+Tab wrap with them.
-        onKeyDown={(event: ContentKeyboardEvent) => {
-          callHandler(event, local.onKeyDown);
-          if (!event.defaultPrevented) wrapShiftTabFromContent(event);
         }}
         style={{
           '--drawer-max-h': `${maxHeight()}dvh`,
@@ -339,7 +300,7 @@ function focusSheetOverItsFirstRow(event: Event) {
     event.preventDefault();
     return;
   }
-  if (isEditableInput(tabStops(sheet)[0])) return;
+  if (isEditableInput(sheet.querySelector(FOCUSABLE_SELECTOR))) return;
   event.preventDefault();
   sheet.focus();
 }

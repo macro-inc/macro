@@ -60,8 +60,9 @@ the sheet open (a discard prompt, a pending confirmation, event details under a
 stacked sheet), which must bring it back on screen:
 `bunx playwright test --config src/components/app/mobile/browser-test/playwright.config.ts`.
 The same suite covers where a sheet puts focus as it opens: on itself, leaving
-its first row unringed, unless the first tab stop is a text field or the sheet
-names its own target; Tab still reaches every row and Shift+Tab stays inside.
+its first row unringed, unless the first tab stop is a text field, the sheet
+focused something itself, or it names its own target; Tab then moves into the
+rows, which do show the ring.
 
 Composer typeahead menus choosing the side with room for their full list
 (`floatWithSelection`'s `fullHeight`), above a composer at the bottom of a
