@@ -555,6 +555,10 @@ pub async fn build_tool_service_context_from_env(
         crate::tool_context::FormsToolConfig {
             app_origin: macro_service_urls::AppServiceUrl::new()?.to_string(),
             editing_worker_url: ai_editing_worker_url,
+            static_files: static_file_service_client::StaticFileServiceClient::new(
+                macro_auth::InternalApiKey::new()?.to_string(),
+                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+            ),
         },
     );
 

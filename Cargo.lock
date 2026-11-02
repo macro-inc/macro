@@ -8369,6 +8369,7 @@ dependencies = [
  "serde",
  "serde_json",
  "sqlx",
+ "static_file_service_client",
  "strum 0.27.2",
  "thiserror 2.0.18",
  "tokio",
@@ -13301,6 +13302,7 @@ name = "models_forms"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "lazy-regex",
  "macro_uuid",
  "models_databases",
  "schemars 1.2.1",
@@ -18601,7 +18603,6 @@ dependencies = [
  "macro_user_id",
  "mention_utils",
  "messages",
- "notification",
  "reqwest 0.13.4",
  "rootcause",
  "serde",
@@ -18609,7 +18610,6 @@ dependencies = [
  "sha2 0.10.9",
  "slack_integration",
  "sqlx",
- "teams",
  "tokio",
  "tokio-util",
  "tracing",

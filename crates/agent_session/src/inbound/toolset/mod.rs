@@ -14,7 +14,7 @@ pub use coding_agents::{
 pub use context::SessionToolContext;
 pub use link_task::LinkTask;
 pub use read_agent_session::{ReadAgentSession, ReadAgentSessionContext};
-pub use set_pull_request::SetPullRequest;
+pub use set_pull_request::{SetPullRequest, SetPullRequestOutput};
 pub use task_pull_requests::TaskPullRequestsTool;
 
 mod manage_agent_session;

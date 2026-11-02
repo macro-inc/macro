@@ -5,6 +5,7 @@
  * OpenAPI spec version: 0.1.0
  */
 
+export * from './accentColor';
 export * from './accessiblePipeline';
 export * from './accessiblePipelineAllOf';
 export * from './accessLevel';
@@ -543,6 +544,7 @@ export * from './createChannelScopedBotRequestTokenExpiresAt';
 export * from './createChannelScopedBotRequestTokenLabel';
 export * from './createChannelScopedBotResponse';
 export * from './createCrmCompanyRequest';
+export * from './createCrmCompanyRequestDomain';
 export * from './createCrmContactRequest';
 export * from './createDatabaseRequest';
 export * from './createDatabaseWebhookRequest';
@@ -1044,6 +1046,10 @@ export * from './foreignEntity';
 export * from './foreignEntityFilters';
 export * from './form';
 export * from './formAccess';
+export * from './formBranding';
+export * from './formBrandingAccentColor';
+export * from './formBrandingCoverFileId';
+export * from './formBrandingLogoFileId';
 export * from './formClosesAt';
 export * from './formCollaboration';
 export * from './formDetail';
@@ -2246,7 +2252,10 @@ export * from './updateCrmTeamSettingsRequestDeleteRecordsRole';
 export * from './updateCrmTeamSettingsRequestEditStagesRole';
 export * from './updateCrmTeamSettingsRequestMoveClosedDealsRole';
 export * from './updateForm';
+export * from './updateFormAccentColor';
 export * from './updateFormClosesAt';
+export * from './updateFormCoverFileId';
+export * from './updateFormLogoFileId';
 export * from './updateInitiativeRequest';
 export * from './updateInitiativeRequestMemberIds';
 export * from './updateInitiativeRequestName';

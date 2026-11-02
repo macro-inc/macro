@@ -825,6 +825,10 @@ pub async fn build(
         ai_tools::FormsToolConfig {
             app_origin: macro_service_urls::AppServiceUrl::new()?.to_string(),
             editing_worker_url: config.ai_editing_worker_url.clone(),
+            static_files: static_file_service_client::StaticFileServiceClient::new(
+                internal_api_key.clone(),
+                macro_service_urls::StaticFileServiceUrl::new()?.to_string(),
+            ),
         },
     );
 

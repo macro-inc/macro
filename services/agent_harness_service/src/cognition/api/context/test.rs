@@ -495,6 +495,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ai_tools::FormsToolConfig {
             app_origin: "https://macro.test".into(),
             editing_worker_url: "http://localhost:8933".into(),
+            static_files: static_file_service_client::StaticFileServiceClient::new(
+                "test-internal-api-key".to_string(),
+                "http://localhost:0".to_string(),
+            ),
         },
     );
 
