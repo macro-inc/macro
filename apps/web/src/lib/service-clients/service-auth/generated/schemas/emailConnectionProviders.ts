@@ -7,10 +7,12 @@
 import type { EmailConnectionProvidersOutlookAdminConsentUrl } from './emailConnectionProvidersOutlookAdminConsentUrl';
 
 /**
- * Actual deployment availability for the provider selector.
+ * What the provider selector offers the requesting user.
  */
 export interface EmailConnectionProviders {
   gmail: boolean;
+  /** Whether this user may start a new Outlook connection: the deployment
+switch and their `enable-outlook` flag. */
   outlook: boolean;
   /** Where a Microsoft 365 administrator approves Macro for their whole
 directory. Present when Outlook is configured and the request named an
