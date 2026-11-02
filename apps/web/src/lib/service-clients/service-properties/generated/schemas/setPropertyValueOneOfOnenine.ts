@@ -7,9 +7,9 @@
 import type { SetPropertyValueOneOfOnenineType } from './setPropertyValueOneOfOnenineType';
 
 /**
- * Multiple link values (for multi-select link properties)
+ * Link value
  */
 export type SetPropertyValueOneOfOnenine = {
   type: SetPropertyValueOneOfOnenineType;
-  urls: string[];
+  url: string;
 };

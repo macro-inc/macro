@@ -1,0 +1,23 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        INSERT INTO email_attachments_drafts (\n            id, draft_id, file_name, content_type, sha, size, s3_key, content_id, is_inline\n        )\n        SELECT $1, $2, $3, $4, $5, $6, $7, $9, $10\n        FROM email_messages m\n        WHERE m.id = $2 AND m.link_id = $8\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text",
+        "Text",
+        "Text",
+        "Int4",
+        "Text",
+        "Uuid",
+        "Text",
+        "Bool"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "4ce2488ef69065e6459d7584600761b2bf64cef0f62c7449fecf35a6ab3ecac8"
+}

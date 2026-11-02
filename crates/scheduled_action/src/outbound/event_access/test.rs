@@ -166,13 +166,17 @@ async fn mints_entity_specific_receipts_for_exact_owner_and_entity() {
             permission,
             calls: Arc::default(),
         };
-        let adapter = EventAccessAdapter::new(service.clone());
+        let adapter = EventAccessAdapter::new(service.clone(), Claims(false));
         let event: EventReference = serde_json::from_value(json!({"event_id":generate_uuid_v7(), "event_name":name, "entity_id":generate_uuid_v7(), "message_id": if name == "email.message_received" {Some(generate_uuid_v7())} else {None}})).unwrap();
         let receipt = adapter.authorize(&owner, &event).await.unwrap().unwrap();
         assert!(receipt.authorizes(&owner, &event));
         assert_eq!(
             *service.calls.lock().unwrap(),
-            vec![(owner.to_string(), event.entity_id().to_string(), kind)]
+            vec![(
+                owner.to_string(),
+                event.entity_id().unwrap().to_string(),
+                kind
+            )]
         );
     }
 }
@@ -191,10 +195,13 @@ async fn wrong_permission_family_is_denied_not_reinterpreted() {
             },
         ),
     ] {
-        let adapter = EventAccessAdapter::new(AccessService {
-            permission,
-            calls: Arc::default(),
-        });
+        let adapter = EventAccessAdapter::new(
+            AccessService {
+                permission,
+                calls: Arc::default(),
+            },
+            Claims(false),
+        );
         let event = serde_json::from_value(json!({"event_id":generate_uuid_v7(), "event_name":name, "entity_id":generate_uuid_v7(), "message_id":null})).unwrap();
         assert!(adapter.authorize(&owner, &event).await.unwrap().is_none());
     }
@@ -216,4 +223,55 @@ fn denial_and_missing_entities_are_distinct_from_infrastructure_failures() {
     ] {
         assert!(access_result::<()>(Err(error)).is_err());
     }
+}
+
+/// Whether every user has a claim to every installation.
+struct Claims(bool);
+impl GithubInstallationClaims for Claims {
+    async fn is_linked(
+        &self,
+        _: &MacroUserIdStr<'_>,
+    ) -> Result<bool, github::domain::models::GithubError> {
+        Ok(self.0)
+    }
+
+    async fn has_claim(
+        &self,
+        _: &MacroUserIdStr<'_>,
+        _: u64,
+    ) -> Result<bool, github::domain::models::GithubError> {
+        Ok(self.0)
+    }
+}
+
+fn github_event(installation_id: u64) -> EventReference {
+    serde_json::from_value(json!({
+        "event_id": generate_uuid_v7(),
+        "event_name": "github",
+        "github": { "event": "push", "installation_id": installation_id },
+    }))
+    .unwrap()
+}
+
+#[tokio::test]
+async fn github_deliveries_follow_the_installation_claim_and_bind_to_it() {
+    let owner = MacroUserIdStr::parse_from_str("macro|owner@macro.com").unwrap();
+    let service = AccessService {
+        permission: EntityPermission::AccessLevel {
+            access_level: AccessLevel::View,
+        },
+        calls: Arc::default(),
+    };
+    let event = github_event(7);
+
+    let claimed = EventAccessAdapter::new(service.clone(), Claims(true));
+    let capability = claimed.authorize(&owner, &event).await.unwrap().unwrap();
+    assert!(capability.authorizes(&owner, &event));
+    assert!(!capability.authorizes(&owner, &github_event(8)));
+    let stranger = MacroUserIdStr::parse_from_str("macro|stranger@macro.com").unwrap();
+    assert!(!capability.authorizes(&stranger, &event));
+
+    let unclaimed = EventAccessAdapter::new(service.clone(), Claims(false));
+    assert!(unclaimed.authorize(&owner, &event).await.unwrap().is_none());
+    assert!(service.calls.lock().unwrap().is_empty());
 }

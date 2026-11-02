@@ -10,7 +10,7 @@ use rootcause::Report;
 use super::{
     models::{
         BotActingUserClaims, BotAuthentication, BotAuthorizationOwner, BotScope,
-        BotTokenAuthorization, MacroAuthorizationError, MacroUserAuthentication,
+        BotTokenAuthorization, CredentialOrigin, MacroAuthorizationError, MacroUserAuthentication,
         ResolvedBotActingUser,
     },
     ports::{BotAuthorizationRepo, BotAuthorizer},
@@ -153,6 +153,7 @@ where
 fn user_authentication(acting_user: ResolvedBotActingUser) -> MacroUserAuthentication {
     let user_id = acting_user.macro_user_id.as_ref().to_owned();
     MacroUserAuthentication {
+        origin: CredentialOrigin::Bot,
         agent_id: None,
         macro_user_id: acting_user.macro_user_id,
         user_context: UserContext {

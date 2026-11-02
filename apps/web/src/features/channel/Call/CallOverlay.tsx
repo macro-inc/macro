@@ -4,7 +4,7 @@ import { useAuthor, useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getDisplayName, tryMacroId } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ChatIcon from '@phosphor/chat-circle.svg';
+import ChatIcon from '@icon/system/regular/chat-circle.svg';
 import { cn, InlineCheckbox, Tooltip } from '@ui';
 import type { RemoteParticipant, Track } from 'livekit-client';
 import {
@@ -55,16 +55,26 @@ function ParticipantTileWrapper(props: {
   isConnecting?: boolean;
   class?: string;
 }) {
+  // Fills its cell, but never wider than 16:9: on a wide panel a full-width
+  // tile crops a 16:9 camera to a zoomed-in strip. Taller cells (phones,
+  // grids) still fill, so portrait video keeps the space.
+  // The minimum height sits on the cell: size containment ignores content.
   return (
     <div
       class={cn(
-        'relative flex items-center justify-center rounded-lg overflow-hidden bg-panel min-h-30 border border-edge-muted',
-        props.isSpeaking && 'ring-inset ring-2 ring-accent',
-        props.isConnecting && 'animate-pulse',
+        'flex size-full min-h-30 items-center justify-center [container-type:size]',
         props.class
       )}
     >
-      {props.children}
+      <div
+        class={cn(
+          'relative flex h-full w-[min(100cqw,calc(100cqh*16/9))] items-center justify-center rounded-lg overflow-hidden bg-panel border border-edge-muted',
+          props.isSpeaking && 'ring-inset ring-2 ring-accent',
+          props.isConnecting && 'animate-pulse'
+        )}
+      >
+        {props.children}
+      </div>
     </div>
   );
 }
@@ -345,7 +355,6 @@ export function CallOverlay(props: {
               when={participants().length > 0}
               fallback={
                 <LocalParticipantTile
-                  class="size-full"
                   isSpeaking={isLocalSpeaking()}
                   isConnecting={isConnecting()}
                   isAudioMuted={callCtx.isAudioMuted()}
@@ -374,7 +383,7 @@ export function CallOverlay(props: {
               {/* Local participant PIP (Google Meet style: small, bottom-right) */}
               <div class="absolute bottom-4 right-4 w-40 aspect-video shadow-lg z-10 sm:w-48">
                 <LocalParticipantTile
-                  class="size-full min-h-0"
+                  class="min-h-0"
                   isSpeaking={isLocalSpeaking()}
                   isConnecting={isConnecting()}
                   isAudioMuted={callCtx.isAudioMuted()}

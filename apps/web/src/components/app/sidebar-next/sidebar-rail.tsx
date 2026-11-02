@@ -1,3 +1,4 @@
+import { useCalendarPreferences } from '@app/features/calendar/utils/preferences';
 import { useHasActiveChannelsCall } from '@app/features/channels-view/use-has-active-call';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { globalSplitManager } from '@app/signal/splitLayout';
@@ -12,9 +13,9 @@ import { ListNav, type ListNavProps } from './list-nav';
 import { MoreMenu } from './more-menu';
 import { visibleNavItems } from './nav-items';
 import { useNextMeetingBadge } from './queries/use-next-meeting-badge';
+import { ReturnToCallButton } from './return-to-call-button';
 import { SearchRailButton } from './search-bar-button';
 import { useNavItemGates } from './use-nav-item-gates';
-import { SidebarPrefsProvider } from './use-sidebar-prefs';
 
 function ChannelsListNav(props: Omit<ListNavProps, 'activeCall'>) {
   const hasActiveCall = useHasActiveChannelsCall();
@@ -33,20 +34,15 @@ function CalendarListNav(props: Omit<ListNavProps, 'badge'>) {
  * Always narrow by design — there is no slim mode or hover-peek overlay.
  * `cmd+.` toggles navigation in the active workspace. The `g`-prefixed
  * nav shortcuts are registered by `GoToHotkeys`, which `Layout` mounts
- * separately. There is no room for leader-key hints on the buttons, so each
- * button's tooltip carries its shortcut instead.
+ * separately. Each button's tooltip carries its shortcut, and after `g` is
+ * pressed each button shows its destination key in a corner badge.
  */
-export const SidebarRail = () => (
-  <SidebarPrefsProvider>
-    <SidebarRailContent />
-  </SidebarPrefsProvider>
-);
-
-const SidebarRailContent = () => {
+export const SidebarRail = () => {
   const gates = useNavItemGates();
   const analytics = useAnalytics();
   const layout = useSplitLayout();
   const hasUnread = useNavigationUnread();
+  const [calendarPreferences] = useCalendarPreferences();
 
   const _openHome = (event: MouseEvent) => {
     if (event.button !== 0) return;
@@ -90,7 +86,12 @@ const SidebarRailContent = () => {
                       />
                     </Suspense>
                   </Match>
-                  <Match when={item.id === 'calendar'}>
+                  <Match
+                    when={
+                      item.id === 'calendar' &&
+                      calendarPreferences.showNextMeetingBadge
+                    }
+                  >
                     <Suspense fallback={<ListNav item={item} />}>
                       <CalendarListNav item={item} />
                     </Suspense>
@@ -106,6 +107,7 @@ const SidebarRailContent = () => {
 
       <div class="min-h-0 flex-1" />
 
+      <ReturnToCallButton />
       <FooterActions />
     </div>
   );

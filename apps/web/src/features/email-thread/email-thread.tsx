@@ -1,11 +1,12 @@
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
-import { useEmail, useUserContext } from '@core/context/user';
+import { useUserContext } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useContacts } from '@core/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createEffectOnEntityTypeNotification } from '@notifications';
 import { InlineFetchedEntityTagsPill } from '@property/tags';
 import { clearSavedDraftThreadCache } from '@queries/email/draft-cache';
+import { useInboxEmail } from '@queries/email/inbox-email';
 import type { ThreadQueryTransport } from '@queries/email/thread';
 import {
   type Accessor,
@@ -28,6 +29,7 @@ import type {
   EmailMessage,
 } from '../email-message/core/email-message';
 import { operationSettled } from '../email-message/core/message-operation';
+import { showsReadReceiptPixel } from '../email-message/core/read-receipt';
 import { EmailMessageOperation } from '../email-message/email-message-operation';
 import { createEmailRenderingContext } from '../email-message/rendering-adapter';
 import { EmailSenderIcon } from '../email-message/sender-icon-adapter';
@@ -43,6 +45,7 @@ import type {
 import type { EmailThreadOrganizationStatus } from './context/email-thread-view-context';
 import { EmailThreadOperations } from './email-thread-operations';
 import { createOptimisticThreadSend } from './primitives/optimistic-send';
+import { createThreadReadReceipts } from './read-receipts';
 import { createThreadActionAdapter } from './thread-action-adapter';
 import {
   EmailThreadSurface,
@@ -64,12 +67,12 @@ export function EmailThread(props: EmailThreadProps) {
   // mounting the body does not start a second disk read/network request.
   const [calendarPreferences] = useCalendarPreferences();
   const contacts = useContacts();
-  const viewerEmail = useEmail();
   const user = useUserContext();
   const compose = createEmailComposeContext({
     threadTransport: props.threadTransport,
   });
   const source = createOptimisticThreadSend(props.source, compose);
+  const viewerEmail = useInboxEmail(() => source.thread()?.link_id);
   const threadContext: EmailThreadContext = {
     source,
     viewerEmail,
@@ -142,6 +145,9 @@ export function EmailThread(props: EmailThreadProps) {
       renderAvatar: (message: EmailMessage) => (
         <EmailSenderIcon message={message} />
       ),
+      readReceipt: createThreadReadReceipts(() => props.threadId()),
+      showReadReceiptPixel: (message: EmailMessage) =>
+        showsReadReceiptPixel(message, compose.accounts.inboxes()),
     },
   };
   const rendering = createEmailRenderingContext();

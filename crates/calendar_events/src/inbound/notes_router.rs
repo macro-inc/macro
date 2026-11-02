@@ -11,7 +11,7 @@ use axum::{
     routing::{get, put},
 };
 use entity_access::domain::{
-    models::{AccessError, EntityType, OwnerAccessLevel},
+    models::{AccessError, EntityType, OwnerAccessLevel, ViewAccessLevel},
     ports::EntityAccessService,
 };
 use macro_authorization::{
@@ -199,7 +199,7 @@ pub async fn note_documents<
     ))
 }
 
-/// List an owned document's meeting grants, including unavailable meetings.
+/// List a document's visible meeting links; owners also see unavailable grants.
 #[utoipa::path(get, path="/meeting-notes/documents/{document_id}/links", params(("document_id" = String, Path)), responses((status=200, body=Vec<DocumentNoteLink>)), tag="calendar_events")]
 pub async fn document_note_links<
     S: MeetingNotesService,
@@ -212,7 +212,7 @@ pub async fn document_note_links<
 ) -> Result<Json<Vec<DocumentNoteLink>>, NotesApiError> {
     let receipt = state
         .access
-        .generate_entity_access_receipt::<OwnerAccessLevel>(
+        .generate_entity_access_receipt::<ViewAccessLevel>(
             &user.authorization.user.macro_user_id,
             user.authorization
                 .user

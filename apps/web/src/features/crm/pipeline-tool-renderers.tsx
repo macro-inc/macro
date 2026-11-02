@@ -1,7 +1,7 @@
 import { BaseTool } from '@core/component/AI/component/tool/BaseTool';
 import { createToolRenderer } from '@core/component/AI/component/tool/ToolRenderer';
-import FileCsv from '@phosphor-icons/core/regular/file-csv.svg';
-import Kanban from '@phosphor-icons/core/regular/kanban.svg';
+import FileCsv from '@icon/system/regular/file-csv.svg';
+import Kanban from '@icon/system/regular/kanban.svg';
 import { queryClient } from '@queries/client';
 import { soupKeys } from '@queries/soup/keys';
 import { Show } from 'solid-js';

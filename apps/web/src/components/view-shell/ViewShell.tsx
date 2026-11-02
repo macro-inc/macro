@@ -10,7 +10,8 @@ import { SplitPanel } from '@components/app/split-panel';
 import { Resize } from '@core/component/Resize';
 import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
-import SidebarIcon from '@phosphor/sidebar-simple.svg';
+import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { createWritableMemo } from '@solid-primitives/memo';
 import { mergeRefs } from '@solid-primitives/refs';
 import { createElementSize } from '@solid-primitives/resize-observer';
@@ -20,6 +21,7 @@ import { tourTarget } from '@ui/components/Tour';
 import {
   type Accessor,
   batch,
+  type ComponentProps,
   createComputed,
   createContext,
   createSignal,
@@ -81,6 +83,7 @@ export type ViewShellLayout = {
 type ViewShellInternal = ViewShellLayout & {
   id: string;
   atLayoutBreakpoint: Accessor<boolean>;
+  asideHost: Accessor<'docked' | 'closing' | 'overlay'>;
 };
 
 const RESIZE_GUTTER = 1;
@@ -251,6 +254,10 @@ function Root(props: ViewShellRootProps) {
     return match ? match() : false;
   };
 
+  // Retain the docked panel only while its narrow-layout exit is animating.
+  const [asideHost, setAsideHost] = createSignal<
+    'docked' | 'closing' | 'overlay'
+  >(untrack(atLayoutBreakpoint) ? 'overlay' : 'docked');
   const asideRequired = () => local.asideRequired ?? false;
   // Each narrow layout starts closed, independently of the saved wide layout,
   // unless navigation is required, which opens the overlay until dismissed.
@@ -273,14 +280,57 @@ function Root(props: ViewShellRootProps) {
 
   const setAsideOpen = (open: boolean) => {
     if (!open && asidePinned()) return;
+    // Repeated requests must not cancel an exit that still owns host cleanup.
+    if (open === (asideMode() === 'docked')) return;
     animateSidebar(() => {
-      if (atLayoutBreakpoint()) setNarrowAsideOpen(open);
-      else setWideAsideCollapsed(!open);
+      if (atLayoutBreakpoint()) {
+        // An explicit overlay replaces an unfinished docked exit.
+        if (open) setAsideHost('overlay');
+        setNarrowAsideOpen(open);
+      } else setWideAsideCollapsed(!open);
     });
   };
-  // The pin flips the docked aside without a setter, so animate it here.
+  // Measure the old host before the slots react to a breakpoint transition.
   createComputed(
-    on(asidePinned, () => animateSidebar(() => {}), { defer: true })
+    on(
+      atLayoutBreakpoint,
+      (narrow, previous) => {
+        if (narrow === previous) return;
+        const docked = Array.from(
+          root()?.querySelectorAll<HTMLElement>(
+            ':scope > [data-resize-zone] > [data-resize-panel]'
+          ) ?? []
+        ).find((panel) => panel.querySelector('[data-view-shell-aside]'));
+        const retain =
+          narrow &&
+          !asideRequired() &&
+          !!docked &&
+          !docked.classList.contains('hidden');
+        animateSidebar(
+          () => {
+            if (!narrow) setAsideHost('docked');
+            else setAsideHost(retain ? 'closing' : 'overlay');
+          },
+          () => {
+            if (narrow) setAsideHost('overlay');
+          }
+        );
+      },
+      { defer: true }
+    )
+  );
+  // Pin changes animate the current docked host, but cannot interrupt its exit.
+  createComputed(
+    on(
+      [() => local.asidePinned, asideRequired],
+      () => {
+        if (!atLayoutBreakpoint()) animateSidebar(() => {});
+        else if (asideRequired()) {
+          animateSidebar(() => setAsideHost('overlay'));
+        }
+      },
+      { defer: true }
+    )
   );
 
   const canFitInlineDetail = () => {
@@ -311,6 +361,7 @@ function Root(props: ViewShellRootProps) {
     width,
     breakpoints,
     atLayoutBreakpoint,
+    asideHost,
     aside: {
       layout: asideLayout,
       mode: asideMode,
@@ -471,7 +522,7 @@ function Aside(props: ViewShellAsideProps) {
   // while its exit animation is still retaining the first one.
   return (
     <Show
-      when={ws.atLayoutBreakpoint()}
+      when={ws.asideHost() === 'overlay'}
       fallback={
         <Resize.Panel
           id={`${ws.id}-aside`}
@@ -480,7 +531,11 @@ function Aside(props: ViewShellAsideProps) {
           maxSize={ws.aside.layout().max}
           redistributionPreferredSize={redistributionPreferredSize()}
           target={{ kind: 'px', px: preferredWidth() }}
-          collapsed={() => ws.aside.isCollapsed()}
+          collapsed={() =>
+            ws.atLayoutBreakpoint()
+              ? ws.asideHost() === 'closing'
+              : ws.aside.isCollapsed()
+          }
           onSizeChangeEnd={onWidthChangeEnd}
         >
           <div
@@ -488,8 +543,8 @@ function Aside(props: ViewShellAsideProps) {
             ref={asideTarget}
             class={cn('size-full min-h-0 min-w-0', local.class)}
             data-view-shell-aside=""
-            inert={ws.aside.isCollapsed()}
-            aria-hidden={ws.aside.isCollapsed()}
+            inert={ws.atLayoutBreakpoint() || ws.aside.isCollapsed()}
+            aria-hidden={ws.atLayoutBreakpoint() || ws.aside.isCollapsed()}
           >
             {local.children}
           </div>
@@ -549,7 +604,16 @@ function Aside(props: ViewShellAsideProps) {
 }
 
 /** Keep split close available in both docked and overlay navigation. */
-export const ViewSidebarCloseButton = SplitPanel.CloseButton;
+export function ViewSidebarCloseButton(
+  props: ComponentProps<typeof SplitPanel.CloseButton>
+) {
+  const [local, rest] = splitProps(props, ['children', 'size']);
+  return (
+    <SplitPanel.CloseButton {...rest} size={local.size ?? 'icon-xs'}>
+      {local.children ?? <CloseIcon class="size-4" />}
+    </SplitPanel.CloseButton>
+  );
+}
 
 /** Safe outside a shell so block preview headers can share this control. */
 export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
@@ -562,11 +626,20 @@ export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
     (props.action === 'expand'
       ? ws.aside.isCollapsed() || ws.aside.isOverlay()
       : !ws.aside.isCollapsed());
+  // Show and Hide are separate actions, not a persistently pressed toggle.
   return (
     <Show when={visible()}>
       <Button
+        aria-label={
+          props.action === 'expand' ? 'Show navigation' : 'Hide navigation'
+        }
+        tooltip={{
+          content:
+            props.action === 'expand' ? 'Show navigation' : 'Hide navigation',
+          hotkey: TOKENS.workspace.toggleNavigation,
+        }}
         variant="ghost"
-        size="icon-sm"
+        size="icon-xs"
         class={cn(
           'shrink-0 touch:hidden',
           props.action === 'collapse' && 'ml-auto',
@@ -574,11 +647,6 @@ export function ViewSidebarToggle(props: { action: 'collapse' | 'expand' }) {
             ws?.aside.isOverlay() &&
             'motion-safe:animate-[dialog-overlay-open_60ms_ease-out_80ms_both]'
         )}
-        label={
-          props.action === 'expand' ? 'Show navigation' : 'Hide navigation'
-        }
-        hotkey={TOKENS.workspace.toggleNavigation}
-        aria-expanded={props.action !== 'expand'}
         ref={(element) => {
           if (props.action === 'expand') toggleTarget(element);
         }}

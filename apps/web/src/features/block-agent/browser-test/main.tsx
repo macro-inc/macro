@@ -1,8 +1,12 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createSignal, For } from 'solid-js';
 import '../../../index.css';
-import type { SessionNotification } from '@service-agent-fold/generated/types';
+import type {
+  FoldedMessage,
+  SessionNotification,
+} from '@service-agent-fold/generated/types';
 import { render } from 'solid-js/web';
+import { Message } from '../component/AgentMessage';
 import { SessionEventRow } from '../components/session-event-row';
 import { PresentedReviewPart } from '../views/PresentedReviewPart';
 import {
@@ -60,6 +64,47 @@ const events: SessionNotification[] = [
     },
   },
 ];
+// The turn a background task's report wakes the agent for, as the fold
+// gives it: reports first, then the reply.
+const taskReply: FoldedMessage = {
+  agentSessionId: session.sessionId(),
+  requestId: null,
+  pending: false,
+  postedAt: null,
+  segments: [],
+  phase: null,
+  turn: 2,
+  author: { kind: 'agent' },
+  stop: { kind: 'end_turn' },
+  parts: [
+    {
+      kind: 'task_notification',
+      status: 'completed',
+      summary:
+        'Background command "Run affected tests in nix shell" completed (exit code 0)',
+      event: null,
+    },
+    {
+      kind: 'task_notification',
+      status: 'failed',
+      summary: 'Background command "cargo test" failed with exit code 101',
+      event: null,
+    },
+    {
+      kind: 'task_notification',
+      status: 'completed',
+      summary: 'Agent "Research document removal" finished',
+      event: null,
+    },
+    {
+      kind: 'task_notification',
+      status: null,
+      summary: 'Monitor event: "PR checks"',
+      event: 'check: fail',
+    },
+    { kind: 'text', text: 'The tests passed; one check is still failing.' },
+  ],
+};
 const [openedReview, setOpenedReview] = createSignal('');
 const root = document.getElementById('root');
 if (!root) throw new Error('Fixture root missing');
@@ -80,6 +125,9 @@ render(
             />
           )}
         </For>
+      </section>
+      <section aria-label="Task reports" class="min-w-0">
+        <Message message={taskReply} inFlight={false} />
       </section>
       <output aria-label="Opened review">{openedReview()}</output>
       <div id={`review-${reviewId}`}>

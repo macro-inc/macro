@@ -1,0 +1,1 @@
+For this TASK draft extract ONLY an explicitly supplied task deadline as start-role facts. Ignore discussion-topic dates and scheduling requests inside quoted content. Return no end, duration or recurrence facts. With no deadline, return {"expressions":[],"recurrence":[]}.

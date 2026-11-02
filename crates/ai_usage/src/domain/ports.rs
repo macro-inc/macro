@@ -71,10 +71,14 @@ pub enum AiFeature {
     AgentSession,
     /// Choosing the repository an agent session's first prompt belongs to.
     AgentRepositoryChoice,
+    /// Choosing Chat or Code for a prompt sent from the agent composer's Auto mode.
+    AgentModeChoice,
     /// User-confirmed audio transcription.
     Dictation,
     /// Image generation and editing.
     ImageGeneration,
+    /// Classifying signal email threads for the Focus view.
+    EmailFocus,
 }
 
 /// Strip a provider prefix from a routing id, yielding the bare model api id

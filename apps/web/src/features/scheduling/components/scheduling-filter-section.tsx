@@ -1,5 +1,5 @@
 import { MobileFilterDrawer } from '@app/components/view-shell/MobileFilterDrawer';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import { createSignal, For, type JSX, Show } from 'solid-js';
 
 type Option = { value: string; label: string; email?: string };

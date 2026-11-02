@@ -77,7 +77,14 @@ export function useHomeRecommendations() {
     }
 
     if (notification) {
-      const result = await openNotification(notification, splitManager, true);
+      const result = await openNotification(
+        notification,
+        splitManager,
+        true,
+        undefined,
+        undefined,
+        { source: 'home_recommendation' }
+      );
       if (result.isOk()) {
         await notificationSource.markAsRead(notification);
         return;

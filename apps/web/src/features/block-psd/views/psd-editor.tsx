@@ -11,13 +11,13 @@ import { paletteColor } from '@app/features/block-fig/primitives/create-peer-ove
 import { IS_MAC } from '@core/constant/isMac';
 import type { IRect } from '@core/psd-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowUUpLeft from '@icon/system/regular/arrow-u-up-left.svg';
+import ArrowUUpRight from '@icon/system/regular/arrow-u-up-right.svg';
+import CloudArrowUp from '@icon/system/regular/cloud-arrow-up.svg';
+import CloudCheck from '@icon/system/regular/cloud-check.svg';
+import Keyboard from '@icon/system/regular/keyboard.svg';
+import WarningCircle from '@icon/system/regular/warning-circle.svg';
 import { Telemetry } from '@macro-inc/observability';
-import ArrowUUpLeft from '@phosphor/arrow-u-up-left.svg';
-import ArrowUUpRight from '@phosphor/arrow-u-up-right.svg';
-import CloudArrowUp from '@phosphor/cloud-arrow-up.svg';
-import CloudCheck from '@phosphor/cloud-check.svg';
-import Keyboard from '@phosphor/keyboard.svg';
-import WarningCircle from '@phosphor/warning-circle.svg';
 import { Button } from '@ui/components/Button';
 import {
   createEffect,
@@ -495,26 +495,26 @@ export function PsdEditor() {
         <span class="flex-1" />
         <Show when={editor.enabled()}>
           <Button
+            aria-label="Undo"
             variant="ghost"
             size="icon-sm"
-            label="Undo"
             tooltip={`Undo · ${IS_MAC ? '⌘Z' : 'Ctrl+Z'}`}
             disabled={!editor.canUndo()}
             data-testid="psd-undo"
             onClick={() => fireAndForget(editor.undo(), 'psd-editor')}
           >
-            <ArrowUUpLeft />
+            <ArrowUUpLeft class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
           <Button
+            aria-label="Redo"
             variant="ghost"
             size="icon-sm"
-            label="Redo"
             tooltip={`Redo · ${IS_MAC ? '⇧⌘Z' : 'Ctrl+⇧Z'}`}
             disabled={!editor.canRedo()}
             data-testid="psd-redo"
             onClick={() => fireAndForget(editor.redo(), 'psd-editor')}
           >
-            <ArrowUUpRight />
+            <ArrowUUpRight class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
           <span
             class="flex size-6 items-center justify-center text-ink-muted"
@@ -538,13 +538,13 @@ export function PsdEditor() {
           </span>
         </Show>
         <Button
+          aria-label="Keyboard shortcuts"
           variant="ghost"
           size="icon-sm"
-          label="Keyboard shortcuts"
           tooltip={`Keyboard shortcuts · ${IS_MAC ? '⌘/' : 'Ctrl+/'}`}
           onClick={() => setShowShortcuts((s) => !s)}
         >
-          <Keyboard />
+          <Keyboard class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
       <OptionsBar

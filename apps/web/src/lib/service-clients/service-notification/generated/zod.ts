@@ -67,6 +67,7 @@ export const unsubscribeItemParams = zod.object({
     'database',
     'database_row',
     'form',
+    'external_chat',
   ]),
   item_id: zod.string(),
 });
@@ -112,6 +113,7 @@ export const removeUnsubscribeItemParams = zod.object({
     'database',
     'database_row',
     'form',
+    'external_chat',
   ]),
   item_id: zod.string(),
 });
@@ -222,6 +224,7 @@ export const listTypedNotificationsResponse = zod
                 'database',
                 'database_row',
                 'form',
+                'external_chat',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -1073,6 +1076,28 @@ export const listTypedNotificationsResponse = zod
                     .describe(
                       'A reminder the user set for themselves came due.'
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          chatName: zod.string().describe("The chat's name."),
+                          messageId: zod
+                            .uuid()
+                            .describe(
+                              'Stable message id; retries use it as their notification id.'
+                            ),
+                          provider: zod
+                            .enum(['whatsapp'])
+                            .describe(
+                              'The messaging service an external chat lives in.'
+                            ),
+                        })
+                        .describe(
+                          'A live message in an independently shared external chat.'
+                        ),
+                      tag: zod.enum(['external_chat_message']),
+                    })
+                    .describe('A live message in a shared external chat.'),
                   zod
                     .object({
                       content: zod
@@ -2224,6 +2249,7 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                 'database',
                 'database_row',
                 'form',
+                'external_chat',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -3075,6 +3101,28 @@ export const bulkGetTypedNotificationsByEventItemIdsResponse = zod
                     .describe(
                       'A reminder the user set for themselves came due.'
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          chatName: zod.string().describe("The chat's name."),
+                          messageId: zod
+                            .uuid()
+                            .describe(
+                              'Stable message id; retries use it as their notification id.'
+                            ),
+                          provider: zod
+                            .enum(['whatsapp'])
+                            .describe(
+                              'The messaging service an external chat lives in.'
+                            ),
+                        })
+                        .describe(
+                          'A live message in an independently shared external chat.'
+                        ),
+                      tag: zod.enum(['external_chat_message']),
+                    })
+                    .describe('A live message in a shared external chat.'),
                   zod
                     .object({
                       content: zod
@@ -4220,6 +4268,7 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                 'database',
                 'database_row',
                 'form',
+                'external_chat',
               ])
               .describe('The type of an entity in Macro'),
           })
@@ -5071,6 +5120,28 @@ export const getTypedNotificationsByEventItemIdResponse = zod
                     .describe(
                       'A reminder the user set for themselves came due.'
                     ),
+                  zod
+                    .object({
+                      content: zod
+                        .object({
+                          chatName: zod.string().describe("The chat's name."),
+                          messageId: zod
+                            .uuid()
+                            .describe(
+                              'Stable message id; retries use it as their notification id.'
+                            ),
+                          provider: zod
+                            .enum(['whatsapp'])
+                            .describe(
+                              'The messaging service an external chat lives in.'
+                            ),
+                        })
+                        .describe(
+                          'A live message in an independently shared external chat.'
+                        ),
+                      tag: zod.enum(['external_chat_message']),
+                    })
+                    .describe('A live message in a shared external chat.'),
                   zod
                     .object({
                       content: zod
@@ -6221,6 +6292,7 @@ export const getTypedNotificationByIdResponse = zod
         'database',
         'database_row',
         'form',
+        'external_chat',
       ])
       .describe('The type of an entity in Macro'),
   })
@@ -6994,6 +7066,28 @@ export const getTypedNotificationByIdResponse = zod
               tag: zod.enum(['reminder']),
             })
             .describe('A reminder the user set for themselves came due.'),
+          zod
+            .object({
+              content: zod
+                .object({
+                  chatName: zod.string().describe("The chat's name."),
+                  messageId: zod
+                    .uuid()
+                    .describe(
+                      'Stable message id; retries use it as their notification id.'
+                    ),
+                  provider: zod
+                    .enum(['whatsapp'])
+                    .describe(
+                      'The messaging service an external chat lives in.'
+                    ),
+                })
+                .describe(
+                  'A live message in an independently shared external chat.'
+                ),
+              tag: zod.enum(['external_chat_message']),
+            })
+            .describe('A live message in a shared external chat.'),
           zod
             .object({
               content: zod

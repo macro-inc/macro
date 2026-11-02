@@ -148,7 +148,6 @@ function registerNodeIdPlugin(editor: LexicalEditor, props: NodeIdProps) {
               idToNodeKeyMap.delete(id);
               nodeKeyToIdMap.delete(node!.getKey());
             }
-            return;
           }
         }
       });

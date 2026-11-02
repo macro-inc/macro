@@ -2,11 +2,12 @@ use chrono::{DateTime, TimeZone, Utc};
 use uuid::Uuid;
 
 use super::*;
+use crate::DateRange;
 use crate::ids::{OptionId, RowId};
 use crate::ops::{EntityKind, EntityRef, OptionRef};
 use crate::views::{
-    Conjunction, DateOperator, FilterCondition, FilterNode, FilterTest, NumberOperator,
-    PresenceOperator, SetOperator, TextOperator,
+    Conjunction, DateOperator, DateRangeOperator, FilterCondition, FilterNode, FilterTest,
+    NumberOperator, PresenceOperator, SetOperator, TextOperator,
 };
 
 const TEAM: ColumnId = ColumnId::from_uuid(Uuid::from_u128(0x7ea));
@@ -502,6 +503,142 @@ fn date_tests_compare_and_fail_on_empty_cells() {
             test: date(DateOperator::OnOrAfter),
             cell: None,
             expected: false,
+        },
+    ]);
+}
+
+#[test]
+fn date_range_tests_read_the_range_against_the_date() {
+    let range = |operator| FilterTest::DateRange {
+        operator,
+        value: september_first(),
+    };
+    // August 25 to September 1, ending at the instant tested.
+    let ending_on_the_day = || {
+        Some(CellValue::DateRange(DateRange {
+            start: Utc.with_ymd_and_hms(2026, 8, 25, 0, 0, 0).unwrap(),
+            end: september_first(),
+        }))
+    };
+    let in_august = || {
+        Some(CellValue::DateRange(DateRange {
+            start: Utc.with_ymd_and_hms(2026, 8, 3, 0, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 8, 7, 0, 0, 0).unwrap(),
+        }))
+    };
+    let in_october = || {
+        Some(CellValue::DateRange(DateRange {
+            start: Utc.with_ymd_and_hms(2026, 10, 5, 0, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 10, 9, 0, 0, 0).unwrap(),
+        }))
+    };
+    run(vec![
+        Case {
+            name: "contains, at its end",
+            test: range(DateRangeOperator::Contains),
+            cell: ending_on_the_day(),
+            expected: true,
+        },
+        Case {
+            name: "contains, before it",
+            test: range(DateRangeOperator::Contains),
+            cell: in_october(),
+            expected: false,
+        },
+        Case {
+            name: "does not contain, after it",
+            test: range(DateRangeOperator::DoesNotContain),
+            cell: in_august(),
+            expected: true,
+        },
+        Case {
+            name: "does not contain, absent",
+            test: range(DateRangeOperator::DoesNotContain),
+            cell: None,
+            expected: false,
+        },
+        Case {
+            name: "ends before",
+            test: range(DateRangeOperator::EndsBefore),
+            cell: in_august(),
+            expected: true,
+        },
+        Case {
+            name: "ends before, ending at it",
+            test: range(DateRangeOperator::EndsBefore),
+            cell: ending_on_the_day(),
+            expected: false,
+        },
+        Case {
+            name: "ends on or after, ending at it",
+            test: range(DateRangeOperator::EndsOnOrAfter),
+            cell: ending_on_the_day(),
+            expected: true,
+        },
+        Case {
+            name: "starts after",
+            test: range(DateRangeOperator::StartsAfter),
+            cell: in_october(),
+            expected: true,
+        },
+        Case {
+            name: "starts after, containing it",
+            test: range(DateRangeOperator::StartsAfter),
+            cell: ending_on_the_day(),
+            expected: false,
+        },
+        Case {
+            name: "starts on or before",
+            test: range(DateRangeOperator::StartsOnOrBefore),
+            cell: ending_on_the_day(),
+            expected: true,
+        },
+        Case {
+            name: "starts on or before, later",
+            test: range(DateRangeOperator::StartsOnOrBefore),
+            cell: in_october(),
+            expected: false,
+        },
+    ]);
+}
+
+#[test]
+fn date_range_tests_read_a_timed_range_against_the_whole_day() {
+    let range = |operator| FilterTest::DateRange {
+        operator,
+        value: september_first(),
+    };
+    // A 1 PM to 5 PM meeting on September 1.
+    let meeting = || {
+        Some(CellValue::DateRange(DateRange {
+            start: Utc.with_ymd_and_hms(2026, 9, 1, 13, 0, 0).unwrap(),
+            end: Utc.with_ymd_and_hms(2026, 9, 1, 17, 0, 0).unwrap(),
+        }))
+    };
+    run(vec![
+        Case {
+            name: "contains its day",
+            test: range(DateRangeOperator::Contains),
+            cell: meeting(),
+            expected: true,
+        },
+        Case {
+            name: "starts on or before its day",
+            test: range(DateRangeOperator::StartsOnOrBefore),
+            cell: meeting(),
+            expected: true,
+        },
+        Case {
+            name: "does not start after its own day",
+            test: range(DateRangeOperator::StartsAfter),
+            cell: meeting(),
+            expected: false,
+        },
+        Case {
+            name: "ends on or after its day",
+            test: range(DateRangeOperator::EndsOnOrAfter),
+            cell: meeting(),
+            expected: true,
         },
     ]);
 }

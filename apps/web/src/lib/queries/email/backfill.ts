@@ -1,9 +1,4 @@
-import { throwOnErr } from '@core/util/result';
-import { queryClient } from '@queries/client';
-import { emailClient } from '@service-email/client';
-import { useQuery } from '@tanstack/solid-query';
 import { createSignal } from 'solid-js';
-import { emailKeys } from './keys';
 
 /** Most recent progress readings kept per link, for the time-remaining estimate. */
 const MAX_PROGRESS_SAMPLES = 5;
@@ -104,33 +99,4 @@ export function estimateEtaSeconds(
   const threadsLeft = Math.max(0, total - completed);
   const ratePerMs = threadsDone / elapsedMs;
   return threadsLeft / ratePerMs / 1000;
-}
-
-function fetchBackfillJobs() {
-  return throwOnErr(() => emailClient.listBackfillJobs());
-}
-
-/**
- * Lists every backfill job for the user. Fired when the email settings open, to
- * surface COMPLETED backfills. In-progress backfills are driven by the live
- * progress store above (connection-gateway events), not this query — its counts
- * can lag the live counters — so consumers should read this only for terminal
- * (e.g. completed) jobs.
- */
-export function useBackfillJobsQuery() {
-  return useQuery(() => ({
-    queryKey: emailKeys.backfillJobs.queryKey,
-    queryFn: fetchBackfillJobs,
-  }));
-}
-
-/**
- * Refetch the backfill jobs list. Call on terminal backfill events so the
- * settled "completed" state updates even while the email settings stay open
- * (the query otherwise only fires on mount).
- */
-export function invalidateBackfillJobs() {
-  queryClient.invalidateQueries({
-    queryKey: emailKeys.backfillJobs.queryKey,
-  });
 }

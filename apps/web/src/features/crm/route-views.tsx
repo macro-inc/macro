@@ -1,8 +1,10 @@
+import { useSplitPanel } from '@components/app/split-layout/layoutUtils';
 import {
   RedirectSplit,
   usePageViewTracking,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { useViewRestoration } from '@components/app/split-layout/view-restoration';
 import { enableCrm, isFeatureEnabled } from '@core/constant/featureFlags';
 import { useLocation } from '@solidjs/router';
 import { createEffect, createMemo, lazy, on } from 'solid-js';
@@ -21,8 +23,10 @@ const Crm = lazy(async () => ({
 export const CompaniesRouteView = withAuth(() => {
   if (!isFeatureEnabled(enableCrm))
     return <RedirectSplit to={{ type: 'component', id: 'home' }} />;
+  useViewRestoration();
   usePageViewTracking('companies');
-  const route = createCrmRoute();
+  const panel = useSplitPanel();
+  const route = createCrmRoute(() => panel?.handle.captureEntryState());
   const crmView = new URLSearchParams(window.location.search).get(
     CRM_VIEW_URL_PARAM
   );

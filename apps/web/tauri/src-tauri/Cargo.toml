@@ -82,6 +82,19 @@ tauri-plugin-updater = "=2.10.1"
 # 2.5 requires tauri 2.12; the pinned fork is 2.11.
 tauri-plugin-window-state = "=2.4.1"
 
+# WhatsApp passkey pairing: caBLE (phone over Bluetooth) on macOS/Linux,
+# native WebAuthn on Windows. See src/whatsapp_passkey.rs.
+[target.'cfg(any(target_os = "macos", target_os = "linux", target_os = "windows"))'.dependencies]
+base64 = "0.22"
+sha2 = "0.10"
+webauthn-rs-proto = { workspace = true }
+
+[target.'cfg(any(target_os = "macos", target_os = "linux"))'.dependencies]
+webauthn-authenticator-rs = { workspace = true, features = ["cable"] }
+
+[target.'cfg(target_os = "windows")'.dependencies]
+webauthn-authenticator-rs = { workspace = true, features = ["win10"] }
+
 [target.'cfg(target_os = "linux")'.dependencies]
 futures-util = "0.3"
 gtk = "0.18"

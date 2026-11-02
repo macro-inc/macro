@@ -18,7 +18,7 @@ crm/
   crm-create.tsx / crm-link.tsx
   crm-actions.ts / crm-hide-action.ts / crm-action-items.ts / crm-user-action.tsx
   crm-search.ts / crm-tool-renderers.tsx
-  crm-route.ts  Route params, record trail, and legacy pipeline link decoding
+  crm-route.ts  Route params, record and item trails, and legacy pipeline link decoding
   route-views.tsx  Authenticated route and shared-view decoding
   crm-hosted-content.ts  Split content that opens Customers on a pipeline or record
   *-adapter.*   Production sources, navigation, persistence, download, collection wiring
@@ -65,18 +65,92 @@ context; later flag, focus or record changes leave the open draft unchanged.
 The Soup and email SQL optimizations are independent of this frontend gate.
 
 The workspace activity feeds are CRM-linked, not unfiltered app shortcuts.
-`queries/activity.ts` loads all authorized companies and contacts before
-building the feed filters; the capped Quick Access suggestions are not a
-complete scope. Notes means Markdown documents excluding task, snippet, and
-skill subtypes. Email uses the viewer's mailbox, without team-scope widening.
-This reuses existing endpoints without a schema change. Keep the scope complete:
-never cap association IDs or fall back to an unfiltered feed. The activity query
-memoizes its large filter AST between scope/tab changes. SQL generation batches
-OR-ed references into set-membership predicates rather than emitting thousands
-of separate subqueries. Email similarly batches participant lists with identical
-sender/recipient roles in both candidate and message queries, and omits exact
-addresses already covered by a company domain. These backend optimizations must
-be deployed to resolve large-scope request stalls.
+`queries/activity.ts` sends a constant-size `crma: 'activity'` association
+selector. CRM resolves every visible company and contact on the server before
+Soup filters and paginates the result; the browser does not prefetch the full
+CRM or enumerate record IDs in filter trees. The scope excludes hidden records,
+including for administrators, and keeps distinct contact IDs even when their
+email addresses match. Tasks, Notes and Calls match Companies/Contacts property
+links; Notes excludes task, snippet and skill Markdown subtypes. Email matches
+visible company domains/contact addresses in the viewer's own mailbox, without
+team-scope widening or requiring a property link on the email.
+
+Databases is a row-linked activity view, not a direct database-to-CRM relation.
+It opts into database rows with the same server-resolved CRM selector and lists
+each containing database once, intersected with authorized database discovery.
+A company includes rows linked to its visible contacts; a contact does not inherit
+its company's rows. Empty row matches never fall back to all databases. Preserve
+Soup pagination and CRM-link invalidation rather than enumerating CRM IDs or table
+IDs in the browser. Database creation uses the existing app action; a database
+joins the CRM list only after a row has a Companies or Contacts link.
+
+CRM collection and record lists use full-height empty states, horizontally
+centered and raised toward the toolbar, with
+creation guidance, distinct search-empty actions, retryable error states, and
+shared list skeletons with compact single-line rows, small icons, varied title
+widths, and supporting metadata columns that hide in narrow panes. Keep search
+and available header actions visible in every state. A failed continuation retains
+rows and retries that page.
+Workspace activity uses the shared single-row desktop header with New and an
+expandable Search control; record-detail tabs retain their section toolbar.
+Company and contact headers keep desktop section tabs; touch uses a labeled
+header island that opens the shared bottom drawer with the current section
+checked under **Switch view**. A collapsed host keeps the section icon and
+accessible label; embedded phone headers put the switcher below the breadcrumb
+and action row. Keep the
+workspace's mobile view strip separate. Copy-link islands
+are square on touch, with a 24px glyph and the standard 40px icon control.
+On touch, record list search has space below the header and fills the row beside
+any filter button. Email filters use the shared filter drawer. Each section's
+creation action replaces the default floating action above the navigation dock
+through `FloatRegion`; keyboard focus, higher-priority composers, and inactive
+panes suppress it. Preserve record context, disabled states, and feature gates.
+Keep the disabled New email action mounted when company email sync is off so
+the unrelated app-wide action does not replace it.
+Desktop creation controls remain in the toolbar.
+
+Activity rows render stored Companies and Contacts reference properties as inline
+pills through the shared Soup row. Pills use the shared property preview and open
+a record independently of the row; additional values use the shared overflow menu.
+Email still matches visible company domains and contact addresses for feed
+membership, but the row displays only stored properties, not inferred matches.
+No separate CRM association metadata lookup or row footer runs during paging.
+Linked Tasks, Email, Notes, Calls and Databases open through nested Customers
+routes from workspace activity and record sections. Tasks, Emails, Calls and
+Databases record sections append only `<item-id>` because their section determines
+the renderer; Tasks also omit the redundant `md/task` suffix. These sections reject
+redundant typed item URLs rather than retaining fallback routes. Workspace activity
+retains `<item-type>/<item-id>` and document metadata; record Files and overview
+notes use document-metadata routes restricted to those sections. The route stores
+the item name and record trail in entry state. Route params retain the record and
+section; pane search retains the workspace tab. `route-adapter.ts` owns item
+navigation and close/history restoration. Keep workspace/pipeline item variants
+in its shared route-family table and identify history entries through merged route
+params instead of enumerating item route IDs.
+`views/item-detail.tsx` renders authorized details in the existing CRM shell
+with source, record trail and item breadcrumbs, omitting section labels such as
+Tasks and Files. The current record breadcrumb returns to the captured section
+and entry state. Preview headers append their own live title and menu after the
+source trail without an extra separator; do not duplicate the selected title in
+the prefix. Modified clicks keep their existing split behavior.
+Standalone record previews retain their normal navigation outside the workspace.
+Record-detail lists and activity membership remain unchanged.
+Sidebar Tasks reuse the production Tasks filters, sort, grouping, and list/board/Gantt
+layouts (subject to the normal feature flags and touch fallback). They use a separate
+CRM persistence scope, and every query, including search and grouped continuation,
+retains the mandatory CRM association. Record-detail Tasks stay unchanged.
+Email reuses the shared read/done/attachment/calendar/tag facets. Notes expose creator
+and tag filters; Calls expose audience and tag filters. These lists have independent
+per-entry search, sort direction, and date/none grouping settings. Date headings follow
+the selected sort field in viewer-local time. Email defaults to last-update date groups;
+Notes and Calls default to no grouping. Local-only filters continue paging through
+empty pages; clearing filters never clears the CRM scope.
+
+Activity extends the existing authorized CRM association path rather than
+splitting the feed into independent client queries. This preserves one sorted
+cursor and a complete scope without raising GraphQL's filter safety limits.
+SQL batching remains useful after resolution, but cannot fix oversized ingress
+filters. Deploy the backend association variant before the updated frontend.
 
 When changing behavior, test the responsible primitive or pure function. When
 moving behavior, retain query keys, persistence keys, mutation ordering, loading

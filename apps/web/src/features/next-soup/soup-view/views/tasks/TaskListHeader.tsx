@@ -1,10 +1,10 @@
 import type { SystemSortOption } from '@app/features/next-soup/soup-view/sort-options';
 import { useSoupView } from '@app/features/next-soup/soup-view/soup-view-context';
 import { useListLayout } from '@entity/composed/list-entity/shared';
-import StatusInProgress from '@icon/square-task-in-progress-circle.svg';
+import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
+import StatusInProgress from '@icon/system/regular/task-in-progress.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import PriorityHigh from '@icon/wide-priority-high.svg';
-import ArrowDownIcon from '@phosphor/arrow-down.svg';
-import UsersIcon from '@phosphor/users.svg';
 import { Tooltip } from '@ui';
 import { cn } from '@ui/utils/classname';
 import { createMemo, For, type JSX, Show } from 'solid-js';
@@ -19,11 +19,18 @@ import './list-property-value.css';
 // modes, so the narrow header matches each row's 24px property button.
 const HEADER_ICON_CLASS = 'size-3 text-ink-muted';
 
-/** Map column IDs to their icons for narrow mode */
-const COLUMN_ICONS: Record<string, () => JSX.Element> = {
-  status: () => <StatusInProgress class={HEADER_ICON_CLASS} />,
-  priority: () => <PriorityHigh class={HEADER_ICON_CLASS} />,
-  assignees: () => <UsersIcon class={HEADER_ICON_CLASS} />,
+/** Column presentation stays with the column rather than the header renderer. */
+const COLUMN_PRESENTATION: Record<
+  string,
+  { icon: () => JSX.Element; compactClass?: string; compactIconClass?: string }
+> = {
+  status: { icon: () => <StatusInProgress class={HEADER_ICON_CLASS} /> },
+  priority: { icon: () => <PriorityHigh class={HEADER_ICON_CLASS} /> },
+  assignees: {
+    icon: () => <UsersIcon class={HEADER_ICON_CLASS} />,
+    compactClass: '@max-[840px]/u-list:justify-start',
+    compactIconClass: '@max-[840px]/u-list:px-1',
+  },
 };
 
 /** Which `TASK_GRID_COLUMNS.id` values map to a sort key (others are read-only). */
@@ -95,9 +102,10 @@ function TaskListHeader(props: { class?: string }) {
               active={sortKey !== undefined && activeSort()?.id === sortKey}
               reversed={activeSort()?.reversed ?? false}
               onSort={setSort}
-              narrowIcon={COLUMN_ICONS[col.id]}
-              // Match the row pill's px-2 content inset so titles left-align
-              // with the pill icons (wide only — narrow collapses to centered icons).
+              narrowIcon={COLUMN_PRESENTATION[col.id]?.icon}
+              compactClass={COLUMN_PRESENTATION[col.id]?.compactClass}
+              compactIconClass={COLUMN_PRESENTATION[col.id]?.compactIconClass}
+              // Match the wide pill inset; compact assignees keep their leading anchor.
               class="@min-[841px]/u-list:pl-2"
             />
           );
@@ -132,13 +140,14 @@ function HeaderCell(props: {
   narrowIcon?: () => JSX.Element;
   align?: 'start' | 'end';
   class?: string;
+  compactClass?: string;
+  compactIconClass?: string;
 }) {
   const justify = () =>
     props.align === 'end' ? 'justify-end' : 'justify-start';
-  // Property columns collapse to a single centered icon on narrow containers,
-  // matching the row pills (which center via `@max-[840px]/u-list:justify-center`).
   const narrowJustify = () =>
-    props.narrowIcon ? '@max-[840px]/u-list:justify-center' : '';
+    props.narrowIcon &&
+    (props.compactClass ?? '@max-[840px]/u-list:justify-center');
 
   return (
     <div
@@ -159,7 +168,12 @@ function HeaderCell(props: {
               <span class="truncate @max-[840px]/u-list:hidden">
                 {props.label}
               </span>
-              <span class="hidden @max-[840px]/u-list:flex @max-[840px]/u-list:px-1.5">
+              <span
+                class={cn(
+                  'hidden @max-[840px]/u-list:flex',
+                  props.compactIconClass ?? '@max-[840px]/u-list:px-1.5'
+                )}
+              >
                 {props.narrowIcon?.()}
               </span>
             </Show>

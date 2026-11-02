@@ -58,7 +58,9 @@ describe.each(['sidebar', 'toolbar'] as const)(
         <TasksCreateAction presentation={presentation} projectsEnabled />
       ));
       fireEvent.keyDown(
-        screen.getByRole('button', { name: 'New task, project, or tag' }),
+        screen.getByRole('button', {
+          name: 'New task, subtask, project, or tag',
+        }),
         { key: 'Enter' }
       );
       fireEvent.keyDown(await screen.findByRole('menuitem', { name: label }), {
@@ -78,7 +80,9 @@ describe.each(['sidebar', 'toolbar'] as const)(
         <TasksCreateAction presentation={presentation} projectsEnabled />
       ));
       fireEvent.keyDown(
-        screen.getByRole('button', { name: 'New task, project, or tag' }),
+        screen.getByRole('button', {
+          name: 'New task, subtask, project, or tag',
+        }),
         { key: 'Enter' }
       );
       fireEvent.keyDown(await screen.findByRole('menuitem', { name: 'Tag' }), {
@@ -97,9 +101,12 @@ it('keeps project creation behind the existing Projects gate', async () => {
   render(() => (
     <TasksCreateAction presentation="sidebar" projectsEnabled={false} />
   ));
-  fireEvent.keyDown(screen.getByRole('button', { name: 'New task or tag' }), {
-    key: 'Enter',
-  });
+  fireEvent.keyDown(
+    screen.getByRole('button', { name: 'New task, subtask, or tag' }),
+    {
+      key: 'Enter',
+    }
+  );
   await screen.findByRole('menuitem', { name: 'Task' });
   expect(screen.queryByRole('menuitem', { name: 'Project' })).toBeNull();
   expect(screen.getByRole('menuitem', { name: 'Tag' })).toBeDefined();

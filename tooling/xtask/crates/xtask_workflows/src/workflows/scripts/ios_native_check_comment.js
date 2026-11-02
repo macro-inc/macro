@@ -39,7 +39,7 @@ if (failed.length && !release) {
   lines.push('### iOS release check could not complete', '',
     `Failed step: **${failed.map(([id]) => names[id] ?? id).join(', ')}**.`, '',
     `See the [workflow logs](${runUrl}) for the error, fix it, then rerun the check.`,
-    'This failure does not establish whether the App Store release is live.');
+    'This failure does not establish whether Apple approved the App Store release.');
 } else if (!native && detectionComplete) {
   lines.push('### iOS release not required', '', 'This PR no longer changes native iOS code.');
 } else if (steps.labels?.outputs?.skip === 'true') {
@@ -47,16 +47,15 @@ if (failed.length && !release) {
     'The `skip-ios-update` label bypasses this check. App Store availability has not been verified.');
 } else if (release) {
   const name = `iOS ${release.version} (build ${release.build})`;
-  if (release.kind === 'live') {
-    lines.push(`### ${name} is live and verified`, '',
-      'The App Store build matches this PR’s current merge result. The iOS release requirement is satisfied; other checks and approvals still apply.');
+  if (release.kind === 'approved') {
+    lines.push(`### ${name} is approved and verified`, '',
+      'Apple approved the App Store build, and it matches this PR’s current merge result. The iOS release requirement is satisfied; other checks and approvals still apply.');
+    if (release.state) lines.push('', `App Store state: \`${release.state}\`.`);
   } else {
-    lines.push(`### ${name} must be live before this PR can merge`, '', release.reason);
+    lines.push(`### ${name} must be approved before this PR can merge`, '', release.reason);
     if (release.state) lines.push('', `App Store state: \`${release.state}\`.`);
     if (release.kind === 'waiting') {
-      lines.push('', release.state === 'PENDING_DEVELOPER_RELEASE'
-        ? 'Release the approved version in App Store Connect.'
-        : 'Wait for Apple to approve and make the release available.');
+      lines.push('', 'Wait for Apple to approve the release.');
     } else if (release.kind === 'mismatch') {
       lines.push('', 'Bump the release numbers, commit, push, then remove and re-add `ios-update` to release the current native code. Use `--no-min` for a release that does not need a higher native build floor.');
     } else {
@@ -64,9 +63,9 @@ if (failed.length && !release) {
         ? 'The `ios-update` label is already present. Follow the **iOS App Store Release** run; if it failed, fix the reported problem, then remove and re-add the label to retry. Resolve any rejection or metadata issue in App Store Connect first.'
         : 'Once the other checks pass and the PR is ready, add **`ios-update`** to build, upload, and submit it for App Review.');
     }
-    lines.push('', 'After release, **iOS Release Watch** reruns this check within 30 minutes. You can also rerun it manually. Optionally enable **auto-merge** to merge once all requirements pass.');
+    lines.push('', 'After approval, **iOS Release Watch** reruns this check within 30 minutes. You can also rerun it manually. Optionally enable **auto-merge** to merge once all requirements pass.');
   }
-  lines.push('', `The next prod web deploy will use minimum supported iOS build **${release.floor}**, as committed in this PR.`,
+  lines.push('', `The next prod deploy releases ${name} on the App Store and makes the web bundle require iOS build **${release.floor}** or later, as committed in this PR.`,
     '', `[App Store Connect](${release.distributionUrl})`);
 } else {
   // No structured result means verification never completed; never infer an

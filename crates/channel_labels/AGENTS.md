@@ -35,11 +35,11 @@ Chat sidebar, following the standard hexagonal crate layout.
 
 ## Gotchas
 
-- Every team member sees the same labels in the same order; only per-member
+- Omitted scope selects team for members and personal otherwise; explicit personal labels accept visible team, public, and private channels, never DMs.
+- Every team member sees the same team labels in the same order; only per-member
   channel *visibility inside* a label differs — don't make label ordering
   per-user.
-- Labels are restricted to team channels (#6801) — don't extend them to
-  non-team channels without revisiting that fix.
+- Team labels remain restricted to channels in the same team; personal labels require active channel membership.
 
 ## Related
 

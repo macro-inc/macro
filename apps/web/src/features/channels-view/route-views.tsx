@@ -6,6 +6,7 @@ import {
   RedirectSplit,
   withAuth,
 } from '@components/app/split-layout/split-router/app-route-shell';
+import { useViewRestoration } from '@components/app/split-layout/view-restoration';
 import { Show } from 'solid-js';
 import { channelsSearch } from './channels-route';
 import { ChannelsView } from './channels-view';
@@ -29,6 +30,7 @@ function ChannelsLegacyRouteView() {
 }
 
 export const ChannelsRouteView = withAuth(() => {
+  useViewRestoration();
   const params = useParams<{ channelId?: string }>();
   const detailRequested = () => typeof params.channelId === 'string';
 

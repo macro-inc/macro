@@ -1,0 +1,21 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "WITH input AS (\n            SELECT * FROM UNNEST($2::text[], $3::text[], $4::text[], $5::timestamptz[], $6::bool[], $7::bool[], $8::jsonb[])\n                AS i(chat_jid, kind, name, last_activity_at, archived, pinned, anchor))\n        INSERT INTO whatsapp_chat AS c (account_id, chat_jid, kind, name, last_activity_at, archived, pinned, anchor)\n        SELECT $1, i.chat_jid, i.kind, i.name, i.last_activity_at, COALESCE(i.archived, false), COALESCE(i.pinned, false), i.anchor\n        FROM input i\n        ON CONFLICT (account_id, chat_jid) DO UPDATE SET\n            name = COALESCE(excluded.name, c.name),\n            last_activity_at = GREATEST(c.last_activity_at, excluded.last_activity_at),\n            archived = COALESCE((SELECT i.archived FROM input i WHERE i.chat_jid = excluded.chat_jid), c.archived),\n            pinned = COALESCE((SELECT i.pinned FROM input i WHERE i.chat_jid = excluded.chat_jid), c.pinned),\n            anchor = CASE WHEN excluded.anchor IS NOT NULL AND (c.anchor IS NULL\n                OR (excluded.anchor->>'at')::timestamptz >= (c.anchor->>'at')::timestamptz)\n                THEN excluded.anchor ELSE c.anchor END,\n            updated_at = now()\n        WHERE c.name IS DISTINCT FROM COALESCE(excluded.name, c.name)\n           OR c.last_activity_at IS DISTINCT FROM GREATEST(c.last_activity_at, excluded.last_activity_at)\n           OR c.archived IS DISTINCT FROM COALESCE((SELECT i.archived FROM input i WHERE i.chat_jid = excluded.chat_jid), c.archived)\n           OR c.pinned IS DISTINCT FROM COALESCE((SELECT i.pinned FROM input i WHERE i.chat_jid = excluded.chat_jid), c.pinned)\n           OR (excluded.anchor IS NOT NULL AND c.anchor IS DISTINCT FROM excluded.anchor AND (c.anchor IS NULL\n               OR (excluded.anchor->>'at')::timestamptz >= (c.anchor->>'at')::timestamptz))",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TextArray",
+        "TextArray",
+        "TimestamptzArray",
+        "BoolArray",
+        "BoolArray",
+        "JsonbArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "13a34fe816487cb7ec13b5988b6d4ca4d3280e12aaeba9f19063430bfa5155de"
+}

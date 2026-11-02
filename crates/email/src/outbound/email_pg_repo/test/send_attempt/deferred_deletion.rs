@@ -288,7 +288,7 @@ async fn explicit_inbox_purge_removes_an_accepted_send_and_its_retained_deletion
     let summary = email_db_client::links::delete::purge_link(
         &pool,
         link(),
-        email_db_client::links::delete::PurgeBatchSizes::default(),
+        email_db_client::links::delete::PurgePacing::default(),
     )
     .await?;
     // The fixture has four messages in this inbox and one in a second inbox.

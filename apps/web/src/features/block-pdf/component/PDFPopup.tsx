@@ -1,9 +1,9 @@
 import type { IHighlight } from '@block-pdf/model/Highlight';
 import { GeneralizedPopup } from '@core/component/GeneralizedPopup/Popup';
-import CheckIcon from '@phosphor-icons/core/bold/check-bold.svg?component-solid';
-import ChatIcon from '@phosphor-icons/core/regular/chat-teardrop.svg?component-solid';
-import LinkIcon from '@phosphor-icons/core/regular/link.svg?component-solid';
-import TrashIcon from '@phosphor-icons/core/regular/trash.svg?component-solid';
+import CheckIcon from '@icon/system/bold/check-bold.svg?component-solid';
+import ChatIcon from '@icon/system/regular/chat-teardrop.svg?component-solid';
+import LinkIcon from '@icon/system/regular/link.svg?component-solid';
+import TrashIcon from '@icon/system/regular/trash.svg?component-solid';
 import { Button } from '@ui';
 import {
   createSignal,
@@ -102,7 +102,7 @@ export function PDFPopup(props: PDFPopupProps) {
                     props.highlightProps.removeHighlight();
                   }}
                 >
-                  <TrashIcon />
+                  <TrashIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
               </Show>
             </Match>
@@ -122,7 +122,7 @@ export function PDFPopup(props: PDFPopupProps) {
                 props.commentProps.placeComment(e as MouseEvent)
               }
             >
-              <ChatIcon />
+              <ChatIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
         </div>
@@ -139,12 +139,12 @@ export function PDFPopup(props: PDFPopupProps) {
                 when={locationCopied()}
                 fallback={
                   <>
-                    <LinkIcon />
+                    <LinkIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                     Share
                   </>
                 }
               >
-                <CheckIcon class="text-success" />
+                <CheckIcon class="text-success size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                 Copied
               </Show>
             </Button>

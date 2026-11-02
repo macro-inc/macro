@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        UPDATE calendar_event_sources source\n        SET normalized_payload = CASE WHEN $4::jsonb IS NULL\n            THEN source.normalized_payload #- '{event,guestPolicy}'\n            ELSE jsonb_set(source.normalized_payload, '{event,guestPolicy}', $4)\n        END\n        FROM calendar_events event\n        WHERE source.event_id = event.id\n          AND source.source_kind = 'google'\n          AND source.id <> $3\n          AND source.normalized_payload ? 'event'\n          AND (source.normalized_payload -> 'event' -> 'guestPolicy') IS DISTINCT FROM $4::jsonb\n          AND calendar_meeting_uid(event.ical_uid) = $1\n          AND lower(event.organizer_email) = $2\n          AND event.status <> 'cancelled'\n          AND NOT event.is_snapshot\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Uuid",
+        "Jsonb"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e2c6ce788ac84c8a60bf65ea1bc2c3d8324104cea0765df0e0d7261b813185f9"
+}

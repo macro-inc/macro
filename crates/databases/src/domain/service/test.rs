@@ -36,6 +36,7 @@ mod casts;
 mod column_options;
 mod columns;
 mod databases;
+mod date_ranges;
 mod delete_table;
 mod derived_columns;
 mod discovery;

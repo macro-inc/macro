@@ -30,7 +30,7 @@ async fn queue_groups_one_channels_facts_and_ignores_non_timeline_activity() {
         Actor::new_from_user("macro|test@example.com".to_owned().try_into().unwrap()),
         None,
         activity::EntityType::Channel,
-        &CHANNEL.to_string(),
+        CHANNEL.to_string(),
         activity::CommonAction::Edited,
         chrono::Utc::now(),
     );

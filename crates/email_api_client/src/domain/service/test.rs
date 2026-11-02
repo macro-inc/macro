@@ -1,15 +1,17 @@
 use std::sync::{Arc, Mutex};
+use std::task::{Context, Waker};
 use std::time::Duration;
 
 use models_email::email::service::label::Label;
 use uuid::Uuid;
 
 use super::super::models::{
-    AccessToken, ApiOperationKind, EmailApiError, RateLimitRefusal, TokenError, TokenFreshness,
+    AccessToken, ApiOperationKind, EmailApiError, RateLimitOrigin, RateLimitRefusal, TokenError,
+    TokenFreshness,
 };
 use super::super::ports::MailboxLabelClient;
 use super::EmailApiClientServiceImpl;
-use super::test_support::{Call, FakeRateLimiter, FakeRepository, FakeTokenSource, call_log};
+use super::test_support::{Call, FakeGate, FakeRepository, FakeTokenSource, call_log};
 
 /// Rejects the listed tokens the way Gmail answers a 401.
 #[derive(Clone, Default)]
@@ -35,12 +37,62 @@ impl MailboxLabelClient for TokenCheckingLabels {
         _: Uuid,
         _: &str,
     ) -> Result<Label, EmailApiError> {
+        Err(EmailApiError::RateLimited {
+            retry_after: None,
+            origin: RateLimitOrigin::Provider { concurrency: false },
+        })
+    }
+
+    async fn delete_label(&self, _: &AccessToken, _: &str) -> Result<(), EmailApiError> {
+        unreachable!("not used by these tests")
+    }
+}
+
+/// Never answers, like a Gmail request still in flight.
+struct UnansweredLabels;
+
+impl MailboxLabelClient for UnansweredLabels {
+    async fn list_labels(&self, _: &AccessToken, _: Uuid) -> Result<Vec<Label>, EmailApiError> {
+        std::future::pending().await
+    }
+
+    async fn create_label(
+        &self,
+        _: &AccessToken,
+        _: Uuid,
+        _: &str,
+    ) -> Result<Label, EmailApiError> {
         unreachable!("not used by these tests")
     }
 
     async fn delete_label(&self, _: &AccessToken, _: &str) -> Result<(), EmailApiError> {
         unreachable!("not used by these tests")
     }
+}
+
+#[tokio::test]
+async fn a_caller_cancelled_mid_request_releases_its_admission() {
+    let calls = call_log();
+    let service = EmailApiClientServiceImpl::new(
+        UnansweredLabels,
+        FakeTokenSource::new(calls.clone(), Ok(AccessToken::new("access-token"))),
+        FakeGate::new(calls.clone(), Ok(())),
+    );
+    let mut read = Box::pin(service.list_labels(Uuid::nil()));
+    let poll = read.as_mut().poll(&mut Context::from_waker(Waker::noop()));
+    assert!(poll.is_pending());
+
+    // An HTTP client disconnected, or a lease-keeping select! gave up.
+    drop(read);
+
+    assert_eq!(
+        *calls.lock().unwrap(),
+        vec![
+            Call::Acquire(Uuid::nil(), ApiOperationKind::ListLabels),
+            Call::Token(Uuid::nil(), TokenFreshness::Cached),
+            Call::Abandon(Uuid::nil()),
+        ]
+    );
 }
 
 async fn list_labels_with(
@@ -56,7 +108,7 @@ async fn list_labels_with(
     let service = EmailApiClientServiceImpl::new(
         repository,
         FakeTokenSource::new(calls.clone(), Ok(AccessToken::new("cached"))).with_fresh(fresh),
-        FakeRateLimiter::new(calls.clone(), Ok(())),
+        FakeGate::new(calls.clone(), Ok(())),
     );
 
     let result = service
@@ -68,22 +120,23 @@ async fn list_labels_with(
     (result, calls, seen)
 }
 
-fn retried_calls() -> Vec<Call> {
-    vec![
-        Call::RateLimit(Uuid::nil(), ApiOperationKind::ListLabels),
-        Call::Token(Uuid::nil(), TokenFreshness::Cached),
-        Call::RateLimit(Uuid::nil(), ApiOperationKind::ListLabels),
-        Call::Token(Uuid::nil(), TokenFreshness::Fresh),
-    ]
-}
-
 #[tokio::test]
 async fn a_rejected_cached_token_is_retried_with_a_fresh_one() {
     let (result, calls, seen) =
         list_labels_with(vec!["cached"], Ok(AccessToken::new("fresh"))).await;
 
     assert_eq!(result, Ok(0));
-    assert_eq!(calls, retried_calls());
+    assert_eq!(
+        calls,
+        vec![
+            Call::Acquire(Uuid::nil(), ApiOperationKind::ListLabels),
+            Call::Token(Uuid::nil(), TokenFreshness::Cached),
+            Call::Finish(Uuid::nil(), Some(EmailApiError::AuthRequired)),
+            Call::Acquire(Uuid::nil(), ApiOperationKind::ListLabels),
+            Call::Token(Uuid::nil(), TokenFreshness::Fresh),
+            Call::Finish(Uuid::nil(), None),
+        ]
+    );
     assert_eq!(seen, ["cached", "fresh"]);
 }
 
@@ -93,7 +146,17 @@ async fn a_revoked_grant_found_by_the_fresh_fetch_stops_the_read() {
         list_labels_with(vec!["cached"], Err(TokenError::ReauthRequired)).await;
 
     assert_eq!(result, Err(EmailApiError::AuthRequired));
-    assert_eq!(calls, retried_calls());
+    assert_eq!(
+        calls,
+        vec![
+            Call::Acquire(Uuid::nil(), ApiOperationKind::ListLabels),
+            Call::Token(Uuid::nil(), TokenFreshness::Cached),
+            Call::Finish(Uuid::nil(), Some(EmailApiError::AuthRequired)),
+            Call::Acquire(Uuid::nil(), ApiOperationKind::ListLabels),
+            Call::Token(Uuid::nil(), TokenFreshness::Fresh),
+            Call::Finish(Uuid::nil(), None),
+        ]
+    );
     assert_eq!(seen, ["cached"]);
 }
 
@@ -103,69 +166,109 @@ async fn a_rejected_fresh_token_is_not_retried_again() {
         list_labels_with(vec!["cached", "fresh"], Ok(AccessToken::new("fresh"))).await;
 
     assert_eq!(result, Err(EmailApiError::AuthRequired));
-    assert_eq!(calls, retried_calls());
+    assert_eq!(
+        calls,
+        vec![
+            Call::Acquire(Uuid::nil(), ApiOperationKind::ListLabels),
+            Call::Token(Uuid::nil(), TokenFreshness::Cached),
+            Call::Finish(Uuid::nil(), Some(EmailApiError::AuthRequired)),
+            Call::Acquire(Uuid::nil(), ApiOperationKind::ListLabels),
+            Call::Token(Uuid::nil(), TokenFreshness::Fresh),
+            Call::Finish(Uuid::nil(), Some(EmailApiError::AuthRequired)),
+        ]
+    );
     assert_eq!(seen, ["cached", "fresh"]);
 }
 
 #[tokio::test]
-async fn token_failure_stops_before_repository_after_the_quota_check() {
+async fn token_failure_releases_admission_without_calling_the_provider() {
     let calls = call_log();
     let service = EmailApiClientServiceImpl::new(
         FakeRepository::new(calls.clone()),
         FakeTokenSource::new(calls.clone(), Err(TokenError::ReauthRequired)),
-        FakeRateLimiter::new(calls.clone(), Ok(())),
+        FakeGate::new(calls.clone(), Ok(())),
     );
 
     let result = service
-        .prepare(Uuid::nil(), ApiOperationKind::GetMessage)
+        .modify_message_labels(
+            Uuid::nil(),
+            &["message-1".to_string()],
+            &[],
+            &["INBOX".to_string()],
+        )
         .await;
 
     assert_eq!(result, Err(EmailApiError::AuthRequired));
     assert_eq!(
         *calls.lock().unwrap(),
         vec![
-            Call::RateLimit(Uuid::nil(), ApiOperationKind::GetMessage),
+            Call::Acquire(Uuid::nil(), ApiOperationKind::ModifyMessageLabels),
             Call::Token(Uuid::nil(), TokenFreshness::Cached),
+            Call::Finish(Uuid::nil(), None),
         ]
     );
 }
 
 #[tokio::test]
-async fn rate_limit_refusal_stops_before_the_token_dance_and_repository() {
+async fn admission_refusal_stops_before_the_token_dance_and_repository() {
     let calls = call_log();
     let retry_after = Duration::from_secs(17);
     let service = EmailApiClientServiceImpl::new(
         FakeRepository::new(calls.clone()),
         FakeTokenSource::new(calls.clone(), Ok(AccessToken::new("access-token"))),
-        FakeRateLimiter::new(calls.clone(), Err(RateLimitRefusal::new(Some(retry_after)))),
+        FakeGate::new(calls.clone(), Err(RateLimitRefusal::new(Some(retry_after)))),
     );
 
-    let result = service
-        .prepare(Uuid::nil(), ApiOperationKind::SendMessage)
-        .await;
+    let result = service.get_thread_count(Uuid::nil()).await;
 
     assert_eq!(
         result,
         Err(EmailApiError::RateLimited {
             retry_after: Some(retry_after),
-            origin: crate::domain::models::RateLimitOrigin::Local,
+            origin: RateLimitOrigin::Local,
         })
     );
-    // A refused attempt must not pay the token acquisition (SELECT + Redis +
-    // possible auth-service refresh + health write).
+    // A refused attempt holds no permit and must not pay the token acquisition
+    // (SELECT + Redis + possible auth-service refresh + health write).
     assert_eq!(
         *calls.lock().unwrap(),
-        vec![Call::RateLimit(Uuid::nil(), ApiOperationKind::SendMessage)]
+        vec![Call::Acquire(Uuid::nil(), ApiOperationKind::GetProfile)]
     );
 }
 
 #[tokio::test]
-async fn explicit_token_probe_honors_requested_freshness_without_quota_check() {
+async fn a_provider_rate_limit_is_reported_to_the_gate_when_releasing_admission() {
+    let calls = call_log();
+    let service = EmailApiClientServiceImpl::new(
+        TokenCheckingLabels::default(),
+        FakeTokenSource::new(calls.clone(), Ok(AccessToken::new("access-token"))),
+        FakeGate::new(calls.clone(), Ok(())),
+    );
+    let throttled = EmailApiError::RateLimited {
+        retry_after: None,
+        origin: RateLimitOrigin::Provider { concurrency: false },
+    };
+
+    let result = service.create_label(Uuid::nil(), "Receipts").await;
+
+    assert_eq!(result.err(), Some(throttled.clone()));
+    assert_eq!(
+        *calls.lock().unwrap(),
+        vec![
+            Call::Acquire(Uuid::nil(), ApiOperationKind::CreateLabel),
+            Call::Token(Uuid::nil(), TokenFreshness::Cached),
+            Call::Finish(Uuid::nil(), Some(throttled)),
+        ]
+    );
+}
+
+#[tokio::test]
+async fn explicit_token_probe_honors_requested_freshness_without_admission() {
     let calls = call_log();
     let service = EmailApiClientServiceImpl::new(
         FakeRepository::new(calls.clone()),
         FakeTokenSource::new(calls.clone(), Ok(AccessToken::new("access-token"))),
-        FakeRateLimiter::new(calls.clone(), Ok(())),
+        FakeGate::new(calls.clone(), Ok(())),
     );
 
     let result = service
@@ -203,7 +306,7 @@ async fn token_errors_preserve_transient_and_permanent_classification() {
         let service = EmailApiClientServiceImpl::new(
             FakeRepository::new(calls.clone()),
             FakeTokenSource::new(calls.clone(), Err(token_error)),
-            FakeRateLimiter::new(calls, Ok(())),
+            FakeGate::new(calls, Ok(())),
         );
 
         assert_eq!(

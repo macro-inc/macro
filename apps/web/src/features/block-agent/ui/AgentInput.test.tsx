@@ -121,11 +121,11 @@ vi.mock('@channel/Input/Input', () => ({
 }));
 vi.mock('@core/util/upload', () => ({ handleFileFolderDrop: vi.fn() }));
 
-vi.mock('@phosphor/arrow-up.svg', () => ({
+vi.mock('@icon/system/bold/arrow-up-bold.svg', () => ({
   default: () => <span data-testid="send-icon" />,
 }));
 
-vi.mock('@phosphor/spinner-gap.svg', () => ({
+vi.mock('@icon/system/regular/spinner-gap.svg', () => ({
   default: () => <span data-testid="spinner-icon" />,
 }));
 
@@ -447,9 +447,7 @@ it('keeps an attached image and text unsent while the selected model is text-onl
       attachments={[{ id: 'image', name: 'test.png', kind: 'image' }]}
     />
   ));
-  expect(screen.getByRole('status').textContent).toContain(
-    'does not support images'
-  );
+  expect(screen.queryByText(/This model does not support images/)).toBeNull();
   editor.enter?.();
   expect(send).not.toHaveBeenCalled();
   expect(editor.clear).not.toHaveBeenCalled();

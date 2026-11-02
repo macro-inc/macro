@@ -7,8 +7,8 @@
 
 /**
  * How a question is asked. Each column kind takes a few, the first its
-default; kinds asked one way only (numbers, checkboxes, entity and row
-pickers) take none.
+default; kinds asked one way only (numbers, checkboxes, date ranges,
+entity and row pickers) take none.
  */
 export type Widget = (typeof Widget)[keyof typeof Widget];
 

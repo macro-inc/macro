@@ -190,12 +190,12 @@ export class UserMentionNode extends DecoratorNode<
     for (const [k, v] of Object.entries(this.getDataAttrs())) {
       element.setAttribute(k, v.toString());
     }
-    element.textContent = this.__displayName;
+    element.textContent = this.getTextContent();
     return { element };
   }
 
   getTextContent(): string {
-    return this.__displayName;
+    return this.__displayName ? `@${this.__displayName}` : '';
   }
 
   getSearchText(): string {

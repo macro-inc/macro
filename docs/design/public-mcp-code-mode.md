@@ -62,10 +62,11 @@ Evaluate `ai-code-mode` for the OAuth user in `initialize`, `list_tools` and `ca
 reusing `agent_inmem::domain::tool_mode::FlaggedToolMode`.
 
 - Off: unchanged.
-- On: `tools_for_inner(AiHost::Mcp, true)` (new `ai_tools::tools_for_mcp_code_mode`),
-  which already drops SDK-covered tools via `covered_by_code_sdk`, plus
-  `ExecuteCode` and `DescribeCodeTools`. `initialize` (which, unlike
-  `get_info`, sees the request) appends code-mode instructions.
+- On: `tools/list` is `ExecuteCode`, `DescribeCodeTools` and `ReadCodeDocs` only
+  (`agent_code_mode::inbound::toolset::user_toolset`). Individual Macro tools
+  are not advertised. `initialize` (which, unlike `get_info`, sees the
+  request) replaces the standard tool-catalog instructions with code-mode
+  instructions.
 - `call_tool` rejects `ExecuteCode` / `DescribeCodeTools` for unflagged users.
   Hidden native tools stay callable; they are the same tools.
 

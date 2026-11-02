@@ -8,7 +8,7 @@ recurrence editor, or reminder AI tool. Calendar event alarms remain separate.
 
 On one selected email or an open conversation, press **H**, choose **Remind me**
 in its menu, or activate its bell. The shared command menu's input placeholder
-reads `Remind me: <subject>`, followed by time choices: **In 30m**, **Later today** (before 5 PM), **Tomorrow**, and
+reads `Type a time, like tomorrow 9am`, followed by time choices: **In 30m**, **Later today** (before 5 PM), **Tomorrow**, and
 **Next week**. Type a future time such as `in 2 hours` or `tomorrow 9am` in
 **Remind me when**. Up/Down changes the selection; Enter or clicking a choice
 saves immediately. **Cancel** (footer, bottom left) or Escape closes without

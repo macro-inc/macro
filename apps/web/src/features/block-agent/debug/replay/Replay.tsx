@@ -47,7 +47,7 @@ function SessionChrome() {
   // already reads as done.
   const working = () => {
     const state = turn();
-    return state !== 'idle' && state !== 'disconnected' && state !== 'stopping';
+    return state === 'starting' || state === 'running' || state === 'blocked';
   };
   return (
     <div class="flex items-center gap-2 border-b border-edge-muted px-4 py-2">

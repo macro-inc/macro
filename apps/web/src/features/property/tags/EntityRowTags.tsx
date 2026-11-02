@@ -1,16 +1,35 @@
-import CaretDownIcon from '@phosphor/caret-down.svg';
-import CircleDashedEmpty from '@phosphor/circle-dashed.svg';
-import FilterIcon from '@phosphor/funnel-simple.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import PlusIcon from '@phosphor/plus.svg';
+import type { PriorityCollapser } from '@app/components/priority-collapse/createPriorityCollapser';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
+import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
+import FilterIcon from '@icon/system/regular/funnel-simple.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import { useInFlightEntityPropertyOptions } from '@queries/properties/in-flight-options';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
-import { Button, badgeTriggerClasses, cn, HoverCard, Layer } from '@ui';
-import { createSignal, For, Match, Show, Switch } from 'solid-js';
+import {
+  type BadgeSize,
+  type BadgeVariant,
+  Button,
+  badgeTriggerClasses,
+  cn,
+  HoverCard,
+  Layer,
+} from '@ui';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  createUniqueId,
+  For,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js';
 import { TagDot } from './TagDot';
 import { type EditableTag, TagEditorDialog } from './TagEditorDialog';
-import { TagPicker } from './TagPicker';
+import { TagPicker, TagSheetPicker } from './TagPicker';
 import { TagPill } from './TagPill';
 import { useDocTags, useSoupDocTags } from './useDocTags';
 import { type ResolvedTag, useSoupResolvedTags } from './useSoupResolvedTags';
@@ -22,8 +41,7 @@ const DEFAULT_MAX_VISIBLE = 3;
 const MAX_OVERFLOW_DOTS = 3;
 
 const hoverMenuLabelClass = 'min-w-0 max-w-[30ch] truncate';
-const hoverMenuIconButtonClass =
-  'size-5 shrink-0 p-0.5 text-ink-extra-muted [&_:where(svg)]:size-3.5';
+const hoverMenuIconButtonClass = 'size-5 shrink-0 p-0.5 text-ink-extra-muted';
 
 function HoverTagRow(props: {
   tag: ResolvedTag;
@@ -42,7 +60,6 @@ function HoverTagRow(props: {
             type="button"
             variant="ghost"
             size="icon-sm"
-            noTouchResize
             tooltip="Filter by tag"
             aria-label={`Filter by ${props.tag.label}`}
             class={hoverMenuIconButtonClass}
@@ -64,7 +81,6 @@ function HoverTagRow(props: {
         type="button"
         variant="ghost"
         size="icon-sm"
-        noTouchResize
         tooltip="Edit tag"
         aria-label={`Edit ${props.tag.label}`}
         class={hoverMenuIconButtonClass}
@@ -181,6 +197,7 @@ function TagChip(props: {
   onFilterByTag?: (id: string) => void;
   onEdit: (tag: ResolvedTag) => void;
   withClickBlock: boolean;
+  onActiveChange: (active: boolean) => void;
 }) {
   const [pickerOpen, setPickerOpen] = createSignal(false);
   return (
@@ -202,6 +219,7 @@ function TagChip(props: {
           class="max-w-[14ch]"
           dotClass="size-2"
           onOpenChange={setPickerOpen}
+          onActiveChange={props.onActiveChange}
           withClickBlock={props.withClickBlock}
         />
       </HoverCard>
@@ -211,15 +229,17 @@ function TagChip(props: {
 
 function TagOverflow(props: {
   tags: ResolvedTag[];
+  visibleCount: number;
   createDocTags: CreateDocTags;
   onFilterByTag?: (id: string) => void;
   onEdit: (tag: ResolvedTag) => void;
   withClickBlock: boolean;
+  onActiveChange: (active: boolean) => void;
 }) {
   const [pickerOpen, setPickerOpen] = createSignal(false);
   const dots = () => props.tags.slice(0, MAX_OVERFLOW_DOTS);
   const count = () =>
-    `+${props.tags.length} ${props.tags.length === 1 ? 'tag' : 'tags'}`;
+    `${props.visibleCount > 0 ? '+' : ''}${props.tags.length} ${props.tags.length === 1 ? 'tag' : 'tags'}`;
 
   return (
     <Layer depth={2}>
@@ -244,11 +264,12 @@ function TagOverflow(props: {
           createDocTags={props.createDocTags}
           triggerClass={badgeTriggerClasses({
             variant: 'outline',
-            size: 'sm',
-            class: 'max-w-[14ch] gap-1.5',
+            size: 'xs',
+            class: 'max-w-[14ch] gap-1.5 touch:min-h-0',
           })}
           triggerLabel="Edit tags"
           onOpenChange={setPickerOpen}
+          onActiveChange={props.onActiveChange}
           withClickBlock={props.withClickBlock}
         >
           <span class="flex items-center">
@@ -270,16 +291,19 @@ function TagOverflow(props: {
 
 /**
  * Compact tag display for list rows, rendered from the entity's already-loaded
- * soup properties (no per-row fetch). Shows up to `maxVisible` chips then a
- * "+N tags" chip. Clicking a chip opens the TagPicker to edit the entity's
- * tags. Hovering a chip surfaces a "Filter by" link and hovering the overflow
- * lists the hidden tags. onFilterByTag applies a tag filter to the list.
+ * soup properties (no per-row fetch). A sole tag keeps its named chip; otherwise
+ * shows up to `maxVisible` chips then a "+N tags" chip, or "N tags" when every tag
+ * is collapsed. Clicking a chip opens the TagPicker to edit the entity's tags.
+ * Hovering a chip surfaces a "Filter by" link; hovering the overflow lists hidden
+ * tags. onFilterByTag applies a tag filter to the list.
  */
 export function EntityRowTags(props: {
   entityId: string;
   entityType: EntityType;
   properties: SoupProperty[] | undefined;
   maxVisible?: number;
+  /** The host's measured overflow controller; hide trailing tags before truncating its title. */
+  collapse?: PriorityCollapser;
   class?: string;
   onFilterByTag?: (optionId: string) => void;
 }) {
@@ -289,7 +313,38 @@ export function EntityRowTags(props: {
   );
   const createDocTags = () =>
     useSoupDocTags(props.entityId, props.entityType, () => props.properties);
-  const maxVisible = () => props.maxVisible ?? DEFAULT_MAX_VISIBLE;
+  const [pickerActive, setPickerActive] = createSignal(false);
+  const [visibleLimit, setVisibleLimit] = createSignal(Infinity);
+  const id = createUniqueId();
+  const limit = createMemo(() =>
+    Math.min(appliedTags().length, props.maxVisible ?? DEFAULT_MAX_VISIBLE)
+  );
+  const maxVisible = () => {
+    if (appliedTags().length === 1) return 1;
+    return props.collapse ? Math.min(limit(), visibleLimit()) : limit();
+  };
+
+  createEffect(() => {
+    const collapse = props.collapse;
+    const count = limit();
+    // Keep triggers mounted through the picker and any nested tag editor.
+    if (!collapse || pickerActive() || appliedTags().length === 1) return;
+    for (let index = 0; index < count; index++) {
+      onCleanup(
+        collapse.register({
+          id: `${id}-${index}`,
+          priority: -index,
+          collapsed: () => maxVisible() <= index,
+          setCollapsed: (collapsed) =>
+            setVisibleLimit((current) =>
+              collapsed
+                ? Math.min(current, index)
+                : Math.max(current, index + 1)
+            ),
+        })
+      );
+    }
+  });
   const visible = () => appliedTags().slice(0, maxVisible());
   const hidden = () => appliedTags().slice(maxVisible());
   const [editingTag, setEditingTag] = createSignal<ResolvedTag>();
@@ -297,7 +352,11 @@ export function EntityRowTags(props: {
   return (
     <Show when={appliedTags().length > 0}>
       <div
-        class={cn('flex items-center gap-1', props.class)}
+        class={cn(
+          'flex items-center gap-1',
+          props.collapse !== undefined && 'shrink-0',
+          props.class
+        )}
         onClick={(event) => event.stopPropagation()}
       >
         <For each={visible()}>
@@ -307,6 +366,7 @@ export function EntityRowTags(props: {
               createDocTags={createDocTags}
               onFilterByTag={props.onFilterByTag}
               onEdit={setEditingTag}
+              onActiveChange={setPickerActive}
               withClickBlock
             />
           )}
@@ -314,9 +374,11 @@ export function EntityRowTags(props: {
         <Show when={hidden().length > 0}>
           <TagOverflow
             tags={hidden()}
+            visibleCount={visible().length}
             createDocTags={createDocTags}
             onFilterByTag={props.onFilterByTag}
             onEdit={setEditingTag}
+            onActiveChange={setPickerActive}
             withClickBlock
           />
         </Show>
@@ -334,9 +396,11 @@ export function EntityRowTags(props: {
   );
 }
 
-export function InlineTagsPill(props: {
+type InlineTagsPillProps = {
   docTags: DocTags;
   class?: string;
+  variant?: BadgeVariant;
+  size?: BadgeSize;
   showPlaceholder?: boolean;
   showAddButton?: boolean;
   /**
@@ -345,13 +409,90 @@ export function InlineTagsPill(props: {
    * the close rather than mid-interaction, which would tear down the open menu.
    */
   onActiveChange?: (active: boolean) => void;
-}) {
-  const tags = () => props.docTags.appliedTags();
-  const first = () => tags()[0];
-  const dots = () => tags().slice(0, MAX_OVERFLOW_DOTS);
-  const label = () =>
-    `${tags().length} ${tags().length === 1 ? 'Tag' : 'Tags'}`;
+};
 
+/** The applied tags as dots and a label, shared by both tag pills. */
+function InlineTagsPillFace(props: {
+  tags: ResolvedTag[];
+  showAddButton?: boolean;
+}) {
+  const first = () => props.tags[0];
+  const dots = () => props.tags.slice(0, MAX_OVERFLOW_DOTS);
+  const label = () =>
+    `${props.tags.length} ${props.tags.length === 1 ? 'Tag' : 'Tags'}`;
+  return (
+    <>
+      <span class="inline-flex min-w-0 items-center gap-1">
+        <Switch>
+          <Match when={props.tags.length === 0 && props.showAddButton}>
+            <PlusIcon class="size-3 shrink-0" />
+            <span>Add tags</span>
+          </Match>
+          <Match when={props.tags.length === 0}>
+            <span class="inline-flex min-w-0 items-center gap-1 opacity-50">
+              <CircleDashedEmpty class="size-3 shrink-0" />
+              <span class="min-w-0 truncate @max-2xl/u-list:hidden">Tags</span>
+            </span>
+          </Match>
+          <Match when={props.tags.length === 1 && first()}>
+            {(tag) => (
+              <>
+                <TagDot color={tag().color} class="size-2.5" />
+                <span class="min-w-0 truncate @max-2xl/u-list:hidden">
+                  {tag().label}
+                </span>
+              </>
+            )}
+          </Match>
+          <Match when={props.tags.length > 1}>
+            <span class="flex items-center">
+              <For each={dots()}>
+                {(tag, index) => (
+                  <TagDot
+                    color={tag.color}
+                    class={cn(
+                      'size-2.5 ring-2 ring-surface',
+                      index() > 0 && '-ml-1'
+                    )}
+                  />
+                )}
+              </For>
+            </span>
+            <span class="min-w-0 truncate @max-2xl/u-list:hidden">
+              {label()}
+            </span>
+          </Match>
+        </Switch>
+      </span>
+      <Show when={props.tags.length > 0 || !props.showAddButton}>
+        <CaretDownIcon class="size-3 shrink-0 @max-2xl/u-list:hidden" />
+      </Show>
+    </>
+  );
+}
+
+function inlineTagsTriggerClass(props: InlineTagsPillProps, count: number) {
+  return badgeTriggerClasses({
+    variant: props.variant ?? 'outline',
+    size: props.size ?? 'xs',
+    class: cn(
+      // Capped so a long tag label truncates instead of squeezing
+      // whatever shares the row with the pill (e.g. a task title).
+      'min-w-0 max-w-35 gap-1.5 text-left touch:min-h-0',
+      count === 0 && !props.showAddButton && 'text-ink-extra-muted',
+      props.class
+    ),
+  });
+}
+
+function inlineTagsTriggerLabel(props: InlineTagsPillProps, count: number) {
+  return count === 0 && props.showAddButton
+    ? 'Add tags'
+    : 'Change or select tags';
+}
+
+export function InlineTagsPill(props: InlineTagsPillProps) {
+  const tags = () => props.docTags.appliedTags();
   return (
     <Show
       when={tags().length > 0 || props.showPlaceholder || props.showAddButton}
@@ -360,71 +501,38 @@ export function InlineTagsPill(props: {
         <TagPicker
           docTags={props.docTags}
           onActiveChange={props.onActiveChange}
-          triggerClass={badgeTriggerClasses({
-            variant: 'outline',
-            size: 'sm',
-            class: cn(
-              // Capped so a long tag label truncates instead of squeezing
-              // whatever shares the row with the pill (e.g. a task title).
-              'min-w-0 max-w-35 gap-1.5 text-left',
-              tags().length === 0 &&
-                !props.showAddButton &&
-                'text-ink-extra-muted',
-              props.class
-            ),
-          })}
-          triggerLabel={
-            tags().length === 0 && props.showAddButton
-              ? 'Add tags'
-              : 'Change or select tags'
-          }
+          triggerClass={inlineTagsTriggerClass(props, tags().length)}
+          triggerLabel={inlineTagsTriggerLabel(props, tags().length)}
         >
-          <Switch>
-            <Match when={tags().length === 0 && props.showAddButton}>
-              <PlusIcon class="size-3 shrink-0" />
-              <span>Add tags</span>
-            </Match>
-            <Match when={tags().length === 0}>
-              <span class="inline-flex min-w-0 items-center gap-1.5 opacity-50">
-                <CircleDashedEmpty class="size-3 shrink-0" />
-                <span class="min-w-0 truncate @max-2xl/u-list:hidden">
-                  Tags
-                </span>
-              </span>
-            </Match>
-            <Match when={tags().length === 1 && first()}>
-              {(tag) => (
-                <>
-                  <TagDot color={tag().color} class="size-2.5" />
-                  <span class="min-w-0 truncate @max-2xl/u-list:hidden">
-                    {tag().label}
-                  </span>
-                </>
-              )}
-            </Match>
-            <Match when={tags().length > 1}>
-              <span class="flex items-center">
-                <For each={dots()}>
-                  {(tag, index) => (
-                    <TagDot
-                      color={tag.color}
-                      class={cn(
-                        'size-2.5 ring-2 ring-surface',
-                        index() > 0 && '-ml-1'
-                      )}
-                    />
-                  )}
-                </For>
-              </span>
-              <span class="min-w-0 truncate @max-2xl/u-list:hidden">
-                {label()}
-              </span>
-            </Match>
-          </Switch>
-          <Show when={tags().length > 0 || !props.showAddButton}>
-            <CaretDownIcon class="size-3 shrink-0 @max-2xl/u-list:hidden" />
-          </Show>
+          <InlineTagsPillFace
+            tags={tags()}
+            showAddButton={props.showAddButton}
+          />
         </TagPicker>
+      </Layer>
+    </Show>
+  );
+}
+
+/** `InlineTagsPill` for a touch sheet: it picks tags in a stacked sheet. */
+export function InlineTagsSheetPill(props: InlineTagsPillProps) {
+  const tags = () => props.docTags.appliedTags();
+  return (
+    <Show
+      when={tags().length > 0 || props.showPlaceholder || props.showAddButton}
+    >
+      <Layer depth={2}>
+        <TagSheetPicker
+          docTags={props.docTags}
+          onActiveChange={props.onActiveChange}
+          triggerClass={inlineTagsTriggerClass(props, tags().length)}
+          triggerLabel={inlineTagsTriggerLabel(props, tags().length)}
+        >
+          <InlineTagsPillFace
+            tags={tags()}
+            showAddButton={props.showAddButton}
+          />
+        </TagSheetPicker>
       </Layer>
     </Show>
   );
@@ -454,6 +562,8 @@ export function InlineFetchedEntityTagsPill(props: {
   entityId: string;
   entityType: EntityType;
   class?: string;
+  variant?: BadgeVariant;
+  size?: BadgeSize;
   showAddButton?: boolean;
 }) {
   const docTags = useDocTags(props.entityId, props.entityType);
@@ -461,6 +571,8 @@ export function InlineFetchedEntityTagsPill(props: {
     <InlineTagsPill
       docTags={docTags}
       class={props.class}
+      variant={props.variant}
+      size={props.size}
       showPlaceholder={props.entityType === EntityType.TASK}
       showAddButton={props.showAddButton}
     />

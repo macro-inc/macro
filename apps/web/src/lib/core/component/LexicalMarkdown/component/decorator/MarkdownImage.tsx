@@ -5,6 +5,9 @@ false && internalDrag;
 import { Lightbox } from '@core/component/Lightbox';
 import { toast } from '@core/component/Toast/Toast';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { displayImageUrl } from '@core/util/imageProxy';
+import ImageIcon from '@icon/system/regular/image-broken.svg';
+import LoadingSpinner from '@icon/system/regular/spinner.svg';
 import { Dialog } from '@kobalte/core/dialog';
 import { mergeRegister } from '@lexical/utils';
 import {
@@ -12,8 +15,6 @@ import {
   type ImageDecoratorProps,
 } from '@macro-inc/lexical-core';
 import { calculateEffectiveDimensions } from '@macro-inc/lexical-core/utils/media';
-import ImageIcon from '@phosphor/image-broken.svg';
-import LoadingSpinner from '@phosphor/spinner.svg';
 import { debounce } from '@solid-primitives/scheduled';
 import { cn, Layer } from '@ui';
 import {
@@ -33,6 +34,7 @@ import {
   useContext,
 } from 'solid-js';
 import { LexicalWrapperContext } from '../../context/LexicalWrapperContext';
+import { DRAG_DATA_FORMAT } from '../../plugins/draggable-block/draggableBlockPlugin';
 import {
   $upgradeDSSMediaUrl,
   getMediaUrl,
@@ -104,7 +106,10 @@ export function MarkdownImage(props: ImageDecoratorProps) {
       return;
     }
     if (props.srcType === 'url') {
-      setImageUrl(props.url);
+      // External hosts (GitHub blob screenshots, GIFs) need the image proxy
+      // under COEP; GitHub blob/`raw` links are rewritten to the raw file host
+      // first so the proxy fetches bytes, not an HTML redirect page.
+      setImageUrl(displayImageUrl(props.url));
       return;
     }
     fireAndForget(
@@ -283,7 +288,9 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           state() === 'error' && 'pattern-edge-muted pattern-diagonal-8',
           state() === 'error' && !effectiveDims()[0] && 'min-h-44',
           // If there are no constrained dimensions, center the image
-          !props.constrainedWidth && !props.constrainedHeight && 'mx-auto'
+          !props.constrainedWidth && !props.constrainedHeight && 'mx-auto',
+          // Under a list item, sit at the item's text like Notion
+          'in-[li]:mx-0 in-[li]:my-2'
         )}
         style={{
           width: effectiveDims()[0] ? '100%' : undefined,
@@ -341,6 +348,12 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           )}
           draggable={true}
           use:internalDrag={true}
+          onDragStart={(e) => {
+            // Dropped in this editor the image moves; anywhere else it is
+            // copied from its URL.
+            if (interactable() && editor()?.isEditable())
+              e.dataTransfer?.setData(DRAG_DATA_FORMAT, props.key);
+          }}
           ref={imageRef}
           src={imageUrl()}
           style={{

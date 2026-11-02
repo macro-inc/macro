@@ -29,8 +29,7 @@ export function SendAction(props: SendActionProps) {
   return (
     <SendButton
       appearance="composer"
-      tooltip={tooltipText()}
-      shortcut="enter"
+      tooltip={{ content: tooltipText(), shortcut: 'enter' }}
       aria-label={tooltipText()}
       data-input-action="send"
       pending={isBlockedByPending()}

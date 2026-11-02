@@ -740,6 +740,16 @@ impl CalendarMutationProvider for OutlookApiClientRepository {
             None => Ok(ProviderInstanceUpdateOutcome::SeriesGone),
         }
     }
+    async fn refresh_event(
+        &self,
+        token: &str,
+        target: &ProviderCalendarTarget,
+        id: &str,
+    ) -> Result<Option<CalendarEventUpsert>, CalendarProviderError> {
+        self.calendar_scope(target)?
+            .calendar_refresh(&AccessToken::new(token.to_owned()), target, id)
+            .await
+    }
     async fn delete_event(
         &self,
         token: &str,

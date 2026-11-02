@@ -7,8 +7,8 @@
  */
 
 import type { StyleInfo, StyleType } from '@core/fig-engine/design-types';
-import CaretRight from '@phosphor/caret-right.svg';
-import Trash from '@phosphor/trash.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { createSignal, For, Show } from 'solid-js';
 import { groupStyles, STYLE_TYPE_LABELS } from '../core/design-system';
 import { ColorPicker } from './color-picker';

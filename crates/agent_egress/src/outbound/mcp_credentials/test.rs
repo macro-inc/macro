@@ -1,5 +1,6 @@
 use super::*;
 use crate::domain::model::{McpDestination, McpResolution};
+use bot_id::BotId;
 use http::header::{HeaderMap, HeaderValue};
 use pipedream_mcp::outbound::api::McpUpstreamCall;
 use std::sync::Mutex;
@@ -108,7 +109,7 @@ async fn resolves_an_app_slug_verbatim() {
     );
 
     let McpResolution::Connected(call) = credentials
-        .resolve(&owner(), &connected("google_sheets"))
+        .resolve(&owner(), BotId::TEST_A, &connected("google_sheets"))
         .await
         .expect("resolved")
     else {
@@ -130,7 +131,7 @@ async fn carries_the_scoping_headers_next_to_the_bearer() {
     );
 
     let McpResolution::Connected(call) = credentials
-        .resolve(&owner(), &connected("linear"))
+        .resolve(&owner(), BotId::TEST_A, &connected("linear"))
         .await
         .expect("resolved")
     else {
@@ -164,7 +165,7 @@ async fn a_disabled_connection_resolves_as_unconnected() {
     );
 
     let resolution = credentials
-        .resolve(&owner(), &connected("linear"))
+        .resolve(&owner(), BotId::TEST_A, &connected("linear"))
         .await
         .expect("resolved");
 
@@ -190,7 +191,7 @@ async fn a_slug_nobody_connected_resolves_as_unconnected_for_the_owner() {
         PipedreamMcpCredentials::new(Arc::new(FixedConnections(Vec::new())), upstream.clone());
 
     let McpResolution::Unconnected(call) = credentials
-        .resolve(&owner(), &connected("linear"))
+        .resolve(&owner(), BotId::TEST_A, &connected("linear"))
         .await
         .expect("resolved")
     else {
@@ -219,7 +220,7 @@ async fn refuses_a_cleartext_upstream() {
     );
 
     let refusal = credentials
-        .resolve(&owner(), &connected("linear"))
+        .resolve(&owner(), BotId::TEST_A, &connected("linear"))
         .await
         .expect_err("refused");
 

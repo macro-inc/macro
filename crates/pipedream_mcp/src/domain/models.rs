@@ -20,6 +20,20 @@ pub struct PipedreamConnection {
     pub enabled: bool,
 }
 
+/// A catalog app that connects through the native MCP stack instead of
+/// Pipedream: the vendor's own MCP server, authorized with our OAuth client
+/// (dynamic or metadata-document registration).
+///
+/// The app still appears in the catalog under its Pipedream slug, but
+/// Pipedream never holds a grant for it.
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct ConnectorOverlay {
+    /// Pipedream app name slug, e.g. `sentry`.
+    pub app_slug: String,
+    /// The vendor's MCP server URL, e.g. `https://mcp.sentry.dev/mcp`.
+    pub server_url: String,
+}
+
 /// A short-lived token for opening Pipedream's hosted Connect UI.
 #[derive(Clone, Debug)]
 pub struct ConnectToken {
@@ -44,6 +58,8 @@ pub struct PipedreamAccount {
     pub app_name: String,
     /// Whether Pipedream considers the account's credentials healthy.
     pub healthy: bool,
+    /// When Pipedream created the account, if it reported it.
+    pub created_at: Option<chrono::DateTime<chrono::Utc>>,
 }
 
 /// One connectable app advertised in the catalog.

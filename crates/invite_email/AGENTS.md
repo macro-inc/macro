@@ -55,7 +55,10 @@ invites, and the colleague-joined email.
 - `InviteToTeamMetadata.reminder` marks the reminder emails `teams` sends for
   unanswered invites; it only prefixes the subject with "Reminder:". A
   reminder shares the invite's rate-limit bucket (one email per invite per
-  2 days), so reminders must stay more than 2 days apart.
+  hour), so reminders must stay more than an hour apart. Manual resends wait
+  out the same window: `teams` reads it from
+  `InviteToTeamMetadata::rate_limit_config()` (`invite_resend_interval`), and
+  the web app's **Resend** mirrors it in `teamInviteResend.ts`.
 - Metadata is queued and stored as JSON, and the notification service
   publishes it in its OpenAPI spec. A new field needs `#[serde(default)]` so
   payloads queued before a deploy still deserialize, and a regenerated web

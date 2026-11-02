@@ -1,4 +1,4 @@
-import Trash from '@phosphor/trash.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { Button, DatePicker, Dialog } from '@ui';
 import { Show } from 'solid-js';
 import type { AvailabilityIssue } from '../core/availability';
@@ -124,7 +124,7 @@ export function AvailabilityExceptionDialog(props: {
                 Cancel
               </Button>
               <Button
-                variant="cta"
+                variant="primary"
                 size="lg"
                 aria-label={
                   props.dates.length > 1

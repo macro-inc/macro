@@ -214,6 +214,14 @@ export class EmailNamespace {
     return Label.create(this.client, name);
   }
 
+  /**
+   * Archive many threads (or unarchive with `false`). Resolves to the threads
+   * whose state could not change.
+   */
+  archive(threads: EmailThread[], archived = true): Promise<EmailThread[]> {
+    return EmailThread.archiveMany(this.client, threads, archived);
+  }
+
   /** Delete a label. */
   async deleteLabel(label: Label): Promise<void> {
     unwrap(await this.client.email.deleteLabel({ path: { id: label.id } }));

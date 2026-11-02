@@ -1,9 +1,6 @@
+import { parseLocalDate } from '@core/util/local-date';
 import type { CalendarEvent, CalendarTimeFormat } from '../types';
-import {
-  isSameLocalDate,
-  isTimedPointEvent,
-  parseLocalDate,
-} from './calendar-date';
+import { isSameLocalDate, isTimedPointEvent } from './calendar-date';
 import { formatCalendarTime } from './time-format';
 
 const formatDate = new Intl.DateTimeFormat(undefined, {

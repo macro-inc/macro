@@ -42,6 +42,21 @@ export interface ReplyEmailOptions {
   replyingTo?: EmailMessage;
 }
 
+/** Open tracking for one of the caller's sent messages. */
+export interface EmailReadReceipt {
+  /** The tracked message. */
+  message: EmailMessage;
+
+  /** Counted pixel fetches; repeats within a few seconds count once. */
+  openCount: number;
+
+  /** When the first counted fetch happened, if any. */
+  firstOpenedAt?: string;
+
+  /** When the latest counted fetch happened, if any. */
+  lastOpenedAt?: string;
+}
+
 /**
  * An email thread. A free-to-construct handle: the detail record (including
  * up to the first 100 messages) loads lazily on first field access.
@@ -87,7 +102,9 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
    * requester as a guest, no join link, nobody notified. Refused with
    * `invalid_input` for an invitation, which is answered from the calendar
    * instead, `already_on_calendar` when the meeting is already on one of
-   * their calendars, and `copy_refused` when Google will not import it. */
+   * their calendars, whichever calendar is named (it cannot be added to
+   * another of theirs either), and `copy_refused` when Google will not
+   * import it. */
   async addEventToCalendar(
     message: EmailMessage,
     invitation: CalendarInvitation,
@@ -104,6 +121,25 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
       }),
     );
     return CalendarEvent.fromRecord(this.client, record);
+  }
+
+  /**
+   * Opens recorded for messages sent from the caller's own or delegated
+   * inboxes with read receipts on, newest message first. Counts are
+   * approximate: some mail apps prefetch images and others block them.
+   */
+  async readReceipts(): Promise<EmailReadReceipt[]> {
+    const { receipts } = unwrap(
+      await this.client.email.getThreadReadReceipts({
+        path: { thread_id: this.id },
+      }),
+    );
+    return receipts.map((receipt) => ({
+      message: EmailMessage.byId(this.client, receipt.message_id),
+      openCount: receipt.open_count,
+      firstOpenedAt: receipt.first_opened_at ?? undefined,
+      lastOpenedAt: receipt.last_opened_at ?? undefined,
+    }));
   }
 
   /** Change project membership or share permissions for this thread. */
@@ -263,6 +299,35 @@ export class EmailThread extends PropertiedEntity<ThreadDetail> {
         body: { value: archived },
       }),
     );
+  }
+
+  /**
+   * Archive many threads (or unarchive with `false`), sending one request per
+   * 100 threads. Resolves to the threads whose state could not change.
+   */
+  static async archiveMany(
+    client: MacroClient,
+    threads: EmailThread[],
+    archived = true,
+  ): Promise<EmailThread[]> {
+    const unchanged: EmailThread[] = [];
+    for (let start = 0; start < threads.length; start += 100) {
+      const batch = threads.slice(start, start + 100);
+      const result = unwrap(
+        await client.email.archiveThreads({
+          body: {
+            thread_ids: batch.map((thread) => thread.id),
+            value: archived,
+          },
+        }),
+      );
+      const failed = new Set(result.failed_thread_ids);
+      for (const thread of batch) {
+        thread.detail.clear();
+        if (failed.has(thread.id)) unchanged.push(thread);
+      }
+    }
+    return unchanged;
   }
 
   /** Update provider-neutral read, trash, spam, or star state. */

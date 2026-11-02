@@ -274,6 +274,15 @@ function partActivity(part: MessagePart): MagicChipActivity {
         label: 'Question answered',
         busy: true,
       }))
+      // The agent wakes to answer a background task's report.
+      .with({ kind: 'task_notification' }, (part) => ({
+        label:
+          part.status === 'failed'
+            ? 'Background task failed'
+            : 'Background task update',
+        detail: part.summary || undefined,
+        busy: true,
+      }))
       .with({ kind: 'plan' }, ({ entries }) => {
         const completed = entries.filter(
           (entry) => entry.status === 'completed'

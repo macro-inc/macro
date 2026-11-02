@@ -1,4 +1,4 @@
-import Newspaper from '@phosphor-icons/core/regular/newspaper.svg';
+import Newspaper from '@icon/system/regular/newspaper.svg';
 import { createSignal, For, Show } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';

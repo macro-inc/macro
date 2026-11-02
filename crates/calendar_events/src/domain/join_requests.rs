@@ -18,7 +18,7 @@ use super::{
     mutations::invite::copy_capabilities,
     ports::{
         CalendarJoinRequestError, CalendarJoinRequestNotifier, CalendarJoinRequestService,
-        CalendarRepository,
+        CalendarRefreshNotifier, CalendarRepository,
     },
 };
 
@@ -91,6 +91,10 @@ pub enum JoinEligibility {
     Eligible {
         /// Owner of the shared event, who answers the request.
         sharer_id: String,
+        /// Inbox of the sharer's copy. Each inbox holds its own copy of a
+        /// meeting, so this one inbox's owner and delegates read the
+        /// requests, however many of its calendars hold the event.
+        sharer_link_id: Uuid,
         /// Event title, for the sharer's notification.
         title: String,
     },
@@ -123,6 +127,7 @@ pub async fn join_eligibility<R: CalendarRepository>(
     }
     Ok(JoinEligibility::Eligible {
         sharer_id: shared.owner_id,
+        sharer_link_id: target.email_link_id,
         title: shared.title,
     })
 }
@@ -162,21 +167,24 @@ pub async fn annotate_join_state<R: CalendarRepository>(
 }
 
 /// Join-request use cases with persistence and delivery behind ports.
-pub struct CalendarJoinRequestServiceImpl<R, N> {
+pub struct CalendarJoinRequestServiceImpl<R, N, F> {
     repository: R,
     notifier: N,
+    refresh: F,
 }
 
-impl<R, N> CalendarJoinRequestServiceImpl<R, N>
+impl<R, N, F> CalendarJoinRequestServiceImpl<R, N, F>
 where
     R: CalendarRepository,
     N: CalendarJoinRequestNotifier,
+    F: CalendarRefreshNotifier,
 {
     /// Construct the service from its ports.
-    pub fn new(repository: R, notifier: N) -> Self {
+    pub fn new(repository: R, notifier: N, refresh: F) -> Self {
         Self {
             repository,
             notifier,
+            refresh,
         }
     }
 
@@ -185,10 +193,10 @@ where
         requester_id: &str,
         event_id: Uuid,
     ) -> Result<(CalendarJoinRequest, bool), CalendarJoinRequestError> {
-        let (sharer_id, title) = match join_eligibility(&self.repository, requester_id, event_id)
+        let eligibility = join_eligibility(&self.repository, requester_id, event_id)
             .await
-            .map_err(CalendarJoinRequestError::Internal)?
-        {
+            .map_err(CalendarJoinRequestError::Internal)?;
+        let (sharer_id, sharer_link_id, title) = match eligibility {
             JoinEligibility::NotVisible => return Err(CalendarJoinRequestError::NotFound),
             JoinEligibility::OwnCopy => {
                 return Err(CalendarJoinRequestError::AlreadyOnCalendar);
@@ -196,7 +204,11 @@ where
             JoinEligibility::SharerCannotInvite => {
                 return Err(CalendarJoinRequestError::SharerCannotInvite);
             }
-            JoinEligibility::Eligible { sharer_id, title } => (sharer_id, title),
+            JoinEligibility::Eligible {
+                sharer_id,
+                sharer_link_id,
+                title,
+            } => (sharer_id, sharer_link_id, title),
         };
         // Invite the inbox whose calendar Macro syncs, the one an added copy
         // would land on, so the mention resolves to the invitation.
@@ -218,6 +230,12 @@ where
             return Err(CalendarJoinRequestError::Declined);
         }
         if opened {
+            // The request is stored, so a refetch finds it. The signal names
+            // the sharer's inbox, so it goes to that inbox's viewers and
+            // never to the requester, who reads no list.
+            self.refresh
+                .calendar_changed(&sharer_id, sharer_link_id, false)
+                .await;
             self.notifier
                 .notify_join_request(&sharer_id, &request, &title)
                 .await;
@@ -232,10 +250,11 @@ fn account_email(requester_id: &str) -> &str {
     requester_id.strip_prefix("macro|").unwrap_or(requester_id)
 }
 
-impl<R, N> CalendarJoinRequestService for CalendarJoinRequestServiceImpl<R, N>
+impl<R, N, F> CalendarJoinRequestService for CalendarJoinRequestServiceImpl<R, N, F>
 where
     R: CalendarRepository,
     N: CalendarJoinRequestNotifier,
+    F: CalendarRefreshNotifier,
 {
     #[tracing::instrument(
         name = "calendar.request_to_join",

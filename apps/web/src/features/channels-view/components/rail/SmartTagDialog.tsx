@@ -1,7 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import FilterIcon from '@phosphor/funnel-simple.svg';
-import HashIcon from '@phosphor/hash.svg';
-import XIcon from '@phosphor/x.svg';
+import FilterIcon from '@icon/system/regular/funnel-simple.svg';
+import HashIcon from '@icon/system/regular/hash.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { useSmartTagPreviewQuery } from '@queries/channel-labels/channel-labels';
 import type { ChannelLabelRule } from '@service-storage/generated/schemas/channelLabelRule';
 import {
@@ -87,14 +87,16 @@ function SmartTagDialog(props: SmartTagDialogProps & ManagedDialogProps) {
               </Dialog.Title>
             </div>
             <Button
+              variant="ghost"
+              aria-label="Close"
+              tooltip="Close"
               type="button"
-              label="Close"
-              size="icon-composer"
+              size="icon-md"
               tabIndex={-1}
               disabled={saving()}
               onClick={() => props.onOpenChange(false)}
             >
-              <XIcon />
+              <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </div>
           <div class="flex flex-col gap-4 px-2">
@@ -141,7 +143,6 @@ function SmartTagDialog(props: SmartTagDialogProps & ManagedDialogProps) {
             <Button
               type="button"
               variant="ghost"
-              depth={3}
               disabled={saving()}
               onClick={() => props.onOpenChange(false)}
             >
@@ -149,8 +150,7 @@ function SmartTagDialog(props: SmartTagDialogProps & ManagedDialogProps) {
             </Button>
             <Button
               type="submit"
-              variant="strong"
-              depth={3}
+              variant="primary"
               class="not-touch:h-[33.75px] not-touch:px-[15px]"
               disabled={!canSubmit() || saving()}
             >

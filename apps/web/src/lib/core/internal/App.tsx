@@ -3,10 +3,10 @@ import { EntityIcon } from '@core/component/EntityIcon';
 import { LiveIndicators } from '@core/component/LiveIndicators';
 import MacroBrandLoader from '@icon/macro-brand-loader.svg';
 import MacroGridLoader from '@icon/macro-grid-noise-loader.svg';
-import Acorn from '@phosphor-icons/core/regular/acorn.svg?component-solid';
-import CaretDown from '@phosphor-icons/core/regular/caret-down.svg';
-import Subtract from '@phosphor-icons/core/regular/subtract.svg?component-solid';
-import TrashSimple from '@phosphor-icons/core/regular/trash-simple.svg?component-solid';
+import Acorn from '@icon/system/regular/acorn.svg?component-solid';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Subtract from '@icon/system/regular/subtract.svg?component-solid';
+import TrashSimple from '@icon/system/regular/trash-simple.svg?component-solid';
 import type { ItemType } from '@service-storage/client';
 import { Button, Dropdown } from '@ui';
 import { type Component, createSignal, For, Index } from 'solid-js';
@@ -72,7 +72,8 @@ const App: Component = () => {
         center={
           <Center>
             <Button variant="ghost" onClick={togglePublicPermissions}>
-              {documentAccess()} <CaretDown />
+              {documentAccess()}{' '}
+              <CaretDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Center>
         }
@@ -80,8 +81,10 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <For each={Themes}>
           {() => (
-            <Button variant="outline">
-              <Subtract /> Button Text <CaretDown />
+            <Button variant="secondary">
+              <Subtract class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />{' '}
+              Button Text{' '}
+              <CaretDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </For>
@@ -89,8 +92,10 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
           {() => (
-            <Button variant="outline">
-              <Subtract /> Button Text <CaretDown />
+            <Button variant="secondary">
+              <Subtract class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />{' '}
+              Button Text{' '}
+              <CaretDown class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </Index>
@@ -98,8 +103,8 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={Themes}>
           {() => (
-            <Button variant="outline" size="icon-md">
-              <Acorn />
+            <Button variant="secondary" size="icon-md">
+              <Acorn class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </Index>
@@ -107,9 +112,9 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
           {() => (
-            <Button variant="outline" size="icon-md">
-              <Acorn />
-              <CaretDown />
+            <Button variant="secondary" size="icon-md">
+              <Acorn class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+              <CaretDown class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </Index>
@@ -117,9 +122,9 @@ const App: Component = () => {
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Index each={ThemesWithSeparator}>
           {() => (
-            <Button variant="outline" size="icon-md">
-              <Acorn />
-              <CaretDown />
+            <Button variant="secondary" size="icon-md">
+              <Acorn class="size-4 touch:size-6 shrink-0 pointer-events-none" />
+              <CaretDown class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           )}
         </Index>
@@ -136,7 +141,7 @@ const App: Component = () => {
       </div>
       <div class="flex flex-row flex-wrap justify-center gap-4">
         <Dropdown>
-          <Dropdown.Trigger variant="outline" tabIndex={-1}>
+          <Dropdown.Trigger variant="secondary" tabIndex={-1}>
             Open
           </Dropdown.Trigger>
           <Dropdown.Content>

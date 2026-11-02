@@ -6,7 +6,7 @@
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
-import X from '@phosphor/x.svg';
+import X from '@icon/system/regular/x.svg';
 import {
   createMemo,
   createSignal,

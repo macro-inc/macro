@@ -8,6 +8,7 @@ use std::future::Future;
 use entity_access::domain::models::{
     EditAccessLevel, EntityAccessReceipt, OwnerAccessLevel, ViewAccessLevel,
 };
+use entity_mutation::EntityMutationErrorCode;
 use macro_user_id::user_id::MacroUserIdStr;
 use model::document::ContentType;
 use model::folder::{UploadFolderRequest, UploadFolderResponseData, UploadFolderWithIdsResponse};
@@ -18,6 +19,7 @@ use model::project::{
     BasicProject, PendingProject, Project, ProjectPreview, ProjectPreviewV2,
     ProjectWithUploadRequest,
 };
+use model_entity::Entity;
 use model_owner::{CreationPrincipal, Owner};
 use models_bulk_upload::{
     BulkUploadRequest, BulkUploadRequestDocuments, UploadExtractFolderRequest,
@@ -31,7 +33,7 @@ use uuid::Uuid;
 
 use super::models::{
     CreateProjectArgs, EditProjectArgs, MarkedUploadedTree, MutatedProject, ProjectError,
-    PurgedProjectTree, RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
+    ProjectTree, PurgedProjectTree, RevertDeleteResult, SoftDeleteResult, UploadFolderRepoArgs,
 };
 
 /// Repository for reading project data from persistent storage.
@@ -81,6 +83,16 @@ pub trait ProjectRepo: Send + Sync + 'static {
         &self,
         project_id: &str,
     ) -> impl Future<Output = Result<Vec<Item>, Self::Err>> + Send;
+
+    /// Get the live folders below a project and the live documents and chats
+    /// filed in it or them. Returns at most `limit` folders and at most
+    /// `limit` items, so a caller detects an oversized tree by asking for
+    /// one more than it accepts.
+    fn get_project_tree(
+        &self,
+        project_id: &str,
+        limit: usize,
+    ) -> impl Future<Output = Result<ProjectTree, Self::Err>> + Send;
 
     /// Get the project's share permission configuration.
     fn get_project_share_permission(
@@ -248,6 +260,40 @@ pub trait ProjectSearchIndexer: Send + Sync + 'static {
     ) -> impl Future<Output = anyhow::Result<()>> + Send;
 }
 
+/// What a folder duplication needs from other domains, acting as the user who
+/// duplicates the folder.
+///
+/// The composition root implements it over `entity_access` and the owning
+/// domains' duplicate and move capabilities, so the projects domain never
+/// depends on the documents or chat crates.
+pub trait ProjectContentCopier: Send + Sync {
+    /// The user's view receipt for `entity`, or `None` when they cannot view
+    /// it or it no longer exists.
+    fn view_receipt(
+        &self,
+        entity: &Entity<'static>,
+    ) -> impl Future<
+        Output = Result<Option<EntityAccessReceipt<ViewAccessLevel>>, EntityMutationErrorCode>,
+    > + Send;
+
+    /// Whether the user may add items to the project.
+    fn can_add_to_project(
+        &self,
+        project_id: &str,
+    ) -> impl Future<Output = Result<bool, EntityMutationErrorCode>> + Send;
+
+    /// Duplicate the document or chat `receipt` covers, as the user, and file
+    /// the copy in `project_id`, returning the copy. `name` is the source's
+    /// name, kept on the copy where its domain allows a chosen name. On
+    /// failure nothing this call created remains.
+    fn copy_into_project(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        name: String,
+        project_id: &str,
+    ) -> impl Future<Output = Result<Entity<'static>, EntityMutationErrorCode>> + Send;
+}
+
 /// Unwired upload-URL port for hosts that expose project operations without
 /// upload flows (e.g. AI tools). Upload methods fail loudly if reached.
 #[derive(Clone, Copy, Debug, Default)]
@@ -376,6 +422,15 @@ pub trait ProjectService: Send + Sync + 'static {
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<ItemWithUserAccessLevel>, ProjectError>> + Send;
 
+    /// Get the live folders, documents, and chats below a project, at most
+    /// `limit` folders and `limit` items (see [`ProjectRepo::get_project_tree`]).
+    /// The receipt covers the project; callers check each entry themselves.
+    fn get_project_tree(
+        &self,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
+        limit: usize,
+    ) -> impl Future<Output = Result<ProjectTree, ProjectError>> + Send;
+
     /// Get project share permissions for an owner.
     fn get_project_permissions(
         &self,
@@ -391,6 +446,16 @@ pub trait ProjectService: Send + Sync + 'static {
     /// Create a project owned by `principal`, optionally beneath an authorized
     /// parent.
     fn create_project(
+        &self,
+        principal: &CreationPrincipal,
+        args: CreateProjectRequest,
+    ) -> impl Future<Output = Result<Project, ProjectError>> + Send;
+
+    /// Create a project that takes its last-edit time from what is put in
+    /// it: it starts never edited and does not mark its parent updated, and
+    /// documents created in it with their own dates date it and the projects
+    /// above it. For importers, so a copied tree keeps its source's dates.
+    fn create_project_dated_by_contents(
         &self,
         principal: &CreationPrincipal,
         args: CreateProjectRequest,

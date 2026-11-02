@@ -330,6 +330,7 @@ export class Form extends MacroEntity<FormDetail> {
                       'text',
                       'number',
                       'date',
+                      'dateRange',
                       'checkbox',
                     ),
                   },
@@ -416,7 +417,15 @@ export class Form extends MacroEntity<FormDetail> {
         }))
         .with(
           {
-            type: P.union('text', 'number', 'boolean', 'date', 'link', 'clear'),
+            type: P.union(
+              'text',
+              'number',
+              'boolean',
+              'date',
+              'date_range',
+              'link',
+              'clear',
+            ),
           },
           (answer) => answer,
         )
@@ -535,6 +544,7 @@ export class Form extends MacroEntity<FormDetail> {
                 'number',
                 'boolean',
                 'date',
+                'date_range',
                 'link',
                 'clear',
               ),

@@ -33,7 +33,7 @@ consumer talks to.
 
 ## Boundaries
 
-- Depends on: `agent_runtime_protocol`, `agent_fold`, `teams`,
+- Depends on: `agent_runtime_protocol`, `agent_fold`, `jev`, `teams`,
   `macro_authorization`.
 - Used by: `agent_harness`, `agent_inmem`, `agent_egress`, `agent_trigger`,
   `agent_changes`, `agent_session_realtime`, `ai_tools` (coding-agent
@@ -50,7 +50,7 @@ consumer talks to.
 
 ## Tool contracts
 
-- `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals.
+- `src/inbound/toolset/`: session reads, creation, lifecycle actions, and sharing. Mutations preserve acting-user identity and existing owner/edit receipts; internal controls accept only prompt/stop, never human approvals. `link_task` returns a `mention` chip to paste when naming the task.
 
 Internal action recovery uses `AgentSessionService::recorded_action`, which reads
 one durable log snapshot including pre-load frames. Keep this separate from the
@@ -74,6 +74,13 @@ private-context entries; the migration bridge preserves their review outcomes
 without restoring owner authority. Claim legacy actions with a conditional
 update of only their matching prompter; recover acting identity from that
 persisted prompter, never from an old wire actor or a newer user turn.
+
+Session names: the first prompt names a session (`set_name_if_default`), and
+after each turn that ends with a reply, `domain/retitle.rs` hands the
+conversation digest to the namer. `name_generation::ClassifiedRetitle` asks Jev
+whether the name stopped fitting (threshold 0.8) before Haiku proposes a new
+one. Only names with `agent_session.name_is_generated` are retitled; a rename
+through `set_name` clears it, so a name a person chose is never replaced.
 
 ## Checks
 

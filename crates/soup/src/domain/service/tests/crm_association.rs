@@ -42,6 +42,7 @@ impl CrmService for FakeCrm {
                 vec![CONTACT, SIBLING_CONTACT],
             )),
             CrmAssociation::Contact(CONTACT) => Ok(CrmRecordAssociation::contact(CONTACT)),
+            CrmAssociation::Activity => Ok(CrmRecordAssociation::default()),
             CrmAssociation::Company(_) => Err(CrmError::CompanyNotFoundForTeam),
             CrmAssociation::Contact(_) => Err(CrmError::ContactNotFoundForTeam),
         }
@@ -79,6 +80,14 @@ impl CrmService for FakeCrm {
         unimplemented!("FakeCrm.depopulate_contact")
     }
 
+    async fn has_depopulate_target(
+        &self,
+        _team_id: &uuid::Uuid,
+        _email: &str,
+    ) -> Result<bool, CrmError> {
+        unimplemented!("FakeCrm.has_depopulate_target")
+    }
+
     async fn link_contact_pairs_with_sources(
         &self,
         _pairs: &[(uuid::Uuid, String)],
@@ -102,7 +111,7 @@ impl CrmService for FakeCrm {
         &self,
         _access: &CrmTeamReceipt<MemberTeamRole>,
         _name: &str,
-        _domain: &str,
+        _domain: Option<&str>,
     ) -> Result<CrmCompanyWithContacts, CrmError> {
         unimplemented!("FakeCrm.create_company")
     }

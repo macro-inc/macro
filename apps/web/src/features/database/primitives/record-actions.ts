@@ -1,3 +1,4 @@
+import type { ViewLayout } from '@service-storage/generated/schemas/viewLayout';
 import { until } from '@solid-primitives/promise';
 import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import type {
@@ -53,7 +54,7 @@ export function createRecordActions(options: {
   source: DatabaseRowsSource;
   columns: Accessor<DatabaseViewColumn[]>;
   visibleColumns: Accessor<DatabaseViewColumn[]>;
-  layout: Accessor<'table' | 'board'>;
+  layout: Accessor<ViewLayout['kind']>;
   canEdit: Accessor<boolean>;
   /** The view filters, so a saved record can fall outside it. */
   constrained: Accessor<boolean>;
@@ -179,7 +180,8 @@ export function createRecordActions(options: {
   }
   /**
    * Show a record arrived at from elsewhere where it sits in the table. A
-   * record this view does not show (filtered out, or a board) opens instead.
+   * record this view does not show (filtered out, or a board or timeline)
+   * opens instead.
    */
   function reveal(rowId: string) {
     if (
@@ -281,7 +283,7 @@ export function createRecordActions(options: {
     if (rowId && creation.open) editCreatedRow(rowId);
     return true;
   }
-  /** Start typing in the first record, or the blank row; a board opens its first card. */
+  /** Start typing in the first record, or the blank row; a board or timeline opens its first record. */
   function focusFirstCell(): Promise<void> {
     if (firstCellRequest) return firstCellRequest;
     firstCellRequest = (async () => {

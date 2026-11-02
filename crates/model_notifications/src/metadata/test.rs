@@ -41,6 +41,18 @@ fn calendar_join_requests_name_the_requester_and_the_event() {
 }
 
 #[test]
+fn calendar_join_requests_store_the_key_their_retirement_reads() {
+    let request_id = Uuid::now_v7();
+    let stored = serde_json::to_value(CalendarEventJoinRequestMetadata {
+        request_id,
+        event_id: Uuid::nil(),
+        title: "Design review".into(),
+    })
+    .unwrap();
+    assert_eq!(stored["requestId"], request_id.to_string());
+}
+
+#[test]
 fn view_access_notifications_preserve_permission_and_format_copy() {
     let request = EntityAccessRequestedMetadata {
         request_id: Uuid::nil(),

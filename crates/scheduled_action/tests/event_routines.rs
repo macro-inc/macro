@@ -89,6 +89,15 @@ impl MacroAuthorizationService for FakeAuth {
             ..Default::default()
         })
     }
+
+    async fn authorize_identity(
+        &self,
+        jwt: &str,
+    ) -> Result<macro_authorization::ValidatedCredential, Report<MacroAuthorizationError>> {
+        self.authorize(jwt)
+            .await
+            .map(macro_authorization::ValidatedCredential::session)
+    }
     async fn authorize_internal(
         &self,
         _: &str,
@@ -108,12 +117,15 @@ impl CurrentOwnerAccess for FakeAccess {
         // The event actor is intentionally different from the routine owner.
         assert_eq!(owner.as_ref(), USER);
         let entity = Entity {
-            entity_id: event.entity_id().to_string(),
+            entity_id: event.entity_id().unwrap().to_string(),
             entity_type: match event.entity_type() {
                 EventEntityType::Document => EntityType::Document,
                 EventEntityType::Channel => EntityType::Channel,
                 EventEntityType::EmailThread => EntityType::EmailThread,
                 EventEntityType::Call => EntityType::Call,
+                EventEntityType::GithubInstallation => {
+                    unreachable!("these routines watch Macro events only")
+                }
             },
         };
         let access = match event.entity_type() {
@@ -155,6 +167,9 @@ impl CurrentOwnerAccess for FakeAccess {
                 )
                 .unwrap(),
             ),
+            EventEntityType::GithubInstallation => {
+                unreachable!("these routines watch Macro events only")
+            }
         };
         Ok(Some(access))
     }

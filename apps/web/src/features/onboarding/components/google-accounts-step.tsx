@@ -1,9 +1,9 @@
 import GoogleIcon from '@icon/macro-google.svg';
-import CheckIcon from '@phosphor/check.svg';
-import HandIcon from '@phosphor/hand-palm.svg';
-import LockIcon from '@phosphor/lock-key.svg';
-import ShieldIcon from '@phosphor/shield-check.svg';
-import SpinnerIcon from '@phosphor/spinner-gap.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import HandIcon from '@icon/system/regular/hand-palm.svg';
+import LockIcon from '@icon/system/regular/lock-key.svg';
+import ShieldIcon from '@icon/system/regular/shield-check.svg';
+import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import { onCleanup, onMount, Show } from 'solid-js';
 import { ContinueButton } from './controls';
 import { animateOnboardingStep } from './motion/step-transition';

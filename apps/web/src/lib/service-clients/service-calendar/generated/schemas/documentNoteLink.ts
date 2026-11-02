@@ -4,14 +4,19 @@
  * calendar_service
  * OpenAPI spec version: 0.1.0
  */
+import type { DocumentNoteLinkEvent } from './documentNoteLinkEvent';
 import type { DocumentNoteLinkTeam } from './documentNoteLinkTeam';
+import type { DocumentNoteLinkTeamEvent } from './documentNoteLinkTeamEvent';
 
 /**
- * An owner's durable sharing link, including meetings they can no longer open.
+ * A visible meeting link, or an owner's durable grant they can no longer open.
  */
 export interface DocumentNoteLink {
-  /** Current name of the owned markdown document. */
+  /** Whether the reader may resolve this exact meeting's details right now. */
+  canViewMeeting: boolean;
+  /** Current name of the markdown document. */
   documentName: string;
+  event?: DocumentNoteLinkEvent;
   /** Linked calendar copy. */
   eventId: string;
   /** Current title, or a safe placeholder when meeting details are unavailable. */
@@ -19,4 +24,5 @@ export interface DocumentNoteLink {
   /** Original occurrence start, or `single` for a one-time meeting. */
   occurrenceKey: string;
   team?: DocumentNoteLinkTeam;
+  teamEvent?: DocumentNoteLinkTeamEvent;
 }

@@ -8,7 +8,7 @@ use crate::domain::catalog::PropertyType;
 use crate::domain::catalog::entity_kind;
 use crate::domain::models::{CastVerdict, ConvertedCell};
 use models_databases::cast::{Cast, Contents, TARGETS, cast};
-use models_databases::{CellValue, ColumnKind, EntityRef, OptionRef};
+use models_databases::{CellValue, ColumnKind, DateRange, EntityRef, OptionRef};
 
 impl<Repository, Definitions, Cells, Events, Access, Broker>
     DatabasesServiceImpl<Repository, Definitions, Cells, Events, Access, Broker>
@@ -208,6 +208,10 @@ fn cell_value(converted: Converted) -> Option<CellValue> {
         Converted::Value(PropertyValue::Num(number)) => CellValue::Number(number),
         Converted::Value(PropertyValue::Bool(checked)) => CellValue::Boolean(checked),
         Converted::Value(PropertyValue::Date(date)) => CellValue::Date(date),
+        Converted::Value(PropertyValue::DateRange(range)) => CellValue::DateRange(DateRange {
+            start: range.start(),
+            end: range.end(),
+        }),
         Converted::Value(PropertyValue::Link(urls)) => CellValue::Link(urls),
         Converted::Value(PropertyValue::EntityRef(references)) => CellValue::Entities(
             references

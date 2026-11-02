@@ -7,6 +7,12 @@ type RecipientField = {
   input: () => HTMLElement | undefined;
 };
 
+/** Shows a Cc or Bcc field and focuses its input once the field mounts. */
+export function revealRecipientField(field: RecipientField) {
+  field.reveal();
+  queueMicrotask(() => field.input()?.focus());
+}
+
 /**
  * Cmd+Shift+C and Cmd+Shift+B reveal and focus the Cc and Bcc fields. Each
  * composer registers them on its own scope, because the enclosing split binds
@@ -20,9 +26,7 @@ export function registerCcBccHotkeys(options: {
 }) {
   const edit = (field: RecipientField) => () => {
     if (options.disabled()) return false;
-    field.reveal();
-    // The field mounts on reveal; focus it once its input ref is set.
-    queueMicrotask(() => field.input()?.focus());
+    revealRecipientField(field);
     return true;
   };
   registerHotkey({

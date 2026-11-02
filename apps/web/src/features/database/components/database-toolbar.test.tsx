@@ -514,6 +514,85 @@ describe('database toolbar views', () => {
     );
   });
 
+  it('shows a board as a timeline along a date-range column from its tab menu', async () => {
+    const showAs = vi.fn(() => okAsync(undefined));
+    const board: DatabaseView = {
+      id: 'work',
+      databaseId: 'database',
+      tableId: 'table',
+      name: 'My work',
+      position: 'a0',
+      query: { filter: null, sort: [] },
+      layout: {
+        kind: 'board',
+        groupBy: 'stage',
+        title: 'name',
+        cardFields: [],
+        lanes: [],
+        hideEmptyLanes: false,
+      },
+      createdAt: '2026-09-01T00:00:00Z',
+      updatedAt: '2026-09-01T00:00:00Z',
+    };
+    render(() => (
+      <DatabaseToolbar
+        columns={[
+          {
+            id: 'stage',
+            name: 'Stage',
+            dataType: 'SELECT_STRING',
+            isMultiSelect: false,
+            writable: true,
+            options: [],
+          },
+          {
+            id: 'sprint',
+            name: 'Sprint',
+            dataType: 'DATE_RANGE',
+            isMultiSelect: false,
+            writable: true,
+            options: [],
+          },
+        ]}
+        views={[board]}
+        view={board}
+        selectedViewId="work"
+        canEdit
+        onSelectView={vi.fn()}
+        onChangeView={vi.fn()}
+        onCreateView={vi.fn(() => okAsync(undefined))}
+        onRenameView={vi.fn(() => okAsync(undefined))}
+        onShowViewAs={showAs}
+        onDeleteView={vi.fn(() => okAsync(undefined))}
+        onReorderViews={vi.fn()}
+      />
+    ));
+    fireEvent.contextMenu(screen.getByRole('button', { name: 'My work' }), {
+      clientX: 100,
+      clientY: 40,
+    });
+    expect(
+      await screen.findByRole('menuitem', { name: 'Show as table' })
+    ).toBeTruthy();
+    expect(
+      screen.queryByRole('menuitem', { name: 'Show as board' })
+    ).toBeNull();
+    const timeline = screen.getByRole('menuitem', { name: 'Show as timeline' });
+    timeline.focus();
+    fireEvent.keyDown(timeline, { key: 'ArrowRight' });
+    fireEvent(
+      await screen.findByRole('menuitem', { name: 'Along Sprint' }),
+      new MouseEvent('pointerup', { button: 0, bubbles: true })
+    );
+
+    await waitFor(() =>
+      expect(showAs).toHaveBeenCalledExactlyOnceWith(board, {
+        kind: 'timeline',
+        range: { kind: 'column', columnId: 'sprint' },
+      })
+    );
+  });
+
   it('creates a table view directly from the New view menu', async () => {
     const create = vi.fn(() => okAsync(undefined));
     render(() => (
@@ -926,6 +1005,21 @@ describe('quick view creation and board grouping', () => {
       name: 'Board view 2',
       layout: 'board',
       groupBy: { kind: 'new-status' },
+    });
+  });
+  it('creates a timeline along a new Time range column when the table has no date range', async () => {
+    const { create } = toolbar();
+    fireEvent.keyDown(screen.getByRole('button', { name: 'New view' }), {
+      key: 'Enter',
+    });
+    fireEvent.keyDown(
+      await screen.findByRole('menuitem', { name: 'Timeline' }),
+      { key: 'Enter' }
+    );
+    expect(create).toHaveBeenCalledExactlyOnceWith({
+      name: 'Timeline view',
+      layout: 'timeline',
+      range: { kind: 'new-column' },
     });
   });
   it('reports a refused creation', async () => {

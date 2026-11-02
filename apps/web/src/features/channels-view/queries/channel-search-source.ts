@@ -31,6 +31,7 @@ export function createChannelSearchSource(options: {
     return byId;
   });
   const search = createSearchState({
+    surface: () => 'channels',
     enabled,
     text: options.text,
     localPool: () => [...localChannels().values()].map((data) => ({ data })),
@@ -46,7 +47,8 @@ export function createChannelSearchSource(options: {
             is_participant: true,
             channel_types: match(options.scope())
               .with('direct_messages', () => ['direct_message'])
-              .with('channels', () => ['public', 'private', 'team'])
+              .with('team_channels', () => ['team'])
+              .with('channels', () => ['public', 'private'])
               .with('recents', 'search', 'threads', () => undefined)
               .exhaustive(() => undefined),
           },

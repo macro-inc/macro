@@ -11,8 +11,8 @@ import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { useShareModal } from '@core/component/TopBar/shareModal';
 import { isMobile } from '@core/mobile/isMobile';
 import { fireAndForget } from '@core/util/fireAndForget';
-import PhoneCallIcon from '@phosphor/phone-call.svg';
-import SpinnerIcon from '@phosphor/spinner.svg';
+import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
+import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { useCallRecordQuery } from '@queries/call/call';
 import {
   hasSoupEntity,
@@ -81,6 +81,7 @@ export function CallDetailActions(props: {
       <Show when={!isMobile() && !props.record.isActive && canCallAgain()}>
         <HeaderActionGroup label="Call actions">
           <HeaderActionButton
+            grouped
             label="Call Again"
             icon={<PhoneCallIcon class="size-3.5 touch:size-4" />}
             onClick={callAgain}
@@ -165,6 +166,7 @@ export function CallDetailContent(props: {
             <Match when={props.query.status === 'pending'}>
               <div class="grid size-full place-items-center text-ink-muted">
                 <SpinnerIcon
+                  aria-hidden={false}
                   aria-label="Loading call recording"
                   class="size-5 animate-spin"
                 />
@@ -175,7 +177,7 @@ export function CallDetailContent(props: {
                 <div class="flex flex-col items-center gap-3 text-sm">
                   <span>This call recording could not be displayed.</span>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
                     onClick={() =>
                       fireAndForget(props.query.refetch(), 'call-detail')
@@ -194,6 +196,7 @@ export function CallDetailContent(props: {
             fallback={
               <div class="grid size-full place-items-center text-ink-muted">
                 <SpinnerIcon
+                  aria-hidden={false}
                   aria-label="Loading call recording"
                   class="size-5 animate-spin"
                 />

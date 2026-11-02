@@ -186,4 +186,18 @@ export class EmailMessage extends MacroEntity<EmailMessageData> {
       (await this.detail.get()).thread_db_id,
     );
   }
+
+  /**
+   * The message's original source, exactly as Gmail or Outlook holds it, as
+   * `message/rfc822` bytes for an `.eml` file. Drafts and messages still on
+   * their way have no source yet and fail with a 404.
+   */
+  async downloadEml(): Promise<Blob> {
+    return unwrap(
+      await this.client.email.getMessageEml({
+        path: { id: this.id },
+        parseAs: 'blob',
+      }),
+    );
+  }
 }
