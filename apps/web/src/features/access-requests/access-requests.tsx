@@ -1,4 +1,5 @@
 import { useIsAuthenticated } from '@core/auth';
+import NotFound from '@core/component/AccessErrorViews/NotFound';
 import Unauthorized from '@core/component/AccessErrorViews/Unauthorized';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Button } from '@ui';
@@ -43,40 +44,60 @@ export function AccessRequestError(props: { source: SharingSource }) {
   );
 }
 
-/** Request initial access from a denied file route without loading its metadata. */
-export function DocumentAccessDenied(props: {
-  documentId: string;
+/** Request initial access from a denied route without loading the item. */
+export function AccessDenied(props: {
+  source: SharingSource;
+  noun?: string;
   onAccessGranted: () => void;
 }) {
   const authenticated = useIsAuthenticated();
-  const source = useShareRequests(
-    () => shareEntity('document', props.documentId),
-    () => true
-  );
   createEffect(
     on(
-      () => source.state()?.accessLevel,
+      () =>
+        props.source.loading() || props.source.notFound()
+          ? undefined
+          : props.source.state()?.accessLevel,
       (level) => {
         if (level) props.onAccessGranted();
       }
     )
   );
   return (
-    <Unauthorized>
-      <Show when={authenticated()}>
-        <div class="mt-6 flex w-full flex-col gap-3 text-sm">
-          <Show when={source.loading()}>
-            <span class="text-ink-muted">Loading access requests…</span>
-          </Show>
-          <RequestAccessView
-            source={source}
-            allowedLevels={['view', 'comment', 'edit']}
-          />
-          <PermissionRequestsView source={source} />
-          <AccessRequestError source={source} />
-        </div>
-      </Show>
-    </Unauthorized>
+    <Show when={!props.source.notFound()} fallback={<NotFound />}>
+      <Unauthorized noun={props.noun}>
+        <Show when={authenticated()}>
+          <div class="mt-6 flex w-full flex-col gap-3 text-sm">
+            <Show
+              when={!props.source.loading()}
+              fallback={
+                <span class="text-ink-muted">Loading access requests…</span>
+              }
+            >
+              <RequestAccessView
+                source={props.source}
+                allowedLevels={['view', 'comment', 'edit']}
+              />
+              <PermissionRequestsView source={props.source} />
+              <AccessRequestError source={props.source} />
+            </Show>
+          </div>
+        </Show>
+      </Unauthorized>
+    </Show>
+  );
+}
+
+/** Request initial access from a denied file route without loading its metadata. */
+export function DocumentAccessDenied(props: {
+  documentId: string;
+  onAccessGranted: () => void;
+}) {
+  const source = useShareRequests(
+    () => shareEntity('document', props.documentId),
+    () => true
+  );
+  return (
+    <AccessDenied source={source} onAccessGranted={props.onAccessGranted} />
   );
 }
 

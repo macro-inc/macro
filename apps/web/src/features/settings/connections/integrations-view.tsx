@@ -214,8 +214,8 @@ function IntegrationsOverview(
     useAgentProviderItem(props.model, 'linear'),
     useAgentProviderItem(props.model, 'notion'),
   ];
-  const items = [
-    ...useEmailItems(props),
+  const emailItems = useEmailItems(props);
+  const otherItems = [
     useGithubItem(props.model),
     ...agentTools,
     useGranolaItem(),
@@ -223,7 +223,7 @@ function IntegrationsOverview(
   ];
   // Agent tool rows need connector records; without them their state is unknown.
   const matching = () =>
-    items.filter(
+    [...emailItems(), ...otherItems].filter(
       (item) =>
         (props.agentToolsAvailable || !agentTools.includes(item)) &&
         matchesIntegration(item, query())

@@ -96,7 +96,7 @@ type MarkDoneVariables = {
   notificationEntities: NotificationEntityRef[];
   restoreFocus?: () => void;
   /** Suppress the "Marked as done" toast, e.g. for send-triggered mark done
-   *  where it would replace the "Email sent" toast. */
+   *  where it would replace the send toast. */
   silent?: boolean;
   /** Receives the undo handle once the mark-done is pushed onto the undo
    *  stack, so callers (e.g. undo-send) can reverse it programmatically. */

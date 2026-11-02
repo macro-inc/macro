@@ -8,6 +8,7 @@ use super::ports::{
     ImageGenerationService, ImageGenerator, ImageMarkdownComposer, ImageReferenceReader,
     ImageStore, UnconfiguredImageReferenceReader,
 };
+use ai_billing::AiAdmissionService;
 use ai_usage::{AiFeature, UsageContext, UsageRecorder};
 use model_owner::CreationPrincipal;
 use std::sync::Arc;
@@ -162,5 +163,35 @@ impl<Store: ImageStore, References: ImageReferenceReader> ImageGenerationService
             height: generated.height,
             note: generated.note,
         })
+    }
+}
+
+/// Admits each request against the acting user's AI allowance before
+/// generating. Hosts that call the use case outside an admitted agent turn,
+/// such as the public HTTP API, compose this around the plain service.
+pub struct AdmittedImageGenerationService<Svc> {
+    service: Arc<Svc>,
+    admission: Arc<dyn AiAdmissionService>,
+}
+
+impl<Svc> AdmittedImageGenerationService<Svc> {
+    /// Gate `service` behind `admission`.
+    pub fn new(service: Arc<Svc>, admission: Arc<dyn AiAdmissionService>) -> Self {
+        Self { service, admission }
+    }
+}
+
+impl<Svc: ImageGenerationService> ImageGenerationService for AdmittedImageGenerationService<Svc> {
+    #[tracing::instrument(name = "image_generation.admit", skip_all, err)]
+    async fn create_generated_image(
+        &self,
+        principal: &CreationPrincipal,
+        image: NewGeneratedImage,
+    ) -> Result<StoredGeneratedImage, GenerateImageError> {
+        let user = principal.user().ok_or(GenerateImageError::UserRequired)?;
+        self.admission
+            .admit(user, AiFeature::ImageGeneration)
+            .await?;
+        self.service.create_generated_image(principal, image).await
     }
 }

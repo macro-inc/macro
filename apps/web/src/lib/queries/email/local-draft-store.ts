@@ -14,7 +14,12 @@ type AttemptRecord = DraftAttempt & {
   transactionId: string;
   storageGeneration: string;
 };
-export type DraftStorageSession = { accountId: string; epoch: string };
+export type DraftStorageSession = {
+  accountId: string;
+  epoch: string;
+  /** The epoch this account took over from an account that never signed out, and when. */
+  replaced?: { epoch: string; at: number };
+};
 /** `writeId` identifies the save that produced the record, so a replay can recognize its own commit. */
 type StoredDraft = LocalDraft & { epoch: string; writeId?: string };
 const STORES = ['drafts', 'files', 'attempts', 'sends', 'meta'] as const;
@@ -160,11 +165,16 @@ export function createLocalDraftStore(
       );
     });
   return {
-    /** Account transitions clear unapproved drafts, retain approved sends, and fence old transactions. */
+    /**
+     * Account transitions clear unapproved drafts, retain approved sends, and fence old transactions.
+     * Another account's session at the same epoch is fenced unless `replaceOtherAccount()` allows
+     * a takeover, which ends that session as its sign-out would and returns a new epoch.
+     */
     async activate(
       accountId: string,
       epoch?: string,
-      isCurrent = () => true
+      isCurrent = () => true,
+      replaceOtherAccount = () => false
     ): Promise<DraftStorageSession> {
       const fenced = new Error('This draft session is no longer active');
       const result = await transaction<DraftStorageSession | Error>(
@@ -173,20 +183,32 @@ export function createLocalDraftStore(
           const meta = tx.objectStore('meta');
           const retired = meta.get(['retired-session', epoch ?? '']);
           retired.onsuccess = () => {
-            if (epoch && retired.result) {
-              finish(fenced);
-              return;
-            }
             const request = meta.get('session');
             request.onsuccess = () => {
               const previous = request.result as
                 | DraftStorageSession
                 | undefined;
+              if (epoch && retired.result) {
+                // A takeover from this epoch already landed, in a replay of
+                // this transaction or in another page of the same account.
+                finish(
+                  previous?.accountId === accountId &&
+                    previous.replaced?.epoch === epoch &&
+                    isCurrent()
+                    ? previous
+                    : fenced
+                );
+                return;
+              }
+              const otherAccount =
+                previous &&
+                previous.accountId !== accountId &&
+                (!epoch || previous.epoch === epoch)
+                  ? previous
+                  : undefined;
               if (
                 !isCurrent() ||
-                (previous &&
-                  previous.accountId !== accountId &&
-                  (!epoch || previous.epoch === epoch))
+                (otherAccount && !(epoch && replaceOtherAccount()))
               ) {
                 finish(fenced);
                 return;
@@ -200,10 +222,15 @@ export function createLocalDraftStore(
               }
               for (const name of STORES)
                 if (name !== 'sends') tx.objectStore(name).clear();
-              const session = {
-                accountId,
-                epoch: epoch ?? crypto.randomUUID(),
-              };
+              const session: DraftStorageSession = otherAccount
+                ? {
+                    accountId,
+                    epoch: crypto.randomUUID(),
+                    replaced: { epoch: otherAccount.epoch, at: Date.now() },
+                  }
+                : { accountId, epoch: epoch ?? crypto.randomUUID() };
+              if (otherAccount)
+                meta.put(true, ['retired-session', otherAccount.epoch]);
               meta.put(session, 'session');
               restoreEmailSendLocks(tx, accountId);
               finish(session);

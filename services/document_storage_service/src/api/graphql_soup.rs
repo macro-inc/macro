@@ -1,3 +1,5 @@
+mod telemetry;
+
 use crate::api::context::{ApiContext, AuthorizationService};
 use crate::api::folders_query::DssFoldersQueryReader;
 use agent_session::outbound::postgres::PgAgentSessionRepo;
@@ -13,7 +15,7 @@ use axum::{
 };
 use axum_extra::extract::Cached;
 use bots::outbound::pg_bots_repo::PgBotsRepo;
-use complete_graph::GraphqlRequestParts;
+use complete_graph::{GraphqlRequestParts, MAIL_CACHE_PROFILE_HEADER, MailCacheProfile};
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use graphql_soup::email_mutation_thread_loader;
@@ -49,7 +51,6 @@ fn graphiql_source(endpoint: &str) -> String {
         .finish()
 }
 
-#[tracing::instrument(skip_all, name = "graphql.execute")]
 async fn graphql_handler(
     State(state): State<ApiContext>,
     Cached(auth): Cached<
@@ -62,17 +63,27 @@ async fn graphql_handler(
         .authorization
         .as_ref()
         .and_then(UserOrInternalServiceAuthorization::acting_user);
-    let request = graphql_query_context_data(
-        request.into_inner(),
-        &state,
-        acting_user.map(|user| user.macro_user_id.clone()),
-        acting_user.and_then(|user| user.user_context.organization_id.map(i64::from)),
-        acting_user.and_then(opaque_viewer_id),
+    let mail_profile = MailCacheProfile::from_advertised(
+        request_parts
+            .headers
+            .get(MAIL_CACHE_PROFILE_HEADER)
+            .and_then(|value| value.to_str().ok()),
     );
-    let result = state
-        .graphql_soup_schema
-        .execute(request.data(GraphqlRequestParts::new(request_parts)))
-        .await;
+    let result = telemetry::observe(request.into_inner(), acting_user.is_some(), |request| {
+        let request = graphql_query_context_data(
+            request,
+            &state,
+            acting_user.map(|user| user.macro_user_id.clone()),
+            acting_user.and_then(|user| user.user_context.organization_id.map(i64::from)),
+            acting_user.and_then(opaque_viewer_id),
+        );
+        state.graphql_soup_schema.execute(
+            request
+                .data(mail_profile)
+                .data(GraphqlRequestParts::new(request_parts)),
+        )
+    })
+    .await;
     graphql_response(result)
 }
 

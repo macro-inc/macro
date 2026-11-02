@@ -2,6 +2,7 @@ import { blockNameToFileExtensionSet } from '@core/constant/allBlocks';
 import { staticFileIdEndpoint } from '@core/constant/servers';
 import { heicConversionService } from '@core/heic/service';
 import type { FetchError } from '@core/service';
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { ResultError } from '@core/util/result';
 import {
   createStaticUploadFile,
@@ -17,9 +18,9 @@ import {
   $createVideoNode,
   $isImageNode,
   $isVideoNode,
-  type ImageNode,
+  ImageNode,
   type MediaType,
-  type VideoNode,
+  VideoNode,
 } from '@macro-inc/lexical-core';
 import { Telemetry } from '@macro-inc/observability';
 import { fetchBinaryDocumentData } from '@queries/storage/binary-document';
@@ -40,8 +41,9 @@ import {
   type LexicalCommand,
   type LexicalEditor,
   type NodeKey,
+  type NodeMutation,
 } from 'lexical';
-import { ok, type Result } from 'neverthrow';
+import { ok, type Result, ResultAsync } from 'neverthrow';
 import { $insertNodesAndSplitList } from '../../utils';
 import { mapRegisterDelete } from '../shared';
 
@@ -96,8 +98,14 @@ export const UPDATE_MEDIA_SIZE_COMMAND: LexicalCommand<
   [NodeKey, { width: number; height: number }, MediaType]
 > = createCommand('UPDATE_MEDIA_SIZE_COMMAND');
 
+type MediaPick = MediaType | 'all';
+
 export const TRY_INSERT_MEDIA_UPLOAD_COMMAND: LexicalCommand<
-  MediaType | 'all'
+  | MediaPick
+  | {
+      mediaType: MediaPick;
+      constrainedMediaDimensions: { width: number; height: number };
+    }
 > = createCommand('TRY_INSERT_MEDIA_UPLOAD_COMMAND');
 
 function validateMediaFile(file: UploadFile, mediaType: MediaType): boolean {
@@ -160,23 +168,25 @@ async function processFile(file: UploadFile): Promise<UploadFile> {
 }
 
 /**
- * Upload files to the static file service.
+ * Upload a file to the static file service. Resolves to its static file id, or
+ * undefined when the upload fails.
  */
-async function uploadStaticFiles(
-  files: File[],
-  onUpload: (id: string) => void,
-  onError?: () => void
-) {
-  for (const file of files) {
-    try {
-      const processedFile = await processFile(createUploadFile(file));
-      const id = await createStaticUploadFile(processedFile);
-      onUpload(id);
-    } catch (_error) {
-      onError?.();
-    }
-  }
+async function uploadStaticFile(file: File): Promise<string | undefined> {
+  const uploaded = await ResultAsync.fromPromise(
+    processFile(createUploadFile(file)),
+    () => undefined
+  ).andThen((processed) =>
+    ResultAsync.fromPromise(createStaticUploadFile(processed), () => undefined)
+  );
+  return uploaded.unwrapOr(undefined);
 }
+
+/**
+ * Uploads by the local preview URL their node renders. Copies, moves, undo,
+ * and remounts give that node a new key or editor but keep the URL, so every
+ * copy, in any editor on the page, receives the upload.
+ */
+const uploadsByLocalUrl = new Map<string, Promise<string | undefined>>();
 
 /**
  * Convert a keyed node from a local media to a durable static file pointer.
@@ -286,12 +296,8 @@ export function $upgradeDSSMediaUrl(
 
 function registerMediaPlugin(editor: LexicalEditor) {
   let consumeNextDelete = false;
-  const cachedUploads = new Map<string, string>();
-  const activeUploadsByUploadKey = new Map<
-    string,
-    Array<{ key: NodeKey; mediaType: MediaType }>
-  >();
-  const staticIdsByLocalUrl = new Map<string, string>();
+  const uploadsByFileKey = new Map<string, Promise<string | undefined>>();
+  const uploadingKeys = new Set<NodeKey>();
 
   const onStaticIdReturned = (
     key: NodeKey,
@@ -311,52 +317,84 @@ function registerMediaPlugin(editor: LexicalEditor) {
     );
   };
 
-  const handleUpload = async (
+  const uploadFile = async (
     file: File,
-    key: NodeKey,
-    localUrl: string,
     mediaType: MediaType
-  ) => {
-    const uploadKey = await getFileKey(createUploadFile(file));
-
-    if (cachedUploads.has(uploadKey)) {
-      const id = cachedUploads.get(uploadKey)!;
-      onStaticIdReturned(key, id, mediaType);
-      return;
-    }
-
-    if (activeUploadsByUploadKey.has(uploadKey)) {
-      activeUploadsByUploadKey.get(uploadKey)!.push({ key, mediaType });
-      return;
-    }
-
-    activeUploadsByUploadKey.set(uploadKey, [{ key, mediaType }]);
-
-    editor.dispatchCommand(UPLOAD_MEDIA_START_COMMAND, [key, mediaType]);
-
-    await uploadStaticFiles(
-      [file],
-      (id) => {
-        cachedUploads.set(uploadKey, id);
-        staticIdsByLocalUrl.set(localUrl, id);
-        onStaticIdReturned(key, id, mediaType);
-        if (activeUploadsByUploadKey.has(uploadKey)) {
-          const entries = activeUploadsByUploadKey.get(uploadKey)!;
-          for (const entry of entries) {
-            if (entry.key === key) continue;
-            onStaticIdReturned(entry.key, id, entry.mediaType);
-          }
-          activeUploadsByUploadKey.delete(uploadKey);
-        }
-      },
-      () => {
-        activeUploadsByUploadKey.delete(uploadKey);
-        editor.dispatchCommand(UPLOAD_MEDIA_FAILURE_COMMAND, [key, mediaType]);
-      }
+  ): Promise<string | undefined> => {
+    const keyed = await ResultAsync.fromPromise(
+      getFileKey(createUploadFile(file)),
+      (error) => error
     );
+    if (keyed.isErr()) {
+      Telemetry.error(keyed.error, { surface: 'media-upload', mediaType });
+      return undefined;
+    }
+    const fileKey = keyed.value;
+    let upload = uploadsByFileKey.get(fileKey);
+    if (!upload) {
+      upload = uploadStaticFile(file);
+      uploadsByFileKey.set(fileKey, upload);
+    }
+    const id = await upload;
+    if (id === undefined && uploadsByFileKey.get(fileKey) === upload) {
+      uploadsByFileKey.delete(fileKey);
+    }
+    return id;
   };
 
+  const followUpload = async (
+    key: NodeKey,
+    mediaType: MediaType,
+    upload: Promise<string | undefined>
+  ) => {
+    if (uploadingKeys.has(key)) return;
+    uploadingKeys.add(key);
+    const id = await upload;
+    uploadingKeys.delete(key);
+    if (id === undefined) {
+      editor.dispatchCommand(UPLOAD_MEDIA_FAILURE_COMMAND, [key, mediaType]);
+      return;
+    }
+    onStaticIdReturned(key, id, mediaType);
+  };
+
+  const followCreatedLocalMedia = (
+    mutations: Map<NodeKey, NodeMutation>,
+    mediaType: MediaType
+  ) => {
+    for (const [key, mutation] of mutations) {
+      if (mutation !== 'created') continue;
+      const url = editor.getEditorState().read(() => {
+        const node = $getNodeByKey(key);
+        if (!node) return undefined;
+        return ($isImageNode(node) || $isVideoNode(node)) &&
+          node.getSrcType() === 'local'
+          ? node.getUrl()
+          : undefined;
+      });
+      const upload = url === undefined ? undefined : uploadsByLocalUrl.get(url);
+      if (upload) {
+        fireAndForget(followUpload(key, mediaType, upload), 'media-upload');
+      }
+    }
+  };
+
+  // Lexical throws when listening for a node the editor did not register, and
+  // chat and calendar editors leave out some media nodes.
+  const followCreated = (
+    klass: typeof ImageNode | typeof VideoNode,
+    mediaType: MediaType
+  ) =>
+    editor.hasNodes([klass])
+      ? editor.registerMutationListener(klass, (mutations) =>
+          followCreatedLocalMedia(mutations, mediaType)
+        )
+      : () => {};
+
   return mergeRegister(
+    followCreated(ImageNode, 'image'),
+    followCreated(VideoNode, 'video'),
+
     editor.registerCommand(
       INSERT_MEDIA_COMMAND,
       (payload) => {
@@ -399,12 +437,11 @@ function registerMediaPlugin(editor: LexicalEditor) {
                   constrainedHeight: payload.constrainedMediaDimensions?.height,
                 });
 
-          $safeInsertMediaNode(node);
-          const nodeKey = node.getKey();
-          handleUpload(payload.file, nodeKey, payload.url, mediaType).catch(
-            (error) =>
-              Telemetry.error(error, { surface: 'media-upload', mediaType })
+          uploadsByLocalUrl.set(
+            payload.url,
+            uploadFile(payload.file, mediaType)
           );
+          $safeInsertMediaNode(node);
           return true;
         }
 
@@ -464,53 +501,25 @@ function registerMediaPlugin(editor: LexicalEditor) {
     editor.registerCommand(
       ON_MEDIA_COMPONENT_MOUNT_COMMAND,
       ([key, mediaType]) => {
-        editor.update(
-          () => {
-            const node = $getNodeByKey(key);
-            if (!node) return true;
-
-            if (mediaType === 'image' && $isImageNode(node)) {
-              const type = node.getSrcType();
-              if (type === 'local') {
-                const url = node.getUrl();
-                if (staticIdsByLocalUrl.has(url)) {
-                  const id = staticIdsByLocalUrl.get(url)!;
-                  onStaticIdReturned(key, id, mediaType);
-                }
-              }
-              if (type === 'sfs') {
-                const id = node.getId();
-                setTimeout(() =>
-                  editor.dispatchCommand(UPLOAD_MEDIA_SUCCESS_COMMAND, [
-                    key,
-                    id,
-                    mediaType,
-                  ])
-                );
-              }
-            } else if (mediaType === 'video' && $isVideoNode(node)) {
-              const type = node.getSrcType();
-              if (type === 'local') {
-                const url = node.getUrl();
-                if (staticIdsByLocalUrl.has(url)) {
-                  const id = staticIdsByLocalUrl.get(url)!;
-                  onStaticIdReturned(key, id, mediaType);
-                }
-              }
-              if (type === 'sfs') {
-                const id = node.getId();
-                setTimeout(() =>
-                  editor.dispatchCommand(UPLOAD_MEDIA_SUCCESS_COMMAND, [
-                    key,
-                    id,
-                    mediaType,
-                  ])
-                );
-              }
-            }
-          },
-          { discrete: true, tag: 'historic' }
-        );
+        if (uploadingKeys.has(key)) {
+          editor.dispatchCommand(UPLOAD_MEDIA_START_COMMAND, [key, mediaType]);
+          return true;
+        }
+        const node = $getNodeByKey(key);
+        if (!node) return true;
+        if (
+          ($isImageNode(node) || $isVideoNode(node)) &&
+          node.getSrcType() === 'sfs'
+        ) {
+          const id = node.getId();
+          setTimeout(() =>
+            editor.dispatchCommand(UPLOAD_MEDIA_SUCCESS_COMMAND, [
+              key,
+              id,
+              mediaType,
+            ])
+          );
+        }
         return true;
       },
       COMMAND_PRIORITY_NORMAL
@@ -541,7 +550,11 @@ function registerMediaPlugin(editor: LexicalEditor) {
 
     editor.registerCommand(
       TRY_INSERT_MEDIA_UPLOAD_COMMAND,
-      (mediaType) => {
+      (payload) => {
+        const { mediaType, constrainedMediaDimensions } =
+          typeof payload === 'string'
+            ? { mediaType: payload, constrainedMediaDimensions: undefined }
+            : payload;
         const input = document.createElement('input');
         input.type = 'file';
         input.accept = 'image/*';
@@ -565,12 +578,15 @@ function registerMediaPlugin(editor: LexicalEditor) {
               : isVideo
                 ? 'video'
                 : null;
-            if (type) {
-              addMediaFromFile(editor, file, type).catch((error) =>
-                Telemetry.error(error, {
-                  surface: 'media-upload',
-                  mediaType: type,
-                })
+            if (type && (mediaType === 'all' || type === mediaType)) {
+              fireAndForget(
+                addMediaFromFile(
+                  editor,
+                  file,
+                  type,
+                  constrainedMediaDimensions
+                ),
+                'media-upload'
               );
             }
           }

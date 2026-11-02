@@ -34,8 +34,8 @@ pub enum Skipped {
     /// The event is another deployment's to act on: an open for a bot whose
     /// runtime opens its own sessions, or managed traffic that is not ours.
     ForeignBot,
-    /// The sender is not a user, so there is nobody to own the session.
-    NotFromUser,
+    /// Neither a user sender nor trusted bot attribution names a session owner.
+    MissingInvokingUser,
     /// An event shape this harness does not recognise yet - the trigger's
     /// vocabulary is non-exhaustive on purpose, and unknown shapes are
     /// skipped rather than wedging the partition.
@@ -71,7 +71,7 @@ pub fn route_agent_trigger(
                 .sender
                 .as_user()
                 .cloned()
-                .ok_or(Skipped::NotFromUser)?;
+                .ok_or(Skipped::MissingInvokingUser)?;
             let mut context = event.context;
             links.link_context_attachments(context.as_mut());
             let attachments =
@@ -132,10 +132,8 @@ pub fn route_agent_trigger(
                 return Err(Skipped::ForeignBot);
             };
             let sender = message
-                .sender
-                .as_user()
-                .cloned()
-                .ok_or(Skipped::NotFromUser)?;
+                .invoking_user()
+                .ok_or(Skipped::MissingInvokingUser)?;
             links.link_context_attachments(context.as_mut());
             let attachments = links.prompt_attachments_for(&message.attachments, context.as_ref());
             Ok(RoutedTrigger::Command(
@@ -169,6 +167,7 @@ pub fn route_agent_trigger(
             else {
                 return Err(Skipped::Unrecognized);
             };
+            let sender = message.invoking_user();
             let origin = AnnounceOrigin {
                 reply_placement: Default::default(),
                 reuse_origin_message: false,
@@ -189,17 +188,13 @@ pub fn route_agent_trigger(
                         context,
                         ..DeliverAction::prompt(
                             AgentAction::prompt_with_attachments(message.content, attachments),
-                            message.sender.as_user().cloned(),
+                            sender.clone(),
                             Some(origin),
                         )
                     }),
                 ));
             }
-            let sender = message
-                .sender
-                .as_user()
-                .cloned()
-                .ok_or(Skipped::NotFromUser)?;
+            let sender = sender.ok_or(Skipped::MissingInvokingUser)?;
             Ok(RoutedTrigger::Announce(
                 session_id,
                 AnnouncePrompt {

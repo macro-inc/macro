@@ -1,8 +1,11 @@
 use super::*;
+use crate::domain::models::AdvancedSortParams;
 use crate::domain::models::SoupPropertiesField;
-use crate::domain::models::grouping::{ItemGroupingInfo, build_grouped_response};
+use crate::domain::models::grouping::{GroupLabels, ItemGroupingInfo, build_grouped_response};
 use document_sub_type::DocumentSubType;
 use item_filters::ast::project::ProjectLiteral;
+use model_entity::EntityType;
+use models_soup::item::SoupItem;
 use uuid::{Uuid, uuid};
 
 #[sqlx::test(
@@ -40,7 +43,7 @@ async fn tasks_group_by_their_project_property(pool: Pool<Postgres>) -> anyhow::
             GroupedDynamicCursorArgs {
                 user_id: user_id.copied(),
                 limit: 50,
-                cursor: Query::Sort(SimpleSortMethod::ViewedUpdated, filter.clone()),
+                cursor: Query::Sort(SimpleSortMethod::ViewedUpdated.into(), filter.clone()),
                 exclude_frecency: false,
                 grouping: GroupingConfig {
                     field: GroupByField::Project,
@@ -74,8 +77,32 @@ async fn tasks_group_by_their_project_property(pool: Pool<Postgres>) -> anyhow::
             assert_eq!(item.key, key);
             assert_eq!(item.total_group_count, 1);
         }
+        // The viewer can read Project One (granted below) but not Project Two.
+        let keys = [
+            EntityType::Initiative
+                .with_entity_string("ad000000-0000-0000-0000-000000000001".to_string()),
+            EntityType::Initiative
+                .with_entity_string("ad000000-0000-0000-0000-000000000002".to_string()),
+        ];
+        let labels: GroupLabels = crate::outbound::pg_soup_repo::initiative::by_ids(
+            &pool,
+            AdvancedSortParams {
+                entities: &keys,
+                user_id: user_id.copied(),
+            },
+        )
+        .await?
+        .into_iter()
+        .filter_map(|item| match item {
+            SoupItem::Initiative(initiative) => Some((initiative.id.to_string(), initiative.name)),
+            _ => None,
+        })
+        .collect();
         let response = build_grouped_response(
             items.into_iter().map(|group| ItemGroupingInfo {
+                document_server_facts: group.document_server_facts,
+                sort_key: group.sort_key,
+                display_order: group.display_order,
                 key: group.key,
                 total_group_count: group.total_group_count,
                 index_in_group: group.index_in_group,
@@ -85,7 +112,15 @@ async fn tasks_group_by_their_project_property(pool: Pool<Postgres>) -> anyhow::
             SimpleSortMethod::ViewedUpdated,
             group_key.map(str::to_owned),
             filter.clone(),
+            &labels,
         );
+        for group in &response.groups {
+            match group.key.as_str() {
+                "ad000000-0000-0000-0000-000000000001" => assert_eq!(group.label, "Project One"),
+                "ad000000-0000-0000-0000-000000000002" => assert_eq!(group.label, group.key),
+                _ => {}
+            }
+        }
         if group_key.is_none() || group_key == Some("") {
             let unassigned = response
                 .groups

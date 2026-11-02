@@ -31,7 +31,8 @@ intermediate JSON asset. Browser workers configure SDL through
 Native startup calls `graphql_cache_init_with_schema`. This requires one native
 release; set the OTA bundle's `MIN_NATIVE_BUILD` to the first build containing that
 command. Older native binaries cannot accept runtime SDL. The frontend does
-not fall back to the old initialization command.
+not fall back to the old initialization command; it runs uncached and asks for
+an app update instead.
 
 An engine owns a validated schema snapshot; there is no mutable global schema.
 Compatible additions are merged under the native engine lock, including when an

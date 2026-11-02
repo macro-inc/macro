@@ -231,8 +231,10 @@ deny = [
     "coding_agent_worker",       # Standalone daemon logging setup
     "cursor_cloud_agents",       # Standalone ACP binary logging; stdout is the protocol, so macro_entrypoint cannot own it
     "dictation",                 # Metadata tracing and content-redaction tests only
+    "document_storage_service",  # GraphQL telemetry span and log tests only (dev-dependency)
     "documents",                 # Dev logging only
     "email",                     # Dev logging only
+    "email_db_client",           # Purge phase span tests only
     "genai_telemetry",           # GenAI span tests
     "graphql_email",             # Unavailable-thread warning field and span tests only
     "graphql_entity_mutation",   # Batch failure span field tests only

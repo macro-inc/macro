@@ -21,15 +21,15 @@ use messages::domain::service::MessageWrite;
 use messages::domain::{events::MessagePostedMetadata, models::MessageParent};
 
 use channel_sender::ChannelSender;
-use macro_user_id::cowlike::CowLike;
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
 
 use crate::domain::broker_events::{ThreadMessageKind, TriggerDecision};
 use crate::domain::thread_window::{ThreadMessage, render_transcript, thread_window};
 use crate::domain::yield_event::{
-    AgentSessionEventDecision, NoEventReason, PotentialTriggerEvent, yield_event,
+    AgentSessionEventDecision, NoEventReason, PotentialTriggerEvent, is_own_message, yield_event,
 };
+use messages::domain::agent_hops::{MAX_AGENT_HOPS, agent_hops};
 
 /// Messages kept either side of a point where the agent spoke or was spoken to.
 /// Wide enough to carry the exchange around it, narrow enough that a long
@@ -241,7 +241,7 @@ where
         posted: &MessagePostedMetadata,
         bot_id: BotId,
     ) -> Result<bool> {
-        let Some(caller) = posted.sender.as_user().cloned().map(CowLike::into_owned) else {
+        let Some(caller) = posted.invoking_user() else {
             return Ok(false);
         };
 
@@ -353,19 +353,53 @@ where
         }
     }
 
-    /// The poster's current capability on the message's conversation, for
-    /// reading it as context. `None` when the poster is no user or may no
+    /// The invoking user's current capability on the message's conversation,
+    /// for reading it as context. `None` when nobody invoked it or they may no
     /// longer write there.
     pub async fn invocation(
         &self,
         posted: &MessagePostedMetadata,
     ) -> Result<Option<AuthorizedInvocation>> {
-        let Some(user) = posted.sender.as_user().cloned().map(CowLike::into_owned) else {
+        let Some(user) = posted.invoking_user() else {
             return Ok(None);
         };
         self.history
             .authorize_invocation(&user, &posted.parent, posted.root_id())
             .await
+    }
+
+    /// Whether a bot's message stays within [`MAX_AGENT_HOPS`] of the last
+    /// person in its thread. Checked before any routing or judging, explicit
+    /// or implicit. An unreadable thread counts as over the limit: an agent
+    /// loop is worse than one missed handoff.
+    async fn within_hop_limit(
+        &self,
+        posted: &MessagePostedMetadata,
+        invocation: &AuthorizedInvocation,
+    ) -> bool {
+        let messages = match self.history.thread_messages(invocation).await {
+            Ok(messages) => messages,
+            Err(error) => {
+                tracing::warn!(error = ?error, "thread read failed; not counting agent hops");
+                return false;
+            }
+        };
+        let senders: Vec<&ChannelSender<'static>> = messages
+            .iter()
+            .take_while(|message| message.id != posted.message_id)
+            .map(|message| &message.sender)
+            .chain(std::iter::once(&posted.sender))
+            .collect();
+        let hops = agent_hops(senders.into_iter());
+        if hops > MAX_AGENT_HOPS {
+            tracing::info!(
+                message_id = %posted.message_id,
+                hops,
+                "agent message exceeds the hop limit; not triggering another agent"
+            );
+            return false;
+        }
+        true
     }
 
     /// Evaluates a posted message for every mentioned bot.
@@ -377,7 +411,7 @@ where
         agent.mention.bot_count = tracing::field::Empty,
     ))]
     pub async fn evaluate(&self, posted: &MessagePostedMetadata) -> Result<Vec<TriggerDecision>> {
-        let Some(user) = posted.sender.as_user().cloned().map(CowLike::into_owned) else {
+        let Some(user) = posted.invoking_user() else {
             return Ok(Vec::new());
         };
         let Some(invocation) = self
@@ -387,6 +421,9 @@ where
         else {
             return Ok(Vec::new());
         };
+        if posted.sender.as_bot().is_some() && !self.within_hop_limit(posted, &invocation).await {
+            return Ok(Vec::new());
+        }
         if let Some(router) = &self.conversations {
             match router.evaluate(posted).await? {
                 ConversationDecision::NotConversation => {}
@@ -411,7 +448,7 @@ where
         if mentioned.is_empty() {
             if let Some(event) = self.evaluate_bot(posted, None, &mut seen_sessions).await? {
                 events.push(event);
-            } else if let Some(event) = self.evaluate_implicit(posted, &invocation).await? {
+            } else if let Some(event) = self.evaluate_implicit(posted, &user, &invocation).await? {
                 events.push(event);
             }
             return Ok(events);
@@ -507,23 +544,23 @@ where
     /// Extractor and judge failures are treated as "no" rather than propagated:
     /// implicit triggering is best-effort, and an outage must not wedge the
     /// message stream or fabricate forwards.
+    ///
+    /// A bot's message is judged like anyone's, but never against the bot's
+    /// own session; the hop limit has already bounded agent chains.
     async fn evaluate_implicit(
         &self,
         posted: &MessagePostedMetadata,
+        _user: &MacroUserIdStr<'static>,
         invocation: &AuthorizedInvocation,
     ) -> Result<Option<TriggerDecision>> {
         let Some(thread_id) = posted.thread_id else {
-            return Ok(None);
-        };
-        // Only a user implicitly addresses an agent; bot traffic must always
-        // mention explicitly, or bots would relay each other forever.
-        let Some(_user) = posted.sender.as_user() else {
             return Ok(None);
         };
         let mut candidates = Vec::new();
         for session in self.sessions.find_all_for_thread(thread_id).await? {
             if session.thread_parent.as_ref() == Some(&posted.parent)
                 && session.thread_id == Some(thread_id)
+                && !is_own_message(session.bot_id, &posted.sender)
                 && self.agent_is_available(posted, session.bot_id).await?
             {
                 candidates.push(session);

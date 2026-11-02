@@ -181,7 +181,8 @@ export function InlineTaskProperties() {
             size="xs"
             showAddButton={documentKind === 'document' && canEdit()}
           />
-          <Key each={inlineProperties()} by="propertyId">
+          {/* A placeholder keeps its chip, and a pick in it, when saving assigns its ID. */}
+          <Key each={inlineProperties()} by="propertyDefinitionId">
             {(property) => (
               <InlinePropertyValue
                 property={property()}

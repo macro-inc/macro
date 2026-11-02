@@ -1,3 +1,4 @@
+import { previewKeys } from '@queries/preview/keys';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { calendarKeys } from '../keys';
 import { handleRefreshCalendar } from '../sync';
@@ -44,6 +45,28 @@ describe('handleRefreshCalendar', () => {
     expect(invalidateQueriesMock).toHaveBeenCalledWith({
       queryKey: calendarKeys.visibleCalendars.queryKey,
     });
+    expect(invalidateQueriesMock).toHaveBeenCalledWith({
+      queryKey: calendarKeys.joinRequests._def,
+    });
+  });
+
+  it("refetches a requester's view of the answered event, and nothing else", () => {
+    handleRefreshCalendar({
+      event: 'join_request_answered',
+      event_id: 'shared-event',
+    });
+
+    expect(invalidateQueriesMock).toHaveBeenCalledWith({
+      queryKey: previewKeys.item('shared-event').queryKey,
+    });
+    expect(invalidateQueriesMock).toHaveBeenCalledWith({
+      queryKey: [...calendarKeys.mentionPreview._def, 'shared-event'],
+    });
+    expect(invalidateQueriesMock).not.toHaveBeenCalledWith({
+      queryKey: calendarKeys.visibleCalendars.queryKey,
+    });
+    expect(invalidateCalendarOccurrencesMock).not.toHaveBeenCalled();
+    expect(refreshTeamCalendarQueriesMock).not.toHaveBeenCalled();
   });
 
   it('defers the occurrence refetch while an RSVP is in flight', () => {
@@ -73,6 +96,8 @@ describe('handleRefreshCalendar', () => {
     });
     handleRefreshCalendar({ event: 'synced' });
     handleRefreshCalendar({ event: 'synced', link_id: 42 });
+    handleRefreshCalendar({ event: 'join_request_answered' });
+    handleRefreshCalendar({ event: 'join_request_answered', event_id: 42 });
 
     expect(invalidateCalendarOccurrencesMock).not.toHaveBeenCalled();
     expect(invalidateQueriesMock).not.toHaveBeenCalled();

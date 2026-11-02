@@ -188,7 +188,16 @@ function page(
     user: {
       id: 'viewer',
       groupSoup: {
-        bins: [{ key: 'todo', items, totalCount: 20, nextCursor: cursor }],
+        bins: [
+          {
+            key: 'todo',
+            items,
+            displayOrder: null,
+            label: null,
+            totalCount: 20,
+            nextCursor: cursor,
+          },
+        ],
       },
     },
   };
@@ -568,7 +577,9 @@ describe('grouped Soup live ownership', () => {
     const cached = page([groupedDocument('a', ['done'])]);
     cached.user.groupSoup.bins.push({
       key: 'done',
+      label: null,
       items: [],
+      displayOrder: null,
       totalCount: 12,
       nextCursor: 'done-next',
     });

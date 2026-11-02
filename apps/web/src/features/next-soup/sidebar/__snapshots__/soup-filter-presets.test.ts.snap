@@ -74,6 +74,7 @@ exports[`documents view GraphQL input contract > captures every production tab w
       "limit": 100,
       "sortDirection": undefined,
       "sortMethod": "UPDATED_AT",
+      "sortPropertyDefinitionId": undefined,
     },
   },
   "attachments": {
@@ -137,6 +138,7 @@ exports[`documents view GraphQL input contract > captures every production tab w
       "limit": 100,
       "sortDirection": undefined,
       "sortMethod": "UPDATED_AT",
+      "sortPropertyDefinitionId": undefined,
     },
   },
   "owned": {
@@ -229,6 +231,7 @@ exports[`documents view GraphQL input contract > captures every production tab w
       "limit": 100,
       "sortDirection": undefined,
       "sortMethod": "UPDATED_AT",
+      "sortPropertyDefinitionId": undefined,
     },
   },
   "shared": {
@@ -323,6 +326,7 @@ exports[`documents view GraphQL input contract > captures every production tab w
       "limit": 100,
       "sortDirection": undefined,
       "sortMethod": "UPDATED_AT",
+      "sortPropertyDefinitionId": undefined,
     },
   },
 }
@@ -393,6 +397,7 @@ exports[`documents view GraphQL input contract > captures every production tab w
       "limit": 100,
       "sortDirection": undefined,
       "sortMethod": "UPDATED_AT",
+      "sortPropertyDefinitionId": undefined,
     },
   },
   "attachments": {
@@ -456,6 +461,7 @@ exports[`documents view GraphQL input contract > captures every production tab w
       "limit": 100,
       "sortDirection": undefined,
       "sortMethod": "UPDATED_AT",
+      "sortPropertyDefinitionId": undefined,
     },
   },
   "owned": {
@@ -539,6 +545,7 @@ exports[`documents view GraphQL input contract > captures every production tab w
       "limit": 100,
       "sortDirection": undefined,
       "sortMethod": "UPDATED_AT",
+      "sortPropertyDefinitionId": undefined,
     },
   },
   "shared": {
@@ -624,6 +631,7 @@ exports[`documents view GraphQL input contract > captures every production tab w
       "limit": 100,
       "sortDirection": undefined,
       "sortMethod": "UPDATED_AT",
+      "sortPropertyDefinitionId": undefined,
     },
   },
 }
