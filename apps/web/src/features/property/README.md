@@ -34,7 +34,9 @@ static and readable in compact rows. When composing a project icon separately,
 pass `hideIcon` to `Property.Text` to avoid duplicate glyphs.
 Status and Priority option icons share a 12px default, including desktop and
 mobile edit menus and desktop title property pills. Task-detail title pills
-use 16px value and empty-state icons on touch; side-panel Status/Priority
+also size Due date icons to 12px on desktop, omit the `Due date:` prefix, and
+order Due date before Project and Assignees. These pills use 16px value and
+empty-state icons on touch; side-panel Status/Priority
 values use explicit 16px icons. Side-panel Project icons, including empty
 values, use 16px on touch and retain their desktop sizes. Other callers can
 override the size.

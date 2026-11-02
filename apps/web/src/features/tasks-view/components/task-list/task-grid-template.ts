@@ -55,6 +55,7 @@ export const TASK_GRID_COLUMNS = [
     sortKey: 'priority',
     width: COLUMN_WIDTHS.priority,
   },
+  TASK_DUE_DATE_COLUMN,
   {
     id: 'assignees',
     label: 'Assignees',
@@ -64,7 +65,6 @@ export const TASK_GRID_COLUMNS = [
     specificEntityType: EntityType.USER,
     width: COLUMN_WIDTHS.assignees,
   },
-  TASK_DUE_DATE_COLUMN,
 ] as const;
 
 /** The task's project, shown only while Projects is enabled. */
@@ -82,15 +82,15 @@ export type TaskGridColumn =
   | (typeof TASK_GRID_COLUMNS)[number]
   | typeof TASK_PROJECT_COLUMN;
 
-/** Default grid order always places Project before Assignees. */
+/** Default grid order places Due date, Project, then Assignees. */
 export const DEFAULT_TASK_GRID_COLUMNS = [
   'indicator',
   'content',
   'status',
   'priority',
+  'dueDate',
   'initiative',
   'assignees',
-  'dueDate',
   'createdBy',
   'timestamp',
 ] as const satisfies readonly TaskGridColumnId[];
@@ -99,9 +99,9 @@ export const DEFAULT_TASK_GRID_COLUMNS = [
 export const TASK_LIST_COLUMNS = [
   'indicator',
   'content',
+  'dueDate',
   'initiative',
   'assignees',
-  'dueDate',
   'timestamp',
   'createdBy',
 ] as const satisfies readonly TaskGridColumnId[];

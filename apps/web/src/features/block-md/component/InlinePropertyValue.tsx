@@ -22,6 +22,7 @@ type InlinePropertyValueProps = {
   emptyLabel?: JSX.Element;
   class?: string;
   iconClass?: string;
+  showLabel?: boolean;
   canManage?: boolean;
   canRemove?: boolean;
   /** The editor the pill opens; see `PropertyValuePill`. */
@@ -66,14 +67,17 @@ export const InlinePropertyValue: Component<InlinePropertyValueProps> = (
       variant="secondary"
       size="xs"
       showLabel={
-        props.property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.STATUS &&
-        props.property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.PRIORITY &&
-        !(
-          ctx.entityType === 'TASK' &&
-          (props.property.propertyDefinitionId ===
-            SYSTEM_PROPERTY_IDS.ASSIGNEES ||
-            props.property.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT)
-        )
+        props.showLabel ??
+        (props.property.propertyDefinitionId !== SYSTEM_PROPERTY_IDS.STATUS &&
+          props.property.propertyDefinitionId !==
+            SYSTEM_PROPERTY_IDS.PRIORITY &&
+          !(
+            ctx.entityType === 'TASK' &&
+            (props.property.propertyDefinitionId ===
+              SYSTEM_PROPERTY_IDS.ASSIGNEES ||
+              props.property.propertyDefinitionId ===
+                SYSTEM_PROPERTY_IDS.PROJECT)
+          ))
       }
       canEdit={ctx.canEdit}
       onSave={ctx.saveHandler.saveProperty}

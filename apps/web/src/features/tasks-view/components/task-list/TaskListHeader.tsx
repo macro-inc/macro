@@ -130,6 +130,13 @@ export function TaskListHeader(props: {
       >
         Task
       </span>
+      <SortableHeader
+        label="Due date"
+        area="dueDate"
+        sortId="due_date_earliest"
+        reverseSortId="due_date_latest"
+        narrowIcon={<CalendarIcon class="size-4" />}
+      />
       <Show when={showTaskProject()}>
         <SortableHeader
           label="Project"
@@ -142,13 +149,6 @@ export function TaskListHeader(props: {
         area="assignees"
         class="@max-[840px]/u-list:justify-start @max-[840px]/u-list:pl-1"
         narrowIcon={<UsersIcon class="size-4" />}
-      />
-      <SortableHeader
-        label="Due date"
-        area="dueDate"
-        sortId="due_date_earliest"
-        reverseSortId="due_date_latest"
-        narrowIcon={<CalendarIcon class="size-4" />}
       />
       <SortableHeader
         label="Updated"

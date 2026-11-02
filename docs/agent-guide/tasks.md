@@ -109,7 +109,8 @@ indicator remains immediately beside the title whenever it is shown.
 Compact desktop rows keep tags after the title and before the trailing properties;
 phone rows retain the single tag or collapsed multi-tag chip instead of dropping tags.
 Tag pills keep their compact height on touch.
-Task rows place Project before Assignees on desktop and phones. Compact rows
+Task rows order trailing properties as Due date, Project, then Assignees on
+desktop and phones. Compact rows
 show both avatars for exactly two assignees; larger groups show the first avatar
 and the remaining count. Compact assignee slots reserve their width and keep the
 first avatar anchored left, so a second avatar or count grows only to the right
@@ -139,9 +140,11 @@ split, and an already open project is focused instead of opened again), and the
 caret changes the project. Hovering the name turns its icon into an arrow. People
 who can't edit the task get the name alone, so they can still open the project.
 An empty or unavailable project keeps the plain pill, and composers never split it.
-On touch devices, the property pills beneath the task title use 16px Status,
-Priority, and Project icons, including empty values; their desktop sizing is
-unchanged. The tags selector in that row has a 36px minimum touch height.
+The property pills beneath the task title place Due date before Project and
+Assignees. Due date has no `Due date:` prefix and uses a 12px desktop icon.
+On touch devices, these pills use 16px Status, Priority, Due date, and Project
+icons, including empty values. The tags selector in that row has a 36px minimum
+touch height.
 Task-list tags and property icons retain their separate compact sizing.
 Empty values in the Properties panel show No status, No priority, Unassigned,
 No due date, or No project with the shared empty-value icons; custom fields show

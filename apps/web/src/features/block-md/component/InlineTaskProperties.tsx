@@ -119,9 +119,12 @@ export function InlineTaskProperties() {
         )
     );
     if (documentKind !== 'task') return visible;
-    const order = [
-      ...getDefaultPinnedProperties('task'),
+    const order: readonly string[] = [
+      SYSTEM_PROPERTY_IDS.STATUS,
+      SYSTEM_PROPERTY_IDS.PRIORITY,
+      SYSTEM_PROPERTY_IDS.DUE_DATE,
       SYSTEM_PROPERTY_IDS.PROJECT,
+      SYSTEM_PROPERTY_IDS.ASSIGNEES,
     ];
     return [...visible].sort((left, right) => {
       const leftIndex = order.indexOf(left.propertyDefinitionId);
@@ -188,8 +191,17 @@ export function InlineTaskProperties() {
               <InlinePropertyValue
                 property={property()}
                 entityId={blockId}
+                showLabel={
+                  documentKind === 'task' &&
+                  property().propertyDefinitionId ===
+                    SYSTEM_PROPERTY_IDS.DUE_DATE
+                    ? false
+                    : undefined
+                }
                 iconClass={
-                  documentKind === 'task' ? 'touch:size-4 shrink-0' : undefined
+                  documentKind === 'task'
+                    ? 'size-3 touch:size-4 shrink-0'
+                    : undefined
                 }
                 canManage={
                   !property().propertyId.startsWith('pending:') ||
