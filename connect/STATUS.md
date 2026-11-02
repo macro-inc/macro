@@ -22,19 +22,10 @@ Eric. Each item is ready for one sitting; agents prepare the rest.
 - [ ] Stripe: finish the `connect@macro.com` Stripe signup (it shows a
       CAPTCHA) in the browser via noVNC (port 6081), so an agent can complete
       Stripe's consent and tool check.
-- [ ] **Company facts every vendor form asks for** (unblocks Zoom, Xero,
-      Figma, Vercel, Box, Discord): legal company name; contact name, title,
-      and email; Connect's production host and OAuth callback (proposed:
-      `https://connect.macro.com`, callback `/v1/oauth/callback`); landing,
-      privacy, terms, and support URLs (proposed: that host's `/`, `/privacy`,
-      `/terms`, `/support`; agents draft the pages for your approval); a logo
-      and wordmark. Approve the product description in each record's Draft.
-- [ ] Xero: approve the Core plan (AUD$35/month, card on file) and choose
-      read-only or read-write for v1.
-- [ ] Box: approve sending the drafted email to `integrate@box.com`
-      ([record](submissions/box.md)).
-- [ ] Zoom: say which security evidence exists (SSDLC, SAST, DAST, pen test,
-      security and incident policies); Zoom's review asks for it.
+- [ ] Discord: pass the Cloudflare check on the Developer Support sign-up
+      page (open in the Connect browser, noVNC port 6081); an agent then
+      creates the support account and sends the drafted question
+      ([record](submissions/discord.md)).
 - [ ] Rotate the `connect@macro.com` password (it was shared in a chat
       transcript on 2026-10-30), then update `CONNECT_ACCOUNT_PASSWORD` in
       Doppler `connect/prd`.
@@ -71,6 +62,11 @@ expires, the gateway must refresh it; unit-tested, not yet seen live). Then
 (T011). Submissions wait on the company facts above.
 
 ## Done
+
+- 2026-11-02: Submitted Vercel's MCP client review form and Figma's remote
+  MCP access request (Figma has paused adding clients, no timeline), with
+  the company facts in [answers.md](submissions/answers.md). Xero, Box, and
+  Zoom deferred by Eric.
 
 - 2026-11-02: [T021](tasks/T021-catalog-dcr-apps.md) every used DCR/CIMD app
   classified ([table](docs/catalog.md)); 28 live, each labelled
