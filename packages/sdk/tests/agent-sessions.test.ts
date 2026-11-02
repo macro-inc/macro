@@ -419,7 +419,10 @@ describe('AgentSession', () => {
     let body: unknown;
     globalThis.fetch = (async (input) => {
       const request = input instanceof Request ? input : new Request(input);
-      if (request.method === 'POST' && request.url.endsWith('/agent-sessions')) {
+      if (
+        request.method === 'POST' &&
+        request.url.endsWith('/agent-sessions')
+      ) {
         body = await request.json();
         return Response.json({ session }, { status: 201 });
       }

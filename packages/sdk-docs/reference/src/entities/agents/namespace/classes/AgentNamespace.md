@@ -60,7 +60,10 @@ Create an agent.
 
 > **list**(): `Promise`\<[`Agent`](../../agent/classes/Agent.md)[]\>
 
-All accessible agents.
+Accessible custom agents. Pass one to
+AgentSessionNamespace.createManaged to start a session as that
+persona. System personas such as Cursor are constructed with
+[Agent.byId](../../agent/classes/Agent.md#byid).
 
 #### Returns
 
