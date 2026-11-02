@@ -9154,7 +9154,7 @@ export interface EditCommentResponse {
   commentId: string;
 }
 /**
- * Apply AI-driven edits to a Macro markdown document in place -- rewriting, inserting, formatting, or restructuring. Use EditSpreadsheet for native Macro spreadsheets. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Edit uploaded Word (.docx) files with ReadWordDocument and EditWordDocument instead. Other uploaded files -- PDFs, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert @-mention chips, include each referenced item's ids and details in `instructions`: userId/email for people; documentId/documentName/blockName (and blockParams when needed) for documents, channels, chats, projects, tasks, emails, calendar events, skills, calls, and routines; session id (and optional expanded card) for agent sessions; ISO datetime plus displayFormat for time chips; profileId/slug/url for booking links. To insert document-card(s), include each document's documentId and documentName.
+ * Apply AI-driven edits to a Macro markdown document in place -- rewriting, inserting, formatting, or restructuring. Use EditSpreadsheet for native Macro spreadsheets. Markdown documents only: these are authored in Macro's collaborative editor, and are the only documents whose content this tool can rewrite. Edit uploaded Word (.docx) files with ReadWordDocument and EditWordDocument instead. Other uploaded files -- PDFs, images, source files such as .py or .ts -- are readable but not editable, and are rejected. If the response contains a `clarification` field, invoke again with the requested info appended to `instructions`. To insert @-mention chips, include each referenced item's ids and details in `instructions`: userId/email for people; documentId/documentName/blockName (and blockParams when needed) for documents, channels, chats, projects, tasks, emails, calendar events, skills, calls, and routines; session id (and optional expanded card) for agent sessions; ISO datetime plus displayFormat for time chips; profileId/slug/url for booking links. To insert document-card(s), include each document's documentId and documentName; to embed a database, its databaseId, name, and tableId/viewId. To insert a live database answer or chart, quote the `<m-db-query>` block from SaveDatabaseQuery verbatim in `instructions`.
  */
 export interface EditDocument {
   /**
@@ -15099,7 +15099,7 @@ export interface RoutineRunStarted {
   };
 }
 /**
- * Save a read-only SELECT as a live question and get back the block that shows its answer. Paste the returned `markdown` verbatim, into your reply or into a document with CreateDocument/EditDocument, and it renders as a live number, table, or chart that re-runs for whoever views it, with their permissions, so it stays current as the data changes.
+ * Save a read-only SELECT as a live question and get back the block that shows its answer. Paste the returned `markdown` verbatim into your reply or a CreateDocument document, or quote it verbatim in EditDocument's `instructions`, and it renders as a live number, table, or chart that re-runs for whoever views it, with their permissions, so it stays current as the data changes.
  *
  * Use it whenever the user asks a question about their data or asks for a chart. Run the SELECT with QueryDatabase first to check it returns what you expect, then save exactly that SQL. The SQL is QueryDatabase's dialect, described there, limited to one SELECT.
  *
@@ -15107,7 +15107,7 @@ export interface RoutineRunStarted {
  * - `chart` (bar/line/area/scatter/pie): `x` is the label column and `y` the numeric result columns, named exactly as the result columns are; alias aggregates (`COUNT(*) AS invites`) so they have stable names. `color` names a result column whose values split one `y` series into one series per value (e.g. invites per party colored by status); `stack` stacks bar or area series instead of setting them side by side.
  * - Pass `databaseId` so the question resolves against that database's tables.
  *
- * Saved questions never change, and a block you write or edit yourself does not work. To change one, save a new one and use its new block.
+ * Saved questions never change, and a block you write or edit yourself does not work. To change one, save a new one and use its new block. EditDocument can restyle a block already in a document (chart type, title, height) and switch an embedded database to another table or view by its `tableId`/`viewId`.
  */
 export interface SaveDatabaseQuery {
   /**
