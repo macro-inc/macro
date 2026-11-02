@@ -29,6 +29,7 @@ import { getEntityValues, hasValue } from '@property/utils';
 import { useBulkSaveEntityPropertiesMutation } from '@queries/properties/entity';
 import { useTagsQuery } from '@queries/properties/tags';
 import type { EntityType } from '@service-properties/generated/schemas/entityType';
+import { Key } from '@solid-primitives/keyed';
 import { Badge, Button, Layer } from '@ui';
 import { cn } from '@ui/utils/classname';
 import {
@@ -328,37 +329,37 @@ export function EntityPropertiesSection(props: EntityPropertiesSectionProps) {
                 'mb-3'
             )}
           >
-            <For each={gridProperties()}>
+            <Key each={gridProperties()} by="propertyDefinitionId">
               {(property) => (
                 <SidePanelPropertyRow
                   entityId={props.entityId}
                   getEmptyLabel={props.getEmptyLabel}
-                  property={property}
+                  property={property()}
                   canRemoveFromEntity={
                     !defaultPinnedDefinitionIds().has(
-                      property.propertyDefinitionId
+                      property().propertyDefinitionId
                     ) &&
                     !(
-                      isPendingProperty(property) &&
+                      isPendingProperty(property()) &&
                       props
                         .defaultProperties?.()
                         .some(
                           (placeholder) =>
                             placeholder.propertyDefinitionId ===
-                            property.propertyDefinitionId
+                            property().propertyDefinitionId
                         )
                     )
                   }
                   canPinPendingProperty={props
                     .defaultTitlePropertyDefinitionIds?.()
-                    .includes(property.propertyDefinitionId)}
+                    .includes(property().propertyDefinitionId)}
                   onRemovePendingProperty={removePendingProperty}
                   onPropertyPinned={
                     props.onPropertyPinned ? pinProperty : undefined
                   }
                 />
               )}
-            </For>
+            </Key>
           </SidePanel.Grid>
         </Show>
 
