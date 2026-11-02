@@ -4,6 +4,7 @@ import {
   createContextKey,
   ROOT_CONTEXT,
   SpanKind,
+  TraceFlags,
   trace,
 } from '@opentelemetry/api';
 import type { Resource } from '@opentelemetry/resources';
@@ -44,7 +45,7 @@ export class Tracing {
   span(name: string, startTime?: number): Span {
     return this.#startSpan(
       name,
-      context.active(),
+      this.#activeParent(),
       undefined,
       undefined,
       startTime
@@ -57,7 +58,7 @@ export class Tracing {
   }
 
   clientSpan(name: string): Span {
-    return this.#startSpan(name, context.active(), SpanKind.CLIENT);
+    return this.#startSpan(name, this.#activeParent(), SpanKind.CLIENT);
   }
 
   /** Starts a span the sampler may drop as a whole performance trace. */
@@ -132,6 +133,23 @@ export class Tracing {
         )
     );
   }
+  /**
+   * The active context, unless it is a perf trace this session does not
+   * export: work started there (requests, lifecycle spans) gets its own trace
+   * so perf sampling never drops telemetry that is kept without it. Phases
+   * started with `span.span()` still follow their flow.
+   */
+  #activeParent(): Context {
+    const active = context.active();
+    if (active.getValue(PERF_TRACE_KEY) !== true) return active;
+    const span = trace.getSpan(active);
+    if (!span) return active;
+    const spanContext =
+      this.#provider?.resolveSpanContext?.(span) ?? span.spanContext();
+    if (spanContext.traceFlags & TraceFlags.SAMPLED) return active;
+    return trace.deleteSpan(active).deleteValue(PERF_TRACE_KEY);
+  }
+
   async #enablePropagation(config: TelemetryInitConfig): Promise<void> {
     try {
       const [enabled] = await Promise.all([config.enabled(), config.startup]);

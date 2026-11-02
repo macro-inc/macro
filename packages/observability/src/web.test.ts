@@ -188,6 +188,33 @@ test('descendants of a perf span carry its class, including client spans in its 
   await provider.shutdown();
 });
 
+test('an unsampled perf trace leaves requests started in it as their own traces', async () => {
+  const provider = createWebTracingProvider(
+    {
+      serviceName: 'web-app',
+      environment: 'test',
+      enabled: async () => true,
+      tracesUrl: 'http://localhost/v1/traces',
+      perfSampleRate: 0,
+    },
+    resourceFromAttributes({}),
+    () => undefined,
+    false
+  );
+  const tracing = new Tracing();
+  const flow = tracing.perfSpan('view.home');
+  const phase = flow.span('home.items');
+  phase.run(() => tracing.clientSpan('http GET /items').end());
+  phase.end();
+  flow.end();
+  await provider.forceFlush();
+  const [request] = exporters.at(-1)?.getFinishedSpans() ?? [];
+  expect(request?.name).toBe('http GET /items');
+  expect(request?.parentSpanContext).toBeUndefined();
+  expect(request?.attributes['macro.trace.class']).toBeUndefined();
+  await provider.shutdown();
+});
+
 test('early spans keep explicit async parentage and wait for exporter enablement', async () => {
   let decide: (enabled: boolean) => void = () => {};
   const decision = new Promise<boolean>((resolve) => {

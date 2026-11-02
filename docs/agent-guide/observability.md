@@ -246,9 +246,11 @@ or by root name: `app.boot`, `navigation`, `view.<route id>` (with `route.id`),
 
 The perf sampling decision is made once per session
 (`Telemetry.config.perfSampled`): 5% of production sessions, 100% in dev and
-local builds and during explicit native recordings. Children and propagated
-requests follow their root's decision. Unsampled sessions drop perf traces and
-install no runtime-resource or typing listeners.
+local builds and during explicit native recordings. Phases follow their root's
+decision. Unsampled sessions drop perf traces and install no runtime-resource
+or typing listeners; requests and other spans started inside an unsampled perf
+trace (`Telemetry.span`, `Telemetry.clientSpan`) start their own trace instead,
+so backend traces are never lost to perf sampling.
 
 ### Span model
 
