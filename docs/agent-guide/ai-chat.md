@@ -474,7 +474,7 @@ the shimmer.
   input is briefly blocked (“Choosing Chat or Code…”) while `POST /agent-mode-choice` on the
   agent harness asks Cloudflare's Clef Flash whether the prompt needs a coding agent. Code
   starts the user's most recently used coding agent (else the first that can start) with its default model and
-  **Choose automatically** for the repository; Chat starts the chat agent with the same
+  **Auto-detect** for the repository, not the saved default; Chat starts the chat agent with the same
   model Chat mode would use. If no coding agent can start, the prompt goes to Chat
   without asking; any failure or a 3s timeout also falls back to Chat. The session opens
   under Chat or Code like one started from that mode.
@@ -560,17 +560,21 @@ the shimmer.
   Selecting Chat hides the repository controls and keeps the mode switch in
   the settings row, without remounting the editor or losing the draft. Reduced-motion
   preferences disable the animation. The hidden drawer is inert. **Repository**
-  (**Choose automatically** with a GitHub icon until one is picked) opens a searchable list:
-  **Choose automatically**, then the repositories the signed-in user reaches
+  (**Auto-detect** with a GitHub icon unless a default was saved) opens a searchable list:
+  **Auto-detect**, then the repositories the signed-in user reaches
   through Macro's GitHub App (`GET /agent-repositories` on the agent harness),
-  recently used ones first. A new conversation always starts on **Choose
-  repository** (Automatic); the last used repository is not preselected.
+  recently used ones first. **Settings → Agents → Coding sessions → Default
+  repository** lets the user save a GitHub repository or **Auto-detect** (the
+  initial default). New Code conversations preselect that choice; changing
+  the composer picker overrides it for that conversation. The preference is
+  saved per user on this device. An inaccessible saved repository falls back
+  to Auto-detect.
   Typing filters the list to those reachable repositories. Unlisted GitHub
   URLs and recents the listing no longer carries are not offered. Arrow keys
   move the highlight and Enter or a click picks it; there is no separate
   confirm button. Someone who reaches no repository sees a hint with **Connect
   GitHub**, which opens Settings → Connected. Listed recents are remembered
-  per user in local storage and offered first, without changing the Automatic
+  per user in local storage and offered first, without changing the saved
   default. Automatic selection always chooses an accessible repository, using
   the most recent accessible session repository when the prompt is ambiguous,
   or the first available repository for users without repository history. Questions
@@ -905,8 +909,32 @@ for Premium, `AI_USAGE_MAX_INCLUDED_ALLOWANCE_CENTS`, and
 used up and no credits or usage billing cover the request, sending a message
 answers HTTP 402 and the app opens the **AI usage limit** dialog (title
 `You've used this month's included AI`, or the spending-limit / failed-charge
-variants). It shows **Monthly limit**, the message `Add additional credits to
-keep going.`, and an `Open usage settings` button. Credit purchases live in
+variants). It says when the included AI resets. When the viewer is the payer
+on a paid plan, it offers **One-time** and, while Auto-Reload is off or
+suspended, **Auto-reload**:
+
+- **One-time** picks a credit pack ($25 / $50 / $100 from the plan catalog) and
+  **Buy $25 in credits** charges the card on file right away, closing with an
+  `Added $25 in credits. Resend your message.` toast. Team members see it too:
+  it charges the team owner's card, shows **Team monthly limit** (`$X of $Y
+  left`), and disables packs over what is left. A declined card shows inline;
+  the payer gets **Add payment method**, a member is told to ask the owner.
+  With no card on file (for example, removed in the billing portal), or a card
+  that needs 3-D Secure, nothing is charged: the payer is sent to Stripe
+  Checkout for the same pack and returns to the same page (Settings → Usage on
+  the web origin from the native app, which opens Stripe in the system
+  browser). A member is asked to have the owner add or update the card.
+- **Auto-reload** shows the reload (`$25 when below $5`), an editable
+  **Monthly limit** prefilled with the plan default ($200 Pro, $1,000 Max; blank
+  means no limit), and **Turn on auto-reload**, which enables it in one click.
+  Enabling reloads right away when the balance is low; on success the dialog
+  closes with an `Auto-reload is on` toast and the user resends. If the card on
+  file can't be charged, the button becomes **Add payment method** (Stripe
+  billing portal, returning to Settings → Usage).
+
+The primary action uses the black-and-white `primary` Button; **Usage settings** and
+**Dismiss** are ghost buttons. Team members who don't pay see `Open usage
+settings` only when they cannot buy (no paid, metered plan). Credit purchases and Auto-Reload thresholds also live in
 Settings → Usage; subscription changes live in Settings → Billing.
 
 The free plan is a hard cap: when its monthly allowance is used up, requests

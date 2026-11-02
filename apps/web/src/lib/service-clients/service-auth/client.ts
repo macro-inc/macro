@@ -15,6 +15,7 @@ import { makePersisted } from '@solid-primitives/storage';
 import { ok } from 'neverthrow';
 import { createSignal } from 'solid-js';
 import type {
+  AiCreditPurchaseResult,
   AiPlanCatalog,
   AiUsageSnapshot,
   PaidPlan,
@@ -52,6 +53,7 @@ import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
 import type { CreatedTeamInviteLinkResponse } from './generated/schemas/createdTeamInviteLinkResponse';
 import type { CreateGtmInviteLinkRequest } from './generated/schemas/createGtmInviteLinkRequest';
 import type { CreateTeamRequest } from './generated/schemas/createTeamRequest';
+import type { CurrentSystemStatus } from './generated/schemas/currentSystemStatus';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import type { GenericSuccessResponse } from './generated/schemas/genericSuccessResponse';
 import type { GetLegacyUserPermissionsResponse } from './generated/schemas/getLegacyUserPermissionsResponse';
@@ -73,6 +75,9 @@ import type { ProfilePictures } from './generated/schemas/profilePictures';
 import type { PublicGtmInviteLink } from './generated/schemas/publicGtmInviteLink';
 import type { PutProfilePictureParams } from './generated/schemas/putProfilePictureParams';
 import type { PutUserNameQueryParams } from './generated/schemas/putUserNameQueryParams';
+import type { StatusUpdate } from './generated/schemas/statusUpdate';
+import type { SystemStatus } from './generated/schemas/systemStatus';
+import type { SystemStatusHistory } from './generated/schemas/systemStatusHistory';
 import type { Team } from './generated/schemas/team';
 import type { TeamInviteLinkResponse } from './generated/schemas/teamInviteLinkResponse';
 import type { TeamInviteLinkTeam } from './generated/schemas/teamInviteLinkTeam';
@@ -779,6 +784,35 @@ export const authServiceClient = {
     ).map((result) => result.offer ?? null);
   },
 
+  /** Public: the status banner shows signed in or not. */
+  async getSystemStatus() {
+    return (
+      await authApiFetch<CurrentSystemStatus>('/system-status', {
+        method: 'GET',
+      })
+    ).map((status) => status);
+  },
+
+  /** Macro staff only; the server rejects everyone else. */
+  async setSystemStatus(status: SystemStatus) {
+    return (
+      await fetchWithAuth<StatusUpdate>(`${authHost}/system-status`, {
+        method: 'POST',
+        body: JSON.stringify(status),
+      })
+    ).map((update) => update);
+  },
+
+  /** Macro staff only. */
+  async listSystemStatusHistory() {
+    return (
+      await fetchWithAuth<SystemStatusHistory>(
+        `${authHost}/system-status/history`,
+        { method: 'GET' }
+      )
+    ).map((result) => result.updates);
+  },
+
   // Stripe HTTP methods (replacing RPC calls)
   async getTrialEligibility() {
     return await fetchWithAuth<TrialEligibility>(
@@ -900,6 +934,42 @@ export const authServiceClient = {
     );
   },
 
+  /** Buy a credit pack now on the payer's card on file. */
+  async purchaseAiCredits(args: { amountCents: number }) {
+    return await fetchWithAuth<
+      AiCreditPurchaseResult,
+      'PAID_PLAN_REQUIRED' | 'CREDIT_PURCHASE_REJECTED'
+    >(`${authHost}/ai-billing/credits/purchase`, {
+      method: 'POST',
+      body: JSON.stringify({ amountCents: args.amountCents }),
+      errorResponseHandler: async (response) => {
+        if (response.status === 402) {
+          return {
+            code: 'PAID_PLAN_REQUIRED',
+            message: 'A paid plan is required',
+          };
+        }
+        // Over the monthly credit limit, or an earlier purchase is still
+        // processing; the body says which.
+        if (response.status === 409) {
+          const body: unknown = await response.json().catch(() => undefined);
+          return {
+            code: 'CREDIT_PURCHASE_REJECTED',
+            message:
+              typeof body === 'object' &&
+              body !== null &&
+              'error' in body &&
+              typeof body.error === 'string'
+                ? body.error
+                : 'Credit purchase rejected',
+          };
+        }
+        return statusError(response.status);
+      },
+    });
+  },
+
+  /** Stripe Checkout for a credit pack, for a payer with no card on file. */
   async createAiCreditCheckout(args: {
     amountCents: number;
     successUrl: string;
