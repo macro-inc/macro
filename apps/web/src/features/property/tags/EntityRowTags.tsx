@@ -1,3 +1,4 @@
+import type { PriorityCollapser } from '@app/components/priority-collapse/createPriorityCollapser';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import FilterIcon from '@icon/system/regular/funnel-simple.svg';
@@ -15,7 +16,17 @@ import {
   HoverCard,
   Layer,
 } from '@ui';
-import { createSignal, For, Match, Show, Switch } from 'solid-js';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  createUniqueId,
+  For,
+  Match,
+  onCleanup,
+  Show,
+  Switch,
+} from 'solid-js';
 import { TagDot } from './TagDot';
 import { type EditableTag, TagEditorDialog } from './TagEditorDialog';
 import { TagPicker, TagSheetPicker } from './TagPicker';
@@ -186,6 +197,7 @@ function TagChip(props: {
   onFilterByTag?: (id: string) => void;
   onEdit: (tag: ResolvedTag) => void;
   withClickBlock: boolean;
+  onActiveChange: (active: boolean) => void;
 }) {
   const [pickerOpen, setPickerOpen] = createSignal(false);
   return (
@@ -207,6 +219,7 @@ function TagChip(props: {
           class="max-w-[14ch]"
           dotClass="size-2"
           onOpenChange={setPickerOpen}
+          onActiveChange={props.onActiveChange}
           withClickBlock={props.withClickBlock}
         />
       </HoverCard>
@@ -216,15 +229,17 @@ function TagChip(props: {
 
 function TagOverflow(props: {
   tags: ResolvedTag[];
+  visibleCount: number;
   createDocTags: CreateDocTags;
   onFilterByTag?: (id: string) => void;
   onEdit: (tag: ResolvedTag) => void;
   withClickBlock: boolean;
+  onActiveChange: (active: boolean) => void;
 }) {
   const [pickerOpen, setPickerOpen] = createSignal(false);
   const dots = () => props.tags.slice(0, MAX_OVERFLOW_DOTS);
   const count = () =>
-    `+${props.tags.length} ${props.tags.length === 1 ? 'tag' : 'tags'}`;
+    `${props.visibleCount > 0 ? '+' : ''}${props.tags.length} ${props.tags.length === 1 ? 'tag' : 'tags'}`;
 
   return (
     <Layer depth={2}>
@@ -250,10 +265,11 @@ function TagOverflow(props: {
           triggerClass={badgeTriggerClasses({
             variant: 'outline',
             size: 'xs',
-            class: 'max-w-[14ch] gap-1.5',
+            class: 'max-w-[14ch] gap-1.5 touch:min-h-0',
           })}
           triggerLabel="Edit tags"
           onOpenChange={setPickerOpen}
+          onActiveChange={props.onActiveChange}
           withClickBlock={props.withClickBlock}
         >
           <span class="flex items-center">
@@ -275,16 +291,19 @@ function TagOverflow(props: {
 
 /**
  * Compact tag display for list rows, rendered from the entity's already-loaded
- * soup properties (no per-row fetch). Shows up to `maxVisible` chips then a
- * "+N tags" chip. Clicking a chip opens the TagPicker to edit the entity's
- * tags. Hovering a chip surfaces a "Filter by" link and hovering the overflow
- * lists the hidden tags. onFilterByTag applies a tag filter to the list.
+ * soup properties (no per-row fetch). A sole tag keeps its named chip; otherwise
+ * shows up to `maxVisible` chips then a "+N tags" chip, or "N tags" when every tag
+ * is collapsed. Clicking a chip opens the TagPicker to edit the entity's tags.
+ * Hovering a chip surfaces a "Filter by" link; hovering the overflow lists hidden
+ * tags. onFilterByTag applies a tag filter to the list.
  */
 export function EntityRowTags(props: {
   entityId: string;
   entityType: EntityType;
   properties: SoupProperty[] | undefined;
   maxVisible?: number;
+  /** The host's measured overflow controller; hide trailing tags before truncating its title. */
+  collapse?: PriorityCollapser;
   class?: string;
   onFilterByTag?: (optionId: string) => void;
 }) {
@@ -294,7 +313,38 @@ export function EntityRowTags(props: {
   );
   const createDocTags = () =>
     useSoupDocTags(props.entityId, props.entityType, () => props.properties);
-  const maxVisible = () => props.maxVisible ?? DEFAULT_MAX_VISIBLE;
+  const [pickerActive, setPickerActive] = createSignal(false);
+  const [visibleLimit, setVisibleLimit] = createSignal(Infinity);
+  const id = createUniqueId();
+  const limit = createMemo(() =>
+    Math.min(appliedTags().length, props.maxVisible ?? DEFAULT_MAX_VISIBLE)
+  );
+  const maxVisible = () => {
+    if (appliedTags().length === 1) return 1;
+    return props.collapse ? Math.min(limit(), visibleLimit()) : limit();
+  };
+
+  createEffect(() => {
+    const collapse = props.collapse;
+    const count = limit();
+    // Keep triggers mounted through the picker and any nested tag editor.
+    if (!collapse || pickerActive() || appliedTags().length === 1) return;
+    for (let index = 0; index < count; index++) {
+      onCleanup(
+        collapse.register({
+          id: `${id}-${index}`,
+          priority: -index,
+          collapsed: () => maxVisible() <= index,
+          setCollapsed: (collapsed) =>
+            setVisibleLimit((current) =>
+              collapsed
+                ? Math.min(current, index)
+                : Math.max(current, index + 1)
+            ),
+        })
+      );
+    }
+  });
   const visible = () => appliedTags().slice(0, maxVisible());
   const hidden = () => appliedTags().slice(maxVisible());
   const [editingTag, setEditingTag] = createSignal<ResolvedTag>();
@@ -302,7 +352,11 @@ export function EntityRowTags(props: {
   return (
     <Show when={appliedTags().length > 0}>
       <div
-        class={cn('flex items-center gap-1', props.class)}
+        class={cn(
+          'flex items-center gap-1',
+          props.collapse !== undefined && 'shrink-0',
+          props.class
+        )}
         onClick={(event) => event.stopPropagation()}
       >
         <For each={visible()}>
@@ -312,6 +366,7 @@ export function EntityRowTags(props: {
               createDocTags={createDocTags}
               onFilterByTag={props.onFilterByTag}
               onEdit={setEditingTag}
+              onActiveChange={setPickerActive}
               withClickBlock
             />
           )}
@@ -319,9 +374,11 @@ export function EntityRowTags(props: {
         <Show when={hidden().length > 0}>
           <TagOverflow
             tags={hidden()}
+            visibleCount={visible().length}
             createDocTags={createDocTags}
             onFilterByTag={props.onFilterByTag}
             onEdit={setEditingTag}
+            onActiveChange={setPickerActive}
             withClickBlock
           />
         </Show>
@@ -421,7 +478,7 @@ function inlineTagsTriggerClass(props: InlineTagsPillProps, count: number) {
     class: cn(
       // Capped so a long tag label truncates instead of squeezing
       // whatever shares the row with the pill (e.g. a task title).
-      'min-w-0 max-w-35 gap-1.5 text-left',
+      'min-w-0 max-w-35 gap-1.5 text-left touch:min-h-0',
       count === 0 && !props.showAddButton && 'text-ink-extra-muted',
       props.class
     ),

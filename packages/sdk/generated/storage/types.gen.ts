@@ -2780,6 +2780,11 @@ export type ChannelLabelRule = {
 };
 
 /**
+ * Requested label namespace. Omission retains the deployed automatic selection.
+ */
+export type ChannelLabelScopeSelection = 'personal' | 'team';
+
+/**
  * The authorized scope's labels in manual order.
  */
 export type ChannelLabelsList = {
@@ -2787,6 +2792,10 @@ export type ChannelLabelsList = {
      * Every label of the scope, whether or not the caller sees channels in it.
      */
     labels: Array<ChannelLabel>;
+    /**
+     * Resolved label namespace.
+     */
+    scope: ChannelLabelScopeSelection;
     /**
      * Team scope, or `None` for private labels.
      */
@@ -4082,11 +4091,12 @@ export type CreateChannelScopedBotResponse = {
  */
 export type CreateCrmCompanyRequest = {
     /**
-     * The company's email domain, e.g. "acme.com". Must be a bare
+     * Optional company domain, e.g. "acme.com". Omit for a name-only
+     * company. When supplied, must be a bare
      * domain (no scheme, path, or email) and not a generic email
      * provider domain.
      */
-    domain: string;
+    domain?: string | null;
     /**
      * Display name for the company. Team-scoped: overrides the
      * domain-directory name on every read path.
@@ -4099,8 +4109,8 @@ export type CreateCrmCompanyRequest = {
  */
 export type CreateCrmContactRequest = {
     /**
-     * The contact's email address, e.g. "jane@acme.com". Its domain
-     * must be one of the company's domains (400 otherwise).
+     * The contact's email address, including personal email providers.
+     * It need not match a company domain.
      */
     email: string;
     /**
@@ -18240,7 +18250,12 @@ export type IngestTranscriptResponses = {
 export type ListChannelLabelsData = {
     body?: never;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels';
 };
 
@@ -18261,7 +18276,12 @@ export type ListChannelLabelsResponse = ListChannelLabelsResponses[keyof ListCha
 export type CreateChannelLabelData = {
     body: CreateChannelLabelRequest;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels';
 };
 
@@ -18290,7 +18310,12 @@ export type SetChannelLabelData = {
          */
         channel_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/channels/{channel_id}';
 };
 
@@ -18313,7 +18338,12 @@ export type SetChannelLabelResponse = SetChannelLabelResponses[keyof SetChannelL
 export type PreviewSmartTagData = {
     body: ChannelLabelRule;
     path?: never;
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/preview';
 };
 
@@ -18340,7 +18370,12 @@ export type DeleteChannelLabelData = {
          */
         label_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/{label_id}';
 };
 
@@ -18367,7 +18402,12 @@ export type RenameChannelLabelData = {
          */
         label_id: string;
     };
-    query?: never;
+    query?: {
+        /**
+         * `personal` selects private labels; `team` requires team membership.
+         */
+        scope?: ChannelLabelScopeSelection;
+    };
     url: '/channel-labels/{label_id}';
 };
 
@@ -19406,6 +19446,9 @@ export type GetContactByEmailData = {
 };
 
 export type GetContactByEmailErrors = {
+    /**
+     * Invalid email or multiple visible contacts match; choose a contact ID.
+     */
     400: ErrorResponse;
     401: ErrorResponse;
     500: ErrorResponse;

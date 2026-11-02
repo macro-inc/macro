@@ -47,6 +47,11 @@ wrapping property pills, description, and discussion for Overview; toolbar and
 rows for Tasks. The mobile skeleton uses the same compact insets as the content.
 The description has its own subtle three-line skeleton while its collaborative
 editor initializes; the project title, properties, and discussion stay visible.
+
+Priority groups appear in **Urgent → High → Medium → Low** order, followed by
+the unset-priority group, in desktop and mobile lists. Verify this order with
+REST and GraphQL Soup before and after refresh; item sorting is independent.
+
 Task lists, including project and CRM task lists, load a group's next page when
 the end of that group scrolls into view, with a spinner row instead of a
 `Load More` button. A failed
@@ -91,6 +96,49 @@ The Project column shows the linked project's name when one project is assigned,
 and `Project` when empty. Multiple linked projects show an item count.
 Long assignee and project names truncate within their columns; hover the cell
 to read the full value.
+Editable property controls use ghost-button hover styling. Empty values are
+dimmed, without adding opacity to the already-muted No priority icon. Folder
+and assigned Project hover cards put their heading above the value; empty
+Project keeps its simple one-line message.
+Folder pills keep their link color and become circular when icon-only. When the
+title area runs out of room, the folder path collapses to a clickable icon with
+a full-path hover card first. Show at most three individual tag chips and keep the
+rest in the existing overflow chip. As space shrinks, move more chips into
+overflow one at a time before truncating the title. A task with only one tag
+keeps that named chip, including on phones, rather than showing “1 tag”.
+Open the overflow to edit all tags; hover it for hidden-tag names and filter/edit actions.
+The overflow chip reads “N tags” when it represents all tags, or “+N tags” when
+individual tag chips remain visible.
+An open picker or nested tag editor stays mounted while resizing. The share
+indicator remains immediately beside the title whenever it is shown.
+Compact desktop rows keep tags after the title and before the trailing properties;
+phone rows retain the single tag or collapsed multi-tag chip instead of dropping tags.
+Tag pills keep their compact height on touch.
+Task rows order trailing properties as Due date, Project, then Assignees on
+desktop and phones. List Due date icons use 12px on wide rows and the shared
+16px icon size in compact columns. No due date uses a slashed calendar in rows,
+property pills, the Properties panel, board cards, and group headers; populated
+dates keep their calendar icon. Compact rows show both avatars for exactly
+two assignees; larger groups show the first avatar
+and the remaining count. Compact assignee slots reserve their width and keep the
+first avatar anchored left, so a second avatar or count grows only to the right
+without shifting Project or other properties.
+Desktop and tablet rows keep the compact column grid and its header at every
+pane width; only phones use the headerless narrow row layout. At list-container
+widths up to 840px, Project, Assignees, Due date, and Updated headers
+become icons with hover/focus tooltips and accessible names. Project occupies 32px
+and Assignees 44px. The assignee header aligns with the first avatar. Updated
+fits its full header and sort arrow, with a 56px content minimum for single-line
+timestamps. At 600px, Updated fades and collapses over
+160ms to leave more room for the title. Hidden Updated and Created by
+columns reserve no width or spacing; visible cells own their 8px leading inset.
+Reduced-motion preferences disable the transition. Visible timestamps stay on one line, and
+Updated remains sortable. Created by is the final column, with a 16px avatar above
+840px and a 20px avatar at compact widths, plus a 16px gap after Updated. Its header
+keeps a 16px user-plus icon with a “Created by” tooltip on hover or focus. Owner names and the column label
+stay accessible; names remain available on hover. The creator header and avatar
+stay visible above 600px and hide alongside Updated at 600px. Shared tasks show the
+shared badge next to the title only while the creator column is hidden.
 The Projects collection reuses a single Due date column and hides Updated in compact panes.
 Property controls retain their selected values in accessible names when compact styles hide the text.
 The project pill beneath a task title shows the project icon and name without
@@ -100,11 +148,63 @@ split, and an already open project is focused instead of opened again), and the
 caret changes the project. Hovering the name turns its icon into an arrow. People
 who can't edit the task get the name alone, so they can still open the project.
 An empty or unavailable project keeps the plain pill, and composers never split it.
+The property pills beneath the task title place Due date before Project and
+Assignees. Due date has no `Due date:` prefix and uses a 12px desktop icon.
+On touch devices, these pills use 16px Status, Priority, Due date, and Project
+icons, including empty values. The tags selector in that row has a 36px minimum
+touch height.
+Task-list tags and property icons retain their separate compact sizing.
+Empty values in the Properties panel show No status, No priority, Unassigned,
+No due date, or No project with the shared empty-value icons; custom fields show
+Not set. Click the empty value to open its existing picker or inline editor.
+The Properties panel also uses 16px Project icons on touch, for both assigned
+and empty values, without changing desktop sizes.
 Enter activates a pill or any other document control holding focus, including one
 that gets focus back when its picker or menu closes, however it closed. After a
 mouse click on a control, Enter still moves to the editor. Tab reaches an editable
 property's pill directly, so its hover card opens on hover only; a read-only
 property keeps a stop that opens the card.
+Wide desktop task rows and group headers share their leading icon alignment.
+Task group headers retain their wide-layout caret-to-content gap at every list
+width, including phones: 8px in the Tasks header and 10px in the next-soup header.
+Their padding and the spacing between the value icon, label, and count stay
+unchanged; the value-icon slot keeps its width when the pane narrows. Long labels
+truncate on one line. Group-header caret containers stay square around their
+16px glyphs, with 16px status and priority icons. Desktop list insets follow the
+list container: 8px below 640px and 12px from 640px; phone insets remain 4px.
+In grouped task and project lists, the current group header stays pinned at the top
+of the scrolling pane until the next group pushes it away. The pinned header still
+collapses or expands its group; keyboard navigation keeps rows below it visible.
+Mobile headers remain below the floating chrome.
+Phone task rows have 44px row height and an 8px unread-dot rail without a checkbox
+column. The rail stays reserved on read tasks so titles do not shift. Status and
+priority controls retain their 36px touch targets; selection highlighting and row
+selection behavior remain available.
+Click or tap the leading status or priority icon to edit without opening the task.
+Status icons are 18px on desktop and phones; priority icons are 16px on desktop
+and 20px on phones and never flex-shrink. Phone tap targets sit edge-to-edge.
+Priority comes first, then Status directly beside the title. The shared badge follows with
+4px of layout spacing and its existing internal padding. Their pickers replace
+the separate Status/Priority columns and duplicate trailing mobile pills; Project
+and Assignees stay on the right, with 20px phone icons. Empty assignees use a filled
+person in a dashed circular frame. Empty priority shows the same wide ascending
+bars as Low/Medium/High, with every bar at 30% opacity. Urgent shows a rounded
+square with a transparent exclamation cutout. Completed and Canceled use filled
+discs with transparent check and cross cutouts. Set projects use a cube; empty
+projects use its corner-dashed counterpart. Not started stays a neutral hollow
+ring without shadows or highlights; In progress and In review add counterclockwise
+half and three-quarter pies from 12 o'clock. Current status colors and icon
+dimensions stay unchanged.
+The property edit menus use 16px status and priority icons on desktop and mobile,
+including empty-value options.
+Each status has its own `task-status-*` theme color, shared by task icons and
+group-header tints. Completed defaults to accent; explicit Completed theme overrides
+remain available. In the theme editor's **Task statuses** section, change a status
+color and verify its icons and group-header tints update together in List and Gantt,
+while Board column icons match and global warning/success colors stay unchanged.
+In Progress defaults to amber blended with the theme's foreground: 20% foreground
+in dark mode and 50% in light mode. Check the icon's legibility against the list,
+menu, and board surfaces in both modes; custom status-color overrides stay intact.
 
 Click a task row or favorite to replace the list with the editable task document. Its top
 bar shows the originating task tab as a text-only return breadcrumb,
@@ -115,6 +215,8 @@ the originating tab breadcrumb, a task tab, or a tag to return to the list.
 Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
 
+Status and Priority values use 12px icons beneath the opened task's title on
+desktop, 16px on touch, and 16px in the Properties side panel.
 Number, text, and link values in the Properties side panel edit in place. Enter
 saves and Escape cancels, and both return focus to the value, or to **+** on a link
 list, so the keyboard stays on the row. A failed save leaves the field open and
@@ -793,6 +895,12 @@ end loads more projects; `Load more projects` also continues the list.
 Keyboard movement changes focus; Enter opens the focused project and
 Shift-selection opens it in a new split. Folders remain separate in Files.
 
+The Projects list's Tasks column shows a borderless progress pill: `3 of 8 done`,
+`All done`, or `No tasks`. Its 12px neutral ring fills clockwise in the accent
+color and stays empty when there are no tasks. Counts come from the
+permission-aware project summary in the list response, not by loading every
+task; they describe the project rather than the current task-list filters.
+
 On desktop, **Project layout** offers **List** and **Gantt**. Gantt shows one
 bar per visible project from Created at to Due date, using the same search,
 filters, sort, grouping, and pagination as the project list. Click a project
@@ -1152,14 +1260,15 @@ above.
 
 ## Task status icons
 
-Task rows show a circular status icon: empty for Not started, partially filled
-for In progress or In review, checked for Completed, and crossed for Canceled.
-Task @mention pills and @mention menu rows use the same live status and update
-when a task changes. Pills show status only in their leading icon; the trailing
-badges carry priority and the first assignee.
+Task rows show the custom circular status icon: empty for Not started, partially
+filled for In progress or In review, checked for Completed, and crossed for
+Canceled. Status group headers, property pills, filters, and pickers use the same
+`TaskStatusIcon` renderer. Task @mention pills and @mention menu rows use the
+same live status and update when a task changes. Pills show status only in their
+leading icon; the trailing badges carry priority and the first assignee.
 Lightweight previews fall back to the task completion flag until status
 properties arrive; missing or unknown status without completion stays empty.
-The navigation and creation icons remain generic task icons.
+Navigation and creation keep the custom generic checked-square task icon.
 
 The backend-free browser fixture exercises the real row icon, document
 mention, and mention menu row, including completing and reopening without a reload:
