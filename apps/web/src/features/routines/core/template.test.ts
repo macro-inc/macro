@@ -174,6 +174,7 @@ describe('templateShareBody', () => {
           summary: '',
           source: 'export async function main() {}',
           writes: [],
+          knobs: [],
         },
         {
           id: 'tell',

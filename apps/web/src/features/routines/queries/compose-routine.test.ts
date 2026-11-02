@@ -69,6 +69,29 @@ describe('routine composition', () => {
     });
   });
 
+  it('keeps the knobs and sentence a drafted code step declares', () => {
+    const knob = {
+      type: 'text',
+      name: 'label',
+      label: 'Label to add',
+      value: 'vc',
+    };
+    const draft = draftFromComposition(
+      {
+        name: 'Inbox triage',
+        triggers: [{ type: 'event', events: ['email.message_received'] }],
+        steps: [{ ...labelStep, knobs: [knob], sentence: 'Label it {label}.' }],
+      },
+      context
+    );
+    if (typeof draft === 'string') throw new Error(draft);
+    expect(draft.steps?.[0]).toMatchObject({
+      kind: 'code',
+      knobs: [knob],
+      sentence: 'Label it {label}.',
+    });
+  });
+
   it('keeps a trigger limited to the items it names', () => {
     const channel = '0195f5d1-4c4b-7a3e-9b3f-2d6a1c8e9f01';
     const draft = draftFromComposition(

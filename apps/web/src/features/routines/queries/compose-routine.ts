@@ -85,7 +85,7 @@ const compositionSchema = z.object({
 function stepJsonSchema(code: boolean) {
   return {
     type: 'object',
-    description: `One step: ${code ? '{type:"code",id?,title,summary,writes,source} | ' : ''}{type:"agent",model?,agent?:{bot_id},instructions}`,
+    description: `One step: ${code ? '{type:"code",id?,title,summary,writes,knobs,sentence,source} | ' : ''}{type:"agent",model?,agent?:{bot_id},instructions}`,
     properties: {
       type: {
         type: 'string',
@@ -144,7 +144,7 @@ Triggers:
 Steps run in order:
 ${
   code
-    ? `- {"type":"code","id"?:"lowercase_id","title":TEXT,"summary":TEXT,"writes":[AREAS],"source":TYPESCRIPT} runs code against Macro's SDK; see Code steps below. Use it for everything that acts or decides: labeling, archiving, setting properties, creating tasks, posting messages, going through many items, and judging them with macro.ai.decide. One code step usually does all of it.
+    ? `- {"type":"code","id"?:"lowercase_id","title":TEXT,"summary":TEXT,"writes":[AREAS],"knobs":[KNOBS],"sentence":TEXT,"source":TYPESCRIPT} runs code against Macro's SDK; see Code steps below. Use it for everything that acts or decides: labeling, archiving, setting properties, creating tasks, posting messages, going through many items, and judging them with macro.ai.decide. One code step usually does all of it. Put the values the person may want to change, and the questions it asks AI, in knobs, and say what it does in its sentence.
 `
     : ''
 }- {"type":"agent","model":"${context.defaultModel}","instructions":TEXT} ("Ask AI") hands off open-ended work (drafting, research, summarizing, filling in CRM details) to AI with tools. Use {"agent":{"bot_id":ID}} instead of model to delegate to a named agent. A routine has at most one, and it goes last.

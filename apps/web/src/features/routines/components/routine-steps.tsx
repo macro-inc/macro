@@ -425,7 +425,13 @@ export function StepBody(props: {
         {(step) => <AgentBody step={step()} onChange={props.onChange} />}
       </Match>
       <Match when={props.step.kind === 'code' && props.step}>
-        {(step) => <CodeStepBody step={step()} path={props.path} />}
+        {(step) => (
+          <CodeStepBody
+            step={step()}
+            path={props.path}
+            onChange={props.onChange}
+          />
+        )}
       </Match>
     </Switch>
   );

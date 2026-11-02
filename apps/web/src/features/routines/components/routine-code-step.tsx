@@ -1,9 +1,16 @@
-import { Badge, cn } from '@ui';
-import { For, type JSX, Show } from 'solid-js';
+import { Badge, Button, cn } from '@ui';
+import { createSignal, For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { CallStatus, HistoryCall } from '../core/history';
+import {
+  type Knob,
+  knobsOutsideSentence,
+  sentenceParts,
+  withKnobValue,
+} from '../core/knobs';
 import { type CodeStepDraft, WRITE_SCOPE_LABELS } from '../core/routine-steps';
 import { callCount } from '../core/step-history';
+import { KnobSettings, StepSentence } from './routine-step-knobs';
 import { Field, useSteps } from './routine-steps';
 
 /** A short muted note under a step's settings. */
@@ -11,17 +18,58 @@ export function StepNote(props: { children: JSX.Element }) {
   return <p class="text-xs text-ink-muted">{props.children}</p>;
 }
 
-/** A code step: what it does, where it may make changes, and its code. AI writes and changes it. */
-export function CodeStepBody(props: { step: CodeStepDraft; path: string }) {
+/**
+ * A code step: what it does in its owner's words, with its knobs to change
+ * in place, where it may make changes, and its code, folded away. AI writes
+ * and changes the code; the owner changes the knobs.
+ */
+export function CodeStepBody(props: {
+  step: CodeStepDraft;
+  path: string;
+  onChange(step: CodeStepDraft): void;
+}) {
   const steps = useSteps();
+  const [showCode, setShowCode] = createSignal(false);
   const calls = () => {
     const record = steps.run()?.get(props.path);
     return record?.kind === 'code' ? record : undefined;
   };
+  const sentence = () => {
+    const sentence = props.step.sentence;
+    return sentence && sentenceParts(sentence, props.step.knobs)
+      ? sentence
+      : undefined;
+  };
+  const settings = () => knobsOutsideSentence(sentence(), props.step.knobs);
+  const setKnob = (name: string, value: Knob['value']) =>
+    props.onChange({
+      ...props.step,
+      knobs: withKnobValue(props.step.knobs, name, value),
+    });
   return (
     <div class="grid min-w-0 gap-3">
-      <Show when={props.step.summary.trim()}>
-        {(summary) => <p class="text-sm text-ink-muted">{summary()}</p>}
+      <Show
+        when={sentence()}
+        fallback={
+          <Show when={props.step.summary.trim()}>
+            {(summary) => <p class="text-sm text-ink-muted">{summary()}</p>}
+          </Show>
+        }
+      >
+        {(sentence) => (
+          <StepSentence
+            sentence={sentence()}
+            knobs={props.step.knobs}
+            onKnob={setKnob}
+          />
+        )}
+      </Show>
+      <Show when={settings().length ? settings() : undefined}>
+        {(knobs) => (
+          <Field label="Settings">
+            <KnobSettings knobs={knobs()} onKnob={setKnob} />
+          </Field>
+        )}
       </Show>
       <Show
         when={props.step.problems?.length ? props.step.problems : undefined}
@@ -62,15 +110,27 @@ export function CodeStepBody(props: { step: CodeStepDraft; path: string }) {
           </For>
         </div>
       </Field>
-      <Field label="Code">
-        <pre class="max-h-80 min-w-0 overflow-auto rounded-xl border border-edge-frame bg-control px-3 py-2 font-mono text-xs leading-relaxed text-ink">
-          <code>{props.step.source}</code>
-        </pre>
-        <StepNote>
-          Written by AI and checked against Macro’s SDK when saved. Ask AI to
-          change it.
-        </StepNote>
-      </Field>
+      <div class="grid min-w-0 gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          size="sm"
+          class="w-fit"
+          aria-expanded={showCode()}
+          onClick={() => setShowCode(!showCode())}
+        >
+          {showCode() ? 'Hide code' : 'Show code'}
+        </Button>
+        <Show when={showCode()}>
+          <pre class="max-h-80 min-w-0 overflow-auto rounded-xl border border-edge-frame bg-control px-3 py-2 font-mono text-xs leading-relaxed text-ink">
+            <code>{props.step.source}</code>
+          </pre>
+          <StepNote>
+            Written by AI and checked against Macro’s SDK when saved. Ask AI to
+            change it; change the underlined values above yourself.
+          </StepNote>
+        </Show>
+      </div>
       <Show when={calls()}>
         {(record) => (
           <Field

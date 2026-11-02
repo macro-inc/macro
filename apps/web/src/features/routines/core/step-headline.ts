@@ -1,4 +1,5 @@
 import { match } from 'ts-pattern';
+import { sentenceText } from './knobs';
 import type { StepDraft } from './routine-steps';
 import { eventScopeKind, type RoutineTriggerDraft } from './routine-triggers';
 
@@ -18,7 +19,7 @@ export function stepHeadline(step: StepDraft): {
     }))
     .with({ kind: 'code' }, (step) => ({
       title: step.title.trim() || 'Run code',
-      summary: step.summary.trim(),
+      summary: sentenceText(step.sentence, step.knobs) ?? step.summary.trim(),
       mode: 'Code',
     }))
     .exhaustive();

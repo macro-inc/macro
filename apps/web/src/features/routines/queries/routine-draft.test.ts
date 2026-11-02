@@ -627,6 +627,7 @@ describe('routines with steps', () => {
         summary: '',
         source: 'export async function main() {}',
         writes: ['workspace'],
+        knobs: [],
       },
     ]);
     expect(added.steps).toHaveLength(2);
@@ -662,6 +663,7 @@ describe('routines with steps', () => {
         summary: '',
         source: 'export async function main() {}',
         writes: ['email'],
+        knobs: [],
       },
     ]);
     expect(draftToUpdateBody(added, stored)?.task).toMatchObject({

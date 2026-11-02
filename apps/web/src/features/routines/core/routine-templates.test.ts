@@ -28,6 +28,7 @@ const codeStep = (title: string): StepDraft => ({
   summary: '',
   source: 'export async function main() {}',
   writes: ['email'],
+  knobs: [],
 });
 
 describe('routine templates', () => {

@@ -126,6 +126,7 @@ const codeStep = (title: string, output?: string): StepDraft => ({
   summary: `${title}, as AI wrote it.`,
   source: 'export async function main() {}',
   writes: ['email'],
+  knobs: [],
 });
 
 describe('routine steps editor', () => {

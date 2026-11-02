@@ -1,5 +1,6 @@
 import { match } from 'ts-pattern';
 import { z } from 'zod';
+import { type Knob, knobSchema, knobToWire } from './knobs';
 import {
   type RoutineTarget,
   routineAgentIdSchema,
@@ -40,6 +41,10 @@ export type CodeStepDraft = {
   summary: string;
   source: string;
   writes: WriteScope[];
+  /** Values its owner changes without new code. */
+  knobs: Knob[];
+  /** What it does, with `{name}` / `{?name}` where its knobs show. */
+  sentence?: string;
   /** Type-checker problems found while drafting, until AI fixes them. Never saved. */
   problems?: string[];
 };
@@ -72,6 +77,8 @@ export type WireStep =
       summary?: string | null;
       source: string;
       writes?: WriteScope[];
+      knobs?: Knob[];
+      sentence?: string | null;
     }
   | {
       type: 'agent';
@@ -88,6 +95,8 @@ const wireStepSchema = z.discriminatedUnion('type', [
     summary: z.string().nullish(),
     source: z.string(),
     writes: z.array(z.enum(writeScopes)).optional(),
+    knobs: z.array(knobSchema).optional(),
+    sentence: z.string().nullish(),
   }),
   z.object({
     type: z.literal('agent'),
@@ -109,6 +118,9 @@ export const stepDraftSchema = z.discriminatedUnion('kind', [
     summary: z.string(),
     source: z.string(),
     writes: z.array(z.enum(writeScopes)),
+    // Drafts saved before steps had knobs have none.
+    knobs: z.array(knobSchema).default([]),
+    sentence: z.string().optional(),
     problems: z.array(z.string()).optional(),
   }),
   z.object({
@@ -157,6 +169,8 @@ function fromWire(steps: WireStep[]): StepDraft[] | undefined {
         summary: step.summary ?? '',
         source: step.source,
         writes: step.writes ?? [],
+        knobs: step.knobs ?? [],
+        ...(step.sentence ? { sentence: step.sentence } : {}),
       }))
       .exhaustive();
     if (!draft) return undefined;
@@ -198,6 +212,8 @@ export function stepsToWire(steps: StepDraft[]): WireStep[] {
         ...(step.summary.trim() ? { summary: step.summary.trim() } : {}),
         source: step.source,
         ...(step.writes.length ? { writes: step.writes } : {}),
+        ...(step.knobs.length ? { knobs: step.knobs.map(knobToWire) } : {}),
+        ...(step.sentence?.trim() ? { sentence: step.sentence } : {}),
       }))
       .exhaustive()
   );
