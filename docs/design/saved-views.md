@@ -23,9 +23,9 @@ main Tasks screen.
 | Contents | Filters, selected layout, grouping, ordered sorting, and task-list property visibility, including implicit person conditions. No search text or scroll state. |
 | Editing | Explicit Save changes, Reset, and Duplicate. |
 | Navigation | Leaving discards temporary edits without a confirmation prompt. |
-| Creation | Desktop sidebar `+` or the shared empty-state Create view action starts an unsaved view; mobile also captures changed filters, layout, grouping, or sort in the filter drawer. |
-| Capture | Save view appears left of Filters on desktop and in the mobile overlay banner when filters, layout, grouping, or sort differ from built-in tab defaults. |
-| Mobile | Shared picker pill after Filters and before built-in tabs; its drawer browses/manages views, while the filter drawer owns save/create/reset actions. |
+| Creation | Desktop sidebar `+` or the shared empty-state Create view action starts an unsaved view; mobile also captures changed filters, layout, grouping, sort, or property visibility in the filter drawer. |
+| Capture | Save view appears left of Filters on desktop and in the mobile overlay banner when filters, layout, grouping, sort, or property visibility differ from built-in tab defaults. |
+| Mobile | Shared picker pill after Filters and Display and before built-in tabs; its drawer browses/manages views, while the filter drawer owns save/create/reset actions. |
 | Initial surfaces | Main Tasks only; not project or CRM embedded task lists. |
 | Owner departure | Team sharing stops while the owner is absent and resumes if they rejoin the shared team. |
 
