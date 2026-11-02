@@ -65,6 +65,8 @@ type EventSlots = {
     group: RoutineEventGroup,
     options: () => JSX.Element
   ) => JSX.Element;
+  /** False hides event triggers from the menu; existing ones stay editable. */
+  offerEvents?: boolean;
 };
 
 function scheduleSummary(trigger: ScheduleTriggerDraft) {
@@ -129,6 +131,7 @@ function TriggerIcon(props: { trigger?: RoutineTriggerDraft }) {
 function TriggerChoices(props: {
   onSelect: (trigger: RoutineTriggerDraft) => void;
   renderEventGroup?: EventSlots['renderEventGroup'];
+  offerEvents?: boolean;
 }) {
   let inputRef: HTMLInputElement | undefined;
   onMount(() => inputRef?.focus());
@@ -142,8 +145,10 @@ function TriggerChoices(props: {
       : undefined;
   });
   const events = () =>
-    routineEvents.filter((event) =>
-      matches(`${event.group} ${event.label} ${event.description}`)
+    routineEvents.filter(
+      (event) =>
+        props.offerEvents !== false &&
+        matches(`${event.group} ${event.label} ${event.description}`)
     );
   return (
     <div
@@ -387,6 +392,7 @@ function TriggerChip(
               <TriggerChoices
                 onSelect={edit}
                 renderEventGroup={props.renderEventGroup}
+                offerEvents={props.offerEvents}
               />
             }
           >
@@ -489,6 +495,7 @@ export function RoutineTriggers(
             renderEventSettings={props.renderEventSettings}
             renderEventCondition={props.renderEventCondition}
             renderEventGroup={props.renderEventGroup}
+            offerEvents={props.offerEvents}
             onSave={(value) =>
               props.onChange(
                 props.triggers.map((trigger) =>
@@ -510,6 +517,7 @@ export function RoutineTriggers(
         renderEventSettings={props.renderEventSettings}
         renderEventCondition={props.renderEventCondition}
         renderEventGroup={props.renderEventGroup}
+        offerEvents={props.offerEvents}
         onSave={(trigger) => props.onChange([...props.triggers, trigger])}
       />
     </>

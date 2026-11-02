@@ -1077,7 +1077,9 @@ time controls. Click **Add trigger** to confirm. Click a saved chip to edit it;
 the composer without moving it. Recurring schedules retain their time zones;
 one-off times use the browser’s local time.
 
-The event menu groups Macro activity triggers by surface:
+Event triggers appear only for users with the `enable-event-routines` PostHog
+flag; without it, **Add trigger** offers schedules only. The event menu groups
+Macro activity triggers by surface:
 
 - **Channels:** **Channel created**, **Message sent in channel**, and **@ mentioned in channel**.
 - **Documents:** **Document created** and **Document deleted**. Tasks are separate.
