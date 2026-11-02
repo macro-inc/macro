@@ -23,7 +23,7 @@ const retained = new Map<string, AgentSession>();
 export function retainRecentlyViewed(id: string): void {
   const held = retained.get(id);
   retained.delete(id);
-  retained.set(id, held ?? AgentSession.acquire(id));
+  retained.set(id, held ?? AgentSession.acquire(id, 'hold'));
   for (const [oldest, session] of retained) {
     if (retained.size <= RETAINED_SESSIONS) break;
     retained.delete(oldest);

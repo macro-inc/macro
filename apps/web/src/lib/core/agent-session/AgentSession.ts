@@ -174,13 +174,15 @@ export class AgentSession {
   /**
    * The shared instance for `id`, created on first acquisition. Every
    * acquisition needs a matching {@link release}; the last one closes the
-   * machine and drops the subscriptions.
+   * machine and drops the subscriptions. `hold` keeps a session open for a
+   * later view without being one, so it is not traced as an open.
    */
-  static acquire(id: string): AgentSession {
+  static acquire(id: string, purpose: 'view' | 'hold' = 'view'): AgentSession {
     const open = AgentSession.open.get(id);
     const session = open ?? new AgentSession(id);
     AgentSession.open.set(id, session);
     session.references += 1;
+    if (purpose === 'hold') return session;
     traceAcquire(id, open === undefined, session.references);
     // A surface opening a session that is already folded waits for nothing;
     // its render is measured from now, not from the load long ago.

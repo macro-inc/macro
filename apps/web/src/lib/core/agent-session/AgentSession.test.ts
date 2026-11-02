@@ -1172,6 +1172,18 @@ describe('AgentSession', () => {
       first.release();
     });
 
+    it('does not trace a hold as an open', async () => {
+      const live = AgentSession.acquire(SESSION);
+      await live.load();
+      const held = AgentSession.acquire(SESSION, 'hold');
+
+      expect(
+        loadSpans().map((span) => span.attributes['agent.session.load.outcome'])
+      ).toEqual(['loaded']);
+      held.release();
+      live.release();
+    });
+
     it('says why a load failed', async () => {
       harness.get.mockResolvedValueOnce(err([{ code: 'HTTP_ERROR' }]));
       const live = AgentSession.acquire(SESSION);
