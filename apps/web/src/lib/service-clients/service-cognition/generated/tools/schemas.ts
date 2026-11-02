@@ -10476,6 +10476,39 @@ export function getGetThreadResponseSchema() {
   return (_cached_GetThreadResponse ??= _create_GetThreadResponse());
 }
 
+function _create_GetUserActivity() {
+  return z.object({
+    userId: z.union([z.string(), z.null()]).optional(),
+    start: z.string().date(),
+    end: z.string().date(),
+  });
+}
+let _cached_GetUserActivity:
+  | ReturnType<typeof _create_GetUserActivity>
+  | undefined;
+export function getGetUserActivitySchema() {
+  return (_cached_GetUserActivity ??= _create_GetUserActivity());
+}
+
+function _create_ActivityReports() {
+  return z.object({
+    reports: z.array(
+      z.object({
+        granularity: z.enum(['day', 'week', 'month', 'summary']),
+        periodStart: z.string().date(),
+        periodEnd: z.string().date(),
+        content: z.string(),
+      })
+    ),
+  });
+}
+let _cached_ActivityReports:
+  | ReturnType<typeof _create_ActivityReports>
+  | undefined;
+export function getActivityReportsSchema() {
+  return (_cached_ActivityReports ??= _create_ActivityReports());
+}
+
 function _create_ImportCompaniesCsv() {
   return z.object({
     csv: z.union([z.string(), z.null()]).optional(),
@@ -17153,6 +17186,24 @@ export function getProjectActivityResultSchema() {
   return (_cached_ProjectActivityResult ??= _create_ProjectActivityResult());
 }
 
+function _create_ReadMemory() {
+  return z.record(z.any());
+}
+let _cached_ReadMemory: ReturnType<typeof _create_ReadMemory> | undefined;
+export function getReadMemorySchema() {
+  return (_cached_ReadMemory ??= _create_ReadMemory());
+}
+
+function _create_ExplicitMemory() {
+  return z.object({ content: z.string(), revision: z.number().int() });
+}
+let _cached_ExplicitMemory:
+  | ReturnType<typeof _create_ExplicitMemory>
+  | undefined;
+export function getExplicitMemorySchema() {
+  return (_cached_ExplicitMemory ??= _create_ExplicitMemory());
+}
+
 function _create_ReadMetadata() {
   return z.object({ documentId: z.string().uuid() });
 }
@@ -19725,6 +19776,49 @@ let _cached_UpdateInitiativeSharing:
 export function getUpdateInitiativeSharingSchema() {
   return (_cached_UpdateInitiativeSharing ??=
     _create_UpdateInitiativeSharing());
+}
+
+function _create_UpdateMemory() {
+  return z.object({
+    revision: z.number().int(),
+    edit: z.any().superRefine((x, ctx) => {
+      const schemas = [
+        z.object({
+          line: z.number().int().gte(0),
+          content: z.string(),
+          action: z.literal('insert'),
+        }),
+        z.object({
+          line: z.number().int().gte(0),
+          content: z.string(),
+          action: z.literal('replace'),
+        }),
+        z.object({
+          line: z.number().int().gte(0),
+          action: z.literal('delete'),
+        }),
+      ];
+      const errors = schemas.reduce<z.ZodError[]>(
+        (errors, schema) =>
+          ((result) => (result.error ? [...errors, result.error] : errors))(
+            schema.safeParse(x)
+          ),
+        []
+      );
+      if (schemas.length - errors.length !== 1) {
+        ctx.addIssue({
+          path: ctx.path,
+          code: 'invalid_union',
+          unionErrors: errors,
+          message: 'Invalid input: Should pass single schema',
+        });
+      }
+    }),
+  });
+}
+let _cached_UpdateMemory: ReturnType<typeof _create_UpdateMemory> | undefined;
+export function getUpdateMemorySchema() {
+  return (_cached_UpdateMemory ??= _create_UpdateMemory());
 }
 
 function _create_UpdatePipelineEntries() {

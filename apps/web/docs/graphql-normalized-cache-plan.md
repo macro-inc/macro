@@ -1095,6 +1095,21 @@ Background hydration retains its existing opt-in notification contract. Soup's
 local collection source opts in; ordinary foreground queries refresh on their
 normal affected-operation notifications.
 
+## CRM contact hydration
+
+The auxiliary lane in `src/lib/queries/soup/backfill.ts` hydrates CRM contacts
+alongside companies and foreign entities. Contacts require the explicit
+`crmContactFilter: { literal: { include: true } }` opt-in; an omitted filter
+returns no contacts. `SoupBackfill` already selects `GraphqlCrmContactFields`
+under `items @cacheOnly`, so records are persisted without materializing their
+payloads in the page. The backend scopes contacts to visible contacts in the
+viewer's accessible CRM-enabled teams.
+
+Checkpoint version 18 restarts scans saved before contacts were included. The
+lane retains normal cursor pagination, retries, cancellation, storage-generation
+checks, and `graphql_cache.backfill` telemetry. Subsequent passes refresh all
+visible contacts because the contact filter has no updated-at watermark.
+
 ## Authoritative Mail membership repair
 
 The shared Soup adapter reconciles supported `UPDATED_AT` Mail first pages
