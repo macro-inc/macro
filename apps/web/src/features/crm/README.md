@@ -36,6 +36,7 @@ Core modules remain independent of Solid, service clients, and app state.
 opening a company or contact clears its row's unread notifications immediately.
 It uses the row's attached notifications before falling back to an entity read;
 the shared notification source owns optimistic state and failure rollback.
+The REST fallback waits for the notification feed before reading its snapshot.
 The discussion's message reader remains visibility-gated and reads a separate
 global feed, so it cannot guarantee that opening a record clears its row's dot.
 UI rollout gates read `useFeatureFlag` directly where used; do not pass rollout

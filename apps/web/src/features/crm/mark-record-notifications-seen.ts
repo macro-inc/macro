@@ -6,7 +6,10 @@ import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity/types/entity';
 import { notificationIsRead } from '@entity/utils/notification';
 import { Telemetry } from '@macro-inc/observability';
-import { markNotificationsForEntityAsRead } from '@notifications/notification-helpers';
+import {
+  ensureNotificationSourceLoaded,
+  markNotificationsForEntityAsRead,
+} from '@notifications/notification-helpers';
 import type { NotificationSource } from '@notifications/notification-source';
 
 /** Clear a company or contact row's unread dot when its details open. */
@@ -34,6 +37,9 @@ export function markCrmNotificationsSeenOnOpen(
         if (notifications.length > 0) {
           await notificationSource.bulkMarkAsRead(notifications);
         } else {
+          if (notificationSource._notificationsQuery.transport === 'rest') {
+            await ensureNotificationSourceLoaded(notificationSource);
+          }
           await markNotificationsForEntityAsRead(notificationSource, {
             type: entity.type,
             id: entity.id,
