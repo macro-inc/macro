@@ -12,6 +12,7 @@ schema = ["dep:schemars", "models_databases/schema"]
 [dependencies]
 schemars = { workspace = true, optional = true }
 chrono = { workspace = true, features = ["serde"] }
+lazy-regex = { workspace = true }
 macro_uuid = { path = "../macro_uuid" }
 models_databases = { path = "../models_databases" }
 serde = { workspace = true }

@@ -1,0 +1,17 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO ai_free_allowance_bonus (id, user_id, cost_cents, note)\n            VALUES ($1, $2, $3, $4)\n            ON CONFLICT (id) DO NOTHING\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "e0e13a10cb2e3099116c732de33fa89b7244d171f8740195df0b1831e9072332"
+}

@@ -1,4 +1,4 @@
-import { Show } from 'solid-js';
+import { type JSX, Show } from 'solid-js';
 import { useProperty } from '../../core/context';
 import { PropertyEmpty } from '../../extractors/PropertyEmpty';
 import { formatNumber } from '../../utils';
@@ -8,7 +8,7 @@ import { useInlineEditor } from '../hooks/useInlineEditor';
  * Click-to-edit number input. Step 0.0001 matches the existing
  * NUMBER_DECIMAL_PLACES rounding the save path applies.
  */
-export function InlineNumberEditor() {
+export function InlineNumberEditor(props: { emptyValue?: JSX.Element }) {
   const ctx = useProperty();
   const editor = useInlineEditor();
 
@@ -35,7 +35,10 @@ export function InlineNumberEditor() {
             'text-ink-muted': !supportsInline(),
           }}
         >
-          <Show when={hasValue()} fallback={<PropertyEmpty label="Empty" />}>
+          <Show
+            when={hasValue()}
+            fallback={props.emptyValue ?? <PropertyEmpty label="Empty" />}
+          >
             <span class="block truncate max-w-full">{display()}</span>
           </Show>
         </button>

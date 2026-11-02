@@ -182,6 +182,10 @@ impl IntoResponse for FormsApiError {
                 StatusCode::BAD_REQUEST,
                 body(FormErrorCode::InvalidSharing, message),
             ),
+            FormError::InvalidBranding(_) => (
+                StatusCode::BAD_REQUEST,
+                body(FormErrorCode::InvalidBranding, message),
+            ),
             FormError::TallyHidden => (
                 StatusCode::FORBIDDEN,
                 body(FormErrorCode::TallyHidden, message),

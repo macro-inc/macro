@@ -15,8 +15,6 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 - `src/domain/capabilities.rs`: Google's organizer-set `GuestPolicy` and the
   `ViewerCapabilities` every read surface exposes as `viewerCan`.
 - `src/domain/team_availability.rs` + `src/domain/team.rs`: team sharing/availability.
-- `src/domain/notes.rs`, `src/outbound/pg_notes.rs`, `src/inbound/notes_router.rs`:
-  occurrence-scoped markdown links and optional team view access (feature `notes`).
 - `src/outbound/google.rs`, `src/outbound/pg.rs`: Google Calendar and Postgres adapters.
 - `src/outbound/pg/outlook.rs`: durable Outlook synchronization; preserve
   provider-specific coverage on discovery.
@@ -52,17 +50,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
 ## Checks
 
 - `cargo test -p calendar_events` (`SQLX_OFFLINE` unset).
-- `cargo test -p calendar_events --features notes,postgres` covers meeting-note
-  policy and its document-access integration against a migrated local MacroDB.
 
 ## Gotchas
 
-- Keep note links separate from sync-owned occurrence rows; require a live
-  occurrence and corroborated inbox copies for inherited view access. A document
-  owner can unlink after losing meeting access. Document readers can discover
-  only links whose meeting details they can currently see; owners also retain
-  unavailable links for revocation. See
-  [meeting-note access](../../docs/architecture/calendar-meeting-notes.md).
 - `CalendarEvent` is the stable Macro entity; external calendars and email
   invitations are sources feeding it, and recurrence instances are queryable
   occurrence projections, not separate events — don't model them as new entities.
@@ -236,8 +226,7 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   `ReadCalendarEvent` (`src/inbound/toolset/read_calendar_event.rs`), which goes
   through `mention_previews`: the hover card's visibility and fields. A preview
   that falls back to a channel share loses its Macro call there, in the
-  repository so that meeting-note references (`reference_previews`) get the
-  same, and before the description cap, since the join line closes the
+  repository and before the description cap, since the join line closes the
   description. Whoever resolves to their own copy keeps it: the card's Join
   button reads the link from the preview. Only the generated Macro call goes;
   join text a provider wrote into the body, as a Teams invitation's, stays, as
@@ -356,6 +345,15 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   as it.
 - Preserve the conservative OOO refresh hint on write outcomes and sync reports;
   its contract is in [team sharing](../../docs/design/calendar-team-sharing.md).
+  Retirements carry it per event (`RetiredCalendarEvent::team_ooo_changed`): only
+  removing a source whose typed `event_type` is out of office raises it, since
+  every sync of a removed meeting's attendees reaches their teammates' calendars
+  and the hint blanks their overlay.
+- A sync of a `ready`, already synced account stays `ready`, on Google as on
+  Outlook, including after a re-grant that kept calendar access, whose sync tokens
+  survive. Any other state is catching up and marks it `syncing`: a first import,
+  a retry, or a return from `disabled` or `reauth_required`. The web's
+  `Syncing your calendar…` banner and its 5 second poll read that state.
 - The team out-of-office overlay (`src/outbound/pg_team/ooo.rs`) starts from
   the viewer's teammates and reaches sources through
   `calendar_event_sources_out_of_office_idx` on the source's typed
