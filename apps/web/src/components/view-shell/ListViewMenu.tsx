@@ -114,8 +114,7 @@ function LayoutTabs(props: { selection: ViewSelection<ViewLayout> }) {
   return (
     <Tabs
       aria-label={t('viewMenus.layout')}
-      size="sm"
-      fullWidth
+      size="md"
       value={props.selection.value}
       options={options()}
       onChange={props.selection.onChange}
