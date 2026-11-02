@@ -115,6 +115,9 @@ describe('GitHub PR statistics', () => {
         'capture-1'
       ).queryKey
     );
-    expect(first.refetchInterval).toBe(30_000);
+    expect(first.refetchInterval({ state: { status: 'success' } })).toBe(
+      30_000
+    );
+    expect(first.refetchInterval({ state: { status: 'error' } })).toBe(300_000);
   });
 });

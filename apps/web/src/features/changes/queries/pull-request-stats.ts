@@ -1,6 +1,6 @@
 import { throwOnErr } from '@core/util/result';
 import { authServiceClient } from '@service-auth/client';
-import { useQuery } from '@tanstack/solid-query';
+import { type QueryState, useQuery } from '@tanstack/solid-query';
 import type { Accessor } from 'solid-js';
 import {
   parseGithubPrUrl,
@@ -9,6 +9,9 @@ import {
   toGithubKey,
 } from '../../block-pr/util/prKey';
 import { changesKeys } from './keys';
+
+const REFETCH_MS = 30_000;
+const FAILING_REFETCH_MS = 5 * 60_000;
 
 export function pullRequestStatsQueryOptions(
   url: string | undefined,
@@ -46,7 +49,10 @@ export function pullRequestStatsQueryOptions(
       };
     },
     staleTime: 30_000,
-    refetchInterval: 30_000,
+    // GitHub answers unchanged pull requests without spending quota, but a
+    // failing or throttled GitHub is asked again only every few minutes.
+    refetchInterval: (query: { state: Pick<QueryState, 'status'> }) =>
+      query.state.status === 'error' ? FAILING_REFETCH_MS : REFETCH_MS,
     retry: false,
   };
 }
