@@ -166,6 +166,12 @@ async fn rewrite(
     program.sdk = Some(version.clone());
     let task = task_with(&action.task, &program).map_err(|error| (error.to_string(), None))?;
     let failed = |reason: String| (reason, Some(task.clone()));
+    // A rewrite keeps the step's knobs, so it must still read every one.
+    if let Err(error) = program.validate() {
+        return Err(failed(format!(
+            "The routine's code was updated for Macro's current SDK, but the update {error}"
+        )));
+    }
     // Checked together: a rewrite that changes what one step returns must
     // still suit the steps that read it.
     let still = code

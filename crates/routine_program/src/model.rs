@@ -7,6 +7,8 @@ use serde::{Deserialize, Serialize};
 use serde_json::Value;
 use uuid::Uuid;
 
+use crate::knob::Knob;
+
 #[cfg(test)]
 mod test;
 
@@ -67,6 +69,26 @@ pub struct CodeStep {
     /// Where the code may make changes. Reads are always allowed.
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub writes: Vec<WriteScope>,
+    /// Values its owner can change without new code, which the code reads
+    /// as `knobs.<name>`.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub knobs: Vec<Knob>,
+    /// What it does as one sentence for its owner, with `{name}` where a
+    /// knob's value shows and `{?name}` where a question knob's question
+    /// shows, e.g. "Label it {label} when {?aboutMoney}". Saving checks every
+    /// slot names one of its knobs.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub sentence: Option<String>,
+}
+
+impl CodeStep {
+    /// Each knob's value by name: `main`'s `knobs`.
+    pub fn knob_values(&self) -> serde_json::Map<String, Value> {
+        self.knobs
+            .iter()
+            .map(|knob| (knob.name().to_string(), knob.value()))
+            .collect()
+    }
 }
 
 /// An area a code step may change.

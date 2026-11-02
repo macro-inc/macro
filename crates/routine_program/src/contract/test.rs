@@ -67,11 +67,11 @@ fn each_code_step_sees_the_outputs_of_the_steps_before_it() {
     let context = |file: &CheckFile| file.source.lines().last().unwrap().to_owned();
     assert_eq!(
         context(&files[0]),
-        "type StepContext = RoutineStepContext<{  }>;"
+        "type StepContext = RoutineStepContext<{  }, {  }>;"
     );
     assert_eq!(
         context(&files[1]),
-        "type StepContext = RoutineStepContext<{ read: StepOutput<Awaited<ReturnType<typeof import('./step_0.ts')['main']>>> }>;"
+        "type StepContext = RoutineStepContext<{ read: StepOutput<Awaited<ReturnType<typeof import('./step_0.ts')['main']>>> }, {  }>;"
     );
     assert_eq!(files[1].title, "Last");
     // The source's own lines come first, unchanged.
@@ -80,6 +80,31 @@ fn each_code_step_sees_the_outputs_of_the_steps_before_it() {
             .source
             .starts_with("export async function main() {}\n")
     );
+}
+
+#[test]
+fn a_step_sees_its_knobs_typed_but_not_their_values() {
+    let with = |priority: &str, days: f64| {
+        program(json!([{
+            "type": "code",
+            "title": "Triage",
+            "source": "export async function main({ knobs }: StepContext) { return [knobs.priority, knobs.days, knobs.note, knobs.urgent, knobs.notify]; }",
+            "knobs": [
+                { "type": "choice", "name": "priority", "label": "Priority", "value": priority, "options": ["Low", "High \"now\""] },
+                { "type": "number", "name": "days", "label": "Days", "value": days, "min": 1 },
+                { "type": "text", "name": "note", "label": "Note", "value": "Hi" },
+                { "type": "question", "name": "urgent", "label": "it's urgent", "value": "Is it urgent?" },
+                { "type": "boolean", "name": "notify", "label": "Notify me", "value": true },
+            ],
+        }]))
+    };
+    let files = with("Low", 7.0).check_files();
+    assert_eq!(
+        files[0].source.lines().last().unwrap(),
+        r#"type StepContext = RoutineStepContext<{  }, { priority: "Low" | "High \"now\""; days: number; note: string; urgent: string; notify: boolean }>;"#
+    );
+    // Changing a value changes nothing the checker sees.
+    assert_eq!(with(r#"High "now""#, 30.0).check_files(), files);
 }
 
 #[test]

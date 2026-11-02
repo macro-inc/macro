@@ -64,6 +64,8 @@ fn starter(
             summary: summary.to_owned(),
             source: source.to_owned(),
             writes: vec![writes],
+            knobs: Vec::new(),
+            sentence: None,
         },
     }
 }

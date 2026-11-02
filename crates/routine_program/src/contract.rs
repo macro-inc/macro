@@ -6,7 +6,7 @@ use std::{collections::HashSet, sync::LazyLock};
 
 use sha2::{Digest, Sha256};
 
-use crate::model::{RoutineProgram, SdkFingerprint, Step, StepId};
+use crate::model::{CodeStep, RoutineProgram, SdkFingerprint, Step, StepId};
 
 #[cfg(test)]
 mod test;
@@ -23,7 +23,7 @@ pub const STEP_CONTEXT: &str = r#"import type { Macro } from '@macro-inc/sdk';
 
 declare global {
   /** What a routine code step's `main` receives. */
-  interface RoutineStepContext<Steps> {
+  interface RoutineStepContext<Steps, Knobs> {
     /** Macro's SDK, acting as the routine's owner. */
     macro: Macro;
     /** This run. */
@@ -34,10 +34,15 @@ declare global {
     trigger: RoutineStart;
     /** What the code steps before this one returned, by id. */
     steps: Steps;
+    /**
+     * This step's knobs by name: values its owner can change without new
+     * code, such as a label, a priority or a question for AI.
+     */
+    knobs: Knobs;
   }
 
   /** A code step's argument, when it is checked on its own. */
-  type StepContext = RoutineStepContext<Record<string, unknown>>;
+  type StepContext = RoutineStepContext<Record<string, unknown>, Record<string, unknown>>;
 
   interface RoutineRunInfo {
     /** Unique to this run. */
@@ -233,8 +238,9 @@ impl Walk {
                         source.push('\n');
                     }
                     source.push_str(&format!(
-                        "type StepContext = RoutineStepContext<{}>;\n",
-                        self.outputs()
+                        "type StepContext = RoutineStepContext<{}, {}>;\n",
+                        self.outputs(),
+                        knobs(code)
                     ));
                     self.files.push(CheckFile {
                         index,
@@ -262,4 +268,15 @@ impl Walk {
             .collect();
         format!("{{ {} }}", fields.join("; "))
     }
+}
+
+/// The TypeScript object type of a step's knobs. Their values aren't in it,
+/// so changing a value doesn't change what the step is checked against.
+fn knobs(code: &CodeStep) -> String {
+    let fields: Vec<String> = code
+        .knobs
+        .iter()
+        .map(|knob| format!("{}: {}", knob.name(), knob.ts_type()))
+        .collect();
+    format!("{{ {} }}", fields.join("; "))
 }

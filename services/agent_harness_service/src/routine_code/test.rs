@@ -228,6 +228,8 @@ async fn a_step_waits_for_a_free_slot_before_its_credential_and_gives_up_after_f
         summary: String::new(),
         source: "export async function main() {}".into(),
         writes: Vec::new(),
+        knobs: Vec::new(),
+        sentence: None,
     };
     let context = json!({ "run": {} });
     let run = |code: Arc<SdkRoutineCode<CountedTokens>>| {
@@ -551,6 +553,49 @@ export async function main({ macro, trigger, steps, run }: StepContext) {
         );
         assert!(outcome.calls[0].duration_ms.is_some());
         server.await.unwrap();
+    }
+
+    #[tokio::test]
+    #[ignore = "requires pinned Deno runtime"]
+    async fn a_step_reads_its_knobs_typed_and_gets_their_values() {
+        let (_root, code) = code("http://127.0.0.1:9").await;
+        let knobbed = |source: &str| {
+            program(json!([{
+                "type": "code", "title": "Triage", "source": source,
+                "knobs": [
+                    { "type": "choice", "name": "priority", "label": "Priority", "value": "High", "options": ["Low", "High"] },
+                    { "type": "number", "name": "days", "label": "Days", "value": 7 },
+                ],
+            }]))
+        };
+        let reads = "export async function main({ knobs }: StepContext) { return { priority: knobs.priority, days: knobs.days + 1 }; }";
+        assert_eq!(code.check_program(&knobbed(reads)).await.unwrap(), Vec::new());
+        // A choice is the union of its options, and there are no other knobs.
+        for wrong in [
+            "export async function main({ knobs }: StepContext) { return knobs.priority === 'Urgent'; }",
+            "export async function main({ knobs }: StepContext) { return knobs.color; }",
+        ] {
+            assert!(
+                !code.check_program(&knobbed(wrong)).await.unwrap().is_empty(),
+                "{wrong}"
+            );
+        }
+        let routine = knobbed(reads);
+        let outcome = code
+            .run(
+                &owner(),
+                CodeRun {
+                    step: routine.code_steps()[0],
+                    context: &json!({ "run": {} }),
+                    steps: &json!({}),
+                    dry_run: false,
+                },
+            )
+            .await;
+        assert_eq!(
+            outcome.result.unwrap(),
+            json!({ "priority": "High", "days": 8 })
+        );
     }
 
     #[tokio::test]

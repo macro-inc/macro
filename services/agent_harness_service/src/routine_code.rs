@@ -53,7 +53,7 @@ const MAX_CALLS: usize = 128;
 /// SDK declarations a rewrite reads, in bytes.
 const REWRITE_DECLARATION_BYTES: usize = 48 * 1024;
 
-const REWRITE_INSTRUCTIONS: &str = "You maintain TypeScript that a Macro routine runs against Macro's SDK. Macro's SDK has changed and the code no longer type-checks. Rewrite it so it type-checks against the declarations you are given, changing only what the type checker's errors require. Keep exactly what it does: the same reads, the same changes, the same decisions and the same return value. Keep the module's shape: `export async function main({ macro, trigger, steps }: StepContext)`, no imports. If a call it made no longer exists, use the declarations' replacement for it.";
+const REWRITE_INSTRUCTIONS: &str = "You maintain TypeScript that a Macro routine runs against Macro's SDK. Macro's SDK has changed and the code no longer type-checks. Rewrite it so it type-checks against the declarations you are given, changing only what the type checker's errors require. Keep exactly what it does: the same reads, the same changes, the same decisions and the same return value. Keep the module's shape, `export async function main(...: StepContext)` with no imports, and keep reading the step's settings from `knobs` as it did. If a call it made no longer exists, use the declarations' replacement for it.";
 
 /// Mints the short-lived token a routine's code acts as its owner with.
 pub trait RoutineCredentials: Send + Sync + 'static {
@@ -261,6 +261,7 @@ impl<Credentials: RoutineCredentials> RoutineCode for SdkRoutineCode<Credentials
             info.insert("dryRun".into(), Value::Bool(run.dry_run));
         }
         arguments.insert("steps".into(), run.steps.clone());
+        arguments.insert("knobs".into(), Value::Object(run.step.knob_values()));
         let writes = if run.dry_run {
             WritePolicy::DryRun
         } else {

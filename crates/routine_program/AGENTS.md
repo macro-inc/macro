@@ -15,15 +15,21 @@ no I/O.
 - `src/contract.rs`: what a code step receives and returns. `CODE_STEPS`
   (`src/code_steps.md`, how to write a code step: the one description
   CreateRoutine and the web drafter both read), `STEP_CONTEXT` (the type of
-  `main`'s argument: `run`, `routine`, `trigger`, `steps`), `code_version`
+  `main`'s argument: `run`, `routine`, `trigger`, `steps`, `knobs`), `code_version`
   (the SDK fingerprint plus a hash of `STEP_CONTEXT`, recorded as `sdk`),
   `assign_step_ids` (ids from titles, on save) and `check_files` (each code
   step's file, with `steps` typed from the code steps before it).
+- `src/knob.rs`: `Knob`s, a code step's values its owner changes without new
+  code (text, number, boolean, choice, or a question for AI), which `main`
+  reads as `knobs.<name>`, typed from the knob but not its value; and
+  `sentence_slots`, the `{name}` / `{?name}` slots of a step's `sentence`.
 - `src/plan.rs`: `StepRecord`, what each step of a run did.
 - `src/starters.rs` + `src/starters/*.ts`: starter routines whose step is
   code, offered by the new-routine flow and shown to the drafter as worked
   examples. The harness's real-Deno test type-checks each one.
-- `src/validate.rs`: save-time rules and `limits`.
+- `src/validate.rs`: save-time rules and `limits`, including that every
+  knob fits its type and is read by the code, and every sentence slot names
+  one of the step's knobs.
 
 ## Scope
 
