@@ -167,6 +167,7 @@ describe('templateShareBody', () => {
         authorId: 'macro|eric@macro.com',
         shared: {
           active_count: 2,
+          appearance: { icon: null, color: null },
           author: 'macro|eric@macro.com',
           created_at: '2026-10-01T00:00:00Z',
           description: 'Weekly renewals digest',

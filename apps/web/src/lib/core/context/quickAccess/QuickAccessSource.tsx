@@ -896,9 +896,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         type: 'database',
         id: database.id,
         name: database.name,
-        appearance: readEntityAppearance(
-          'appearance' in database ? database.appearance : undefined
-        ),
+        appearance: readEntityAppearance(database.appearance),
         ownerId: database.owner_id,
         createdAt: database.created_at,
         grant,
@@ -935,9 +933,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
         type: 'form',
         id: form.id,
         name: form.name,
-        appearance: readEntityAppearance(
-          'appearance' in form ? form.appearance : undefined
-        ),
+        appearance: readEntityAppearance(form.appearance),
         ownerId: form.ownerId,
         createdAt: form.createdAt,
         access,

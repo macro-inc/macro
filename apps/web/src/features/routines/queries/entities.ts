@@ -17,9 +17,7 @@ export function scheduleToEntity(
     id: schedule.id,
     type: 'routine',
     name: schedule.name,
-    appearance: readEntityAppearance(
-      'appearance' in schedule ? schedule.appearance : undefined
-    ),
+    appearance: readEntityAppearance(schedule.appearance),
     ownerId: schedule.owner,
     createdAt: schedule.created_at,
     updatedAt: schedule.updated_at,

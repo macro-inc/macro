@@ -121,38 +121,36 @@ function setup(
   const [loaded, setLoaded] = createSignal(false);
   render(() => (
     <QueryClientProvider client={queryClient}>
-      <>
-        <BlockItemSplitLabel
-          name={() => 'Customers'}
-          title={
-            <Show when={loaded()}>
-              <DatabaseTitle
-                name="Customers"
-                canEdit={grant !== 'view'}
-                onRename={vi.fn()}
-                onEditReady={editReady}
-              />
-            </Show>
-          }
-        />
-        <DatabasePageActions
-          detail={
-            {
-              database: { id: 'db', name: 'Customers', owner_id: 'owner' },
-              grant,
-              tables: [],
-            } as unknown as DatabaseDetail
-          }
-          table={
-            selectedTable?.() ??
-            ({ table: { id: 'table', name: 'Contacts' } } as TableDetail)
-          }
-          entityActions={entityActions}
-          onImported={vi.fn()}
-          onRename={() => editTitle?.()}
-          onDelete={remove}
-        />
-      </>
+      <BlockItemSplitLabel
+        name={() => 'Customers'}
+        title={
+          <Show when={loaded()}>
+            <DatabaseTitle
+              name="Customers"
+              canEdit={grant !== 'view'}
+              onRename={vi.fn()}
+              onEditReady={editReady}
+            />
+          </Show>
+        }
+      />
+      <DatabasePageActions
+        detail={
+          {
+            database: { id: 'db', name: 'Customers', owner_id: 'owner' },
+            grant,
+            tables: [],
+          } as unknown as DatabaseDetail
+        }
+        table={
+          selectedTable?.() ??
+          ({ table: { id: 'table', name: 'Contacts' } } as TableDetail)
+        }
+        entityActions={entityActions}
+        onImported={vi.fn()}
+        onRename={() => editTitle?.()}
+        onDelete={remove}
+      />
     </QueryClientProvider>
   ));
   setLoaded(true);

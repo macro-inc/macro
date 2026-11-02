@@ -67,9 +67,7 @@ export function mapInitiativeIdentity(
   return {
     id: project.id,
     name: project.displayName ?? 'Untitled project',
-    ...('appearance' in project
-      ? { appearance: readEntityAppearance(project.appearance) }
-      : {}),
+    appearance: readEntityAppearance(project.appearance),
     userAccessLevel:
       permission?.__typename === 'GraphqlAccessLevelPermission'
         ? ACCESS_FROM_GRAPHQL[permission.accessLevel]

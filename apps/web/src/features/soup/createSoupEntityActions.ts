@@ -109,7 +109,7 @@ export function createSoupEntityActions(
   options: {
     /** A list that completes its own rows, such as Home's work feed. */
     markDoneDelegate?: () => MarkDoneDelegate | undefined;
-    appearanceEntity?: () => EntityData | undefined;
+    selectedEntities?: () => readonly EntityData[];
   } = {}
 ): {
   buildActionGroups: BuildActionGroups;
@@ -119,10 +119,11 @@ export function createSoupEntityActions(
   const projectsFlag = useFeatureFlag(enableProjects);
   const userId = useUserId();
   const changeIcon = useChangeEntityIcon();
-  const canEditIcon = useAppearanceEditAccess(
-    () => options.appearanceEntity?.(),
-    userId
-  );
+  const selectedEntity = () => {
+    const entities = options.selectedEntities?.();
+    return entities?.length === 1 ? entities[0] : undefined;
+  };
+  const canEditIcon = useAppearanceEditAccess(selectedEntity, userId);
   const notificationSource = useGlobalNotificationSource();
   const crmActions = createCrmEntityActionItems();
 
@@ -337,20 +338,19 @@ export function createSoupEntityActions(
         onClick: handle(renameAction.executeWithSoup),
       });
     }
-    const appearanceEntity = entities.length === 1 ? entities[0] : undefined;
+    const entity = entities.length === 1 ? entities[0] : undefined;
     if (
-      appearanceEntity &&
-      supportsEntityAppearance(appearanceEntity) &&
-      (appearanceEntity.ownerId === userId() ||
-        (options.appearanceEntity?.()?.id === appearanceEntity.id &&
-          canEditIcon()))
+      entity &&
+      supportsEntityAppearance(entity) &&
+      (entity.ownerId === userId() ||
+        (selectedEntity()?.id === entity.id && canEditIcon()))
     ) {
       middleItems.push({
         id: 'change-icon',
         icon: SmileyIcon,
         label: t('appearance.title'),
         onClick: () => {
-          changeIcon(appearanceEntity);
+          changeIcon(entity);
         },
       });
     }

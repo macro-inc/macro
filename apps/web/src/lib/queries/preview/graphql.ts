@@ -167,9 +167,7 @@ export function graphqlRecordToPreview(
       return {
         id: record.id,
         type: 'document',
-        appearance: readEntityAppearance(
-          'appearance' in record ? record.appearance : undefined
-        ),
+        appearance: readEntityAppearance(record.appearance),
         access: 'access',
         loading: false,
         rawName: record.displayName ?? record.documentName,
@@ -236,9 +234,7 @@ export function graphqlRecordToPreview(
       return {
         id: record.id,
         type: 'initiative',
-        appearance: readEntityAppearance(
-          'appearance' in record ? record.appearance : undefined
-        ),
+        appearance: readEntityAppearance(record.appearance),
         access: 'access',
         loading: false,
         rawName: record.displayName ?? '',

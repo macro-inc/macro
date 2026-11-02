@@ -1816,9 +1816,7 @@ export function mapGraphqlSoupItem(
           is_favorited: entity.isFavorited,
           data: {
             id: entity.id,
-            appearance: readEntityAppearance(
-              'appearance' in entity ? entity.appearance : undefined
-            ),
+            appearance: readEntityAppearance(entity.appearance),
             name: entity.displayName ?? 'Untitled project',
             ownerId: entity.metadata.ownerId ?? '',
             createdAt: entity.metadata.createdAt ?? '',
@@ -1838,9 +1836,7 @@ export function mapGraphqlSoupItem(
           is_favorited: entity.isFavorited,
           data: {
             id: entity.id,
-            appearance: readEntityAppearance(
-              'appearance' in entity ? entity.appearance : undefined
-            ),
+            appearance: readEntityAppearance(entity.appearance),
             name: entity.documentName,
             ownerId: entity.ownerId,
             fileType: entity.fileType ?? undefined,

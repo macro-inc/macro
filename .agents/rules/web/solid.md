@@ -51,6 +51,7 @@ State ownership, reactivity, and async error handling.
 ## Solid patterns
 
 - Use `Switch`/`Match` for mutually exclusive render states instead of nested `Show` fallbacks.
+- Resolve JSX children with `children(() => props.children)` before reusing or inspecting them; repeated prop reads can recreate components.
 
 - Avoid createEffect. Legitimate uses: syncing with external/imperative systems
   (DOM APIs, third-party libs). If you're using it to derive state or trigger

@@ -8,9 +8,9 @@ import { Show } from 'solid-js';
 import type { EntityData } from '../entity/types/entity';
 import { supportsEntityAppearance } from './core/appearance';
 
-const AppearanceEditor = lazyNamed(
-  () => import('./views/appearance-editor'),
-  'AppearanceEditor'
+const AppearanceDialog = lazyNamed(
+  () => import('./appearance-dialog'),
+  'AppearanceDialog'
 );
 
 /** Capture account context outside handlers; the editor survives its launching menu. */
@@ -21,7 +21,7 @@ export function useChangeEntityIcon() {
     if (!actor || !supportsEntityAppearance(entity)) return;
     const rect = element?.getBoundingClientRect();
     return openDialog(
-      AppearanceEditor,
+      AppearanceDialog,
       {
         entity,
         userId: actor,
@@ -29,16 +29,6 @@ export function useChangeEntityIcon() {
           ? { x: rect.x, y: rect.y, width: rect.width, height: rect.height }
           : undefined,
         isCurrent: () => userId() === actor,
-        save: async (appearance) => {
-          const { saveEntityAppearance } = await import(
-            './save-entity-appearance'
-          );
-          return saveEntityAppearance(
-            entity,
-            appearance,
-            () => userId() === actor
-          );
-        },
       },
       { key: `entity-appearance:${actor}:${entity.type}:${entity.id}` }
     );

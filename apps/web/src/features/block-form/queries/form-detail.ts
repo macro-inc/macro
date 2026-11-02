@@ -25,9 +25,7 @@ export function toFormMetadata(form: Form): FormMetadata {
   return {
     id: form.id,
     name: form.name,
-    appearance: readEntityAppearance(
-      'appearance' in form ? form.appearance : undefined
-    ),
+    appearance: readEntityAppearance(form.appearance),
     description: form.description,
     ownerId: form.ownerId,
     databaseId: form.databaseId,

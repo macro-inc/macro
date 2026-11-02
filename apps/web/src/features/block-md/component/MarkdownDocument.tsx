@@ -182,7 +182,7 @@ async function ingestS3Snapshot(
 type MarkdownDocumentProps = {
   documentId: string;
   kind: MarkdownDocumentKind;
-  appearanceEntity?: DocumentEntity;
+  entity?: DocumentEntity;
   state?: MarkdownDocumentState;
   documentSource: MarkdownDocumentSource;
   permissions: {
@@ -203,7 +203,7 @@ export function MarkdownDocument(props: ParentProps<MarkdownDocumentProps>) {
     documentId: () => props.documentId,
     kind: () => props.kind,
     documentSource: () => props.documentSource,
-    appearanceEntity: () => props.appearanceEntity,
+    entity: () => props.entity,
     permissions: {
       canComment: () => props.permissions.canComment,
       canEdit: () => props.permissions.canEdit,

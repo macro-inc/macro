@@ -3,6 +3,15 @@ import type { EntityAppearance } from '@service-storage/generated/schemas/entity
 
 export type { AppearanceColor, EntityAppearance };
 
+const APPEARANCE_ENTITY_TYPES = [
+  'document',
+  'initiative',
+  'routine',
+  'form',
+  'database',
+] as const;
+export type AppearanceEntityType = (typeof APPEARANCE_ENTITY_TYPES)[number];
+
 export const APPEARANCE_COLORS = [
   'gray',
   'red',
@@ -23,23 +32,20 @@ export function appearanceColor(
   return `var(--color-${color})`;
 }
 
-export function supportsEntityAppearance(entity: {
-  type: string;
-  fileType?: string | null;
-  subType?: { type: string } | null;
-}): boolean {
+export function supportsEntityAppearance<
+  T extends {
+    type: string;
+    fileType?: string | null;
+    subType?: { type: string } | null;
+  },
+>(entity: T): entity is T & { type: AppearanceEntityType } {
   if (entity.type === 'document') {
     return (
       entity.fileType === 'md' &&
       (!entity.subType || entity.subType.type === 'snippet')
     );
   }
-  return (
-    entity.type === 'initiative' ||
-    entity.type === 'routine' ||
-    entity.type === 'form' ||
-    entity.type === 'database'
-  );
+  return APPEARANCE_ENTITY_TYPES.some((type) => type === entity.type);
 }
 
 export function defaultAppearance(): EntityAppearance {

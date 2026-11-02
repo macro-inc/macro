@@ -198,9 +198,7 @@ export function DatabasePageActions(props: {
                             ownerId: props.detail.database.owner_id,
                             grant: props.detail.grant,
                             appearance: readEntityAppearance(
-                              'appearance' in props.detail.database
-                                ? props.detail.database.appearance
-                                : undefined
+                              props.detail.database.appearance
                             ),
                           },
                           menuButton

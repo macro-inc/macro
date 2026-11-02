@@ -1,4 +1,4 @@
-import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { markdownEntityFromMetadata } from '@app/features/entity-appearance/queries/document-appearance';
 import { FindAndReplace } from '@block-md/component/FindAndReplace';
 import {
   MarkdownDocument,
@@ -106,29 +106,20 @@ function MarkdownDetailContent(props: {
     });
   });
 
-  const appearanceEntity = (): DocumentEntity | undefined => {
+  const documentEntity = (): DocumentEntity | undefined => {
     const metadata = props.data.metadata;
     if (
       (props.kind !== 'document' && props.kind !== 'snippet') ||
-      metadata.documentId !== props.documentId ||
-      (metadata.subType != null && metadata.subType !== 'snippet')
+      metadata.documentId !== props.documentId
     )
       return;
-    return {
-      type: 'document',
-      id: props.documentId,
-      name: persistedName(),
-      ownerId: props.data.metadata.owner,
-      fileType: 'md',
-      subType: metadata.subType === 'snippet' ? { type: 'snippet' } : null,
-      appearance: readEntityAppearance(props.data.metadata.appearance),
-    };
+    return markdownEntityFromMetadata(metadata, persistedName());
   };
   return (
     <MarkdownDocument
       documentId={props.documentId}
       kind={props.kind}
-      appearanceEntity={appearanceEntity()}
+      entity={documentEntity()}
       state={state}
       documentSource={{ type: 'sync', source: props.data.source }}
       permissions={props.data.permissions}

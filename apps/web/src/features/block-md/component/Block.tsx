@@ -1,4 +1,4 @@
-import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
+import { markdownEntityFromMetadata } from '@app/features/entity-appearance/queries/document-appearance';
 import { useBlockEntityCommands } from '@app/features/next-soup/actions';
 import {
   CollaborationStatusIndicator,
@@ -119,34 +119,25 @@ export default function MarkdownBlockAdapter(props: BlockMarkdownProps) {
   const canEdit = useCanEdit();
   const isOwner = useIsDocumentOwner();
 
-  const appearanceEntity = (): DocumentEntity | undefined => {
+  const documentEntity = (): DocumentEntity | undefined => {
     const metadata = blockMetadataSignal();
     if (
       (kind !== 'document' && kind !== 'snippet') ||
       !metadata ||
-      metadata.documentId !== documentId ||
-      metadata.fileType !== 'md' ||
-      (metadata.subType != null && metadata.subType !== 'snippet')
+      metadata.documentId !== documentId
     )
       return;
-    return {
-      type: 'document',
-      id: documentId,
-      name: persistedName() ?? metadata.documentName ?? '',
-      ownerId: metadata.owner,
-      fileType: 'md',
-      subType: metadata.subType === 'snippet' ? { type: 'snippet' } : null,
-      appearance: readEntityAppearance(
-        'appearance' in metadata ? metadata.appearance : undefined
-      ),
-    };
+    return markdownEntityFromMetadata(
+      metadata,
+      persistedName() ?? metadata.documentName ?? ''
+    );
   };
   return (
     <DocumentBlockContainer>
       <MarkdownDocument
         documentId={documentId}
         kind={kind}
-        appearanceEntity={appearanceEntity()}
+        entity={documentEntity()}
         state={markdownState}
         documentSource={documentSource()}
         permissions={{

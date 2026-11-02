@@ -1,5 +1,5 @@
 import type { Component, JSX } from 'solid-js';
-import { lazy, Match, Suspense, Switch } from 'solid-js';
+import { children, lazy, Match, Suspense, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import type { EntityAppearance } from '../core/appearance';
 
@@ -18,6 +18,7 @@ export function AppearanceGlyph(props: {
   appearance?: EntityAppearance | null;
   children: JSX.Element;
 }) {
+  const fallback = children(() => props.children);
   const macro = () => {
     const icon = props.appearance?.icon;
     return icon?.kind === 'macro' ? GLYPHS.get(icon.name) : undefined;
@@ -27,7 +28,7 @@ export function AppearanceGlyph(props: {
     return icon?.kind === 'emoji' ? icon.value : undefined;
   };
   return (
-    <Switch fallback={props.children}>
+    <Switch fallback={fallback()}>
       <Match when={emoji()}>
         {(value) => (
           <span
@@ -41,7 +42,7 @@ export function AppearanceGlyph(props: {
       </Match>
       <Match when={macro()}>
         {(glyph) => (
-          <Suspense fallback={props.children}>
+          <Suspense fallback={fallback()}>
             <Dynamic component={glyph()} class="size-full" />
           </Suspense>
         )}

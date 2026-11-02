@@ -6,7 +6,14 @@ import DotsIcon from '@icon/system/regular/dots-three.svg';
 import ShareIcon from '@icon/system/regular/share-network.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
 import { Button, ButtonGroup, Dropdown } from '@ui';
-import { type Accessor, createSignal, Match, Show, Switch } from 'solid-js';
+import {
+  type Accessor,
+  createSignal,
+  type JSX,
+  Match,
+  Show,
+  Switch,
+} from 'solid-js';
 import { RoutineEditor } from '../components/routine-editor';
 import { RoutineRunButton } from '../components/routine-run-button';
 import type { RoutineDetailSlots } from '../context/routine-slots';
@@ -31,7 +38,7 @@ export function RoutineDetailView(props: {
   onCopyPrompt(prompt: string): Promise<void>;
   onShare?(): void;
   onChangeIcon?(): void;
-  identityIcon?: import('solid-js').JSX.Element;
+  identityIcon?: JSX.Element;
   onOpenTemplate?(templateId: string): void;
   onOpenRun(resource: HistoryResource, newSplit: boolean): void;
 }) {

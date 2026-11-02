@@ -9,7 +9,7 @@ export type MarkdownDocumentContextValue = {
   documentId: Accessor<string>;
   kind: Accessor<MarkdownDocumentKind>;
   documentSource: Accessor<MarkdownDocumentSource>;
-  appearanceEntity?: Accessor<DocumentEntity | undefined>;
+  entity?: Accessor<DocumentEntity | undefined>;
   permissions: {
     canComment: Accessor<boolean>;
     canEdit: Accessor<boolean>;

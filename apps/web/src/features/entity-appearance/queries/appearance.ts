@@ -6,33 +6,17 @@ import {
 } from '@graphql-cache/exchange/record-selection';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
-import { setPreviewAppearance } from '@queries/preview';
 import { previewKeys } from '@queries/preview/keys';
-import {
-  getSoupEntityById,
-  hydrateSoupEntity,
-  optimisticUpdateSoupEntity,
-} from '@queries/soup/cache';
 import { soupKeys } from '@queries/soup/keys';
-import { databasesKeys, entityKeys, formsKeys } from '@queries/storage/keys';
-import type { ScheduledAction } from '@service-scheduled-action/generated/schemas/scheduledAction';
 import type { AppearanceEntityType } from '@service-storage/entity-appearance';
-import type { DatabaseDetail } from '@service-storage/generated/schemas/databaseDetail';
-import type { DocumentMetadata } from '@service-storage/generated/schemas/documentMetadata';
-import type { Form } from '@service-storage/generated/schemas/form';
-import type { FormDetail } from '@service-storage/generated/schemas/formDetail';
-import type { ListedDatabase } from '@service-storage/generated/schemas/listedDatabase';
-import type { ListedForm } from '@service-storage/generated/schemas/listedForm';
 import {
   type EntityAppearanceCacheWriteSubscription,
   EntityAppearanceFieldsFragmentDoc,
 } from '@service-storage/graphql/generated/graphql';
 import type { QueryClient, QueryKey } from '@tanstack/solid-query';
 import { err, ok, type Result } from 'neverthrow';
-import { match } from 'ts-pattern';
 import APPEARANCE_CACHE_WRITE from '../../../lib/service-clients/service-storage/graphql/entity-appearance-cache-write.graphql?raw';
 import type { EntityData } from '../../entity/types/entity';
-import { scheduledActionKeys } from '../../routines/queries/keys';
 import {
   type EntityAppearance,
   readEntityAppearance,
@@ -40,24 +24,24 @@ import {
   supportsEntityAppearance,
 } from '../core/appearance';
 import {
+  appearanceAdapter,
+  patchAppearanceReaders,
+  type SoupAppearanceTarget,
+} from './appearance-readers';
+import {
   type AppearanceMutationVariables,
   ENTITY_APPEARANCE_MUTATION_KEY,
 } from './pending-appearance';
-
-type Rollback = () => void;
 
 const appearanceSelection = selectRecords(EntityAppearanceFieldsFragmentDoc);
 
 async function readCachedAppearance(
   host: Pick<CacheHost, 'readRecordsByKeys'>,
-  entity: EntityData
+  id: string,
+  soup: SoupAppearanceTarget
 ) {
-  const type =
-    entity.type === 'initiative'
-      ? 'GraphqlSoupInitiative'
-      : 'GraphqlSoupDocument';
   const result = await readRecordsByKeys(host, appearanceSelection, [
-    `${type}:${entity.id}`,
+    `${soup.typename}:${id}`,
   ]);
   const record = result.records[0]?.record;
   if (
@@ -68,154 +52,9 @@ async function readCachedAppearance(
   }
 }
 
-function patchRestReaders(
-  queryClient: QueryClient,
-  entity: EntityData,
-  appearance: EntityAppearance
-): Rollback {
-  const rollbacks: Rollback[] = [];
-  function patch<T>(
-    queryKey: QueryKey,
-    read: (value: T) => EntityAppearance | null | undefined,
-    write: (value: T, next: EntityAppearance | null | undefined) => T
-  ) {
-    const previous = queryClient.getQueryData<T>(queryKey);
-    if (previous === undefined) return;
-    const priorAppearance = read(previous);
-    queryClient.setQueryData<T>(queryKey, (current) =>
-      current === undefined ? current : write(current, appearance)
-    );
-    rollbacks.push(() => {
-      queryClient.setQueryData<T>(queryKey, (current) =>
-        current !== undefined && sameAppearance(read(current), appearance)
-          ? write(current, priorAppearance)
-          : current
-      );
-    });
-  }
-  const previewBefore = setPreviewAppearance(entity.id, appearance);
-  if (previewBefore !== undefined) {
-    rollbacks.push(() => {
-      setPreviewAppearance(entity.id, previewBefore.appearance, appearance);
-    });
-  }
-  if (entity.type === 'document') {
-    patch<DocumentMetadata>(
-      entityKeys.documentMetadata(entity.id).queryKey,
-      (value) => value.appearance,
-      (value, next) => ({ ...value, appearance: next ?? null })
-    );
-  }
-  if (entity.type === 'document' || entity.type === 'initiative') {
-    const current = getSoupEntityById(entity.id);
-    if (current) {
-      optimisticUpdateSoupEntity({
-        tag: entity.type,
-        data: { id: entity.id, appearance },
-        frecency_score: current.frecency_score,
-      });
-      const priorSoupAppearance =
-        current?.tag === 'document' || current?.tag === 'initiative'
-          ? current.data.appearance
-          : null;
-      rollbacks.push(() => {
-        const latest = getSoupEntityById(entity.id);
-        if (
-          latest &&
-          (latest.tag === 'document' || latest.tag === 'initiative') &&
-          sameAppearance(latest.data.appearance, appearance)
-        ) {
-          hydrateSoupEntity({
-            tag: entity.type,
-            data: { id: entity.id, appearance: priorSoupAppearance ?? null },
-            frecency_score: latest.frecency_score,
-          });
-        }
-      });
-    }
-  }
-  if (entity.type === 'routine') {
-    patch<ScheduledAction>(
-      scheduledActionKeys.detail({ scheduleId: entity.id }).queryKey,
-      (value) => value.appearance,
-      (value, next) => ({ ...value, appearance: next ?? undefined })
-    );
-    patch<ScheduledAction[]>(
-      scheduledActionKeys.list.queryKey,
-      (value) => value.find((item) => item.id === entity.id)?.appearance,
-      (value, next) =>
-        value.map((item) =>
-          item.id === entity.id
-            ? { ...item, appearance: next ?? undefined }
-            : item
-        )
-    );
-  }
-  if (entity.type === 'database') {
-    patch<DatabaseDetail>(
-      databasesKeys.detail(entity.id).queryKey,
-      (value) => value.database.appearance,
-      (value, next) => ({
-        ...value,
-        database: { ...value.database, appearance: next ?? null },
-      })
-    );
-    patch<ListedDatabase[]>(
-      databasesKeys.list.queryKey,
-      (value) =>
-        value.find((item) => item.database.id === entity.id)?.database
-          .appearance,
-      (value, next) =>
-        value.map((item) =>
-          item.database.id === entity.id
-            ? {
-                ...item,
-                database: { ...item.database, appearance: next ?? null },
-              }
-            : item
-        )
-    );
-  }
-  if (entity.type === 'form') {
-    patch<FormDetail>(
-      formsKeys.detail(entity.id).queryKey,
-      (value) => value.form.appearance,
-      (value, next) => ({
-        ...value,
-        form: { ...value.form, appearance: next ?? null },
-      })
-    );
-    patch<ListedForm[]>(
-      formsKeys.list.queryKey,
-      (value) =>
-        value.find((item) => item.form.id === entity.id)?.form.appearance,
-      (value, next) =>
-        value.map((item) =>
-          item.form.id === entity.id
-            ? { ...item, form: { ...item.form, appearance: next ?? null } }
-            : item
-        )
-    );
-    for (const [queryKey] of queryClient.getQueriesData<Form[]>({
-      queryKey: formsKeys.forDatabase._def,
-    })) {
-      patch<Form[]>(
-        queryKey,
-        (value) => value.find((item) => item.id === entity.id)?.appearance,
-        (value, next) =>
-          value.map((item) =>
-            item.id === entity.id ? { ...item, appearance: next ?? null } : item
-          )
-      );
-    }
-  }
-  return () => {
-    for (const rollback of rollbacks.reverse()) rollback();
-  };
-}
-
 function appearanceCacheWrite(
-  entity: EntityData,
+  soup: SoupAppearanceTarget,
+  id: string,
   appearance: EntityAppearance | null
 ) {
   return {
@@ -226,11 +65,8 @@ function appearanceCacheWrite(
         {
           __typename: 'SoupUpdated',
           item: {
-            __typename:
-              entity.type === 'document'
-                ? 'GraphqlSoupDocument'
-                : 'GraphqlSoupInitiative',
-            id: entity.id,
+            __typename: soup.typename,
+            id,
             appearance,
           },
         },
@@ -293,42 +129,19 @@ export function createSaveEntityAppearance(sources: {
       span.setAttr('entity.type', entity.type);
       if (!supportsEntityAppearance(entity) || !isCurrent())
         return err(t('appearance.saveFailed'));
-      const type = match(entity.type)
-        .with('document', 'initiative', 'form', 'database', (type) => type)
-        .with('routine', () => 'scheduled_action' as const)
-        .otherwise(() => undefined);
-      if (!type) return err(t('appearance.saveFailed'));
+      const adapter = appearanceAdapter(
+        sources.queryClient,
+        entity.type,
+        entity.id
+      );
+      const soup = adapter.soup;
       const key = `${entity.type}:${entity.id}`;
       const host = sources.cacheHost();
       const keys: QueryKey[] = [
         previewKeys.item(entity.id).queryKey,
-        ...(entity.type === 'document'
-          ? [entityKeys.documentMetadata(entity.id).queryKey]
-          : []),
-        ...(entity.type === 'routine'
-          ? [
-              scheduledActionKeys.detail({ scheduleId: entity.id }).queryKey,
-              scheduledActionKeys.list.queryKey,
-            ]
-          : []),
-        ...(entity.type === 'database'
-          ? [
-              databasesKeys.detail(entity.id).queryKey,
-              databasesKeys.list.queryKey,
-            ]
-          : []),
-        ...(entity.type === 'form'
-          ? [
-              formsKeys.detail(entity.id).queryKey,
-              formsKeys.list.queryKey,
-              formsKeys.forDatabase._def,
-            ]
-          : []),
+        ...adapter.readers.map((reader) => reader.key),
       ];
-      const coldKeys =
-        entity.type === 'document' || entity.type === 'initiative'
-          ? [...keys, soupKeys._def]
-          : keys;
+      const coldKeys = soup ? [...keys, soupKeys._def] : keys;
       const coldReads = Promise.allSettled(
         coldKeys.flatMap((queryKey) =>
           sources.queryClient
@@ -363,18 +176,24 @@ export function createSaveEntityAppearance(sources: {
         ? previousWrites
         : [];
       writes.set(key, pending);
-      const rollbackRest = patchRestReaders(
-        sources.queryClient,
-        entity,
+      const rollbackRest = patchAppearanceReaders(
+        adapter,
+        entity.id,
         appearance
       );
       let graphPrevious: Awaited<ReturnType<typeof readCachedAppearance>>;
       const rollback = async () => {
         rollbackRest();
         const prior = graphPrevious;
-        if (host && prior && host === sources.cacheHost() && !host.disabled) {
+        if (
+          host &&
+          soup &&
+          prior &&
+          host === sources.cacheHost() &&
+          !host.disabled
+        ) {
           await queueWrite(`cache:${key}`, async () => {
-            const current = await readCachedAppearance(host, entity);
+            const current = await readCachedAppearance(host, entity.id, soup);
             if (
               isCurrent() &&
               host === sources.cacheHost() &&
@@ -382,7 +201,7 @@ export function createSaveEntityAppearance(sources: {
               sameAppearance(current.appearance, appearance)
             ) {
               await host.writeQuery(
-                appearanceCacheWrite(entity, prior.appearance ?? null)
+                appearanceCacheWrite(soup, entity.id, prior.appearance ?? null)
               );
             }
           });
@@ -402,33 +221,34 @@ export function createSaveEntityAppearance(sources: {
           host.disabled ||
           host !== sources.cacheHost() ||
           !isCurrent() ||
-          (entity.type !== 'document' && entity.type !== 'initiative')
+          !soup
         )
           return;
-        graphPrevious = await readCachedAppearance(host, entity);
+        graphPrevious = await readCachedAppearance(host, entity.id, soup);
         // Only patch loaded records; a failed save must not leave a partial cache entry.
         if (graphPrevious && isCurrent() && host === sources.cacheHost()) {
-          await host.writeQuery(appearanceCacheWrite(entity, appearance));
+          await host.writeQuery(
+            appearanceCacheWrite(soup, entity.id, appearance)
+          );
         }
       });
       const cache = Promise.allSettled([graph]);
       // Keep server writes ordered while newer choices are already visible locally.
       const result = await queueWrite(`server:${key}`, async () => {
         if (!isCurrent()) return err(t('appearance.saveFailed'));
-        const result = await sources.update(type, entity.id, appearance);
+        const result = await sources.update(
+          adapter.apiType,
+          entity.id,
+          appearance
+        );
         await cache;
         if (result.isErr() || !isCurrent()) return result;
         let reconciled = false;
-        if (
-          host &&
-          !host.disabled &&
-          host === sources.cacheHost() &&
-          (entity.type === 'document' || entity.type === 'initiative')
-        ) {
+        if (host && !host.disabled && host === sources.cacheHost() && soup) {
           sources.acknowledgeWrite?.(host);
           const confirmed = await Promise.allSettled([
             queueWrite(`cache:${key}`, async () => {
-              const current = await readCachedAppearance(host, entity);
+              const current = await readCachedAppearance(host, entity.id, soup);
               if (
                 !current ||
                 !isCurrent() ||
@@ -440,7 +260,11 @@ export function createSaveEntityAppearance(sources: {
                 (write) => write.status === 'pending' && write.isCurrent()
               );
               await host.writeQuery(
-                appearanceCacheWrite(entity, latest?.appearance ?? appearance)
+                appearanceCacheWrite(
+                  soup,
+                  entity.id,
+                  latest?.appearance ?? appearance
+                )
               );
               return true;
             }),
@@ -498,7 +322,7 @@ export function createSaveEntityAppearance(sources: {
           readers.token === token &&
           readers.confirmed
         ) {
-          patchRestReaders(sources.queryClient, entity, readers.confirmed);
+          patchAppearanceReaders(adapter, entity.id, readers.confirmed);
         }
       };
       reconcileReaders();

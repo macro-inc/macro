@@ -94,9 +94,7 @@ export function TopBar(props: {
     name: detail.database.name,
     ownerId: detail.database.owner_id,
     grant: detail.grant,
-    appearance: readEntityAppearance(
-      'appearance' in detail.database ? detail.database.appearance : undefined
-    ),
+    appearance: readEntityAppearance(detail.database.appearance),
   });
   const entityActions = (detail: DatabaseDetail): DatabaseEntityActions => ({
     favorited: favoriteAction.isFavorited(entity(detail)),

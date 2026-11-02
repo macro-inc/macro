@@ -1,6 +1,8 @@
-import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { EntityAppearanceTrigger } from '@app/features/entity-appearance/entity-appearance';
-import { useDocumentAppearance } from '@app/features/entity-appearance/queries/document-appearance';
+import {
+  markdownEntityFromMetadata,
+  useDocumentAppearance,
+} from '@app/features/entity-appearance/queries/document-appearance';
 import {
   ResponsiveBlockToolbar,
   ResponsivePermissionsBadge,
@@ -16,7 +18,6 @@ import { useUserId } from '@core/context/user';
 import { blockMetadataSignal } from '@core/signal/load';
 import { useCanEdit } from '@core/signal/permissions';
 import { useBlockDocumentName } from '@core/util/currentBlockDocumentName';
-import type { DocumentEntity } from '@entity';
 import { blockNameToItemType } from '@service-storage/client';
 import { type Accessor, Show } from 'solid-js';
 import { useMarkdownDocumentTools } from './useMarkdownDocumentTools';
@@ -35,31 +36,13 @@ export function TopBar(props: { name?: Accessor<string | undefined> } = {}) {
   const { fileOperations, menuTools, tools } = useMarkdownDocumentTools();
   const userId = useUserId();
   const canEdit = useCanEdit();
-  const appearanceEntity = (): DocumentEntity | undefined => {
-    const metadata = blockMetadataSignal();
-    if (
-      !metadata ||
-      metadata.fileType !== 'md' ||
-      (metadata.subType && metadata.subType !== 'snippet')
-    )
-      return;
-    return {
-      type: 'document',
-      id: metadata.documentId,
-      name: name() ?? metadata.documentName,
-      ownerId: metadata.owner,
-      fileType: 'md',
-      subType: metadata.subType === 'snippet' ? { type: 'snippet' } : null,
-      appearance: readEntityAppearance(
-        'appearance' in metadata ? metadata.appearance : undefined
-      ),
-    };
-  };
-  const appearance = useDocumentAppearance(appearanceEntity, () =>
+  const documentEntity = () =>
+    markdownEntityFromMetadata(blockMetadataSignal(), name());
+  const appearance = useDocumentAppearance(documentEntity, () =>
     Boolean(userId())
   );
   const headerEntity = () => {
-    const entity = appearanceEntity();
+    const entity = documentEntity();
     return entity && { ...entity, appearance: appearance() };
   };
 

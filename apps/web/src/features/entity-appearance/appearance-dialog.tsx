@@ -9,9 +9,12 @@ import {
 } from '@service-storage/graphql-soup';
 import { refreshProjectQueries } from '../projects/queries/project-revalidation';
 import { createSaveEntityAppearance } from './queries/appearance';
+import {
+  AppearanceEditor,
+  type AppearanceEditorProps,
+} from './views/appearance-editor';
 
-/** Lazy production wiring; the editor and query adapter accept explicit capabilities. */
-export const saveEntityAppearance = createSaveEntityAppearance({
+const saveEntityAppearance = createSaveEntityAppearance({
   queryClient,
   cacheHost: getGraphqlCacheHost,
   update: setEntityAppearance,
@@ -26,3 +29,15 @@ export const saveEntityAppearance = createSaveEntityAppearance({
     ]);
   },
 });
+
+/** Load the editor and its production adapters together, only when opened. */
+export function AppearanceDialog(props: Omit<AppearanceEditorProps, 'save'>) {
+  return (
+    <AppearanceEditor
+      {...props}
+      save={(appearance) =>
+        saveEntityAppearance(props.entity, appearance, props.isCurrent)
+      }
+    />
+  );
+}

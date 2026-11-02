@@ -96,8 +96,9 @@ query ProjectSoup($input: SoupInput!) {
     id
     soup(input: $input) {
       items {
-        ...SoupItemFields
+        __typename
         ... on GraphqlSoupInitiative {
+          ...InitiativeListFields
           taskCount
           completedTaskCount
         }

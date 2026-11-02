@@ -33,9 +33,7 @@ function toRoutine(schedule: ScheduledAction): RoutineSnapshot {
   return {
     id: schedule.id,
     name: schedule.name,
-    appearance: readEntityAppearance(
-      'appearance' in schedule ? schedule.appearance : undefined
-    ),
+    appearance: readEntityAppearance(schedule.appearance),
     ownerId: schedule.owner,
     createdAt: schedule.created_at,
     enabled: schedule.enabled,

@@ -1,6 +1,7 @@
 import { queryReadyGate } from '@queries/gate';
 import { useDocumentAccessLevelQuery } from '@queries/storage/document-metadata';
 import type { Accessor } from 'solid-js';
+import { match } from 'ts-pattern';
 import type { EntityData } from '../../entity/types/entity';
 import { useProjectIdentityQuery } from '../../projects/queries/project-identity';
 import { supportsEntityAppearance } from '../core/appearance';
@@ -32,22 +33,28 @@ export function useAppearanceEditAccess(
     const current = target();
     if (!current || !userId()) return false;
     if (current.ownerId === userId()) return true;
-    if (current.type === 'document') {
-      return (
-        queryReadyGate(document) &&
-        (document.data === 'edit' || document.data === 'owner')
-      );
-    }
-    if (current.type === 'initiative') {
-      return (
-        project.isSuccess &&
-        (project.data?.access === 'edit' || project.data?.access === 'owner')
-      );
-    }
-    if (current.type === 'database')
-      return current.grant === 'edit' || current.grant === 'owner';
-    if (current.type === 'form')
-      return current.access === 'edit' || current.access === 'owner';
-    return false;
+    return match(current)
+      .with(
+        { type: 'document' },
+        () =>
+          queryReadyGate(document) &&
+          (document.data === 'edit' || document.data === 'owner')
+      )
+      .with(
+        { type: 'initiative' },
+        () =>
+          project.isSuccess &&
+          (project.data?.access === 'edit' || project.data?.access === 'owner')
+      )
+      .with(
+        { type: 'database' },
+        (entity) => entity.grant === 'edit' || entity.grant === 'owner'
+      )
+      .with(
+        { type: 'form' },
+        (entity) => entity.access === 'edit' || entity.access === 'owner'
+      )
+      .with({ type: 'routine' }, () => false)
+      .exhaustive(() => false);
   };
 }

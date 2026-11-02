@@ -136,9 +136,7 @@ async function fetchDocumentPreviews(ids: string[]): Promise<PreviewItem[]> {
           loading: false,
           rawName: doc.document_name,
           name: doc.document_name,
-          appearance: readEntityAppearance(
-            'appearance' in doc ? doc.appearance : undefined
-          ),
+          appearance: readEntityAppearance(doc.appearance),
           fileType: doc.file_type as FileType,
           owner: doc.owner,
           updatedAt: doc.updated_at,
@@ -291,9 +289,7 @@ async function fetchInitiativePreviews(
             loading: false,
             rawName: item.data.name,
             name: item.data.name,
-            appearance: readEntityAppearance(
-              'appearance' in item.data ? item.data.appearance : undefined
-            ),
+            appearance: readEntityAppearance(item.data.appearance),
             owner: item.data.ownerId,
             updatedAt: item.data.updatedAt,
           },
@@ -446,9 +442,7 @@ async function fetchDatabasePreviews(ids: string[]): Promise<PreviewItem[]> {
         access: 'access',
         rawName: database.name,
         name: database.name,
-        appearance: readEntityAppearance(
-          'appearance' in database ? database.appearance : undefined
-        ),
+        appearance: readEntityAppearance(database.appearance),
         owner: database.owner_id,
       };
     })
@@ -472,9 +466,7 @@ async function fetchFormPreviews(ids: string[]): Promise<PreviewItem[]> {
         access: 'access',
         rawName: form.name,
         name: form.name,
-        appearance: readEntityAppearance(
-          'appearance' in form ? form.appearance : undefined
-        ),
+        appearance: readEntityAppearance(form.appearance),
         owner: form.ownerId,
       };
     })
@@ -494,9 +486,7 @@ async function fetchRoutinePreviews(ids: string[]): Promise<PreviewItem[]> {
         access: 'access',
         rawName: routine.value.name,
         name: routine.value.name,
-        appearance: readEntityAppearance(
-          'appearance' in routine.value ? routine.value.appearance : undefined
-        ),
+        appearance: readEntityAppearance(routine.value.appearance),
         owner: routine.value.owner,
         updatedAt: routine.value.updated_at,
       };

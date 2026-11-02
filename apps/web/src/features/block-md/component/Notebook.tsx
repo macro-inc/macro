@@ -105,7 +105,7 @@ export function Notebook(props: {
   const {
     element: blockElement,
     state,
-    appearanceEntity,
+    entity: documentEntity,
     permissions,
   } = useMarkdownDocument();
   const { comments: commentState, params } = state;
@@ -118,11 +118,11 @@ export function Notebook(props: {
     setAppearanceDialog(changeIcon(entity, anchor));
   };
   const appearance = useDocumentAppearance(
-    () => appearanceEntity?.(),
+    () => documentEntity?.(),
     () => Boolean(userId())
   );
   const titleEntity = () => {
-    const entity = appearanceEntity?.();
+    const entity = documentEntity?.();
     return entity && { ...entity, appearance: appearance() };
   };
   const scopeId = () => props.hotkeyScope;

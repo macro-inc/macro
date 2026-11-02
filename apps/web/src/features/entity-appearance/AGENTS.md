@@ -12,11 +12,12 @@ snippets, task projects (initiatives), forms, and databases.
 - `components/appearance-glyph.tsx`: presentation without data fetching.
 - `primitives/create-appearance-editor.ts`: immediate picks with guarded async settlement.
 - `primitives/create-recent-icons.ts`: account-scoped recent picks through `makePersistedState` and schema-validated storage.
-- `core/catalog.ts`: picker-only catalog groups and exclusions.
+- `core/catalog.ts`: generated picker catalog projections; curate sections in `tooling/icons/entity-icon-sections.json`.
 - `core/picker-grid.ts`: row projection and keyboard traversal independent of the virtual viewport.
 - `queries/appearance.ts`: domain writes and cache reconciliation.
+- `queries/appearance-readers.ts`: one typed entity adapter table for API routing, cancellation keys, and cache patches.
 - `queries/pending-appearance.ts`: transient mutation intent for live GraphQL readers, including uncached lists.
-- `save-entity-appearance.ts`: lazy production clients for the mutation adapter.
+- `appearance-dialog.tsx`: lazy editor composition with production clients for the mutation adapter.
 - `queries/document-appearance.ts`: authenticated lightweight identity projection for open Markdown headers.
 
 ## Scope
@@ -27,12 +28,12 @@ snippets, task projects (initiatives), forms, and databases.
 ## Recipes
 
 - Regenerate selectable icons with `bun tooling/icons/generate-entity-icons.ts`
-  from the repository root.
+  from the repository root; generation rejects unknown or duplicate section entries.
 - Generate wire types from Rust; never hand-write appearance DTOs.
 
 ## Checks
 
-- Run the focused editor, picker, appearance query, and imperative dialog tests; run the browser fixture only when browser testing is permitted.
+- Run the focused editor, picker, appearance query, and imperative dialog tests.
 
 ## Gotchas
 
@@ -50,5 +51,5 @@ snippets, task projects (initiatives), forms, and databases.
 - Preserve appearance in identity projections and renderers, including project list, sidebar, and picker rows; reserve type-only icons for navigation and status.
 - Keep document header icons editable outside breadcrumb navigation buttons; content titles have no leading icon.
 - Keep header icon buttons at 24px with 16px glyphs; retain the shared larger touch targets.
-- Pass document identity through `MarkdownDocument` context from each host; do not read legacy block metadata inside `Notebook`.
+- Pass document identity through the `MarkdownDocument` context's `entity` accessor from each host; do not read legacy block metadata inside `Notebook`.
 - Keep initiative list queries limited to server-backed initiative fields; unrelated cache-only Mail fields prevent cache hits and optimistic icon updates.

@@ -1,5 +1,4 @@
 import { DocumentTitleHoverCard } from '@app/components/entity-detail/DocumentTitleHoverCard';
-import { readEntityAppearance } from '@app/features/entity-appearance/core/appearance';
 import { t } from '@app/lib/i18n';
 import { isInBlock, useBlockAliasedName } from '@core/block';
 import {
@@ -251,10 +250,8 @@ export function BlockItemSplitLabel(props: {
   const suppliedIcon = children(() => props.icon);
   const appearance = () => {
     const metadata = blockMetadataSignal();
-    return (blockName === 'md' || blockName === 'snippet') &&
-      metadata &&
-      'appearance' in metadata
-      ? readEntityAppearance(metadata.appearance)
+    return (blockName === 'md' || blockName === 'snippet') && metadata
+      ? metadata.appearance
       : undefined;
   };
 

@@ -59,7 +59,7 @@ function HomeEntityBreadcrumb(props: {
   value: Accessor<string>;
   fileMenu?: JSX.Element;
   appearance?: EntityAppearance | null;
-  appearanceEntity?: Accessor<EntityData | undefined>;
+  entity?: Accessor<EntityData | undefined>;
   canEditAppearance?: Accessor<boolean>;
 }) {
   useSplitDisplayName(props.name);
@@ -73,11 +73,7 @@ function HomeEntityBreadcrumb(props: {
       {(item) => (
         <div class="flex min-w-0 items-center">
           <Show
-            when={
-              props.canEditAppearance?.()
-                ? props.appearanceEntity?.()
-                : undefined
-            }
+            when={props.canEditAppearance?.() ? props.entity?.() : undefined}
           >
             {(entity) => (
               <span class="shrink-0">
@@ -94,9 +90,7 @@ function HomeEntityBreadcrumb(props: {
             onClick={item.onSelect}
             tooltip={props.name()}
           >
-            <Show
-              when={!props.canEditAppearance?.() || !props.appearanceEntity?.()}
-            >
+            <Show when={!props.canEditAppearance?.() || !props.entity?.()}>
               <Show
                 when={
                   props.target.type === 'channel' ? props.target.id : undefined
@@ -175,7 +169,7 @@ function HomeMarkdownBreadcrumb(props: {
       target={props.target}
       value={props.value}
       appearance={appearance()}
-      appearanceEntity={headerEntity}
+      entity={headerEntity}
       canEditAppearance={permissions.canEdit}
       fileMenu={
         <SplitFileMenu

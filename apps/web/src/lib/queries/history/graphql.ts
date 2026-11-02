@@ -85,9 +85,7 @@ function historyItemFromSearchDocument(
       return {
         ...base,
         type: 'document',
-        appearance: readEntityAppearance(
-          'appearance' in record ? record.appearance : undefined
-        ),
+        appearance: readEntityAppearance(record.appearance),
         fileType: record.fileType ?? (markdown ? 'md' : undefined),
         subType,
       } as HistoryItem;
