@@ -152,6 +152,42 @@ test('a sampled session exports perf traces tagged with their class', async () =
   await provider.shutdown();
 });
 
+test('descendants of a perf span carry its class, including client spans in its context', async () => {
+  const provider = createWebTracingProvider(
+    {
+      serviceName: 'web-app',
+      environment: 'test',
+      enabled: async () => true,
+      tracesUrl: 'http://localhost/v1/traces',
+      perfSampleRate: 1,
+    },
+    resourceFromAttributes({}),
+    () => undefined,
+    true
+  );
+  const tracing = new Tracing();
+  const flow = tracing.perfSpan('view.home');
+  const phase = flow.span('home.items');
+  phase.run(() => tracing.clientSpan('http GET /items').end());
+  phase.end();
+  flow.end();
+  tracing.span('doc.open').end();
+  await provider.forceFlush();
+  const classes = Object.fromEntries(
+    (exporters.at(-1)?.getFinishedSpans() ?? []).map((span) => [
+      span.name,
+      span.attributes['macro.trace.class'],
+    ])
+  );
+  expect(classes).toEqual({
+    'http GET /items': 'perf',
+    'home.items': 'perf',
+    'view.home': 'perf',
+    'doc.open': undefined,
+  });
+  await provider.shutdown();
+});
+
 test('early spans keep explicit async parentage and wait for exporter enablement', async () => {
   let decide: (enabled: boolean) => void = () => {};
   const decision = new Promise<boolean>((resolve) => {

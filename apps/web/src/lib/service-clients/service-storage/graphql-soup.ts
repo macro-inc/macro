@@ -1,3 +1,4 @@
+import { traceParentExchange } from '@app/lib/urql-solid/trace-parent-exchange';
 import { toast } from '@core/component/Toast/Toast';
 import {
   ENABLE_BEARER_TOKEN_AUTH,
@@ -388,7 +389,11 @@ export async function dssGraphqlFetch(
 
 const graphqlSoupClient = createClient({
   url: `${dssHost}/items/soup/graphql`,
-  exchanges: [networkRevalidationExchange(), fetchExchange],
+  exchanges: [
+    networkRevalidationExchange(),
+    traceParentExchange,
+    fetchExchange,
+  ],
   fetch: dssGraphqlFetch,
   // urql's default ("within-url-limit") sends small documents as GET, but
   // GET on the DSS GraphQL path serves the GraphiQL IDE — only POST
@@ -501,6 +506,7 @@ function getUncachedRealtimeClient(): Client {
       networkRevalidationExchange(),
       notificationReceiptExchange(publishNotificationPatch),
       graphqlSoupSubscriptionExchange(websocketClient),
+      traceParentExchange,
       fetchExchange,
     ],
     fetch: dssGraphqlFetch,
@@ -843,6 +849,7 @@ export function getGraphqlSoupClient(): Client {
           }),
           notificationReceiptExchange(publishNotificationPatch),
           graphqlSoupSubscriptionExchange(graphqlWsClient),
+          traceParentExchange,
           fetchExchange,
         ],
         fetch: (input, init) => dssGraphqlFetch(input, init, host),

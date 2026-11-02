@@ -1,7 +1,7 @@
 import { render } from '@solidjs/testing-library';
 import { createSignal, Show } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { beginInteraction, TraceFlow, usePending } from './flow';
+import { beginInteraction, TraceFlow, useFlow, usePending } from './flow';
 
 type Recorded = {
   name: string;
@@ -11,9 +11,11 @@ type Recorded = {
   ended: boolean;
 };
 
-const { spans, operations } = vi.hoisted(() => ({
+const { spans, operations, contexts } = vi.hoisted(() => ({
   spans: [] as Recorded[],
   operations: [] as { name: string; outcome: string | undefined }[],
+  /** The span each `run` call made active, innermost last. */
+  contexts: [] as string[],
 }));
 
 vi.mock('./ui-operation', () => {
@@ -28,7 +30,14 @@ vi.mock('./ui-operation', () => {
     spans.push(record);
     const span = {
       span: (child: string) => makeSpan(child, name),
-      run: <T,>(work: () => T) => work(),
+      run: <T,>(work: () => T) => {
+        contexts.push(name);
+        try {
+          return work();
+        } finally {
+          contexts.pop();
+        }
+      },
       setAttr: (key: string, value: unknown) => {
         record.attrs[key] = value;
       },
@@ -41,11 +50,19 @@ vi.mock('./ui-operation', () => {
     return span;
   }
   return {
-    startUiOperation: (name: string) => {
+    setActiveRoute: () => {},
+    startUiOperation: (
+      name: string,
+      options: { kind?: string; attributes?: Record<string, unknown> } = {}
+    ) => {
       const operation = { name, outcome: undefined as string | undefined };
       operations.push(operation);
+      const span = makeSpan(name, undefined);
+      span.setAttr('flow.kind', options.kind);
+      for (const [key, value] of Object.entries(options.attributes ?? {}))
+        span.setAttr(key, value);
       return {
-        span: makeSpan(name, undefined),
+        span,
         get ended() {
           return operation.outcome !== undefined;
         },
@@ -69,6 +86,7 @@ describe('TraceFlow', () => {
   beforeEach(() => {
     spans.length = 0;
     operations.length = 0;
+    contexts.length = 0;
   });
 
   it('stays open until every pending phase under it has loaded', async () => {
@@ -118,6 +136,11 @@ describe('TraceFlow', () => {
     await flush();
     expect(spans.map((span) => span.name)).toEqual(['home.load']);
     expect(spans[0].events).toEqual(['home.items.ready']);
+    expect(spans[0].attrs).toMatchObject({
+      'home.items.waited': false,
+      'flow.ready_phase_count': 1,
+      'flow.phase_count': 0,
+    });
     expect(operations[0].outcome).toBe('painted');
   });
 
@@ -307,5 +330,76 @@ describe('TraceFlow', () => {
       'app.shell',
       'settings.view',
     ]);
+  });
+
+  it('tags roots with their kind and every phase with its root and route', async () => {
+    const [loading, setLoading] = createSignal(true);
+    function Content() {
+      usePending('doc.content', loading);
+      return null;
+    }
+    const navigation = beginInteraction('navigation', { kind: 'navigation' });
+    render(() => (
+      <TraceFlow name="view.doc" attributes={{ 'route.id': 'doc' }}>
+        <Content />
+      </TraceFlow>
+    ));
+    navigation.end();
+    await flush();
+    setLoading(false);
+    await flush();
+    const span = (name: string) => spans.find((each) => each.name === name);
+    expect(span('navigation')?.attrs).toMatchObject({
+      'flow.kind': 'navigation',
+      'route.id': 'doc',
+      'flow.phase_count': 2,
+      'flow.ready_phase_count': 0,
+    });
+    expect(span('view.doc')?.attrs).toMatchObject({
+      'flow.root': 'navigation',
+      'route.id': 'doc',
+    });
+    expect(span('view.doc')?.attrs['doc.content.waited']).toBe(true);
+    expect(span('doc.content')?.attrs).toMatchObject({
+      'flow.root': 'navigation',
+      'route.id': 'doc',
+      'flow.outcome': 'success',
+    });
+  });
+
+  it('records a flow with no interaction to join as a view root', async () => {
+    render(() => <TraceFlow name="view.home">{null}</TraceFlow>);
+    await flush();
+    expect(spans[0].attrs['flow.kind']).toBe('view');
+    beginInteraction('panel.toggle').end();
+    expect(spans[1].attrs['flow.kind']).toBe('interaction');
+  });
+
+  it('starts requests in the flow while it loads and outside it once settled', async () => {
+    const [loading, setLoading] = createSignal(true);
+    let flow: ReturnType<typeof useFlow> | undefined;
+    function Content() {
+      flow = useFlow();
+      usePending('doc.content', loading);
+      return null;
+    }
+    render(() => (
+      <TraceFlow name="view.doc">
+        <Content />
+      </TraceFlow>
+    ));
+    await flush();
+    let parent: string | undefined;
+    flow?.run(() => {
+      parent = contexts.at(-1);
+    });
+    expect(parent).toBe('view.doc');
+
+    setLoading(false);
+    await flush();
+    flow?.run(() => {
+      parent = contexts.at(-1);
+    });
+    expect(parent).toBeUndefined();
   });
 });

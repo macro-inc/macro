@@ -3,6 +3,7 @@ import {
   eventTimingCursor,
   initializeUiOperationTelemetry,
   readEventTimings,
+  setActiveRoute,
   startUiOperation,
 } from './ui-operation';
 
@@ -146,6 +147,32 @@ describe('UI operation timing', () => {
     expect(JSON.stringify(spans)).not.toContain('secret URL');
     operation.cancel();
     expect(spans[0].ends).toBe(1);
+  });
+
+  it('tags each root with its kind and, except navigations, the current route', () => {
+    setActiveRoute('channel');
+    startUiOperation('database.cell.commit').cancel();
+    startUiOperation('navigation', { kind: 'navigation' }).cancel();
+    startUiOperation('view.email', {
+      kind: 'view',
+      attributes: { 'route.id': 'email' },
+    }).cancel();
+    expect(spans.map((span) => span.attrs['flow.kind'])).toEqual([
+      'interaction',
+      'navigation',
+      'view',
+    ]);
+    expect(spans.map((span) => span.attrs['route.id'])).toEqual([
+      'channel',
+      undefined,
+      'email',
+    ]);
+    expect(spans[0].attrs).toMatchObject({
+      'ui.outcome': 'cancelled',
+      'ui.long_task_count': 0,
+      'ui.long_animation_frame_count': 0,
+    });
+    expect(spans[0].attrs['ui.elapsed_ms']).toEqual(expect.any(Number));
   });
 
   it('ends hidden operations and cancels frames without claiming a paint', () => {

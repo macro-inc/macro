@@ -76,7 +76,6 @@ describe('desktop recording', () => {
       'app.platform': 'desktop',
       'service.instance.id': 'launch-1',
       'macro.recording.id': 'recording-1',
-      'os.type': 'darwin',
     });
     recorded.identity.recordingId = null;
     expect(desktopResourceAttributes(recorded)).toMatchObject({

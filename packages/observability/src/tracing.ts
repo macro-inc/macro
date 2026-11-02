@@ -1,6 +1,7 @@
 import {
   type Context,
   context,
+  createContextKey,
   ROOT_CONTEXT,
   SpanKind,
   trace,
@@ -15,6 +16,9 @@ import {
 import { suppressUserId } from './privacy';
 import type { TelemetryTracingProvider } from './provider';
 import { type Span, SpanImpl, type TraceContext } from './span';
+
+/** Set on a perf span's context so every descendant carries the class. */
+const PERF_TRACE_KEY = createContextKey('@macro-inc/observability/perf-trace');
 
 export class Tracing {
   #provider: TelemetryTracingProvider | undefined;
@@ -96,13 +100,29 @@ export class Tracing {
     attributes?: Attributes,
     startTime?: number
   ): Span {
-    const otelSpan = trace
-      .getTracer(INSTRUMENTATION_SCOPE_NAME)
-      .startSpan(name, { kind, attributes, startTime }, parent);
+    // Descendants of a perf root (phases, HTTP client spans) are tagged too,
+    // so span queries can select a perf trace's spans without trace queries.
+    const perf =
+      attributes?.[ATTR_TRACE_CLASS] === PERF_TRACE_CLASS ||
+      parent.getValue(PERF_TRACE_KEY) === true;
+    const otelSpan = trace.getTracer(INSTRUMENTATION_SCOPE_NAME).startSpan(
+      name,
+      {
+        kind,
+        attributes: perf
+          ? { ...attributes, [ATTR_TRACE_CLASS]: PERF_TRACE_CLASS }
+          : attributes,
+        startTime,
+      },
+      parent
+    );
     const provider = this.#provider;
     return new SpanImpl(
       otelSpan,
-      trace.setSpan(parent, otelSpan),
+      trace.setSpan(
+        perf ? parent.setValue(PERF_TRACE_KEY, true) : parent,
+        otelSpan
+      ),
       (childName, childParent) => this.#startSpan(childName, childParent),
       () => this.#propagationEnabled,
       () =>

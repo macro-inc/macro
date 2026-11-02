@@ -250,6 +250,50 @@ local builds and during explicit native recordings. Children and propagated
 requests follow their root's decision. Unsampled sessions drop perf traces and
 install no runtime-resource or typing listeners.
 
+### Span model
+
+Every perf trace has one root. Phases are `<area>.<phase>` (`channel.messages`,
+`doc.load.context`); nested flows for a mounted subtree end in `.view` when the
+area has several (`channel.messages.view`). Names are static: no ids, counts or
+content in a name. In Datadog the span name is `resource_name` (the
+`operation_name` is the span kind, such as `Internal`).
+
+| Root | `flow.kind` | Started by | `route.id` |
+| --- | --- | --- | --- |
+| `app.boot` | `boot` | `observability/boot.ts` | The first view it opens |
+| `navigation` | `navigation` | split-router commit (`runner.ts`) | The first view it opens |
+| `view.<route id>` | `view` | `RouteView` in `split-router/solid/outlet.tsx`; a root only when no navigation is open, otherwise a phase of it | Its route |
+| Other `<TraceFlow>` roots (`quick_access.results`, `doc.editor` after the view settled) | `view` | `TraceFlow` | Last opened view |
+| `quick_access.open`, `quick_access.input`, `channel.tab`, `form.tab` | `interaction` | `beginInteraction` | Last opened view |
+| `database.cell.editor.open`, `database.cell.commit`, `form.submit`, `input.typing_burst` | `interaction` | `startUiOperation` | Last opened view |
+
+`urql.reconcile` and `graphql_cache.ipc.request` are perf-class spans that are
+not flows (no `flow.kind`); `app.runtime.sample` is a point sample.
+
+Attributes every perf trace carries, set by the owners (`ui-operation.ts`,
+`flow.tsx`, `packages/observability` tracing), not by call sites:
+
+| On | Attributes |
+| --- | --- |
+| Every span in a perf trace, including HTTP client spans started in it | `macro.trace.class=perf` |
+| Roots | `flow.kind`, `route.id` (when known), `ui.operation`, `ui.outcome` (`success`, `cancelled`, `hidden`, `timeout`), `ui.elapsed_ms`, `ui.work_to_ready_ms` (success only), `ui.long_task_count`, `ui.long_task_overlap_ms`, `ui.long_animation_frame_count`, `ui.long_animation_frame_overlap_ms`, `ui.long_animation_frame_blocking_ms`, `ui.visibility`; with an input event, `ui.input_to_ready_ms`, `ui.input_to_paint_opportunity_ms` and `ui.event_*` |
+| Flow roots | `flow.phase_count` (child spans opened), `flow.ready_phase_count` (`usePending` phases already loaded when reached) |
+| Phases | `flow.root` (the root's name), `route.id` (the root's), `flow.outcome` (`success` or `cancelled`) |
+| A phase's parent | `<phase>.waited`: `false` when it was already loaded (cache or an earlier load), `true` when the flow waited for it |
+| Resource (Datadog tags and facets) | `service.name=web-app`, `service.version` (Datadog `version`), `deployment.environment` (Datadog `env`), `app.runtime` (`browser`, `tauri`), `app.platform` (`web`, `desktop`, `ios`, `android`), `os.type` (`darwin`, `windows`, `linux`, `ios`, `android`, `chromeos`, `unknown`), `frontend_instance_id` |
+
+Entity context is opaque ids and categories only, on the phase that loads the
+entity (`block.type` and `document.id` on `block.data`, `channel.id`,
+`entity.type` and `entity.id`); never titles, text, queries or addresses.
+
+Requests join the flow that started them. urql queries (`traceParentExchange`)
+and TanStack queries (`lib/queries/flow-trace.ts`) created inside a flow send
+their request in that flow's context while it loads, so `graphql.transport`
+and `http <method> <path>` spans are descendants of the flow node and carry
+`traceparent` to the backend. They hang under the flow (`view.*` or a nested
+`TraceFlow`), not under the `usePending` phase that watches the query. A
+refetch after the flow settled starts its own trace.
+
 ### Boot (`app.boot`)
 
 Search `{ resource.service.name="web-app" && name="app.boot" }` after a cold
@@ -343,8 +387,10 @@ Phases you will see:
 ### Reading phases
 
 - A phase already settled when its flow reached it emits `<name>.ready` instead
-  of a span. That means it did not wait, not that the cache was hit; use the
-  explicit cache fields on lifecycle spans to compare warm and cold.
+  of a span and sets `<name>.waited=false` on its parent. That means it did not
+  wait, not that the cache was hit; use the explicit cache fields on lifecycle
+  spans to compare warm and cold. On the root, `flow.ready_phase_count` against
+  `flow.phase_count` shows how much of a view was already warm.
 - Background refetches after readiness do not extend or reopen a flow.
 - Phases overlap (`block.data` and `block.component` run concurrently); never
   add durations together.

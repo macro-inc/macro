@@ -20,6 +20,7 @@ import { frontendInstanceId } from './frontend-instance';
 import { configureNativeCallTracing } from './native-call-tracing';
 import { startNativeDiagnostics } from './native-diagnostics';
 import { recordNativeWebviewStart } from './native-lifecycle';
+import { osType } from './os-type';
 import { startRuntimeResourceSampling } from './runtime-resources';
 import { startTypingBurstTelemetry } from './typing-burst';
 import { initializeUiOperationTelemetry } from './ui-operation';
@@ -145,6 +146,7 @@ export async function initializeBrowserObservability(
       frontend_instance_id: frontendInstanceId,
       'app.runtime': isTauri() ? 'tauri' : 'browser',
       'app.platform': getPlatform(),
+      'os.type': osType(),
       ...(native && desktopResourceAttributes(desktopReady)),
     },
     spanAttributes: () => ({

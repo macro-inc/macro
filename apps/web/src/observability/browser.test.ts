@@ -40,6 +40,7 @@ vi.mock('./runtime-resources', () => ({
   startRuntimeResourceSampling: vi.fn(() => vi.fn()),
 }));
 vi.mock('./boot', () => ({ startBootTrace: vi.fn() }));
+vi.mock('./os-type', () => ({ osType: () => 'linux' }));
 vi.mock('./ui-operation', () => ({
   initializeUiOperationTelemetry: vi.fn(() => vi.fn()),
 }));
@@ -165,6 +166,7 @@ it('an older binary without diagnostics still obeys the normal telemetry gate', 
   expect(config.resourceAttributes).toMatchObject({
     'app.runtime': 'tauri',
     'app.platform': 'desktop',
+    'os.type': 'linux',
   });
   expect(startupSpan.setAttr).toHaveBeenCalledWith(
     'previous_document_checkpoint_available',

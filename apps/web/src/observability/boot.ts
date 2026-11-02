@@ -13,6 +13,7 @@ export function startBootTrace(): void {
   if (started || typeof performance === 'undefined') return;
   started = true;
   beginInteraction('app.boot', {
+    kind: 'boot',
     startTime: 0,
     closeOnJoin: true,
     onFinish: reconstructBoot,

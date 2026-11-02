@@ -1,4 +1,8 @@
-import { NOOP_SPAN, type Span } from '@macro-inc/observability';
+import {
+  NOOP_SPAN,
+  type Span,
+  type TraceContext,
+} from '@macro-inc/observability';
 import {
   type Accessor,
   createContext,
@@ -12,8 +16,9 @@ import {
   useContext,
 } from 'solid-js';
 import {
+  type FlowKind,
+  setActiveRoute,
   startUiOperation,
-  type UiOperation,
   type UiOperationOptions,
 } from './ui-operation';
 
@@ -21,11 +26,27 @@ type Attributes = Record<string, string | number | boolean>;
 type Outcome = 'success' | 'cancelled';
 
 /**
+ * What every node of one perf trace shares: the root's name and route, stamped
+ * on each phase so Datadog can aggregate phases per root without trace
+ * queries, and how many phases it opened versus found already loaded.
+ */
+interface FlowRoot {
+  readonly span: Span;
+  readonly name: string;
+  route: string | undefined;
+  phaseCount: number;
+  readyPhases: number;
+}
+
+const ROUTE_ID = 'route.id';
+
+/**
  * One span in a loading flow. It stays open while anything under it holds it
  * and settles the first time the holds reach zero.
  */
 interface FlowNode {
   readonly span: Span;
+  readonly root: FlowRoot;
   readonly settled: boolean;
   /** Keep the node open until the returned release runs. Idempotent. */
   hold(): () => void;
@@ -35,6 +56,7 @@ interface FlowNode {
 
 function createNode(
   span: Span,
+  root: FlowRoot,
   finish: (outcome: Outcome) => void,
   expired: () => boolean = () => false
 ): FlowNode {
@@ -42,6 +64,7 @@ function createNode(
   let settled = false;
   return {
     span,
+    root,
     get settled() {
       return settled || expired();
     },
@@ -68,10 +91,27 @@ function createNode(
 }
 
 /** A root node finishes its UI operation one paint after it settles. */
-function rootNode(operation: UiOperation): FlowNode {
+function rootNode(
+  name: string,
+  kind: FlowKind,
+  options: UiOperationOptions = {}
+): FlowNode {
+  const operation = startUiOperation(name, { ...options, kind });
+  const route = options.attributes?.[ROUTE_ID];
+  if (typeof route === 'string') setActiveRoute(route);
+  const root: FlowRoot = {
+    span: operation.span,
+    name,
+    route: typeof route === 'string' ? route : undefined,
+    phaseCount: 0,
+    readyPhases: 0,
+  };
   return createNode(
     operation.span,
+    root,
     (outcome) => {
+      operation.span.setAttr('flow.phase_count', root.phaseCount);
+      operation.span.setAttr('flow.ready_phase_count', root.readyPhases);
       if (outcome === 'success') operation.afterPaint();
       else operation.cancel();
     },
@@ -87,9 +127,22 @@ function childNode(
 ): FlowNode {
   const release = parent.hold();
   const span = parent.span.span(name);
+  const root = parent.root;
+  const route = attributes?.[ROUTE_ID];
+  if (typeof route === 'string') {
+    setActiveRoute(route);
+    // A navigation or boot is about the first view it opens.
+    if (root.route === undefined) {
+      root.route = route;
+      root.span.setAttr(ROUTE_ID, route);
+    }
+  }
+  span.setAttr('flow.root', root.name);
+  if (root.route !== undefined) span.setAttr(ROUTE_ID, root.route);
   for (const [key, value] of Object.entries(attributes ?? {}))
     span.setAttr(key, value);
-  return createNode(span, (outcome) => {
+  root.phaseCount++;
+  return createNode(span, root, (outcome) => {
     span.setAttr('flow.outcome', outcome);
     span.end();
     // Solid disposes children before parents: when the parent is unmounting
@@ -127,7 +180,9 @@ export interface Interaction {
   end(): void;
 }
 
-export type InteractionOptions = UiOperationOptions & {
+export type InteractionOptions = Omit<UiOperationOptions, 'kind'> & {
+  /** `boot` or `navigation` for the app's own roots; defaults to `interaction`. */
+  kind?: Extract<FlowKind, 'boot' | 'navigation' | 'interaction'>;
   /** Close the window as soon as one flow joins, such as the first view. */
   closeOnJoin?: boolean;
 };
@@ -146,7 +201,7 @@ export function beginInteraction(
   const enclosing = activeInteraction();
   const node = enclosing
     ? joinInteraction(enclosing, name, options.attributes)
-    : rootNode(startUiOperation(name, options));
+    : rootNode(name, options.kind ?? 'interaction', options);
   const release = node.hold();
   let closed = false;
   const interaction: OpenInteraction = {
@@ -183,7 +238,7 @@ function openNode(
     return childNode(parent.node, name, attributes);
   const interaction = activeInteraction();
   if (interaction) return joinInteraction(interaction, name, attributes);
-  return rootNode(startUiOperation(name, { attributes }));
+  return rootNode(name, 'view', { attributes });
 }
 
 /**
@@ -261,6 +316,7 @@ export function usePending(
   let attached = scope.node;
   const begin = () => {
     if (phase || scope.node.settled) return;
+    scope.node.span.setAttr(`${name}.waited`, true);
     phase = childNode(scope.node, name, attributes);
     release = phase.hold();
   };
@@ -270,8 +326,13 @@ export function usePending(
     release = undefined;
   };
   if (untrack(pending)) begin();
-  else if (!scope.node.settled)
+  else if (!scope.node.settled) {
+    // Already loaded when the flow reached it: usually a cache or a load an
+    // earlier view started. `waited` is queryable where the event is not.
     scope.node.span.event(`${name}.ready`, attributes);
+    scope.node.span.setAttr(`${name}.waited`, false);
+    scope.node.root.readyPhases++;
+  }
   createEffect(
     on(
       [pending, scope.current],
@@ -300,11 +361,18 @@ export interface Flow {
   readonly span: Span;
   /** Run async work as a child phase that holds the flow open until done. */
   task<T>(name: string, operation: (span: Span) => Promise<T>): Promise<T>;
+  /**
+   * Run work in the flow's trace while it is loading, so requests it starts
+   * become the flow's descendants. Once the flow settles, work runs in the
+   * caller's context: a background refresh never joins a finished view.
+   */
+  run<T>(work: () => T): T;
 }
 
 const NO_FLOW: Flow = {
   span: NOOP_SPAN,
   task: (_name, operation) => operation(NOOP_SPAN),
+  run: (work) => work(),
 };
 
 /** The enclosing flow, for imperative phases and attributes. */
@@ -315,6 +383,7 @@ export function useFlow(): Flow {
     get span() {
       return scope.node.span;
     },
+    run: (work) => (scope.node.settled ? work() : scope.node.span.run(work)),
     task: async (name, operation) => {
       if (scope.node.settled) return operation(NOOP_SPAN);
       const phase = childNode(scope.node, name);
@@ -329,4 +398,16 @@ export function useFlow(): Flow {
       }
     },
   };
+}
+
+/**
+ * The nearest flow as a parent for requests a component starts (see
+ * {@link Flow.run}), or undefined outside any flow. Transports that send
+ * later, such as urql's exchange chain, carry it to the send.
+ */
+export function useFlowTrace(): TraceContext | undefined {
+  const scope = useContext(FlowContext);
+  if (!scope) return;
+  const flow = useFlow();
+  return { run: flow.run };
 }

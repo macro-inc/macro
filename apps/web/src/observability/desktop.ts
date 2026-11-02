@@ -107,8 +107,6 @@ const desktopResourceReaders: Record<
   'macro.recording.enabled': (snapshot) =>
     snapshot.identity.recordingId !== null,
   'macro.native.version': (snapshot) => snapshot.identity.nativeVersion,
-  'os.type': (snapshot) =>
-    snapshot.identity.os === 'macos' ? 'darwin' : snapshot.identity.os,
   'macro.native.pid': (snapshot) => snapshot.identity.hostPid,
 };
 

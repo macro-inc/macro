@@ -9,7 +9,23 @@ export type UiOperationOutcome =
 type Outcome = UiOperationOutcome;
 type Attributes = Record<string, string | number | boolean>;
 
+/**
+ * What a perf root measures, recorded as `flow.kind` so dashboards can rank
+ * each kind separately. `boot` and `navigation` take their `route.id` from the
+ * first view that joins them, not from the route they started on.
+ */
+export type FlowKind = 'boot' | 'navigation' | 'view' | 'interaction';
+
+let activeRoute: string | undefined;
+
+/** Record the route of the view that opened most recently, for later roots. */
+export function setActiveRoute(route: string): void {
+  activeRoute = route;
+}
+
 export interface UiOperationOptions {
+  /** Defaults to `interaction`. */
+  kind?: FlowKind;
   event?: Event;
   attributes?: Attributes;
   /**
@@ -294,7 +310,12 @@ export function startUiOperation(
       ? undefined
       : performance.timeOrigin + options.startTime
   );
+  const kind = options.kind ?? 'interaction';
   span.setAttr('ui.operation', name);
+  span.setAttr('flow.kind', kind);
+  // A navigation's route is the view it opens, which joins it later.
+  if (kind !== 'boot' && kind !== 'navigation' && activeRoute !== undefined)
+    span.setAttr('route.id', activeRoute);
   span.setAttr('ui.visibility', document.visibilityState);
   span.setAttr('ui.performance_entry_types', supported.join(','));
   for (const [key, value] of Object.entries(options.attributes ?? {}))

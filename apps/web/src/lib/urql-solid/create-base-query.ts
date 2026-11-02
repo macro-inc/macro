@@ -1,3 +1,4 @@
+import { useFlowTrace } from '@app/observability/flow';
 import { Telemetry } from '@macro-inc/observability';
 import {
   type Accessor,
@@ -15,6 +16,7 @@ import {
   containsReactiveStore,
   supportsStoreReconciliation,
 } from './reactive-selection';
+import { TRACE_PARENT_CONTEXT_KEY } from './trace-parent-exchange';
 
 /** Bridges a framework-neutral urql observer into one reactive Solid store. */
 export function createBaseQuery<
@@ -26,7 +28,17 @@ export function createBaseQuery<
   name: string
 ): Result {
   const providerClient = useOptionalUrqlClient();
-  const options = createMemo(getOptions);
+  // Requests sent while the enclosing view loads join its trace; see
+  // traceParentExchange.
+  const flow = useFlowTrace();
+  const options = createMemo(() => {
+    const next = getOptions();
+    if (!flow) return next;
+    return {
+      ...next,
+      context: { ...next.context, [TRACE_PARENT_CONTEXT_KEY]: flow },
+    };
+  });
 
   const client = createMemo(() => {
     const override = options().client;

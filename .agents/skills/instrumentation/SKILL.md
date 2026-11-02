@@ -82,6 +82,14 @@ session.
   created inside it join it; wrap the newly mounted content in a flow.
 - Use `startUiOperation` directly only for a measured action that mounts no
   flow (a cell commit, a submit); call `afterPaint()` once the UI updated.
+- urql and TanStack queries created inside a flow already send their requests
+  in its trace. For another request a component starts during the load, start
+  it inside `useFlow().run(...)`, or hand `useFlowTrace()` to a transport that
+  sends later.
+- `flow.kind`, `route.id`, `flow.root`, `flow.outcome`, `<phase>.waited` and
+  the `ui.*` timing fields come from the owners; never set them per call site.
+  The [span model](../../../docs/agent-guide/observability.md#span-model) lists
+  them.
 - Keep names static and attributes to opaque ids, categories and counts. No
   flow per message, row or cell; measure the containing view.
 

@@ -223,6 +223,7 @@ export function createRunner(options: {
     committing += 1;
     // Views the commit mounts join this trace until they have loaded.
     const interaction = beginInteraction('navigation', {
+      kind: 'navigation',
       attributes: {
         'navigation.cause': navigation.cause,
         'navigation.pane_count': navigation.targets.length,
