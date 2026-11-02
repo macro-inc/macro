@@ -7,6 +7,7 @@ import type {
   Step,
 } from '@core/database-sql/generated/types';
 import * as sqlTrace from '@core/database-sql/trace';
+import { createNoopCacheHost } from '@graphql-cache/host/noop-host';
 import type { CacheHost } from '@graphql-cache/host/types';
 import type {
   CacheRevision,
@@ -138,6 +139,87 @@ afterEach(() => {
 });
 
 describe('createDatabaseSqlQuery', () => {
+  it('reads people offline first and revalidates people with the statement network policy', async () => {
+    const network = Promise.withResolvers<void>();
+    const people = vi.fn(async (policy: string) => {
+      if (policy === 'network-only') network.resolve();
+      return [];
+    });
+    const peopleCatalog: Catalog = {
+      tables: [
+        {
+          id: 'people',
+          databaseId: 'macro',
+          database: 'macro',
+          name: 'people',
+          source: 'people',
+          columns: [
+            { id: 'id', placement: 'id', name: 'id', kind: { kind: 'text' } },
+            {
+              id: 'name',
+              placement: 'name',
+              name: 'name',
+              kind: { kind: 'text' },
+            },
+            {
+              id: 'email',
+              placement: 'email',
+              name: 'email',
+              kind: { kind: 'text' },
+            },
+          ],
+        },
+      ],
+    };
+    const open: OpenEngine = async () => ({
+      start: () => ({
+        step: 'fetch',
+        id: 0,
+        query: { type: 'people', ids: null },
+        needs: [],
+        cursor: null,
+        limit: 500,
+      }),
+      feed_page: () => ({
+        step: 'done',
+        columns: [],
+        rows: [],
+        rowIds: [],
+        readTables: [],
+        truncated: false,
+        insertedRowIds: [],
+        changesApplied: 0,
+      }),
+      feed_bins: () => {
+        throw new Error('people does not use bins');
+      },
+      free: () => {},
+    });
+    const host = createNoopCacheHost();
+    const capabilities = {
+      client: () =>
+        createClient({ url: 'https://sql.invalid/graphql', exchanges: [] }),
+      cacheHost: () => host,
+      people,
+      catalog: async () => peopleCatalog,
+      open,
+    };
+    const statement = { schema, sql: 'SELECT name FROM macro.people' };
+    createRoot((cleanup) => {
+      dispose = cleanup;
+      createDatabaseSqlQuery(() => statement, capabilities);
+    });
+    await network.promise;
+    expect(people.mock.calls.map(([policy]) => policy)).toEqual([
+      'cache-only',
+      'network-only',
+    ]);
+    people.mockClear();
+    const result = await readDatabaseSql(statement, capabilities);
+    expect(result.isOk()).toBe(true);
+    expect(people).toHaveBeenCalledWith('network-only');
+  });
+
   it('does not open an engine for a pending catalog after its owner is disposed', async () => {
     const pending = Promise.withResolvers<Catalog>();
     const build = vi.fn(() => pending.promise);

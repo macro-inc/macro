@@ -41,6 +41,7 @@ fn soup_response_schema_exposes_frontend_fields() {
         "emailLabels: [GraphqlSoupEmailLabel!]!",
         "emailLinks: [GraphqlEmailLink!]!",
         "favorites(filter: FavoritesFilterInput): [GraphqlFavorite!]!",
+        "contacts: [ID!]!",
         "folders: [GraphqlSoupProject!]!",
         "input FavoritesFilterInput {",
         "entityTypes: [GraphqlEntityType!]! = []",

@@ -34,6 +34,9 @@ const mailAccounts = vi.hoisted(() => vi.fn());
 vi.mock('../email/mail-accounts', () => ({
   useMailAccountsQuery: mailAccounts,
 }));
+vi.mock('../contacts/graphql', () => ({
+  createGraphqlContactsQuery: vi.fn(),
+}));
 
 const leaderMocks = vi.hoisted(() => ({
   createTabLeaderSignal: vi.fn(),

@@ -256,6 +256,16 @@ never treat virtualized overscan or a visible thread parent as seeing its replie
 The backend-free desktop/phone/tablet regression is
 `bunx playwright test --config src/features/notifications/browser-test/playwright.config.ts`.
 
+## Contacts
+
+Normal contacts use `queries/contacts/contacts.ts`: GraphQL-enabled readers share
+`user.contacts` in the persistent cache, while the disabled path retains REST.
+Wait for remote flags before selecting the transport. Startup warms this catalog
+alongside mail accounts, independently of paged Soup hydration. Route contact
+invalidations through `invalidateContacts()` so the persisted catalog refreshes
+even with no picker mounted. Database SQL uses `fetchContacts()` with the
+statement's cache/network policy rather than a second TanStack catalog.
+
 ## Development Patterns
 
 Route database row rename and delete through `renameDatabase` and

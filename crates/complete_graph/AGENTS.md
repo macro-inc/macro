@@ -117,6 +117,8 @@ Email send admission, cancellation and status are exposed by `graphql_email`;
 `GraphqlUser.pendingEmailSends` lists authorized inbox attempts with cursor pagination.
 Keep this viewer-scoped listing independent of normalized-cache initialization.
 
+Normal contact IDs hang off authenticated `GraphqlUser.contacts`, independently of CRM/Soup contacts. `ContactsGraphqlContext` shares the contacts domain service from request data; the domain retains graph membership and self-inclusion semantics.
+
 Never remove or narrow anything deployed clients send without a dated
 deprecation (`Remove after YYYY-MM-DD`, at least 30 days out).
 `cargo x graphql-schema-compat` checks the SDL against `origin/main`, and CI runs

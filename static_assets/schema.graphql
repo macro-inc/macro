@@ -10078,6 +10078,10 @@ type GraphqlUser {
 	"""
 	id: ID!
 	"""
+	All normal contact user IDs for the authenticated viewer, including the viewer.
+	"""
+	contacts: [ID!]!
+	"""
 	A page filtered and ordered across the entire authorized table.
 	"""
 	databaseViewRows(databaseId: ID!, input: DatabaseViewRowsInput!): DatabaseViewRowsPage!

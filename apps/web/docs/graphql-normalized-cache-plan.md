@@ -1003,6 +1003,12 @@ Background hydration retains its existing opt-in notification contract. Soup's
 local collection source opts in; ordinary foreground queries refresh on their
 normal affected-operation notifications.
 
+## Normal contact hydration
+
+Normal contacts are separate from CRM contacts and Soup entities. The `Contacts` document selects authenticated `user.id` and the complete `user.contacts` ID catalog, including the viewer. The normalized cache stores membership on the viewer record without inventing another entity type.
+
+The backfill leader mounts the contacts query alongside mail accounts, independently of paged Soup lanes. The same live query serves contact pickers, and imperative database SQL reads use its persisted result. With GraphQL Soup disabled, contacts retain their REST/TanStack path. `contacts_invalidation` refreshes the persisted GraphQL catalog even without mounted readers; concurrent invalidations coalesce and request a trailing read when needed. Cache identity, replacement, persistence, and failed-refresh behavior use the shared GraphQL query infrastructure.
+
 ## CRM contact hydration
 
 The auxiliary lane in `src/lib/queries/soup/backfill.ts` hydrates CRM contacts

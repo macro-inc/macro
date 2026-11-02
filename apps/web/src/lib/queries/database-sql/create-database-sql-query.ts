@@ -31,8 +31,7 @@ import { buildDatabaseSqlCatalog } from '@core/database-sql/wasm-module';
 import { idToDisplayName, idToEmail } from '@core/user/util';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { Telemetry } from '@macro-inc/observability';
-import { queryClient } from '@queries/client';
-import { contactsQueryOptions } from '@queries/contacts/contacts';
+import { fetchContacts } from '@queries/contacts/contacts';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
 import {
   getGraphqlSoupCacheHost,
@@ -86,7 +85,8 @@ export interface DatabaseSqlQueryCapabilities {
         'onCacheChanged' | 'entityFilter' | 'readRecordsByKeys' | 'readQuery'
       >
     | undefined;
-  people: () => Promise<Person[]>;
+  /** People obey the same offline/network policy as the statement's other sources. */
+  people: (requestPolicy: RequestPolicy) => Promise<Person[]>;
   /** The engine; the wasm module unless a test says otherwise. */
   open?: OpenEngine;
   openView?: OpenView;
@@ -156,8 +156,8 @@ function productionDatabaseSqlCapabilities(): DatabaseSqlQueryCapabilities {
   return {
     client: getGraphqlSoupClient,
     cacheHost: getGraphqlSoupCacheHost,
-    people: async () => {
-      const { contacts } = await queryClient.fetchQuery(contactsQueryOptions());
+    people: async (requestPolicy) => {
+      const { contacts } = await fetchContacts(requestPolicy);
       return contacts.map((id) => ({
         id,
         name: idToDisplayName(id),
@@ -221,7 +221,7 @@ export function createDatabaseSqlQuery(
                 catalog: built,
                 requestPolicy,
                 cache: host,
-                people: capabilities.people,
+                people: () => capabilities.people(requestPolicy),
                 membership: host ? { host, baselines, reconcile } : undefined,
               }),
               capabilities,
@@ -416,7 +416,7 @@ export function readDatabaseSql(
         client: capabilities.client(),
         catalog,
         requestPolicy: 'network-only',
-        people: capabilities.people,
+        people: () => capabilities.people('network-only'),
       }),
       capabilities,
       { reason, scope: statement.scope, requestPolicy: 'network-only' }
