@@ -12,7 +12,7 @@ import TagIcon from '@icon/system/regular/tag.svg';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import PriorityIcon from '@icon/wide-priority-high.svg';
-import { Button, Dropdown } from '@ui';
+import { Dropdown, Tooltip } from '@ui';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
@@ -191,60 +191,59 @@ function TaskPropertyPill(props: {
 
   return (
     <div class="group/property relative inline-flex max-w-full">
-      <Show
-        when={isTouchDevice()}
-        fallback={
-          <Button
-            variant="secondary"
-            finish="flat"
-            size="sm"
-            as={Dropdown.Item}
-            role="menuitem"
-            tabIndex={-1}
-            closeOnSelect={false}
-            onSelect={cycle}
-            textValue={props.property.label}
+      <Tooltip.Root>
+        <Show
+          when={isTouchDevice()}
+          fallback={
+            <Tooltip.Trigger
+              as={Dropdown.Item}
+              closeOnSelect={false}
+              onSelect={cycle}
+              textValue={props.property.label}
+              aria-label={label()}
+              class="inline-flex min-h-7 min-w-0 w-auto items-center gap-2 rounded-full border border-edge-button bg-control px-2.5 text-sm text-ink-muted outline-none select-none not-touch:hover:text-ink focus-visible:ring-2 focus-visible:ring-accent touch:min-h-9 touch:pr-10"
+            >
+              {content()}
+            </Tooltip.Trigger>
+          }
+        >
+          <Tooltip.Trigger
+            as="button"
+            type="button"
+            onClick={cycle}
             aria-label={label()}
-            tooltip={tooltip()}
-            class="min-w-0 w-auto shrink touch:pr-10"
+            class="inline-flex min-h-7 min-w-0 items-center gap-2 rounded-full border border-edge-button bg-control px-2.5 text-sm text-ink-muted outline-none select-none not-touch:hover:text-ink focus-visible:ring-2 focus-visible:ring-accent touch:min-h-9 touch:pr-10"
           >
             {content()}
-          </Button>
-        }
-      >
-        <Button
-          variant="secondary"
-          finish="flat"
-          size="sm"
-          onClick={cycle}
-          aria-label={label()}
-          tooltip={tooltip()}
-          class="min-w-0 shrink touch:pr-10"
-        >
-          {content()}
-        </Button>
-      </Show>
-      <div class="absolute inset-y-0 right-0 z-1 flex items-center rounded-full bg-surface not-touch:invisible not-touch:group-hover/property:visible not-touch:group-focus-within/property:visible has-[[data-expanded]]:visible has-[[data-highlighted]]:visible">
+          </Tooltip.Trigger>
+        </Show>
+        <Tooltip.Portal>
+          <Tooltip.Content>{tooltip()}</Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
+      <div class="pointer-events-none absolute inset-y-0 right-0 z-1 flex items-center rounded-r-full bg-linear-to-l from-control from-60% to-transparent pl-4 not-touch:invisible not-touch:group-hover/property:visible not-touch:group-focus-within/property:visible has-[[data-expanded]]:visible has-[[data-highlighted]]:visible">
         <Show
           when={isTouchDevice()}
           fallback={
             <Dropdown.Sub>
-              <Button
-                variant="ghost"
-                as={Dropdown.SubTrigger}
-                role="menuitem"
-                tabIndex={-1}
-                size="icon-sm"
-                aria-label={menuLabel()}
-                textValue={menuLabel()}
-                tooltip={menuLabel()}
-              >
-                <Dynamic
-                  component={current().icon}
-                  class="size-3.5"
-                  data-icon-motion="none"
-                />
-              </Button>
+              <Tooltip.Root>
+                <Tooltip.Trigger
+                  as={Dropdown.SubTrigger}
+                  aria-label={menuLabel()}
+                  textValue={menuLabel()}
+                  onPointerMove={(event) => event.preventDefault()}
+                  class="pointer-events-auto flex h-full w-7 shrink-0 items-center justify-center rounded-full p-0 text-ink-muted outline-none not-touch:hover:text-ink focus-visible:ring-2 focus-visible:ring-accent touch:min-h-9 touch:w-9"
+                >
+                  <Dynamic
+                    component={current().icon}
+                    class="size-3.5"
+                    data-icon-motion="none"
+                  />
+                </Tooltip.Trigger>
+                <Tooltip.Portal>
+                  <Tooltip.Content>{menuLabel()}</Tooltip.Content>
+                </Tooltip.Portal>
+              </Tooltip.Root>
               <Dropdown.SubContent class="min-w-48 max-w-80">
                 {options()}
               </Dropdown.SubContent>
@@ -253,11 +252,10 @@ function TaskPropertyPill(props: {
         >
           <MobileDrawer restoreFocus>
             <MobileDrawer.Trigger
-              as={Button}
-              variant="ghost"
-              size="icon-sm"
+              as="button"
+              type="button"
               aria-label={menuLabel()}
-              tooltip={menuLabel()}
+              class="pointer-events-auto flex h-full w-7 shrink-0 items-center justify-center rounded-full p-0 text-ink-muted outline-none not-touch:hover:text-ink focus-visible:ring-2 focus-visible:ring-accent touch:min-h-9 touch:w-9"
             >
               <Dynamic
                 component={current().icon}

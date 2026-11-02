@@ -87,11 +87,11 @@ In Properties, icon pills use a wrapping row on desktop and touch. Click or tap
 one to cycle Show → Hide when empty → Hide (skipping Hide when empty for Tags,
 Updated, and Created by). A pill tooltip explains the current mode and next click.
 Hover or keyboard-focus a pill to reveal its current-state menu icon (an eye,
-half-filled circle, or crossed-out eye), overlaid at the right on an opaque
-backing rather than a separate button-group segment. Click the icon to choose
-a mode directly. On touch, the icon stays visible and opens a small visibility
-sheet above View; dismissing it returns focus to the icon. Mode choices keep
-View open.
+half-filled circle, or crossed-out eye), overlaid at the right on a background
+that fades to transparent toward the left. Hover only reveals the icon;
+activate it by click or keyboard to open the mode menu. On touch, the icon stays
+visible and opens a small visibility sheet above View; dismissing it returns
+focus to the icon. Mode choices keep View open.
 The mobile bottom dock has **+ Task** and Search, with no floating Ask AI input.
 Project and CRM task lists use the same separate controls. Changes in either
 sheet remain part of the existing saved-view draft; its save actions stay in

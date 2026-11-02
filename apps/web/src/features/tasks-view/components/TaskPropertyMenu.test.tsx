@@ -26,6 +26,7 @@ vi.mock('@ui', async () => ({
   ...(await import('../../../components/ui/components/Button')),
   ...(await import('../../../components/ui/components/ButtonGroup')),
   ...(await import('../../../components/ui/components/Dropdown')),
+  ...(await import('../../../components/ui/components/Tooltip')),
 }));
 
 beforeEach(() => {
@@ -44,6 +45,7 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  vi.useRealTimers();
 });
 
 it('cycles supported pill modes and keeps direct keyboard choices in View', async () => {
@@ -96,6 +98,36 @@ it('cycles supported pill modes and keeps direct keyboard choices in View', asyn
   expect(display().dueDate).toBe('hide_when_empty');
   expect(open()).toBe(true);
   expect(empty.getAttribute('aria-checked')).toBe('true');
+});
+
+it('opens visibility choices on click, not pointer hover', async () => {
+  vi.useFakeTimers();
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime });
+  const [open, setOpen] = createSignal(true);
+  render(() => (
+    <HeaderActionGroup label="View options">
+      <ListViewMenu open={open()} onOpenChange={setOpen}>
+        <TaskPropertyMenu
+          display={DEFAULT_TASK_PROPERTY_DISPLAY}
+          showProject
+          onChange={vi.fn()}
+        />
+      </ListViewMenu>
+    </HeaderActionGroup>
+  ));
+  const trigger = screen.getByRole('menuitem', {
+    name: 'Change Due date visibility',
+  });
+  await user.hover(trigger);
+  await vi.advanceTimersByTimeAsync(150);
+  expect(trigger.getAttribute('aria-expanded')).toBe('false');
+
+  await user.click(trigger);
+  expect(trigger.getAttribute('aria-expanded')).toBe('true');
+  expect(
+    screen.getByRole('menuitemradio', { name: 'Hide when empty' })
+  ).toBeTruthy();
+  expect(open()).toBe(true);
 });
 
 it('keeps View open while touch pills and their visibility sheet change modes', async () => {
