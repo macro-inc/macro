@@ -212,6 +212,24 @@ Desktop keeps the plain image. The backend-free phone and tablet regression is
 `bunx playwright test --config src/features/block-image/browser-test/playwright.config.ts`
 from `apps/web`.
 
+## Reading unrecognized files
+
+A file Macro has no viewer for reads in place when its content is text: one whose
+name has no recognized extension, or a text type such as `.env`, `.ics`, `.vcf`,
+or `.dot`. Both `/app/unknown/<id>` (channel attachments, mentions) and the Drive
+detail show it read-only through the static Lexical renderer, one literal line
+per file line, never as Markdown.
+
+- Upload a file named `notes` containing `# heading` and an indented line. Open
+  it from a channel and from Drive: the heading stays literal, the indentation
+  stays, and the header keeps Download and Share. Select several lines and copy:
+  the copy has no extra blank lines.
+- Binary content, empty files, text that is not UTF-8, and files over 1 MB or
+  20,000 lines keep **No preview available** with Share and Download. Known
+  binary types such as `.zip` never download for this check; legacy Office files
+  keep their conversion message.
+- `.txt` and other code types open in the code editor instead.
+
 ## Downloading files
 
 Open a video, image, code file, canvas, or other uploaded file in Drive. Its
