@@ -127,7 +127,8 @@ and cells. The core storage adapter purges its journal in the same transaction.
    their view references, when they cannot. A column bound to a property shared
    beyond the database stays bound to it when the duplicator may bind it, and
    otherwise gets a property of the copy's own with the same options and
-   values. Relation cells naming rows that are gone are left out. Grants, the team share, forms,
+   values. Relation cells naming rows that are gone are left out, and formula values
+   are computed again in the copy from its own columns. Grants, the team share, forms,
    webhooks, saved queries, column protections and the journal stay behind; the
    copy's history starts empty.
 

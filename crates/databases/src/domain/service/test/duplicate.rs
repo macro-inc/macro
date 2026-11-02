@@ -796,3 +796,65 @@ async fn a_shared_property_the_duplicator_cannot_bind_is_copied_into_one_the_cop
     assert_eq!(option.color.as_deref(), Some("#FF0000"));
     assert_eq!(value, Some(PropertyValue::SelectOption(vec![option.id])));
 }
+
+/// A formula column's values are stored like other cells; the copy's are
+/// computed from its own columns.
+#[tokio::test]
+async fn a_formula_column_is_copied_with_its_values_computed_in_the_copy() {
+    let seeded = seeded().await;
+    let seats = ColumnId::new();
+    seeded
+        .service
+        .apply_ops(
+            edit(seeded.database_id),
+            viewer(OWNER),
+            OpBatch::from(vec![DatabaseOp::Column {
+                table: seeded.table_id,
+                column: seats,
+                change: ColumnChange::Create {
+                    definition: NewColumn::Derived {
+                        name: "Seats".into(),
+                        formula: models_databases::Formula::Binary {
+                            operator: models_databases::Operator::Multiply,
+                            left: Box::new(models_databases::Formula::Column {
+                                column: seeded.plus_ones_column.id,
+                            }),
+                            right: Box::new(models_databases::Formula::Number { value: 2.0 }),
+                        },
+                    },
+                    after: None,
+                },
+            }]),
+        )
+        .await
+        .unwrap();
+
+    let copy = seeded
+        .service
+        .duplicate_database(view_receipt(seeded.database_id, VIEWER), user(VIEWER), None)
+        .await
+        .unwrap();
+
+    let w = seeded.world.lock().unwrap();
+    let guests = w
+        .tables
+        .iter()
+        .find(|t| t.database_id == copy.id)
+        .unwrap()
+        .id;
+    let source_seats = w.columns.iter().find(|c| c.id == seats).unwrap();
+    let copied = w
+        .columns
+        .iter()
+        .find(|c| c.table_id == guests && matches!(c.config, Some(ColumnConfig::Derived { .. })))
+        .unwrap();
+    assert_ne!(
+        copied.property_definition_id,
+        source_seats.property_definition_id
+    );
+    let sam = w.rows[&guests][0].id;
+    assert_eq!(
+        w.cells[&sam].get(&copied.property_definition_id),
+        Some(&PropertyValue::Num(4.0))
+    );
+}
