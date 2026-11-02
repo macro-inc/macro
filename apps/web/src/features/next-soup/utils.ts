@@ -16,6 +16,7 @@ import {
   type CalendarViewTarget,
 } from '@app/features/calendar-view/types';
 import { callsHostedContent } from '@app/features/calls-view/calls-hosted-content';
+import { markCrmNotificationsSeenOnOpen } from '@app/features/crm/mark-record-notifications-seen';
 import { driveHostedContent } from '@app/features/drive-view/drive-hosted-content';
 import { projectHostedContent } from '@app/features/projects/open-project';
 import { reviewsHostedContent } from '@app/features/reviews-view/reviews-hosted-content';
@@ -907,7 +908,7 @@ export function markChannelNotificationsSeenOnOpen(
 
 /**
  * Clear the dots of rows whose opened view has no block that marks the row's
- * loaded notifications read: calendar events and agent sessions.
+ * loaded notifications read: calendar events, agent sessions, and CRM records.
  */
 export function markRowNotificationsSeenOnOpen(
   entity: EntityWithRawNotifications<EntityData>,
@@ -915,6 +916,7 @@ export function markRowNotificationsSeenOnOpen(
 ) {
   markCalendarNotificationSeenOnOpen(entity, notificationSource);
   markAgentSessionNotificationsSeenOnOpen(entity, notificationSource);
+  markCrmNotificationsSeenOnOpen(entity, notificationSource);
 }
 
 /**
