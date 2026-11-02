@@ -19,15 +19,8 @@ CREATE TRIGGER crm_contacts_fill_team_id
     BEFORE INSERT ON crm_contacts
     FOR EACH ROW EXECUTE FUNCTION crm_contacts_fill_team_id();
 
--- Backfill without touching updated_at, which listings show and sort by.
-ALTER TABLE crm_contacts DISABLE TRIGGER crm_contacts_set_updated_at;
-UPDATE crm_contacts ct
-SET team_id = co.team_id
-FROM crm_companies co
-WHERE co.id = ct.company_id;
-ALTER TABLE crm_contacts ENABLE TRIGGER crm_contacts_set_updated_at;
-
-ALTER TABLE crm_contacts ALTER COLUMN team_id SET NOT NULL;
+-- The backfill and NOT NULL follow in their own migrations, so no single
+-- transaction holds this table's exclusive lock across a full scan.
 ALTER TABLE crm_contacts ALTER COLUMN company_id DROP NOT NULL;
 
 -- Email sync keeps personal-provider addresses (gmail.com etc.) out unless
