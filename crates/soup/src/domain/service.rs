@@ -70,6 +70,7 @@ use serde::Serialize;
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use std::sync::Arc;
+use tracing::Instrument;
 use uuid::Uuid;
 
 mod agent_metadata;
@@ -1259,7 +1260,12 @@ where
                 SoupSortDirection::Desc,
             ),
             self.handle_crm_company_request(crm_company_request),
-            self.handle_crm_contact_request(crm_contact_request),
+            self.handle_crm_contact_request(crm_contact_request)
+                .instrument(tracing::info_span!(
+                    "soup.crm_contact_candidates",
+                    contact_count = crm_contact_ids.len(),
+                    contact_ids = ?crm_contact_ids,
+                )),
         );
 
         let mut candidates_by_entity = HashMap::new();
