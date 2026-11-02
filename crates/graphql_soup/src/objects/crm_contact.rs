@@ -59,18 +59,33 @@ impl<E: SoupEntityEdges> GraphqlSoupCrmContact<E> {
         ID(self.0.team_id.to_string())
     }
     /// Parent company; null for a contact without a company.
-    pub(super) async fn company_id(&self) -> Option<ID> {
+    pub(super) async fn parent_company_id(&self) -> Option<ID> {
         self.0
             .company_id
             .map(|company_id| ID(company_id.to_string()))
     }
     /// Parent company's display name; null without a company.
-    pub(super) async fn company_name(&self) -> Option<&str> {
+    pub(super) async fn parent_company_name(&self) -> Option<&str> {
         self.0.company_name.as_deref()
     }
     /// Full email address; null for a contact added by name alone.
-    pub(super) async fn email(&self) -> Option<&str> {
+    pub(super) async fn email_address(&self) -> Option<&str> {
         self.0.email.as_deref()
+    }
+    /// Parent company, or the nil ID for a contact without a company.
+    #[graphql(deprecation = "Use parentCompanyId. Remove after 2026-12-10.")]
+    pub(super) async fn company_id(&self) -> ID {
+        ID(self.0.company_id.unwrap_or_default().to_string())
+    }
+    /// Parent company's display name, or empty without a company.
+    #[graphql(deprecation = "Use parentCompanyName. Remove after 2026-12-10.")]
+    pub(super) async fn company_name(&self) -> &str {
+        self.0.company_name.as_deref().unwrap_or_default()
+    }
+    /// Full email address, or empty for a contact added by name alone.
+    #[graphql(deprecation = "Use emailAddress. Remove after 2026-12-10.")]
+    pub(super) async fn email(&self) -> &str {
+        self.0.email.as_deref().unwrap_or_default()
     }
     /// Team-local display name.
     pub(super) async fn name(&self) -> Option<&str> {
