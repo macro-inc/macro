@@ -20,5 +20,11 @@ query state and exact selection resolver over stand-in transport/profile service
 It covers selected names outside the page, unknown/custom emails, broader server
 matches, page replacement, input focus and arrow navigation on desktop/phone.
 
+`/?list-filters=drive` and `/?list-filters=notes` mount the production Drive/CRM
+filter models and desktop/mobile controls over bounded contact stand-ins. They
+check lazy loading, Me, persisted unavailable IDs, broader-than-substring matches,
+page replacement and viewport reset, checkbox preservation, and Only without
+changing unrelated facets. They do not instantiate Tasks' full AI-filter catalog.
+
 This is UI/adapter coverage, not a WASM memory measurement or live-backend trace.
 Real Turso/OPFS hydration/search coverage lives in `crates/client/cache-turso`.

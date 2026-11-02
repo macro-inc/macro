@@ -163,6 +163,13 @@ and **Created by** submenus alongside **Files** for Default, All files, and Emai
 attachments. Options within a group match any selected option; different groups
 combine to narrow the results. Created by is hidden while My Files
 is restricted to your own files. Recent offers only file-scope filtering.
+Created by uses a bounded searchable contact window on desktop and in the mobile
+drawer, with Me and persisted selections resolved independently of that window.
+Next options replaces the page; selected and unavailable IDs remain selected,
+and Only clears off-page selections in this group without changing other facets.
+Partial/offline cache data is labeled rather than treated as an empty directory.
+The source stays idle until the creator submenu/drawer section opens. Regression:
+`src/lib/core/internal/browser-test/list-filters.browser.e2e.ts` (stand-in data).
 The desktop Filter trigger shows the number of active filters, matching the
 mobile drawer; clearing all filters removes the badge. Use the left checkboxes
 (or Space) to combine Type options without closing. Row activation adds and

@@ -25,6 +25,7 @@
     "graphql_cache_entity_filter",
     "graphql_cache_entity_filter_resume",
     "graphql_cache_hydrate",
+    "graphql_cache_hydrate_scoped",
     "graphql_cache_init_with_schema",
     "graphql_cache_inspect_mutations",
     "graphql_cache_inspect_query",

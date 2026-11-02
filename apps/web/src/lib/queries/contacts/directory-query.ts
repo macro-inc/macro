@@ -2,7 +2,7 @@ import { debouncedDependent } from '@core/util/debounce';
 import type { CacheHost } from '@graphql-cache/host/types';
 import { queryReadyGate } from '@queries/gate';
 import { subscribeToVisibleCacheChanges } from '@queries/subscribe-to-visible-cache-changes';
-import { queryOptions, useQuery } from '@tanstack/solid-query';
+import { hashKey, queryOptions, useQuery } from '@tanstack/solid-query';
 import {
   type Accessor,
   batch,
@@ -47,7 +47,13 @@ function contactWindowOptions(
     queryFn: async ({ signal }) => {
       if (!userId) throw new Error('Contact directory requires authentication');
       const page = await reader(userId, host, request, signal);
-      return { userId, hostId: host?.clientId, generation, page };
+      return {
+        userId,
+        hostId: host?.clientId,
+        generation,
+        requestKey: hashKey([request]),
+        page,
+      };
     },
     enabled: !!userId,
     gcTime: 0,
@@ -107,6 +113,7 @@ export function createContactDirectoryWindow(
       return undefined;
     const result = query.data;
     if (
+      result.requestKey !== hashKey([request()]) ||
       result.page.query !== search() ||
       result.userId !== scope().userId ||
       result.hostId !== scope().host?.clientId ||
@@ -140,6 +147,8 @@ export function createContactDirectoryWindow(
       setSearch(value);
     },
     data,
+    windowKey: () =>
+      data() ? `${generation()}:${hashKey([request()])}` : undefined,
     loading: () => query.isFetching || search() !== debouncedSearch(),
     error: () => query.error,
     next: () => {

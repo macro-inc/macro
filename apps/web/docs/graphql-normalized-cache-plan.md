@@ -1216,6 +1216,12 @@ Guarded foreground hydration warms returned contacts on supported engines.
 Calendar search organizer/attendee filters now combine bounded suggestions with
 independent selected-email labels and do not use the global full-list hook.
 Their avatars consume resolved names rather than adding name-store history.
+Drive creators and CRM Notes creators now use the same reads via lazy option
+sources in the shared list filter menu and mobile drawer. Selected IDs and Me
+remain separate from the bounded visible page; selection changes do not shuffle
+clicked rows or accumulate prior pages. Only replaces the whole current group,
+including selected IDs outside the page. Tasks' AI-filter catalog and CRM company
+owner/team semantics have not been changed.
 Other picker migrations, before-limit DM ranking/exclusions, and authoritative
 removal reconciliation remain in [the contacts checklist](../../../docs/design/disk-backed-contacts.md).
 

@@ -6,10 +6,14 @@ import {
   createContactDirectoryWindow,
 } from '@queries/contacts/directory-query';
 import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
-import { createMemo, createSignal } from 'solid-js';
+import { createMemo, createSignal, Match, Switch } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ContactDirectoryInspector } from '../ContactDirectoryInspector';
 import { CalendarFilterFixture } from './calendar-fixture';
+import {
+  DriveListFilterFixture,
+  NotesListFilterFixture,
+} from './list-filter-fixture';
 import { changeViewer, fetchContactDirectoryPage } from './network';
 
 const client = new QueryClient();
@@ -132,11 +136,25 @@ if (!root) throw new Error('Missing fixture root');
 render(
   () => (
     <QueryClientProvider client={client}>
-      {new URLSearchParams(location.search).has('filters') ? (
-        <CalendarFilterFixture />
-      ) : (
-        <App />
-      )}
+      <Switch fallback={<App />}>
+        <Match
+          when={
+            new URLSearchParams(location.search).get('list-filters') === 'drive'
+          }
+        >
+          <DriveListFilterFixture />
+        </Match>
+        <Match
+          when={
+            new URLSearchParams(location.search).get('list-filters') === 'notes'
+          }
+        >
+          <NotesListFilterFixture />
+        </Match>
+        <Match when={new URLSearchParams(location.search).has('filters')}>
+          <CalendarFilterFixture />
+        </Match>
+      </Switch>
     </QueryClientProvider>
   ),
   root

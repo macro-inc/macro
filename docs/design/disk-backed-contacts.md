@@ -5,12 +5,13 @@ contact hydration, bounded page retention, a `person` projection, and a generate
 cursor-only backfill result. Background hydration is now wired under Soup's
 existing authenticated tab leadership and cache flag. It admits pages under an
 engine-checked account/storage generation and saves only committed cursors.
-The contact debug inspector and Calendar search's organizer/attendee pickers
-now use bounded windows. Explicit selected ID/email lookup reads viewer-scoped
+The contact debug inspector, Calendar search's organizer/attendee pickers,
+Drive creator filters and CRM Notes creator filters now use bounded windows. Explicit selected ID/email lookup reads viewer-scoped
 keys offline and authoritative bounded batches online; selected values remain
 independent of suggestions. Other product menus still retain legacy arrays.
-**Next step:** migrate the remaining filters and implement before-limit DM
-ranking/exclusions for Quick Access and shared recipient pickers.
+**Next step:** migrate Soup and CRM owner filters; handle Tasks' AI-filter people
+catalog before migrating its people controls. Quick Access/shared recipients
+still need before-limit DM ranking/exclusions.
 
 ## Goal and scope
 
@@ -197,8 +198,14 @@ checkpoint describes a cached snapshot, not current authoritative membership.
   `useCombinedRecipients()` consumers: query-driven suggestions and separate selection.
 - [ ] Calendar guests, event editors, participant menus, and mentions: bounded
   search plus explicit resolution of attendees/participants already present.
-- [ ] Drive, Tasks, Soup, and CRM people filters: searchable pages plus explicit
-  resolution of persisted selected IDs.
+- [x] Drive creator and CRM Notes creator filters: lazy sources in the existing
+  desktop submenu and mobile drawer, bounded search/browse, and independent
+  persisted-ID resolution. Self is an explicit pin, selected/unknown IDs survive
+  off-page searches, and Only changes only its own group.
+- [ ] Tasks, Soup, and CRM owner filters: searchable pages plus explicit
+  resolution of persisted selected IDs. Tasks currently passes the whole people
+  catalog to its AI filter planner; replacing that catalog with a suggestion page
+  would silently lose people and must not be used as a migration shortcut.
 - [x] Calendar search organizer/attendee filters: bounded suggestion pages and
   separate selected-email lookup, with desktop/phone focus and keyboard coverage.
   Render resolved names through `UserIcon.name` rather than filling the global
