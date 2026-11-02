@@ -7,6 +7,7 @@ import { AgentConversationsProvider } from '@app/features/agent-conversations/ag
 import { AgentDmComposer } from '@app/features/agent-dms/agent-dm-composer';
 import { openChatWithInput } from '@app/features/chat/ChatWithAgentButton';
 import { usePending } from '@app/observability/flow';
+import { startUiOperation } from '@app/observability/ui-operation';
 import { createActivityTracker } from '@channel/activity-tracker';
 import { useStartChannelCall } from '@channel/Call/use-start-channel-call';
 import { DebugSuspense } from '@channel/DebugSuspense';
@@ -688,6 +689,10 @@ export function Channel(props: ChannelProps) {
     });
 
     const optimisticId = newMessageId();
+    // Send to the optimistic message's paint; channel.send follows delivery.
+    const sendUi = startUiOperation('message.send', {
+      attributes: { 'channel.id': channelId, 'message.id': optimisticId },
+    });
     fireAndForget(
       Telemetry.span('channel.send', async (span) => {
         span.setAttr('message.id', optimisticId);
@@ -698,10 +703,12 @@ export function Channel(props: ChannelProps) {
             parent: { type: 'channel', id: channelId },
             senderId,
             optimisticId,
+            onOptimisticInsert: sendUi.afterPaint,
             ...payload,
           });
           span.setAttr('composer.outcome', 'succeeded');
         } catch {
+          sendUi.finish('error');
           span.error('Channel send failed');
           const handle = channelInputHandle();
           if (

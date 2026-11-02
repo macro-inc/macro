@@ -408,6 +408,8 @@ type SendMessageParams = {
   /** From `newMessageId`; the message's final id, not a placeholder. */
   optimisticId: string;
   senderId: string;
+  /** Called once the optimistic message is in the timeline. */
+  onOptimisticInsert?: () => void;
 };
 
 type SendMessageContext = {
@@ -460,6 +462,7 @@ export function useSendMessageMutation(
             optimisticAttachments: vars.optimisticAttachments,
             ...vars.message,
           });
+          vars.onOptimisticInsert?.();
           const updatedAt =
             vars.parent.type === 'channel'
               ? optimisticUpdateSoupItemUpdatedAt(

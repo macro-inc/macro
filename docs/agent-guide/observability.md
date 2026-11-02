@@ -241,8 +241,24 @@ find and read them.
 Boot, navigation, view loading and in-view interactions are perf-class traces.
 Search `{ resource.service.name = "web-app" && span.macro.trace.class = "perf" }`,
 or by root name: `app.boot`, `navigation`, `view.<route id>` (with `route.id`),
-`channel.tab`, `form.tab`, `quick_access.open`, `quick_access.input`,
+`list.open`, `channel.tab`, `form.tab`, `email.tab`, `quick_access.open`,
+`quick_access.input`, `calendar.event.open`, `message.send`, `email.send`,
 `input.typing_burst`, `app.runtime.sample`. Then open the full trace.
+
+- `list.open` runs from a list row's open action (Home, Mail, Soup lists,
+  tasks, CRM) through any notification lookup to the opened view's paint; its
+  `navigation` and view are children. `entity.type` says what opened.
+- `message.send` runs from a channel composer send to the optimistic message's
+  paint opportunity (`message.id`, `channel.id`); delivery stays on the separate
+  `channel.send` trace with the same `message.id`.
+- `email.send` runs from Send (after the composer's checks) to the sent state;
+  `email.send.queued` says whether the durable outbox took it. Early refusals
+  are `cancelled`, failures `error`.
+- `email.tab` contains the restarted `email.list` flow and its
+  `email.list.items` phase; on first load `email.list` is a phase of the mail
+  view.
+- `calendar.event.open` times opening an event's details (`calendar.event.origin`
+  is `grid` or `agenda`).
 
 The perf sampling decision is made once per session
 (`Telemetry.config.perfSampled`): 5% of production sessions, 100% in dev and
@@ -266,8 +282,8 @@ content in a name. In Datadog the span name is `resource_name` (the
 | `navigation` | `navigation` | split-router commit (`runner.ts`) | The innermost view it opened; none when it opened no view |
 | `view.<route id>` | `view` | `RouteView` in `split-router/solid/outlet.tsx`; a root only when no navigation is open, otherwise a phase of it | Its route |
 | Other `<TraceFlow>` roots (`quick_access.results`, `doc.editor` after the view settled) | `view` | `TraceFlow` | Last opened view |
-| `quick_access.open`, `quick_access.input`, `channel.tab`, `form.tab` | `interaction` | `beginInteraction` | Last opened view |
-| `database.cell.editor.open`, `database.cell.commit`, `form.submit`, `input.typing_burst` | `interaction` | `startUiOperation` | Last opened view |
+| `quick_access.open`, `quick_access.input`, `channel.tab`, `form.tab`, `email.tab`, `list.open`, `calendar.event.open` | `interaction` | `beginInteraction` | Last opened view, or the innermost view it opened |
+| `database.cell.editor.open`, `database.cell.commit`, `form.submit`, `message.send`, `email.send`, `input.typing_burst` | `interaction` | `startUiOperation` | Last opened view |
 
 `urql.reconcile` and `graphql_cache.ipc.request` are perf-class spans that are
 not flows (no `flow.kind`); `app.runtime.sample` is a point sample.
