@@ -14,7 +14,10 @@ invites, and the colleague-joined email.
 - `src/call_invite.rs`, `src/colleague_joined.rs`: the remaining notification
   metadata types, one file each.
 - `templates/*.html`: the actual email markup (Askama/Jinja2-compatible
-  syntax).
+  syntax). An email that needs an unsubscribe link puts
+  `notification::domain::models::signing::unsubscribe_placeholder(TYPE_NAME)` in
+  the `href`; the notification service signs it per recipient at send time, and
+  the type must be in the service's blockable list.
 - `preview_invite.py`: renders `templates/invite.html` with dummy data via
   Jinja2 and opens it in a browser — use this to check template changes
   without sending an email (`pip3 install jinja2` if needed).

@@ -35,15 +35,16 @@ use crate::domain::models::{
     MyResponse, Respondent, ResponseSummary, StoredForm, Submission, SubmissionOutcome, UpdateForm,
 };
 use crate::domain::ports::{
-    Clock, CreateFormCommand, FormAccessDirectory, FormEventPublisher, FormsRepo, FormsService,
+    Clock, CreateFormCommand, FormAccessDirectory, FormEventPublisher, FormImageFiles, FormsRepo,
+    FormsService,
 };
 
 /// Concrete forms service backed by its ports. `Databases` is the databases
 /// domain service, the only way a form reads or writes its table; `Access`
 /// lists the forms a user holds grants on; `Events` pings a form's open
-/// pages after it changes.
+/// pages after it changes; `Images` reads the files its branding shows.
 #[derive(Debug, Clone)]
-pub struct FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts> {
+pub struct FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images> {
     repository: Repository,
     databases: Arc<Databases>,
     access: Access,
@@ -51,6 +52,7 @@ pub struct FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, 
     clock: Now,
     broker: Broker,
     drafts: Drafts,
+    images: Images,
 }
 
 fn repository_error<Error: std::error::Error + Send + Sync + 'static>(error: Error) -> FormError {
@@ -151,8 +153,8 @@ fn internal_receipt<Level: RequiredPermission>(
     )
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker, Drafts>
-    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
+    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
 where
     Repository: FormsRepo + FormDraftRepository,
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
@@ -161,8 +163,10 @@ where
     Now: Clock,
     Broker: MacroEventBroker,
     Drafts: FormDraftStore,
+    Images: FormImageFiles,
 {
     /// Create a forms service from its ports.
+    #[expect(clippy::too_many_arguments, reason = "one adapter per port")]
     pub fn new(
         repository: Repository,
         databases: Arc<Databases>,
@@ -171,6 +175,7 @@ where
         clock: Now,
         broker: Broker,
         drafts: Drafts,
+        images: Images,
     ) -> Self {
         Self {
             repository,
@@ -180,6 +185,7 @@ where
             clock,
             broker,
             drafts,
+            images,
         }
     }
 
@@ -279,8 +285,8 @@ fn within(text: &str, max: usize) -> Result<(), FormError> {
     Ok(())
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker, Drafts> FormsService
-    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images> FormsService
+    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
 where
     Repository: FormsRepo + FormDraftRepository,
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
@@ -289,6 +295,7 @@ where
     Now: Clock,
     Broker: MacroEventBroker,
     Drafts: FormDraftStore,
+    Images: FormImageFiles,
 {
     async fn collaborate_form(
         &self,

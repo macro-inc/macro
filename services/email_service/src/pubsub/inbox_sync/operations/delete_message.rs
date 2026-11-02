@@ -87,14 +87,6 @@ pub async fn delete_message(
         sender.into_iter().filter_map(|c| c.email_address).collect()
     };
 
-    // Commit CRM cleanup candidates with the deletion so neither can survive
-    // a rollback alone. Deferred deletions retain the message; cleanup's
-    // `link_has_any_message_with` pre-check keeps its contacts until removal.
-    if !crm_emails.is_empty() {
-        let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
-        insert_crm_cleanup_candidates(&mut *tx, link.id, &self_email, crm_emails).await?;
-    }
-
     let result = async {
         let result = email_db_client::messages::delete::delete_message_with_tx(&mut tx, &message)
             .await
@@ -104,6 +96,15 @@ pub async fn delete_message(
                     source: e.context("Failed to delete message with transaction".to_string()),
                 })
             })?;
+        // Commit CRM cleanup candidates with the deletion so neither can survive
+        // a rollback alone. Deferred deletions retain the message; cleanup's
+        // `link_has_any_message_with` pre-check keeps its contacts until removal.
+        // Upsert last: the row lock lasts until commit, and every delete of mail
+        // with the same contact waits on it.
+        if !crm_emails.is_empty() {
+            let self_email = link.email_address.0.as_ref().to_ascii_lowercase();
+            insert_crm_cleanup_candidates(&mut *tx, link.id, &self_email, crm_emails).await?;
+        }
         Ok::<MessageDeletion, ProcessingError>(result)
     }
     .await;
