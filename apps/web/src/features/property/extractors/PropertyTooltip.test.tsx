@@ -25,9 +25,9 @@ const property: Property = {
   value: ['in-progress'],
 };
 
-function context(canEdit: boolean): PropertyRootContextValue {
+function context(canEdit: boolean, value = property): PropertyRootContextValue {
   return {
-    property: () => property,
+    property: () => value,
     pickedEntityName: () => undefined,
     canEdit: () => canEdit,
     editorOpen: () => false,
@@ -56,17 +56,24 @@ it('tabs straight to an editable pill, where Enter opens its editor', async () =
   expect(value.openEditor).toHaveBeenCalledOnce();
 });
 
-it('keeps a tab stop on a read-only value, which may hold no control', async () => {
-  const user = userEvent.setup();
-  render(() => (
-    <PropertyRootContext.Provider value={context(false)}>
-      <PropertyTooltip property={property}>
-        <span>In progress</span>
-      </PropertyTooltip>
-    </PropertyRootContext.Provider>
-  ));
+it.each([
+  { name: 'without edit access', canEdit: false, isMetadata: false },
+  { name: 'on a metadata property', canEdit: true, isMetadata: true },
+])(
+  'keeps a tab stop on a value that may hold no control $name',
+  async ({ canEdit, isMetadata }) => {
+    const user = userEvent.setup();
+    const value = { ...property, isMetadata };
+    render(() => (
+      <PropertyRootContext.Provider value={context(canEdit, value)}>
+        <PropertyTooltip property={value}>
+          <span>In progress</span>
+        </PropertyTooltip>
+      </PropertyRootContext.Provider>
+    ));
 
-  await user.tab();
+    await user.tab();
 
-  expect(document.activeElement?.textContent).toBe('In progress');
-});
+    expect(document.activeElement?.textContent).toBe('In progress');
+  }
+);

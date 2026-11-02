@@ -32,10 +32,11 @@ export function PropertyTooltip(props: Props) {
   const trailingAction = children(() => props.trailingAction);
   const hasActions = () =>
     actions.toArray().length > 0 || trailingAction.toArray().length > 0;
+  const isEditable = () => ctx?.canEdit() && !ctx.property().isMetadata;
   return (
     <HoverCard
       triggerClass="min-w-0 max-w-full"
-      triggerTabIndex={ctx?.canEdit() ? -1 : undefined}
+      triggerTabIndex={isEditable() ? -1 : undefined}
       content={
         <div class="min-w-0">
           <CorePropertyTooltip
