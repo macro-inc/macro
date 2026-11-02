@@ -129,11 +129,14 @@ pub async fn reconcile_deferred_deletion(
 
     // Capture recipients before the cascade. Extra candidates are harmless:
     // the CRM cleanup worker checks remaining email sources before removal.
+    // Email order matches `insert_candidates`, so the two writers lock shared
+    // rows in the same order.
     sqlx::query!(
         r#"INSERT INTO crm_cleanup_candidates (link_id, contact_email)
            SELECT DISTINCT $2::uuid, lower(trim(c.email_address))
            FROM email_message_recipients r JOIN email_contacts c ON c.id = r.contact_id
            WHERE r.message_id=$1 AND c.email_address IS NOT NULL AND trim(c.email_address) <> ''
+           ORDER BY 2
            ON CONFLICT (link_id, contact_email) DO UPDATE SET created_at=NOW()"#,
         message_id,
         link_id,
