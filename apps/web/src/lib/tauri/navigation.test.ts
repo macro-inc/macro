@@ -9,10 +9,15 @@ const mocks = vi.hoisted(() => ({
   setPostLoginRedirect: vi.fn(),
   listen: vi.fn(),
   invoke: vi.fn(),
+  invalidateGithubLinkStatus: vi.fn(),
 }));
 
-vi.mock('@core/util/platform', () => ({
+vi.mock('@core/util/platform', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/util/platform')>()),
   getNativeMobilePlatform: () => mocks.platform,
+}));
+vi.mock('@queries/auth', () => ({
+  invalidateGithubLinkStatus: mocks.invalidateGithubLinkStatus,
 }));
 vi.mock('@core/util/postLoginRedirect', () => ({
   setPostLoginRedirect: mocks.setPostLoginRedirect,
@@ -103,6 +108,14 @@ describe('native link session routing', () => {
     });
     expect(mocks.navigate).not.toHaveBeenCalled();
     expect(mocks.setPostLoginRedirect).not.toHaveBeenCalled();
+  });
+
+  it('refreshes GitHub after desktop consent without leaving the current page', () => {
+    mocks.platform = 'macos';
+    mocks.invalidateGithubLinkStatus.mockResolvedValue(undefined);
+    receive({ payload: { path: '/github-link-callback', query: '' } });
+    expect(mocks.invalidateGithubLinkStatus).toHaveBeenCalledOnce();
+    expect(mocks.navigate).not.toHaveBeenCalled();
   });
 
   it('ignores stale connector callbacks without routing to a missing page', () => {
