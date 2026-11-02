@@ -2508,6 +2508,64 @@ async fn sync_status_reflects_visible_account_ingestion_state(pool: PgPool) {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn only_a_first_google_import_reports_syncing(pool: PgPool) {
+    let owner_id = "macro|calendar-routine-sync@example.com";
+    let link_id = insert_link(&pool, owner_id).await;
+    let repo = PgCalendarRepository::new(pool.clone());
+    let enabled = repo
+        .apply_google_grant(
+            link_id,
+            complete_grant(),
+            CalendarGrantIntent::CalendarRequested,
+        )
+        .await
+        .unwrap();
+    let (account_id, _) = provider_ids(&repo, link_id).await;
+    let google_job = enabled
+        .jobs
+        .into_iter()
+        .find(|job| job.kind == CalendarBackfillKind::GoogleCalendar)
+        .unwrap();
+    let key = CalendarBackfillJobKey {
+        job_id: google_job.id,
+        email_link_id: link_id,
+    };
+
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("the first import should be claimable");
+    };
+    repo.mark_google_account_syncing(key, lease_token)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.sync_status(owner_id).await.unwrap(),
+        CalendarSyncStatus::Syncing
+    );
+    repo.reconcile_google_calendar_list(key, lease_token, account_id, Vec::new())
+        .await
+        .unwrap();
+    repo.complete_google_backfill(key, lease_token)
+        .await
+        .unwrap();
+
+    assert!(repo.schedule_google_sync_for_link(link_id).await.unwrap());
+    let CalendarBackfillClaim::Claimed { lease_token, .. } =
+        repo.claim_google_backfill(key).await.unwrap()
+    else {
+        panic!("the routine run should be claimable");
+    };
+    repo.mark_google_account_syncing(key, lease_token)
+        .await
+        .unwrap();
+    assert_eq!(
+        repo.sync_status(owner_id).await.unwrap(),
+        CalendarSyncStatus::Ready
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn unchanged_google_projection_skips_the_write_path(pool: PgPool) {
     let owner_id = "macro|calendar-idempotent@example.com";
     let link_id = insert_link(&pool, owner_id).await;

@@ -3329,10 +3329,16 @@ impl CalendarBackfillRepository for PgCalendarRepository {
     ) -> Result<(), Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
         fence_google_mutation_tx(&mut tx, key, lease_token, None).await?;
+        // A routine run of a synced account imports nothing a viewer should
+        // wait for, so it stays ready, as on Outlook. A first import, a retry
+        // or a reconnect is still catching up.
         sqlx::query!(
             r#"
             UPDATE calendar_accounts
-            SET sync_status = 'syncing',
+            SET sync_status = CASE
+                    WHEN sync_status = 'ready' AND last_synced_at IS NOT NULL THEN 'ready'
+                    ELSE 'syncing'
+                END,
                 updated_at = now()
             WHERE email_link_id = $1
             "#,

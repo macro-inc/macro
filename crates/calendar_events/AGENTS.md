@@ -356,6 +356,9 @@ reminder dispatch, team availability, and provider/Postgres persistence.
   as it.
 - Preserve the conservative OOO refresh hint on write outcomes and sync reports;
   its contract is in [team sharing](../../docs/design/calendar-team-sharing.md).
+- A routine sync of a `ready`, already synced account stays `ready`, on Google as
+  on Outlook; only a first import, a retry or a reconnect marks it `syncing`. The
+  web's `Syncing your calendar…` banner and its 5 second poll read that state.
 - The team out-of-office overlay (`src/outbound/pg_team/ooo.rs`) starts from
   the viewer's teammates and reaches sources through
   `calendar_event_sources_out_of_office_idx` on the source's typed
