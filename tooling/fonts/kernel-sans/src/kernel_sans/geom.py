@@ -328,7 +328,7 @@ def chamfer(x, y, leg, corner):
     corner is "nw", "ne", "se" or "sw": the direction the corner points.
     The cut removes a right isosceles triangle with legs `leg` along the x
     and y axes from the corner. The region is local (it only reaches a little
-    past the triangle), so it is safe to use on terminals inside a glyph."""
+    past the triangle), so it is safe to use on stem ends inside a glyph."""
     sx = -1 if corner in ("nw", "sw") else 1
     sy = 1 if corner in ("nw", "ne") else -1
     e = max(4.0, leg * 0.6)

@@ -66,7 +66,7 @@ class Params:
     chair: float  # capital horizontal stroke
     fstem: float  # figure vertical stem
     fhair: float  # figure horizontal stroke
-    cut: float  # 45-degree chamfer leg on lowercase terminals and stem ends
+    cut: float  # 45-degree chamfer leg on lowercase stem ends
     ccut: float  # chamfer leg on capitals and figures
     sq: float  # superellipse exponent of outer round contours (2 = circle)
     sq_in: float  # superellipse exponent of counters

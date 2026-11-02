@@ -1,7 +1,7 @@
 """Type specimen: one HTML page generated from the built fonts.
 
 The page shows the variable font live (weight slider, tester, glyph set with
-an inspector) and outline views of the four cyber details drawn from the
+an inspector) and outline views of the three cyber details drawn from the
 ExtraBold outlines.
 """
 
