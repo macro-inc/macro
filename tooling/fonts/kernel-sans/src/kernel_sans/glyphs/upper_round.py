@@ -229,10 +229,6 @@ def R(p):
     xl_t = x_bl + slope * yt
     leg = poly([(x_bl, 0), (x_br, 0), (xl_t + hw, yt), (xl_t, yt)])
     shape = (bowl.outer + rect(0, 0, s, yb + 2) + leg) - bowl.counter
-    # No ink trap where the leg's right edge meets the bowl: the bowl curves
-    # away, so the white opens like a 63/70/77-degree wedge at 300/400/800
-    # (DESIGN.md: no trap past about 70 degrees). A trap at some weights only
-    # would break the variable font, so there is none at any weight.
     return G(shape, l=p.csb, r=p.csbr * 0.5, anchors={"top": w / 2})
 
 

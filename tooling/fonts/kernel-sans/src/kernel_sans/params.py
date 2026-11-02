@@ -68,7 +68,6 @@ class Params:
     fhair: float  # figure horizontal stroke
     cut: float  # 45-degree chamfer leg on lowercase terminals and stem ends
     ccut: float  # chamfer leg on capitals and figures
-    trap: float  # ink-trap depth at acute joins (0 at the lightest weight)
     sq: float  # superellipse exponent of outer round contours (2 = circle)
     sq_in: float  # superellipse exponent of counters
     sb: float  # lowercase sidebearing next to a straight stem
@@ -107,7 +106,6 @@ def params(wght):
         fhair=s * 0.92,
         cut=round(0.36 * s, 1),
         ccut=round(0.36 * cs, 1),
-        trap=max(0.0, (s - 48) * 0.36),
         sq=3.0,
         # Counters squarer than outers keep round strokes even at the corners.
         sq_in=3.4,

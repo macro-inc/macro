@@ -15,11 +15,6 @@ Math operators share the tabular advance and centre on `P.AXIS`;
 their `.case` forms sit on `P.CASE_AXIS`. Superiors, fraction parts and the
 ordinals are the full shapes drawn 150 weight units heavier and scaled by
 `SUP`.
-
-Ink traps follow DESIGN.md: where a straight stroke leaves a stem (the flag of
-1, the diagonal of 4 at its stem) `geom.stem_trap` runs along the stem edge,
-like n; the vertices between two strokes (2, the 4's bar join, 6, 9 and the
-yen) take the flat-floored `geom.crotch_trap` at depth `p.trap`.
 """
 
 import math
@@ -32,7 +27,6 @@ from ..geom import (
     above,
     below,
     chamfer,
-    crotch_trap,
     diag,
     dot,
     left_of,
@@ -41,7 +35,6 @@ from ..geom import (
     right_of,
     ring,
     squircle,
-    stem_trap,
     stroke,
 )
 from . import G, glyph, ref
@@ -177,33 +170,6 @@ def _tangent(q, box, n, pick):
     return a
 
 
-def _ray_hit_sq(p0, d, box, n):
-    """Where the ray p0 + t*d (t > 0) first crosses the squircle exactly as
-    drawn (its cubic outline), and the outline's direction there (degrees,
-    taken left to right)."""
-    pts = _sq_pts(box, n, per=400)
-    best = None
-    m = len(pts)
-    for i in range(m):
-        ax, ay = pts[i]
-        bx, by = pts[(i + 1) % m]
-        ex, ey = bx - ax, by - ay
-        den = d[0] * ey - d[1] * ex
-        if abs(den) < 1e-12:
-            continue
-        t = ((ax - p0[0]) * ey - (ay - p0[1]) * ex) / den
-        u = ((ax - p0[0]) * d[1] - (ay - p0[1]) * d[0]) / den
-        if t > 0 and 0 <= u <= 1 and (best is None or t < best[0]):
-            if ex < 0:
-                ex, ey = -ex, -ey
-            best = (
-                t,
-                (p0[0] + d[0] * t, p0[1] + d[1] * t),
-                math.degrees(math.atan2(ey, ex)),
-            )
-    return (best[1], best[2]) if best else (None, None)
-
-
 def _fit(p, shape, dx=0.0, width=None):
     """Centre the outline in the tabular advance (or `width`)."""
     w = _fw(p) if width is None else width
@@ -280,10 +246,7 @@ def _one(p, longer=0.0):
     # The flag covers the stem's top-left corner, so only the free top-right
     # corner takes the house chamfer.
     stem = rect(0, 0, s, P.CAP, ne=p.ccut)
-    # Trap where the flag's lower edge leaves the stem: along the stem edge,
-    # opening into the white below the flag (DESIGN.md, like n).
-    crotch = P.CAP - t / math.cos(a)
-    return stem + flag - stem_trap(0, crotch, p.trap, side="left")
+    return stem + flag
 
 
 def _one_tf(p):
@@ -292,8 +255,7 @@ def _one_tf(p):
     like Inter's; the baseless 1 is under 0.65). An exception to DESIGN.md's
     "1 without a base" for the tabular form only; the default 1, the
     superiors and fractions keep the baseless form. The base is the free end
-    of a bar, so its ends stay square, and its join with the stem is a right
-    angle, so it takes no trap."""
+    of a bar, so its ends stay square."""
     s = p.fstem
     base = rect(-p.w(150, -0.2), 0, s + p.w(130, -0.2), _fh(p))
     return _one(p, p.w(40, -0.3)) + base
@@ -345,10 +307,7 @@ def _two(p):
         ],
     )
     base = rect(0, 0, w + p.w(6, 0.1), hb)
-    crotch_x = mo[0] - d[0] * (mo[1] - hb) / d[1]
-    shape = up + spine + base
-    # One-sided crotch (the base runs on past it): half depth, as in 4.
-    return shape - crotch_trap((crotch_x, hb), 0, d, p.trap * 0.5)
+    return up + spine + base
 
 
 def _waist(p, k):
@@ -409,16 +368,7 @@ def _four(p):
         [(0, yb), (ox0, oy0), (xs, P.CAP), (xs + hw, P.CAP), (hw - hb * dx / dy, yb)]
     )
     dg = dg & left_of(xs + s * 0.5)
-    shape = stem + bar + dg
-    # Where the diagonal's inner edge leaves the stem: a trap along the stem
-    # edge, opening into the counter below (DESIGN.md, like n).
-    yc = oy0 + (xs - hw) * dy / dx
-    shape = shape - stem_trap(xs, yc, p.trap, side="left")
-    # Crotch where the inner edge meets the bar. It is one-sided (the bar
-    # runs on past it), so at full depth it reads as a slit along the bar;
-    # half depth just blunts it.
-    shape = shape - crotch_trap((hw, oy0), 0, (dx, dy), p.trap * 0.5)
-    return shape
+    return stem + bar + dg
 
 
 def _five(p):
@@ -492,13 +442,7 @@ def _six(p):
     o1, o2 = _handles((0.0, cy), lean, mo, d, 0.56, 0.72)
     r = (x_at(tp[1]) + hw, tp[1])  # inner edge, level with the tangent point
     tail = _path((0.0, cy), [(o1, o2, mo), a_l, a_r, r, (cx, cy - 0.1 * (cy - box[1]))])
-    shape = (squircle(*box, n=n) + tail) - squircle(*ibox, n=ni)
-    crotch, a_curve = _ray_hit_sq(a_r, (-d[0], -d[1]), box, n)
-    if crotch is not None:
-        # The bowl edge is convex, so its tangent stays in the white and the
-        # trap opens cleanly on that side too.
-        shape = shape - crotch_trap(crotch, d, a_curve, p.trap)
-    return shape
+    return (squircle(*box, n=n) + tail) - squircle(*ibox, n=ni)
 
 
 def _nine(p):
@@ -1066,12 +1010,6 @@ def yen(p):
     arm_r = diag(cx, yj - 60, w - hw_top, P.CAP, t) & above(yj - 60)
     stem = rect(cx - s / 2, 0, cx + s / 2, yj)
     sh = arm_l + arm_r + stem
-    # Crotch between the arms: their inner edges meet on the centre line,
-    # half the arm thickness (measured vertically) above the centrelines.
-    dxa = cx - hw_top
-    k = (P.CAP - (yj - 60)) / dxa
-    y_cr = (yj - 60) + (t / 2) / math.cos(math.atan(k))
-    sh = sh - crotch_trap((cx, y_cr), (-1.0, k), (1.0, k), p.trap)
     bl, br = cx - p.w(196, 0.4), cx + p.w(196, 0.4)
     h = h * 0.88
     ym = P.CAP * 0.275

@@ -34,14 +34,7 @@ DETAILS = [
         800,
         "chamfer",
         "Chamfered stroke ends",
-        "Free stem tops and curve terminals are clipped at 45°. The leg is 0.36 of the stem ({cut:.0f} units at ExtraBold), so the cut keeps its proportion at every weight.",
-    ),
-    (
-        "n",
-        800,
-        "trap",
-        "Ink traps",
-        "Acute joins are notched. The trap grows with weight, from {trap_light:.0f} units at Light to {trap_bold:.0f} at ExtraBold, so heavy text keeps its crotches open.",
+        "Free stem ends are clipped at 45°; curve terminals end in a clean horizontal cut. The leg is 0.36 of the stem ({cut:.0f} units at ExtraBold), so the cut keeps its proportion at every weight.",
     ),
     (
         "i",
@@ -63,10 +56,6 @@ def _detail_view(font, name, framing, p):
     if framing == "chamfer":
         size = 2.6 * p.stem
         return (x0 - 0.35 * size, P.XH + 0.3 * size, size, size)
-    if framing == "trap":
-        cx, cy = x0 + p.stem, P.XH - p.hair - 0.17 * P.XH
-        size = 1.9 * p.stem
-        return (cx - size / 2, cy + size * 0.6, size, size)
     if framing == "dot":
         size = (y1 - (P.XH - 140)) + 80
         cx = (x0 + x1) / 2
@@ -237,8 +226,6 @@ def build_specimen(fonts_dir, out_html, embed=False):
         "sq": P.params(400).sq,
         "sq_in": P.params(400).sq_in,
         "cut": P.params(800).cut,
-        "trap_light": P.params(300).trap * 1.3,
-        "trap_bold": P.params(800).trap * 1.3,
     }
     for name, w, framing, title, caption in DETAILS:
         if name not in static[w].getGlyphOrder():

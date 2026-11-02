@@ -4,12 +4,6 @@ Built like `H` in core.py: capital stems `p.cstem`, arms and bars `p.chair`,
 the house 45-degree chamfer (`p.ccut`) only on free stem tops, square corners
 where a stem turns into an arm, and flat-cut diagonal ends and vertices.
 
-Ink traps follow DESIGN.md: where a diagonal leaves a stem (the stem joins of
-M, N and AE, K's arm) a `geom.stem_trap` runs along the stem edge, like n's
-shoulder; at the inner vertex of two diagonals (A V W Y and the M vertex) a
-flat-floored `geom.crotch_trap` of depth `p.trap`. Crotches wider than about
-70 degrees (K's arm/leg junction) take none.
-
 Open right sides (E F L T Z) take a real sidebearing, a fraction of `p.csb`,
 so they shrink with weight like the straight ones.
 
@@ -21,7 +15,7 @@ those edges, so every weight uses the same construction.
 import math
 
 from .. import params as P
-from ..geom import crotch_trap, poly, rect, stem_trap
+from ..geom import poly, rect
 from . import G, glyph
 
 CAP = P.CAP
@@ -95,37 +89,6 @@ class _Slant:
         return poly(
             [(self.xl(y0), y0), (self.xr(y0), y0), (self.xr(y1), y1), (self.xl(y1), y1)]
         )
-
-
-def _vtrap(p, v, d1, d2):
-    """Ink trap at the inner vertex v of two diagonals whose edges leave v
-    along d1 and d2 (into the white): geom.crotch_trap at depth p.trap, which
-    blunts the vertex with a flat floor."""
-    return crotch_trap(v, d1, d2, p.trap)
-
-
-# Stem-join traps (M N AE K): geom.stem_trap along the stem edge, as in n,
-# but sized for a 22-40 degree crotch. At n's shoulder most of stem_trap's
-# triangle already lies in the white; here all of it lands in ink. Placed at
-# the crotch with n's 1.3 * p.trap it bit 3.4 times n's ink out of each join
-# (2400 vs 700 units^2 at 800) and sat above the wedge behind an 8-unit neck,
-# so it read as a hole punched through the join at text sizes. Depth p.trap,
-# anchored 0.6 of the depth below the crotch, opens the bite out of the wedge
-# itself: at 800 the white's narrowest point is 13-19 units wide (5-8 with
-# the trap at the crotch), and it stays under 24 units wide for 15-44 units
-# against 29-55 with no trap.
-STEM_JOIN = 1.0  # depth, in p.trap
-STEM_JOIN_DROP = 0.6  # anchor below the crotch, in depths
-
-
-def _strap(p, x, y, side, up):
-    """Ink trap where a diagonal leaves the straight stem edge x at the crotch
-    height y: geom.stem_trap along the stem edge. `side` is the side of the
-    stem the white is on; `up` means the white opens downward from the crotch
-    (the trap runs up the stem edge)."""
-    d = STEM_JOIN * p.trap
-    y0 = y - STEM_JOIN_DROP * d if up else y + STEM_JOIN_DROP * d
-    return stem_trap(x, y0, d, side=side, up=up)
 
 
 def _down(edge):
@@ -241,7 +204,6 @@ def A(p):
         ]
     )
     shape = shape + rect(left.xc(bar_y), bar_y - h / 2, right.xc(bar_y), bar_y + h / 2)
-    shape = shape - _vtrap(p, crotch, _down(left.right()), _down(right.left()))
     return G(shape, l=p.csbr * 0.3, r=p.csbr * 0.3)
 
 
@@ -265,7 +227,6 @@ def V(p):
             (0, CAP),
         ]
     )
-    shape = shape - _vtrap(p, crotch, _up(left.right()), _up(right.left()))
     return G(shape, l=p.csbr * 0.3, r=p.csbr * 0.3)
 
 
@@ -304,9 +265,6 @@ def W(p):
             (s1.hw, CAP),
         ]
     )
-    shape = shape - _vtrap(p, v1, _up(s1.right()), _up(s2.left()))
-    shape = shape - _vtrap(p, v2, _up(s3.right()), _up(s4.left()))
-    shape = shape - _vtrap(p, ap, _down(s2.right()), _down(s3.left()))
     return G(shape, l=p.csbr * 0.3, r=p.csbr * 0.3)
 
 
@@ -341,9 +299,6 @@ def M(p):
             (0, CAP),
         ]
     )
-    shape = shape - _strap(p, sm, yl, "right", up=True)
-    shape = shape - _strap(p, w - sm, yr, "left", up=True)
-    shape = shape - _vtrap(p, v, _up(ld.right()), _up(rd.left()))
     return G(shape, l=p.csb, r=p.csb)
 
 
@@ -373,8 +328,6 @@ def N(p):
             (0, CAP),
         ]
     )
-    shape = shape - _strap(p, sn, yl, "right", up=True)
-    shape = shape - _strap(p, w - sn, yr, "left", up=False)
     return G(shape, l=p.csb, r=p.csb)
 
 
@@ -415,7 +368,6 @@ def Y(p):
             pl,
         ]
     )
-    shape = shape - _vtrap(p, crotch, _up(la.right()), _up(ra.left()))
     return G(shape, l=p.csbr * 0.3, r=p.csbr * 0.3)
 
 
@@ -453,9 +405,6 @@ def K(p):
             (0, CAP - c),
         ]
     )
-    # Arm against stem: a stem trap along the stem edge, as in n. The
-    # arm/leg junction at q is obtuse (about 105 degrees), so no trap there.
-    shape = shape - _strap(p, s, p2[1], "right", up=False)
     return G(shape, l=p.csb, r=p.csbr * 0.3)
 
 
@@ -504,6 +453,4 @@ def AE(p):
         + rect(dg.xc(mid_y), mid_y - h / 2, xs + ew - p.w(30, 0.1), mid_y + h / 2)
         + rect(xs + s * 0.5, 0, xs + ew, h)
     )
-    yc = dg.y_at("r", xs)
-    shape = shape - _strap(p, xs, yc, "left", up=True)
     return G(shape, l=p.csbr * 0.3, r=p.csb * 0.75)

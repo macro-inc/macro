@@ -16,8 +16,6 @@ from ..geom import (
     rect,
     right_of,
     squircle,
-    stem_trap,
-    trap,
 )
 
 
@@ -58,7 +56,7 @@ def arch(xl, xr, top, yc, w_side, w_top, join_out, join_in, n=None, n_in=None, p
     return ((outer - inner) & above(yc)) & right_of(xl - 1)
 
 
-def n_shape(p, x0, counter, top=None, height=None, cut=True, trap_ink=True):
+def n_shape(p, x0, counter, top=None, height=None, cut=True):
     """The complete lowercase n: left stem at x0 with a free top, arch, right
     stem. Returns (shape, xr) where xr is the right edge of the right stem.
     `height` is the stem height (x-height); `top` the arch top."""
@@ -83,11 +81,7 @@ def n_shape(p, x0, counter, top=None, height=None, cut=True, trap_ink=True):
     # Share the edge exactly: an overlap at a curve's vertical extreme can
     # make pathops resolve the union differently per weight.
     stem_r = rect(xr - s, 0, xr, yc)
-    shape = stem_l + a + stem_r
-    if trap_ink:
-        crotch_y = h - p.hair - h * 0.17
-        shape = shape - stem_trap(xl, crotch_y, p.trap * 1.3)
-    return shape, xr
+    return stem_l + a + stem_r, xr
 
 
 def bowl(p, x0, x1, y0=None, y1=None, w_side=None, w_top=None, n=None, n_in=None):
@@ -172,5 +166,4 @@ __all__ = [
     "right_of",
     "solve_cx",
     "squircle",
-    "trap",
 ]

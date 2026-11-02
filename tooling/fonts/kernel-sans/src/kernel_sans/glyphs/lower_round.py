@@ -3,8 +3,8 @@ single-storey a.ss01, and ae oe oslash eth thorn germandbls.
 
 b d p q g thorn and a.ss01 share one bowl-on-stem construction (`_bowl_on_stem`):
 the bowl's outer contour leaves the stem near its top and bottom like the n
-arch, and its counter meets the stem lower down in a crotch that gets an ink
-trap. d q g a.ss01 are mirror images of b p.
+arch, and its counter meets the stem lower down. d q g a.ss01 are mirror
+images of b p.
 
 pathops gotcha: a stem whose straight edge overlaps a squircle's vertical
 extreme for a unit or so can make the union drop the curve entirely. Where a
@@ -17,19 +17,16 @@ from types import SimpleNamespace
 
 from .. import params as P
 from ..geom import (
-    Shape,
     above,
     below,
     chamfer,
     diag,
     left_of,
-    poly,
     rect,
     right_of,
     ring,
     squircle,
     stroke,
-    superness,
 )
 from . import G, glyph, ref
 from .parts import outer_x, solve_cx
@@ -63,84 +60,9 @@ def _oy(x0, y0, x1, y1, n, x, side="top"):
     return cy + dy if side == "top" else cy - dy
 
 
-def _quadrant(box, n, which):
-    """Control points of one quadrant of geom.squircle(*box, n): "tl" runs
-    from the top point to the left point, "bl" from the left point to the
-    bottom point."""
-    x0, y0, x1, y1 = box
-    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    rx, ry = (x1 - x0) / 2, (y1 - y0) / 2
-    k = superness(n)
-    if which == "tl":
-        return [
-            (cx, cy + ry),
-            (cx - k * rx, cy + ry),
-            (cx - rx, cy + k * ry),
-            (cx - rx, cy),
-        ]
-    return [
-        (cx - rx, cy),
-        (cx - rx, cy - k * ry),
-        (cx - k * rx, cy - ry),
-        (cx, cy - ry),
-    ]
-
-
 def _heavy(p):
     """0 up to Regular, 1 at ExtraBold: how far above Regular the weight is."""
     return max(0.0, p.grow) / (P.STEMS[800] - P.REGULAR_STEM)
-
-
-def _bez(pts, t):
-    (x0, y0), (x1, y1), (x2, y2), (x3, y3) = pts
-    m = 1 - t
-    a, b, c, d = m * m * m, 3 * m * m * t, 3 * m * t * t, t * t * t
-    return (a * x0 + b * x1 + c * x2 + d * x3, a * y0 + b * y1 + c * y2 + d * y3)
-
-
-def _bez_solve(pts, axis, value):
-    """Point on a monotonic cubic where coordinate `axis` (0 = x, 1 = y)
-    equals value."""
-    lo, hi = 0.0, 1.0
-    rising = _bez(pts, 1)[axis] > _bez(pts, 0)[axis]
-    for _ in range(60):
-        mid = (lo + hi) / 2
-        if (_bez(pts, mid)[axis] < value) == rising:
-            lo = mid
-        else:
-            hi = mid
-    return _bez(pts, (lo + hi) / 2)
-
-
-def _trap(x, depth, up, counter, n_in):
-    """Ink trap where a squircle counter (box `counter`, lying to the RIGHT
-    of the stem edge x = x) meets that edge: at the top of the counter when
-    `up`, else at its bottom. Like geom.stem_trap, it runs along the stem
-    edge for `depth`, but it is fitted to the drawn curve: the crotch is
-    found on the actual Bezier, the cut starts just below it on the straight
-    edge (no lip), and the far corner sits in the white beyond the curve (no
-    sliver). Mirror the result for counters on the left."""
-    if depth < 1:
-        return Shape()
-    sy = 1 if up else -1
-    quad = _quadrant(counter, n_in, "tl" if up else "bl")
-    _, yc = _bez_solve(quad, 0, x)  # the crotch
-    tip = (x - depth * 0.22, yc + sy * depth)
-    # Far corner where geom.stem_trap puts it (a near-flat top edge, as in
-    # n) when that lies well inside the counter; otherwise, for counters
-    # that leave the stem at a shallow angle, just beyond the curve on a
-    # ray from the tip.
-    b = (x + depth * 0.95, yc + sy * depth * 1.1)
-    ytop = quad[0][1] if up else quad[3][1]
-    inside = (
-        sy * (ytop - b[1]) > 2 and b[0] > _bez_solve(quad, 1, b[1])[0] + depth * 0.2 + 1
-    )
-    if not inside:
-        q = _bez_solve(quad, 1, yc + sy * depth * 0.6)
-        b = (q[0] + (q[0] - tip[0]) * 0.6, q[1] + (q[1] - tip[1]) * 0.6)
-    e = (x, yc - sy * (2.0 + 0.05 * depth))
-    a = (e[0] + (e[0] - tip[0]) * 0.5, e[1] + (e[1] - tip[1]) * 0.5)
-    return poly([a, tip, b])
 
 
 def _bowl_on_stem(p, xl, xr, y0, y1, ws, wt, wb, out_top, in_top, out_bot, in_bot):
@@ -151,8 +73,8 @@ def _bowl_on_stem(p, xl, xr, y0, y1, ws, wt, wb, out_top, in_top, out_bot, in_bo
     the side stays smooth.
 
     Returns a namespace: shape (the bowl clipped to x >= xl - 1), out and cnt
-    (its unclipped outer and counter), out_bot_box (the box of the outer's
-    lower half) and traps(depth), both crotches' ink traps."""
+    (its unclipped outer and counter) and out_bot_box (the box of the outer's
+    lower half)."""
     n, n_in = p.sq, p.sq_in
     yc, ry = (y0 + y1) / 2, (y1 - y0) / 2
     yi0, yi1 = y0 + wb, y1 - wt
@@ -172,13 +94,7 @@ def _bowl_on_stem(p, xl, xr, y0, y1, ws, wt, wb, out_top, in_top, out_bot, in_bo
     out = (squircle(*ot, n) & above(yc)) + (squircle(*ob, n) & below(yc))
     cnt = (squircle(*bt, n_in) & above(yci)) + (squircle(*bb, n_in) & below(yci))
     shape = (out - cnt) & right_of(xl - 1)
-
-    def traps(depth):
-        # Never thinner than 3.5 units, so even Light keeps a clean notch.
-        depth = max(depth, 3.5)
-        return _trap(xl, depth, True, bt, n_in) + _trap(xl, depth, False, bb, n_in)
-
-    return SimpleNamespace(shape=shape, out=out, cnt=cnt, traps=traps, out_bot_box=ob)
+    return SimpleNamespace(shape=shape, out=out, cnt=cnt, out_bot_box=ob)
 
 
 def _bowl_joins(p):
@@ -217,12 +133,7 @@ def _b_body(p, stem_y0, stem_y1, nw=0, sw=0):
         out_bot,
         in_bot,
     )
-    shape = (
-        rect(0, stem_y0, s, stem_y1, nw=nw, sw=sw)
-        + bowl.shape
-        - bowl.traps(p.trap * 1.3)
-    )
-    return shape, xr
+    return rect(0, stem_y0, s, stem_y1, nw=nw, sw=sw) + bowl.shape, xr
 
 
 def _mirror(shape_xr):
@@ -381,15 +292,7 @@ def _a_shape(p, xr, ae_e=None):
         clip = (lo + e_in) / 2
         bowl = (bw.out & right_of(-clip)) - (bw.cnt & right_of(-xs))
         stem = rect(xs, yb1 * 0.4, clip, yc_h)
-    # Bowl-join traps, fitted to the counter like b's (`_trap`), so no stub
-    # of stem edge or sliver of curve survives beside the cut. Exception to
-    # the 1.3 * p.trap rule: this counter is short and leaves the stem
-    # steeply, so a deeper notch reaches past its top and leaves a barb of
-    # black between the curve and the cut at ExtraBold. The + 2 keeps the
-    # Light notch large enough that none of its edges is under 2 units.
-    d = p.trap * 0.65 + 2
-    traps = bw.traps(d)
-    shape = hook + bowl.flip_x(0) + stem - traps.flip_x(0)
+    shape = hook + bowl.flip_x(0) + stem
     return shape, cx_h, xs
 
 

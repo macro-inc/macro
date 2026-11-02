@@ -18,7 +18,6 @@ from ..geom import (
     band,
     below,
     chamfer,
-    crotch_trap,
     diag,
     dot,
     half_plane,
@@ -29,7 +28,6 @@ from ..geom import (
     right_of,
     ring,
     squircle,
-    stem_trap,
     stroke,
 )
 from . import G, glyph, ref
@@ -832,10 +830,6 @@ def at(p):
     )
     stem = rect(xs, oy0, xr, oy1, ne=p.cut)
     sh = ringsh + side + hook + bowl + stem
-    # No bowl-join traps: the counter runs into the stem near its flat top,
-    # so the white at those crotches is about 111 degrees at every weight,
-    # well past DESIGN.md's 70-degree limit (a notch there only made a
-    # spike at ExtraBold).
     return G(sh, l=p.sbr, r=p.sbr)
 
 
@@ -1050,9 +1044,7 @@ def registered(p):
 def _small_m(p, x0, y0, h, w, st):
     """A small M built like the capital: square-topped vertical sides,
     diagonals that start inside the side tops and meet at a flat vertex on
-    the baseline. Ink traps as in M: geom.stem_trap along the sides where
-    the diagonals leave them, geom.crotch_trap at the inner vertex, both
-    scaled from the capital's by the stroke ratio."""
+    the baseline."""
     td = st * 0.94  # diagonals (M: 0.86 / 0.92 of its sides)
     fv = st * 0.87  # flat vertex on the baseline
     e = st * 0.3  # diagonals start inside the side tops
@@ -1071,12 +1063,6 @@ def _small_m(p, x0, y0, h, w, st):
         + right
         + [(x0 + w, top), (2 * cx - xt - hw, top), (cx, yv), (xt + hw, top), (x0, top)]
     )
-    k = st / (p.cstem * 0.92)  # M's sides are 0.92 of the capital stem
-    d = 0.75 * p.trap * k  # M's stem-join depth (upper_straight.STEM_JOIN)
-    sh = sh - stem_trap(x0 + st, yl, d, side="right", up=True)
-    sh = sh - stem_trap(2 * cx - x0 - st, yl, d, side="left", up=True)
-    up = (xt - xb, h)  # along the left diagonal, upwards
-    sh = sh - crotch_trap((cx, yv), up, (-up[0], up[1]), p.trap * k)
     return sh
 
 
