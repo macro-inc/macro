@@ -24,8 +24,16 @@ export interface HotkeyCommand {
   // command registered before it on the same key — they stop running until it
   // is disposed, then become effective again (see getEffectiveCommands). An
   // 'add' command coexists with earlier ones. Undefined counts as 'override',
-  // the registration default.
+  // the registration default. Profile commands neither eclipse nor are
+  // eclipsed.
   registrationType?: 'add' | 'override';
+  // Set on a command a hotkey profile registered. In its scope it runs before
+  // every other command on its keys, whatever their priority or registration
+  // order, so a profile's keys win where its view registered them.
+  profile?: HotkeyProfileTag;
+  // The tokens of the existing commands this command runs. Token displays
+  // (tooltips, command menu rows) show this command's key for them.
+  aliasOf?: HotkeyToken[];
   // What scope does this hotkey belong to
   scopeId: string;
   // The hotkey strings, e.g. ['cmd+j', 'ctrl+j']
@@ -81,6 +89,12 @@ export interface HotkeyCommand {
    */
   proxiedHotkey?: boolean;
 }
+
+/** The hotkey profile that registered a command. */
+export type HotkeyProfileTag = {
+  id: string;
+  label: () => string;
+};
 
 export interface HotkeyRegistrationOptions {
   /**
@@ -169,6 +183,17 @@ export interface HotkeyRegistrationOptions {
    * @default 'override'
    */
   registrationType?: 'add' | 'override';
+
+  /**
+   * The hotkey profile registering this command; see HotkeyCommand.profile.
+   */
+  profile?: HotkeyProfileTag;
+
+  /**
+   * The tokens of the existing commands this command runs; see
+   * HotkeyCommand.aliasOf.
+   */
+  aliasOf?: HotkeyToken[];
 
   /**
    * If true, hotkey command can be hidden from the UI. It will still run, but may not be displayed.
