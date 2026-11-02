@@ -11,14 +11,14 @@ import {
   aiUsageErrorResponseHandler,
 } from '../ai-usage-limit';
 import type {
+  ActionConfiguration,
+  ActionConfigurationUpdate,
   ActionExecutionRecord,
-  CreateScheduledAction,
   InProgressExecution,
   RoutineTemplate,
   ScheduledAction,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
-  UpdateScheduledAction,
 } from './generated/schemas';
 import {
   type ROUTINE_LIMIT_ERROR,
@@ -58,7 +58,7 @@ export const scheduledActionClient = {
       }
     ),
 
-  createSchedule: async (body: CreateScheduledAction) =>
+  createSchedule: async (body: ActionConfiguration) =>
     fetchWithToken<ScheduledAction, typeof ROUTINE_LIMIT_ERROR>(
       `${scheduledActionHost}/scheduled-actions`,
       {
@@ -70,7 +70,7 @@ export const scheduledActionClient = {
 
   updateSchedule: async (args: {
     scheduleId: string;
-    body: UpdateScheduledAction;
+    body: ActionConfigurationUpdate;
   }) =>
     fetchWithToken<ScheduledAction, typeof ROUTINE_LIMIT_ERROR>(
       `${scheduledActionHost}/scheduled-actions/${args.scheduleId}`,
@@ -130,10 +130,7 @@ export const scheduledActionClient = {
       method: 'DELETE',
     }),
 
-  activateTemplate: (args: {
-    templateId: string;
-    body: CreateScheduledAction;
-  }) =>
+  activateTemplate: (args: { templateId: string; body: ActionConfiguration }) =>
     fetchWithToken<ScheduledAction, typeof ROUTINE_LIMIT_ERROR>(
       `${scheduledActionHost}/scheduled-actions/${args.templateId}/template/activate`,
       {

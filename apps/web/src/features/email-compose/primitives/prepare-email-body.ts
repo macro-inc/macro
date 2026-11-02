@@ -3,15 +3,19 @@ import {
   normalizeContentId,
   staticFileIdsByContentId,
 } from '@app/features/email-message/core/inline-images';
+import { readReceiptPixelPrefixes } from '@app/features/email-message/core/read-receipt';
 import { convertBookingLinkMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertBookingLinkMentionsToLinks';
 import { convertDocumentMentionsToLinks } from '@core/component/LexicalMarkdown/utils/convertDocumentMentionsToLinks';
-import { staticFileReferenceEndpoint } from '@core/constant/servers';
+import {
+  EMAIL_SERVICE_EMBEDDED_HOSTS,
+  staticFileReferenceEndpoint,
+} from '@core/constant/servers';
 import { encodeBase64UrlUtf8 } from '@core/util/base64';
 import { formatEmailDate } from '@core/util/date';
 import { $generateHtmlFromNodes, $generateNodesFromDOM } from '@lexical/html';
 import { $createQuoteNode, $isQuoteNode } from '@lexical/rich-text';
 import { $dfsIterator } from '@lexical/utils';
-import { sanitizeEmailHtml } from '@macro-inc/email-renderer';
+import { type ImagePolicy, sanitizeEmailHtml } from '@macro-inc/email-renderer';
 import type { DocumentMentionInfo } from '@macro-inc/lexical-core';
 import {
   $createClassedBlockNode,
@@ -37,6 +41,13 @@ import { TOGGLE_APPEND_EMAIL_THREAD_COMMAND } from './email-editor-commands';
 import { flattenConsecutiveParagraphs } from './flatten-consecutive-paragraphs';
 
 export { TOGGLE_APPEND_EMAIL_THREAD_COMMAND } from './email-editor-commands';
+
+// Quotes always drop Macro pixels: the composer would count an open, and a
+// reply or forward must not carry the original's pixel to new recipients.
+const QUOTED_IMAGES: ImagePolicy = {
+  remote: 'allow',
+  hiddenUrlPrefixes: readReceiptPixelPrefixes(EMAIL_SERVICE_EMBEDDED_HOSTS),
+};
 
 export function clearEmailBody(editor: LexicalEditor | undefined) {
   if (!editor) return;
@@ -193,7 +204,7 @@ const $appendPreviousEmail = (
   } else {
     const parser = new DOMParser();
     const dom = parser.parseFromString(
-      sanitizeEmailHtml(replyingToBodyHTML),
+      sanitizeEmailHtml(replyingToBodyHTML, QUOTED_IMAGES),
       'text/html'
     );
     linkInlineImages(dom, replyingTo);
@@ -400,7 +411,7 @@ function getAppendedReplyElement(
     quote.textContent = replyingTo.body_text ?? '';
   } else {
     const innerDom = new DOMParser().parseFromString(
-      sanitizeEmailHtml(replyingToBodyHTML),
+      sanitizeEmailHtml(replyingToBodyHTML, QUOTED_IMAGES),
       'text/html'
     );
     linkInlineImages(innerDom, replyingTo);

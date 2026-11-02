@@ -29,6 +29,8 @@ import { observeAiUsageLimitMutations } from '@app/features/paywall/ai-usage-lim
 import { observeRoutineLimitMutations } from '@app/features/paywall/routine-limit-handling';
 import { MobileSettingsProvider } from '@app/features/settings/context/mobile-settings';
 import { NativeShareSheet } from '@app/features/sharing/native-share-sheet/NativeShareSheet';
+import { StatusBanner } from '@app/features/system-status/components/StatusBanner';
+import { useBannerStatus } from '@app/features/system-status/primitives/use-banner-status';
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { mountGlobalFocusListener } from '@app/signal/focus';
 import { CreateChannelModal } from '@channel/CreateChannelModal';
@@ -263,6 +265,7 @@ export function AppChrome(props: ParentProps) {
   // Route mailto: links (via openExternalUrl) to the in-app email composer.
   registerMailtoComposerHandler();
   useNewOnboardingRedirect();
+  const systemStatus = useBannerStatus();
 
   const companyDialogUsed = hasOpened(companyCreation.open);
   const contactDialogUsed = hasOpened(
@@ -326,7 +329,14 @@ export function AppChrome(props: ParentProps) {
           </Show>
         </Show>
       </Suspense>
-      <div class="min-h-0 flex-1 flex">
+      <Show when={systemStatus()}>
+        {(status) => <StatusBanner {...status()} />}
+      </Show>
+      {/* The banner already sits below the status bar on touch devices. */}
+      <div
+        class="min-h-0 flex-1 flex"
+        classList={{ 'touch:[--safe-top:0px]': systemStatus() !== undefined }}
+      >
         <ItemDndProvider>
           {/* The rail and each view's switcher share the rail preferences. */}
           <SidebarPrefsProvider>

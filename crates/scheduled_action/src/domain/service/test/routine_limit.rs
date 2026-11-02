@@ -34,19 +34,13 @@ fn paused() -> ActionConfiguration {
 async fn free_owner_cannot_activate_an_eleventh_routine_but_can_save_it_paused() {
     let svc = service(false);
     for _ in 0..10 {
-        svc.create_action(
-            &user_principal(),
-            CreateScheduledAction::Canonical(configuration(false)),
-        )
-        .await
-        .unwrap();
+        svc.create_action(&user_principal(), configuration(false))
+            .await
+            .unwrap();
     }
 
     let error = svc
-        .create_action(
-            &user_principal(),
-            CreateScheduledAction::Canonical(configuration(false)),
-        )
+        .create_action(&user_principal(), configuration(false))
         .await
         .unwrap_err();
     let limit = limit_reached(&error).expect("routine limit refusal");
@@ -54,12 +48,9 @@ async fn free_owner_cannot_activate_an_eleventh_routine_but_can_save_it_paused()
     assert_eq!(limit.max_active(), 10);
     assert_eq!(stored_actions(&svc).len(), 10);
 
-    svc.create_action(
-        &user_principal(),
-        CreateScheduledAction::Canonical(paused()),
-    )
-    .await
-    .unwrap();
+    svc.create_action(&user_principal(), paused())
+        .await
+        .unwrap();
     assert_eq!(stored_actions(&svc).len(), 11);
 }
 
@@ -74,12 +65,9 @@ async fn the_owners_plan_sets_the_limit() {
     )
     .with_routine_plans(OnPlan(PlanTier::Premium));
     for _ in 0..11 {
-        svc.create_action(
-            &user_principal(),
-            CreateScheduledAction::Canonical(configuration(false)),
-        )
-        .await
-        .unwrap();
+        svc.create_action(&user_principal(), configuration(false))
+            .await
+            .unwrap();
     }
     assert_eq!(stored_actions(&base).len(), 11);
 }
@@ -88,10 +76,7 @@ async fn the_owners_plan_sets_the_limit() {
 async fn enabling_a_paused_routine_counts_against_the_limit() {
     let svc = service(false);
     let paused_id = svc
-        .create_action(
-            &user_principal(),
-            CreateScheduledAction::Canonical(paused()),
-        )
+        .create_action(&user_principal(), paused())
         .await
         .unwrap()
         .id
@@ -99,10 +84,7 @@ async fn enabling_a_paused_routine_counts_against_the_limit() {
     let mut active = Vec::new();
     for _ in 0..10 {
         let created = svc
-            .create_action(
-                &user_principal(),
-                CreateScheduledAction::Canonical(configuration(false)),
-            )
+            .create_action(&user_principal(), configuration(false))
             .await
             .unwrap();
         active.push(created.id.unwrap());
@@ -135,10 +117,7 @@ async fn enabling_a_paused_routine_counts_against_the_limit() {
 async fn rescheduling_a_finished_one_off_counts_against_the_limit() {
     let svc = service(false);
     let finished_id = svc
-        .create_action(
-            &user_principal(),
-            CreateScheduledAction::Canonical(configuration(false)),
-        )
+        .create_action(&user_principal(), configuration(false))
         .await
         .unwrap()
         .id
@@ -153,12 +132,9 @@ async fn rescheduling_a_finished_one_off_counts_against_the_limit() {
         .unwrap()
         .next_run_at = None;
     for _ in 0..10 {
-        svc.create_action(
-            &user_principal(),
-            CreateScheduledAction::Canonical(configuration(false)),
-        )
-        .await
-        .unwrap();
+        svc.create_action(&user_principal(), configuration(false))
+            .await
+            .unwrap();
     }
 
     let renamed = ActionConfiguration {
@@ -196,10 +172,7 @@ async fn downgraded_owner_keeps_active_routines_without_a_plan_lookup() {
     let mut active = Vec::new();
     for _ in 0..12 {
         let created = on_pro
-            .create_action(
-                &user_principal(),
-                CreateScheduledAction::Canonical(configuration(false)),
-            )
+            .create_action(&user_principal(), configuration(false))
             .await
             .unwrap();
         active.push(created.id.unwrap());
@@ -226,10 +199,7 @@ async fn downgraded_owner_keeps_active_routines_without_a_plan_lookup() {
         .await
         .unwrap();
     unavailable
-        .create_action(
-            &user_principal(),
-            CreateScheduledAction::Canonical(paused()),
-        )
+        .create_action(&user_principal(), paused())
         .await
         .unwrap();
 

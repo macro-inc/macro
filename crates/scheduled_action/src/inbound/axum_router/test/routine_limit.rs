@@ -4,11 +4,11 @@ use super::*;
 async fn activating_past_the_plan_limit_is_payment_required_with_a_code() {
     let app = router(false);
     for _ in 0..10 {
-        let (status, _) = request(&app, "POST", "/scheduled-actions", "owner", legacy()).await;
+        let (status, _) = request(&app, "POST", "/scheduled-actions", "owner", cron_action()).await;
         assert_eq!(status, StatusCode::CREATED);
     }
 
-    let (status, body) = request(&app, "POST", "/scheduled-actions", "owner", legacy()).await;
+    let (status, body) = request(&app, "POST", "/scheduled-actions", "owner", cron_action()).await;
     assert_eq!(status, StatusCode::PAYMENT_REQUIRED);
     assert_eq!(body["code"], "routine_limit_reached");
     assert_eq!(body["limit"], 10);
@@ -19,7 +19,7 @@ async fn activating_past_the_plan_limit_is_payment_required_with_a_code() {
             .is_some_and(|error| error.contains("10"))
     );
 
-    let mut paused = legacy();
+    let mut paused = cron_action();
     paused["enabled"] = json!(false);
     let (status, created) = request(&app, "POST", "/scheduled-actions", "owner", paused).await;
     assert_eq!(status, StatusCode::CREATED);

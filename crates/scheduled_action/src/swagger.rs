@@ -24,9 +24,8 @@ use crate::domain::event_trigger::{
 };
 use crate::domain::models::{
     ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionKind, AgentTask,
-    AgentTaskAgent, CreateScheduledAction, ExecutionResource, ExecutionResourceType,
-    ExecutionResult, InProgressExecution, LegacyActionConfiguration, RoutineModelId, Schedule,
-    ScheduledAction, ScheduledActionUpdate, UpdateScheduledAction,
+    AgentTaskAgent, ExecutionResource, ExecutionResourceType, ExecutionResult, InProgressExecution,
+    RoutineModelId, Schedule, ScheduledAction, ScheduledActionUpdate,
 };
 use ai_billing::inbound::admission::AiAdmissionErrorBody;
 use model::response::EmptyResponse;
@@ -63,8 +62,7 @@ use model::response::EmptyResponse;
             ScheduledActionResponse,
             ActionConfiguration,
             ActionConfigurationUpdate,
-            LegacyActionConfiguration,
-            ActionTrigger,
+                        ActionTrigger,
             crate::domain::event_trigger::RoutineTrigger,
             crate::domain::event_trigger::RoutineTriggers,
             EventFilter,
@@ -73,8 +71,6 @@ use model::response::EmptyResponse;
             GithubSelectorInput,
             PayloadConditionInput,
             PayloadScalar,
-            CreateScheduledAction,
-            UpdateScheduledAction,
             SetScheduledActionEnabled,
             Schedule,
             ActionKind,

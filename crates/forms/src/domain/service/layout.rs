@@ -20,7 +20,9 @@ use crate::domain::models::{
     Audience, ColumnId, Form, FormAccess, FormDetail, FormError, FormLayout, FormQuestionDetail,
     FormSection, FormSectionDetail, LayoutProblem, QuestionOption, Widget,
 };
-use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, FormsRepo};
+use crate::domain::ports::{
+    Clock, FormAccessDirectory, FormEventPublisher, FormImageFiles, FormsRepo,
+};
 
 /// What a question shows and checks of its column.
 #[derive(Debug, Clone)]
@@ -340,8 +342,8 @@ pub(super) fn asks_for_a_file(layout: &FormLayout) -> bool {
     })
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker, Drafts>
-    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
+    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
 where
     Repository: FormsRepo + FormDraftRepository,
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
@@ -350,6 +352,7 @@ where
     Now: Clock,
     Broker: MacroEventBroker,
     Drafts: FormDraftStore,
+    Images: FormImageFiles,
 {
     pub(super) async fn read_detail(
         &self,

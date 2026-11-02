@@ -2,8 +2,8 @@ use std::sync::Arc;
 
 use crate::domain::event_trigger::ActionTrigger;
 use crate::domain::models::{
-    ActionExecutionRecord, ActionPolicyError, AlreadyRunningError, CreateScheduledAction,
-    InProgressExecution, OwnerNotUserError, Schedule, ScheduledAction, UpdateScheduledAction,
+    ActionConfiguration, ActionConfigurationUpdate, ActionExecutionRecord, ActionPolicyError,
+    AlreadyRunningError, InProgressExecution, OwnerNotUserError, Schedule, ScheduledAction,
 };
 use crate::domain::ports::ScheduledActionService;
 use crate::domain::target_validation::TargetValidationError;
@@ -224,7 +224,7 @@ pub async fn health() -> impl IntoResponse {
     path = "/scheduled-actions",
     tag = "scheduled actions",
     operation_id = "create_scheduled_action",
-    request_body = CreateScheduledAction,
+    request_body = ActionConfiguration,
     responses(
         (status = 201, body = ScheduledActionResponse),
         (status = 400, body = String),
@@ -237,7 +237,7 @@ pub async fn health() -> impl IntoResponse {
 pub async fn create_action<S, Svc, Auth>(
     State(state): State<ScheduledActionRouterState<S, Svc, Auth>>,
     CreationPrincipalExtractor { principal, .. }: CreationPrincipalExtractor<Auth>,
-    body: Result<Json<CreateScheduledAction>, JsonRejection>,
+    body: Result<Json<ActionConfiguration>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
 where
     S: ScheduledActionService + Send + Sync + 'static,
@@ -322,7 +322,7 @@ where
     tag = "scheduled actions",
     operation_id = "update_scheduled_action",
     params(("id" = String, Path, description = "ID of the scheduled action")),
-    request_body = UpdateScheduledAction,
+    request_body = ActionConfigurationUpdate,
     responses(
         (status = 200, body = ScheduledActionResponse),
         (status = 400, body = String),
@@ -339,7 +339,7 @@ pub async fn update_action<S, Svc, Auth>(
         entity_access_receipt,
         ..
     }: ScheduledActionAccessExtractor<EditAccessLevel, Svc, Auth>,
-    body: Result<Json<UpdateScheduledAction>, JsonRejection>,
+    body: Result<Json<ActionConfigurationUpdate>, JsonRejection>,
 ) -> Result<impl IntoResponse, ScheduledActionApiError>
 where
     S: ScheduledActionService + Send + Sync + 'static,
@@ -528,7 +528,8 @@ impl IntoResponse for ScheduledActionApiError {
                 } else {
                     StatusCode::BAD_REQUEST
                 };
-                return (status, "invalid scheduled action request").into_response();
+                // The caller's own input, naming the field it rejected.
+                return (status, rejection.body_text()).into_response();
             }
             Self::Service(error) => error,
         };

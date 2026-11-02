@@ -50,5 +50,23 @@ export function fixtureSnapshot(state: BillingSimulation): AiUsageSnapshot {
       suspended: state.reloadSuspended,
       active: state.autoReload.enabled && !state.reloadSuspended,
     },
+    credit_purchase:
+      state.tier === 'free' || state.unlimited
+        ? undefined
+        : {
+            // Members fall back to the plan's default team limit, as on the
+            // backend; a payer without a limit is uncapped.
+            monthly_limit_cents:
+              limit ??
+              (state.role === 'member'
+                ? state.tier === 'max'
+                  ? 100_000
+                  : 20_000
+                : null),
+            committed_cents: state.reloadSpentCents,
+            resets_at: new Date(
+              Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1)
+            ).toISOString(),
+          },
   };
 }
