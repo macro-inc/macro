@@ -7,6 +7,7 @@ import {
   Panel,
 } from '@ui';
 import { type Owner, onCleanup, runWithOwner, Show } from 'solid-js';
+import { OutlookBetaBadge } from './OutlookBetaBadge';
 
 export type EmailProvider = 'GMAIL' | 'OUTLOOK';
 
@@ -62,6 +63,7 @@ export function EmailProviderDialog(
               onClick={() => props.onSelect('OUTLOOK')}
             >
               Outlook / Microsoft 365
+              <OutlookBetaBadge />
             </Button>
           </Show>
           <Button

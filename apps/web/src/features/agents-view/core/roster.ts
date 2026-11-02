@@ -66,6 +66,12 @@ export type RosterAgent = {
   ownerId?: string;
   /** Why it cannot be started from the composer right now, when it cannot. */
   unavailableReason?: string;
+  /**
+   * Its paired machine is not connected. Distinct from an unconfigured
+   * built-in runtime: there is nothing to set up, the computer is just away,
+   * so surfaces mark it "Offline" rather than offering a connect flow.
+   */
+  offline?: boolean;
   /** An unavailable agent with a setup action stays clickable. */
   connectLabel?: string;
   /** The persisted record behind a user-made agent; absent for system ones. */
@@ -153,6 +159,7 @@ function persistedAgent(
       agent.bot.owner?.type === 'user'
         ? agent.bot.owner.user_id
         : (agent.bot.created_by ?? undefined),
+    offline: agent.harness === 'macrod' && !connected,
     connectLabel:
       agent.harness === 'cursor' && input.cursorNeedsConnection
         ? 'Connect Cursor'
