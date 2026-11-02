@@ -54,6 +54,12 @@ It uses the real records view with a local source and picker to exercise opening
 replacement, cancellation, keyboard editing, and read-only references. Navigation
 adapter tests separately check file types, access failures, and split selection.
 
+Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
+backend-free desktop/phone regression: the card reserves its height from
+`previewData.poll.optionCount` as a `min-height`, grows to wrapped text, and
+never scrolls or clips inside:
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts poll-card.browser.e2e.ts`.
+
 Pinch zoom on opened image files (Drive details and image splits) has a
 backend-free phone and tablet regression:
 `bunx playwright test --config src/features/block-image/browser-test/playwright.config.ts`.
@@ -137,6 +143,18 @@ boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
 lift a row past a better name match. The one exception: Cmd+K then keeps Macro
 users and DMs ahead of CRM contacts across the people positions, whatever their
 match. Tune name relevance there for every menu.
+Cmd+K and mobile name search widen the first group: a query equal to the first
+word of a DM or person name counts as exact, so a person's first name reaches
+their full-name DM. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
+Quick Access, and Soup search including the Chat sidebar) matches channels and
+DMs by terms in any order, adding to uFuzzy's in-order matches, because names
+are generated from participants and people type them in any order. It also
+ranks a conversation whose participants the query names, by name prefixes,
+right after exact names. Each participant needs a term of their own, so a group
+with more people than the query names stays below it.
+Commas separate query terms like spaces in the cache search
+(`cache-core/search.rs`, mirrored by `matchesTokenSubsequences`) and in the
+server's channel name search; keep the three together.
 Name groups and match position use the row's label (`getDisplayName`), so search
 text can add emails, aliases, or command keywords before or after it. Mention
 menus rank loaded entity sources together with `MENTION_RANKING_CONFIG` in
