@@ -10,7 +10,7 @@ and kept in sync via the connection gateway.
 
 - `src/domain/service.rs`: the contacts use cases (`domain::service`), including bounded ID pages through `ContactsPageService`; the deployed full-list API is unchanged.
 - `src/domain/service/directory.rs`: bounded enrichment, search, and membership-first lookup. Search is ID-ordered, not ranked: at most four 500-row batches are enriched per request, and empty results may have a continuation.
-- `src/domain/models/contact.rs`: viewer/person-derived normalized identity and nullable resolved names; email fallback stays with the consuming surface.
+- `src/domain/models/contact.rs`: viewer/person-derived normalized identity and nullable resolved names; email fallback stays with the consuming surface. `contact/identity-fixtures.json` freezes the UUIDv5 contract shared with frontend point reads; change neither side independently.
 - `src/outbound/names.rs`: `directory-names` feature, reusing the existing user-name owner's profile-over-address-book query without duplicating SQL.
 - `src/domain/models/page.rs`: page sizes (default 100, maximum 500) and original per-row positions, distinct from canonicalized user IDs. Short/empty pages may still have continuations.
 - `src/domain/models/query.rs`: 512-byte normalized searches and at most 500 raw lookup IDs, deduplicated without reordering; empty lookup never means all contacts.

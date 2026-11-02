@@ -20,6 +20,8 @@ export default defineConfig({
     dedupe: ['solid-js'],
     alias: {
       '@service-storage/graphql-contacts': `${directory}/network.ts`,
+      '@queries/contacts/use-directory': `${directory}/calendar-adapters.tsx`,
+      '@core/component/UserIcon': `${directory}/calendar-adapters.tsx`,
       'loro-crdt': 'loro-crdt/base64',
     },
   },

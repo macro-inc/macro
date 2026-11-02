@@ -21,6 +21,7 @@ import {
   readContactDirectory,
 } from './directory';
 import { contactsKeys } from './keys';
+import { createContactQueryEpoch } from './query-epoch';
 
 export type ContactWindowHost = ContactDirectoryHost &
   Pick<CacheHost, 'onCacheChanged' | 'onCacheGenerationChanged'>;
@@ -60,14 +61,21 @@ function contactWindowOptions(
 /** Owns a single replaceable result window, never an appended page history. */
 export function createContactDirectoryWindow(
   scope: Accessor<{ userId?: string; host?: ContactWindowHost }>,
-  reader: typeof readContactDirectory = readContactDirectory
+  reader: typeof readContactDirectory = readContactDirectory,
+  enabled: Accessor<boolean> = () => true
 ) {
   const owner = createUniqueId();
   const [search, setSearch] = createSignal('');
   const debouncedSearch = debouncedDependent(search, 200);
   const [cursor, setCursor] = createSignal<ContactDirectoryCursor>();
   const [fresh, setFresh] = createSignal(false);
-  const [generation, setGeneration] = createSignal(0);
+  const { epoch: generation, invalidate } = createContactQueryEpoch(
+    scope,
+    () => {
+      setCursor(undefined);
+      setFresh(false);
+    }
+  );
   const request = createMemo<ContactDirectoryRequest>(() => {
     const current = cursor();
     const query = debouncedSearch();
@@ -83,7 +91,7 @@ export function createContactDirectoryWindow(
   const query = useQuery(() =>
     contactWindowOptions(
       owner,
-      scope().userId,
+      enabled() ? scope().userId : undefined,
       scope().host,
       generation(),
       request(),
@@ -92,6 +100,7 @@ export function createContactDirectoryWindow(
   );
   const data = () => {
     if (
+      !enabled() ||
       query.error instanceof ContactDirectoryScopeError ||
       !queryReadyGate(query)
     )
@@ -111,12 +120,6 @@ export function createContactDirectoryWindow(
     const host = scope().host;
     if (!host) return;
     onCleanup(
-      host.onCacheGenerationChanged(() => {
-        setCursor(undefined);
-        setGeneration((value) => value + 1);
-      })
-    );
-    onCleanup(
       subscribeToVisibleCacheChanges(
         host,
         () => {
@@ -128,22 +131,6 @@ export function createContactDirectoryWindow(
         { searchBuckets: () => ['person'] }
       )
     );
-  });
-  // An account/host change cannot resurrect its old page when switching back.
-  let previousScope = untrack(scope);
-  createEffect(() => {
-    const current = scope();
-    if (
-      current.userId !== previousScope.userId ||
-      current.host !== previousScope.host
-    ) {
-      batch(() => {
-        setCursor(undefined);
-        setFresh(false);
-        setGeneration((value) => value + 1);
-      });
-    }
-    previousScope = current;
   });
   return {
     search,
@@ -172,7 +159,7 @@ export function createContactDirectoryWindow(
       batch(() => {
         setCursor(undefined);
         setFresh(true);
-        setGeneration((value) => value + 1);
+        invalidate();
       }),
     retry: () => query.refetch({ cancelRefetch: false }),
   };

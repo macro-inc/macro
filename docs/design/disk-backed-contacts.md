@@ -5,11 +5,12 @@ contact hydration, bounded page retention, a `person` projection, and a generate
 cursor-only backfill result. Background hydration is now wired under Soup's
 existing authenticated tab leadership and cache flag. It admits pages under an
 engine-checked account/storage generation and saves only committed cursors.
-The contact debug inspector is the first bounded UI consumer: one replaceable
-50-result window, cached search/browse, scoped server fallback, and explicit
-snapshot/offline status. Product menus still retain the directory through legacy hooks.
-**Next step:** migrate a product picker after implementing before-limit DM
-ranking/exclusions and bounded exact selected-contact resolution.
+The contact debug inspector and Calendar search's organizer/attendee pickers
+now use bounded windows. Explicit selected ID/email lookup reads viewer-scoped
+keys offline and authoritative bounded batches online; selected values remain
+independent of suggestions. Other product menus still retain legacy arrays.
+**Next step:** migrate the remaining filters and implement before-limit DM
+ranking/exclusions for Quick Access and shared recipient pickers.
 
 ## Goal and scope
 
@@ -145,10 +146,17 @@ bounded point reads before resolving names.
 - [x] Add bounded search/browse under `apps/web/src/lib/queries/contacts`, with
   pending/error, snapshot/partial/cold, and offline/source status. Cursors bind to
   source, account, query and (for cache) generation; pagination never switches sources.
-- [ ] Add shared exact ID/email resolution, including offline selected contacts.
+- [x] Add shared exact ID/email resolution, including offline selected contacts.
+  Bound raw input to 500 before deduplication. Derive only requested normalized
+  keys with the standard UUIDv5 identity contract, checked by shared Rust/TS
+  fixtures. Online omissions remain authoritative for that batch; offline
+  unresolved IDs never imply non-membership. Successful reads warm supported
+  caches through guarded hydration without retaining lookup wrappers.
 - [x] Bound result windows and query history in the new API: one page per observer,
   immediate TanStack garbage collection, plain copied cursors, and no page accumulation.
-- [ ] Keep selected contacts independent of suggestions when migrating product pickers.
+- [x] Provide an independent, account/epoch-fenced selection resolver with no
+  query history. Calendar people filters use it and preserve unknown/custom
+  emails across searches, page replacement, failures, and offline gaps.
 - [x] For cold, disabled, or unsupported caches, the new reader uses one bounded
   server page. Offline fallback requires an identity-checked cached window and
   never masks authorization errors; legacy full-list APIs are not a fallback.
@@ -189,8 +197,12 @@ checkpoint describes a cached snapshot, not current authoritative membership.
   `useCombinedRecipients()` consumers: query-driven suggestions and separate selection.
 - [ ] Calendar guests, event editors, participant menus, and mentions: bounded
   search plus explicit resolution of attendees/participants already present.
-- [ ] Drive, Tasks, Soup, CRM, and calendar people filters: searchable pages plus
-  explicit resolution of persisted selected IDs.
+- [ ] Drive, Tasks, Soup, and CRM people filters: searchable pages plus explicit
+  resolution of persisted selected IDs.
+- [x] Calendar search organizer/attendee filters: bounded suggestion pages and
+  separate selected-email lookup, with desktop/phone focus and keyboard coverage.
+  Render resolved names through `UserIcon.name` rather than filling the global
+  name store again. Calendar guest editors remain on the migration list.
 - [ ] Onboarding: bounded same-domain lookup instead of collecting every contact email.
 - [ ] Imports: batch exact matching of the imported assignees, plus bounded picker search.
 - [ ] Database SQL `people`: move filtering/aggregation to an appropriate execution

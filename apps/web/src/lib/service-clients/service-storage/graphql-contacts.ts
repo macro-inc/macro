@@ -7,6 +7,8 @@ import {
   type ContactDirectoryBackfillQuery,
   type ContactDirectoryBackfillQueryVariables,
   type ContactDirectoryBackfillResult,
+  ContactDirectoryByUserIdsDocument,
+  type ContactDirectoryByUserIdsQuery,
   ContactDirectoryPageDocument,
   type ContactDirectoryPageQuery,
   type ContactDirectoryPageQueryVariables,
@@ -19,6 +21,30 @@ import {
 const DOCUMENT = print(ContactDirectoryBackfillDocument);
 const TRANSPORT_DOCUMENT = graphqlSoupTransportDocument(DOCUMENT);
 const PAGE_SIZE = 500;
+
+/** Membership-scoped exact lookup; empty input is never a directory listing. */
+export async function fetchContactDirectoryByIds(
+  userIds: string[],
+  signal: AbortSignal
+): Promise<ContactDirectoryByUserIdsQuery> {
+  signal.throwIfAborted();
+  if (userIds.length > PAGE_SIZE)
+    throw new Error('Contact lookup exceeds its batch bound');
+  const result = await getGraphqlSoupNetworkClient()
+    .query(
+      ContactDirectoryByUserIdsDocument,
+      { userIds },
+      {
+        requestPolicy: 'network-only',
+        fetchOptions: { signal },
+      }
+    )
+    .toPromise();
+  signal.throwIfAborted();
+  if (result.error) throw result.error;
+  if (!result.data) throw new Error('Contact lookup returned no data');
+  return result.data;
+}
 
 /** Foreground fallback is one bounded server page, never the legacy full list.
  * It is fetch-only: obsolete UI requests cannot change cache identity. */

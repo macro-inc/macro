@@ -1,4 +1,6 @@
+import { contactRecordKey } from '@queries/contacts/contact-key';
 import type {
+  ContactDirectoryByUserIdsQuery,
   ContactDirectoryPageQuery,
   ContactDirectoryPageQueryVariables,
 } from '@service-storage/graphql/generated/graphql';
@@ -31,6 +33,26 @@ export async function fetchContactDirectoryPage(
     },
   };
 }
+export async function fetchContactDirectoryByIds(
+  userIds: string[],
+  signal: AbortSignal
+): Promise<ContactDirectoryByUserIdsQuery> {
+  signal.throwIfAborted();
+  return {
+    user: {
+      id: viewer,
+      contactsByUserIds: userIds
+        .filter((id) => id === 'macro|selected@example.com')
+        .map((userId) => ({
+          id: contactRecordKey(viewer, userId).slice('GraphqlContact:'.length),
+          userId,
+          email: userId.slice(6),
+          name: 'Selected Person',
+        })),
+    },
+  };
+}
+
 export async function hydrateGraphqlContacts(): Promise<never> {
   throw new Error('Background hydration is not mounted by this fixture');
 }

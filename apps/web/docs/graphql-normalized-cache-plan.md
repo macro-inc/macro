@@ -1209,8 +1209,15 @@ viewer identity and storage generation around cache reads, preserves target user
 IDs, and uses bounded server pages for cold/unsupported caches. Offline windows
 remain explicitly incomplete; authorization failures never become cached successes.
 Server continuations stay server-side even if hydration finishes between pages.
-Product picker migration, before-limit DM ranking/exclusions, exact selected-contact
-resolution, and authoritative removal reconciliation remain in [the contacts checklist](../../../docs/design/disk-backed-contacts.md).
+Exact ID/email resolution derives only requested viewer-scoped UUIDv5 keys
+(verified against shared backend fixtures) and projects bounded records offline.
+Online batches check current membership; omissions never resurrect cached rows.
+Guarded foreground hydration warms returned contacts on supported engines.
+Calendar search organizer/attendee filters now combine bounded suggestions with
+independent selected-email labels and do not use the global full-list hook.
+Their avatars consume resolved names rather than adding name-store history.
+Other picker migrations, before-limit DM ranking/exclusions, and authoritative
+removal reconciliation remain in [the contacts checklist](../../../docs/design/disk-backed-contacts.md).
 
 ## Cached email Quick Access
 

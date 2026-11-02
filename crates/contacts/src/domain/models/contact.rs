@@ -4,6 +4,9 @@ use super::page::ContactCursor;
 use macro_user_id::user_id::MacroUserIdStr;
 use uuid::Uuid;
 
+#[cfg(test)]
+mod test;
+
 /// Stable identity of one viewer's directory entry for a person.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct ContactId(Uuid);

@@ -15,5 +15,10 @@ window, and inspector. Cache/network stand-ins synthesize bounded windows from a
 browse pages, target IDs, search, account switches, empty server-budget pages,
 offline partial data, query-history collection, and layout overflow.
 
+`/?filters` mounts the production Calendar organizer/attendee filters, bounded
+query state and exact selection resolver over stand-in transport/profile services.
+It covers selected names outside the page, unknown/custom emails, broader server
+matches, page replacement, input focus and arrow navigation on desktop/phone.
+
 This is UI/adapter coverage, not a WASM memory measurement or live-backend trace.
 Real Turso/OPFS hydration/search coverage lives in `crates/client/cache-turso`.

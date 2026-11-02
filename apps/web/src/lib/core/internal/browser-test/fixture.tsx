@@ -9,6 +9,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/solid-query';
 import { createMemo, createSignal } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ContactDirectoryInspector } from '../ContactDirectoryInspector';
+import { CalendarFilterFixture } from './calendar-fixture';
 import { changeViewer, fetchContactDirectoryPage } from './network';
 
 const client = new QueryClient();
@@ -131,7 +132,11 @@ if (!root) throw new Error('Missing fixture root');
 render(
   () => (
     <QueryClientProvider client={client}>
-      <App />
+      {new URLSearchParams(location.search).has('filters') ? (
+        <CalendarFilterFixture />
+      ) : (
+        <App />
+      )}
     </QueryClientProvider>
   ),
   root

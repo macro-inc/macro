@@ -9,14 +9,18 @@ import { Telemetry } from '@macro-inc/observability';
 import {
   type ContactDirectoryFieldsFragment,
   ContactDirectoryFieldsFragmentDoc,
-  ContactDirectoryIdentityDocument,
 } from '@service-storage/graphql/generated/graphql';
 import { fetchContactDirectoryPage } from '@service-storage/graphql-contacts';
 import { CombinedError } from '@urql/core';
-import { print } from 'graphql';
 import { loadContactCheckpoint } from './backfill';
+import {
+  assertContactCacheScope,
+  ContactDirectoryScopeError,
+  readContactCacheScope,
+} from './cache-scope';
 
-const IDENTITY_DOCUMENT = print(ContactDirectoryIdentityDocument);
+export { ContactDirectoryScopeError } from './cache-scope';
+
 const CONTACT_SELECTION = selectRecords(ContactDirectoryFieldsFragmentDoc);
 export const CONTACT_WINDOW_SIZE = 50;
 
@@ -51,34 +55,6 @@ export type ContactDirectoryHost = Pick<
   | 'readRecordsByKeys'
 >;
 
-export class ContactDirectoryScopeError extends Error {
-  constructor() {
-    super('Contact directory scope changed; restart this page');
-  }
-}
-
-function hasViewer(data: unknown, viewer: string): boolean {
-  return (
-    typeof data === 'object' &&
-    data !== null &&
-    'user' in data &&
-    typeof data.user === 'object' &&
-    data.user !== null &&
-    'id' in data.user &&
-    data.user.id === viewer
-  );
-}
-async function currentViewer(
-  host: ContactDirectoryHost,
-  viewer: string
-): Promise<boolean> {
-  const result = await host.readQuery({
-    query: IDENTITY_DOCUMENT,
-    operationName: 'ContactDirectoryIdentity',
-  });
-  return result.kind === 'hit' && hasViewer(result.data, viewer);
-}
-
 /** Does not touch the global display-name store. Cache IDs are never navigation IDs. */
 export function contactToUser(contact: ContactDirectoryFieldsFragment): IUser {
   return {
@@ -95,9 +71,8 @@ async function cachedPage(
   limit: number,
   signal: AbortSignal
 ): Promise<{ page: ContactDirectoryPage; generation: string } | undefined> {
-  const generation = await host.currentStorageGeneration();
-  signal.throwIfAborted();
-  if (!(await currentViewer(host, viewer))) return undefined;
+  const generation = await readContactCacheScope(host, viewer, signal);
+  if (!generation) return undefined;
   if (
     request.cursor?.source === 'cache' &&
     request.cursor.generation !== generation
@@ -119,12 +94,7 @@ async function cachedPage(
     hits.documents.map((hit) => hit.recordKey)
   );
   signal.throwIfAborted();
-  if (
-    !(await currentViewer(host, viewer)) ||
-    generation !== (await host.currentStorageGeneration())
-  )
-    throw new ContactDirectoryScopeError();
-  signal.throwIfAborted();
+  await assertContactCacheScope(host, viewer, generation, signal);
   const checkpoint = loadContactCheckpoint(viewer, generation);
   const users = selected.records.map(({ record }) => contactToUser(record));
   let sync: ContactDirectoryPage['sync'] = 'cold';
@@ -259,13 +229,13 @@ export async function readContactDirectory(
           throw error;
         // Network work introduced another async gap since the local read.
         // Re-prove its original scope before exposing an offline fallback.
-        if (
-          !host ||
-          !(await currentViewer(host, viewer)) ||
-          snapshot?.generation !== (await host.currentStorageGeneration())
-        )
-          throw new ContactDirectoryScopeError();
-        signal.throwIfAborted();
+        if (!host || !snapshot) throw new ContactDirectoryScopeError();
+        await assertContactCacheScope(
+          host,
+          viewer,
+          snapshot.generation,
+          signal
+        );
         result = { ...local, offline: true };
       }
     }

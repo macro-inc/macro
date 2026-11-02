@@ -351,9 +351,17 @@ Search button. The expanded field exposes Filters and, after typing, the
 icon-only Exact-match toggle. The filter button stays before Close. The filter
 menu opens below the button, aligned to its right edge: Search in is
 single-select, while Status, Organizer, and Attendee allow multiple values.
-Organizer and Attendee virtualize their contact lists; selected contacts stay
-in place, while custom email addresses appear first. Adding a valid email clears
-the contact search. Filter selections apply immediately, and only these filters
+Organizer and Attendee virtualize a bounded contact window, using shared
+name/email matching. Matching selected values stay pinned independently of the
+page; their labels resolve through explicit email lookup, including cached
+point reads offline. Unknown or external selections keep their email labels.
+Next contacts replaces the suggestion page without clearing selections. Empty
+server pages may still have a continuation; partial/offline caches are labeled
+rather than claiming no contacts exist. Adding a valid email clears the contact
+search. Typing keeps focus in the input as async rows arrive, and ArrowDown moves
+into the checkbox rows. Desktop/phone coverage uses the production filters and
+query/lookup state over stand-in services in
+`src/lib/core/internal/browser-test/playwright.config.ts`. Filter selections apply immediately, and only these filters
 mark the filter button, not Exact mode. Search opens a calendar-search hint
 until at least three characters are entered; searches show skeleton rows while
 loading. Empty results show an illustrated empty state. Result titles show a calendar-color
