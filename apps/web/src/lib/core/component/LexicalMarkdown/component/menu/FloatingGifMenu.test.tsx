@@ -290,8 +290,13 @@ it.each(['element', 'text'])(
   }
 );
 
-it.each(['empty text', 'empty element', 'clipped element'])(
-  'uses the correct reference for a %s caret',
+it.each([
+  'empty text',
+  'empty element',
+  'clipped element',
+  'scrolled document',
+])(
+  'keeps the picker correctly anchored within the viewport for a %s caret',
   async (anchorType) => {
     const floating =
       await vi.importActual<typeof import('@floating-ui/dom')>(
@@ -300,6 +305,8 @@ it.each(['empty text', 'empty element', 'clipped element'])(
     const defaultPosition = vi.mocked(computePosition).getMockImplementation();
     vi.mocked(computePosition).mockImplementation(floating.computePosition);
     try {
+      const scrollY = anchorType === 'scrolled document' ? 900 : 0;
+      vi.spyOn(window, 'scrollY', 'get').mockReturnValue(scrollY);
       vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(
         1024
       );
@@ -320,6 +327,8 @@ it.each(['empty text', 'empty element', 'clipped element'])(
         HTMLElement.prototype,
         'getBoundingClientRect'
       ).mockImplementation(function (this: HTMLElement) {
+        if (this === document.documentElement)
+          return new DOMRect(0, -scrollY, 1024, 768 + scrollY);
         if (this.hasAttribute('contenteditable'))
           return new DOMRect(100, 600, 400, 40);
         if (this.hasAttribute('data-holds-prompts'))

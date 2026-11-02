@@ -132,6 +132,7 @@ export function floatWithSelection(
   ) {
     let room = 0;
     await computePosition(toReference(anchor), floatingEl, {
+      strategy: 'fixed',
       placement,
       middleware: [
         offset(spacing),
@@ -211,6 +212,7 @@ export function floatWithSelection(
             hide(),
           ],
           ...floatingOptions,
+          strategy: 'fixed',
         }
       );
 
@@ -230,6 +232,7 @@ export function floatWithSelection(
       floatingEl,
       {
         placement: decidedPlacement,
+        strategy: 'fixed',
         middleware: [
           offset(spacing),
           shift({ padding: iosSafePadding(spacing), boundary }),

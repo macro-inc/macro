@@ -429,6 +429,8 @@ using the mentions menu's side gutters.
 If the browser has no caret selection or its range has no rendered geometry,
 the GIF picker anchors to its editor rather than staying hidden.
 The larger desktop GIF picker stays within the viewport on narrow screens.
+Repeat after scrolling the page: the picker must stay beside the composer,
+without adding the page's scroll offset to its fixed position.
 Trending GIFs show first, with the large search field focused on both desktop
 and phones. Search keeps the composer expanded, and tapping anywhere in the
 search field keeps focus there. Tap a GIF to download its original animated bytes
