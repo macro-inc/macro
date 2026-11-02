@@ -3,6 +3,7 @@ import { join, resolve } from 'node:path';
 import * as aws from '@pulumi/aws';
 import * as awsx from '@pulumi/awsx';
 import * as pulumi from '@pulumi/pulumi';
+import * as random from '@pulumi/random';
 import { parse } from 'smol-toml';
 
 const stack = pulumi.getStack();
@@ -222,6 +223,12 @@ const dbSubnets = new aws.rds.SubnetGroup(`${name}-db-subnets`, {
   subnetIds: privateSubnetIds,
   tags,
 });
+// Pulumi owns the password: an RDS-managed one rotates weekly behind the
+// DATABASE_URL baked into the runtime secret.
+const dbPassword = new random.RandomPassword(`${name}-db-password`, {
+  length: 40,
+  special: false,
+});
 const database = new aws.rds.Instance(
   `${name}-db`,
   {
@@ -234,7 +241,7 @@ const database = new aws.rds.Instance(
     storageEncrypted: true,
     dbName: 'macro_connect',
     username: 'connect_api',
-    manageMasterUserPassword: true,
+    password: dbPassword.result,
     dbSubnetGroupName: dbSubnets.name,
     vpcSecurityGroupIds: [dbSg.id],
     publiclyAccessible: false,
@@ -246,20 +253,13 @@ const database = new aws.rds.Instance(
   },
   { protect: stack === 'prod' },
 );
-const dbSecretArn = database.masterUserSecrets.apply((secrets) => {
-  if (secrets.length !== 1) throw new Error('RDS master secret is missing');
-  return secrets[0].secretArn;
-});
-const dbSecret = aws.secretsmanager.getSecretVersionOutput({
-  secretId: dbSecretArn,
-});
 const databaseUrl = pulumi.secret(
   pulumi
-    .all([database.address, dbSecret.secretString])
-    .apply(([address, secret]) => {
-      const credentials = JSON.parse(secret) as { password: string };
-      return `postgresql://connect_api:${encodeURIComponent(credentials.password)}@${address}:5432/macro_connect`;
-    }),
+    .all([database.address, dbPassword.result])
+    .apply(
+      ([address, password]) =>
+        `postgresql://connect_api:${encodeURIComponent(password)}@${address}:5432/macro_connect`,
+    ),
 );
 const runtimeSecret = new aws.secretsmanager.Secret(`${name}-runtime`, {
   name: `${name}-runtime`,
