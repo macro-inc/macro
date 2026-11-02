@@ -6,7 +6,7 @@ import {
   type OperationContext,
   type OperationResult,
 } from '@urql/core';
-import { createMemo, createRoot } from 'solid-js';
+import { type Accessor, createMemo, createRoot, createSignal } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { makeSubject, onEnd, pipe } from 'wonka';
 
@@ -58,7 +58,7 @@ import {
   groupedSoupInputKey,
   groupedSoupLogicalViewKey,
 } from '@queries/soup/grouped/graphql-operation-registry';
-import type { GroupMeta } from '@queries/soup/grouped/types';
+import type { GroupByField, GroupMeta } from '@queries/soup/grouped/types';
 import type { GroupSoupQueryVariables } from '@service-storage/graphql/generated/graphql';
 import { createGraphqlGroupedSoupQueries } from './create-graphql-grouped-soup-queries';
 
@@ -166,7 +166,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-function setup() {
+function setup(options: { groupByField?: Accessor<GroupByField> } = {}) {
   const fake = makeFakeClient();
   getGraphqlSoupClientMock.mockReturnValue(fake.client);
 
@@ -176,7 +176,7 @@ function setup() {
       () => ({
         params: { limit: 2, sort_method: 'updated_at' },
         body: {},
-        groupBy: {
+        groupBy: options.groupByField?.() ?? {
           type: 'property',
           propertyDefinitionId: 'status-definition',
         },
@@ -451,4 +451,71 @@ describe('createGraphqlGroupedSoupQueries', () => {
     expect(fake.executions).toHaveLength(2);
     expect(fake.executions[0]?.unsubscribed).toBe(false);
   });
+});
+
+it('discards loaded cursors when date ranges change with the same bucket keys', async () => {
+  const [field, setField] = createSignal<GroupByField>({
+    type: 'property',
+    propertyDefinitionId: 'review-date-property',
+    bucketing: {
+      type: 'date_ranges',
+      ranges: [
+        { key: 'a', start: null, end: '2026-10-22T00:00:00Z' },
+        { key: 'b', start: '2026-10-22T00:00:00Z', end: null },
+      ],
+      missingValueBucketKey: 'no_review_date',
+    },
+  });
+  const { fake, grouped } = setup({ groupByField: field });
+  fake.executions[0].next(
+    page([group('a', ['a-1'], 'old-cursor')], [item('a-1')])
+  );
+  const a = grouped.map().get('a')!;
+  const load = a.fetchNextPage();
+  fake.executions[1].next(
+    page([group('a', ['a-2'], 'next-old-cursor')], [item('a-2')])
+  );
+  await load;
+  expect(entityIds(a)).toEqual(['a-1', 'a-2']);
+  setField({
+    type: 'property',
+    propertyDefinitionId: 'review-date-property',
+    bucketing: {
+      type: 'date_ranges',
+      ranges: [
+        { key: 'a', start: null, end: '2026-10-23T00:00:00Z' },
+        { key: 'b', start: '2026-10-23T00:00:00Z', end: null },
+      ],
+      missingValueBucketKey: 'no_review_date',
+    },
+  });
+  expect(fake.executions[1].unsubscribed).toBe(true);
+  expect(fake.executions[2].variables.input).toMatchObject({
+    initial: {
+      groupBy: {
+        field: 'PROPERTY',
+        propertyDefinitionId: 'review-date-property',
+        bucketing: {
+          type: 'DATE_RANGES',
+          ranges: [
+            { key: 'a', start: null, end: '2026-10-23T00:00:00Z' },
+            { key: 'b', start: '2026-10-23T00:00:00Z', end: null },
+          ],
+          missingValueBucketKey: 'no_review_date',
+        },
+      },
+    },
+  });
+  fake.executions[2].next(
+    page([group('a', ['a-3'], 'new-cursor')], [item('a-3')])
+  );
+  const refreshed = grouped.map().get('a')!;
+  expect(entityIds(refreshed)).toEqual(['a-3']);
+  const next = refreshed.fetchNextPage();
+  expect(fake.executions[3].variables.input).toMatchObject({
+    continuation: { cursor: 'new-cursor' },
+  });
+  fake.executions[3].next(page([group('a', ['a-4'], null)], [item('a-4')]));
+  await next;
+  expect(entityIds(refreshed)).toEqual(['a-3', 'a-4']);
 });
