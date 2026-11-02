@@ -297,3 +297,102 @@ test('a sheet opened by its trigger slides up, and swipes away', async ({
 
   await expect(filters).toHaveCount(0);
 });
+
+test.describe('a persistent prompt', () => {
+  const toastCard = (page: Page, text: string) =>
+    page.locator('[data-macro-toast]', { hasText: text });
+  const prompt = (page: Page) =>
+    toastCard(page, 'Enable Browser Notifications');
+  const notice = (page: Page) => toastCard(page, 'Link copied');
+
+  async function middleOf(target: Locator) {
+    await expect(target).toBeVisible();
+    const box = await target.boundingBox();
+    if (!box) throw new Error('The target is not rendered');
+    return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  }
+
+  /** Whether a tap at this spot lands in `target`, not on what covers it. */
+  const receivesTapsAt = (target: Locator, spot: { x: number; y: number }) =>
+    target.evaluate(
+      (element, { x, y }) => element.contains(document.elementFromPoint(x, y)),
+      spot
+    );
+
+  async function openProperties(page: Page) {
+    await tap(page, page.getByRole('button', { name: 'Properties' }));
+    const properties = page.getByRole('dialog', { name: 'Properties' });
+    await settled(properties);
+    return properties;
+  }
+
+  test('waits under a sheet and the picker stacked on it', async ({ page }) => {
+    await page.goto('/?scenario=prompt');
+    const spot = await middleOf(prompt(page));
+    await tap(page, prompt(page).getByRole('button', { name: 'Enable' }));
+    await expect(pressed(page)).toHaveText('Enable');
+
+    const properties = await openProperties(page);
+    expect(await receivesTapsAt(properties, spot)).toBe(true);
+    await tap(page, properties.getByRole('button', { name: 'Due date' }));
+    await expect(pressed(page)).toHaveText('Enable, Due date');
+
+    await tap(page, properties.getByRole('button', { name: 'Assignee' }));
+    const picker = page.getByRole('dialog', { name: 'Assignee' });
+    await settled(picker);
+    const search = picker.getByRole('textbox', { name: 'Search people' });
+    await expect(search).toBeVisible();
+    expect(await receivesTapsAt(picker, spot)).toBe(true);
+    await tap(page, search);
+    await expect(search).toBeFocused();
+
+    await tap(page, picker.getByRole('button', { name: 'Cancel' }));
+    await expect(picker).toHaveCount(0);
+    await dragDown(page, properties);
+    await expect(properties).toHaveCount(0);
+
+    expect(await receivesTapsAt(prompt(page), spot)).toBe(true);
+    await tap(page, prompt(page).getByRole('button', { name: 'Enable' }));
+    await expect(pressed(page)).toHaveText('Enable, Due date, Enable');
+  });
+
+  test('moves up to clear a notice, and back when it goes', async ({
+    page,
+  }) => {
+    await page.goto('/?scenario=prompt');
+    await expect(prompt(page)).toBeVisible();
+    await prompt(page).evaluate((card) =>
+      Promise.all(card.getAnimations().map((motion) => motion.finished))
+    );
+    const resting = await prompt(page).boundingBox();
+    // 12px over the dock inset, plus the 20px gap the stack keeps above notices.
+    expect(
+      page.viewportSize()!.height - (resting!.y + resting!.height)
+    ).toBeCloseTo(32, 1);
+
+    await tap(page, page.getByRole('button', { name: 'Show notice' }));
+    await expect(notice(page)).toBeVisible();
+    await expect(async () => {
+      const raised = await prompt(page).boundingBox();
+      const shown = await notice(page).boundingBox();
+      expect(shown!.y - (raised!.y + raised!.height)).toBeCloseTo(20, 1);
+    }).toPass();
+
+    await page.getByRole('button', { name: 'Dismiss notice' }).click();
+    await expect(notice(page)).toHaveCount(0);
+    await expect
+      .poll(async () => (await prompt(page).boundingBox())?.y)
+      .toBe(resting!.y);
+  });
+
+  test('leaves a notice on top of the sheet', async ({ page }) => {
+    await page.goto('/?scenario=prompt');
+    const properties = await openProperties(page);
+
+    await tap(page, properties.getByRole('button', { name: 'Copy link' }));
+
+    expect(
+      await receivesTapsAt(notice(page), await middleOf(notice(page)))
+    ).toBe(true);
+  });
+});

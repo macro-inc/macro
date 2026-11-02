@@ -1,104 +1,50 @@
 import { TextShimmer } from '@app/features/block-agent/ui';
-import CheckIcon from '@icon/system/regular/check.svg';
-import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
-import WarningIcon from '@icon/system/regular/warning-circle.svg';
-import XIcon from '@icon/system/regular/x.svg';
 import { Key } from '@solid-primitives/keyed';
-import { createSignal, Match, Show, Switch } from 'solid-js';
+import { Match, Switch } from 'solid-js';
 
-/** One step of an agent's work, as the session's fold worded it. */
+/**
+ * One step of an agent's work, as the session's fold worded it. A
+ * conversation names the step only: what it ran or read stays in the session.
+ */
 export type ActivityRowView = {
   id: string;
   label: string;
-  detail?: string | null;
   status: 'running' | 'completed' | 'failed' | 'interrupted';
 };
 
-/** Steps shown before the earlier ones fold behind a count. */
-const VISIBLE_ROWS = 6;
-
 /**
- * The steps an agent took between two passages of its reply: what it did, to
- * what, and how that went, one quiet line each. A long run keeps its latest
- * steps in view and folds the rest behind a count.
+ * The steps an agent took between two passages of its reply, one quiet line
+ * each like the session's tool rows: what it did, and how it went only when
+ * it did not simply finish.
  */
 export function ActivityRows(props: { rows: readonly ActivityRowView[] }) {
-  const [expanded, setExpanded] = createSignal(false);
-  const hidden = () =>
-    expanded() ? 0 : Math.max(0, props.rows.length - VISIBLE_ROWS);
   return (
-    <ul class="my-1 flex min-w-0 flex-col gap-0.5 text-xs" aria-label="Steps">
-      <Show when={hidden() > 0}>
-        <li>
-          <button
-            type="button"
-            class="text-ink-extra-muted hover:text-ink-muted"
-            onClick={() => setExpanded(true)}
-          >
-            {hidden()} earlier {hidden() === 1 ? 'step' : 'steps'}
-          </button>
-        </li>
-      </Show>
-      {/* A live run's rows arrive as new objects with every paint. Keyed by
-          step, a row updates in place and its spinner and shimmer run on. */}
-      <Key each={props.rows.slice(hidden())} by="id">
+    <ul class="my-1 flex min-w-0 flex-col gap-0.5" aria-label="Steps">
+      {/* Rows can arrive as new objects with every paint. Keyed by step, a
+          row updates in place and its shimmer runs on. */}
+      <Key each={props.rows} by="id">
         {(row) => (
           <li
-            class="flex min-h-5 min-w-0 items-center gap-2"
+            class="flex min-h-6 min-w-0 items-center gap-1.5"
             data-status={row().status}
           >
-            <StatusIcon status={row().status} />
-            <span class="shrink-0 text-ink-muted">
+            <span class="shrink-0">
               <TextShimmer
                 text={row().label}
                 active={row().status === 'running'}
               />
             </span>
-            <Show when={row().detail}>
-              {(detail) => (
-                <span class="min-w-0 truncate font-mono text-ink-extra-muted">
-                  {detail()}
-                </span>
-              )}
-            </Show>
+            <Switch>
+              <Match when={row().status === 'failed'}>
+                <span class="shrink-0 text-failure">Failed</span>
+              </Match>
+              <Match when={row().status === 'interrupted'}>
+                <span class="shrink-0 text-ink-disabled">Interrupted</span>
+              </Match>
+            </Switch>
           </li>
         )}
       </Key>
     </ul>
-  );
-}
-
-function StatusIcon(props: { status: ActivityRowView['status'] }) {
-  return (
-    <Switch>
-      <Match when={props.status === 'running'}>
-        <SpinnerIcon
-          aria-hidden={false}
-          class="size-3.5 shrink-0 animate-spin text-ink-muted"
-          aria-label="Running"
-        />
-      </Match>
-      <Match when={props.status === 'completed'}>
-        <CheckIcon
-          aria-hidden={false}
-          class="size-3.5 shrink-0 text-success"
-          aria-label="Done"
-        />
-      </Match>
-      <Match when={props.status === 'failed'}>
-        <XIcon
-          aria-hidden={false}
-          class="size-3.5 shrink-0 text-failure"
-          aria-label="Failed"
-        />
-      </Match>
-      <Match when={props.status === 'interrupted'}>
-        <WarningIcon
-          aria-hidden={false}
-          class="size-3.5 shrink-0 text-ink-muted"
-          aria-label="Interrupted: it may or may not have finished"
-        />
-      </Match>
-    </Switch>
   );
 }
