@@ -80,7 +80,9 @@ class ByteReader {
   private chunks: Uint8Array[] = [];
   private buffered = 0;
 
-  constructor(private readonly reader: ReadableStreamDefaultReader<Uint8Array>) {}
+  constructor(
+    private readonly reader: ReadableStreamDefaultReader<Uint8Array>
+  ) {}
 
   /** `null` only when the stream ends before any of the bytes arrive. */
   async read(length: number): Promise<Uint8Array | null> {
@@ -134,12 +136,18 @@ export async function* decodeTar(
       if (type !== 0x30 && type !== 0) continue;
       const nameEnd = header.indexOf(0);
       const name = decoder.decode(
-        header.subarray(0, nameEnd === -1 || nameEnd > NAME_BYTES ? NAME_BYTES : nameEnd)
+        header.subarray(
+          0,
+          nameEnd === -1 || nameEnd > NAME_BYTES ? NAME_BYTES : nameEnd
+        )
       );
       const prefixField = header.subarray(345, 500);
       const prefixEnd = prefixField.indexOf(0);
       const prefix = decoder.decode(
-        prefixField.subarray(0, prefixEnd === -1 ? prefixField.length : prefixEnd)
+        prefixField.subarray(
+          0,
+          prefixEnd === -1 ? prefixField.length : prefixEnd
+        )
       );
       yield { path: prefix ? `${prefix}/${name}` : name, bytes: body };
     }

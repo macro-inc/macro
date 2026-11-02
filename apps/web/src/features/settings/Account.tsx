@@ -25,6 +25,7 @@ import {
 } from '@core/signal/profilePicture';
 import { createStaticFile } from '@core/util/create';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { lazyNamed } from '@core/util/lazyNamed';
 import { openFilePicker } from '@core/util/upload';
 import CheckIcon from '@icon/system/regular/check.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
@@ -57,6 +58,7 @@ import {
   Match,
   onCleanup,
   Show,
+  Suspense,
   Switch,
 } from 'solid-js';
 import { Transition } from 'solid-transition-group';
@@ -75,6 +77,11 @@ import {
   SettingsRow,
   SettingsSection,
 } from './primitives';
+
+const WorkspaceDataSettings = lazyNamed(
+  () => import('@app/features/workspace-archive/workspace-archive'),
+  'WorkspaceDataSettings'
+);
 
 const DELETE_HOLD_MS = 5000;
 
@@ -490,6 +497,12 @@ export function Account() {
             <BundleUpdateRow />
           </Show>
         </SettingsCard>
+      </SettingsSection>
+
+      <SettingsSection title="Workspace data">
+        <Suspense>
+          <WorkspaceDataSettings />
+        </Suspense>
       </SettingsSection>
 
       <Show when={isSettingsTabAvailable('Billing')}>

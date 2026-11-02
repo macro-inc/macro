@@ -136,9 +136,30 @@ export function encodeArchive(
       await iterator.throw(reason);
     },
   });
-  return tar.pipeThrough(
-    new CompressionStream('gzip')
-  );
+  return asBufferSource(tar).pipeThrough(new CompressionStream('gzip'));
+}
+
+/**
+ * Re-types a byte stream for the native compression streams, whose writable
+ * side accepts any `BufferSource`. Pulls lazily, so backpressure holds.
+ */
+export function asBufferSource(
+  source: ReadableStream<Uint8Array>
+): ReadableStream<BufferSource> {
+  const reader = source.getReader();
+  return new ReadableStream<BufferSource>({
+    async pull(controller) {
+      const { done, value } = await reader.read();
+      if (done) controller.close();
+      else
+        controller.enqueue(
+          value.buffer instanceof ArrayBuffer
+            ? new Uint8Array(value.buffer, value.byteOffset, value.byteLength)
+            : value.slice()
+        );
+    },
+    cancel: (reason) => reader.cancel(reason),
+  });
 }
 
 function parseJson(bytes: Uint8Array, path: string): unknown {
@@ -194,6 +215,33 @@ function toSummary(value: unknown): ArchiveSummary {
   return { entities, failures };
 }
 
+/** Joins an entity record with the files written before it. */
+function toEntity(
+  kind: string,
+  id: string,
+  record: unknown,
+  pending: ReadonlyMap<string, Uint8Array>
+): ArchivedEntity {
+  if (!isRecord(record))
+    throw new ArchiveFormatError(
+      'corrupt',
+      `Unreadable record for ${kind}/${id}`
+    );
+  const names = Array.isArray(record.files)
+    ? record.files.filter((file): file is string => typeof file === 'string')
+    : [];
+  const files = names.map((name) => {
+    const bytes = pending.get(name);
+    if (!bytes)
+      throw new ArchiveFormatError(
+        'corrupt',
+        `Missing ${name} for ${kind}/${id}`
+      );
+    return { name, bytes };
+  });
+  return { kind, id, data: record.data, files };
+}
+
 /**
  * Reads an archive as a stream: one entity at a time is held in memory, so
  * archives larger than memory import. Gzip's CRC rejects corrupted bytes,
@@ -202,7 +250,7 @@ function toSummary(value: unknown): ArchiveSummary {
 export async function* decodeArchive(
   compressed: ReadableStream<Uint8Array>
 ): AsyncGenerator<ArchiveItem> {
-  const tar = compressed.pipeThrough(
+  const tar = asBufferSource(compressed).pipeThrough(
     new DecompressionStream('gzip')
   );
   let sawManifest = false;
@@ -245,25 +293,10 @@ export async function* decodeArchive(
         continue;
       }
 
-      const record = parseJson(bytes, path);
-      if (!isRecord(record))
-        throw new ArchiveFormatError('corrupt', `Unreadable ${path}`);
-      const names = Array.isArray(record.files)
-        ? record.files.filter((file): file is string => typeof file === 'string')
-        : [];
-      const files: ArchiveFile[] = [];
-      for (const fileName of names) {
-        const fileBytes = pending.get(fileName);
-        if (!fileBytes)
-          throw new ArchiveFormatError(
-            'corrupt',
-            `Missing ${fileName} for ${entityKey}`
-          );
-        files.push({ name: fileName, bytes: fileBytes });
-      }
+      const entity = toEntity(kind, id, parseJson(bytes, path), pending);
       pending = new Map();
       pendingEntity = undefined;
-      yield { type: 'entity', entity: { kind, id, data: record.data, files } };
+      yield { type: 'entity', entity };
     }
   } catch (error) {
     if (error instanceof ArchiveFormatError) throw error;

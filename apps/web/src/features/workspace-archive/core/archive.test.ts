@@ -2,8 +2,9 @@ import { describe, expect, it } from 'vitest';
 import {
   ARCHIVE_FORMAT,
   type ArchivedEntity,
-  type ArchiveItem,
   ArchiveFormatError,
+  type ArchiveItem,
+  asBufferSource,
   decodeArchive,
   encodeArchive,
 } from './archive';
@@ -42,7 +43,9 @@ async function readAll(bytes: Uint8Array, chunk?: number) {
 }
 
 function gzip(bytes: Uint8Array) {
-  return bytesOf(streamOf(bytes).pipeThrough(new CompressionStream('gzip')));
+  return bytesOf(
+    asBufferSource(streamOf(bytes)).pipeThrough(new CompressionStream('gzip'))
+  );
 }
 
 function tarOf(entries: { path: string; text: string }[]) {
@@ -124,7 +127,9 @@ describe('workspace archive', () => {
         () => []
       )
     );
-    const tar = streamOf(archive).pipeThrough(new DecompressionStream('gzip'));
+    const tar = asBufferSource(streamOf(archive)).pipeThrough(
+      new DecompressionStream('gzip')
+    );
     const paths: string[] = [];
     for await (const entry of decodeTar(tar)) paths.push(entry.path);
     expect(paths).toEqual([
