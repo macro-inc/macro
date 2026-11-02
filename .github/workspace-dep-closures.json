@@ -6076,6 +6076,7 @@
       "crates/document_sub_type",
       "crates/documents",
       "crates/docx_engine",
+      "crates/dynamic_ui",
       "crates/dynamodb_client",
       "crates/email",
       "crates/email_api_client",
