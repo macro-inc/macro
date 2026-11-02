@@ -41,10 +41,23 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
   added chats (`backfill_*` columns on `external_chat`; limits
   `BACKFILL_MESSAGE_LIMIT` / `BACKFILL_MAX_AGE_DAYS` in `models.rs`). The
   anchor is the chat's `whatsapp_chat.anchor`, else the newest stored message
-  the account saw; without one the group is `waiting_for_message` until a chat
-  update brings one. History
+  the account saw; with one a chat waits for the owner's Import
+  (`waiting_for_phone`; `POST /whatsapp/history-import` → `pending` +
+  `whatsapp_history_requested`), without one a group is
+  `waiting_for_message` until a chat update brings one, and a direct chat (a
+  saved contact, a looked-up number) is added `done`, made
+  `waiting_for_phone` only by an anchor older than its adoption while nothing
+  was imported. The phone is never asked without that Import. Saved contacts are chat-list rows with no activity. History
   messages skip the adoption-time boundary but only reach the account owner's
   own groups (`observed_bindings_in`).
+- `src/outbound/pg/lookups.rs`: phone-number lookups (`whatsapp_lookup`,
+  `POST`/`GET /whatsapp/lookups`): DSS records one (E.164 `PhoneNumber` in
+  `domain/jid.rs`, human sessions only, `LOOKUP_LIMIT` per
+  `LOOKUP_WINDOW_MINUTES`, a pending one of the same number is reused) and
+  signals `whatsapp_lookup_requested`; the session records the answer, and a
+  found number joins the chat list so `adopt` accepts it unchanged. Pending
+  past `LOOKUP_EXPIRY_SECONDS` reads `failed`; rows go with the account's
+  consent and after the window.
 - `src/outbound/pg/sends.rs`: enqueue, claim, dispatch fence, outcome. A
   repeated intent key returns the stored send before any other check.
 - `src/signals.rs`: the DSS ↔ session-service `NOTIFY` channels; payloads,
@@ -59,7 +72,8 @@ They share no HTTP: only MacroDB rows and `NOTIFY` (`external_chat`'s
   static `file_id`), then `*_external_chat.sql` (the generic `external_chat*`
   tables, the view rule `external_chat_access_level` that entity_access also
   calls, and `whatsapp_roster`/`whatsapp_chat_membership`; released files
-  queue in `external_chat_file_deletion`) and its entity type validation.
+  queue in `external_chat_file_deletion`) and its entity type validation, then
+  `*_whatsapp_lookup.sql` (phone-number lookups).
   Deleting a user cascades to their account,
   chats (with their grants, entity record and sharing settings) and sends;
   aliases outlive the account that saw them.

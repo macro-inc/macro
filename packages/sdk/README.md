@@ -407,6 +407,28 @@ Publishing, reading, and activating templates require the caller's
 404 (`template()` returns `undefined`). `stopSharingTemplate()` stays available
 to owners, and previously activated routines continue working.
 
+A GitHub trigger takes a filter of its own, with optional exact payload tests in
+`match`. It needs the owner to have connected GitHub:
+
+```ts
+await routine.update({
+  ...options,
+  trigger: {
+    type: 'events',
+    filters: [
+      {
+        events: ['github'],
+        github: { events: ['workflow_run'], actions: ['completed'], repositories: ['macro-inc/macro'] },
+        match: [
+          { path: ['workflow_run', 'name'], equals: 'CI' },
+          { path: ['workflow_run', 'conclusion'], in: ['failure', 'timed_out'] },
+        ],
+      },
+    ],
+  },
+});
+```
+
 ### Agents, conversations and hosts
 
 `macro.agents.list/create/byId` manage agent configuration. `AgentOptions` takes

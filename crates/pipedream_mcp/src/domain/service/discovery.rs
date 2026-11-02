@@ -22,7 +22,7 @@ const MAX_TOOLS: usize = 100;
 pub enum DiscoveryRequest {
     /// Find connectable apps by name.
     Search {
-        /// App name, e.g. "LinkedIn" or "Linear", not a task description.
+        /// App name, e.g. "Notion" or "Linear", not a task description.
         query: String,
     },
     /// Verify capabilities and connection status for one catalog app.

@@ -654,7 +654,10 @@ pub async fn run() -> anyhow::Result<()> {
         PgGithubSyncRepo::new(db.clone()),
         GithubSyncClientImpl::default(),
         ConnectionGatewayGithubRealtime::new(conn_gateway_client.clone()),
-    );
+    )
+    .with_webhook_publisher(github::broker::BrokerGithubWebhookPublisher(
+        macro_event_broker.clone(),
+    ));
 
     let github_pull_request_index_state = PullRequestIndexRouterState {
         service: Arc::new(PullRequestIndexService::new(
@@ -1952,6 +1955,11 @@ pub async fn run() -> anyhow::Result<()> {
                     calendar_events::outbound::pg::PgCalendarRepository::new(db.clone()),
                     calendar_events::outbound::notification_notifier::NotificationCalendarJoinRequestNotifier::new(
                         (*notification_ingress_service).clone(),
+                    ),
+                    crate::outbound::calendar_refresh::ConnectionGatewayCalendarRefresh::new(
+                        (*conn_gateway_client).clone(),
+                        db.clone(),
+                        event_broker_tracker.clone(),
                     ),
                 ),
             ),

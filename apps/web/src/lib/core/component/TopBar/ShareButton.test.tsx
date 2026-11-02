@@ -50,6 +50,7 @@ vi.mock('@app/features/access-requests/access-requests', async (original) => ({
     state: () => undefined,
     grants: () => [],
     loading: () => false,
+    notFound: () => false,
     busy: () => false,
     error: () => undefined,
   }),

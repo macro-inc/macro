@@ -9,6 +9,7 @@ import {
   type SupportedNotificationSettings,
   useNotificationSettings,
 } from '../notification-settings';
+import { notificationsBlockedMessage } from '../notifications-blocked-message';
 
 export const BrowserNotificationModal = () => {
   const settings = useNotificationSettings();
@@ -33,15 +34,20 @@ export const BrowserNotificationModal = () => {
   );
 };
 
+/** Native apps ask for app notifications; only the web app uses the browser's. */
+function promptTitle() {
+  if (isPlatform('desktop')) return 'Enable Desktop Notifications';
+  if (isPlatform('android')) return 'Enable Notifications';
+  return 'Enable Browser Notifications';
+}
+
 function NotificationToastTrigger(props: {
   settings: SupportedNotificationSettings;
 }) {
   onMount(() => {
     const toastId = toast.custom(
       {
-        title: isPlatform('desktop')
-          ? 'Enable Desktop Notifications'
-          : 'Enable Browser Notifications',
+        title: promptTitle(),
         icon: Bell,
         color: 'var(--color-accent)',
         content: () => (
@@ -62,6 +68,9 @@ function NotificationToastTrigger(props: {
             onClick: async () => {
               try {
                 await props.settings.toggle(true);
+                if (!props.settings.isEnabled()) {
+                  toast.failure(notificationsBlockedMessage());
+                }
               } catch (error) {
                 console.error('Failed to enable notifications:', error);
               }

@@ -108,6 +108,24 @@ describe('prejoin media', () => {
     }
   });
 
+  it('explains when the app exposes no media devices', async () => {
+    const request = vi
+      .fn()
+      .mockRejectedValue(
+        new DOMException('Media devices are unavailable', 'NotSupportedError')
+      );
+    const { media, dispose } = setup(request);
+    try {
+      await media.prepare();
+      expect(media.microphoneEnabled()).toBe(false);
+      expect(media.errors()).toEqual([
+        'Microphone isn’t available in this app or browser. Update it, then turn it on to retry.',
+      ]);
+    } finally {
+      dispose();
+    }
+  });
+
   it('does not request the camera until the microphone permission settles', async () => {
     const microphone = fakeTrack('audio');
     const camera = fakeTrack('video');

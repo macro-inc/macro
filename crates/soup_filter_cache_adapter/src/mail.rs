@@ -157,9 +157,6 @@ fn project_with_facts(
     let all = preview_ref(record, "mailAllPreview")?;
     let draft = preview_ref(record, "mailDraftPreview")?;
     let sent = preview_ref(record, "mailSentPreview")?;
-    if all.is_none() && (draft.is_some() || sent.is_some()) {
-        return None;
-    }
     facts.push(boolean_fact(all.is_some(), "mail-has-message")?);
     for (attribute, id) in [
         ("mail-all-message", all),

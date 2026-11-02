@@ -1168,7 +1168,7 @@
       },
       "EventFilter": {
         "type": "object",
-        "description": "An event name AND an entity ID must match within the same filter. A\ncondition further requires the event's content to answer it with yes.",
+        "description": "An event name AND an entity ID must match within the same filter. A\ncondition further requires the event's content to answer it with yes.\n\n`github` comes from outside Macro and carries its payload: it stands\nalone in its filter, takes no ids, and may require\nexact payload values with `match`. A `github` filter narrows deliveries\nwith its `github` selector.",
         "required": ["events"],
         "properties": {
           "condition": {
@@ -1182,11 +1182,29 @@
               "$ref": "#/components/schemas/EventName"
             }
           },
+          "github": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/GithubSelector",
+                "description": "Which GitHub deliveries match; required for, and only for, `github`."
+              }
+            ]
+          },
           "ids": {
             "type": ["array", "null"],
             "items": {
               "type": "string"
             }
+          },
+          "match": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/PayloadCondition"
+            },
+            "description": "Exact tests on the payload, all of which must pass."
           }
         }
       },
@@ -1215,7 +1233,8 @@
           "channel.message_patched",
           "channel.message_attachment_created",
           "call.started",
-          "call.ended"
+          "call.ended",
+          "github"
         ]
       },
       "ExecutionResource": {
@@ -1272,6 +1291,38 @@
           }
         }
       },
+      "GithubSelector": {
+        "type": "object",
+        "description": "Which GitHub deliveries match.",
+        "properties": {
+          "actions": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Payload actions, such as `completed` or `opened`; any when empty."
+          },
+          "events": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "GitHub event names, such as `workflow_run` or `pull_request`; any when empty."
+          },
+          "includeBots": {
+            "type": "boolean",
+            "description": "Also run for deliveries caused by bots and apps, including Macro's own."
+          },
+          "repositories": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Repositories as `owner/name`, matched without regard to case; every\nrepository the owner's installations cover when empty. A renamed\nrepository stops matching until it is chosen again."
+          }
+        },
+        "additionalProperties": false
+      },
       "InProgressExecution": {
         "type": "object",
         "required": ["action_id"],
@@ -1321,6 +1372,73 @@
           }
         },
         "additionalProperties": false
+      },
+      "PayloadCondition": {
+        "type": "object",
+        "description": "`path` walks objects by key; `*` steps into every element of an array and\na number into one. Give exactly one test. `notIn` also passes when the\npath finds nothing.",
+        "required": ["path"],
+        "properties": {
+          "equals": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/PayloadScalar",
+                "description": "Some value found equals this."
+              }
+            ]
+          },
+          "exists": {
+            "type": ["boolean", "null"],
+            "description": "Whether the path finds a non-null value."
+          },
+          "glob": {
+            "type": ["string", "null"],
+            "description": "Some text found matches this glob; `*` matches any run of characters."
+          },
+          "in": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/PayloadScalar"
+            },
+            "description": "Some value found is one of these."
+          },
+          "notIn": {
+            "type": ["array", "null"],
+            "items": {
+              "$ref": "#/components/schemas/PayloadScalar"
+            },
+            "description": "No value found is one of these."
+          },
+          "path": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Keys from the payload's root, e.g. `[\"workflow_run\", \"conclusion\"]`."
+          }
+        },
+        "additionalProperties": false
+      },
+      "PayloadScalar": {
+        "oneOf": [
+          {
+            "type": "null",
+            "default": null
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "number",
+            "format": "double"
+          },
+          {
+            "type": "string"
+          }
+        ],
+        "description": "A JSON text, number, boolean or null that payload values are compared with."
       },
       "RoutineModelId": {
         "type": "string",

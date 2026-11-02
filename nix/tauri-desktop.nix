@@ -954,6 +954,43 @@
           cef.embed = true;
         };
       };
+      # CEF CDN builds omit H.264, HEVC, and AAC, so the app could not play
+      # most videos. The `Build CEF with codecs` workflow publishes the same
+      # CEF version built with proprietary codecs; lay it out the way
+      # `cef-dll-sys` caches a download (`<CEF_PATH>/<version>/cef_macos_aarch64`
+      # plus `archive.json`), which the CEF Tauri CLI also reads, so neither
+      # downloads from the CDN.
+      cefCodecs = builtins.fromJSON (builtins.readFile ../apps/web/tauri/desktop-cef/cef-codecs.json);
+      cefCodecsVersion = builtins.head (lib.splitString "+" cefCodecs.cefVersion);
+      # The `cef` crate's build metadata is the CEF version it loads. A crate
+      # bump without a new manifest would fall back to the codec-less CDN build.
+      cefCrateVersion =
+        let
+          lock = builtins.fromTOML (builtins.readFile ../apps/web/tauri/desktop-cef/Cargo.lock);
+          cef = lib.findFirst (p: p.name == "cef") null lock.package;
+        in
+        lib.last (lib.splitString "+" cef.version);
+      cefCodecsArchive = pkgs.fetchurl {
+        url = "https://github.com/macro-inc/macro/releases/download/${cefCodecs.releaseTag}/${cefCodecs.asset}";
+        sha256 =
+          assert lib.assertMsg (cefCodecsVersion == cefCrateVersion)
+            "desktop-cef loads CEF ${cefCrateVersion} but cef-codecs.json pins ${cefCodecsVersion}; update the manifest and rebuild";
+          assert lib.assertMsg (cefCodecs.sha256 != "")
+            "apps/web/tauri/desktop-cef/cef-codecs.json has no sha256; run the `Build CEF with codecs` workflow and pin its output";
+          cefCodecs.sha256;
+      };
+      cefCodecsDistribution = pkgs.runCommand "cef-codecs-${cefCodecsVersion}" { } ''
+        tar -xjf ${cefCodecsArchive}
+        src=$(echo cef_binary_*_macosarm64_minimal)
+        dest="$out/${cefCodecsVersion}/cef_macos_aarch64"
+        mkdir -p "$(dirname "$dest")"
+        mv "$src/Release" "$dest"
+        for entry in CMakeLists.txt cmake include libcef_dll CREDITS.html; do
+          mv "$src/$entry" "$dest/$entry"
+        done
+        printf '{"type":"minimal","name":"%s","sha1":""}' "$src" > "$dest/archive.json"
+        test -d "$dest/Chromium Embedded Framework.framework"
+      '';
       tauriDesktopCefApp = cefCraneLib.mkCargoDerivation {
         pname = "macro-tauri-desktop-cef-app";
         version = appVersion;
@@ -980,6 +1017,9 @@
         preBuild = ''
           export PATH="$PATH:/usr/bin:/bin:/usr/sbin:/sbin"
           export CEF_PATH="$TMPDIR/tauri-cef"
+          mkdir -p "$CEF_PATH"
+          cp -R ${cefCodecsDistribution}/. "$CEF_PATH/"
+          chmod -R u+w "$CEF_PATH"
           cp ${../apps/web/package.json} apps/web/package.json
           rm -rf apps/web/dist
           cp -r ${frontend} apps/web/dist
