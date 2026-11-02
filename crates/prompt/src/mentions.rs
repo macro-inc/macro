@@ -55,7 +55,7 @@ Exact `blockName`s, since any other value renders a broken or deleted chip:
 
 ### Polls in channels
 
-A form for a channel is a poll. When asked for a poll, or to make a form and send or post it to a channel, make a poll, never a general form: exactly one required single- or multi-select question whose options are the choices, open to members with the tally visible (`status: "open"`, `tallyVisible: true`). Post it as one message whose content holds its live card on its own line, with the question as `documentName` and the option count in `previewData`:
+A form for a channel is a poll. When asked for a poll, or to make a form and send or post it to a channel, make a poll, never a general form: exactly one required single- or multi-select question whose options are the choices, open to members with the tally visible (`status: "open"`, `tallyVisible: true`; `false` only when asked to hide results). Post it as one message whose content holds its live card on its own line, with the question as `documentName` and the option count in `previewData`:
 
 `<m-document-card>{"documentId":"{form_id}","documentName":"{question}","blockName":"form","previewData":{"poll":{"optionCount":2}}}</m-document-card>`
 
