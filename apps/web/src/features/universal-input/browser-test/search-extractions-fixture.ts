@@ -16,7 +16,7 @@ const answers: Record<string, SearchExtraction> = {
     },
   'find hiring': { type: 'all', query: 'hiring' },
   'find hiring plan': { type: 'all', query: 'hiring plan' },
-  'find notes on how blowholes work': {
+  'find my notes on how blowholes work': {
     type: 'all',
     query: 'how blowholes work',
   },
@@ -24,7 +24,7 @@ const answers: Record<string, SearchExtraction> = {
     type: 'all',
     query: 'how blowholes work in the ocean',
   },
-  'search all messages from julia': {
+  'search all recent messages from julia': {
     query: null,
     type: 'channels',
     from: ['Julia'],
@@ -54,13 +54,13 @@ const answers: Record<string, SearchExtraction> = {
     from: ['Pat'],
     in: [],
   },
-  'search messages about __budget__': {
+  'search all messages about __budget__': {
     query: '__budget__',
     type: 'channels',
     from: [],
     in: [],
   },
-  'search messages about **budget**': {
+  'search all messages about **budget**': {
     query: '**budget**',
     type: 'channels',
     from: [],
@@ -78,7 +78,7 @@ const answers: Record<string, SearchExtraction> = {
     in: ['Julia direct message'],
     from: [],
   },
-  'search all documents about Scope': {
+  'search all my documents about Scope': {
     query: 'Scope',
     type: 'document-or-file',
   },

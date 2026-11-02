@@ -1242,14 +1242,14 @@ Opens a dialog with a focused `Search...` textbox and bubble-style category radi
 the top hit. Also exposes commands: `Create`, `Change theme`, `MCP setup`. Keys: Tab cycles
 category, Esc closes. The category strip and footer have transparent backgrounds.
 
-With PostHog **enable-universal-input** enabled, typing at least **29 characters**
+With PostHog **enable-universal-input** enabled, typing at least **34 characters**
 (word count does not matter) turns the menu into the shared Universal Input composer. The current
 text and insertion point transfer to its rich input in the same header row, with
 the same type size and padding. There is no additional title. The Macro logo hides
 when the rich input wraps or contains multiple lines, then returns on one line;
 its reserved space is removed so text uses the full input width. Classification and field
 extraction run while typing continues. For example, “dinner with julia tomorrow
-at 9pm” reveals an event; users can change the type and edit fields before acting.
+at 9:30pm” reveals an event; users can change the type and edit fields before acting.
 Shorter edits keep the composer open; clearing the input returns to ordinary
 Command K search. IME composition finishes before the transition. This applies to
 ordinary search, including a selected category; nested command scopes, entity

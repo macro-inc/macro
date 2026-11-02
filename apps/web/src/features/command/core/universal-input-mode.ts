@@ -1,4 +1,4 @@
-const UNIVERSAL_INPUT_CHARACTERS = 29;
+const UNIVERSAL_INPUT_CHARACTERS = 34;
 
 /** Keep a promoted draft in composer mode until it is cleared. */
 export function shouldUseUniversalInput(text: string, active = false): boolean {

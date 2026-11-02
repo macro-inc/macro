@@ -86,7 +86,7 @@ test('Command K keeps the composer for shorter edits, clears back to search, and
   const dialog = await openMenu(page);
   await dialog
     .getByPlaceholder('Search...', { exact: true })
-    .fill('dinner with julia tomorrow at 7pm');
+    .fill('dinner with julia tomorrow at 7:30pm');
   const input = dialog.getByRole('textbox', {
     name: 'Your input',
     exact: true,
@@ -145,7 +145,7 @@ test('Command K waits for composition to finish before promotion', async ({
     input.dispatchEvent(
       new CompositionEvent('compositionstart', { bubbles: true })
     );
-    input.value = 'dinner with julia tomorrow at 7pm';
+    input.value = 'dinner with julia tomorrow at 7:30pm';
     input.dispatchEvent(
       new InputEvent('input', { bubbles: true, isComposing: true })
     );
@@ -210,7 +210,7 @@ test('the Macro logo hides for explicit newlines and wrapping, then returns for 
   const dialog = await openMenu(page);
   await dialog
     .getByPlaceholder('Search...', { exact: true })
-    .fill('Email Julia that I will be late');
+    .fill('Email Julia that I will be late today');
   const input = dialog.getByRole('textbox', {
     name: 'Your input',
     exact: true,
@@ -221,7 +221,7 @@ test('the Macro logo hides for explicit newlines and wrapping, then returns for 
   await input.fill('Email Julia\nI will be late');
   await expect(logo).toBeHidden();
   expect((await input.boundingBox())!.x).toBe(originalLeft - 32);
-  await input.fill('Email Julia that I will be late');
+  await input.fill('Email Julia that I will be late today');
   await expect(logo).toBeVisible();
   await input.fill(
     'Email Julia that I will send the revised presentation after our meeting tomorrow'
@@ -267,7 +267,7 @@ test('Shift+Enter keeps Universal Input search open while browsing a result', as
   const dialog = await openMenu(page);
   await dialog
     .getByPlaceholder('Search...', { exact: true })
-    .fill('find notes on how blowholes work');
+    .fill('find my notes on how blowholes work');
   const input = dialog.getByRole('textbox', {
     name: 'Your input',
     exact: true,
@@ -287,7 +287,7 @@ test('Shift+Enter keeps Universal Input search open while browsing a result', as
   await expect(page.getByTestId('opened-search-result')).toHaveText('');
   await page.keyboard.type('in the ocean');
   await expect(input.locator('p')).toHaveText([
-    'find notes on how blowholes work',
+    'find my notes on how blowholes work',
     'in the ocean',
   ]);
   await input.press('ArrowDown');
@@ -306,7 +306,7 @@ test('the type selector uses the shared dropdown and Escape leaves Command K ope
   const dialog = await openMenu(page);
   await dialog
     .getByPlaceholder('Search...', { exact: true })
-    .fill('find notes on how blowholes work');
+    .fill('find my notes on how blowholes work');
   const type = dialog.getByLabel('Content type');
   await expect(type).toHaveText('Auto · Search');
   await type.click();
@@ -317,7 +317,7 @@ test('the type selector uses the shared dropdown and Escape leaves Command K ope
   await expect(type).toHaveText('Task');
   await expect(
     dialog.getByRole('textbox', { name: 'Your input', exact: true })
-  ).toHaveText('find notes on how blowholes work');
+  ).toHaveText('find my notes on how blowholes work');
   await type.click();
   await expect(
     page.getByRole('option', { name: 'Task', exact: true })
