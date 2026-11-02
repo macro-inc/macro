@@ -1,5 +1,5 @@
-import { pauseOffscreenAnimations } from '@core/util/animationVisibility';
 import { DisclosureCaret } from '@app/features/block-agent/ui/DisclosureCaret';
+import { pauseOffscreenAnimations } from '@core/util/animationVisibility';
 import CaretRight from '@icon/system/regular/caret-right.svg?component-solid';
 import { Button, Layer } from '@ui';
 import type { Accessor, Component, JSX } from 'solid-js';
