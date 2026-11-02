@@ -54,6 +54,12 @@ It uses the real records view with a local source and picker to exercise opening
 replacement, cancellation, keyboard editing, and read-only references. Navigation
 adapter tests separately check file types, access failures, and split selection.
 
+Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
+backend-free desktop/phone regression: the card reserves its height from
+`previewData.poll.optionCount` as a `min-height`, grows to wrapped text, and
+never scrolls or clips inside:
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts poll-card.browser.e2e.ts`.
+
 Pinch zoom on opened image files (Drive details and image splits) has a
 backend-free phone and tablet regression:
 `bunx playwright test --config src/features/block-image/browser-test/playwright.config.ts`.
