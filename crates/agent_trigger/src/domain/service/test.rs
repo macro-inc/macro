@@ -1575,7 +1575,7 @@ async fn an_agents_unmentioned_follow_up_reaches_another_agents_session() {
     for (replies, judge, kind) in [
         (
             extractor(Ok(None)),
-            judge_saying(Ok(true)),
+            judge_saying(Ok(vec![0.9])),
             ThreadMessageKind::Inferred,
         ),
         (

@@ -31,7 +31,7 @@ use entity_access::outbound::PgAccessRepository;
 use entity_registry::OwnerGrantPolicy;
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use jev::domain::JevClassifier;
-use jev::outbound::TypesafeJev;
+use jev::outbound::SystemOneJev;
 use kafka_util::{GroupName, InitialOffset, KafkaEventConsumer, consumer_span, record_span_error};
 use lexical_client::LexicalClient;
 use macro_entrypoint::{MacroEntrypoint, shutdown_signal};
@@ -72,7 +72,7 @@ type Trigger = AgentTriggerService<
     BotRepoAgentLookup<PgBotsRepo>,
     BotRepoAgentLookup<PgBotsRepo>,
     LexicalExplicitReplyExtractor,
-    Option<JevTriggerJudge<JevClassifier<TypesafeJev>>>,
+    Option<JevTriggerJudge<JevClassifier<SystemOneJev>>>,
     MessageThreadHistory<
         entity_access::domain::service::EntityAccessServiceImpl<
             entity_access::outbound::PgAccessRepository,
@@ -202,7 +202,7 @@ async fn run() -> anyhow::Result<()> {
     let classifier = config
         .typesafe_api_key
         .value()
-        .map(TypesafeJev::new)
+        .map(SystemOneJev::typesafe)
         .transpose()
         .context("invalid TYPESAFE_API_KEY")?
         .map(|provider| Arc::new(JevClassifier::new(provider, recorder)));

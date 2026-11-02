@@ -1775,7 +1775,7 @@ async fn run() -> anyhow::Result<()> {
     let trigger_classifier = config
         .typesafe_api_key
         .value()
-        .map(jev::outbound::TypesafeJev::new)
+        .map(jev::outbound::SystemOneJev::typesafe)
         .transpose()
         .context("invalid TYPESAFE_API_KEY")?
         .map(|provider| Arc::new(jev::domain::JevClassifier::new(provider, recorder.clone())));
