@@ -256,6 +256,46 @@ async fn done_on_an_email_row_archives_its_thread() {
 }
 
 #[tokio::test]
+async fn done_from_before_newer_mail_keeps_the_thread_in_the_inbox() {
+    let harness = harness(
+        vec![mail_candidate(
+            "mail",
+            MAIL,
+            Some(8),
+            None,
+            MailFacts {
+                inbox_visible: true,
+                is_read: false,
+            },
+        )],
+        vec![
+            new_email(5, MAIL, 7, NotificationState::Unseen),
+            new_email(6, MAIL, 8, NotificationState::Unseen),
+        ],
+    );
+    let thread = key(entity(EntityType::EmailThread, MAIL));
+
+    let outcome = harness
+        .service
+        .mark_done(
+            viewer(),
+            vec![InboxRowTarget {
+                id: row(&thread, "email"),
+                // Observed before the second email arrived.
+                revision: Some(FeedRevision {
+                    attention_through: Some(at(7)),
+                }),
+            }],
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(outcome.receipt.notification_ids, vec![uuid(5)]);
+    assert!(outcome.receipt.archived_threads.is_empty());
+    assert!(harness.mail.calls.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
 async fn done_on_rows_that_are_gone_acknowledges_nothing() {
     let harness = inbox();
     let gone = row(&channel(), "thread:nope");

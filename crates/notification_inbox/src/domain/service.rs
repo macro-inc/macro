@@ -346,10 +346,15 @@ where
                 Some((group, row)) => {
                     found.push(row.row_type);
                     let observed = target.revision.unwrap_or_else(|| row.revision());
+                    let notification_ids = observed.acknowledged(row.all_notifications());
+                    // Archiving takes the whole thread out of the inbox, so a
+                    // done from before newer mail arrived leaves it there.
+                    let observed_all = notification_ids.len() == row.all_notifications().count();
                     Acknowledgment {
                         key: group.key.clone(),
-                        notification_ids: observed.acknowledged(row.all_notifications()),
-                        archive_thread: (row.row_type == InboxRowType::Email
+                        notification_ids,
+                        archive_thread: (observed_all
+                            && row.row_type == InboxRowType::Email
                             && group.mail.is_some_and(|mail| mail.inbox_visible))
                         .then(|| email_thread_id(&group.key))
                         .flatten(),
