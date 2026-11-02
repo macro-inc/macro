@@ -22,6 +22,7 @@ use tokio_util::{
 const BOOTSTRAP: &str = include_str!("deno/bootstrap.mjs");
 const SDK: &str = include_str!("deno/sdk.mjs");
 const HANDLEBARS: &str = include_str!("deno/handlebars.mjs");
+const TIMERS: &str = include_str!("deno/timers.mjs");
 /// Runtime version pinned by the container and checked at startup.
 pub const DENO_VERSION: &str = "2.9.6";
 
@@ -115,9 +116,12 @@ impl DenoRunner {
         tokio::fs::write(root.join("handlebars.mjs"), HANDLEBARS)
             .await
             .map_err(internal)?;
+        tokio::fs::write(root.join("timers.mjs"), TIMERS)
+            .await
+            .map_err(internal)?;
         tokio::fs::write(
             root.join("imports.json"),
-            r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","handlebars":"./handlebars.mjs"}}"#,
+            r#"{"imports":{"@macro-inc/sdk":"./sdk.mjs","handlebars":"./handlebars.mjs","node:timers":"./timers.mjs","node:timers/promises":"./timers.mjs","node:worker_threads":"./timers.mjs","timers":"./timers.mjs","timers/promises":"./timers.mjs","worker_threads":"./timers.mjs"}}"#,
         )
         .await
         .map_err(internal)?;
