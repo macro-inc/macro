@@ -250,7 +250,10 @@ async fn a_step_waits_for_a_free_slot_before_its_credential_and_gives_up_after_f
     let held = Arc::clone(&code.slots).acquire_owned().await.unwrap();
     let waiting = tokio::spawn(run(Arc::clone(&code)));
     tokio::time::sleep(Duration::from_secs(60)).await;
-    assert_eq!(code.credentials.0.load(std::sync::atomic::Ordering::SeqCst), 0);
+    assert_eq!(
+        code.credentials.0.load(std::sync::atomic::Ordering::SeqCst),
+        0
+    );
     // A slot that frees up within five minutes runs it, and the wait is kept.
     drop(held);
     let ran = waiting.await.unwrap();
