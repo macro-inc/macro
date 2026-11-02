@@ -237,9 +237,14 @@ where
         + RestoreEntity
         + DeleteEntityPermanently
         + PurgeOwnedEntity,
-    Databases:
-        DatabasesService + RenameEntity + TrashEntity + RestoreEntity + DeleteEntityPermanently,
+    Databases: DatabasesService
+        + RenameEntity
+        + MoveEntity
+        + TrashEntity
+        + RestoreEntity
+        + DeleteEntityPermanently,
     Forms: RenameEntity
+        + MoveEntity
         + TrashEntity
         + RestoreEntity
         + DeleteEntityPermanently
@@ -481,6 +486,14 @@ where
                 self.move_with(&*self.projects, actor, &requested, project_id)
                     .await
             }
+            EntityType::Database => {
+                self.move_with(&*self.databases, actor, &requested, project_id)
+                    .await
+            }
+            EntityType::Form => {
+                self.move_with(&*self.forms, actor, &requested, project_id)
+                    .await
+            }
             EntityType::User
             | EntityType::Team
             | EntityType::Channel
@@ -497,11 +510,7 @@ where
             | EntityType::AgentSession
             | EntityType::ScheduledAction
             | EntityType::Initiative
-            // A database is not filed into a project, so there is nowhere to
-            // move it to (`EntityType::is_valid_entity_access_entity`).
-            | EntityType::Database
             | EntityType::ExternalChat
-            | EntityType::Form
             | EntityType::DatabaseRow => {
                 return unsupported(requested, "move");
             }
@@ -852,9 +861,14 @@ where
         + RestoreEntity
         + DeleteEntityPermanently
         + PurgeOwnedEntity,
-    Databases:
-        DatabasesService + RenameEntity + TrashEntity + RestoreEntity + DeleteEntityPermanently,
+    Databases: DatabasesService
+        + RenameEntity
+        + MoveEntity
+        + TrashEntity
+        + RestoreEntity
+        + DeleteEntityPermanently,
     Forms: RenameEntity
+        + MoveEntity
         + TrashEntity
         + RestoreEntity
         + DeleteEntityPermanently

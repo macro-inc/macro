@@ -10468,6 +10468,10 @@ export const listDatabasesResponseItem = zod
         id: zod.uuid().describe('Identifier.'),
         name: zod.string().describe('Display name.'),
         owner_id: zod.string().describe('Owning user.'),
+        project_id: zod
+          .string()
+          .nullable()
+          .describe('The folder it is filed in; `null` at the root.'),
         trashed_at: zod.iso
           .datetime({})
           .nullable()
@@ -10988,6 +10992,10 @@ export const getDatabaseResponse = zod
         id: zod.uuid().describe('Identifier.'),
         name: zod.string().describe('Display name.'),
         owner_id: zod.string().describe('Owning user.'),
+        project_id: zod
+          .string()
+          .nullable()
+          .describe('The folder it is filed in; `null` at the root.'),
         trashed_at: zod.iso
           .datetime({})
           .nullable()
@@ -22829,6 +22837,10 @@ export const listFormsResponseItem = zod
         'Its display name. A standalone form follows the database it created;\na form attached to an existing table has its own name.'
       ),
     ownerId: zod.string().describe('Its owner.'),
+    projectId: zod
+      .string()
+      .nullable()
+      .describe('The folder it is filed in; `null` at the root.'),
     respondentColumnId: zod
       .uuid()
       .nullable()
@@ -22966,6 +22978,10 @@ export const listAccessibleFormsResponseItem = zod
             'Its display name. A standalone form follows the database it created;\na form attached to an existing table has its own name.'
           ),
         ownerId: zod.string().describe('Its owner.'),
+        projectId: zod
+          .string()
+          .nullable()
+          .describe('The folder it is filed in; `null` at the root.'),
         respondentColumnId: zod
           .uuid()
           .nullable()
@@ -23075,6 +23091,10 @@ export const getFormResponse = zod
             'Its display name. A standalone form follows the database it created;\na form attached to an existing table has its own name.'
           ),
         ownerId: zod.string().describe('Its owner.'),
+        projectId: zod
+          .string()
+          .nullable()
+          .describe('The folder it is filed in; `null` at the root.'),
         respondentColumnId: zod
           .uuid()
           .nullable()
@@ -23626,6 +23646,10 @@ export const updateFormResponse = zod
         'Its display name. A standalone form follows the database it created;\na form attached to an existing table has its own name.'
       ),
     ownerId: zod.string().describe('Its owner.'),
+    projectId: zod
+      .string()
+      .nullable()
+      .describe('The folder it is filed in; `null` at the root.'),
     respondentColumnId: zod
       .uuid()
       .nullable()
@@ -23734,6 +23758,10 @@ export const collaborateFormResponse = zod
                 'Its display name. A standalone form follows the database it created;\na form attached to an existing table has its own name.'
               ),
             ownerId: zod.string().describe('Its owner.'),
+            projectId: zod
+              .string()
+              .nullable()
+              .describe('The folder it is filed in; `null` at the root.'),
             respondentColumnId: zod
               .uuid()
               .nullable()
@@ -24680,6 +24708,10 @@ export const putFormLayoutResponse = zod
                 'Its display name. A standalone form follows the database it created;\na form attached to an existing table has its own name.'
               ),
             ownerId: zod.string().describe('Its owner.'),
+            projectId: zod
+              .string()
+              .nullable()
+              .describe('The folder it is filed in; `null` at the root.'),
             respondentColumnId: zod
               .uuid()
               .nullable()

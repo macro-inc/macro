@@ -27303,7 +27303,14 @@
       "Database": {
         "type": "object",
         "description": "A database: a named collection of tables, owned and shared as one entity.",
-        "required": ["id", "name", "owner_id", "created_at", "trashed_at"],
+        "required": [
+          "id",
+          "name",
+          "owner_id",
+          "created_at",
+          "trashed_at",
+          "project_id"
+        ],
         "properties": {
           "created_at": {
             "type": "string",
@@ -27322,6 +27329,10 @@
           "owner_id": {
             "type": "string",
             "description": "Owning user."
+          },
+          "project_id": {
+            "type": ["string", "null"],
+            "description": "The folder it is filed in; `null` at the root."
           },
           "trashed_at": {
             "type": ["string", "null"],
@@ -32018,6 +32029,7 @@
           "branding",
           "createdAt",
           "updatedAt",
+          "projectId",
           "isHiddenInDrive"
         ],
         "properties": {
@@ -32068,6 +32080,10 @@
           "ownerId": {
             "type": "string",
             "description": "Its owner."
+          },
+          "projectId": {
+            "type": ["string", "null"],
+            "description": "The folder it is filed in; `null` at the root."
           },
           "respondentColumnId": {
             "type": ["string", "null"],

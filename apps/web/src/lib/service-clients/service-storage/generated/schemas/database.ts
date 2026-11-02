@@ -4,6 +4,7 @@
  * document_storage_service
  * OpenAPI spec version: 0.1.0
  */
+import type { DatabaseProjectId } from './databaseProjectId';
 import type { DatabaseTrashedAt } from './databaseTrashedAt';
 
 /**
@@ -18,6 +19,8 @@ export interface Database {
   name: string;
   /** Owning user. */
   owner_id: string;
+  /** The folder it is filed in; `null` at the root. */
+  project_id: DatabaseProjectId;
   /** Set when trashed. */
   trashed_at: DatabaseTrashedAt;
 }

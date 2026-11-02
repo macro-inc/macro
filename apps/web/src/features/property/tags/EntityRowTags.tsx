@@ -7,6 +7,7 @@ import PlusIcon from '@icon/system/regular/plus.svg';
 import { useInFlightEntityPropertyOptions } from '@queries/properties/in-flight-options';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
+import { Key } from '@solid-primitives/keyed';
 import {
   type BadgeSize,
   type BadgeVariant,
@@ -199,12 +200,19 @@ function TagChip(props: {
   withClickBlock: boolean;
   onActiveChange: (active: boolean) => void;
 }) {
-  const [pickerOpen, setPickerOpen] = createSignal(false);
+  const [pickerActive, setPickerActive] = createSignal(false);
+  const onActiveChange = (active: boolean) => {
+    setPickerActive(active);
+    props.onActiveChange(active);
+  };
+  onCleanup(() => {
+    if (pickerActive()) props.onActiveChange(false);
+  });
   return (
     <Layer depth={2}>
       <HoverCard
         placement="bottom-start"
-        disabled={pickerOpen()}
+        disabled={pickerActive()}
         content={
           <TagHoverContent
             tag={props.tag}
@@ -218,8 +226,7 @@ function TagChip(props: {
           createDocTags={props.createDocTags}
           class="max-w-[14ch]"
           dotClass="size-2"
-          onOpenChange={setPickerOpen}
-          onActiveChange={props.onActiveChange}
+          onActiveChange={onActiveChange}
           withClickBlock={props.withClickBlock}
         />
       </HoverCard>
@@ -236,7 +243,14 @@ function TagOverflow(props: {
   withClickBlock: boolean;
   onActiveChange: (active: boolean) => void;
 }) {
-  const [pickerOpen, setPickerOpen] = createSignal(false);
+  const [pickerActive, setPickerActive] = createSignal(false);
+  const onActiveChange = (active: boolean) => {
+    setPickerActive(active);
+    props.onActiveChange(active);
+  };
+  onCleanup(() => {
+    if (pickerActive()) props.onActiveChange(false);
+  });
   const dots = () => props.tags.slice(0, MAX_OVERFLOW_DOTS);
   const count = () =>
     `${props.visibleCount > 0 ? '+' : ''}${props.tags.length} ${props.tags.length === 1 ? 'tag' : 'tags'}`;
@@ -245,7 +259,7 @@ function TagOverflow(props: {
     <Layer depth={2}>
       <HoverCard
         placement="bottom-end"
-        disabled={pickerOpen()}
+        disabled={pickerActive()}
         content={
           <div class="flex flex-col gap-0.5">
             <For each={props.tags}>
@@ -268,8 +282,7 @@ function TagOverflow(props: {
             class: 'max-w-[14ch] gap-1.5 touch:min-h-0',
           })}
           triggerLabel="Edit tags"
-          onOpenChange={setPickerOpen}
-          onActiveChange={props.onActiveChange}
+          onActiveChange={onActiveChange}
           withClickBlock={props.withClickBlock}
         >
           <span class="flex items-center">
@@ -359,10 +372,10 @@ export function EntityRowTags(props: {
         )}
         onClick={(event) => event.stopPropagation()}
       >
-        <For each={visible()}>
+        <Key each={visible()} by="optionId">
           {(tag) => (
             <TagChip
-              tag={tag}
+              tag={tag()}
               createDocTags={createDocTags}
               onFilterByTag={props.onFilterByTag}
               onEdit={setEditingTag}
@@ -370,7 +383,7 @@ export function EntityRowTags(props: {
               withClickBlock
             />
           )}
-        </For>
+        </Key>
         <Show when={hidden().length > 0}>
           <TagOverflow
             tags={hidden()}

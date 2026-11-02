@@ -23,6 +23,7 @@ fn a_new_database_is_written_into_its_starter_table_and_title_column() {
             owner_id: "macro|owner@example.com".to_string(),
             created_at: Utc::now(),
             trashed_at: None,
+            project_id: None,
         },
         grant: AccessLevel::Owner,
         tables: vec![TableDetail {
@@ -91,6 +92,7 @@ fn a_new_database_without_a_starter_table_is_refused() {
             owner_id: "macro|owner@example.com".to_string(),
             created_at: Utc::now(),
             trashed_at: None,
+            project_id: None,
         },
         grant: AccessLevel::Owner,
         tables: vec![],
@@ -110,6 +112,7 @@ fn a_new_database_whose_starter_table_has_no_column_is_refused() {
             owner_id: "macro|owner@example.com".to_string(),
             created_at: Utc::now(),
             trashed_at: None,
+            project_id: None,
         },
         grant: AccessLevel::Owner,
         tables: vec![TableDetail {

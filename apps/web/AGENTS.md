@@ -54,6 +54,12 @@ It uses the real records view with a local source and picker to exercise opening
 replacement, cancellation, keyboard editing, and read-only references. Navigation
 adapter tests separately check file types, access failures, and split selection.
 
+Poll cards in messages (the real `DocumentCard` around `FormCardView`) have a
+backend-free desktop/phone regression: the card reserves its height from
+`previewData.poll.optionCount` as a `min-height`, grows to wrapped text, and
+never scrolls or clips inside:
+`bunx playwright test --config src/lib/core/component/LexicalMarkdown/component/decorator/browser-test/playwright.config.ts poll-card.browser.e2e.ts`.
+
 Pinch zoom on opened image files (Drive details and image splits) has a
 backend-free phone and tablet regression:
 `bunx playwright test --config src/features/block-image/browser-test/playwright.config.ts`.
@@ -137,6 +143,18 @@ boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
 lift a row past a better name match. The one exception: Cmd+K then keeps Macro
 users and DMs ahead of CRM contacts across the people positions, whatever their
 match. Tune name relevance there for every menu.
+Cmd+K and mobile name search widen the first group: a query equal to the first
+word of a DM or person name counts as exact, so a person's first name reaches
+their full-name DM. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
+Quick Access, and Soup search including the Chat sidebar) matches channels and
+DMs by terms in any order, adding to uFuzzy's in-order matches, because names
+are generated from participants and people type them in any order. It also
+ranks a conversation whose participants the query names, by name prefixes,
+right after exact names. Each participant needs a term of their own, so a group
+with more people than the query names stays below it.
+Commas separate query terms like spaces in the cache search
+(`cache-core/search.rs`, mirrored by `matchesTokenSubsequences`) and in the
+server's channel name search; keep the three together.
 Name groups and match position use the row's label (`getDisplayName`), so search
 text can add emails, aliases, or command keywords before or after it. Mention
 menus rank loaded entity sources together with `MENTION_RANKING_CONFIG` in
@@ -438,6 +456,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Keep mobile Search history lightweight: save query/category/mode, account-scoped item anchors, and at most 200 ordering IDs per mode; never save row objects or virtualizer caches. Restore from current sources with at most three additional pages, fall back when an anchor disappears, and stop restoration on user interaction or scope changes. Dock navigation starts a fresh search session; cached rows belong to the source, not history.
 - Release per-history-entry state when its router entry is replaced, pruned, or closed; retain only the latest per-view session snapshot and the latest split event outside reachable Back/Forward history.
 - Keep Quick Access cache availability reactive to the GraphQL rollout flag; it can arrive after the provider mounts, and email has no legacy source fallback.
+- Cmd+K, mobile name search, and the desktop Search page find routines by name from the Quick Access `routine` bucket (the scheduled-action list); keep them out of `entityPool`, which Home, Drive, and Tasks searches share, and use `routinePool` for workspace Search only.
 - Cmd+K and mobile name search take task projects from the Quick Access `initiative` bucket (typed All queries and the Projects category), searched from the GraphQL cache like other entities. Don't give them a per-query server search: its rows drop out while each new query loads, so projects flash as you type.
 - Merge the complete channel list into Quick Access even with the GraphQL cache enabled; preserve newer viewed timestamps and apply the channel boost before the extra DM boost in shared command/mobile name ranking.
 - Include all channel metadata in Quick Access item versions; record complete, cached-recent, and merged channel counts plus the last index-build duration on cache-search traces.
@@ -548,6 +567,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   [dragging rows into a folder](../../docs/agent-guide/navigation.md#dragging-rows-into-a-folder).
 - Keep channel rail and title menus on `CHANNEL_ACTION_VIEW_CONTEXT`, including
   the shared desktop `Open in new split` action and its mobile/capacity guards.
+  Rail splits open at latest before notifications load; only rows that stand
+  for a notification (Home, Inbox) wait for it to choose a target.
 - Gate the Chat redesign with `enable-chat-sidebar-sections`; wait for its result, restore the tabbed rail when off, and keep mobile unchanged.
   Keep the original rail renderer and label dialogs in `components/rail/`; build the redesigned rail and section dialogs in `components/rail/next/`, with shared controller, context, and row primitives outside `next/`.
   With the flag on, keep desktop Chat sections in a scrolling stack with Favorites first and DMs directly below; personal and team-shared section assignments remain independent, including when dragging a row out of its originating section.

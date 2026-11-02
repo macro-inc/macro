@@ -17,6 +17,7 @@ import { openExternalUrl } from '@core/util/url';
 import { isGithubPrEntity } from '@entity';
 import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-create-dm';
 import { projectRouteId } from '../projects/core/route';
+import { routineContent } from '../routines/routine-navigation';
 import { getCategorySearchFilters } from './category-search-filters';
 import {
   type CommandMenuItem,
@@ -127,6 +128,15 @@ export function createCommandResultOpener(
         },
         { referredFrom, preferNewSplit: openInNewSplit }
       );
+      return true;
+    }
+
+    if (isEntityItem(item) && item.bucket === 'routine') {
+      openWithSplit(routineContent(item.id), {
+        referredFrom,
+        preferNewSplit: openInNewSplit,
+        search: {},
+      });
       return true;
     }
 
