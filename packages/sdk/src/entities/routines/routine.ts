@@ -73,7 +73,11 @@ export interface RoutineOptions {
   userPrompt: string;
   /** Model override. */
   model?: RoutineModelId;
-  /** Agent to run the task. */
+  /**
+   * Agent to run the task: a built-in agent, or one the caller owns or can
+   * use, including one on a self-hosted runtime. Access is checked on save and
+   * again on every run.
+   */
   agent?: Agent;
   /** Whether triggers can start executions. Defaults to true on creation. */
   enabled?: boolean;

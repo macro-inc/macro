@@ -6,7 +6,7 @@ Configuration of an agent routine.
 
 | Property | Type | Description |
 | ------ | ------ | ------ |
-| <a id="property-agent"></a> `agent?` | [`Agent`](../../../agents/agent/classes/Agent.md) | Agent to run the task. |
+| <a id="property-agent"></a> `agent?` | [`Agent`](../../../agents/agent/classes/Agent.md) | Agent to run the task: a built-in agent, or one the caller owns or can use, including one on a self-hosted runtime. Access is checked on save and again on every run. |
 | <a id="property-enabled"></a> `enabled?` | `boolean` | Whether triggers can start executions. Defaults to true on creation. |
 | <a id="property-model"></a> `model?` | `string` | Model override. |
 | <a id="property-name"></a> `name` | `string` | Display name. |
