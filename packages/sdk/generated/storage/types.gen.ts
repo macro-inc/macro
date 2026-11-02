@@ -14974,6 +14974,13 @@ export type TallyBucket = {
      * The value.
      */
     value: TallyValue;
+    /**
+     * Who chose it, as Macro user ids in submission order: present only
+     * for the form's editors, or its viewers when it shares its responses,
+     * and never when it hides respondents. Rows no signed-in respondent
+     * submitted count without a voter.
+     */
+    voters?: Array<string> | null;
 };
 
 /**
