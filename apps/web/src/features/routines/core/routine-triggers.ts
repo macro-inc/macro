@@ -3,6 +3,7 @@ import {
   formatTimeLabel,
   getDefaultTimezone,
 } from '@core/util/cron';
+import { format } from 'date-fns';
 import { match } from 'ts-pattern';
 import { z } from 'zod';
 
@@ -567,7 +568,11 @@ export function describeTrigger(trigger: RoutineTriggerDraft): string {
     })
     .with('day', () => `Every day at ${formatTimeLabel(trigger.time)}`)
     .with('hour', () => 'Every hour')
-    .with('once', () => 'Once')
+    .with('once', () => {
+      const at = new Date(trigger.onceAt);
+      if (!Number.isFinite(at.getTime())) return 'Run once';
+      return `Once at ${format(at, at.getSeconds() ? 'MMM d, h:mm:ss a' : 'MMM d, h:mm a')}`;
+    })
     .with('custom', () => `Custom schedule (${trigger.cron})`)
     .exhaustive();
 }

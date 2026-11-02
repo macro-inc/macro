@@ -1075,7 +1075,11 @@ natural date search (**tomorrow 9am**, **in 2 hours**) and an inline calendar wi
 time controls. Click **Add trigger** to confirm. Click a saved chip to edit it;
 **Done** applies changes and **Cancel** leaves it unchanged. The panel floats over
 the composer without moving it. Recurring schedules retain their time zones;
-one-off times use the browser’s local time.
+one-off times use the browser’s local time. A one-off saves a `once` trigger
+(`{type: 'once', at}`, the same one agents create through the SDK to check back
+later), runs within about a second of its time, runs as soon as it is saved when
+the time has passed, and then shows **Completed**; its chip reads **Once at**
+the time.
 
 The event menu groups Macro activity triggers by surface:
 
