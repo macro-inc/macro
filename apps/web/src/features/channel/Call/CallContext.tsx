@@ -1581,12 +1581,6 @@ function createCallState() {
     if (!r) return;
     const newSharing = !store.isScreenSharing;
     try {
-<<<<<<< HEAD
-      await r.localParticipant.setScreenShareEnabled(
-        newSharing,
-        screenShareCaptureOptions(persistedShareScreenAudio())
-      );
-=======
       const outcome = await traceCallMedia(
         'screen_share',
         {
@@ -1597,14 +1591,17 @@ function createCallState() {
           if (newSharing) {
             // The picker stays out of the startup bundle CallProvider is in.
             const { startScreenShare } = await import('./screen-share');
-            return startScreenShare(r, span);
+            return startScreenShare(
+              r,
+              span,
+              screenShareCaptureOptions(persistedShareScreenAudio())
+            );
           }
           await r.localParticipant.setScreenShareEnabled(false);
           return 'shared';
         }
       );
       if (outcome === 'cancelled') return;
->>>>>>> 28fddb501e (fix(calls): pick a screen to share in the macOS app)
       setStore('isScreenSharing', newSharing);
       analytics.track('call_action', {
         action: 'screen_share_toggled',

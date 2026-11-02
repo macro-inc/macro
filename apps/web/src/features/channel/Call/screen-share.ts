@@ -1,6 +1,6 @@
 import { t } from '@app/lib/i18n';
 import type { Span } from '@macro-inc/observability';
-import type { Room } from 'livekit-client';
+import type { Room, ScreenShareCaptureOptions } from 'livekit-client';
 import { callMediaErrorType } from './call-media-telemetry';
 import {
   captureScreenSource,
@@ -26,7 +26,8 @@ function shareFailed(span: Span, message: string, cause: unknown) {
  */
 export async function startScreenShare(
   room: Room,
-  span: Span
+  span: Span,
+  browserOptions?: ScreenShareCaptureOptions
 ): Promise<ScreenShareStart> {
   const listed = await listScreenCaptureSources();
   if (listed.isErr()) {
@@ -34,7 +35,7 @@ export async function startScreenShare(
       throw shareFailed(span, t('calls.shareFailed'), listed.error.error);
     }
     span.setAttr('call.media.screen_share.picker', 'browser');
-    await room.localParticipant.setScreenShareEnabled(true);
+    await room.localParticipant.setScreenShareEnabled(true, browserOptions);
     return 'shared';
   }
 
