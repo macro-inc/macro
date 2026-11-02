@@ -2926,6 +2926,30 @@ describe('normalizedCacheExchange', () => {
       }
     );
 
+    it.each([false, true])(
+      'fences pre-existing reads after a REST write is acknowledged (hydration=%s)',
+      async (hydration) => {
+        let externalMutationVersion = 0;
+        const { ops, network, forwarded, results } = controlledQueryHarness(
+          host,
+          {
+            externalMutationVersion: () => externalMutationVersion,
+          }
+        );
+        ops.next(hydration ? makeHydrationOp(1) : makeOp(1, 'network-only'));
+        await tick();
+        externalMutationVersion += 1;
+        network.next(queryResult(forwarded[0], { from: 'obsolete' }));
+        await tick();
+        expect(results).toEqual([]);
+        expect(host.writes).toEqual([]);
+        expect(forwarded).toHaveLength(2);
+        network.next(queryResult(forwarded[1], { from: 'fresh' }));
+        await tick();
+        expect(results.at(-1)?.data).toEqual({ from: 'fresh' });
+      }
+    );
+
     it('honors cache-only if a subscriber changes policy before an obsolete response arrives', async () => {
       const { ops, network, forwarded } = controlledQueryHarness(host);
       ops.next(makeOp(1, 'network-only'));

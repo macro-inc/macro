@@ -334,10 +334,77 @@ it('keeps a committed REST write successful when GraphQL cache reconciliation fa
     update,
   });
   expect((await save(entity, appearance, () => true)).isOk()).toBe(true);
-  expect(host.writeQuery).toHaveBeenCalledOnce();
+  expect(host.writeQuery).toHaveBeenCalledTimes(2);
   expect(queryClient.getQueryData(key)).toEqual({ ...original, appearance });
   queryClient.clear();
 });
+
+it.each(['document', 'initiative'] as const)(
+  'repairs a stale %s cache response received before REST confirmation',
+  async (type) => {
+    const queryClient = new QueryClient();
+    const patched = Promise.withResolvers<void>();
+    const response =
+      Promise.withResolvers<Awaited<ReturnType<UpdateAppearance>>>();
+    const record = {
+      __typename:
+        type === 'document' ? 'GraphqlSoupDocument' : 'GraphqlSoupInitiative',
+      id: entity.id,
+      appearance: null as EntityAppearance | null,
+    };
+    const events: string[] = [];
+    const host = {
+      disabled: false,
+      readRecordsByKeys: vi.fn(async () => ({
+        revision: INITIAL_CACHE_REVISION,
+        records: [
+          {
+            recordKey: `${record.__typename}:${record.id}`,
+            record: { ...record },
+          },
+        ],
+      })),
+      writeQuery: vi.fn<CacheHost['writeQuery']>(async (write) => {
+        record.appearance = await writtenAppearance(write);
+        events.push('write');
+        patched.resolve();
+        return {
+          revision: INITIAL_CACHE_REVISION,
+          revisionAdvanced: true,
+          changed: [],
+          affectedOps: [],
+          reset: false,
+        };
+      }),
+    };
+    const acknowledgeWrite = vi.fn(() => events.push('acknowledge'));
+    const refreshUncached = vi.fn();
+    const save = createSaveEntityAppearance({
+      queryClient,
+      cacheHost: () => host,
+      update: () => response.promise,
+      acknowledgeWrite,
+      refreshUncached,
+    });
+    const target =
+      type === 'document'
+        ? entity
+        : { type, id: entity.id, name: entity.name, ownerId: entity.ownerId };
+    const pending = save(target, appearance, () => true);
+    await patched.promise;
+    expect(record.appearance).toEqual(appearance);
+    expect(acknowledgeWrite).not.toHaveBeenCalled();
+    // An older read can already have published while the REST write is pending.
+    record.appearance = null;
+    response.resolve(ok(undefined));
+    expect((await pending).isOk()).toBe(true);
+    expect(record.appearance).toEqual(appearance);
+    expect(events).toEqual(['write', 'acknowledge', 'write']);
+    expect(acknowledgeWrite).toHaveBeenCalledWith(host);
+    expect(refreshUncached).not.toHaveBeenCalled();
+    queryClient.clear();
+  }
+);
 
 it.each(['document', 'initiative'] as const)(
   'updates a cached %s without requiring unrelated preview fields',
@@ -402,66 +469,72 @@ it.each(['document', 'initiative'] as const)(
   }
 );
 
-it('serializes normalized cache rollback when overlapping edits both fail', async () => {
-  const queryClient = new QueryClient();
-  const response =
-    Promise.withResolvers<Awaited<ReturnType<UpdateAppearance>>>();
-  const later = Promise.withResolvers<Awaited<ReturnType<UpdateAppearance>>>();
-  const firstPatched = Promise.withResolvers<void>();
-  const secondPatched = Promise.withResolvers<void>();
-  const record = {
-    __typename: 'GraphqlSoupDocument',
-    id: entity.id,
-    appearance: null as EntityAppearance | null,
-    displayName: 'Document',
-    documentName: 'Document',
-    fileType: 'md',
-    subType: null,
-    viewerPermission: { accessLevel: 'EDIT' },
-  };
-  const host = {
-    disabled: false,
-    readRecordsByKeys: vi.fn(async () => ({
-      revision: INITIAL_CACHE_REVISION,
-      records: [{ recordKey: `GraphqlSoupDocument:${entity.id}`, record }],
-    })),
-    writeQuery: vi.fn<CacheHost['writeQuery']>(async (write) => {
-      record.appearance = await writtenAppearance(write);
-      if (sameAppearance(record.appearance, appearance)) firstPatched.resolve();
-      if (sameAppearance(record.appearance, second)) secondPatched.resolve();
-      return {
+it.each([true, false])(
+  'settles overlapping normalized cache edits when the older save succeeds=%s',
+  async (olderSucceeds) => {
+    const queryClient = new QueryClient();
+    const response =
+      Promise.withResolvers<Awaited<ReturnType<UpdateAppearance>>>();
+    const later =
+      Promise.withResolvers<Awaited<ReturnType<UpdateAppearance>>>();
+    const firstPatched = Promise.withResolvers<void>();
+    const secondPatched = Promise.withResolvers<void>();
+    const record = {
+      __typename: 'GraphqlSoupDocument',
+      id: entity.id,
+      appearance: null as EntityAppearance | null,
+      displayName: 'Document',
+      documentName: 'Document',
+      fileType: 'md',
+      subType: null,
+      viewerPermission: { accessLevel: 'EDIT' },
+    };
+    const host = {
+      disabled: false,
+      readRecordsByKeys: vi.fn(async () => ({
         revision: INITIAL_CACHE_REVISION,
-        revisionAdvanced: true,
-        changed: [],
-        affectedOps: [],
-        reset: false,
-      };
-    }),
-  };
-  const update = vi
-    .fn<UpdateAppearance>()
-    .mockImplementationOnce(() => response.promise)
-    .mockImplementationOnce(() => later.promise);
-  const save = createSaveEntityAppearance({
-    queryClient,
-    cacheHost: () => host,
-    update,
-  });
-  const pending = save(entity, appearance, () => true);
-  await firstPatched.promise;
-  expect(record.appearance).toEqual(appearance);
-  expect(record.viewerPermission).toEqual({ accessLevel: 'EDIT' });
-  const pendingLater = save(entity, second, () => true);
-  await secondPatched.promise;
-  expect(record.appearance).toEqual(second);
-  response.resolve(err([]));
-  expect((await pending).isErr()).toBe(true);
-  later.resolve(err([]));
-  expect((await pendingLater).isErr()).toBe(true);
-  expect(record.appearance).toBeNull();
-  expect(record.viewerPermission).toEqual({ accessLevel: 'EDIT' });
-  queryClient.clear();
-});
+        records: [{ recordKey: `GraphqlSoupDocument:${entity.id}`, record }],
+      })),
+      writeQuery: vi.fn<CacheHost['writeQuery']>(async (write) => {
+        record.appearance = await writtenAppearance(write);
+        if (sameAppearance(record.appearance, appearance))
+          firstPatched.resolve();
+        if (sameAppearance(record.appearance, second)) secondPatched.resolve();
+        return {
+          revision: INITIAL_CACHE_REVISION,
+          revisionAdvanced: true,
+          changed: [],
+          affectedOps: [],
+          reset: false,
+        };
+      }),
+    };
+    const update = vi
+      .fn<UpdateAppearance>()
+      .mockImplementationOnce(() => response.promise)
+      .mockImplementationOnce(() => later.promise);
+    const save = createSaveEntityAppearance({
+      queryClient,
+      cacheHost: () => host,
+      update,
+    });
+    const pending = save(entity, appearance, () => true);
+    await firstPatched.promise;
+    expect(record.appearance).toEqual(appearance);
+    expect(record.viewerPermission).toEqual({ accessLevel: 'EDIT' });
+    const pendingLater = save(entity, second, () => true);
+    await secondPatched.promise;
+    expect(record.appearance).toEqual(second);
+    response.resolve(olderSucceeds ? ok(undefined) : err([]));
+    expect((await pending).isOk()).toBe(olderSucceeds);
+    expect(record.appearance).toEqual(second);
+    later.resolve(err([]));
+    expect((await pendingLater).isErr()).toBe(true);
+    expect(record.appearance).toEqual(olderSucceeds ? appearance : null);
+    expect(record.viewerPermission).toEqual({ accessLevel: 'EDIT' });
+    queryClient.clear();
+  }
+);
 
 it('does not roll back a Soup entity that was absent when the edit began', async () => {
   const queryClient = new QueryClient();

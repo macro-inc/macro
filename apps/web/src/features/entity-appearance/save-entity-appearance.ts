@@ -3,6 +3,7 @@ import { refreshActiveGraphqlPreviewQueries } from '@queries/preview/active-quer
 import { refreshActiveGraphqlSoupQueries } from '@queries/soup/graphql/active-queries';
 import { setEntityAppearance } from '@service-storage/entity-appearance';
 import {
+  acknowledgeGraphqlRestWrite,
   getGraphqlCacheHost,
   getGraphqlSoupClient,
 } from '@service-storage/graphql-soup';
@@ -14,6 +15,7 @@ export const saveEntityAppearance = createSaveEntityAppearance({
   queryClient,
   cacheHost: getGraphqlCacheHost,
   update: setEntityAppearance,
+  acknowledgeWrite: acknowledgeGraphqlRestWrite,
   refreshUncached: async (entity) => {
     await Promise.all([
       refreshActiveGraphqlSoupQueries({ throwOnError: true }),

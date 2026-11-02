@@ -39,7 +39,7 @@ snippets, task projects (initiatives), forms, and databases.
 - Read only the normalized appearance fields before optimistic writes; unrelated preview fields can be absent on a loaded entity.
 - Type cache-write payloads with the generated subscription result; `soupUpdates` is a list.
 - Keep pending appearance visible through uncached GraphQL revalidation; retain confirmed intent only for failed readers until fresh data or mutation garbage collection.
-- Serialize server writes per entity, and reconcile confirmed appearance after in-flight initial reads without canceling those reads.
+- Serialize server writes per entity, fence confirmed REST writes against older GraphQL responses, and republish confirmed appearance before releasing pending intent.
 - Render public metadata without mounting authenticated preview queries.
 - Preserve appearance in identity projections and renderers, including project list, sidebar, and picker rows; reserve type-only icons for navigation and status.
 - Keep initiative list queries limited to server-backed initiative fields; unrelated cache-only Mail fields prevent cache hits and optimistic icon updates.

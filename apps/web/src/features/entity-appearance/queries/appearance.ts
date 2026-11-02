@@ -240,6 +240,7 @@ function appearanceCacheWrite(
 }
 
 type AppearanceWrite = {
+  appearance: EntityAppearance;
   rollback: () => Promise<void>;
   isCurrent: () => boolean;
   status: 'pending' | 'failed' | 'success';
@@ -260,6 +261,7 @@ export function createSaveEntityAppearance(sources: {
     appearance: EntityAppearance
   ) => Promise<Result<unknown, unknown>>;
   refreshUncached?: (entity: EntityData) => Promise<void>;
+  acknowledgeWrite?: (host: object) => void;
 }) {
   // Keep only overlapping writes. Their rollback closures change appearance fields,
   // never entire query snapshots or unrelated metadata.
@@ -386,7 +388,12 @@ export function createSaveEntityAppearance(sources: {
           });
         }
       };
-      const entry: AppearanceWrite = { rollback, isCurrent, status: 'pending' };
+      const entry: AppearanceWrite = {
+        appearance,
+        rollback,
+        isCurrent,
+        status: 'pending',
+      };
       pending.push(entry);
       // Writes and rollbacks share one queue so overlapping failures unwind in order.
       const graph = queueWrite(`cache:${key}`, async () => {
@@ -410,11 +417,38 @@ export function createSaveEntityAppearance(sources: {
         if (!isCurrent()) return err(t('appearance.saveFailed'));
         const result = await sources.update(type, entity.id, appearance);
         await cache;
+        if (result.isErr() || !isCurrent()) return result;
+        let reconciled = false;
         if (
-          result.isOk() &&
-          isCurrent() &&
-          (!host || host.disabled || !graphPrevious)
+          host &&
+          !host.disabled &&
+          host === sources.cacheHost() &&
+          (entity.type === 'document' || entity.type === 'initiative')
         ) {
+          sources.acknowledgeWrite?.(host);
+          const confirmed = await Promise.allSettled([
+            queueWrite(`cache:${key}`, async () => {
+              const current = await readCachedAppearance(host, entity);
+              if (
+                !current ||
+                !isCurrent() ||
+                host !== sources.cacheHost() ||
+                host.disabled
+              )
+                return false;
+              const latest = pending.findLast(
+                (write) => write.status === 'pending' && write.isCurrent()
+              );
+              await host.writeQuery(
+                appearanceCacheWrite(entity, latest?.appearance ?? appearance)
+              );
+              return true;
+            }),
+          ]);
+          reconciled =
+            confirmed[0]?.status === 'fulfilled' && confirmed[0].value;
+        }
+        if (!reconciled) {
           const refreshed = await Promise.allSettled([
             sources.refreshUncached?.(entity),
           ]);
