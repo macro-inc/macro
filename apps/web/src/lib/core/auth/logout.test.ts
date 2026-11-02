@@ -36,7 +36,8 @@ vi.mock('@queries/email/send-queue', () => ({
 vi.mock('@queries/email/outbox-session', () => ({
   setEmailOutboxSession: vi.fn(),
 }));
-vi.mock('@core/constant/servers', () => ({
+vi.mock('@core/constant/servers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/servers')>()),
   SERVER_HOSTS: { 'auth-logout': 'https://auth.example.com/oauth2/logout' },
 }));
 vi.mock('@core/util/platform', async (importOriginal) => ({

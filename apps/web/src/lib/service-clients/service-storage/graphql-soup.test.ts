@@ -413,7 +413,8 @@ vi.mock('@core/constant/featureFlags', () => ({
   enableGraphqlSoup: { key: 'enable-graphql-soup' },
   isFeatureEnabled: () => mocks.graphqlEnabled,
 }));
-vi.mock('@core/constant/servers', () => ({
+vi.mock('@core/constant/servers', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('@core/constant/servers')>()),
   SERVER_HOSTS: { 'document-storage-service': 'http://dss.test' },
 }));
 vi.mock('@core/util/cookies', () => ({

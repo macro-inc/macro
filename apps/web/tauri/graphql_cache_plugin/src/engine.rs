@@ -31,13 +31,15 @@ use cache_turso::{TursoStorage, TursoStorageCloseOutcome};
 use serde::Serialize;
 use std::collections::HashMap;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+mod access;
+use access::EngineAccess;
 
 mod calendar;
 mod soup;
 pub use calendar::CalendarRangeResultWire;
 pub use soup::{
-    EntityFilterRequest, EntityFilterResult, PredicateBaselineEntry, PredicateFilterResult,
+    EntityFilterRequest, EntityFilterResult, LiveQueryResult, PredicateBaselineEntry,
+    PredicateFilterResult,
 };
 
 /// Mirrors `ReadResult` in `apps/web/src/lib/graphql-cache/protocol.ts`.
@@ -57,6 +59,9 @@ pub enum ReadResultWire {
 #[derive(Debug, Serialize)]
 #[serde(rename_all = "camelCase")]
 pub struct WriteResultWire {
+    /// Optional complete displayed-window invalidation proofs.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub unchanged_views: Option<Vec<String>>,
     /// Effective scalar patches; absent when a query reread is required.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub field_changes: Option<Vec<cache_core::field_changes::RecordFieldChange>>,
@@ -87,6 +92,8 @@ pub struct WriteResultWire {
 /// Internal hydration result used to fan out changes before returning only
 /// the caller-visible projection across IPC.
 pub struct HydrationWriteResultWire {
+    /// Displayed windows proven unchanged by complete engine journal evidence.
+    pub unchanged_views: Vec<String>,
     /// Quick Access buckets changed by hydration.
     pub search_changed_buckets: std::collections::BTreeSet<String>,
     /// Cache changes required for host notifications.
@@ -389,13 +396,14 @@ struct EngineState {
     selections: RecordSelectionCache,
 }
 
-/// Cheaply-clonable handle to the shared engine. All methods serialize
-/// through the async mutex; errors are stringified for the IPC boundary
+/// Cheaply-clonable handle to the shared engine. Foreground methods serialize
+/// through the async mutex. Hydration yields and refetches when superseded.
+/// Errors are stringified for the IPC boundary
 /// (the JS host rejects the pending call, and the exchange degrades to the
 /// network).
 #[derive(Clone)]
 pub struct EngineHandle {
-    inner: Arc<Mutex<EngineState>>,
+    inner: Arc<EngineAccess<EngineState>>,
     // Shared by cloned handles, changed when the native engine is reopened.
     // Revisions alone may repeat across process restarts.
     mail_generation: String,
@@ -403,6 +411,7 @@ pub struct EngineHandle {
 
 fn wire_write_result(ops: &OpInterner, result: WriteResult) -> WriteResultWire {
     WriteResultWire {
+        unchanged_views: None,
         field_changes: result.field_changes,
         identity_errors: result.identity_errors,
         revision: result.revision.to_string(),
@@ -452,7 +461,7 @@ impl EngineHandle {
         );
         EngineHandle {
             mail_generation: soup_filter_cache_adapter::mail::new_generation(),
-            inner: Arc::new(Mutex::new(EngineState {
+            inner: Arc::new(EngineAccess::new(EngineState {
                 engine,
                 ops: OpInterner::default(),
                 selections: RecordSelectionCache::default(),
@@ -625,6 +634,27 @@ impl EngineHandle {
         .await
     }
 
+    /// Reads a retained live view, atomically checking its specification identity.
+    pub async fn resume_entity_filter(
+        &self,
+        id: String,
+        registration_id: cache_core::engine::live_query::LiveQueryRegistration,
+        since: Option<String>,
+    ) -> Result<Option<soup::LiveQueryResult>, String> {
+        let since = since
+            .map(|revision| revision.parse())
+            .transpose()
+            .map_err(|error: cache_core::revision::ParseCacheRevisionError| error.to_string())?;
+        self.inner
+            .lock()
+            .await
+            .engine
+            .resume_live_query(&id, registration_id, since)
+            .await
+            .map(|update| update.map(|update| soup::LiveQueryResult::LiveQuery { update }))
+            .map_err(|error| error.to_string())
+    }
+
     /// Recovers cached query variables without materializing each variant.
     pub async fn inspect_query_variants(
         &self,
@@ -680,7 +710,7 @@ impl EngineHandle {
             data,
             identity,
         } = request;
-        let mut state = self.inner.lock().await;
+        let mut state = self.inner.write().await;
         let EngineState { engine, ops, .. } = &mut *state;
         let origin = origin_op_id.map(|name| ops.intern(&name));
         let registration = registration.map(|registration| {
@@ -730,7 +760,7 @@ impl EngineHandle {
         data: serde_json::Value,
         identity: Option<String>,
     ) -> Result<HydrationWriteResultWire, String> {
-        let mut state = self.inner.lock().await;
+        let mut state = self.inner.hydrate().await?;
         let EngineState { engine, ops, .. } = &mut *state;
         let projections = soup::write_projections(
             engine,
@@ -741,7 +771,7 @@ impl EngineHandle {
             identity.as_deref(),
         )
         .await?;
-        engine
+        let result = engine
             .hydrate_query_with_projections(
                 &query,
                 operation_name.as_deref(),
@@ -751,12 +781,18 @@ impl EngineHandle {
                 projections,
             )
             .await
-            .map(|result| HydrationWriteResultWire {
-                search_changed_buckets: result.search_changed_buckets,
-                write_result: wire_write_result(ops, result.write_result),
-                data: result.data,
-            })
-            .map_err(|error| error.to_string())
+            .map_err(|error| error.to_string())?;
+        // Invalidation evidence is optional: a failed proof must not reject a committed hydration.
+        let unchanged_views = engine
+            .unchanged_observed_windows()
+            .await
+            .unwrap_or_default();
+        Ok(HydrationWriteResultWire {
+            unchanged_views,
+            search_changed_buckets: result.search_changed_buckets,
+            write_result: wire_write_result(ops, result.write_result),
+            data: result.data,
+        })
     }
 
     /// Durably queues a mutation and its optimistic layer, then attempts to
@@ -780,7 +816,7 @@ impl EngineHandle {
         client_metadata: Option<serde_json::Value>,
         uncertain_calendar_event_keys: Vec<String>,
     ) -> Result<EnqueueOptimisticMutationResultWire, String> {
-        let mut state = self.inner.lock().await;
+        let mut state = self.inner.write().await;
         let EngineState { engine, ops, .. } = &mut *state;
         let origin = origin_op_id.map(|name| ops.intern(&name));
         let projections = soup::optimistic_projections(
@@ -924,7 +960,7 @@ impl EngineHandle {
             owner: lease_owner,
             generation: parse_u64(&lease_generation, "lease generation")?,
         };
-        let mut state = self.inner.lock().await;
+        let mut state = self.inner.write().await;
         let EngineState { engine, ops, .. } = &mut *state;
         let projections = soup::write_projections(
             engine,
@@ -983,7 +1019,7 @@ impl EngineHandle {
             owner: lease_owner,
             generation: parse_u64(&lease_generation, "lease generation")?,
         };
-        let mut state = self.inner.lock().await;
+        let mut state = self.inner.write().await;
         let EngineState { engine, ops, .. } = &mut *state;
         match engine
             .rollback_optimistic_write_with_outcome(transaction, claim)
@@ -1009,7 +1045,7 @@ impl EngineHandle {
         &self,
         keys: Vec<String>,
     ) -> Result<AffectedOperationsResultWire, String> {
-        let mut state = self.inner.lock().await;
+        let mut state = self.inner.write().await;
         let EngineState { engine, ops, .. } = &mut *state;
         let projections = soup::invalidation_projections(engine, &keys).await?;
         let keys: Vec<EntityKey<'static>> =
@@ -1030,7 +1066,7 @@ impl EngineHandle {
         &self,
         keys: Vec<String>,
     ) -> Result<AffectedOperationsResultWire, String> {
-        let mut state = self.inner.lock().await;
+        let mut state = self.inner.write().await;
         let EngineState { engine, ops, .. } = &mut *state;
         let projections = soup::deletion_projections(engine, &keys).await?;
         let keys: Vec<EntityKey<'static>> =
@@ -1057,7 +1093,7 @@ impl EngineHandle {
 
     /// Drops all cached state (logout).
     pub async fn clear(&self) -> Result<CacheRevision, String> {
-        let mut state = self.inner.lock().await;
+        let mut state = self.inner.write().await;
         state.engine.clear().await.map_err(|e| e.to_string())
     }
 }
