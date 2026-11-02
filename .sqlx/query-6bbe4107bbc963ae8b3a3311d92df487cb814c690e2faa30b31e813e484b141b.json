@@ -1,0 +1,14 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE database_rows SET created_at = '2026-01-03T00:00:00Z' WHERE table_id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "6bbe4107bbc963ae8b3a3311d92df487cb814c690e2faa30b31e813e484b141b"
+}

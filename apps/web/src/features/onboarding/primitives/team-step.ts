@@ -109,6 +109,9 @@ export function createTeamForm(
     seed.prefilled.length > 0 ? [...seed.prefilled, ''] : ['', '']
   );
   const [pending, setPending] = createSignal(false);
+  // Only a work domain can be joined by domain; on by default.
+  const [allowDomainJoin, setAllowDomainJoin] = createSignal(true);
+  const domainJoin = () => seed.domain !== undefined && allowDomainJoin();
 
   const invites = () => validInviteEmails(slots(), options.ownEmail);
   const canCreate = () => name().trim().length > 0 && !pending();
@@ -118,7 +121,11 @@ export function createTeamForm(
     const sent = invites();
     setPending(true);
     try {
-      await context.createTeam({ name: name().trim(), invites: sent });
+      await context.createTeam({
+        name: name().trim(),
+        invites: sent,
+        allowDomainJoin: domainJoin(),
+      });
     } catch {
       // The capability reports its own failure; keep the form intact.
       return;
@@ -133,6 +140,7 @@ export function createTeamForm(
       invites_removed: seed.prefilled.filter((address) => !kept.has(address))
         .length,
       used_domain_suggestion: seed.domain !== undefined,
+      allow_domain_join: domainJoin(),
     });
     options.onCreated();
   };
@@ -151,6 +159,10 @@ export function createTeamForm(
     invites,
     pending,
     canCreate,
+    /** The work domain colleagues can join by, when there is one. */
+    domain: seed.domain,
+    allowDomainJoin,
+    setAllowDomainJoin,
     suggested: seed.prefilled.length > 0,
     create,
   };
