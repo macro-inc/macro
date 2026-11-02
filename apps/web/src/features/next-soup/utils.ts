@@ -765,29 +765,36 @@ export const openEntityInSplitFromUnifiedList = async (
     splitContent = withListNavigationSource(splitContent, splitHandle);
   }
 
-  const hydrateNotificationsAndMarkSeen = async (
+  const hydrateNotificationsAndMarkSeen = (
     channel: ChannelEntity,
     notificationSource: NotificationSource
-  ) => {
-    try {
-      const hydrated = await hydrateChannelNotificationSelection(
-        channel,
-        notificationSource.withLocalOverrides
-      );
-      const view = splitManager.findOpenView(content);
-      // A late response must not mark a closed conversation or a mobile pane
-      // that the user has already left. Hydration never reopens or retargets it.
-      if (!view || (isTouchDevice() && !view.topLevelSplit?.isActive())) return;
-      markChannelNotificationsSeenOnOpen(hydrated, notificationSource, {
-        channelReadScope: options.channelReadScope,
-      });
-    } catch (error) {
-      console.error('Failed to load conversation notifications after opening', {
-        channelId: channel.id,
-        error,
-      });
-    }
-  };
+  ) =>
+    Telemetry.span('channel.open.notifications', async (span) => {
+      span.setAttr('channel.id', channel.id);
+      try {
+        const hydrated = await hydrateChannelNotificationSelection(
+          channel,
+          notificationSource.withLocalOverrides
+        );
+        const view = splitManager.findOpenView(content);
+        // A late response must not mark a closed conversation or a mobile pane
+        // that the user has already left. Hydration never reopens or retargets it.
+        if (!view || (isTouchDevice() && !view.topLevelSplit?.isActive())) {
+          span.setAttr('channel.open.outcome', 'left');
+          return;
+        }
+        markChannelNotificationsSeenOnOpen(hydrated, notificationSource, {
+          channelReadScope: options.channelReadScope,
+        });
+        span.setAttr('channel.open.outcome', 'marked');
+      } catch (error) {
+        span.setAttr('channel.open.outcome', 'failed');
+        console.error(
+          'Failed to load conversation notifications after opening',
+          { channelId: channel.id, error }
+        );
+      }
+    });
 
   let markedNotifications = false;
   const markNotificationsSeen = () => {
