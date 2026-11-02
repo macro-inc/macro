@@ -403,7 +403,7 @@ describe('AgentSession', () => {
   });
 
   test('a created session serializes with its web app link', async () => {
-    globalThis.fetch = (async () =>
+    globalThis.fetch = (async (_input) =>
       Response.json({ session }, { status: 201 })) as typeof fetch;
     const macro = new Macro({
       token: 'user-token',
