@@ -101,6 +101,8 @@ describe('buildAgentRoster', () => {
     });
     expect(saved[2]?.unavailableReason).toBe('Its runtime is disconnected');
     expect(saved[2]?.connectLabel).toBe('Reconnect runtime');
+    expect(saved[2]?.offline).toBe(true);
+    expect(saved[1]?.offline).toBeFalsy();
     expect(saved[3]?.runtime.label).toBe('Disconnected runtime');
   });
 

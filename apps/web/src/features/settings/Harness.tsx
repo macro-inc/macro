@@ -18,17 +18,10 @@ import {
 } from '@queries/harnesses/harnesses';
 import type { Harness as RegisteredHarness } from '@service-storage/client';
 import { useSearchParams } from '@solidjs/router';
-import {
-  ApiKeyInput,
-  Button,
-  confirmDialog,
-  Dialog,
-  Input,
-  Panel,
-  ToggleSwitch,
-} from '@ui';
-import { createSignal, For, onMount, Show } from 'solid-js';
+import { ApiKeyInput, Button, confirmDialog, Dialog, Input, Panel } from '@ui';
+import { createSignal, onMount, Show } from 'solid-js';
 import { CodexHarness } from './codex/views/CodexHarness';
+import { ConnectedRuntimesSection } from './components/connected-runtimes-section';
 import { CursorDefaultModel } from './components/cursor-default-model';
 import { LocalRuntimeCard } from './components/local-runtime-card';
 import {
@@ -36,18 +29,12 @@ import {
   CURSOR_KEY_PREFIX,
   isCursorApiKey,
 } from './core/cursor-api-key';
-import { ConnectAction, HarnessIcon, StatusDot } from './integration-ui';
+import { HarnessIcon } from './integration-ui';
 import { SettingsCard, SettingsPage } from './primitives';
 import { RuntimePairingPage } from './RuntimePairingPage';
 
 function failureMessage(error: unknown, fallback: string): string {
   return (error instanceof ThrownResultError && error.message) || fallback;
-}
-
-function lastConnectedText(harness: RegisteredHarness): string {
-  return harness.last_connected_at
-    ? `Last connected ${new Date(harness.last_connected_at).toLocaleString()}`
-    : 'Never connected';
 }
 
 /** Settings UI for choosing and configuring the available agent harnesses. */
@@ -154,6 +141,12 @@ export function Harness(
             </Button>
           }
         >
+          <ConnectedRuntimesSection
+            harnesses={harnessesQuery.isSuccess ? harnessesQuery.data : []}
+            error={harnessesQuery.isError}
+            onRename={setRenamingHarness}
+            onRemove={setRemovingHarness}
+          />
           <LocalRuntimeCard />
           <div>
             <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
@@ -297,43 +290,6 @@ export function Harness(
               </Show>
             </SettingsCard>
           </div>
-
-          <Show
-            when={!harnessesQuery.isSuccess || harnessesQuery.data.length > 0}
-          >
-            <div>
-              <h2 class="mb-3 px-6 text-sm font-semibold text-ink">
-                Paired runtimes
-              </h2>
-              <SettingsCard>
-                <For
-                  each={harnessesQuery.isSuccess ? harnessesQuery.data : []}
-                  fallback={
-                    <div class="flex flex-col items-center py-6 text-center">
-                      <p class="text-sm text-ink">
-                        {harnessesQuery.isError
-                          ? 'Could not load runtimes.'
-                          : 'Loading runtimes…'}
-                      </p>
-                    </div>
-                  }
-                >
-                  {(harness) => (
-                    <PairedRuntimeRow
-                      harness={harness}
-                      onRename={() => setRenamingHarness(harness)}
-                      onRemove={() => setRemovingHarness(harness)}
-                    />
-                  )}
-                </For>
-                <Show when={harnessesQuery.isError}>
-                  <p class="px-4 py-3 text-xs text-negative">
-                    Could not load your runtimes. Try refreshing this page.
-                  </p>
-                </Show>
-              </SettingsCard>
-            </div>
-          </Show>
         </SettingsPage>
       </Show>
 
@@ -364,93 +320,6 @@ export function Harness(
         )}
       </Show>
     </>
-  );
-}
-
-/**
- * One paired macrod runtime. Its name, owner and permission bypass live here
- * on the web; macrod.toml on the machine holds only machine-local config.
- */
-function PairedRuntimeRow(props: {
-  harness: RegisteredHarness;
-  onRename: () => void;
-  onRemove: () => void;
-}) {
-  const patchHarness = usePatchHarnessMutation();
-
-  const setBypass = async (allowed: boolean) => {
-    if (allowed) {
-      const confirmed = await confirmDialog({
-        title: 'Allow bypassing permission requests?',
-        body: 'Agents set to bypass can run commands and edit files on this machine without approval. Only enable this if you trust everyone who can create agents on this runtime.',
-        confirmLabel: 'Allow',
-        tone: 'danger',
-      });
-      if (!confirmed) return;
-    }
-    try {
-      await patchHarness.mutateAsync({
-        harnessId: props.harness.id,
-        allowPermissionBypass: allowed,
-      });
-    } catch (error) {
-      toast.failure(
-        failureMessage(error, 'Failed to change permission requests')
-      );
-    }
-  };
-
-  return (
-    <div class="flex flex-col gap-3 px-4 py-3">
-      <div class="flex items-center justify-between gap-4">
-        <div class="min-w-0 flex-1">
-          <div class="flex min-w-0 items-center gap-2">
-            <p class="min-w-0 flex-1 truncate text-sm text-ink">
-              {props.harness.name}
-            </p>
-            <span class="inline-flex h-5 shrink-0 items-center whitespace-nowrap rounded-md border border-edge-muted px-2 text-xxs/none font-medium uppercase text-ink-extra-muted">
-              {props.harness.owner.type === 'team' ? 'Team' : 'Private'}
-            </span>
-            <StatusDot
-              state={props.harness.connected ? 'connected' : 'disconnected'}
-              label={props.harness.connected ? 'Connected' : 'Disconnected'}
-            />
-          </div>
-          <p class="mt-0.5 truncate text-xs text-ink-extra-muted">
-            {lastConnectedText(props.harness)}
-          </p>
-        </div>
-        <div class="flex shrink-0 items-center gap-1">
-          <ConnectAction
-            label="Rename"
-            variant="neutral"
-            onClick={props.onRename}
-          />
-          <ConnectAction
-            label="Remove"
-            variant="danger"
-            onClick={props.onRemove}
-          />
-        </div>
-      </div>
-      <div class="flex flex-col gap-1">
-        <ToggleSwitch
-          size="md"
-          label="Allow bypassing permission requests"
-          labelClass="text-xs text-ink"
-          checked={props.harness.allow_permission_bypass}
-          disabled={patchHarness.isPending}
-          onChange={(allowed) =>
-            fireAndForget(setBypass(allowed), 'harness-settings')
-          }
-        />
-        <p class="text-xs text-ink-extra-muted">
-          {props.harness.allow_permission_bypass
-            ? 'Agents set to Always bypass approve tool calls without asking, from their next turn.'
-            : 'Every agent on this runtime must ask for permission.'}
-        </p>
-      </div>
-    </div>
   );
 }
 
