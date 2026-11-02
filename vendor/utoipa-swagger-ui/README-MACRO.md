@@ -12,3 +12,8 @@ upstream emits a relative or interpolated folder.
 
 `Cargo.toml` also drops the author's email from `authors`, which the
 repository's PII scan rejects.
+
+The build script's `zip` build dependency is raised from 3 to the workspace's
+9, which clears RUSTSEC-2026-0429 from the lockfile. The script reads entries
+one by one and never calls the affected `ZipArchive::extract`; under zip 9
+it tells directories by `is_dir()`, since `name()` now returns a `Result`.
