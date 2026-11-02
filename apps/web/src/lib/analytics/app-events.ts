@@ -96,7 +96,13 @@ export type AppEvents = {
   onboarding_v4_connector_connected: { connector: string };
   /** What happened on the team step. */
   onboarding_v4_team: {
-    action: 'created' | 'joined_invite' | 'already_on_team';
+    action:
+      | 'created'
+      | 'joined_invite'
+      | 'already_on_team'
+      | 'invite_link_copied'
+      | 'referrals_sent'
+      | 'referral_link_copied';
     invites_sent?: number;
     /** Same-domain teammates the step pre-added to the invite list. */
     invites_prefilled?: number;
