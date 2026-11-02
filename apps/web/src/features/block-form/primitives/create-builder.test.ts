@@ -39,6 +39,7 @@ function detail(layout: FormLayout): FormDetail {
       closesAt: null,
       tallyVisible: false,
       confirmationMessage: '',
+      branding: { logoFileId: null, coverFileId: null, accentColor: null },
       submittedColumnId: 'column-submitted',
       respondentColumnId: 'column-respondent',
     },

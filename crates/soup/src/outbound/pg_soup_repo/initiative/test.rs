@@ -1,7 +1,13 @@
 use super::*;
-use crate::outbound::pg_soup_repo::expanded::dynamic::{
-    ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, expanded_dynamic_cursor_soup,
-    expanded_dynamic_cursor_soup_grouped,
+use crate::{
+    domain::models::DynamicSortValue,
+    outbound::pg_soup_repo::{
+        candidate_gates::initiative_gate,
+        expanded::dynamic::{
+            ExpandedDynamicCursorArgs, GroupedDynamicCursorArgs, expanded_dynamic_cursor_soup,
+            expanded_dynamic_cursor_soup_grouped,
+        },
+    },
 };
 use filter_ast::Expr;
 use item_filters::ast::{
@@ -47,7 +53,7 @@ async fn initiatives_access_cursor_and_hydration(pool: PgPool) -> anyhow::Result
             ExpandedDynamicCursorArgs {
                 user_id: user(),
                 limit: 20,
-                cursor: Query::Sort(SimpleSortMethod::UpdatedAt, without_initiatives),
+                cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), without_initiatives),
                 exclude_frecency: false,
             }
         )
@@ -61,7 +67,7 @@ async fn initiatives_access_cursor_and_hydration(pool: PgPool) -> anyhow::Result
         ExpandedDynamicCursorArgs {
             user_id: user(),
             limit: 2,
-            cursor: Query::Sort(sort, filters()),
+            cursor: Query::Sort(sort.into(), filters()),
             exclude_frecency: false,
         },
     )
@@ -83,7 +89,12 @@ async fn initiatives_access_cursor_and_hydration(pool: PgPool) -> anyhow::Result
             cursor: Query::Cursor(CursorWithValAndFilter {
                 id: first[1].id(),
                 limit: 2,
-                val: SoupItem::sort_on(sort)(&first[1]),
+                val: models_pagination::CursorVal {
+                    sort_type: sort.into(),
+                    last_val: DynamicSortValue::Timestamp(
+                        SoupItem::sort_on(sort)(&first[1]).last_val,
+                    ),
+                },
                 filter: filters(),
             }),
             exclude_frecency: false,
@@ -138,7 +149,7 @@ async fn initiative_listing_and_candidate_gate_share_access_rules(
         ExpandedDynamicCursorArgs {
             user_id: user(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filters()),
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), filters()),
             exclude_frecency: false,
         },
     )
@@ -171,7 +182,7 @@ async fn initiative_listing_and_candidate_gate_share_access_rules(
         SELECT candidate.id FROM unnest($2::uuid[]) candidate(id)
         WHERE {}
         ORDER BY candidate.id"#,
-        crate::outbound::pg_soup_repo::candidate_gates::initiative_gate("candidate.id::text", None)
+        initiative_gate("candidate.id::text", None,)
     ))
     .bind(user().as_ref())
     .bind(
@@ -209,12 +220,13 @@ async fn initiatives_grouping_and_property_enrichment(pool: PgPool) -> anyhow::R
         GroupedDynamicCursorArgs {
             user_id: user(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filters()),
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), filters()),
             exclude_frecency: false,
             grouping: GroupingConfig {
                 field: GroupByField::Property {
                     property_definition_id: system_properties::SystemPropertyKey::STATUS_UUID,
                     entity_type: Some("INITIATIVE".into()),
+                    bucketing: None,
                 },
                 group_key: None,
                 per_group_limit: None,
@@ -244,7 +256,7 @@ async fn initiatives_grouping_and_property_enrichment(pool: PgPool) -> anyhow::R
         ExpandedDynamicCursorArgs {
             user_id: user(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filtered),
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), filtered),
             exclude_frecency: false,
         },
     )
@@ -275,7 +287,7 @@ async fn initiatives_grouping_and_property_enrichment(pool: PgPool) -> anyhow::R
             ExpandedDynamicCursorArgs {
                 user_id: user(),
                 limit: 20,
-                cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filter),
+                cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), filter),
                 exclude_frecency: false,
             },
         )

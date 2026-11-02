@@ -75,7 +75,7 @@ const buttonStyles = createVariants(
       ),
       ghost: cn(
         buttonFrames.ghost,
-        'not-data-disabled:hover:bg-button-tertiary-hover not-data-disabled:hover:text-ink not-data-disabled:active:bg-button-tertiary-pressed not-data-disabled:active:text-ink aria-pressed:bg-button-tertiary-pressed aria-pressed:text-ink aria-pressed:not-data-disabled:hover:bg-button-tertiary-pressed popup-open:bg-button-tertiary-pressed popup-open:text-ink popup-open:not-data-disabled:hover:bg-button-tertiary-pressed',
+        'not-touch:not-data-disabled:hover:bg-button-tertiary-hover not-touch:not-data-disabled:hover:text-ink not-data-disabled:active:bg-button-tertiary-pressed not-data-disabled:active:text-ink aria-pressed:bg-button-tertiary-pressed aria-pressed:text-ink not-touch:aria-pressed:not-data-disabled:hover:bg-button-tertiary-pressed popup-open:bg-button-tertiary-pressed popup-open:text-ink not-touch:popup-open:not-data-disabled:hover:bg-button-tertiary-pressed',
         buttonPressedStyles
       ),
       danger: cn(

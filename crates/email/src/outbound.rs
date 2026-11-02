@@ -10,6 +10,8 @@ mod gmail_sender_provider;
 mod gmail_token_provider;
 #[cfg(feature = "outbound")]
 pub mod invitation_pg;
+#[cfg(feature = "outbound")]
+pub mod read_receipts_pg;
 #[cfg(feature = "s3")]
 mod s3_draft_attachment_storage;
 
