@@ -74,6 +74,6 @@ it.each([
 
     await user.tab();
 
-    expect(document.activeElement?.textContent).toBe('In progress');
+    expect(document.activeElement).toBe(screen.getByRole('link'));
   }
 );
