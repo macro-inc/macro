@@ -10,7 +10,7 @@ export type NotificationRowProps = {
   /** The row's element id, for `aria-activedescendant`. */
   id: string;
   type: InboxRow<unknown>['type'];
-  /** Muted "actor verb place" line, e.g. "Jacob assigned you a task". */
+  /** Muted "actor verb place" line, e.g. "<first name> assigned you a task". */
   action: string;
   /** What the notification is about: a subject, message, task or title. */
   subject: string;

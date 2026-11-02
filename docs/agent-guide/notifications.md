@@ -15,7 +15,7 @@ top-level mention, an entity's comments, one comment thread, a task
 assignment, a pull request, a calendar event, an access request or grant, or
 an agent session. A message that mentions you appears once,
 in its mention row. Rows show a type glyph, a muted line saying who did what
-(for example **Jacob assigned you a task**), the subject (email subject,
+(for example **&lt;first name&gt; assigned you a task**), the subject (email subject,
 message or comment text, task name, PR or event title), a count when the row
 stands for several notifications, the time, and an unread dot. The author is
 the row's actor: a Macro user by first name, an agent by its bot name, or
