@@ -216,6 +216,360 @@ async fn openapi_route_describes_catalog() {
         schema["paths"]["/v1/users/{external_user_id}/connections"]["get"]["security"][0]["customer_key"],
         serde_json::json!([])
     );
+    for path in ["/v1/connections", "/v1/connections/summary", "/v1/users"] {
+        assert_eq!(
+            schema["paths"][path]["get"]["security"][0]["customer_key"],
+            serde_json::json!([])
+        );
+    }
+}
+
+#[tokio::test]
+#[expect(
+    clippy::disallowed_methods,
+    reason = "Connect database tests use runtime-checked SQLx queries"
+)]
+async fn customer_connection_listing_is_scoped_ordered_filtered_and_safe() {
+    use crate::outbound::{EnvelopeCipher, LocalKeyWrapper, PostgresRepository};
+    use base64::{Engine as _, engine::general_purpose::STANDARD};
+    let database = TestDatabase::new().await;
+    let repository = Arc::new(PostgresRepository::new(database.pool().clone()));
+    let key = repository.create_customer("one").await.unwrap();
+    let other_key = repository.create_customer("two").await.unwrap();
+    let customer_id = repository.authenticate(&key).await.unwrap();
+    let other_id = repository.authenticate(&other_key).await.unwrap();
+    let cipher = Arc::new(EnvelopeCipher::new(Arc::new(
+        LocalKeyWrapper::from_base64(&STANDARD.encode([9_u8; 32])).unwrap(),
+    )));
+    let envelope = domain::Envelope {
+        ciphertext: b"private-ciphertext".to_vec(),
+        nonce: vec![0; 12],
+        encrypted_data_key: b"private-key".to_vec(),
+        kms_key_id: "local".into(),
+        encryption_version: 1,
+        access_token_expires_at: Some(chrono::Utc::now() + chrono::Duration::hours(1)),
+    };
+    for (owner, user, app_id, status, time) in [
+        (
+            customer_id,
+            "old-user",
+            "notion",
+            "active",
+            "2026-10-29T09:00:00Z",
+        ),
+        (
+            customer_id,
+            "new-user",
+            "linear",
+            "needs_reauth",
+            "2026-10-30T09:00:00Z",
+        ),
+        (
+            customer_id,
+            "new-user",
+            "notion",
+            "active",
+            "2026-10-30T09:00:00Z",
+        ),
+        (
+            other_id,
+            "other-user",
+            "notion",
+            "active",
+            "2026-10-31T09:00:00Z",
+        ),
+    ] {
+        let id = uuid::Uuid::now_v7();
+        repository
+            .insert_connection(id, owner, user, app_id, &["read".into()], &envelope)
+            .await
+            .unwrap();
+        sqlx::query(
+            "UPDATE connections SET status = $1, created_at = $2::timestamptz WHERE id = $3",
+        )
+        .bind(status)
+        .bind(time)
+        .bind(id)
+        .execute(database.pool())
+        .await
+        .unwrap();
+    }
+    let apps = all_apps().unwrap();
+    let app = router(AppState {
+        apps,
+        service: Arc::new(Service::new(repository.clone())),
+        oauth: Arc::new(domain::oauth::OAuthService::new(
+            repository.clone(),
+            cipher,
+            Arc::new(outbound::oauth::VendorOAuth::new().unwrap()),
+            apps,
+            url::Url::parse("http://localhost:8080").unwrap(),
+            HashMap::new(),
+        )),
+        mcp_http: outbound::mcp::VendorMcp::new().unwrap(),
+    });
+    let get = |path: String, key: &str| {
+        Request::builder()
+            .uri(path)
+            .header(header::AUTHORIZATION, format!("Bearer {key}"))
+            .body(Body::empty())
+            .unwrap()
+    };
+    let response = app
+        .clone()
+        .oneshot(get("/v1/connections?limit=2".into(), &key))
+        .await
+        .unwrap();
+    assert_eq!(response.status(), StatusCode::OK);
+    let body = response.into_body().collect().await.unwrap().to_bytes();
+    let first: serde_json::Value = serde_json::from_slice(&body).unwrap();
+    assert_eq!(first["items"].as_array().unwrap().len(), 2);
+    assert!(
+        first["items"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .all(|item| item["externalUserId"] == "new-user")
+    );
+    assert_eq!(first["items"][0]["appId"], "notion");
+    assert!(first["items"][0]["accessTokenExpiresAt"].is_string());
+    let json = first.to_string();
+    for secret in [
+        "ciphertext",
+        "nonce",
+        "encrypted",
+        "private",
+        "\"accessToken\"",
+        "refreshToken",
+    ] {
+        assert!(!json.contains(secret), "leaked {secret}");
+    }
+    let cursor = first["nextCursor"].as_str().unwrap();
+    let mut url = url::Url::parse("http://localhost/v1/connections").unwrap();
+    url.query_pairs_mut()
+        .append_pair("limit", "2")
+        .append_pair("cursor", cursor);
+    let second = app
+        .clone()
+        .oneshot(get(
+            format!("{}?{}", url.path(), url.query().unwrap()),
+            &key,
+        ))
+        .await
+        .unwrap();
+    let second: serde_json::Value =
+        serde_json::from_slice(&second.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(second["items"][0]["externalUserId"], "old-user");
+    assert!(second["nextCursor"].is_null());
+    for (path, expected) in [
+        ("/v1/connections?app_id=notion", 2),
+        ("/v1/connections?status=needs_reauth", 1),
+        ("/v1/connections?app_id=linear&status=active", 0),
+    ] {
+        let response = app.clone().oneshot(get(path.into(), &key)).await.unwrap();
+        let body: serde_json::Value =
+            serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes())
+                .unwrap();
+        assert_eq!(body["items"].as_array().unwrap().len(), expected);
+    }
+    for path in [
+        "/v1/connections?cursor=bad",
+        "/v1/connections?status=bad",
+        "/v1/connections?app_id=%3Cbad%3E",
+        "/v1/connections?app_id=-bad",
+        "/v1/connections?limit=501",
+        "/v1/connections?limit=0",
+    ] {
+        assert_eq!(
+            app.clone()
+                .oneshot(get(path.into(), &key))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+    assert_eq!(
+        app.clone()
+            .oneshot(
+                Request::builder()
+                    .uri("/v1/connections")
+                    .body(Body::empty())
+                    .unwrap()
+            )
+            .await
+            .unwrap()
+            .status(),
+        StatusCode::UNAUTHORIZED
+    );
+    for (key, users, connections, needs_reauth) in [(&key, 2, 3, 1), (&other_key, 1, 1, 0)] {
+        let response = app
+            .clone()
+            .oneshot(get("/v1/connections/summary".into(), key))
+            .await
+            .unwrap();
+        let summary: serde_json::Value =
+            serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes())
+                .unwrap();
+        assert_eq!(summary["users"], users);
+        assert_eq!(summary["connections"], connections);
+        assert_eq!(summary["needsReauth"], needs_reauth);
+        let response = app
+            .clone()
+            .oneshot(get("/v1/connections".into(), key))
+            .await
+            .unwrap();
+        let page: serde_json::Value =
+            serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes())
+                .unwrap();
+        assert_eq!(page["items"].as_array().unwrap().len(), connections);
+    }
+    let response = app
+        .clone()
+        .oneshot(get("/v1/connections/summary".into(), &key))
+        .await
+        .unwrap();
+    let summary: serde_json::Value =
+        serde_json::from_slice(&response.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(summary["apps"].as_array().unwrap().len(), 2);
+    assert_eq!(
+        summary["apps"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|app| app["appId"] == "notion")
+            .unwrap()["active"],
+        2
+    );
+    sqlx::query("UPDATE connections SET created_at = '2026-10-20T09:00:00Z' WHERE customer_id = $1 AND external_user_id = 'new-user' AND app_id = 'linear'")
+        .bind(customer_id).execute(database.pool()).await.unwrap();
+    let first = app
+        .clone()
+        .oneshot(get("/v1/users?limit=1".into(), &key))
+        .await
+        .unwrap();
+    assert_eq!(first.status(), StatusCode::OK);
+    let first: serde_json::Value =
+        serde_json::from_slice(&first.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(first["items"].as_array().unwrap().len(), 1);
+    assert_eq!(first["items"][0]["externalUserId"], "old-user");
+    let cursor = first["nextCursor"].as_str().unwrap();
+    let mut url = url::Url::parse("http://localhost/v1/users").unwrap();
+    url.query_pairs_mut()
+        .append_pair("limit", "1")
+        .append_pair("cursor", cursor);
+    let second = app
+        .clone()
+        .oneshot(get(
+            format!("{}?{}", url.path(), url.query().unwrap()),
+            &key,
+        ))
+        .await
+        .unwrap();
+    let second: serde_json::Value =
+        serde_json::from_slice(&second.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(second["items"][0]["externalUserId"], "new-user");
+    assert_eq!(
+        second["items"][0]["connections"].as_array().unwrap().len(),
+        2
+    );
+    assert_eq!(second["items"][0]["connections"][0]["appId"], "linear");
+    assert_eq!(second["items"][0]["connections"][1]["appId"], "notion");
+    assert_eq!(
+        second["items"][0]["firstConnectedAt"],
+        "2026-10-20T09:00:00Z"
+    );
+    assert!(second["nextCursor"].is_null());
+    for secret in [
+        "ciphertext",
+        "encrypted",
+        "private",
+        "refreshToken",
+        "\"accessToken\"",
+    ] {
+        assert!(!second.to_string().contains(secret), "leaked {secret}");
+    }
+    let filtered = app
+        .clone()
+        .oneshot(get(
+            "/v1/users?app_id=linear&status=needs_reauth".into(),
+            &key,
+        ))
+        .await
+        .unwrap();
+    let filtered: serde_json::Value =
+        serde_json::from_slice(&filtered.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(filtered["items"].as_array().unwrap().len(), 1);
+    assert_eq!(
+        filtered["items"][0]["connections"]
+            .as_array()
+            .unwrap()
+            .len(),
+        2
+    );
+    for path in [
+        "/v1/users?cursor=bad",
+        "/v1/users?limit=0",
+        "/v1/users?limit=501",
+        "/v1/users?status=bad",
+        "/v1/users?app_id=-bad",
+    ] {
+        assert_eq!(
+            app.clone()
+                .oneshot(get(path.into(), &key))
+                .await
+                .unwrap()
+                .status(),
+            StatusCode::BAD_REQUEST
+        );
+    }
+    let other = app
+        .clone()
+        .oneshot(get("/v1/users".into(), &other_key))
+        .await
+        .unwrap();
+    let other: serde_json::Value =
+        serde_json::from_slice(&other.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(other["items"].as_array().unwrap().len(), 1);
+    assert_eq!(other["items"][0]["externalUserId"], "other-user");
+    sqlx::query("INSERT INTO connections (id, customer_id, external_user_id, app_id, status, scopes, created_at) VALUES ($1, $2, 'z-user', 'linear', 'active', ARRAY[]::text[], '2026-10-29T09:00:00Z')")
+        .bind(uuid::Uuid::now_v7()).bind(customer_id).execute(database.pool()).await.unwrap();
+    let tied = app
+        .clone()
+        .oneshot(get("/v1/users?limit=1".into(), &key))
+        .await
+        .unwrap();
+    let tied: serde_json::Value =
+        serde_json::from_slice(&tied.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(tied["items"][0]["externalUserId"], "z-user");
+    let mut tie_url = url::Url::parse("http://localhost/v1/users").unwrap();
+    tie_url
+        .query_pairs_mut()
+        .append_pair("limit", "1")
+        .append_pair("cursor", tied["nextCursor"].as_str().unwrap());
+    let after_tie = app
+        .clone()
+        .oneshot(get(
+            format!("{}?{}", tie_url.path(), tie_url.query().unwrap()),
+            &key,
+        ))
+        .await
+        .unwrap();
+    let after_tie: serde_json::Value =
+        serde_json::from_slice(&after_tie.into_body().collect().await.unwrap().to_bytes()).unwrap();
+    assert_eq!(after_tie["items"][0]["externalUserId"], "old-user");
+    assert_eq!(
+        app.oneshot(
+            Request::builder()
+                .uri("/v1/users")
+                .body(Body::empty())
+                .unwrap()
+        )
+        .await
+        .unwrap()
+        .status(),
+        StatusCode::UNAUTHORIZED
+    );
 }
 
 #[tokio::test]

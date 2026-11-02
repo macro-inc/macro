@@ -2,7 +2,7 @@
 
 Last updated 2026-10-31 by Claude. Slice 1 is deployed and proven end to end
 on dev: `https://connect-dev.macro.com`, demo at
-`https://connect-dev.macro.com/demo`. Target: Macro's own users off Pipedream
+`https://connect-dev.macro.com/demo`, dashboard at `/demo/dashboard`. Target: Macro's own users off Pipedream
 for catalog apps by 2026-11-06 ([plan](docs/plan.md#week-one)).
 
 ## Human queue
@@ -13,6 +13,9 @@ Eric. Each item is ready for one sitting; agents prepare the rest.
       Macro's deployed services).
 - [ ] **Review the demo PR** (stacked on #9231): the demo app, its optional
       infra, and the CDP driver.
+- [ ] **Review the dashboard PR #9272** (stacked on the demo PR):
+      `/v1/connections`, `/v1/users`, `/v1/connections/summary`, and
+      `/demo/dashboard`.
 - [ ] **Company facts every vendor form asks for** (unblocks Zoom, Xero,
       Figma, Vercel, Box, Discord): legal company name; contact name, title,
       and email; Connect's production host and OAuth callback (proposed:
@@ -66,6 +69,8 @@ expires, the gateway must refresh it; unit-tested, not yet seen live). Then
   its tools (70, 68, 1, 12) and answered a read tool call.
   [T019](tasks/T019-demo-app.md) demo deployed at `/demo`: connect, list
   tools, and call a tool from the browser. `cdp.ts` drives the browser.
+  [T020](tasks/T020-users-dashboard.md) user and connection listings plus
+  `/demo/dashboard`, deployed and checked in the browser.
 
 - 2026-10-30: [T014](tasks/T014-deny-wrappers.md), [T015](tasks/T015-test-databases.md)
   CI fixes; [T016](tasks/T016-independent-hosting.md) Connect hosted

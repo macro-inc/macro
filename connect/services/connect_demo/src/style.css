@@ -1,6 +1,8 @@
 :root { color-scheme: light; font-family: system-ui, sans-serif; background: #f7f7f6; color: #242424; }
 body { max-width: 980px; margin: 2rem auto; padding: 0 1rem; }
 h1 { font-size: 2rem; margin-bottom: .3rem; }
+nav { display: flex; gap: 1rem; margin: .5rem 0 1.5rem; }
+nav a { color: inherit; }
 p { line-height: 1.45; }
 .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 1rem; }
 .card, .panel { background: white; border: 1px solid #dededb; border-radius: 12px; padding: 1rem; }
@@ -14,3 +16,25 @@ pre { overflow: auto; white-space: pre-wrap; overflow-wrap: anywhere; padding: 1
 .error { color: #a22; }
 #workspace { margin-top: 1.5rem; }
 #workspace .panel { margin: .75rem 0; }
+.tiles { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .75rem; }
+.tiles .card { display: flex; flex-direction: column; gap: .3rem; }
+.tiles strong { font-size: 1.8rem; }
+.tiles span { color: #555; }
+table { width: 100%; border-collapse: collapse; background: white; margin-bottom: 1.5rem; }
+th, td { padding: .7rem; border-bottom: 1px solid #dededb; text-align: left; vertical-align: top; }
+.app-icon { width: 24px; height: 24px; vertical-align: middle; margin-right: .5rem; }
+.filters { display: flex; flex-wrap: wrap; align-items: end; gap: .7rem; margin-bottom: 1rem; }
+.filters label { display: flex; flex-direction: column; gap: .25rem; }
+.filters select { padding: .4rem; font: inherit; max-width: 100%; }
+.status-badge { display: inline-block; margin: .1rem; padding: .2rem .4rem; border-radius: 5px; background: #f1f1ef; font-size: .8rem; }
+@media (max-width: 600px) {
+  body { margin: 1rem auto; }
+  .tiles { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: .35rem; }
+  .tiles .card { padding: .6rem; }
+  .tiles strong { font-size: 1.3rem; }
+  table, tbody, tr, td { display: block; }
+  thead { display: none; }
+  tr { border: 1px solid #dededb; border-radius: 8px; margin: .5rem 0; padding: .35rem; background: white; }
+  td { display: flex; gap: .5rem; justify-content: space-between; overflow-wrap: anywhere; border: 0; padding: .3rem; }
+  td::before { content: attr(data-label); color: #555; flex: 0 0 35%; }
+}
