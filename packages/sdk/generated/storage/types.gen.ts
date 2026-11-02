@@ -1217,6 +1217,11 @@ export type Awareness = {
  */
 export type AwarenessRelay = {
     /**
+     * Whether the viewer's grant lets them edit; a viewer who cannot is
+     * shown as viewing.
+     */
+    canEdit: boolean;
+    /**
      * The database the viewer is in.
      */
     databaseId: string;

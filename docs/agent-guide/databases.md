@@ -780,6 +780,13 @@ Database awareness identifies each mounted client with a random peer ID while th
 server supplies its authenticated user. Open the same database in two tabs signed
 in as the same user: each should show the other tab's selection and name. Moving
 or leaving one peer must not overwrite or remove another peer's selection.
+Another viewer's selection is an outline in their color laid over the cells, and
+their name sits above the selection's top-right corner, over the sticky header
+while that edge is in view. Neither ever changes a row's or cell's size. Anyone
+who can view the database shares and sees presence: a view-only viewer's label
+shows an eye (`Lee is viewing`), and the server never relays them as editing.
+Sign in as an editor and a viewer to check both directions; the viewer still
+cannot change cells.
 Refresh failures emit a `database.rows.read_refresh` span with the database ID,
 table ID, and failure kind, plus a `database rows could not be refreshed` log.
 

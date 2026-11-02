@@ -21489,8 +21489,12 @@
       "AwarenessRelay": {
         "type": "object",
         "description": "The [`AWARENESS_MESSAGE_TYPE`] payload: one viewer's awareness, stamped\nwhen the server relayed it so receivers can drop older relays.",
-        "required": ["databaseId", "userId", "state", "relayedAt"],
+        "required": ["databaseId", "userId", "canEdit", "state", "relayedAt"],
         "properties": {
+          "canEdit": {
+            "type": "boolean",
+            "description": "Whether the viewer's grant lets them edit; a viewer who cannot is\nshown as viewing."
+          },
           "databaseId": {
             "type": "string",
             "format": "uuid",
