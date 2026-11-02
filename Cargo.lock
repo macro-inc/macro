@@ -920,6 +920,7 @@ dependencies = [
  "document_sub_type",
  "entity_access",
  "initiative",
+ "jev",
  "lexical_client",
  "macro_db_migrator",
  "macro_event_broker",
@@ -967,6 +968,7 @@ dependencies = [
  "entity_registry",
  "entity_registry_db_utils",
  "initiative",
+ "jev",
  "kafka_util",
  "lexical_client",
  "macro_config",
@@ -2172,6 +2174,7 @@ dependencies = [
  "entity_access",
  "entity_registry",
  "favorites",
+ "feature_flags",
  "foreign_entity",
  "fusionauth",
  "futures",
@@ -2239,6 +2242,7 @@ dependencies = [
  "sqlx",
  "sqs_client",
  "strum 0.27.2",
+ "system_status",
  "teams",
  "thiserror 2.0.18",
  "time",
@@ -5361,6 +5365,7 @@ dependencies = [
  "messages",
  "model-error-response",
  "models_databases",
+ "models_pagination",
  "models_permissions",
  "models_properties",
  "properties",
@@ -7234,6 +7239,7 @@ dependencies = [
  "models_email",
  "models_pagination",
  "non_empty",
+ "rand 0.9.4",
  "recursion",
  "redis",
  "reqwest 0.13.4",
@@ -9112,6 +9118,7 @@ dependencies = [
  "async-graphql",
  "axum",
  "axum-extra",
+ "chrono",
  "filter_ast",
  "item_filters",
  "macro_authorization",
@@ -13315,7 +13322,10 @@ name = "models_grouping"
 version = "0.1.0"
 dependencies = [
  "chrono",
+ "models_pagination",
+ "models_properties",
  "serde",
+ "utoipa",
  "uuid",
  "workspace-hack",
 ]
@@ -15721,7 +15731,9 @@ dependencies = [
  "document_sub_type",
  "entity_access",
  "entity_access_db_utils",
+ "filter_ast",
  "futures",
+ "item_filters",
  "macro_authorization",
  "macro_db_migrator",
  "macro_event_broker",
@@ -15732,6 +15744,7 @@ dependencies = [
  "model-entity",
  "model_notifications",
  "model_owner",
+ "models_pagination",
  "models_permissions",
  "models_properties",
  "notification",
@@ -19808,6 +19821,33 @@ name = "system_skills"
 version = "0.1.0"
 dependencies = [
  "prompt",
+ "uuid",
+ "workspace-hack",
+]
+
+[[package]]
+name = "system_status"
+version = "0.1.0"
+dependencies = [
+ "axum",
+ "chrono",
+ "connection_gateway_client",
+ "http-body-util",
+ "macro_authorization",
+ "macro_db_migrator",
+ "macro_user_id",
+ "macro_uuid",
+ "model-error-response",
+ "model_user",
+ "rootcause",
+ "serde",
+ "serde_json",
+ "sqlx",
+ "thiserror 2.0.18",
+ "tokio",
+ "tower 0.5.3",
+ "tracing",
+ "utoipa",
  "uuid",
  "workspace-hack",
 ]

@@ -70,7 +70,10 @@ once 150ms pass without input or scrolling and `scrollTop` has not moved in that
 the adjustment is removed and committed to the DOM offset in the same task. A busy
 main thread can delay scroll events beyond 150ms while momentum continues, so the
 timer alone is not proof that scrolling stopped.
-The sizer retains its logical height and clips shifted overflow during this period.
+The sizer's height excludes the adjustment during this period, so its end moves with
+the shifted rows: native scrolling stops at the latest message instead of continuing
+into blank space below it (or stopping short of it), and the distance to the bottom
+compares native positions.
 Scroll boundaries follow the same rule: momentum bounces there, and a finger can hold
 the list against an edge. Explicit message, reply, latest, and pinned viewport/inset
 navigation flush the adjustment before computing targets.

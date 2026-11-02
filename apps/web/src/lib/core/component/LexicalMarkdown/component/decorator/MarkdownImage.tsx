@@ -288,7 +288,9 @@ export function MarkdownImage(props: ImageDecoratorProps) {
           state() === 'error' && 'pattern-edge-muted pattern-diagonal-8',
           state() === 'error' && !effectiveDims()[0] && 'min-h-44',
           // If there are no constrained dimensions, center the image
-          !props.constrainedWidth && !props.constrainedHeight && 'mx-auto'
+          !props.constrainedWidth && !props.constrainedHeight && 'mx-auto',
+          // Under a list item, sit at the item's text like Notion
+          'in-[li]:mx-0 in-[li]:my-2'
         )}
         style={{
           width: effectiveDims()[0] ? '100%' : undefined,
