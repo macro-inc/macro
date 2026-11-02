@@ -117,6 +117,7 @@ impl SoupService for RecordingSoupService {
             .map(|item| SoupProjectionHydration {
                 item,
                 document_server_facts: None,
+                sort_key: None,
             })
             .collect())
     }

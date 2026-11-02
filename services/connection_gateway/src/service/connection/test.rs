@@ -79,7 +79,7 @@ async fn a_connection_with_capacity_takes_the_message() {
         },
     );
 
-    manager
+    let outcome = manager
         .send_message(
             "connection",
             Message::new("test".to_owned(), "first".to_owned()),
@@ -87,6 +87,7 @@ async fn a_connection_with_capacity_takes_the_message() {
         .await
         .unwrap();
 
+    assert_eq!(outcome, SendOutcome::Queued);
     assert!(receiver.recv().await.is_some(), "the message must arrive");
     assert!(
         manager.connections.get("connection").is_some(),
@@ -131,7 +132,11 @@ async fn a_saturated_connection_is_dropped_rather_than_waited_on() {
         std::time::Duration::ZERO,
         "a publisher must never wait on a consumer"
     );
-    assert!(result.is_err(), "a full queue must refuse the message");
+    assert_eq!(
+        result.unwrap(),
+        SendOutcome::Dropped,
+        "a full queue must refuse the message without failing the send"
+    );
     assert!(
         manager.connections.get("connection").is_none(),
         "the saturated connection must be dropped"

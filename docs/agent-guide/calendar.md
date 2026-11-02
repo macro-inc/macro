@@ -164,6 +164,7 @@ If metadata fails, events remain usable with the default calendar presentation.
 Provider backfill shows a persistent `Syncing your calendar…` banner above the
 grid, explaining that events will appear automatically and Macro remains usable.
 The banner stays visible as partial results arrive and disappears when sync finishes.
+A routine sync of an already imported account never shows it.
 Errors retain the separate retry state. Verify delayed occurrence
 responses: switch Month/Week/Day rapidly and navigate without blanking the grid.
 Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Retry.
@@ -277,7 +278,8 @@ the flag request gets no answer, for example when a browser blocks it.
 
 Calendar connections live in **Settings → Calendar** (`/app/settings/calendar`).
 Connected calendars offers Connect account (pick Gmail or Outlook / Microsoft 365,
-then consent), Connect calendar for accounts missing calendar permission (consent
+then consent; Outlook is offered only to accounts with the `enable-outlook` flag,
+and without it Connect account goes straight to Google), Connect calendar for accounts missing calendar permission (consent
 again for that account at its own provider with its address preselected, as
 Settings → Email's Enable calendar does), and Disconnect with confirmation. When
 the only linked account lacks calendar permission, the Calendar accounts row
@@ -882,12 +884,16 @@ says `You've asked to join this event` and refreshes to `Requested` or `Invited`
 notification (Settings → Notifications → Calendar → Requests to join), which Home lists as
 `<requester> asked to join <event>` with a person-plus glyph, like a comment row. It opens the event,
 whose details list each request with `Add as guest` and `Decline` on desktop and in the phone
-drawer. Adding writes the guest through the same invite path as `Add guests`, so Google or
+drawer. A new request appears in details already open, for the owner and delegates of the sharer's
+inbox, without a reload; a repeated or refused ask changes nothing there. Adding writes the guest through the same invite path as `Add guests`, so Google or
 Outlook sends the invitation and the mention then opens the viewer's own copy. Declining sends
 the requester nothing, but their card then reads `Declined` and `The person who shared this event
 declined your request to join.` with no `Ask to join`, and offers `Add to calendar` again. A
 declined request stands: the server refuses another ask with 409 `request_declined`, so the
-sharer is asked only once. The notification goes when the request is answered, by whoever answers
+sharer is asked only once. An answer given anywhere else (a delegate, the API, another window)
+drops the request from an open list and updates the requester's open card, without a reload. A
+press on a row that had not caught up changes nothing and says so: `Already answered: <address> was
+invited` or `Already answered: this request was declined`. The notification goes when the request is answered, by whoever answers
 it and however they do, leaving the notifications of other requests on the event, when the
 requester's account is deleted, and when the event goes (deleted in Macro, deleted or cancelled in
 Google or Outlook, its calendar or inbox removed); deleting one occurrence of a series leaves it,

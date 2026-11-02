@@ -391,6 +391,7 @@ where
             .map(|thread| SoupProjectionHydration {
                 item: SoupItem::EmailThread(thread),
                 document_server_facts: None,
+                sort_key: None,
             })
             .chain(receipted)
             .chain(listed);

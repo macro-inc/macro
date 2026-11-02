@@ -111,6 +111,7 @@ fn a_task_joining_a_project_decodes_as_a_project_addition() {
         actor_user_id: Some(user.clone()),
         actor: None,
         on_behalf_of: None,
+        source: None,
         value: Some(PropertyValue::EntityRef(vec![EntityReference {
             entity_id: project.to_string(),
             entity_type: EntityType::Initiative,

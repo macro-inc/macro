@@ -1,7 +1,7 @@
 use crate::{
     domain::{
         models::{
-            AdvancedSortParams, CrmPropertyEdge, GroupedSortRequest, NotifiedEntity,
+            AdvancedSortParams, CrmPropertyEdge, DynamicSort, GroupedSortRequest, NotifiedEntity,
             NotifiedSoupRequest, SimpleSortQuery, SimpleSortRequest, SoupProjectionHydration,
             SoupPropertiesField, TouchedEntity, TouchedSoupRequest, WorkFeedCandidate,
             WorkFeedCandidateRequest, grouping::ItemGroupingInfo,
@@ -70,6 +70,18 @@ impl SoupRepo for PgSoupRepo {
         let sort = *req.cursor.sort_method();
         let limit = req.limit;
         let mut items = match req.cursor {
+            SimpleSortQuery::Property(cursor) => {
+                return expanded::dynamic::expanded_dynamic_cursor_soup_with_projection(
+                    &self.pool.0,
+                    ExpandedDynamicCursorArgs {
+                        user_id: req.user_id,
+                        limit: req.limit,
+                        cursor,
+                        exclude_frecency: false,
+                    },
+                )
+                .await;
+            }
             SimpleSortQuery::ItemsAndFrecencyFilter(query) => {
                 // Extract the EntityFilterAst from the tuple (Frecency, EntityFilterAst)
                 expanded::dynamic::expanded_dynamic_cursor_soup_with_projection(
@@ -77,7 +89,7 @@ impl SoupRepo for PgSoupRepo {
                     ExpandedDynamicCursorArgs {
                         user_id: req.user_id,
                         limit: req.limit,
-                        cursor: query.map_filter(|(_, ast)| ast),
+                        cursor: DynamicSort::from_timestamp_query(query.map_filter(|(_, ast)| ast)),
                         exclude_frecency: true,
                     },
                 )
@@ -89,7 +101,7 @@ impl SoupRepo for PgSoupRepo {
                     ExpandedDynamicCursorArgs {
                         user_id: req.user_id,
                         limit: req.limit,
-                        cursor: ast,
+                        cursor: DynamicSort::from_timestamp_query(ast),
                         exclude_frecency: false,
                     },
                 )
@@ -110,7 +122,9 @@ impl SoupRepo for PgSoupRepo {
                     ExpandedDynamicCursorArgs {
                         user_id: req.user_id,
                         limit: req.limit,
-                        cursor: f.map_filter(|_| EntityFilterAst::default()),
+                        cursor: DynamicSort::from_timestamp_query(
+                            f.map_filter(|_| EntityFilterAst::default()),
+                        ),
                         exclude_frecency: true,
                     },
                 )
@@ -122,7 +136,9 @@ impl SoupRepo for PgSoupRepo {
                     ExpandedDynamicCursorArgs {
                         user_id: req.user_id,
                         limit: req.limit,
-                        cursor: f.map_filter(|_| EntityFilterAst::default()),
+                        cursor: DynamicSort::from_timestamp_query(
+                            f.map_filter(|_| EntityFilterAst::default()),
+                        ),
                         exclude_frecency: false,
                     },
                 )
@@ -136,6 +152,7 @@ impl SoupRepo for PgSoupRepo {
                 .map(|item| SoupProjectionHydration {
                     item,
                     document_server_facts: None,
+                    sort_key: None,
                 }),
         );
         items.extend(
@@ -145,6 +162,7 @@ impl SoupRepo for PgSoupRepo {
                 .map(|item| SoupProjectionHydration {
                     item,
                     document_server_facts: None,
+                    sort_key: None,
                 }),
         );
         sort_and_truncate_hydrations(&mut items, sort, limit);
@@ -159,6 +177,7 @@ impl SoupRepo for PgSoupRepo {
         let sort = *req.cursor.sort_method();
         let limit = req.limit;
         let mut items = match req.cursor {
+            SimpleSortQuery::Property(_) => return self.expanded_generic_cursor_soup(req).await,
             SimpleSortQuery::ItemsFilter(_) => not_implemented(req).await?,
             SimpleSortQuery::ItemsAndFrecencyFilter(_) => not_implemented(req).await?,
             // Same substitution as the expanded path above; this arm has
@@ -169,7 +188,9 @@ impl SoupRepo for PgSoupRepo {
                     ExpandedDynamicCursorArgs {
                         user_id: req.user_id,
                         limit: req.limit,
-                        cursor: f.map_filter(|_| EntityFilterAst::default()),
+                        cursor: DynamicSort::from_timestamp_query(
+                            f.map_filter(|_| EntityFilterAst::default()),
+                        ),
                         exclude_frecency: true,
                     },
                 )
@@ -224,6 +245,7 @@ impl SoupRepo for PgSoupRepo {
                 .map(|item| SoupProjectionHydration {
                     item,
                     document_server_facts: None,
+                    sort_key: None,
                 }),
         );
         items.extend(
@@ -233,6 +255,7 @@ impl SoupRepo for PgSoupRepo {
                 .map(|item| SoupProjectionHydration {
                     item,
                     document_server_facts: None,
+                    sort_key: None,
                 }),
         );
         items.extend(
@@ -242,6 +265,7 @@ impl SoupRepo for PgSoupRepo {
                 .map(|item| SoupProjectionHydration {
                     item,
                     document_server_facts: None,
+                    sort_key: None,
                 }),
         );
         items.extend(
@@ -251,6 +275,7 @@ impl SoupRepo for PgSoupRepo {
                 .map(|item| SoupProjectionHydration {
                     item,
                     document_server_facts: None,
+                    sort_key: None,
                 }),
         );
         Ok(items)
@@ -279,6 +304,7 @@ impl SoupRepo for PgSoupRepo {
                 .map(|item| SoupProjectionHydration {
                     item,
                     document_server_facts: None,
+                    sort_key: None,
                 }),
         );
         Ok(items)
@@ -599,6 +625,7 @@ macro_rules! map_soup_projection_hydration {
                 $crate::domain::models::SoupProjectionHydration {
                     item,
                     document_server_facts,
+                    sort_key: None,
                 }
             })
         }

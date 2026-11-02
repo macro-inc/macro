@@ -175,6 +175,7 @@ impl SoupService for RecordingSoupService {
                 Some(SoupProjectionHydration {
                     item,
                     document_server_facts: None,
+                    sort_key: None,
                 })
             })
             .collect())

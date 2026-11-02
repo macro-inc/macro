@@ -567,6 +567,57 @@ describe('working-copy concurrency fences', () => {
       'no longer active'
     );
   });
+  it('takes over another account at the same epoch only when allowed, ending its session', async () => {
+    const store = open();
+    const previous = await store.activate('other-owner', 'epoch');
+    await store.save(previous, snapshot());
+    await expect(store.activate('owner', 'epoch')).rejects.toThrow(
+      'no longer active'
+    );
+    const owner = await store.activate(
+      'owner',
+      'epoch',
+      () => true,
+      () => true
+    );
+    expect(owner).toMatchObject({
+      accountId: 'owner',
+      replaced: { epoch: 'epoch' },
+    });
+    expect(owner.epoch).not.toBe('epoch');
+    expect(await store.list(owner)).toEqual([]);
+    await expect(
+      store.save(previous, snapshot('Late edit', 1))
+    ).rejects.toThrow('no longer active');
+    await expect(
+      store.activate(
+        'other-owner',
+        'epoch',
+        () => true,
+        () => true
+      )
+    ).rejects.toThrow('no longer active');
+  });
+  it('returns a takeover that landed before the page saw an abort', async () => {
+    const store = open();
+    await store.activate('other-owner', 'epoch');
+    landBeforeAbort();
+    const owner = await store.activate(
+      'owner',
+      'epoch',
+      () => true,
+      () => true
+    );
+    expect(owner).toMatchObject({ replaced: { epoch: 'epoch' } });
+    expect(
+      await store.activate(
+        'owner',
+        'epoch',
+        () => true,
+        () => true
+      )
+    ).toEqual(owner);
+  });
   it('merges upload receipts committed after a snapshot was captured', async () => {
     const store = open();
     const owner = await store.activate('owner');

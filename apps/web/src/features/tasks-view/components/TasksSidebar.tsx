@@ -9,6 +9,7 @@ import { ConnectorImportSidebar } from '@app/features/connector-import/connector
 import { FavoriteContextMenu } from '@app/features/favorites/FavoriteContextMenu';
 import { FavoriteIcon } from '@app/features/favorites/FavoriteIcon';
 import { t } from '@app/lib/i18n';
+import { useParams } from '@app/lib/split-router';
 import {
   favoriteSplitContent,
   useFavoriteDisplayName,
@@ -157,9 +158,11 @@ export function TasksSidebar() {
     setState,
     projectsEnabled,
     setTab,
+    selectedTask,
     isSidebarSectionOpen,
     setSidebarSectionOpen,
   } = useTasksView();
+  const params = useParams<{ projectId?: string }>();
 
   useViewTabHotkeys({
     scopeId: panel.splitHotkeyScope,
@@ -170,6 +173,10 @@ export function TasksSidebar() {
       ),
     activeId: () => state.tab,
     setActiveId: (id) => setTab(id as TasksTab),
+    // Tab cycles these tabs over a list and is focus order over an open project
+    // or task. A pane's own override can't hold this: the sidebar remounts after
+    // it whenever the view crosses its layout breakpoint.
+    shouldHandleSequentialKeyEvent: () => !params.projectId && !selectedTask(),
   });
 
   return (

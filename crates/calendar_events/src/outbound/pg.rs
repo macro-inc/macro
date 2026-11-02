@@ -25,6 +25,7 @@ use uuid::Uuid;
 use crate::domain::{
     changes::CalendarChangeOp,
     ics::{CalendarEventExport, content_without_macro_call},
+    labels::EventCopy,
     models::{
         ActorInboxes, AlignedGuestCopy, AppliedGoogleGrant, AttendeeResponseStatus,
         CALENDAR_SYNC_FAILURE_BADGE_THRESHOLD, CalendarAttendee, CalendarBackfillClaim,
@@ -1826,7 +1827,8 @@ impl CalendarRepository for PgCalendarRepository {
         if !sync.cancelled_provider_event_ids.is_empty() {
             // A cancelled recurring master retires its expanded instances via
             // provider_recurring_event_id, matching Google's tombstone shape.
-            let affected_event_ids = sqlx::query_scalar!(
+            let removed = sqlx::query_as!(
+                RemovedSources,
                 r#"
                 WITH deleted_sources AS (
                     DELETE FROM calendar_event_sources source
@@ -1837,10 +1839,13 @@ impl CalendarRepository for PgCalendarRepository {
                             source.provider_event_id = ANY($3::text[])
                             OR source.provider_recurring_event_id = ANY($3::text[])
                       )
-                    RETURNING source.event_id
+                    RETURNING source.event_id, source.event_type
                 )
-                SELECT DISTINCT event_id AS "event_id!"
+                SELECT
+                    event_id AS "event_id!",
+                    bool_or(event_type = 'out_of_office') AS "out_of_office!"
                 FROM deleted_sources
+                GROUP BY event_id
                 "#,
                 account_id,
                 sync.calendar_id,
@@ -1849,20 +1854,15 @@ impl CalendarRepository for PgCalendarRepository {
             .fetch_all(&mut *tx)
             .await
             .map_err(report)?;
-            if !affected_event_ids.is_empty() {
+            if !removed.is_empty() {
                 source_access::invalidate_account_freshness(&mut tx, account_id).await?;
             }
-            for event_id in affected_event_ids {
-                if let Some(outcome) =
-                    restore_best_source_or_delete(&mut tx, &mut log, event_id).await?
-                {
-                    retired.push(outcome);
-                }
-            }
+            retired.extend(retire_removed_sources(&mut tx, &mut log, removed).await?);
         }
 
         if let Some(observed_provider_event_ids) = &sync.observed_provider_event_ids {
-            let affected_event_ids = sqlx::query_scalar!(
+            let removed = sqlx::query_as!(
+                RemovedSources,
                 r#"
                 WITH deleted_sources AS (
                     DELETE FROM calendar_event_sources source
@@ -1870,10 +1870,13 @@ impl CalendarRepository for PgCalendarRepository {
                       AND source.account_id = $1
                       AND source.calendar_id = $2
                       AND NOT (source.provider_event_id = ANY($3::text[]))
-                    RETURNING source.event_id
+                    RETURNING source.event_id, source.event_type
                 )
-                SELECT DISTINCT event_id AS "event_id!"
+                SELECT
+                    event_id AS "event_id!",
+                    bool_or(event_type = 'out_of_office') AS "out_of_office!"
                 FROM deleted_sources
+                GROUP BY event_id
                 "#,
                 account_id,
                 sync.calendar_id,
@@ -1882,16 +1885,10 @@ impl CalendarRepository for PgCalendarRepository {
             .fetch_all(&mut *tx)
             .await
             .map_err(report)?;
-            if !affected_event_ids.is_empty() {
+            if !removed.is_empty() {
                 source_access::invalidate_account_freshness(&mut tx, account_id).await?;
             }
-            for event_id in affected_event_ids {
-                if let Some(outcome) =
-                    restore_best_source_or_delete(&mut tx, &mut log, event_id).await?
-                {
-                    retired.push(outcome);
-                }
-            }
+            retired.extend(retire_removed_sources(&mut tx, &mut log, removed).await?);
         }
 
         let has_materialized_range = sync.materialized_range.is_some();
@@ -2161,7 +2158,8 @@ impl CalendarRepository for PgCalendarRepository {
         let mut tx = self.pool.begin().await.map_err(report)?;
         fence_google_mutation_tx(&mut tx, key, lease_token, Some(account_id)).await?;
 
-        let affected_event_ids = sqlx::query_scalar!(
+        let removed = sqlx::query_as!(
+            RemovedSources,
             r#"
             WITH deleted_sources AS (
                 DELETE FROM calendar_event_sources source
@@ -2171,10 +2169,13 @@ impl CalendarRepository for PgCalendarRepository {
                         source.calendar_id IS NULL
                         OR NOT (source.calendar_id = ANY($2::uuid[]))
                   )
-                RETURNING source.event_id
+                RETURNING source.event_id, source.event_type
             )
-            SELECT DISTINCT event_id AS "event_id!"
+            SELECT
+                event_id AS "event_id!",
+                bool_or(event_type = 'out_of_office') AS "out_of_office!"
             FROM deleted_sources
+            GROUP BY event_id
             "#,
             account_id,
             &calendar_ids,
@@ -2182,16 +2183,10 @@ impl CalendarRepository for PgCalendarRepository {
         .fetch_all(&mut *tx)
         .await
         .map_err(report)?;
-        if !affected_event_ids.is_empty() {
+        if !removed.is_empty() {
             source_access::invalidate_account_freshness(&mut tx, account_id).await?;
         }
-        for event_id in affected_event_ids {
-            if let Some(outcome) =
-                restore_best_source_or_delete(&mut tx, &mut log, event_id).await?
-            {
-                retired.push(outcome);
-            }
-        }
+        retired.extend(retire_removed_sources(&mut tx, &mut log, removed).await?);
 
         let flipped_calendars = sqlx::query!(
             r#"
@@ -2334,10 +2329,20 @@ impl CalendarRepository for PgCalendarRepository {
                 event_id: row.id,
                 owner_id: row.owner_id,
                 deleted: false,
+                team_ooo_changed: true,
             }
         }));
+        // One event can land here twice; either report can carry the hint.
+        let ooo_changed = retired
+            .iter()
+            .filter(|outcome| outcome.team_ooo_changed)
+            .map(|outcome| outcome.event_id)
+            .collect::<HashSet<_>>();
         let mut announced = HashSet::new();
-        retired.retain(|outcome| announced.insert(outcome.event_id));
+        retired.retain_mut(|outcome| {
+            outcome.team_ooo_changed = ooo_changed.contains(&outcome.event_id);
+            announced.insert(outcome.event_id)
+        });
 
         log.commit(tx).await?;
         Ok(retired)
@@ -2716,6 +2721,55 @@ impl CalendarRepository for PgCalendarRepository {
         Ok(rows.into_iter().map(visible_calendar).collect())
     }
 
+    #[tracing::instrument(skip(self, event_ids), fields(event_count = event_ids.len()), err)]
+    async fn event_copies(&self, event_ids: &[Uuid]) -> Result<Vec<EventCopy>, Report> {
+        let rows = sqlx::query!(
+            r#"
+            SELECT
+                event.id,
+                event.source_link_id,
+                event.status,
+                event.organizer_email,
+                event.is_read_only,
+                event.is_snapshot,
+                event.guests_can_modify,
+                event.guests_can_invite_others,
+                event.guests_can_see_other_guests
+            FROM calendar_events event
+            WHERE event.id = ANY($1)
+            "#,
+            event_ids,
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(report)?;
+        let mut attendees = fetch_attendees(&self.pool, event_ids).await?;
+        let mut source_contents = fetch_source_contents(&self.pool, event_ids).await?;
+        Ok(rows
+            .into_iter()
+            .map(|row| EventCopy {
+                event_id: row.id,
+                link_id: row.source_link_id,
+                status: event_status(&row.status),
+                organizer_email: row.organizer_email,
+                is_read_only: row.is_read_only,
+                is_snapshot: row.is_snapshot,
+                guest_policy: GuestPolicy {
+                    can_modify: row.guests_can_modify,
+                    can_invite_others: row.guests_can_invite_others,
+                    can_see_other_guests: row.guests_can_see_other_guests,
+                },
+                attendees: attendees.remove(&row.id).unwrap_or_default(),
+                calendar_ids: source_contents
+                    .remove(&row.id)
+                    .unwrap_or_default()
+                    .into_iter()
+                    .map(|source| source.calendar_id)
+                    .collect(),
+            })
+            .collect())
+    }
+
     #[tracing::instrument(skip(self, requester_id), err)]
     async fn owned_inboxes(&self, requester_id: &str) -> Result<Vec<OwnedInbox>, Report> {
         sqlx::query!(
@@ -2766,7 +2820,8 @@ impl CalendarRepository for PgCalendarRepository {
         let cancelled = [provider_event_id.to_string()];
         // A deleted recurring master retires its expanded instances via
         // provider_recurring_event_id, matching Google's tombstone shape.
-        let affected_event_ids = sqlx::query_scalar!(
+        let removed = sqlx::query_as!(
+            RemovedSources,
             r#"
             WITH deleted_sources AS (
                 DELETE FROM calendar_event_sources source
@@ -2777,10 +2832,13 @@ impl CalendarRepository for PgCalendarRepository {
                         source.provider_event_id = ANY($3::text[])
                         OR source.provider_recurring_event_id = ANY($3::text[])
                   )
-                RETURNING source.event_id
+                RETURNING source.event_id, source.event_type
             )
-            SELECT DISTINCT event_id AS "event_id!"
+            SELECT
+                event_id AS "event_id!",
+                bool_or(event_type = 'out_of_office') AS "out_of_office!"
             FROM deleted_sources
+            GROUP BY event_id
             "#,
             account_id,
             calendar_id,
@@ -2789,14 +2847,7 @@ impl CalendarRepository for PgCalendarRepository {
         .fetch_all(&mut *tx)
         .await
         .map_err(report)?;
-        let mut retired = Vec::new();
-        for event_id in affected_event_ids {
-            if let Some(outcome) =
-                restore_best_source_or_delete(&mut tx, &mut log, event_id).await?
-            {
-                retired.push(outcome);
-            }
-        }
+        let retired = retire_removed_sources(&mut tx, &mut log, removed).await?;
         log.commit(tx).await?;
         Ok(retired)
     }
@@ -3279,10 +3330,18 @@ impl CalendarBackfillRepository for PgCalendarRepository {
     ) -> Result<(), Report> {
         let mut tx = self.pool.begin().await.map_err(report)?;
         fence_google_mutation_tx(&mut tx, key, lease_token, None).await?;
+        // A ready, synced account has nothing a viewer should wait for, so the
+        // run leaves it ready, as on Outlook. That includes a re-grant that
+        // kept calendar access: its sync tokens survive. Every other state is
+        // still catching up: a first import, a retry, or a return from
+        // `disabled` or `reauth_required`.
         sqlx::query!(
             r#"
             UPDATE calendar_accounts
-            SET sync_status = 'syncing',
+            SET sync_status = CASE
+                    WHEN sync_status = 'ready' AND last_synced_at IS NOT NULL THEN 'ready'
+                    ELSE 'syncing'
+                END,
                 updated_at = now()
             WHERE email_link_id = $1
             "#,
@@ -4148,7 +4207,8 @@ async fn apply_canonical_projection(
 /// Rewrite an event from its next-best remaining source, or delete it when no
 /// source on a live calendar is left, reporting which happened.
 ///
-/// `None` means the row was already gone before this call.
+/// `None` means the row was already gone before this call. The report cannot
+/// tell what was removed, so it leaves the team hint uncertain.
 async fn restore_best_source_or_delete(
     tx: &mut Transaction<'_, Postgres>,
     log: &mut ChangeLogBatch,
@@ -4206,6 +4266,7 @@ async fn restore_best_source_or_delete(
             event_id,
             owner_id: identity.owner_id,
             deleted: true,
+            team_ooo_changed: true,
         }));
     };
 
@@ -4228,7 +4289,34 @@ async fn restore_best_source_or_delete(
         event_id,
         owner_id: identity.owner_id,
         deleted: false,
+        team_ooo_changed: true,
     }))
+}
+
+/// One event that lost sources, and whether any of them was out of office.
+struct RemovedSources {
+    event_id: Uuid,
+    out_of_office: bool,
+}
+
+/// Settles the fate of each event that lost sources. The team overlay reads
+/// sources by this same typed `event_type`, so only removing an out-of-office
+/// source can withdraw a row teammates hold.
+async fn retire_removed_sources(
+    tx: &mut Transaction<'_, Postgres>,
+    log: &mut ChangeLogBatch,
+    removed: Vec<RemovedSources>,
+) -> Result<Vec<RetiredCalendarEvent>, Report> {
+    let mut retired = Vec::new();
+    for source in removed {
+        if let Some(outcome) = restore_best_source_or_delete(tx, log, source.event_id).await? {
+            retired.push(RetiredCalendarEvent {
+                team_ooo_changed: source.out_of_office,
+                ..outcome
+            });
+        }
+    }
+    Ok(retired)
 }
 
 async fn replace_attendees(

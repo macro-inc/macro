@@ -52,6 +52,7 @@ import type { AppleLoginRequest } from './generated/schemas/appleLoginRequest';
 import type { CreatedTeamInviteLinkResponse } from './generated/schemas/createdTeamInviteLinkResponse';
 import type { CreateGtmInviteLinkRequest } from './generated/schemas/createGtmInviteLinkRequest';
 import type { CreateTeamRequest } from './generated/schemas/createTeamRequest';
+import type { CurrentSystemStatus } from './generated/schemas/currentSystemStatus';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
 import type { GenericSuccessResponse } from './generated/schemas/genericSuccessResponse';
 import type { GetLegacyUserPermissionsResponse } from './generated/schemas/getLegacyUserPermissionsResponse';
@@ -73,6 +74,9 @@ import type { ProfilePictures } from './generated/schemas/profilePictures';
 import type { PublicGtmInviteLink } from './generated/schemas/publicGtmInviteLink';
 import type { PutProfilePictureParams } from './generated/schemas/putProfilePictureParams';
 import type { PutUserNameQueryParams } from './generated/schemas/putUserNameQueryParams';
+import type { StatusUpdate } from './generated/schemas/statusUpdate';
+import type { SystemStatus } from './generated/schemas/systemStatus';
+import type { SystemStatusHistory } from './generated/schemas/systemStatusHistory';
 import type { Team } from './generated/schemas/team';
 import type { TeamInviteLinkResponse } from './generated/schemas/teamInviteLinkResponse';
 import type { TeamInviteLinkTeam } from './generated/schemas/teamInviteLinkTeam';
@@ -320,6 +324,16 @@ const githubErrorResponseHandler: ErrorResponseHandler<GithubReauthenticationErr
         return { code: 'GONE', message: 'Resource deleted' };
       case 500:
         return { code: 'SERVER_ERROR', message: 'Internal server error' };
+      // GitHub, Google, or the sign-in service is down or throttling. The
+      // body names which and says to retry later, in words for the user.
+      case 502:
+      case 503:
+        return {
+          code: 'HTTP_ERROR',
+          message:
+            (await readErrorMessage(response)) ??
+            `HTTP error! status: ${response.status}`,
+        };
       default:
         return {
           code: 'HTTP_ERROR',
@@ -769,6 +783,35 @@ export const authServiceClient = {
     ).map((result) => result.offer ?? null);
   },
 
+  /** Public: the status banner shows signed in or not. */
+  async getSystemStatus() {
+    return (
+      await authApiFetch<CurrentSystemStatus>('/system-status', {
+        method: 'GET',
+      })
+    ).map((status) => status);
+  },
+
+  /** Macro staff only; the server rejects everyone else. */
+  async setSystemStatus(status: SystemStatus) {
+    return (
+      await fetchWithAuth<StatusUpdate>(`${authHost}/system-status`, {
+        method: 'POST',
+        body: JSON.stringify(status),
+      })
+    ).map((update) => update);
+  },
+
+  /** Macro staff only. */
+  async listSystemStatusHistory() {
+    return (
+      await fetchWithAuth<SystemStatusHistory>(
+        `${authHost}/system-status/history`,
+        { method: 'GET' }
+      )
+    ).map((result) => result.updates);
+  },
+
   // Stripe HTTP methods (replacing RPC calls)
   async getTrialEligibility() {
     return await fetchWithAuth<TrialEligibility>(
@@ -1209,7 +1252,16 @@ export const authServiceClient = {
     return authServiceClient.initGithubLink(originalUrl);
   },
 
-  async sendMobileWelcomeEmail(email: string) {
+  async sendMobileWelcomeEmail(
+    email: string,
+    attribution?: Record<string, string>
+  ) {
+    const body: { email: string; attribution?: Record<string, string> } = {
+      email,
+    };
+    if (attribution && Object.keys(attribution).length > 0) {
+      body.attribution = attribution;
+    }
     return safeFetch<
       SendMobileWelcomeEmailResponse,
       'RATE_LIMITED' | 'INVALID_EMAIL'
@@ -1217,7 +1269,7 @@ export const authServiceClient = {
       `${authHost}/mobile-welcome-email`,
       {
         method: 'POST',
-        body: JSON.stringify({ email }),
+        body: JSON.stringify(body),
         credentials: 'include',
       },
       async (response) => {

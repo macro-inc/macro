@@ -200,6 +200,11 @@ const projectRef = z.object({
   name: z.string(),
 });
 
+const pullRequestChange = z.object({
+  url: z.string(),
+  github_login: z.string(),
+});
+
 const taskSnapshot = z.object({
   id: z.string().min(1),
   title: z.string(),
@@ -273,7 +278,11 @@ const routineEvent = z.discriminatedUnion('event', [
     name: z.string(),
   }),
   z.object({ event: z.literal('task_created'), task: taskSnapshot }),
-  z.object({ event: z.literal('task_status_changed'), task: taskSnapshot }),
+  z.object({
+    event: z.literal('task_status_changed'),
+    task: taskSnapshot,
+    pull_request: pullRequestChange.optional(),
+  }),
   z.object({ event: z.literal('task_priority_changed'), task: taskSnapshot }),
   z.object({ event: z.literal('task_property_changed'), task: taskSnapshot }),
   z.object({ event: z.literal('email_received'), email: emailSnapshot }),

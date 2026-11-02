@@ -62,6 +62,8 @@ export interface ComposeState {
 
   // Status
   disabled: Accessor<boolean>;
+  /** Discard can outlast editing; defaults to `disabled`. */
+  deleteDisabled?: Accessor<boolean>;
   primaryActionDisabled: Accessor<boolean>;
   isSending: Accessor<boolean>;
   isSavingDraft?: Accessor<boolean>;

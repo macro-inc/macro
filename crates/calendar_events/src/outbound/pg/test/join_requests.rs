@@ -1,6 +1,155 @@
 use super::*;
-use crate::domain::join_requests::{CalendarJoinRequest, CalendarJoinRequestStatus};
+use crate::domain::join_requests::{
+    CalendarJoinRequest, CalendarJoinRequestServiceImpl, CalendarJoinRequestStatus,
+};
+use crate::domain::ports::{
+    CalendarJoinRequestError, CalendarJoinRequestNotifier, CalendarJoinRequestService,
+    CalendarRefreshNotifier,
+};
 use sqlx::postgres::PgListener;
+use std::sync::{Arc, Mutex};
+
+struct NoNotification;
+
+impl CalendarJoinRequestNotifier for NoNotification {
+    async fn notify_join_request(&self, _: &str, _: &CalendarJoinRequest, _: &str) {}
+}
+
+/// Records each nudge with the requests its readers would refetch right then.
+#[derive(Clone)]
+struct ListReadingRefresh {
+    repo: PgCalendarRepository,
+    event_id: Uuid,
+    nudges: Arc<Mutex<Vec<(String, Uuid, usize)>>>,
+}
+
+impl CalendarRefreshNotifier for ListReadingRefresh {
+    async fn calendar_changed(&self, owner_id: &str, email_link_id: Uuid, _: bool) {
+        let listed = self
+            .repo
+            .list_pending_join_requests(self.event_id)
+            .await
+            .unwrap()
+            .len();
+        self.nudges
+            .lock()
+            .unwrap()
+            .push((owner_id.to_string(), email_link_id, listed));
+    }
+
+    async fn join_request_answered(&self, _: &str, _: Uuid) {
+        unreachable!("asking answers nothing");
+    }
+}
+
+/// The sharer's copy of the meeting on `provider`'s calendar: no guests, so
+/// they may add one.
+fn sharer_copy(link_id: Uuid, provider: (Uuid, Uuid)) -> CalendarEventUpsert {
+    let mut copy = timed_upsert(
+        "macro|ask-sharer@example.com",
+        link_id,
+        provider,
+        "ask@example.com",
+        "Offsite",
+        1,
+    );
+    copy.event.is_read_only = false;
+    copy.event.attendees.clear();
+    copy
+}
+
+async fn delegate(pool: &PgPool, primary: &str, child: &str, link_id: Uuid) {
+    sqlx::query!(
+        "INSERT INTO macro_user_links (primary_macro_id, child_macro_id, link_id) VALUES ($1, $2, $3)",
+        primary,
+        child,
+        link_id,
+    )
+    .execute(pool)
+    .await
+    .unwrap();
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_new_request_reaches_the_inbox_holding_the_shared_copy_once(pool: PgPool) {
+    let sharer_id = "macro|ask-sharer@example.com";
+    let member_id = "macro|ask-member@example.com";
+    let delegate_id = "macro|ask-delegate@example.com";
+    let mailbox_id = "macro|ask-mailbox@example.com";
+    let other_delegate_id = "macro|ask-other-delegate@example.com";
+    for user in [
+        sharer_id,
+        member_id,
+        delegate_id,
+        mailbox_id,
+        other_delegate_id,
+    ] {
+        insert_user(&pool, user).await;
+    }
+    let repo = PgCalendarRepository::new(pool.clone());
+
+    // Two calendars of one inbox hold the meeting: one entity, one inbox.
+    let shared_link = insert_link(&pool, sharer_id).await;
+    let primary = provider_ids(&repo, shared_link).await;
+    let secondary = insert_shared_calendar(&repo, primary.0, "owner", &[]).await;
+    let event_id = repo
+        .upsert_event_fixture(sharer_copy(shared_link, primary))
+        .await
+        .unwrap();
+    let on_secondary = repo
+        .upsert_event_fixture(sharer_copy(shared_link, (primary.0, secondary)))
+        .await
+        .unwrap();
+    assert_eq!(on_secondary, event_id);
+    delegate(&pool, delegate_id, mailbox_id, shared_link).await;
+
+    // Their other inbox holds the same meeting as its own entity and list.
+    let other_link = insert_link(&pool, sharer_id).await;
+    let other_provider = provider_ids(&repo, other_link).await;
+    let other_copy = repo
+        .upsert_event_fixture(sharer_copy(other_link, other_provider))
+        .await
+        .unwrap();
+    assert_ne!(other_copy, event_id);
+    delegate(&pool, other_delegate_id, mailbox_id, other_link).await;
+
+    let channel_id = insert_channel(&pool, sharer_id, &[sharer_id, member_id]).await;
+    share_with_channel(&pool, event_id, channel_id).await;
+
+    let refresh = ListReadingRefresh {
+        repo: repo.clone(),
+        event_id,
+        nudges: Arc::default(),
+    };
+    let service = CalendarJoinRequestServiceImpl::new(repo, NoNotification, refresh.clone());
+
+    let request = service.request_to_join(member_id, event_id).await.unwrap();
+
+    assert_eq!(
+        refresh.nudges.lock().unwrap().as_slice(),
+        [(sharer_id.to_string(), shared_link, 1)]
+    );
+    for reader in [sharer_id, delegate_id] {
+        assert_eq!(
+            service.list_join_requests(reader, event_id).await.unwrap(),
+            std::slice::from_ref(&request),
+            "{reader}"
+        );
+    }
+    // Those two are the list's only readers.
+    for outsider in [other_delegate_id, member_id] {
+        assert!(
+            matches!(
+                service.list_join_requests(outsider, event_id).await,
+                Err(CalendarJoinRequestError::NotFound)
+            ),
+            "{outsider}"
+        );
+    }
+
+    service.request_to_join(member_id, event_id).await.unwrap();
+    assert_eq!(refresh.nudges.lock().unwrap().len(), 1);
+}
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn join_requests_open_once_and_resolve_once(pool: PgPool) {

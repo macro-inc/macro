@@ -1,5 +1,5 @@
 use crate::{
-    domain::models::SoupDocumentServerFacts,
+    domain::models::{DynamicSort, DynamicSortValue, SoupDocumentServerFacts},
     outbound::pg_soup_repo::{
         expanded::{
             by_ids::{
@@ -50,7 +50,9 @@ async fn expanded_generic_cursor_soup(
         ExpandedDynamicCursorArgs {
             user_id,
             limit,
-            cursor: cursor.map_filter(|_| EntityFilterAst::default()),
+            cursor: DynamicSort::from_timestamp_query(
+                cursor.map_filter(|_| EntityFilterAst::default()),
+            ),
             exclude_frecency: false,
         },
     )
@@ -68,7 +70,9 @@ async fn no_frecency_expanded_generic_soup(
         ExpandedDynamicCursorArgs {
             user_id,
             limit,
-            cursor: cursor.map_filter(|_| EntityFilterAst::default()),
+            cursor: DynamicSort::from_timestamp_query(
+                cursor.map_filter(|_| EntityFilterAst::default()),
+            ),
             exclude_frecency: true,
         },
     )
@@ -755,7 +759,10 @@ async fn empty_ast_returns_same_as_static_query(db: PgPool) {
         ExpandedDynamicCursorArgs {
             user_id: user_id.clone(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, EntityFilterAst::mock_empty()),
+            cursor: Query::Sort(
+                SimpleSortMethod::CreatedAt.into(),
+                EntityFilterAst::mock_empty(),
+            ),
             exclude_frecency: false,
         },
     )
@@ -811,7 +818,7 @@ async fn test_filter_by_document_file_type(db: PgPool) -> anyhow::Result<()> {
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -886,7 +893,7 @@ async fn test_filter_by_document_ids(db: PgPool) -> anyhow::Result<()> {
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -963,7 +970,7 @@ async fn test_filter_documents_by_project_id(db: PgPool) -> anyhow::Result<()> {
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -1035,7 +1042,7 @@ async fn test_filter_chats_by_project_id(db: PgPool) -> anyhow::Result<()> {
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -1110,7 +1117,7 @@ async fn test_filter_by_chat_ids(db: PgPool) -> anyhow::Result<()> {
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -1193,7 +1200,7 @@ async fn test_filter_by_project_ids(db: PgPool) -> anyhow::Result<()> {
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -1276,7 +1283,7 @@ async fn test_filter_by_project_ids_include_root(db: PgPool) -> anyhow::Result<(
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -1335,7 +1342,7 @@ async fn test_negated_project_id_filter_includes_root_projects(db: PgPool) -> an
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -1410,7 +1417,7 @@ async fn test_combined_entity_filters(db: PgPool) -> anyhow::Result<()> {
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -1502,7 +1509,7 @@ async fn test_multiple_filter_criteria_documents(db: PgPool) -> anyhow::Result<(
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -1580,7 +1587,7 @@ async fn test_filters_respect_access_control(db: PgPool) -> anyhow::Result<()> {
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -1645,7 +1652,7 @@ async fn test_filter_by_owner(db: PgPool) -> anyhow::Result<()> {
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -1712,7 +1719,7 @@ async fn test_filter_non_existent_items(db: PgPool) -> anyhow::Result<()> {
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -1775,7 +1782,7 @@ async fn test_cursor_pagination_with_document_filter(db: PgPool) -> anyhow::Resu
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 3,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters.clone()),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters.clone()),
             exclude_frecency: false,
         },
     )
@@ -1812,7 +1819,10 @@ async fn test_cursor_pagination_with_document_filter(db: PgPool) -> anyhow::Resu
             cursor: Query::Cursor(models_pagination::Cursor {
                 id: cursor_decoded.id,
                 limit: cursor_decoded.limit,
-                val: cursor_decoded.val,
+                val: models_pagination::CursorVal {
+                    sort_type: cursor_decoded.val.sort_type.into(),
+                    last_val: DynamicSortValue::Timestamp(cursor_decoded.val.last_val),
+                },
                 filter: filters_for_cursor,
             }),
             exclude_frecency: false,
@@ -1896,7 +1906,7 @@ async fn test_cursor_pagination_with_combined_filters(db: PgPool) -> anyhow::Res
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 2,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters.clone()),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters.clone()),
             exclude_frecency: false,
         },
     )
@@ -1920,7 +1930,10 @@ async fn test_cursor_pagination_with_combined_filters(db: PgPool) -> anyhow::Res
                 cursor: Query::Cursor(models_pagination::Cursor {
                     id: cursor_decoded.id,
                     limit: cursor_decoded.limit,
-                    val: cursor_decoded.val,
+                    val: models_pagination::CursorVal {
+                        sort_type: cursor_decoded.val.sort_type.into(),
+                        last_val: DynamicSortValue::Timestamp(cursor_decoded.val.last_val),
+                    },
                     filter: filters_for_cursor,
                 }),
                 exclude_frecency: false,
@@ -1996,7 +2009,7 @@ async fn test_cursor_pagination_filter_consistency(db: PgPool) -> anyhow::Result
             ExpandedDynamicCursorArgs {
                 user_id: user_id.copied(),
                 limit: page_size,
-                cursor: current_query,
+                cursor: DynamicSort::from_timestamp_query(current_query),
                 exclude_frecency: false,
             },
         )
@@ -2093,7 +2106,7 @@ async fn test_cursor_pagination_with_single_item_filter(db: PgPool) -> anyhow::R
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 5,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters.clone()),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters.clone()),
             exclude_frecency: false,
         },
     )
@@ -2123,7 +2136,10 @@ async fn test_cursor_pagination_with_single_item_filter(db: PgPool) -> anyhow::R
                 cursor: Query::Cursor(models_pagination::Cursor {
                     id: cursor_decoded.id,
                     limit: cursor_decoded.limit,
-                    val: cursor_decoded.val,
+                    val: models_pagination::CursorVal {
+                        sort_type: cursor_decoded.val.sort_type.into(),
+                        last_val: DynamicSortValue::Timestamp(cursor_decoded.val.last_val),
+                    },
                     filter: filters_for_cursor,
                 }),
                 exclude_frecency: false,
@@ -2202,7 +2218,7 @@ async fn test_dynamic_query_with_ast_and_frecency_exclusion(
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filters.clone()),
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), filters.clone()),
             exclude_frecency: true,
         },
     )
@@ -2255,7 +2271,7 @@ async fn test_dynamic_query_with_ast_and_frecency_exclusion(
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -2329,7 +2345,7 @@ async fn test_filter_documents_by_importance(db: PgPool) -> anyhow::Result<()> {
             ExpandedDynamicCursorArgs {
                 user_id: user_id.copied(),
                 limit: 20,
-                cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+                cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
                 exclude_frecency: false,
             },
         )
@@ -2385,7 +2401,7 @@ async fn test_filter_documents_by_importance(db: PgPool) -> anyhow::Result<()> {
             ExpandedDynamicCursorArgs {
                 user_id: user_id.copied(),
                 limit: 20,
-                cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+                cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
                 exclude_frecency: false,
             },
         )
@@ -2456,7 +2472,7 @@ async fn test_filter_chats_by_importance(db: PgPool) -> anyhow::Result<()> {
             ExpandedDynamicCursorArgs {
                 user_id: user_id.copied(),
                 limit: 20,
-                cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+                cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
                 exclude_frecency: false,
             },
         )
@@ -2497,7 +2513,7 @@ async fn test_filter_chats_by_importance(db: PgPool) -> anyhow::Result<()> {
             ExpandedDynamicCursorArgs {
                 user_id: user_id.copied(),
                 limit: 20,
-                cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+                cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
                 exclude_frecency: false,
             },
         )
@@ -2556,7 +2572,7 @@ async fn test_filter_projects_by_importance(db: PgPool) -> anyhow::Result<()> {
             ExpandedDynamicCursorArgs {
                 user_id: user_id.copied(),
                 limit: 20,
-                cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+                cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
                 exclude_frecency: false,
             },
         )
@@ -2600,7 +2616,7 @@ async fn test_filter_projects_by_importance(db: PgPool) -> anyhow::Result<()> {
             ExpandedDynamicCursorArgs {
                 user_id: user_id.copied(),
                 limit: 20,
-                cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+                cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
                 exclude_frecency: false,
             },
         )
@@ -2648,7 +2664,10 @@ async fn test_bulk_populate_properties_enriches_raw_soup_items(
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, EntityFilterAst::mock_empty()),
+            cursor: Query::Sort(
+                SimpleSortMethod::UpdatedAt.into(),
+                EntityFilterAst::mock_empty(),
+            ),
             exclude_frecency: false,
         },
     )
@@ -3636,7 +3655,7 @@ async fn dyn_fetch(
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit,
-            cursor: Query::Sort(sort, filters),
+            cursor: Query::Sort(sort.into(), filters),
             exclude_frecency,
         },
     )
@@ -4491,7 +4510,7 @@ async fn test_dyn_paginate_one_at_a_time(db: PgPool) -> anyhow::Result<()> {
             ExpandedDynamicCursorArgs {
                 user_id: user_id.copied(),
                 limit: 1,
-                cursor: current_query,
+                cursor: DynamicSort::from_timestamp_query(current_query),
                 exclude_frecency: false,
             },
         )
@@ -4584,7 +4603,7 @@ async fn test_dyn_paginate_with_filters(db: PgPool) -> anyhow::Result<()> {
             ExpandedDynamicCursorArgs {
                 user_id: user_id.copied(),
                 limit: page_size,
-                cursor: current_query,
+                cursor: DynamicSort::from_timestamp_query(current_query),
                 exclude_frecency: false,
             },
         )
@@ -4872,6 +4891,7 @@ async fn test_property_filter_by_select_option(db: Pool<Postgres>) -> anyhow::Re
             entity_type: Some("DOCUMENT".to_string()),
             option_ids: vec!["00000001-0000-0000-0003-000000000001".to_string()], // Low
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -4926,6 +4946,7 @@ async fn test_property_filter_by_status_completed(db: Pool<Postgres>) -> anyhow:
             entity_type: Some("DOCUMENT".to_string()),
             option_ids: vec!["00000001-0000-0000-0002-000000000004".to_string()], // Completed
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -4981,12 +5002,14 @@ async fn test_property_filter_multiple_and(db: Pool<Postgres>) -> anyhow::Result
                 entity_type: Some("DOCUMENT".to_string()),
                 option_ids: vec!["00000001-0000-0000-0003-000000000001".to_string()], // Low
                 entity_ids: vec![],
+                ..Default::default()
             },
             PropertyFilter {
                 property_definition_id: "00000001-0000-0000-0000-000000000002".to_string(), // Status
                 entity_type: Some("DOCUMENT".to_string()),
                 option_ids: vec!["00000001-0000-0000-0002-000000000004".to_string()], // Completed
                 entity_ids: vec![],
+                ..Default::default()
             },
         ],
         ..Default::default()
@@ -5041,6 +5064,7 @@ async fn test_property_filter_no_match(db: Pool<Postgres>) -> anyhow::Result<()>
             entity_type: Some("DOCUMENT".to_string()),
             option_ids: vec!["00000001-0000-0000-0003-000000000004".to_string()], // Urgent
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -5088,6 +5112,7 @@ async fn test_property_filter_multiple_options_or(db: Pool<Postgres>) -> anyhow:
                 "00000001-0000-0000-0003-000000000002".to_string(), // Medium
             ],
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -5146,6 +5171,7 @@ async fn test_property_filter_without_entity_type(db: Pool<Postgres>) -> anyhow:
                 "00000001-0000-0000-0003-000000000002".to_string(), // Medium
             ],
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -5200,6 +5226,7 @@ async fn test_property_filter_scoped_entity_type(db: Pool<Postgres>) -> anyhow::
             entity_type: Some("PROJECT".to_string()),
             option_ids: vec!["00000001-0000-0000-0003-000000000002".to_string()], // Medium
             entity_ids: vec![],
+            ..Default::default()
         }],
         ..Default::default()
     };
@@ -5275,7 +5302,7 @@ async fn test_dyn_filter_by_document_sub_type_task(db: PgPool) -> anyhow::Result
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -5342,7 +5369,7 @@ async fn test_dyn_filter_by_sub_type_and_file_type(db: PgPool) -> anyhow::Result
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -5386,7 +5413,7 @@ async fn document_ids_for_phase0_membership_filter(
         ExpandedDynamicCursorArgs {
             user_id,
             limit: 100,
-            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -5527,7 +5554,10 @@ async fn projection_hydration_carries_viewer_relative_facts_from_flat_and_by_id_
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 50,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, EntityFilterAst::default()),
+            cursor: Query::Sort(
+                SimpleSortMethod::CreatedAt.into(),
+                EntityFilterAst::default(),
+            ),
             exclude_frecency: false,
         },
     )
@@ -5670,7 +5700,10 @@ async fn projection_status_extraction_treats_non_array_values_as_empty(
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 50,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, EntityFilterAst::default()),
+            cursor: Query::Sort(
+                SimpleSortMethod::CreatedAt.into(),
+                EntityFilterAst::default(),
+            ),
             exclude_frecency: false,
         },
     )
@@ -5728,7 +5761,7 @@ async fn test_dyn_filter_is_email_attachment_true(db: PgPool) -> anyhow::Result<
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -5798,7 +5831,7 @@ async fn test_dyn_filter_is_email_attachment_false(db: PgPool) -> anyhow::Result
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -5860,7 +5893,7 @@ async fn test_dyn_filter_by_not_document_sub_type_task(db: PgPool) -> anyhow::Re
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 50,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filters),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filters),
             exclude_frecency: false,
         },
     )
@@ -5954,7 +5987,7 @@ async fn run_and_count(
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, ast),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), ast),
             exclude_frecency: false,
         },
     )
@@ -6634,7 +6667,7 @@ async fn run_notification_filter(
         ExpandedDynamicCursorArgs {
             user_id: user_id.copied(),
             limit: 100,
-            cursor: Query::Sort(SimpleSortMethod::UpdatedAt, ast),
+            cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), ast),
             exclude_frecency: false,
         },
     )
@@ -7155,7 +7188,7 @@ async fn a_viewable_project_lists_its_tasks_without_a_grant_on_each(
             ExpandedDynamicCursorArgs {
                 user_id: stranger.clone(),
                 limit: 20,
-                cursor: Query::Sort(SimpleSortMethod::UpdatedAt, filter),
+                cursor: Query::Sort(SimpleSortMethod::UpdatedAt.into(), filter),
                 exclude_frecency: false,
             },
         )
@@ -7175,6 +7208,141 @@ async fn a_viewable_project_lists_its_tasks_without_a_grant_on_each(
         list(Some(Uuid::new_v4())).await?.is_empty(),
         "another project's scope admits none of this project's tasks"
     );
+    Ok(())
+}
+
+#[sqlx::test(
+    migrator = "MACRO_DB_MIGRATIONS",
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("soup_items_with_properties")
+    )
+)]
+async fn date_property_boundaries_presence_and_clearing(db: Pool<Postgres>) -> anyhow::Result<()> {
+    use item_filters::ast::properties::DateRange;
+    let at =
+        chrono::DateTime::parse_from_rfc3339("2025-12-31T23:59:59Z")?.with_timezone(&chrono::Utc);
+    let after = at + chrono::Duration::seconds(1);
+    let before = at - chrono::Duration::seconds(1);
+    let doc_a = Uuid::parse_str("11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa")?;
+    let doc_b = Uuid::parse_str("11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb")?;
+    let user_id = sqlx::query_scalar!(
+        r#"SELECT owner FROM "Document" WHERE id = $1"#,
+        doc_a.to_string(),
+    )
+    .fetch_one(&db)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+           VALUES ($1, $2, 'DOCUMENT', '00000001-0000-0000-0000-000000000004',
+                   '{"type":"String","value":"not a timestamp"}'::jsonb)"#,
+        Uuid::now_v7(),
+        doc_a.to_string(),
+    )
+    .execute(&db)
+    .await?;
+    for (range, has_date, expected) in [
+        (
+            Some(DateRange {
+                start: Some(at),
+                end: Some(after),
+            }),
+            None,
+            Some(doc_b),
+        ),
+        (
+            Some(DateRange {
+                start: Some(before),
+                end: Some(at),
+            }),
+            None,
+            None,
+        ),
+        (
+            Some(DateRange {
+                start: None,
+                end: Some(after),
+            }),
+            None,
+            Some(doc_b),
+        ),
+        (
+            Some(DateRange {
+                start: None,
+                end: Some(at),
+            }),
+            None,
+            None,
+        ),
+        (
+            Some(DateRange {
+                start: Some(at),
+                end: None,
+            }),
+            None,
+            Some(doc_b),
+        ),
+        (
+            Some(DateRange {
+                start: Some(after),
+                end: None,
+            }),
+            None,
+            None,
+        ),
+        (
+            Some(DateRange {
+                start: None,
+                end: None,
+            }),
+            None,
+            Some(doc_b),
+        ),
+        (None, Some(true), Some(doc_b)),
+        (None, Some(false), Some(doc_a)),
+    ] {
+        let ast = EntityFilterAst::new_from_filters(item_filters::EntityFilters {
+            property_filters: vec![PropertyFilter {
+                property_definition_id: "00000001-0000-0000-0000-000000000004".into(),
+                entity_type: Some("DOCUMENT".into()),
+                date_range: range,
+                has_date,
+                ..Default::default()
+            }],
+            ..Default::default()
+        })?
+        .unwrap();
+        let items = dyn_fetch(&db, &user_id, 1, SimpleSortMethod::UpdatedAt, ast, false).await?;
+        let ids: Vec<_> = items
+            .iter()
+            .filter_map(|item| match item {
+                SoupItem::Document(doc) => Some(doc.id),
+                _ => None,
+            })
+            .collect();
+        assert_eq!(ids.first().copied(), expected);
+    }
+    sqlx::query!("UPDATE entity_properties SET values = NULL WHERE entity_id = '11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb' AND property_definition_id = '00000001-0000-0000-0000-000000000004'")
+        .execute(&db).await?;
+    let ast = EntityFilterAst::new_from_filters(item_filters::EntityFilters {
+        property_filters: vec![PropertyFilter {
+            property_definition_id: "00000001-0000-0000-0000-000000000004".into(),
+            entity_type: Some("DOCUMENT".into()),
+            has_date: Some(false),
+            ..Default::default()
+        }],
+        ..Default::default()
+    })?
+    .unwrap();
+    let items = dyn_fetch(&db, &user_id, 100, SimpleSortMethod::UpdatedAt, ast, false).await?;
+    let ids: HashSet<_> = items
+        .iter()
+        .filter_map(|item| match item {
+            SoupItem::Document(doc) => Some(doc.id),
+            _ => None,
+        })
+        .collect();
+    assert!(ids.contains(&doc_a) && ids.contains(&doc_b));
     Ok(())
 }
 

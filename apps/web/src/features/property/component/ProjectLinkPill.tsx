@@ -30,7 +30,8 @@ export function ProjectLinkPill(props: {
   const reference = () => getEntityValues(props.property)[0];
   const { name, nativeProjectId, isLoading } = usePropertyEntityDisplay(
     () => reference()?.entity_id ?? '',
-    () => 'INITIATIVE'
+    () => 'INITIATIVE',
+    { loadingName: () => ctx.pickedEntityName(reference()?.entity_id ?? '') }
   );
   const open = (event: MouseEvent) => {
     event.stopPropagation();

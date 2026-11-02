@@ -1920,6 +1920,11 @@ pub enum RefreshCalendarEvent {
         /// True for sharing changes and any possibly affected OOO projection.
         team_ooo_changed: bool,
     },
+    /// The viewer's request to join a shared event was answered.
+    JoinRequestAnswered {
+        /// The shared event they asked to join.
+        event_id: Uuid,
+    },
 }
 
 /// Delivery channel of a reminder that Macro owns. Google email reminders
