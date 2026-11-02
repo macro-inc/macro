@@ -85,12 +85,13 @@ are pills, with separate leading Filters and View controls. Filters contains onl
 filter facets (including Tags); View opens a sheet with Group by, Sort, and Properties choices.
 In Properties, icon pills use a wrapping row on desktop and touch. Click or tap
 one to cycle Show → Hide when empty → Hide (skipping Hide when empty for Tags,
-Updated, and Created by). An eye, half-filled circle, or crossed-out eye marks
-the current mode. A pill tooltip explains the current mode and next click.
-Use its separate chevron to choose a mode directly; the chevron appears on
-hover or keyboard focus on desktop and stays visible on touch. On touch,
-the chevron opens a small visibility sheet above View; dismissing it returns
-focus to the chevron. Mode choices keep View open.
+Updated, and Created by). A pill tooltip explains the current mode and next click.
+Hover or keyboard-focus a pill to reveal its current-state menu icon (an eye,
+half-filled circle, or crossed-out eye), overlaid at the right on an opaque
+backing rather than a separate button-group segment. Click the icon to choose
+a mode directly. On touch, the icon stays visible and opens a small visibility
+sheet above View; dismissing it returns focus to the icon. Mode choices keep
+View open.
 The mobile bottom dock has **+ Task** and Search, with no floating Ask AI input.
 Project and CRM task lists use the same separate controls. Changes in either
 sheet remain part of the existing saved-view draft; its save actions stay in

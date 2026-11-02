@@ -2,7 +2,6 @@ import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import CalendarIcon from '@icon/system/regular/calendar.svg';
-import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import ConditionalIcon from '@icon/system/regular/circle-half.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
@@ -13,7 +12,7 @@ import TagIcon from '@icon/system/regular/tag.svg';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import UsersIcon from '@icon/system/regular/users.svg';
 import PriorityIcon from '@icon/wide-priority-high.svg';
-import { ButtonGroup, Dropdown } from '@ui';
+import { Button, Dropdown } from '@ui';
 import { For, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import {
@@ -164,11 +163,6 @@ function TaskPropertyPill(props: {
       >
         {props.property.label}
       </span>
-      <Dynamic
-        component={current().icon}
-        class="size-3.5 shrink-0"
-        data-icon-motion="none"
-      />
     </>
   );
   const options = () => (
@@ -196,17 +190,14 @@ function TaskPropertyPill(props: {
   );
 
   return (
-    <ButtonGroup
-      size="sm"
-      variant="secondary"
-      finish="flat"
-      class="group/property max-w-full"
-      aria-label={props.property.label}
-    >
+    <div class="group/property relative inline-flex max-w-full">
       <Show
         when={isTouchDevice()}
         fallback={
-          <ButtonGroup.Button
+          <Button
+            variant="secondary"
+            finish="flat"
+            size="sm"
             as={Dropdown.Item}
             role="menuitem"
             tabIndex={-1}
@@ -215,89 +206,103 @@ function TaskPropertyPill(props: {
             textValue={props.property.label}
             aria-label={label()}
             tooltip={tooltip()}
-            class="min-w-0 w-auto shrink"
+            class="min-w-0 w-auto shrink touch:pr-10"
           >
             {content()}
-          </ButtonGroup.Button>
+          </Button>
         }
       >
-        <ButtonGroup.Button
+        <Button
+          variant="secondary"
+          finish="flat"
+          size="sm"
           onClick={cycle}
           aria-label={label()}
           tooltip={tooltip()}
-          class="min-w-0 shrink"
+          class="min-w-0 shrink touch:pr-10"
         >
           {content()}
-        </ButtonGroup.Button>
+        </Button>
       </Show>
-      <Show
-        when={isTouchDevice()}
-        fallback={
-          <Dropdown.Sub>
-            <ButtonGroup.Button
-              as={Dropdown.SubTrigger}
-              role="menuitem"
-              tabIndex={-1}
+      <div class="absolute inset-y-0 right-0 z-1 flex items-center rounded-full bg-surface not-touch:invisible not-touch:group-hover/property:visible not-touch:group-focus-within/property:visible has-[[data-expanded]]:visible has-[[data-highlighted]]:visible">
+        <Show
+          when={isTouchDevice()}
+          fallback={
+            <Dropdown.Sub>
+              <Button
+                variant="ghost"
+                as={Dropdown.SubTrigger}
+                role="menuitem"
+                tabIndex={-1}
+                size="icon-sm"
+                aria-label={menuLabel()}
+                textValue={menuLabel()}
+                tooltip={menuLabel()}
+              >
+                <Dynamic
+                  component={current().icon}
+                  class="size-3.5"
+                  data-icon-motion="none"
+                />
+              </Button>
+              <Dropdown.SubContent class="min-w-48 max-w-80">
+                {options()}
+              </Dropdown.SubContent>
+            </Dropdown.Sub>
+          }
+        >
+          <MobileDrawer restoreFocus>
+            <MobileDrawer.Trigger
+              as={Button}
+              variant="ghost"
               size="icon-sm"
               aria-label={menuLabel()}
-              textValue={menuLabel()}
               tooltip={menuLabel()}
-              class="not-touch:invisible not-touch:group-hover/property:visible not-touch:group-focus-within/property:visible data-expanded:visible data-highlighted:visible"
             >
-              <CaretDownIcon class="size-3.5" />
-            </ButtonGroup.Button>
-            <Dropdown.SubContent class="min-w-48 max-w-80">
-              {options()}
-            </Dropdown.SubContent>
-          </Dropdown.Sub>
-        }
-      >
-        <MobileDrawer restoreFocus>
-          <MobileDrawer.Trigger
-            as={ButtonGroup.Button}
-            size="icon-sm"
-            aria-label={menuLabel()}
-            tooltip={menuLabel()}
-          >
-            <CaretDownIcon class="size-3.5" />
-          </MobileDrawer.Trigger>
-          <MobileDrawer.Portal>
-            <MobileDrawer.Overlay />
-            <MobileDrawer.Content>
-              <MobileDrawer.Handle />
-              <MobileDrawer.Title class="px-6 pb-4 text-lg font-semibold">
-                {menuLabel()}
-              </MobileDrawer.Title>
-              <MobileDrawer.ScrollBody>
-                <MobileDrawer.Section
-                  role="radiogroup"
-                  aria-label={props.property.label}
-                >
-                  <For each={modes}>
-                    {(mode) => (
-                      <MobileDrawer.Item
-                        role="radio"
-                        aria-checked={props.mode === mode.id}
-                        onClick={() => props.onChange(mode.id)}
-                      >
-                        <mode.icon
-                          class="size-4 shrink-0"
-                          data-icon-motion="none"
-                        />
-                        <span class="flex-1">{mode.label}</span>
-                        <Show when={props.mode === mode.id}>
-                          <CheckIcon class="size-4 shrink-0 text-accent" />
-                        </Show>
-                      </MobileDrawer.Item>
-                    )}
-                  </For>
-                </MobileDrawer.Section>
-              </MobileDrawer.ScrollBody>
-            </MobileDrawer.Content>
-          </MobileDrawer.Portal>
-        </MobileDrawer>
-      </Show>
-    </ButtonGroup>
+              <Dynamic
+                component={current().icon}
+                class="size-3.5"
+                data-icon-motion="none"
+              />
+            </MobileDrawer.Trigger>
+            <MobileDrawer.Portal>
+              <MobileDrawer.Overlay />
+              <MobileDrawer.Content>
+                <MobileDrawer.Handle />
+                <MobileDrawer.Title class="px-6 pb-4 text-lg font-semibold">
+                  {menuLabel()}
+                </MobileDrawer.Title>
+                <MobileDrawer.ScrollBody>
+                  <MobileDrawer.Section
+                    role="radiogroup"
+                    aria-label={props.property.label}
+                  >
+                    <For each={modes}>
+                      {(mode) => (
+                        <MobileDrawer.Item
+                          role="radio"
+                          aria-checked={props.mode === mode.id}
+                          onClick={() => props.onChange(mode.id)}
+                        >
+                          <mode.icon
+                            class="size-4 shrink-0"
+                            data-icon-motion="none"
+                          />
+                          <span class="flex-1">{mode.label}</span>
+                          <Show when={props.mode === mode.id}>
+                            <CheckIcon class="size-4 shrink-0 text-accent" />
+                          </Show>
+                        </MobileDrawer.Item>
+                      )}
+                    </For>
+                  </MobileDrawer.Section>
+                </MobileDrawer.ScrollBody>
+              </MobileDrawer.Content>
+            </MobileDrawer.Portal>
+          </MobileDrawer>
+        </Show>
+      </div>
+    </div>
   );
 }
 
