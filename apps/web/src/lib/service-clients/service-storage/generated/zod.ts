@@ -36575,7 +36575,7 @@ function _create_postItemsSoupBody() {
             .array(zod.string())
             .optional()
             .describe(
-              "Filter by session owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
+              "Filter by session owner principal — a user ('macro|user1@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every\nowner."
             ),
         })
         .optional()
@@ -36796,7 +36796,7 @@ function _create_postItemsSoupBody() {
             .array(zod.string())
             .optional()
             .describe(
-              "Filter by chat owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
+              "Filter by chat owner principal — a user ('macro|user1@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@example.com'], ['macro|user1@example.com', 'bot|0199...']. Empty to\nsearch all owners."
             ),
           project_ids: zod
             .array(zod.string())
@@ -36883,7 +36883,7 @@ function _create_postItemsSoupBody() {
             .array(zod.string())
             .optional()
             .describe(
-              "Filter by document owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
+              "Filter by document owner principal — a user ('macro|user1@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@example.com'], ['macro|user1@example.com', 'bot|0199...']. Empty to\nsearch all owners."
             ),
           project_ids: zod
             .array(zod.string())
@@ -37174,7 +37174,7 @@ function _create_postItemsSoupBody() {
             .array(zod.string())
             .optional()
             .describe(
-              "Filter by project owner principal — a user ('macro|user1@user.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to\nsearch all owners."
+              "Filter by project owner principal — a user ('macro|user1@example.com'), a bot\n('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:\n['macro|user1@example.com'], ['macro|user1@example.com', 'bot|0199...']. Empty to\nsearch all owners."
             ),
           project_ids: zod
             .array(zod.string())
