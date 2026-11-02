@@ -164,22 +164,30 @@ export function ThreadList(props: ThreadListProps) {
   const batchHeights = new Map<Element, number>();
   let applyingBatch = false;
   let deferredScroll: Parameters<ScrollToFn> | undefined;
+  // Rows shift by the gesture adjustment. The sizer's end moves with them, so
+  // native scrolling stops at the latest row instead of blank space past it.
+  let gestureAdjustment = 0;
+  const sizerHeight = (total: number) =>
+    Math.max(viewportSize(), total - gestureAdjustment);
   const scrollCompensation =
     isSafari || isIOS
       ? createScrollCompensation({
           getElement: () => scrollEl(),
           setAdjustment: (adjustment) => {
+            gestureAdjustment = adjustment;
             if (!contentRef) return;
             contentRef.style.setProperty(
               '--channel-scroll-adjustment',
               `${adjustment}px`
             );
-            // Shifted rows must not change the logical scroll extent.
-            contentRef.style.overflow = adjustment === 0 ? '' : 'clip';
           },
           writeOffset: (offset) => {
             const element = scrollEl();
             if (!element) return;
+            // Restore the logical extent before the offset replaces the adjustment.
+            if (contentRef) {
+              contentRef.style.height = `${sizerHeight(virtualizer.getTotalSize())}px`;
+            }
             writingScroll = true;
             try {
               element.scrollTo({ top: offset });
@@ -439,21 +447,19 @@ export function ThreadList(props: ThreadListProps) {
   measured = { instance: virtualizer };
 
   function writeScroll(...[offset, options, instance]: Parameters<ScrollToFn>) {
+    // WebKit ends native momentum on scrollTo writes. Keep TanStack's logical
+    // offset, but counter-shift the rows until wheel/touch scrolling settles.
+    // Explicit navigation finishes compensation before calculating its target.
+    const deferred =
+      lifecycle.isReady() &&
+      !!scrollCompensation?.defer(offset + (options.adjustments ?? 0));
     // Size corrections happen before the Solid adapter publishes its new
     // total. Commit the sizer first so the browser cannot clamp the requested
     // scroll to the old range (especially with padding below a growing row).
     if (contentRef) {
-      contentRef.style.height = `${Math.max(viewportSize(), instance.getTotalSize())}px`;
+      contentRef.style.height = `${sizerHeight(instance.getTotalSize())}px`;
     }
-    // WebKit ends native momentum on scrollTo writes. Keep TanStack's logical
-    // offset, but counter-shift the rows until wheel/touch scrolling settles.
-    // Explicit navigation finishes compensation before calculating its target.
-    if (
-      lifecycle.isReady() &&
-      scrollCompensation?.defer(offset + (options.adjustments ?? 0))
-    ) {
-      return;
-    }
+    if (deferred) return;
     writingScroll = true;
     try {
       elementScroll(offset, options, instance);
@@ -582,11 +588,13 @@ export function ThreadList(props: ThreadListProps) {
     if (!el) return;
     // This microtask runs after synchronous row measurements, before paint.
     lifecycle.send('layout');
-    const distanceFromTop = logicalScrollOffset(el.scrollTop);
+    const scrollTop = el.scrollTop;
+    const distanceFromTop = logicalScrollOffset(scrollTop);
     // The virtualizer's cached offset can trail scrollTop: this publish may run
     // in the microtask before its own scroll listener records the new position.
+    // The sizer excludes the gesture adjustment, so compare native positions.
     const distanceFromBottom = Math.max(
-      el.scrollHeight - el.clientHeight - distanceFromTop,
+      el.scrollHeight - el.clientHeight - scrollTop,
       0
     );
     // WebKit cannot move the native top boundary during a fling without a
@@ -711,7 +719,7 @@ export function ThreadList(props: ThreadListProps) {
           style={{
             position: 'relative',
             width: '100%',
-            height: `${Math.max(viewportSize(), virtualizer.getTotalSize())}px`,
+            height: `${sizerHeight(virtualizer.getTotalSize())}px`,
           }}
         >
           <Key each={virtualItems()} by="key">
