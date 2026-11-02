@@ -111,6 +111,7 @@ export function CellMentionEditor(
         aria-label={props.label}
         aria-readonly={props.readonly}
         data-cell-text-editor
+        data-input-surface="grid-cell"
         contentEditable={!props.readonly}
         tabIndex={0}
         class={`${props.class} whitespace-pre-wrap touch:text-[max(16px,1rem)]`}

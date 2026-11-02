@@ -4,7 +4,6 @@
  */
 
 import uFuzzy from '@leeoniya/ufuzzy';
-import { differenceInMilliseconds } from 'date-fns';
 import type { Accessor } from 'solid-js';
 import type { DateValue } from './date';
 import {
@@ -111,12 +110,16 @@ function extractTimestamp(
 function calculateTimeScore(
   timestamp: DateValue | null,
   config: FreshSortConfigWithDefaults,
-  now: Date
+  nowMs: number,
+  maxAgeMs: number
 ): number {
   if (!timestamp) return 0;
 
-  const ageMs = Math.max(0, differenceInMilliseconds(now, timestamp));
-  const maxAgeMs = parsedDurationToMilliseconds(config.maxAge);
+  const timestampMs =
+    timestamp instanceof Date
+      ? timestamp.getTime()
+      : new Date(timestamp).getTime();
+  const ageMs = Math.max(0, nowMs - timestampMs);
 
   if (ageMs >= maxAgeMs) {
     return 0;
@@ -199,10 +202,18 @@ function ufuzzyFilter<T>(
 
   // Score where the query falls in the label when it matches there, so
   // aliases or keywords placed before the label don't count as a late start.
-  const labelPositions =
-    getDisplayName === getName
-      ? undefined
-      : labelMatchPositions(items.map(getDisplayName), query, idxs);
+  let labelPositions: Map<number, MatchPosition> | undefined;
+  if (getDisplayName !== getName) {
+    const labels = new Array<string>(items.length);
+    const distinct: number[] = [];
+    for (const index of idxs) {
+      const label = getDisplayName(items[index]);
+      labels[index] = label;
+      if (label !== haystack[index]) distinct.push(index);
+    }
+    if (distinct.length)
+      labelPositions = labelMatchPositions(labels, query, distinct);
+  }
 
   const queryLen = query.length;
   return order.map((orderIdx) => {
@@ -239,6 +250,7 @@ function freshSort<T>(
   isDmItem: BooleanFn<T>,
   getTimestamp: TimestampFn<T>
 ): FreshSortResult<T>[] {
+  if (filterResults.length === 0) return [];
   const finalConfig = {
     ...DEFAULT_CONFIG,
     ...config,
@@ -257,7 +269,8 @@ function freshSort<T>(
       ? Math.max(...filterNoInfResults.map((r) => r.score))
       : 1;
 
-  const now = new Date();
+  const nowMs = Date.now();
+  const maxAgeMs = parsedDurationToMilliseconds(finalConfig.maxAge);
   const scoredResults: FreshSortResult<T>[] = filterResults.map((result) => {
     const timestampInfo = getTimestamp(result.original);
     const rawScore = result.score === Infinity ? maxFuzzyScore : result.score;
@@ -266,7 +279,8 @@ function freshSort<T>(
     const timeScore = calculateTimeScore(
       extractTimestamp(timestampInfo, finalConfig.useViewedAt),
       finalConfig,
-      now
+      nowMs,
+      maxAgeMs
     );
 
     const textForBrevity = result.string || '';
@@ -334,9 +348,22 @@ export function createFreshSearch<T>({
     const finalConfig = { ...DEFAULT_CONFIG, ...config };
     const trimmedQuery = query.trim();
     const term = trimmedQuery.toLocaleLowerCase();
+    // Snapshot dynamic labels once per query, never across reactive updates.
+    const labels = new Map<T, string>();
+    const displayName =
+      getDisplayName === getName
+        ? getName
+        : (item: T) => {
+            let label = labels.get(item);
+            if (label === undefined) {
+              label = getDisplayName(item);
+              labels.set(item, label);
+            }
+            return label;
+          };
     const getNameMatchRank = (item: T) =>
       finalConfig.rankNameMatchesFirst
-        ? calculateNameMatchRank(getDisplayName(item), term)
+        ? calculateNameMatchRank(displayName(item), term)
         : 0;
 
     const hasComma = trimmedQuery.includes(',');
@@ -383,7 +410,7 @@ export function createFreshSearch<T>({
       const nonChannelResults = ufuzzyFilter(
         nonChannelItems,
         getName,
-        getDisplayName,
+        displayName,
         trimmedQuery,
         finalConfig.gapPenaltyWeight,
         finalConfig.startBonusDecay
@@ -402,7 +429,7 @@ export function createFreshSearch<T>({
     const fuzzyResults = ufuzzyFilter(
       items,
       getName,
-      getDisplayName,
+      displayName,
       query,
       finalConfig.gapPenaltyWeight,
       finalConfig.startBonusDecay

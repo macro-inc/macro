@@ -5,8 +5,8 @@ import { StaticMarkdownContext } from '@core/component/LexicalMarkdown/component
 import { aiChatTheme } from '@core/component/LexicalMarkdown/theme';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { isMobileWidth } from '@core/mobile/mobileWidth';
+import { createElementSize } from '@core/util/createElementSize';
 import { PulsingStar } from '@entity/components/PulsingStar';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import type { Accessor, JSXElement } from 'solid-js';
 import {
   createEffect,
@@ -104,7 +104,7 @@ export function ChatMessages(props: ChatMessagesProps) {
   const [parentHeight, setParentHeight] = createSignal(0);
 
   const selectScroll = () => {
-    return messagesRef?.closest('[data-chat-scroll]');
+    return messagesRef?.closest<HTMLElement>('[data-chat-scroll]');
   };
 
   const scrollRef = createElementSize(selectScroll);

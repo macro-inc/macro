@@ -29,7 +29,7 @@ vi.mock('@core/component/LexicalMarkdown/plugins', () => ({
   },
 }));
 
-vi.mock('@solid-primitives/resize-observer', () => ({
+vi.mock('@core/util/createElementSize', () => ({
   createElementSize: () => ({ width: 1200, height: 10000 }),
 }));
 

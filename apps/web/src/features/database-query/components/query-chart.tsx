@@ -1,4 +1,4 @@
-import { createElementSize } from '@solid-primitives/resize-observer';
+import { createElementSize } from '@core/util/createElementSize';
 import { createSignal, Match, Show, Switch } from 'solid-js';
 import { chartModeLabel, type QueryChartData } from '../core/query-chart';
 import { PieChart } from './pie-chart';

@@ -1,3 +1,4 @@
+import { pauseOffscreenAnimations } from '@core/util/animationVisibility';
 import type { LexicalEditor, NodeKey } from 'lexical';
 import {
   type Accessor,
@@ -14,7 +15,7 @@ false && glueToElement;
 
 const TypingAnimationManager = (() => {
   const animationStartTime = Date.now();
-  const animationDuration = 1400;
+  const animationDuration = 1200;
 
   const styleElement = document.createElement('style');
   styleElement.textContent = `
@@ -35,7 +36,11 @@ const TypingAnimationManager = (() => {
       line-height: 10px;
       font-weight: bold;
       color: currentColor;
-      animation: typingDotAnimation 1.4s infinite;
+      animation: typingDotAnimation 1.2s steps(3, end) infinite;
+      animation-play-state: var(--animation-play-state, running);
+    }
+    @media (prefers-reduced-motion: reduce) {
+      .typing-dot { animation: none; }
     }
   `;
   document.head.appendChild(styleElement);
@@ -103,7 +108,7 @@ export function GenerateAccessory(props: {
             enterClass="opacity-0"
             enterToClass="opacity-100"
           >
-            <div class="my-1.5 flex gap-1.25">
+            <div ref={pauseOffscreenAnimations} class="my-1.5 flex gap-1.25">
               <For each={Array(4).fill(0)}>
                 {(_, index) => (
                   <span

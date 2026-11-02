@@ -1,4 +1,4 @@
-import { createElementSize } from '@solid-primitives/resize-observer';
+import { createElementSize } from '@core/util/createElementSize';
 import { cn, Layer, Tooltip } from '@ui';
 import { format } from 'date-fns';
 import { createEffect, createMemo, createSignal, For, Show } from 'solid-js';
@@ -170,6 +170,32 @@ function ContributionHeatmap(props: {
   weekAreaRef: (element: HTMLDivElement) => void;
 }) {
   let weekArea: HTMLDivElement | undefined;
+  const [hoveredDate, setHoveredDate] = createSignal<string>();
+  const [tooltipOpen, setTooltipOpen] = createSignal(false);
+  const activeDay = createMemo(() => {
+    const date = hoveredDate();
+    if (!date) return;
+    for (const week of props.weeks) {
+      const day = week.find((day) => day?.date === date);
+      if (day) return day;
+    }
+  });
+  const label = createMemo(() => {
+    const day = activeDay();
+    return day ? actionLabel(day) : '';
+  });
+  const anchorRect = createMemo(() => {
+    const date = hoveredDate();
+    if (!date) return;
+    return () =>
+      weekArea
+        ?.querySelector<HTMLElement>(`[data-activity-date="${date}"]`)
+        ?.getBoundingClientRect();
+  });
+  const clearHover = () => {
+    setHoveredDate(undefined);
+    setTooltipOpen(false);
+  };
   // Where the user has panned to, in weeks from the newest week; undefined
   // until the area first overflows. Kept in weeks so a resize that changes
   // the cell size restores the same weeks rather than the same pixels.
@@ -209,27 +235,47 @@ function ContributionHeatmap(props: {
       data-activity-heatmap
     >
       <WeekdayGutter />
-      <div
-        ref={(element) => {
-          weekArea = element;
-          props.weekAreaRef(element);
-        }}
-        class="min-w-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
-        onScroll={rememberPan}
-        data-activity-heatmap-weeks
+      <Tooltip.Root
+        placement="top"
+        disabled={props.skeleton}
+        open={tooltipOpen() && activeDay() !== undefined}
+        onOpenChange={setTooltipOpen}
+        getAnchorRect={anchorRect()}
       >
-        <div class="flex w-max gap-(--heatmap-column-gap)">
-          <For each={props.weeks}>
-            {(week, index) => (
-              <HeatmapWeek
-                week={week}
-                monthLabel={props.monthLabels.get(index())}
-                skeleton={props.skeleton}
-              />
-            )}
-          </For>
-        </div>
-      </div>
+        <Tooltip.Trigger
+          as="div"
+          ref={(element) => {
+            weekArea = element;
+            props.weekAreaRef(element);
+          }}
+          class="min-w-0 flex-1 overflow-x-auto overflow-y-hidden overscroll-x-contain [scrollbar-width:none] [&::-webkit-scrollbar]:hidden"
+          onPointerOver={(event) => {
+            const day =
+              event.target instanceof Element
+                ? event.target.closest<HTMLElement>('[data-activity-date]')
+                : null;
+            setHoveredDate(day?.dataset.activityDate);
+          }}
+          onPointerLeave={clearHover}
+          onScroll={rememberPan}
+          data-activity-heatmap-weeks
+        >
+          <div class="flex w-max gap-(--heatmap-column-gap)">
+            <For each={props.weeks}>
+              {(week, index) => (
+                <HeatmapWeek
+                  week={week}
+                  monthLabel={props.monthLabels.get(index())}
+                  skeleton={props.skeleton}
+                />
+              )}
+            </For>
+          </div>
+        </Tooltip.Trigger>
+        <Tooltip.Portal>
+          <Tooltip.Content>{label()}</Tooltip.Content>
+        </Tooltip.Portal>
+      </Tooltip.Root>
     </div>
   );
 }
@@ -284,19 +330,13 @@ function DaySquare(props: { day: ContributionDay | null; skeleton: boolean }) {
         />
       }
     >
-      <Tooltip
-        as="span"
-        placement="top"
-        class="block size-(--heatmap-cell) shrink-0"
-        label={label}
-      >
-        <IntensitySwatch
-          level={day.intensity}
-          class="block size-full rounded-[3px]"
-          aria-label={label}
-          data-activity-day
-        />
-      </Tooltip>
+      <IntensitySwatch
+        level={day.intensity}
+        class="block size-(--heatmap-cell) shrink-0 rounded-[3px]"
+        aria-label={label}
+        data-activity-day
+        data-activity-date={day.date}
+      />
     </Show>
   );
 }
@@ -306,11 +346,13 @@ function IntensitySwatch(props: {
   class?: string;
   'aria-label'?: string;
   'data-activity-day'?: boolean;
+  'data-activity-date'?: string;
 }) {
   return (
     <span
       aria-label={props['aria-label']}
       data-activity-day={props['data-activity-day'] || undefined}
+      data-activity-date={props['data-activity-date']}
       class={cn(
         match(props.level)
           .with(0, () => 'bg-ink/10')

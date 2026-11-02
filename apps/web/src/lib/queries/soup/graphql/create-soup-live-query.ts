@@ -47,6 +47,7 @@ import {
 import { createUrqlInfiniteQuery } from '../../../urql-solid/create-urql-infinite-query';
 import type { UrqlInfiniteData } from '../../../urql-solid/types';
 import { registerChannelNotificationRefresh } from '../../channel/register-notification-refresh';
+import { subscribeToVisibleCacheChanges } from '../../subscribe-to-visible-cache-changes';
 import { registerGraphqlSoupRevalidations } from './active-queries';
 import { soupCacheTelemetry } from './cache-activity-telemetry';
 import { createPredicateQuery } from './create-predicate-query';
@@ -138,6 +139,7 @@ export function createSoupLiveQuery(
     baseline: Accessor<GraphqlSoupItem[]>;
   };
   type LocalProjection = {
+    observationId?: string;
     input: GraphqlSoupInput;
     generation: number;
     baselineKeys: ReadonlySet<string>;
@@ -193,6 +195,7 @@ export function createSoupLiveQuery(
   let localEvaluationPending = false;
   let cacheGeneration = 0;
   let cacheObservation = 0;
+  let observedCacheRevision: CacheRevision | undefined;
   let disposed = false;
   onCleanup(() => {
     disposed = true;
@@ -254,7 +257,12 @@ export function createSoupLiveQuery(
     batch(() => {
       // Cache pushes (including optimistic writes) can arrive before this ack.
       // Never rewind their watermark or republish/clear the visible row data.
-      if (cacheObservation === page.observation) {
+      const current = currentCacheRevision();
+      if (
+        (cacheObservation === page.observation ||
+          observedCacheRevision === revision) &&
+        (current === undefined || BigInt(revision) >= BigInt(current))
+      ) {
         setCurrentCacheRevision(revision);
         cacheObservation += 1;
       }
@@ -269,6 +277,7 @@ export function createSoupLiveQuery(
     if (!host) return;
     cacheGeneration += 1;
     const invalidateGeneration = () => {
+      observedCacheRevision = undefined;
       localRequest += 1;
       setCurrentCacheRevision(undefined);
       setNetworkAuthorityRevision(undefined);
@@ -291,9 +300,14 @@ export function createSoupLiveQuery(
         // Keep network data usable while the local cache is unavailable.
       }
     };
-    const unsubscribeChanges = host.onCacheChanged(
+    const unsubscribeChanges = subscribeToVisibleCacheChanges(
+      host,
       (revision) => {
-        cacheObservation += 1;
+        // Local reads and persistence acknowledgements may already have
+        // advanced past a queued notification within this generation.
+        const current = currentCacheRevision();
+        if (current !== undefined && BigInt(revision) <= BigInt(current))
+          return;
         if (
           networkAuthorityRevision() !== undefined &&
           networkAuthorityRevision() !== revision &&
@@ -304,8 +318,14 @@ export function createSoupLiveQuery(
         }
         setCurrentCacheRevision(revision);
       },
-      // The authority watermark must observe the same writes as the live view.
-      { includeHydration: true }
+      {
+        observation: () => localProjection()?.observationId,
+        // Fence in-flight network acknowledgements before the coalesced read.
+        onChange: (revision) => {
+          observedCacheRevision = revision;
+          cacheObservation += 1;
+        },
+      }
     );
     const unsubscribeGeneration = host.onCacheGenerationChanged(() => {
       soupCacheTelemetry.record('generation');
@@ -610,26 +630,27 @@ export function createSoupLiveQuery(
       live.status() === 'ready'
     );
   };
+  // Revision-only acknowledgements must not walk the same row set again.
+  const liveRows = createMemo(() => live.data()?.records);
+  const liveKeys = createMemo(() => live.data()?.keys);
+  const hasLiveData = createMemo(() => live.data() !== undefined);
   const liveRecords = createMemo(
     () => {
-      const snapshot = live.data();
-      return snapshot
-        ? materializeReconciledSoup(
-            snapshot.keys,
-            snapshot.records,
-            serverRecords()
-          )
+      const rows = liveRows();
+      const keys = liveKeys();
+      return rows && keys
+        ? materializeReconciledSoup(keys, rows, serverRecords())
         : [];
     },
     undefined,
     { equals: arrayEquals }
   );
   maintainedProjection = createMemo(() => {
-    const snapshot = live.data();
     const input = firstPageInput();
-    if (!snapshot || !input || !maintainedQueryAvailable()) return;
+    if (!hasLiveData() || !input || !maintainedQueryAvailable()) return;
     const withoutEmail = options().localReconciliation === 'without-email';
     return {
+      observationId: live.observationId(),
       input,
       generation: cacheGeneration,
       baselineKeys: new Set(
@@ -646,6 +667,13 @@ export function createSoupLiveQuery(
     };
   });
 
+  let lastLocalEvaluation:
+    | {
+        definition: ReturnType<typeof localSource>;
+        revision: CacheRevision;
+        generation: number;
+      }
+    | undefined;
   createEffect(() => {
     localEvaluationTrigger();
     const revision = currentCacheRevision();
@@ -664,6 +692,15 @@ export function createSoupLiveQuery(
     const loaded = definition?.records.length ?? 0;
     const edge = localMailEdge();
     const existing = untrack(localProjection);
+    // A coherent read can advance beyond the revision that started it. Its
+    // publication must not rescan that same unchanged source a second time.
+    if (
+      !definition?.mailView &&
+      lastLocalEvaluation?.definition === definition &&
+      lastLocalEvaluation?.revision === revision &&
+      lastLocalEvaluation?.generation === cacheGeneration
+    )
+      return;
     if (
       existing?.mail &&
       existing.input === input &&
@@ -780,6 +817,15 @@ export function createSoupLiveQuery(
               discarded = true;
               return;
             }
+            // Notifications are coalesced for UI work, but their immediate
+            // watermark still rejects an obsolete filter before fetching rows.
+            if (
+              observedCacheRevision !== undefined &&
+              BigInt(result.revision) < BigInt(observedCacheRevision)
+            ) {
+              discarded = true;
+              return;
+            }
             // Older native hosts accept but ignore the baseline on Mail reads.
             // Their omission cannot prove non-membership; retain the server list.
             if (
@@ -801,7 +847,11 @@ export function createSoupLiveQuery(
               baseline: records,
               mailView,
             });
-            if (requestId !== localRequest) {
+            if (
+              requestId !== localRequest ||
+              (observedCacheRevision !== undefined &&
+                BigInt(result.revision) < BigInt(observedCacheRevision))
+            ) {
               discarded = true;
               return;
             }
@@ -812,8 +862,17 @@ export function createSoupLiveQuery(
               continue;
             }
             const reconciledRecords = selected.records;
+            lastLocalEvaluation = {
+              definition,
+              revision: result.revision,
+              generation: requestGeneration,
+            };
             batch(() => {
               setLocalProjection({
+                observationId:
+                  result.kind === 'mail-page'
+                    ? result.observationId
+                    : undefined,
                 input: definition.input,
                 generation: requestGeneration,
                 baselineKeys: new Set(records.map(soupItemKey)),
@@ -1138,6 +1197,8 @@ export function createSoupLiveQuery(
           setLocalMailCurrent(result.retainedKeys?.length === 0);
           setLocalProjection({
             ...local,
+            // This page observes only new rows; a through-read must observe the combined window.
+            observationId: undefined,
             baselineKeys: reconcile
               ? new Set(definition.records.map(soupItemKey))
               : local.baselineKeys,

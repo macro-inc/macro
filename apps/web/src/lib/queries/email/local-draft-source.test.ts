@@ -124,6 +124,26 @@ describe('local draft discovery', () => {
     }
   });
 
+  it('coalesces a burst of auth and draft notifications into one storage read', async () => {
+    runtime.list.mockResolvedValue([]);
+    const dispose = createRoot((dispose) => {
+      createLocalDraftSource(() => true);
+      return dispose;
+    });
+    await Promise.resolve();
+    runtime.list.mockClear();
+    for (let i = 0; i < 100; i++) {
+      for (const listener of runtime.cacheListeners)
+        listener({
+          query: { queryHash: JSON.stringify(authKeys.userInfo.queryKey) },
+        });
+      for (const listener of runtime.listeners) listener();
+    }
+    await Promise.resolve();
+    expect(runtime.list).toHaveBeenCalledTimes(1);
+    dispose();
+  });
+
   it('emits one canonical conversation row and excludes synced or deleting copies', () => {
     const rows = localDraftEntities([
       draft({ serverThreadId: 'canonical' }),

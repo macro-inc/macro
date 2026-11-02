@@ -1,4 +1,11 @@
-import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import { createSharedRoot } from '@solid-primitives/rootless';
+import {
+  type Accessor,
+  batch,
+  createEffect,
+  createSignal,
+  onCleanup,
+} from 'solid-js';
 
 /** What compaction remembers about the moment it compacted. */
 export type PillCompactionState =
@@ -35,6 +42,73 @@ export function nextPillCompaction(
     : state;
 }
 
+type CompactionJob = {
+  reset: () => void;
+  measure: () => () => void;
+};
+
+// Share resize observation while any rows are mounted. Read every dirty row
+// before applying compaction, so one row's write cannot force the next's layout.
+const useCompactionObserver = createSharedRoot(() => {
+  const resizing = new Map<Element, Set<CompactionJob>>();
+  const pending = new Set<CompactionJob>();
+  let frame: number | undefined;
+  const schedule = (job: CompactionJob) => {
+    pending.add(job);
+    if (frame !== undefined) return;
+    frame = requestAnimationFrame(() => {
+      frame = undefined;
+      const updates = [...pending].map((job) => job.measure());
+      pending.clear();
+      batch(() => updates.forEach((update) => update()));
+    });
+  };
+  const resize = new ResizeObserver((entries) => {
+    for (const { target } of entries) {
+      resizing.get(target)?.forEach(schedule);
+    }
+  });
+  onCleanup(() => {
+    resize.disconnect();
+    if (frame !== undefined) cancelAnimationFrame(frame);
+  });
+  return (pills: HTMLElement, container: HTMLElement, job: CompactionJob) => {
+    const targets = new Set([pills, container]);
+    for (const target of targets) {
+      let jobs = resizing.get(target);
+      if (!jobs) {
+        jobs = new Set();
+        resizing.set(target, jobs);
+        resize.observe(target);
+      }
+      jobs.add(job);
+    }
+    // MutationObserver cannot unobserve a single node. Keep mutation ownership
+    // with the row, so removing one never reconnects every surviving row.
+    const mutation = new MutationObserver(() => {
+      job.reset();
+      schedule(job);
+    });
+    mutation.observe(pills, {
+      childList: true,
+      subtree: true,
+      characterData: true,
+    });
+    onCleanup(() => {
+      pending.delete(job);
+      for (const target of targets) {
+        const jobs = resizing.get(target);
+        jobs?.delete(job);
+        if (!jobs?.size) {
+          resize.unobserve(target);
+          resizing.delete(target);
+        }
+      }
+      mutation.disconnect();
+    });
+  };
+});
+
 /**
  * Whether a row's pills should collapse to their icons and overlap so the
  * title keeps its room. Content changes start over from the expanded pills.
@@ -44,42 +118,22 @@ export function createPillCompaction(
   row: (element: HTMLElement) => HTMLElement | null
 ) {
   const [state, setState] = createSignal<PillCompactionState>(EXPANDED);
-
+  const observe = useCompactionObserver();
   createEffect(() => {
     const pills = element();
     if (!pills) return;
     const container = row(pills) ?? pills;
-    let frame: number | undefined;
-    const measure = () => {
-      frame = undefined;
-      setState((current) =>
-        nextPillCompaction(current, {
+    observe(pills, container, {
+      reset: () => setState(EXPANDED),
+      measure: () => {
+        const measurement = {
           overflow: pills.scrollWidth - pills.clientWidth,
           rowWidth: container.clientWidth,
-        })
-      );
-    };
-    const schedule = () => {
-      if (frame === undefined) frame = requestAnimationFrame(measure);
-    };
-    const resize = new ResizeObserver(schedule);
-    resize.observe(pills);
-    resize.observe(container);
-    const mutation = new MutationObserver(() => {
-      setState(EXPANDED);
-      schedule();
-    });
-    mutation.observe(pills, {
-      childList: true,
-      subtree: true,
-      characterData: true,
-    });
-    onCleanup(() => {
-      resize.disconnect();
-      mutation.disconnect();
-      if (frame !== undefined) cancelAnimationFrame(frame);
+        };
+        return () =>
+          setState((current) => nextPillCompaction(current, measurement));
+      },
     });
   });
-
   return { compact: () => state().compact };
 }

@@ -614,9 +614,6 @@ export type CacheChangeHints = {
   searchChangedBuckets?: string[];
 };
 
-/** Previous name, kept until the cache worker adopts CacheChangeHints. */
-export type HydrationSearchChanges = CacheChangeHints;
-
 export type HydrationResult = CacheChangeHints &
   (
     | { kind: 'data'; data: unknown; revision: CacheRevision }

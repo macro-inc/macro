@@ -54,7 +54,7 @@ vi.mock('@app/features/calendar/components/CalendarViewContext', () => ({
 vi.mock('@app/features/calendar/hooks/use-calendar-hotkeys', () => ({
   useCalendarHotkeys: () => {},
 }));
-vi.mock('@solid-primitives/resize-observer', () => ({
+vi.mock('@core/util/createElementSize', () => ({
   createElementSize: () => ({ width: 1200, height: 60 }),
 }));
 vi.mock('@app/features/calendar/components/MonthDrawer', () => ({

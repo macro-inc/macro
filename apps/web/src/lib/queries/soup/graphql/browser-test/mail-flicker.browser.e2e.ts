@@ -1,7 +1,12 @@
 import { writeFile } from 'node:fs/promises';
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
 import type { SoupQueryVariables } from '../../../../service-clients/service-storage/graphql/generated/graphql';
 import { CACHED_IDS, id, response, SERVER_IDS, STALE_IDS } from './fixtures';
+
+async function openFixture(page: Page, url: string) {
+  await page.goto(url);
+  await page.waitForFunction(() => window.mailFlicker?.ready === true);
+}
 
 function heldResponse() {
   return {
@@ -32,7 +37,8 @@ for (const result of ['emails', 'empty'] as const) {
         json: { data: response(result === 'emails' ? SERVER_IDS : []) },
       });
     });
-    await page.goto(
+    await openFixture(
+      page,
       `/?scope=cold-noise-${crypto.randomUUID()}&seed=false&tab=signal`
     );
     await page.evaluate(() => window.mailFlicker.releaseLocalReads());
@@ -82,7 +88,7 @@ test('Noise never reintroduces repaired stale threads between cached and network
     }
     await route.fulfill({ json: { data: response(noise ? SERVER_IDS : []) } });
   });
-  await page.goto(`/?scope=${scope}`);
+  await openFixture(page, `/?scope=${scope}`);
   const rows = page.locator('[data-thread-id]');
   const list = page.locator('#mail-list');
   const expected = SERVER_IDS.map(id);
@@ -111,7 +117,7 @@ test('Noise never reintroduces repaired stale threads between cached and network
     network = heldResponse();
     if (visit === 'opfs-reload') {
       await page.goto('about:blank');
-      await page.goto(`/?scope=${scope}&seed=false`);
+      await openFixture(page, `/?scope=${scope}&seed=false`);
     } else {
       await page.getByRole('button', { name: 'Drafts', exact: true }).click();
       await expect(list).toHaveAttribute('data-tab', 'drafts');

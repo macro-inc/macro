@@ -1,6 +1,13 @@
+import { usePageVisibility } from '@solid-primitives/page-visibility';
 import { createResizeObserver } from '@solid-primitives/resize-observer';
 import { $getRoot, type LexicalEditor } from 'lexical';
-import { type Accessor, createEffect, createSignal, onCleanup } from 'solid-js';
+import {
+  type Accessor,
+  createEffect,
+  createSignal,
+  on,
+  onCleanup,
+} from 'solid-js';
 import { match } from 'ts-pattern';
 import { createHasMultilineStructure } from './create-has-multiline-structure';
 
@@ -19,6 +26,7 @@ export function createComposerLayout(
     mode?: Accessor<ComposerLayoutMode>;
   }
 ) {
+  const visible = usePageVisibility();
   const [root, setRoot] = createSignal<HTMLElement | null>(null);
   const hasMultilineStructure = createHasMultilineStructure(editor);
   const [hasWrappedLines, setHasWrappedLines] = createSignal(false);
@@ -30,9 +38,8 @@ export function createComposerLayout(
       .with('expanded', () => false)
       .with('collapsed', () => true)
       .exhaustive();
-  let queued = false;
   let disposed = false;
-  let resizeFrame: number | undefined;
+  let frame: number | undefined;
 
   const measure = () => {
     const element = root();
@@ -45,6 +52,20 @@ export function createComposerLayout(
       editor.getEditorState().read(() => $getRoot().getTextContentSize() === 0)
     ) {
       setHasWrappedLines(false);
+      return;
+    }
+    const measureRange = (editorElement: HTMLElement) => {
+      const range = element.ownerDocument.createRange();
+      range.selectNodeContents(editorElement);
+      const lineHeight = Number.parseFloat(
+        getComputedStyle(editorElement).lineHeight
+      );
+      setHasWrappedLines(range.getBoundingClientRect().height > lineHeight + 1);
+    };
+    // The live editor already has the compact CSS. Read it directly without
+    // inserting another composer and invalidating the page's layout.
+    if (container.getAttribute('data-composer-compact') === 'true') {
+      measureRange(element);
       return;
     }
     const containerWidth = container.getBoundingClientRect().width;
@@ -83,27 +104,31 @@ export function createComposerLayout(
     container.parentElement.append(probe);
     try {
       if (probeEditor.getBoundingClientRect().width <= 0) return;
-      const range = element.ownerDocument.createRange();
-      range.selectNodeContents(probeEditor);
-      const lineHeight = Number.parseFloat(
-        getComputedStyle(probeEditor).lineHeight
-      );
-      setHasWrappedLines(range.getBoundingClientRect().height > lineHeight + 1);
+      measureRange(probeEditor);
     } finally {
       probe.remove();
     }
   };
 
-  // Lexical and Solid may still be updating the DOM when a draft changes.
-  // A microtask measures the committed layout, including in background tabs.
+  // Lexical, Solid, decorators and controls can all change in one edit.
+  // Read their final DOM once before paint, outside the input dispatch and
+  // ResizeObserver delivery. Hidden pages resume measurement when revealed.
   const schedule = () => {
-    if (queued || disposed) return;
-    queued = true;
-    queueMicrotask(() => {
-      queued = false;
-      if (!disposed) measure();
+    if (frame !== undefined || disposed || !visible()) return;
+    frame = requestAnimationFrame(() => {
+      frame = undefined;
+      if (!disposed && visible()) measure();
     });
   };
+  createEffect(
+    on(visible, (isVisible) => {
+      if (isVisible) schedule();
+      else if (frame !== undefined) {
+        cancelAnimationFrame(frame);
+        frame = undefined;
+      }
+    })
+  );
 
   onCleanup(
     editor.registerRootListener((element) => {
@@ -111,20 +136,7 @@ export function createComposerLayout(
     })
   );
   onCleanup(editor.registerUpdateListener(schedule));
-  // A wrapping change can resize the container and its scroll viewport.
-  // Applying it during ResizeObserver delivery invalidates ancestors already
-  // measured in that delivery. Coalesce resize work into the next frame;
-  // draft edits still measure in a microtask before their first paint.
-  createResizeObserver(
-    () => [root(), options.container()],
-    () => {
-      if (resizeFrame !== undefined) return;
-      resizeFrame = requestAnimationFrame(() => {
-        resizeFrame = undefined;
-        schedule();
-      });
-    }
-  );
+  createResizeObserver(() => [root(), options.container()], schedule);
   createEffect(() => {
     isCompact();
     options.container();
@@ -153,7 +165,7 @@ export function createComposerLayout(
   });
   onCleanup(() => {
     disposed = true;
-    if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
+    if (frame !== undefined) cancelAnimationFrame(frame);
   });
 
   return { isCompact, hasMultilineContent };

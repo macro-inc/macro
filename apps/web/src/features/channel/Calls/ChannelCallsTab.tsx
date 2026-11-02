@@ -24,6 +24,7 @@ import {
   withSplitPanelOwner,
 } from '@components/app/split-layout/layoutUtils';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createElementSize } from '@core/util/createElementSize';
 import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateCallsGraphic from '@design/empty-state-calls.svg';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
@@ -36,7 +37,6 @@ import {
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { validateSearchServiceText } from '@queries/soup/search';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, EmptyStatePanel } from '@ui';
 import {
   createEffect,

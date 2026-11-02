@@ -659,7 +659,7 @@ describe('CacheWorkerCore', () => {
     ]);
   });
 
-  it('keeps a calendar commit behind the hydration it covers and fans out its deletions', async () => {
+  it('supersedes unrelated queued hydration on calendar commit and fans out deletions', async () => {
     const order: string[] = [];
     let releaseBlocker!: () => void;
     let markBlockerStarted!: () => void;
@@ -730,8 +730,8 @@ describe('CacheWorkerCore', () => {
     const hydration = core.handleRequest(port, {
       id: 3,
       kind: 'hydrate',
-      query: 'query CalendarOccurrences { occurrences }',
-      data: { occurrences: [] },
+      query: 'query BackgroundDocuments { documents { id } }',
+      data: { documents: [] },
     });
     const commit = core.handleRequest(port, {
       id: 4,
@@ -749,12 +749,14 @@ describe('CacheWorkerCore', () => {
     releaseBlocker();
     await Promise.all([running, hydration, commit, read]);
 
-    expect(order).toEqual([
-      'read',
-      'calendar-range',
-      'hydrate',
-      'calendar-commit',
-    ]);
+    expect(order).toEqual(['read', 'calendar-commit', 'calendar-range']);
+    expect(messages).toContainEqual(
+      expect.objectContaining({
+        id: 3,
+        ok: false,
+        error: expect.stringContaining('hydration superseded'),
+      })
+    );
     expect(messages).toContainEqual({ id: 5, ok: true, result: range });
     expect(messages).toContainEqual({
       kind: 'ops-affected',
@@ -844,10 +846,17 @@ describe('CacheWorkerCore', () => {
     await Promise.all([running, hydration, write]);
 
     expect(record).toEqual({ id: 'doc-1', title: 'newer' });
-    expect(hydrateQuery).toHaveBeenCalledBefore(writeQuery);
+    expect(hydrateQuery).not.toHaveBeenCalled();
+    expect(port.postMessage).toHaveBeenCalledWith(
+      expect.objectContaining({
+        id: 3,
+        ok: false,
+        error: expect.stringContaining('hydration superseded'),
+      })
+    );
   });
 
-  it.each(['commit', 'delete'] as const)(
+  it.each(['commit', 'delete', 'invalidate', 'calendar'] as const)(
     'preserves a %s after older hydration queued behind a busy worker',
     async (action) => {
       const blocker = Promise.withResolvers<void>();
@@ -876,6 +885,14 @@ describe('CacheWorkerCore', () => {
           },
           deleteKeys: async () => {
             title = undefined;
+            return written;
+          },
+          invalidateKeys: async () => {
+            title = undefined;
+            return written;
+          },
+          calendarCommit: async () => {
+            title = 'calendar';
             return written;
           },
         }),
@@ -907,13 +924,29 @@ describe('CacheWorkerCore', () => {
               query: 'mutation Save { document { title } }',
               data: { document: { title: 'committed' } },
             }
-          : { id: 4, kind: 'delete-records', keys: ['Document:doc-1'] }
+          : action === 'calendar'
+            ? { id: 4, kind: 'calendar-commit', commit: {} }
+            : {
+                id: 4,
+                kind: action === 'invalidate' ? 'invalidate' : 'delete-records',
+                keys: ['Document:doc-1'],
+              }
       );
       blocker.resolve();
       await Promise.all([running, hydration, write]);
-      expect(title).toBe(action === 'commit' ? 'committed' : undefined);
-      expect(port.postMessage).not.toHaveBeenCalledWith(
-        expect.objectContaining({ ok: false })
+      expect(title).toBe(
+        action === 'commit'
+          ? 'committed'
+          : action === 'calendar'
+            ? 'calendar'
+            : undefined
+      );
+      expect(port.postMessage).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: 3,
+          ok: false,
+          error: expect.stringContaining('hydration superseded'),
+        })
       );
     }
   );

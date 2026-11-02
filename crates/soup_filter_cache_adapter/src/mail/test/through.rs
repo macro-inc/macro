@@ -236,3 +236,187 @@ fn a_window_spans_several_index_pages() {
         assert_eq!(keys, all[..1_050], "fewest rows past one index page");
     });
 }
+
+#[test]
+fn short_window_lookahead_does_not_skip_the_next_row() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        store(&mut engine, (1..=100).map(readable).collect()).await;
+        let all = all_keys(&mut engine, filters(), "ALL").await;
+        let (shown, edge) = loaded(&mut engine).await;
+        let PageResult::MailPage {
+            keys, next_cursor, ..
+        } = through_at_least(&mut engine, "generation", &edge, 20).await
+        else {
+            panic!("window")
+        };
+        assert_eq!(keys, shown);
+        let PageResult::MailPage { keys, .. } =
+            read(&mut engine, filters(), "ALL", next_cursor).await
+        else {
+            panic!("continuation")
+        };
+        assert_eq!(keys, all[20..30]);
+    });
+}
+
+#[test]
+fn window_proofs_skip_older_mail_but_invalidate_new_visible_entrants() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        store(&mut engine, (1..=40).map(readable).collect()).await;
+        let PageResult::MailPage {
+            observation_id,
+            keys,
+            ..
+        } = read(&mut engine, filters(), "ALL", None).await
+        else {
+            panic!("first page")
+        };
+        assert_eq!(keys.len(), 10);
+        let selection = cache_core::record_selection::RecordSelection::parse(
+            cache_core::meta::bundled_schema_ref(),
+            "fragment Item on GraphqlSoupEmailThread { id }",
+            "Item",
+        )
+        .unwrap();
+        engine
+            .read_records_by_keys(
+                &selection,
+                &keys
+                    .iter()
+                    .map(|key| EntityKey(key.clone().into()))
+                    .collect::<Vec<_>>(),
+            )
+            .await
+            .unwrap();
+        store(&mut engine, vec![readable(0)]).await;
+        assert!(
+            engine
+                .unchanged_observed_windows()
+                .await
+                .unwrap()
+                .contains(&observation_id)
+        );
+        store(&mut engine, vec![readable(100)]).await;
+        assert!(
+            !engine
+                .unchanged_observed_windows()
+                .await
+                .unwrap()
+                .contains(&observation_id)
+        );
+    });
+}
+
+#[test]
+fn exhausted_windows_notice_when_older_hydration_creates_a_continuation() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        store(&mut engine, (10..20).map(readable).collect()).await;
+        let PageResult::MailPage {
+            observation_id,
+            keys,
+            next_cursor,
+            ..
+        } = read(&mut engine, filters(), "ALL", None).await
+        else {
+            panic!("first page")
+        };
+        assert_eq!(keys.len(), 10);
+        assert!(next_cursor.is_none());
+        let selection = cache_core::record_selection::RecordSelection::parse(
+            cache_core::meta::bundled_schema_ref(),
+            "fragment Item on GraphqlSoupEmailThread { id }",
+            "Item",
+        )
+        .unwrap();
+        engine
+            .read_records_by_keys(
+                &selection,
+                &keys
+                    .iter()
+                    .map(|key| EntityKey(key.clone().into()))
+                    .collect::<Vec<_>>(),
+            )
+            .await
+            .unwrap();
+        store(&mut engine, vec![readable(0)]).await;
+        assert!(
+            !engine
+                .unchanged_observed_windows()
+                .await
+                .unwrap()
+                .contains(&observation_id)
+        );
+        let PageResult::MailPage { next_cursor, .. } =
+            read(&mut engine, filters(), "ALL", None).await
+        else {
+            panic!("updated page")
+        };
+        assert!(next_cursor.is_some());
+    });
+}
+
+#[test]
+fn deleting_the_last_lookahead_invalidates_a_windows_continuation_proof() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        store(&mut engine, (10..21).map(readable).collect()).await;
+        let PageResult::MailPage {
+            observation_id,
+            keys,
+            next_cursor,
+            ..
+        } = read(&mut engine, filters(), "ALL", None).await
+        else {
+            panic!("first page")
+        };
+        let PageResult::MailPage {
+            keys: remaining, ..
+        } = read(&mut engine, filters(), "ALL", next_cursor).await
+        else {
+            panic!("continuation")
+        };
+        assert_eq!(remaining.len(), 1);
+        let selection = cache_core::record_selection::RecordSelection::parse(
+            cache_core::meta::bundled_schema_ref(),
+            "fragment Item on GraphqlSoupEmailThread { id }",
+            "Item",
+        )
+        .unwrap();
+        engine
+            .read_records_by_keys(
+                &selection,
+                &keys
+                    .iter()
+                    .map(|key| EntityKey(key.clone().into()))
+                    .collect::<Vec<_>>(),
+            )
+            .await
+            .unwrap();
+        engine
+            .put_records_with_projections(
+                None,
+                vec![],
+                vec![cache_core::predicate::ProjectionMutation::Delete(
+                    RecordKey::new(remaining[0].clone()).unwrap(),
+                )],
+            )
+            .await
+            .unwrap();
+        assert!(
+            !engine
+                .unchanged_observed_windows()
+                .await
+                .unwrap()
+                .contains(&observation_id)
+        );
+        let PageResult::MailPage { next_cursor, .. } =
+            read(&mut engine, filters(), "ALL", None).await
+        else {
+            panic!("updated page")
+        };
+        assert!(next_cursor.is_none());
+    });
+}

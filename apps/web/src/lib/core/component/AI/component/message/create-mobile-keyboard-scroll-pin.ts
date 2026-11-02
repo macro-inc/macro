@@ -1,8 +1,6 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import {
-  createElementSize,
-  makeResizeObserver,
-} from '@solid-primitives/resize-observer';
+import { createElementSize } from '@core/util/createElementSize';
+import { makeResizeObserver } from '@solid-primitives/resize-observer';
 import { type Accessor, createEffect, on, onMount } from 'solid-js';
 
 // Matches the AI chat's own near-bottom threshold (see ChatMessages); larger
@@ -26,7 +24,7 @@ const NEAR_BOTTOM_THRESHOLD = 100;
  */
 export function createMobileKeyboardScrollPin(opts: {
   /** The scroll container (the `[data-chat-scroll]` element). */
-  scrollEl: Accessor<Element | null | undefined>;
+  scrollEl: Accessor<HTMLElement | null | undefined>;
   /** The messages wrapper that carries the trailing inset as padding. */
   wrapperEl: Accessor<HTMLElement | null | undefined>;
   scrollToBottom: (behavior: 'instant' | 'smooth') => void;
@@ -53,8 +51,8 @@ export function createMobileKeyboardScrollPin(opts: {
   );
 
   // Wrapper border-box growth (keyboard dismissing → dock inset restored).
-  // Must observe the border-box: a content-box observer (createElementSize)
-  // never sees a padding-only change, so it'd silently miss the dock's inset.
+  // Must observe the border-box: a content-box observer never sees a
+  // padding-only change, so it'd silently miss the dock's inset.
   onMount(() => {
     const wrapper = wrapperEl();
     if (!wrapper) return;

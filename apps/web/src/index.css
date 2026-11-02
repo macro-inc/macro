@@ -526,19 +526,25 @@ body.tauri-ios {
   --font-mono: "Roboto Mono Variable",  monospace;
   --text-xxs: 0.625rem;
 
+  /* Long-running status cues use discrete poses: software compositing must
+     not repaint the window at display refresh rate for background progress. */
+  --animate-spin: spin 1s steps(8, end) infinite;
+  --animate-pulse: pulse 2s steps(5, end) infinite;
+  --animate-ping: ping 1s steps(4, end) infinite;
+
   /* Animations */
   --animate-slide-in: slideIn 150ms cubic-bezier(0.16, 1, 0.3, 1);
   --animate-menu-open: menu-open 120ms cubic-bezier(0.16, 1, 0.3, 1);
   --animate-dialog-overlay-open: dialog-overlay-open 120ms ease-out;
   --animate-dialog-content-open: dialog-content-open 160ms cubic-bezier(0.16, 1, 0.3, 1);
   --animate-dialog-fullscreen-open: dialog-fullscreen-open 160ms cubic-bezier(0.16, 1, 0.3, 1);
-  --animate-typing-dot: typing-dot 1s infinite;
+  --animate-typing-dot: typing-dot 1.2s steps(3, end) infinite;
   --animate-swipe-out: swipeOut 100ms ease-out;
   --animate-swipe-out-left: swipeOutLeft 100ms ease-out;
-  --animate-indeterminate-bar: indeterminate-bar 1.1s ease-in-out infinite;
-  --animate-todo-pulse: todo-pulse 1.6s ease-in-out infinite;
-  /* Two laps around the circle, easing in and out, then a long rest before the next. */
-  --animate-update-glow: update-glow-spin 8s infinite, update-glow-fade 8s linear infinite;
+  --animate-indeterminate-bar: indeterminate-bar 1.1s steps(6, end) infinite;
+  --animate-todo-pulse: todo-pulse 1.6s steps(4, end) infinite;
+  /* Two laps in discrete poses, then a long rest before the next. */
+  --animate-update-glow: update-glow 8s step-end infinite;
   --animate-accordion-down: accordion-down 150ms ease-out;
   --animate-accordion-up: accordion-up 150ms ease-out;
 
@@ -1153,111 +1159,6 @@ html[data-theme-light='true'] :is(.glass-input, .elevated-surface) {
   }
 }
 
-@property --press-light {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0;
-}
-
-@property --press-spread {
-  syntax: "<number>";
-  inherits: false;
-  initial-value: 0.45;
-}
-
-@property --press-expansion {
-  syntax: "<length>";
-  inherits: true;
-  initial-value: 0px;
-}
-
-/* Native iOS press paint layers belong to the material, including channel inputs.
-   ::before paints the live fill, shadow and tap-centered sheen; ::after keeps
-   the glass rim. No child nodes, computed-style snapshots or release cleanup.
-   Keep this scope in sync with glassPress.ts's surface selection. */
-html[data-platform='ios'][data-touch-device='true'] :is(
-  [data-glass-input],
-  [data-input] [data-composer-collapsed],
-  [data-mobile-dock-island],
-  [data-header-island],
-  [data-slot='button-group']:is(.glass, [class~='touch:glass']),
-  :is(button, a, [role='button'], [role='tab']):is(.glass, [class~='touch:glass'], .island, [class~='touch:island'])
-) {
-  /* The shimmer replaces native tap feedback only on these press surfaces. */
-  -webkit-tap-highlight-color: transparent;
-  --press-expansion: 0px;
-  position: relative;
-  isolation: isolate;
-  overflow: visible;
-  background-color: transparent !important;
-  backdrop-filter: none;
-  box-shadow: none;
-  scale: 1;
-  transform-origin: center;
-  transition: scale 300ms cubic-bezier(0.22, 1, 0.36, 1),
-    --press-expansion 300ms cubic-bezier(0.22, 1, 0.36, 1);
-
-  & button {
-    scale: 1 !important;
-  }
-
-  &::before {
-    content: "";
-    position: absolute;
-    z-index: -1;
-    pointer-events: none;
-    background-color: color-mix(in oklch, var(--glass-press-tint) calc(8% * var(--press-light)), var(--glass-fill));
-    background-image: radial-gradient(
-      circle calc(var(--press-shimmer-size, 100px) * var(--press-spread) / 2)
-      at calc(var(--press-x, 50%) + var(--press-expansion)) calc(var(--press-y, 50%) + var(--press-expansion)),
-      color-mix(in oklch, var(--glass-press-tint) calc(28% * var(--press-light)), transparent),
-      color-mix(in oklch, var(--glass-press-tint) calc(12% * var(--press-light)), transparent) 45%,
-      transparent 100%
-    );
-    backdrop-filter: var(--glass-backdrop, none);
-    box-shadow: var(--glass-shadow, none);
-    transition: --press-light 220ms ease-out,
-      --press-spread 350ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  &::before, &::after {
-    inset: calc(-1 * var(--press-expansion));
-    border-radius: inherit;
-  }
-
-  & svg {
-    scale: 1;
-    transform-origin: center;
-    transform-box: view-box;
-    transition: scale 300ms cubic-bezier(0.22, 1, 0.36, 1);
-  }
-
-  &[data-glass-press]::before {
-    --press-light: 1;
-  }
-
-  @media (prefers-reduced-motion: no-preference) {
-    &[data-glass-press='round'] {
-      scale: var(--press-scale);
-    }
-    &[data-glass-press='wide'] {
-      --press-expansion: var(--press-outset);
-
-      & svg {
-        scale: 1.18;
-      }
-    }
-    &[data-glass-press]::before {
-      --press-spread: 1;
-    }
-  }
-
-  @media (prefers-reduced-motion: reduce) {
-    &, &::before, &::after, & svg {
-      transition: none;
-    }
-  }
-}
 
 @layer base {
   html {
@@ -1329,6 +1230,87 @@ html[data-platform='ios'][data-touch-device='true'] :is(
   }
 }
 
+/* Utility declarations also cover motion-safe and responsive variants. */
+@utility animate-spin {
+  animation-play-state: var(--animation-play-state, running);
+}
+
+@utility animate-pulse {
+  animation-play-state: var(--animation-play-state, running);
+}
+
+@utility animate-update-glow {
+  animation-play-state: var(--animation-play-state, running);
+}
+
+/* Change the theme animation itself so every utility variant obeys the preference. */
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --animate-spin: none;
+    --animate-pulse: none;
+    --animate-ping: none;
+    --animate-typing-dot: none;
+    --animate-indeterminate-bar: none;
+    --animate-todo-pulse: none;
+    --animate-update-glow: none;
+  }
+}
+
+/* Brand loader motion is shared; SVG instances own geometry and phase delays. */
+/* The original eased bar trajectory sampled every 200ms; no per-frame SMIL repaint. */
+.macro-brand-loader-column {
+  animation: macro-brand-loader-column 4s step-end infinite;
+  animation-play-state: var(--animation-play-state, running);
+}
+@keyframes macro-brand-loader-column {
+  0% { transform: translateY(-3.000px); }
+  5% { transform: translateY(-2.899px); }
+  10% { transform: translateY(-2.528px); }
+  15% { transform: translateY(-1.698px); }
+  20% { transform: translateY(0.133px); }
+  25% { transform: translateY(5.500px); }
+  30% { transform: translateY(10.867px); }
+  35% { transform: translateY(12.698px); }
+  40% { transform: translateY(13.528px); }
+  45% { transform: translateY(13.899px); }
+  50% { transform: translateY(14.000px); }
+  55% { transform: translateY(13.899px); }
+  60% { transform: translateY(13.528px); }
+  65% { transform: translateY(12.698px); }
+  70% { transform: translateY(10.867px); }
+  75% { transform: translateY(5.500px); }
+  80% { transform: translateY(0.133px); }
+  85% { transform: translateY(-1.698px); }
+  90% { transform: translateY(-2.528px); }
+  95% { transform: translateY(-2.899px); }
+  100% { transform: translateY(-3.000px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .macro-brand-loader-column { animation: none; }
+}
+
+/* The original eased bar trajectory sampled every 200ms; no per-frame SMIL repaint. */
+.macro-brand-legacy-column {
+  animation: macro-brand-legacy-column 2s step-end infinite;
+  animation-play-state: var(--animation-play-state, running);
+}
+@keyframes macro-brand-legacy-column {
+  0% { transform: translateY(0.000px); }
+  10% { transform: translateY(24.800px); }
+  20% { transform: translateY(49.600px); }
+  30% { transform: translateY(60.000px); }
+  40% { transform: translateY(60.000px); }
+  50% { transform: translateY(60.000px); }
+  60% { transform: translateY(60.000px); }
+  70% { transform: translateY(60.000px); }
+  80% { transform: translateY(63.854px); }
+  90% { transform: translateY(78.799px); }
+  100% { transform: translateY(120.000px); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .macro-brand-legacy-column { animation: none; transform: translateY(60px); }
+}
+
 .magic-chip-shimmer {
   background: linear-gradient(
     90deg,
@@ -1341,7 +1323,8 @@ html[data-platform='ios'][data-touch-device='true'] :is(
   background-repeat: no-repeat;
   background-clip: text;
   color: transparent;
-  animation: magic-chip-shimmer 1.8s linear infinite;
+  animation: magic-chip-shimmer 1.8s steps(9, end) infinite;
+  animation-play-state: var(--animation-play-state, running);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1357,27 +1340,29 @@ html[data-platform='ios'][data-touch-device='true'] :is(
    not two. */
 @keyframes agent-working-wave {
   0%,
-  60%,
+  66.666667%,
   100% {
     opacity: 0.35;
     transform: translateY(0);
   }
-  30% {
+  33.333333% {
     opacity: 1;
     transform: translateY(-2px);
   }
 }
 
 .agent-working-wave > * {
-  animation: agent-working-wave 1.8s ease-in-out infinite;
+  animation: agent-working-wave 1.8s steps(3, end) infinite;
+  animation-delay: var(--working-wave-phase, 0ms);
+  animation-play-state: var(--animation-play-state, running);
 }
 
 .agent-working-wave > :nth-child(2) {
-  animation-delay: 0.2s;
+  animation-delay: calc(var(--working-wave-phase, 0ms) + 0.2s);
 }
 
 .agent-working-wave > :nth-child(3) {
-  animation-delay: 0.4s;
+  animation-delay: calc(var(--working-wave-phase, 0ms) + 0.4s);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1413,6 +1398,7 @@ html[data-platform='ios'][data-touch-device='true'] :is(
     transparent
   );
   animation: skeleton-shimmer 1.4s infinite;
+  animation-play-state: var(--animation-play-state, running);
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -1507,15 +1493,26 @@ html[data-platform='ios'][data-touch-device='true'] :is(
 
 /* Ported from opencode's `--animate-pulse-scale` (github.com/sst/opencode, MIT © 2025 opencode). */
 /* easeInOutCubic: the laps start slow, speed up, and slow down into the end. */
-@keyframes update-glow-spin {
-  0%        { transform: rotate(0deg); animation-timing-function: cubic-bezier(0.65, 0, 0.35, 1); }
-  35%, 100% { transform: rotate(720deg); }
-}
-
-@keyframes update-glow-fade {
-  0%        { opacity: 0; }
-  3%, 31%   { opacity: 1; }
-  35%, 100% { opacity: 0; }
+/* One coupled comet clock; the invisible rest schedules no intermediate poses. */
+@keyframes update-glow {
+  0% { transform: rotate(0.00deg); opacity: 0.000; }
+  2.5% { transform: rotate(3.16deg); opacity: 0.833; }
+  3% { transform: rotate(4.64deg); opacity: 1.000; }
+  5% { transform: rotate(13.96deg); opacity: 1.000; }
+  7.5% { transform: rotate(35.16deg); opacity: 1.000; }
+  10% { transform: rotate(71.29deg); opacity: 1.000; }
+  12.5% { transform: rotate(130.16deg); opacity: 1.000; }
+  15% { transform: rotate(224.38deg); opacity: 1.000; }
+  17.5% { transform: rotate(360.00deg); opacity: 1.000; }
+  20% { transform: rotate(495.62deg); opacity: 1.000; }
+  22.5% { transform: rotate(589.84deg); opacity: 1.000; }
+  25% { transform: rotate(648.71deg); opacity: 1.000; }
+  27.5% { transform: rotate(684.84deg); opacity: 1.000; }
+  30% { transform: rotate(706.04deg); opacity: 1.000; }
+  31% { transform: rotate(711.42deg); opacity: 1.000; }
+  32.5% { transform: rotate(716.84deg); opacity: 0.625; }
+  35% { transform: rotate(720.00deg); opacity: 0.000; }
+  100% { transform: rotate(720.00deg); opacity: 0.000; }
 }
 
 @keyframes todo-pulse {
@@ -1531,7 +1528,7 @@ html[data-platform='ios'][data-touch-device='true'] :is(
 
 .incoming-call-shake {
   transform-origin: center;
-  animation: incoming-call-shake 1.2s ease-in-out infinite;
+  animation: incoming-call-shake 1.2s step-end infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {

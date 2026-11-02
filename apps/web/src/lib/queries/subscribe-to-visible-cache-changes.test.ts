@@ -1,6 +1,6 @@
 import type { CacheChangeListener, CacheHost } from '@graphql-cache/host/types';
 import {
-  type HydrationSearchChanges,
+  type CacheChangeHints,
   INITIAL_CACHE_REVISION,
 } from '@graphql-cache/protocol';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
@@ -29,7 +29,7 @@ function setup(
   dispose = subscribeToVisibleCacheChanges(host, refresh, options);
   return {
     host,
-    notify: (changes?: HydrationSearchChanges) =>
+    notify: (changes?: CacheChangeHints) =>
       notify(INITIAL_CACHE_REVISION, changes),
     refresh,
     unsubscribe,
@@ -277,4 +277,82 @@ describe('subscribeToVisibleCacheChanges', () => {
       expect(vi.getTimerCount()).toBe(0);
     }
   );
+});
+
+it('fences every revision immediately but refreshes with the latest coalesced revision', async () => {
+  vi.useFakeTimers();
+  let notify: CacheChangeListener = () => {};
+  const observed: string[] = [];
+  const refreshed: string[] = [];
+  dispose = subscribeToVisibleCacheChanges(
+    {
+      onCacheChanged: (cb) => {
+        notify = cb;
+        return () => {};
+      },
+    },
+    (revision) => {
+      refreshed.push(revision);
+    },
+    {
+      onChange: (revision) => {
+        observed.push(revision);
+      },
+    }
+  );
+  const { parseCacheRevision } = await import('@graphql-cache/protocol');
+  notify(parseCacheRevision('1'));
+  notify(parseCacheRevision('2'));
+  notify(parseCacheRevision('3'));
+  expect(observed).toEqual(['1', '2', '3']);
+  expect(refreshed).toEqual(['1']);
+  await vi.advanceTimersByTimeAsync(250);
+  expect(refreshed).toEqual(['1', '3']);
+});
+
+it('drops a pending watermark when the cache engine changes generation', async () => {
+  let notify: CacheChangeListener = () => {};
+  let reset = () => {};
+  const refresh = vi.fn();
+  const stopGeneration = vi.fn();
+  dispose = subscribeToVisibleCacheChanges(
+    {
+      onCacheChanged: (callback) => {
+        notify = callback;
+        return () => {};
+      },
+      onCacheGenerationChanged: (callback) => {
+        reset = () => callback({ storage: 'preserved' });
+        return stopGeneration;
+      },
+    },
+    refresh
+  );
+  notify(INITIAL_CACHE_REVISION);
+  notify(INITIAL_CACHE_REVISION);
+  expect(refresh).toHaveBeenCalledOnce();
+  reset();
+  await vi.advanceTimersByTimeAsync(250);
+  expect(refresh).toHaveBeenCalledOnce();
+  dispose();
+  expect(stopGeneration).toHaveBeenCalledOnce();
+});
+
+it('skips only the engine-proven displayed window and retains conservative fences', () => {
+  let observation: string | undefined = 'window-a';
+  const onChange = vi.fn();
+  const { notify, refresh } = setup(undefined, {
+    observation: () => observation,
+    onChange,
+  });
+  for (let i = 0; i < 100; i++) notify({ unchangedViews: ['window-a'] });
+  expect(refresh).not.toHaveBeenCalled();
+  expect(onChange).not.toHaveBeenCalled();
+  observation = 'window-b';
+  notify({ unchangedViews: ['window-a'] });
+  expect(refresh).toHaveBeenCalledOnce();
+  expect(onChange).toHaveBeenCalledOnce();
+  vi.advanceTimersByTime(250);
+  notify();
+  expect(refresh).toHaveBeenCalledTimes(2);
 });

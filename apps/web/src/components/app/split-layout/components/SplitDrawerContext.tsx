@@ -1,4 +1,4 @@
-import type { NullableSize } from '@solid-primitives/resize-observer';
+import type { ElementSize } from '@core/util/createElementSize';
 import {
   type Accessor,
   createContext,
@@ -15,14 +15,14 @@ interface ISplitDrawerContext {
   openDrawer: (id: string) => boolean;
   closeDrawer: (id: string) => boolean;
   isDrawerOpen: (id: string) => boolean;
-  panelSize: NullableSize;
+  panelSize: ElementSize;
 }
 
 const SplitDrawerContext = createContext<ISplitDrawerContext>();
 
 export function SplitDrawerGroup(
   props: ParentProps<{
-    panelSize: NullableSize;
+    panelSize: ElementSize;
   }>
 ) {
   const [currentDrawer, setCurrentDrawer] = createSignal<string | null>(null);

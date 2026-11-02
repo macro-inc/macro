@@ -16,6 +16,7 @@ import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { PullToRefresh } from '@components/app/mobile/PullToRefresh';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
+import { createElementSize } from '@core/util/createElementSize';
 import { fireAndForget } from '@core/util/fireAndForget';
 import EmptyStateNoSearchMatchGraphic from '@design/empty-state-no-search-match.svg';
 import type { ChannelEntity } from '@entity';
@@ -23,7 +24,6 @@ import { SOUP_ROW_CLASS } from '@entity/composed/list-entity/row-geometry';
 import { InboxDivider } from '@entity/composed/list-entity/shared';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import XIcon from '@icon/system/regular/x.svg';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { Button, cn, EmptyStatePanel } from '@ui';
 import {
   createEffect,

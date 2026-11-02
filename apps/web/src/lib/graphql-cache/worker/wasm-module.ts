@@ -12,6 +12,7 @@ import type { IdentityBindingWire, MutationInspection } from '../protocol';
 import type { EntityResolverWire } from '../exchange/entity-resolvers';
 import type {
   AffectedOperationsResult,
+  CacheChangeHints,
   CachedQueryInstanceWire,
   CachedQueryVariantWire,
   CacheRevision,
@@ -25,7 +26,6 @@ import type {
   EnqueueOptimisticMutationResult,
   EntityFilterCacheArgs,
   EntityFilterCacheResult,
-  HydrationSearchChanges,
   OptimisticLinkPatchWire,
   QueryRevalidationWire,
   ReadRecordsByKeysResult,
@@ -70,7 +70,7 @@ export interface CacheOpenResult {
 }
 
 export type CacheEngineHydrationResult = WriteResult &
-  HydrationSearchChanges & {
+  CacheChangeHints & {
     data: unknown | null;
   };
 

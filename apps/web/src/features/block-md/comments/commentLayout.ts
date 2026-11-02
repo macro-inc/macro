@@ -11,7 +11,7 @@ import {
   registerEditorWidthObserver,
   registerInternalLayoutShiftListener,
 } from '@core/component/LexicalMarkdown/plugins';
-import { createElementSize } from '@solid-primitives/resize-observer';
+import { createElementSize } from '@core/util/createElementSize';
 import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
 import {
   createEffect,

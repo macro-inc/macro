@@ -975,7 +975,9 @@ export function createQuickAccessValue(): QuickAccessContextValue {
     return sortIndexEntries(entries);
   });
 
+  let indexBuildDurationMs = 0;
   const processedData = createLazyMemo(() => {
+    const startedAt = performance.now();
     const allEntries = mergeMultipleSortedIndices([
       historyEntries().entries,
       channelEntries().entries,
@@ -1008,6 +1010,7 @@ export function createQuickAccessValue(): QuickAccessContextValue {
       }
     }
 
+    indexBuildDurationMs = performance.now() - startedAt;
     return deduplicatedEntries;
   });
 
@@ -1171,7 +1174,10 @@ export function createQuickAccessValue(): QuickAccessContextValue {
             filterPreviousItems: filterQuickAccessItems,
             sourceAttributes: () => {
               const channelIndex = channelEntries();
+              const entryCount = processedData().length;
               return {
+                'search.index.count': entryCount,
+                'search.index.last_build_ms': indexBuildDurationMs,
                 'search.channel_index.complete_count':
                   channelIndex.completeCount,
                 'search.channel_index.cached_recent_count':

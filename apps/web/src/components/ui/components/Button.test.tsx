@@ -32,6 +32,51 @@ describe('Button', () => {
     expect(onClick).toHaveBeenCalledTimes(2);
   });
 
+  it('updates content without recalculating unrelated style inputs', () => {
+    const [label, setLabel] = createSignal('Save');
+    const styleRead = vi.fn(() => 'custom-placement');
+    render(() => <Button class={styleRead()}>{label()}</Button>);
+    const button = screen.getByRole('button', { name: 'Save' });
+    const reads = styleRead.mock.calls.length;
+
+    setLabel('Saved');
+    expect(screen.getByRole('button', { name: 'Saved' })).toBe(button);
+    expect(styleRead).toHaveBeenCalledTimes(reads);
+  });
+
+  it('restores polymorphic keyboard activation and tab order after loading', () => {
+    const [loading, setLoading] = createSignal(false);
+    const [tabIndex, setTabIndex] = createSignal<number>();
+    const onClick = vi.fn();
+    render(() => (
+      <Button
+        as="div"
+        loading={loading()}
+        tabIndex={tabIndex()}
+        onClick={onClick}
+      >
+        Save
+      </Button>
+    ));
+    const button = screen.getByRole('button', { name: 'Save' });
+    expect(button.tabIndex).toBe(0);
+    fireEvent.keyDown(button, { key: 'Enter' });
+    expect(onClick).toHaveBeenCalledTimes(1);
+    setLoading(true);
+    expect(button.tabIndex).toBe(-1);
+    expect(button.getAttribute('aria-disabled')).toBe('true');
+    fireEvent.keyDown(button, { key: 'Enter' });
+    expect(onClick).toHaveBeenCalledTimes(1);
+    setLoading(false);
+    expect(button.tabIndex).toBe(0);
+    setTabIndex(3);
+    expect(button.tabIndex).toBe(3);
+    setTabIndex(undefined);
+    expect(button.tabIndex).toBe(0);
+    fireEvent.keyDown(button, { key: 'Enter' });
+    expect(onClick).toHaveBeenCalledTimes(2);
+  });
+
   it('inherits group settings only through explicit segments', () => {
     render(() => (
       <ButtonGroup variant="secondary" size="sm">

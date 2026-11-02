@@ -506,6 +506,31 @@ describe('runSoupBackfills', () => {
     );
   });
 
+  it('refetches superseded hydration without advancing its checkpoint', async () => {
+    vi.useFakeTimers();
+    seedCheckpoint();
+    const fetchPage = vi.fn(async (_input: FetchInput) => {
+      if (fetchPage.mock.calls.length <= 5) {
+        throw new Error(
+          'cache hydration superseded by a foreground write; refetch the page'
+        );
+      }
+      return { nextCursor: null };
+    });
+    const run = Effect.runPromise(
+      runSoupBackfill('user-1', mockCacheHost, lane('core-entities', fetchPage))
+    );
+    await vi.advanceTimersByTimeAsync(1_250);
+    await run;
+    expect(fetchPage).toHaveBeenCalledTimes(6);
+    for (const [input] of fetchPage.mock.calls) {
+      expect(input).toMatchObject({ continuation: { cursor: 'saved-cursor' } });
+    }
+    expect(
+      loadSoupBackfillCheckpoint('user-1', 'core-entities').pagesFetched
+    ).toBe(13);
+  });
+
   it('immediately catches up email changes that moved ahead of the initial cursor', async () => {
     vi.useFakeTimers();
     vi.setSystemTime('2026-09-02T12:00:00.000Z');

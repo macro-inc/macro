@@ -17,6 +17,7 @@ import {
   type EntityItem,
   useQuickAccess,
 } from '@core/context/quickAccess';
+import { BUCKET_COMBINATIONS } from '@core/context/quickAccess/types';
 import { useUserId } from '@core/context/user';
 import clickOutside from '@core/directive/clickOutside';
 import { isMobile } from '@core/mobile/isMobile';
@@ -148,6 +149,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
 
   const hasCustomEntities = () => !!props.entities;
   const sessionsEnabled = () =>
+    props.menu.isOpen() &&
     !hasCustomEntities() &&
     (!props.sources || props.sources.includes('agentSessions'));
   const quickAccess = hasCustomEntities() ? undefined : useQuickAccess();
@@ -163,7 +165,12 @@ function MentionsMenuInner(props: MentionsMenuProps) {
     }))
   );
 
-  const allItems = props.entities ?? quickAccess!.useList().items;
+  const allItems =
+    props.entities ??
+    quickAccess!.useList({
+      buckets: BUCKET_COMBINATIONS.all,
+      enabled: () => props.menu.isOpen(),
+    }).items;
 
   const { isKeypressActive } = useIsKeyPressActive();
 
@@ -171,6 +178,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const blockId = props.sourceDocumentId ?? legacyBlockId;
 
   const { usersAndGroups, groups, availableUsers } = useUsersMention({
+    enabled: props.menu.isOpen,
     users: props.users,
     searchTerm,
     isChannelBlock: props.block === 'channel',
@@ -204,6 +212,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const docsMention =
     customDocs ??
     useEntityMention({
+      enabled: props.menu.isOpen,
       buckets: props.documentBuckets ?? DEFAULT_DOCUMENT_BUCKETS,
       searchTerm: activeSearchTerm,
     });
@@ -212,6 +221,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const channelsMention =
     customChannels ??
     useEntityMention({
+      enabled: props.menu.isOpen,
       buckets: ['channel', 'dm'],
       searchTerm: activeSearchTerm,
     });
@@ -222,6 +232,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
   const companyMention = isFeatureEnabled(enableCrm)
     ? (customCompanies ??
       useEntityMention({
+        enabled: props.menu.isOpen,
         buckets: ['crm_company'],
         searchTerm: activeSearchTerm,
       }))

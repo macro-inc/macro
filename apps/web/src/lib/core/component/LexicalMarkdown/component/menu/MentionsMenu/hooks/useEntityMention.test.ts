@@ -22,7 +22,11 @@ vi.mock('@core/context/quickAccess', () => ({
 
 it('exposes pagination from search projections, not just legacy record selection', async () => {
   const { mention, dispose } = createRoot((dispose) => ({
-    mention: useEntityMention({ buckets: ['note'], searchTerm: () => '' }),
+    mention: useEntityMention({
+      enabled: () => true,
+      buckets: ['note'],
+      searchTerm: () => '',
+    }),
     dispose,
   }));
   expect(mention.hasMore()).toBe(true);
@@ -73,6 +77,7 @@ it('ranks local projects together with cached hits and reranks new pages', () =>
   list.items.mockImplementation(rows);
   const { mention, custom, dispose } = createRoot((dispose) => ({
     mention: useEntityMention({
+      enabled: () => true,
       buckets: ['task', 'initiative'],
       searchTerm: () => 'task',
     }),

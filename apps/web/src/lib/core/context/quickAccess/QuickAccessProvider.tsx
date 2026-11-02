@@ -1,6 +1,13 @@
 import { DebugSuspense } from '@channel/DebugSuspense';
 import { useIsAuthenticated, useUserId } from '@core/context/user';
-import { createMemo, type FlowComponent, on } from 'solid-js';
+import { createLazyMemo } from '@solid-primitives/memo';
+import {
+  createEffect,
+  createMemo,
+  createSignal,
+  type FlowComponent,
+  on,
+} from 'solid-js';
 import { QuickAccessContextProvider } from './context';
 import { createQuickAccessValue } from './QuickAccessSource';
 import type {
@@ -16,17 +23,34 @@ const QuickAccessProviderValue: FlowComponent = (props) => {
   const source = createMemo(
     on(
       () => (authenticated() === true ? userId() : undefined),
-      (id) => (id ? createQuickAccessValue() : undefined)
+      (id) => {
+        if (!id) return;
+        const [requested, setRequested] = createSignal(false);
+        const value = createMemo(
+          on(requested, (enabled) =>
+            enabled ? createQuickAccessValue() : undefined
+          )
+        );
+        return { value, request: () => setRequested(true) };
+      }
     )
   );
 
   const useList = ((
     ...args: Bucket[] | [QuickAccessListOptions]
   ): QuickAccessList => {
-    const sourceList = createMemo(() => {
-      const current = source();
-      if (!current) return;
+    // A mounted enabled list owns activation. Reading cached state never writes
+    // the request signal or constructs account queries as a side effect.
+    createEffect(() => {
       const first = args[0];
+      if (typeof first === 'object' && first.enabled?.() === false) return;
+      source()?.request();
+    });
+    const sourceList = createLazyMemo(() => {
+      const first = args[0];
+      if (typeof first === 'object' && first.enabled?.() === false) return;
+      const current = source()?.value();
+      if (!current) return;
       return typeof first === 'object'
         ? current.useList(first)
         : current.useList(...(args as Bucket[]));
@@ -46,11 +70,13 @@ const QuickAccessProviderValue: FlowComponent = (props) => {
 
   const quickAccess: QuickAccessContextValue = {
     useList,
-    usesRecordSelection: () => source()?.usesRecordSelection() ?? false,
-    usesSearchProjection: () => source()?.usesSearchProjection() ?? false,
-    isLoading: () => source()?.isLoading() ?? false,
-    refresh: () => source()?.refresh(),
-    getById: (id) => source()?.getById(id),
+    usesRecordSelection: () =>
+      source()?.value()?.usesRecordSelection() ?? false,
+    usesSearchProjection: () =>
+      source()?.value()?.usesSearchProjection() ?? false,
+    isLoading: () => source()?.value()?.isLoading() ?? false,
+    refresh: () => source()?.value()?.refresh(),
+    getById: (id) => source()?.value()?.getById(id),
   };
 
   return (

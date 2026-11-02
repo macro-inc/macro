@@ -1,3 +1,4 @@
+import { pauseOffscreenAnimations } from '@core/util/animationVisibility';
 import CaretRight from '@icon/system/regular/caret-right.svg?component-solid';
 import { Button, Layer } from '@ui';
 import type { Component, JSX } from 'solid-js';
@@ -81,6 +82,7 @@ function Row(props: ToolRowProps) {
         classList={{ 'mt-0.5': alignStart() }}
       />
       <div
+        ref={pauseOffscreenAnimations}
         class="min-w-0 flex-1 overflow-hidden"
         classList={{ 'magic-chip-shimmer': props.active }}
       >

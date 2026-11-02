@@ -220,11 +220,6 @@ export function Button<T extends ValidComponent = 'button'>(
   const size = () => local.size ?? 'md';
   const unavailable = () => !!(local.disabled || local.loading);
   const activation = createButtonActivation(unavailable, local);
-  const tabIndexProps = () => {
-    if (unavailable()) return { tabIndex: -1 };
-    if (local.tabIndex === undefined) return {};
-    return { tabIndex: local.tabIndex };
-  };
   const tooltip = () => tooltipOptions(local.tooltip);
   const tokens = () => {
     const value = tooltip().hotkey;
@@ -246,15 +241,20 @@ export function Button<T extends ValidComponent = 'button'>(
         data-variant={variant()}
         data-appearance={local.appearance ?? 'default'}
         disabled={unavailable()}
-        {...tabIndexProps()}
+        tabIndex={unavailable() ? -1 : local.tabIndex}
         aria-busy={local.loading || buttonProps['aria-busy'] || undefined}
         class={buttonClasses({
-          ...local,
           variant: variant(),
           size: size(),
+          appearance: local.appearance,
+          finish: local.finish,
+          fullWidth: local.fullWidth,
           class: local.class,
         })}
-        {...activation}
+        onClick={activation.onClick}
+        onAuxClick={activation.onAuxClick}
+        onKeyDown={activation.onKeyDown}
+        onKeyUp={activation.onKeyUp}
       >
         <Show when={local.loading !== undefined} fallback={local.children}>
           <span

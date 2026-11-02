@@ -1,3 +1,4 @@
+import { pauseOffscreenAnimations } from '@core/util/animationVisibility';
 import CheckCircle from '@icon/system/fill/check-circle-fill.svg';
 import QuestionCircle from '@icon/system/fill/question-fill.svg';
 import WarningCircle from '@icon/system/fill/warning-circle-fill.svg';
@@ -88,6 +89,7 @@ function MagicChipStatusBadge(props: {
       )}
     >
       <span
+        ref={pauseOffscreenAnimations}
         class="truncate"
         classList={{
           'magic-chip-shimmer':

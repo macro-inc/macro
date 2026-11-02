@@ -147,7 +147,7 @@ async function flushMeasurements() {
 }
 
 describe('composer layout', () => {
-  it('coalesces resize measurements outside observer delivery while keeping edits immediate', async () => {
+  it('coalesces edits, mutations and resizes before paint outside observer delivery', async () => {
     const input = setup('a'.repeat(30));
     await flushMeasurements();
     expect(input.isCompact()).toBe(true);
@@ -164,7 +164,42 @@ describe('composer layout', () => {
     input.setText('short');
     await Promise.resolve();
     await Promise.resolve();
+    await flushMeasurements();
     expect(input.isCompact()).toBe(true);
+  });
+
+  it('reads a compact editor once per frame without cloning its surface', async () => {
+    const input = setup('short');
+    await flushMeasurements();
+    const clone = vi.spyOn(HTMLElement.prototype, 'cloneNode');
+    const measure = vi.mocked(Range.prototype.getBoundingClientRect);
+    measure.mockClear();
+    input.setText('still short');
+    input.resize(500);
+    input.setControlsWidth(80);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(measure).not.toHaveBeenCalled();
+    await flushMeasurements();
+    expect(measure).toHaveBeenCalledTimes(1);
+    expect(clone).not.toHaveBeenCalled();
+  });
+
+  it('leaves hidden editors idle and measures their current draft on reveal', async () => {
+    const input = setup('short');
+    await flushMeasurements();
+    const visibility = vi.spyOn(document, 'visibilityState', 'get');
+    visibility.mockReturnValue('hidden');
+    document.dispatchEvent(new Event('visibilitychange'));
+    const measure = vi.mocked(Range.prototype.getBoundingClientRect);
+    measure.mockClear();
+    input.setText('a'.repeat(60));
+    await flushMeasurements();
+    expect(measure).not.toHaveBeenCalled();
+    visibility.mockReturnValue('visible');
+    document.dispatchEvent(new Event('visibilitychange'));
+    await flushMeasurements();
+    expect(input.isCompact()).toBe(false);
   });
 
   it('expands for wrapped text without newlines and stays expanded at the wider layout', async () => {

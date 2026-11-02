@@ -667,6 +667,8 @@ const MAX_THROUGH_ROWS: usize = 5_000;
 pub enum PageResult {
     /// Matching cached email keys and an exclusive continuation.
     MailPage {
+        /// Engine-owned displayed-window invalidation observation.
+        observation_id: String,
         /// Effective cache revision.
         revision: String,
         /// Normalized matching email keys.
@@ -773,10 +775,13 @@ async fn page_impl<S: PredicateIndexStorage>(
     baseline: &[PredicateBaselineEntry],
 ) -> Result<PageResult, PageError<S::Error>> {
     let revision = engine.current_revision().to_string();
-    // A read through a position takes `limit` as its fewest rows and pages
-    // the index at its own size.
+    // Start near the visible window, with one row beyond its minimum to
+    // locate the cutoff. A distant cursor grows the scan below; a short
+    // window must not load and decode the maximum page on every revision.
     let page_size = if request.through.is_some() {
-        predicate_index::MAX_QUERY_LIMIT - 1
+        limit
+            .saturating_add(1)
+            .min(predicate_index::MAX_QUERY_LIMIT - 1)
     } else {
         limit
     };
@@ -799,7 +804,7 @@ async fn page_impl<S: PredicateIndexStorage>(
     let user = EntityKey(format!("GraphqlUser:{viewer}").into());
     let records = engine
         .storage()
-        .get_batch(&[user])
+        .get_batch(std::slice::from_ref(&user))
         .await
         .map_err(EngineError::Storage)?;
     let Some(Some(record)) = records.first() else {
@@ -869,6 +874,7 @@ async fn page_impl<S: PredicateIndexStorage>(
         let cursor: Cursor = serde_json::from_str(cursor).map_err(error)?;
         Ok((cursor.generation == generation && cursor.query == fingerprint).then_some(cursor))
     };
+    let starts_at_top = request.cursor.is_none();
     let window = match (request.cursor, request.through) {
         (Some(_), Some(_)) => {
             return Err(error("a Mail page takes a cursor or a through position, not both").into());
@@ -916,7 +922,38 @@ async fn page_impl<S: PredicateIndexStorage>(
                 .ok_or_else(|| error("invalid page timestamp"))
         })
         .collect::<Result<Vec<_>, _>>()?;
+    let boundary = if starts_at_top && retained_keys.is_empty() && window.continuation.is_some() {
+        window
+            .keys
+            .last()
+            .zip(window.values.last())
+            .map(|(key, value)| (*value, key.clone()))
+    } else {
+        None
+    };
+    let observation_id = engine.observe_predicate_window(
+        query.clone(),
+        &window.keys,
+        boundary,
+        baseline
+            .iter()
+            .map(|entry| EntityKey(entry.record_key.as_str().to_owned().into()))
+            .chain(
+                window
+                    .continuation
+                    .iter()
+                    .map(|key| EntityKey(key.as_str().to_owned().into())),
+            )
+            .collect(),
+    );
+    engine.observe_window_field(
+        &observation_id,
+        user,
+        "emailLinks".into(),
+        record.fields.get("emailLinks").cloned(),
+    );
     Ok(PageResult::MailPage {
+        observation_id,
         revision,
         keys: window
             .keys
@@ -925,7 +962,7 @@ async fn page_impl<S: PredicateIndexStorage>(
             .collect(),
         retained_keys,
         sort_timestamps,
-        next_cursor: end_cursor.clone().filter(|_| window.more),
+        next_cursor: end_cursor.clone().filter(|_| window.continuation.is_some()),
         end_cursor,
         optimistic: window.optimistic,
     })
@@ -935,8 +972,8 @@ async fn page_impl<S: PredicateIndexStorage>(
 struct Window {
     keys: Vec<RecordKey>,
     values: Vec<i64>,
-    /// Matching rows remain after the last one.
-    more: bool,
+    /// Known matching row beyond the indexed window; proves continuation exists.
+    continuation: Option<RecordKey>,
     optimistic: bool,
 }
 
@@ -949,13 +986,13 @@ async fn read_page<S: PredicateIndexStorage>(
     // Unknown rows never become fabricated matches; the UI labels this cached mail.
     let result = engine.reconcile_predicate_index(query, &[]).await?;
     let mut keys = result.value.keys;
-    let more = keys.len() > usize::from(limit);
+    let continuation = keys.get(usize::from(limit)).cloned();
     keys.truncate(usize::from(limit));
     let values = sort_values(engine, query, &keys).await?;
     Ok(Window {
         keys,
         values,
-        more,
+        continuation,
         optimistic: result.value.optimistic,
     })
 }
@@ -966,7 +1003,7 @@ async fn read_page<S: PredicateIndexStorage>(
 async fn read_through<S: PredicateIndexStorage>(
     engine: &mut Engine<S>,
     query: &ValidatedIndexQuery,
-    page_size: u16,
+    mut page_size: u16,
     fewest: usize,
     through: &Cursor,
 ) -> Result<Window, PageError<S::Error>> {
@@ -985,22 +1022,33 @@ async fn read_through<S: PredicateIndexStorage>(
             .map(|offset| checked + offset)
             .or_else(|| (window.keys.len() > MAX_THROUGH_ROWS).then_some(MAX_THROUGH_ROWS));
         if let Some(end) = end.map(|end| end.min(MAX_THROUGH_ROWS)) {
+            window.continuation = window.keys.get(end).cloned();
             window.keys.truncate(end);
             window.values.truncate(end);
-            window.more = true;
             return Ok(window);
         }
-        let (Some(key), Some(value), true) =
-            (window.keys.last(), window.values.last(), window.more)
-        else {
+        let (Some(key), Some(value), true) = (
+            window.keys.last(),
+            window.values.last(),
+            window.continuation.is_some(),
+        ) else {
             return Ok(window);
         };
         checked = window.keys.len();
-        let next = query.after(*value, key.clone()).map_err(error)?;
+        // A cursor can outlive its row or sit deeper than the requested
+        // minimum. Grow geometrically so those windows still take bounded
+        // scans rather than one round trip for each short page.
+        page_size = page_size
+            .saturating_mul(2)
+            .min(predicate_index::MAX_QUERY_LIMIT - 1);
+        let next = query
+            .with_limit(page_size + 1)
+            .and_then(|query| query.after(*value, key.clone()))
+            .map_err(error)?;
         let page = read_page(engine, &next, page_size).await?;
         window.keys.extend(page.keys);
         window.values.extend(page.values);
-        window.more = page.more;
+        window.continuation = page.continuation;
         window.optimistic |= page.optimistic;
     }
 }

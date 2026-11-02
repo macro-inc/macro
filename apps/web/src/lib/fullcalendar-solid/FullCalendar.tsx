@@ -14,6 +14,7 @@ import {
 } from '@fullcalendar/core';
 import type { CustomRendering } from '@fullcalendar/core/internal';
 import { mergeRefs } from '@solid-primitives/refs';
+import { createResizeObserver } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
   type Component,
@@ -306,6 +307,14 @@ function createFullCalendarController(
     setResizeFrame(
       requestAnimationFrame(() => {
         setResizeFrame(undefined);
+        const element = hostElement();
+        if (
+          !element?.isConnected ||
+          !element.clientWidth ||
+          !element.clientHeight
+        ) {
+          return;
+        }
         calendar()?.updateSize();
       })
     );
@@ -327,7 +336,15 @@ function createFullCalendarController(
 
   const resetOptions = () => {
     const calendarInstance = calendar();
-    if (!calendarInstance) return;
+    const element = hostElement();
+    // Keep the latest reactive options pending until the host has a layout box.
+    if (
+      !calendarInstance ||
+      !element?.isConnected ||
+      !element.clientWidth ||
+      !element.clientHeight
+    )
+      return;
 
     const nextOptions = buildOptions();
     const next = nextOptions.options as Record<string, unknown>;
@@ -348,6 +365,15 @@ function createFullCalendarController(
       hasRemovedOption ? undefined : changedOptionNames
     );
   };
+
+  // One container resize owner for workspaces and embeds. The primitive filters
+  // unchanged sizes; zero-size notifications never enqueue layout work. Showing
+  // the host again applies options accumulated while it had no layout box.
+  createResizeObserver(hostElement, ({ width, height }) => {
+    if (width <= 0 || height <= 0) return;
+    resetOptions();
+    requestResize();
+  });
 
   createEffect(on(getOptions, resetOptions, { defer: true }));
 

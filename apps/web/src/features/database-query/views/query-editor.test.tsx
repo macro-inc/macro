@@ -8,7 +8,7 @@ import type { QueryAnswer, QueryDefinition, QuerySchema } from '../core/query';
 import { PlainAnswerDisplay } from '../tests/plain-answer-display';
 import { QueryEditor } from './query-editor';
 
-vi.mock('@solid-primitives/resize-observer', () => ({
+vi.mock('@core/util/createElementSize', () => ({
   createElementSize: () => ({ width: 346, height: 300 }),
 }));
 

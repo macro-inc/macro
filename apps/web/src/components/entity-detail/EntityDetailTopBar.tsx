@@ -1,5 +1,5 @@
 import { SidePanel } from '@components/app/side-panel';
-import { createElementSize } from '@solid-primitives/resize-observer';
+import { createElementSize } from '@core/util/createElementSize';
 import { cn } from '@ui';
 import {
   type Accessor,

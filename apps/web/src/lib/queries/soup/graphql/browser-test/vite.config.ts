@@ -9,6 +9,7 @@ const RUNTIME = fileURLToPath(new URL('./runtime.ts', import.meta.url));
 
 export default defineConfig({
   root: DIRECTORY,
+  cacheDir: `${WEB}/node_modules/.vite-soup-browser-test`,
   plugins: [
     {
       name: 'mail-flicker-composition',

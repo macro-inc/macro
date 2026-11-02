@@ -14,18 +14,15 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
 import { isMobile } from '@core/mobile/isMobile';
-import { createElementSize } from '@solid-primitives/resize-observer';
+import { createElementSize } from '@core/util/createElementSize';
 import { Layer } from '@ui';
 import { Pager, PagerSwipeGestures } from '@ui/components/Pager';
 import { tourTarget } from '@ui/components/Tour';
 import {
-  createEffect,
   createSignal,
   For,
   type JSX,
   Match,
-  on,
-  onCleanup,
   Show,
   Suspense,
   Switch,
@@ -53,26 +50,6 @@ function CalendarPages() {
   );
   const useNarrowDayHeaders = () =>
     viewportSize.width !== null && !breakpoints.fullDayHeaders();
-  let resizeFrame: number | undefined;
-
-  createEffect(
-    on(
-      () => viewportSize.width,
-      (width) => {
-        if (width === null) return;
-        if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
-        resizeFrame = requestAnimationFrame(() => {
-          resizeFrame = undefined;
-          calendarPager.updateSize();
-        });
-      }
-    )
-  );
-
-  onCleanup(() => {
-    if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
-  });
-
   return (
     <Layer depth={2}>
       <div class="flex min-w-0 min-h-0 flex-1 flex-col">

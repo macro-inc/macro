@@ -63,6 +63,7 @@ function SnippetsMenuInner(props: SnippetsMenuProps) {
   const activeSearchTerm = () => (props.menu.isOpen() ? searchTerm() : '');
 
   const { entities: snippets } = useEntityMention({
+    enabled: props.menu.isOpen,
     buckets: ['snippet'],
     searchTerm: activeSearchTerm,
   });

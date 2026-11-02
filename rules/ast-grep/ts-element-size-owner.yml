@@ -1,0 +1,13 @@
+id: ts-element-size-owner
+language: typescript
+severity: error
+message: Import createElementSize from @core/util/createElementSize; its observer entries avoid forced layout reads.
+files:
+  - apps/web/src/**
+rule:
+  kind: import_statement
+  regex: \bcreateElementSize\b
+  has:
+    kind: string
+    field: source
+    regex: '@solid-primitives/resize-observer'

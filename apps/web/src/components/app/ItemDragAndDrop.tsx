@@ -133,42 +133,44 @@ export function ItemDndProvider(props: { children: JSXElement }) {
     pointerPosition = { x: e.clientX, y: e.clientY };
   };
 
-  const handleMouseMove = (e: MouseEvent) => {
-    pointerPosition = { x: e.clientX, y: e.clientY };
+  const stopTrackingPointer = () => {
+    window.removeEventListener('pointermove', handlePointerMove, true);
+    window.removeEventListener('pointerup', handlePointerEnd, true);
+    window.removeEventListener('pointercancel', handlePointerEnd, true);
   };
-
   const handlePointerEnd = () => {
+    stopTrackingPointer();
     queueMicrotask(() => {
       pointerPosition = undefined;
     });
   };
+  const handlePointerStart = (event: PointerEvent) => {
+    handlePointerMove(event);
+    window.addEventListener('pointermove', handlePointerMove, {
+      capture: true,
+    });
+    window.addEventListener('pointerup', handlePointerEnd, { capture: true });
+    window.addEventListener('pointercancel', handlePointerEnd, {
+      capture: true,
+    });
+  };
+  const handleBlur = () => {
+    stopTrackingPointer();
+    pointerPosition = undefined;
+    setIsAltPressed(false);
+  };
 
   window.addEventListener('keydown', handleKeyDown);
   window.addEventListener('keyup', handleKeyUp);
-  window.addEventListener('pointermove', handlePointerMove, { capture: true });
-  window.addEventListener('pointerup', handlePointerEnd, { capture: true });
-  window.addEventListener('pointercancel', handlePointerEnd, { capture: true });
-  window.addEventListener('mousemove', handleMouseMove, { capture: true });
-  window.addEventListener('mouseup', handlePointerEnd, { capture: true });
+  window.addEventListener('pointerdown', handlePointerStart, { capture: true });
+  window.addEventListener('blur', handleBlur);
 
   onCleanup(() => {
+    stopTrackingPointer();
     window.removeEventListener('keydown', handleKeyDown);
     window.removeEventListener('keyup', handleKeyUp);
-    window.removeEventListener('pointermove', handlePointerMove, {
-      capture: true,
-    });
-    window.removeEventListener('pointerup', handlePointerEnd, {
-      capture: true,
-    });
-    window.removeEventListener('pointercancel', handlePointerEnd, {
-      capture: true,
-    });
-    window.removeEventListener('mousemove', handleMouseMove, {
-      capture: true,
-    });
-    window.removeEventListener('mouseup', handlePointerEnd, {
-      capture: true,
-    });
+    window.removeEventListener('pointerdown', handlePointerStart, true);
+    window.removeEventListener('blur', handleBlur);
   });
 
   return (

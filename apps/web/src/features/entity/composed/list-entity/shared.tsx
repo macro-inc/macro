@@ -1,6 +1,6 @@
+import { createElementSize } from '@core/util/createElementSize';
 import type { DateValue } from '@core/util/date';
 import type { StreamEvent } from '@service-connection/generated/schemas';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import {
   type Accessor,
   createContext,

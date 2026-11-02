@@ -1,7 +1,7 @@
 import { isNativeMobilePlatform } from '@core/mobile/isNativeMobilePlatform';
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
+import { createElementSize } from '@core/util/createElementSize';
 import { isPlatform } from '@core/util/platform';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn, Layer } from '@ui';
 import { createEffect, createSignal, For, onCleanup } from 'solid-js';
 import { FLOAT_REGIONS, FloatRegions } from './float-region-state';

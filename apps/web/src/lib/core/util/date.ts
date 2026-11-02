@@ -7,6 +7,7 @@ import {
   isYesterday,
   toDate,
 } from 'date-fns';
+import { dateTimeFormatter, formatIntlDate } from './dateTimeFormat';
 
 /** Represents a Date or an Api RFC3339 string response that can be parsed into a Date object. */
 export type DateValue = Date | string;
@@ -33,7 +34,7 @@ export const formatTime = (
 ): string => {
   if (!date) return '';
   const d = date instanceof Date ? date : toDate(date);
-  return d.toLocaleTimeString('en-US', {
+  return formatIntlDate(d, 'en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,
@@ -51,7 +52,7 @@ export const formatTimeZoneAbbreviation = (
   date: Date,
   timeZone?: string
 ): string | undefined =>
-  new Intl.DateTimeFormat('en-US', { timeZoneName: 'short', timeZone })
+  dateTimeFormatter('en-US', { timeZoneName: 'short', timeZone })
     .formatToParts(date)
     .find((part) => part.type === 'timeZoneName')?.value;
 
@@ -83,14 +84,14 @@ export const formatDate = (
   }
 
   if (differenceInCalendarDays(now, d, timeZoneOpts) < 7) {
-    const weekday = d.toLocaleDateString(undefined, {
+    const weekday = formatIntlDate(d, undefined, {
       weekday: shortWeekday ? 'short' : 'long',
       timeZone,
     });
     return showTime ? `${weekday} at ${time}` : weekday;
   }
 
-  const displayDate = d.toLocaleDateString(undefined, {
+  const displayDate = formatIntlDate(d, undefined, {
     month: '2-digit',
     day: '2-digit',
     year: '2-digit',
@@ -106,11 +107,11 @@ export const formatDate = (
  */
 export const formatEmailDate = (date: DateValue) => {
   const d = toDate(date);
-  const weekday = d.toLocaleDateString('en-US', { weekday: 'short' });
-  const month = d.toLocaleDateString('en-US', { month: 'short' });
+  const weekday = formatIntlDate(d, 'en-US', { weekday: 'short' });
+  const month = formatIntlDate(d, 'en-US', { month: 'short' });
   const day = d.getDate();
   const year = d.getFullYear();
-  const time = d.toLocaleTimeString('en-US', {
+  const time = formatIntlDate(d, 'en-US', {
     hour: 'numeric',
     minute: '2-digit',
     hour12: true,

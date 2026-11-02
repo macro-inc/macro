@@ -55,7 +55,7 @@ vi.mock('../use-navigation-unread', () => ({
   useNavigationUnread: () => (id: string) => unreadIds().includes(id),
 }));
 const [islandWidth, setIslandWidth] = createSignal(80);
-vi.mock('@solid-primitives/resize-observer', () => ({
+vi.mock('@core/util/createElementSize', () => ({
   createElementSize: () => ({
     get width() {
       return islandWidth();

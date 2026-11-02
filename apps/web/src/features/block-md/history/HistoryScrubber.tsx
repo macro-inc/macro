@@ -1,5 +1,5 @@
+import { createElementSize } from '@core/util/createElementSize';
 import type { HistorySession } from '@service-sync/client';
-import { createElementSize } from '@solid-primitives/resize-observer';
 import { cn } from '@ui';
 import { group } from 'd3-array';
 import {

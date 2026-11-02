@@ -1,5 +1,5 @@
 import type { HotkeyToken } from '@core/hotkey/tokens';
-import type { NullableSize } from '@solid-primitives/resize-observer';
+import type { ElementSize } from '@core/util/createElementSize';
 import {
   type Accessor,
   type Component,
@@ -87,7 +87,7 @@ export type SplitPanelContextType = {
   panelRef: Accessor<HTMLElement | null>;
   /** The element last pressed in the panel, kept in view when it opens a split. */
   pointerTarget?: () => Element | undefined;
-  panelSize: NullableSize;
+  panelSize: ElementSize;
   contentOffsetTop: Accessor<number>;
   setContentOffsetTop: Setter<number>;
   /**

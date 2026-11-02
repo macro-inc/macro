@@ -12,6 +12,8 @@ import { SplitPanel } from '../components/SplitPanel';
 import { SplitPanelContext, type SplitPanelContextType } from '../context';
 import type { SplitHandle, SplitId, SplitState } from '../layoutManager';
 
+const device = vi.hoisted(() => ({ touch: true }));
+
 // Keep the production panel, header, portal contributions, and target refs.
 // Collection data, routing, and unrelated chrome are outside this lifecycle test.
 vi.mock('@app/features/access-requests/context/visit', () => ({
@@ -56,7 +58,9 @@ vi.mock('@core/hotkey/hotkeys', () => ({
 vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToBlockName: () => 'md',
 }));
-vi.mock('@core/mobile/isTouchDevice', () => ({ isTouchDevice: () => true }));
+vi.mock('@core/mobile/isTouchDevice', () => ({
+  isTouchDevice: () => device.touch,
+}));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => true }));
 vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
   isNativeMobilePlatform: () => true,
@@ -97,12 +101,32 @@ afterEach(() => {
   vi.unstubAllGlobals();
 });
 
-it('mounts header contributions when chrome appears and follows its replacement without remounting the view', () => {
+it.each([true, false])('keeps header targets (touch=%s)', (touch) => {
+  device.touch = touch;
+  const resize = new Map<Element, () => void>();
   vi.stubGlobal(
     'ResizeObserver',
-    class {
-      observe() {}
-      unobserve() {}
+    class implements ResizeObserver {
+      constructor(private callback: ResizeObserverCallback) {}
+      observe(target: Element) {
+        resize.set(target, () =>
+          this.callback(
+            [
+              {
+                target,
+                borderBoxSize: [{ inlineSize: 1000, blockSize: 48 }],
+                contentBoxSize: [],
+                devicePixelContentBoxSize: [],
+                contentRect: new DOMRectReadOnly(0, 0, 1000, 48),
+              },
+            ],
+            this
+          )
+        );
+      }
+      unobserve(target: Element) {
+        resize.delete(target);
+      }
       disconnect() {}
     }
   );
@@ -204,6 +228,17 @@ it('mounts header contributions when chrome appears and follows its replacement 
   );
   expect(firstHeader).not.toBeNull();
   if (!firstHeader) throw new Error('Expected the first header to mount');
+  const panelElement = container.querySelector<HTMLElement>('[data-split-id]');
+  expect(panelElement?.style.getPropertyValue('--split-header-height')).toBe(
+    '0px'
+  );
+  const measureHeader = resize.get(firstHeader);
+  if (!measureHeader) throw new Error('Expected the header size observer');
+  measureHeader();
+  expect(panelElement?.style.getPropertyValue('--split-header-height')).toBe(
+    touch ? '48px' : '0px'
+  );
+
   expect(
     within(firstHeader).getByRole('button', { name: 'Unread' })
   ).toBeTruthy();

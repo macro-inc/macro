@@ -95,8 +95,8 @@ export interface CacheWorkerCoreOptions {
 }
 
 // Backfill hydration is cache warming, so foreground reads may overtake it.
-// Hydration and authoritative writes still retain arrival order so stale
-// hydration cannot overwrite a newer queued response.
+// A foreground write supersedes older queued hydration. Its caller must
+// refetch that page, so stale warming can never overwrite the live update.
 const BACKGROUND_HYDRATION_PRIORITY = -1;
 const NORMAL_READ_PRIORITY = 0;
 const USER_VISIBLE_READ_PRIORITY = 1;
@@ -113,8 +113,8 @@ function isOrderingBarrier(request: CacheRequest): boolean {
 }
 
 function isAuthoritativeWrite(request: CacheRequest): boolean {
-  // A calendar commit records coverage for data written just before it, so it
-  // must never overtake that write or hydration.
+  // Calendar callers await occurrence hydration before publishing coverage.
+  // Commits retain order with foreground writes and supersede unrelated warming.
   return (
     request.kind === 'write' ||
     request.kind === 'hydrate' ||
@@ -376,6 +376,30 @@ export class CacheWorkerCore {
       const priority = requestPriority(request);
       const signature = readSignature(request);
 
+      if (
+        request.kind !== 'hydrate' &&
+        (isAuthoritativeWrite(request) ||
+          request.kind === 'invalidate' ||
+          request.kind === 'enqueue-optimistic-mutation' ||
+          request.kind === 'rollback-optimistic-write')
+      ) {
+        // Do not cross a lifecycle barrier: its earlier segment must finish
+        // before any work in this segment can observe or change the engine.
+        for (let i = this.queue.length - 1; i >= 0; i -= 1) {
+          const queued = this.queue[i];
+          if (!queued || isOrderingBarrier(queued.request)) break;
+          if (queued.request.kind !== 'hydrate') continue;
+          this.queue.splice(i, 1);
+          for (const waiter of queued.waiters) {
+            waiter.reject(
+              new Error(
+                'cache hydration superseded by a foreground write; refetch the page'
+              )
+            );
+          }
+        }
+      }
+
       // Coalesce only within the current lifecycle segment. In particular, a
       // remount after teardown must perform a fresh read to re-register deps.
       if (signature !== undefined) {
@@ -593,6 +617,9 @@ export class CacheWorkerCore {
           this.push({
             kind: 'cache-hydrated',
             revision: result.revision,
+            ...(result.unchangedViews !== undefined
+              ? { unchangedViews: result.unchangedViews }
+              : {}),
             ...(result.searchChangedBuckets !== undefined
               ? { searchChangedBuckets: result.searchChangedBuckets }
               : {}),
@@ -1132,6 +1159,9 @@ export class CacheWorkerCore {
       this.push({
         kind: 'cache-changed',
         revision: result.revision,
+        ...(!result.reset && result.unchangedViews !== undefined
+          ? { unchangedViews: result.unchangedViews }
+          : {}),
         ...(!result.reset && result.searchChangedBuckets !== undefined
           ? { searchChangedBuckets: result.searchChangedBuckets }
           : {}),

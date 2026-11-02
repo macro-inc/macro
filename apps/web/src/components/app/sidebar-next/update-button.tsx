@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { pauseOffscreenAnimations } from '@core/util/animationVisibility';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import { Popover } from '@kobalte/core/popover';
 import { Button } from '@ui';
@@ -66,6 +67,7 @@ export function UpdateButton(props: { update: () => AppUpdate }) {
       >
         <span class="pointer-events-none relative flex size-7 items-center justify-center rounded-full bg-accent-bg text-accent">
           <span
+            ref={pauseOffscreenAnimations}
             aria-hidden="true"
             class="absolute -inset-px rounded-full opacity-0 animate-update-glow motion-reduce:hidden"
             style={COMET}

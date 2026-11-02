@@ -22,19 +22,31 @@ export function mountGlobalFocusListener(withDebug?: boolean) {
     return;
   }
   onMount(() => {
-    document.addEventListener('focusin', setDirty);
-    document.addEventListener('focusout', setDirty);
-    // Removing a focused editor (or one of its ancestors) does not reliably
-    // emit focusout. Reconcile after DOM changes so consumers cannot keep
-    // treating a detached search input/composer as the active editor.
+    // Focus removal need not emit focusout. Watch only the focused element's
+    // ancestor chain: mutations inside unrelated rows cannot change its focus.
     const observer = new MutationObserver(() => {
-      if (rawActiveElement() !== document.activeElement) setDirty();
+      if (rawActiveElement() !== document.activeElement) updateFocus();
     });
-    observer.observe(document, { childList: true, subtree: true });
+    const updateFocus = () => {
+      setDirty();
+      observer.disconnect();
+      const focused = document.activeElement;
+      if (!focused || focused === document.body) return;
+      for (
+        let parent = focused.parentNode;
+        parent;
+        parent = parent.parentNode
+      ) {
+        observer.observe(parent, { childList: true });
+      }
+    };
+    document.addEventListener('focusin', updateFocus);
+    document.addEventListener('focusout', updateFocus);
+    updateFocus();
     onCleanup(() => {
       observer.disconnect();
-      document.removeEventListener('focusin', setDirty);
-      document.removeEventListener('focusout', setDirty);
+      document.removeEventListener('focusin', updateFocus);
+      document.removeEventListener('focusout', updateFocus);
     });
   });
 

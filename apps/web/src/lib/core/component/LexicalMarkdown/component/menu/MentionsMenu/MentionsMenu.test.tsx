@@ -15,6 +15,7 @@ const mocks = vi.hoisted(() => ({
   whatsappUserIds: [] as string[],
   mobile: false,
   requestedBuckets: [] as string[],
+  listEnabled: [] as (() => boolean)[],
   contacts: [] as import('@core/context/quickAccess').EntityItem[],
   hasMoreContacts: false,
   loadMoreContacts: vi.fn(async () => {}),
@@ -112,9 +113,18 @@ vi.mock('@core/context/quickAccess', () => ({
     usesSearchProjection: () => false,
     useList: (...args: unknown[]) => {
       const [first] = args;
+      if (
+        first &&
+        typeof first === 'object' &&
+        'enabled' in first &&
+        typeof first.enabled === 'function'
+      ) {
+        const enabled = first.enabled;
+        mocks.listEnabled.push(() => Boolean(enabled()));
+      }
       if (first && typeof first === 'object') {
         mocks.requestedBuckets.push(
-          ...(first as { buckets: string[] }).buckets
+          ...((first as { buckets?: string[] }).buckets ?? [])
         );
       }
       return {
@@ -191,6 +201,7 @@ afterEach(() => {
   mocks.whatsappUserIds = [];
   mocks.mobile = false;
   mocks.requestedBuckets = [];
+  mocks.listEnabled = [];
   mocks.contacts = [];
   mocks.hasMoreContacts = false;
   mocks.loadMoreContacts.mockClear();
@@ -564,4 +575,15 @@ it("offers the viewer's routines to share by mention, only in channel composers"
     />
   ));
   expect(screen.queryByText('Routines')).toBeNull();
+});
+
+it('keeps all Quick Access mention lists disabled until the menu opens', () => {
+  const menu = createMenuOperations();
+  render(() => <MentionsMenu menu={menu} editor={createEditor()} />);
+  expect(mocks.listEnabled.length).toBeGreaterThan(0);
+  expect(mocks.listEnabled.every((enabled) => !enabled())).toBe(true);
+  menu.openMenu();
+  expect(mocks.listEnabled.every((enabled) => enabled())).toBe(true);
+  menu.closeMenu();
+  expect(mocks.listEnabled.every((enabled) => !enabled())).toBe(true);
 });

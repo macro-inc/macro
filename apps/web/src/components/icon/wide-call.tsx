@@ -1,9 +1,11 @@
+import { pauseOffscreenAnimations } from '@core/util/animationVisibility';
 export const AnimatedCallIcon = (props: {
   triggerAnimation?: boolean;
   class?: string;
 }) => {
   return (
     <svg
+      ref={pauseOffscreenAnimations}
       width="100%"
       height="100%"
       viewBox="-1.5 -1.5 18 18"
@@ -32,7 +34,11 @@ export const AnimatedCallIcon = (props: {
           transform-origin: center;
         }
         .animated-call-icon.animating .phone {
-          animation: phone-ring 1s ease-in-out infinite;
+          animation: phone-ring 1s step-end infinite;
+          animation-play-state: var(--animation-play-state, running);
+        }
+        @media (prefers-reduced-motion: reduce) {
+          .animated-call-icon.animating .phone { animation: none; }
         }
       `}</style>
 

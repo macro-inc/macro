@@ -388,6 +388,54 @@ describe('freshSort with all exact matches', () => {
 });
 
 describe('name match ranking', () => {
+  it('reads changed display labels on each query with the same items array', () => {
+    const viewedAt = new Date();
+    const items = [
+      { id: 'first', search: 'create make', label: 'Create', viewedAt },
+      { id: 'second', search: 'create make', label: 'Make', viewedAt },
+    ];
+    const search = createFreshSearch<(typeof items)[number]>({
+      config: { rankNameMatchesFirst: true },
+      getName: (item) => item.search,
+      getDisplayName: (item) => item.label,
+      getTimestamp: (item) => ({ viewedAt: item.viewedAt }),
+    });
+    expect(search(items, 'create').map((result) => result.item.id)).toEqual([
+      'first',
+      'second',
+    ]);
+    items[0].label = 'Make';
+    items[1].label = 'Create';
+    expect(search(items, 'create').map((result) => result.item.id)).toEqual([
+      'second',
+      'first',
+    ]);
+  });
+
+  it('preserves scores when a separate display-label accessor returns search text', () => {
+    const items: MockItem[] = [
+      { id: 'exact', name: 'Plan', type: 'item' },
+      { id: 'prefix', name: 'Planning', type: 'channel' },
+      { id: 'contains', name: 'Team plan', type: 'item' },
+    ];
+    const options = {
+      config: { rankNameMatchesFirst: true, commaSeparatedChannelMatch: true },
+      getName: (item: MockItem) => item.name,
+      isChannelItem: (item: MockItem) => item.type === 'channel',
+      getTimestamp: (item: MockItem) => ({ viewedAt: item.viewedAt }),
+    };
+    const sameAccessor = createFreshSearch(options);
+    const separateAccessor = createFreshSearch({
+      ...options,
+      getDisplayName: (item: MockItem) => item.name,
+    });
+    for (const query of ['plan', 'pl, an', 'zzzz', '']) {
+      expect(separateAccessor(items, query)).toEqual(
+        sameAccessor(items, query)
+      );
+    }
+  });
+
   it('ranks exact names, then prefixes, then other matches, ignoring case and outer spaces', () => {
     const viewedAt = new Date();
     const items: MockItem[] = [

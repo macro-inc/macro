@@ -39,6 +39,7 @@ observer.observe(container, {
 });
 
 const api = {
+  ready: false,
   releaseLocalReads,
   startRecording() {
     timeline.length = 0;
@@ -128,6 +129,7 @@ if (new URLSearchParams(location.search).get('seed') !== 'false') {
 }
 setCacheRevision(await host.currentRevision());
 const dispose = render(() => <App />, container);
+api.ready = true;
 window.addEventListener(
   'pagehide',
   () => {

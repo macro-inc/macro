@@ -26,18 +26,7 @@
   <g mask="url(#mbl2-r)">
     <path   fill="currentColor" fill-opacity="0.2" d="m20.51 15.501 3.3805-1.3255 12.693 11.996-3.378 1.3278z"/>
     <path d="m23.89 14.176v4.5204"/>
-    <g transform="translate(0, -3)">
-      <animateTransform
-        keySplines="0.8 0 0.2 1; 0.8 0 0.2 1"
-        values="0, -3; 0, 14; 0, -3"
-        attributeName="transform"
-        repeatCount="indefinite"
-        keyTimes="0; 0.5; 1"
-        calcMode="spline"
-        type="translate"
-        begin="0.4s"
-        dur="4s"
-      />
+    <g transform="translate(0, -3)" class="macro-brand-loader-column" style="animation-delay: 0.4s">
       <g stroke-dasharray="0.5, 1">
         <path d="m23.89 14.176-3.3805 1.3255"/>
         <path d="m23.89 14.176v-10.674"/>
@@ -57,18 +46,7 @@
 
     <path   fill="currentColor" fill-opacity="0.2" d="m6.4402 15.501 3.3805-1.3255 12.693 11.996-3.378 1.3278z"/>
     <path d="m9.8207 14.176v4.5204"/>
-    <g transform="translate(0, -3)">
-      <animateTransform
-        keySplines="0.8 0 0.2 1; 0.8 0 0.2 1"
-        values="0, -3; 0, 14; 0, -3"
-        attributeName="transform"
-        repeatCount="indefinite"
-        keyTimes="0; 0.5; 1"
-        calcMode="spline"
-        type="translate"
-        begin="0.2s"
-        dur="4s"
-      />
+    <g transform="translate(0, -3)" class="macro-brand-loader-column" style="animation-delay: 0.2s">
       <g stroke-dasharray="0.5, 1">
         <path d="m9.8207 14.176-3.3805 1.3255"/>
         <path d="m9.8207 14.176v-10.674"/>
@@ -88,18 +66,7 @@
 
     <path   fill="currentColor" fill-opacity="0.2" d="m0.41661 23.097 3.3805-1.3255 4.6567 4.3976-3.3834 1.33z"/>
     <path d="m3.7971 21.772v4.5204"/>
-    <g transform="translate(0, -3)">
-      <animateTransform
-        keySplines="0.8 0 0.2 1; 0.8 0 0.2 1"
-        values="0, -3; 0, 14; 0, -3"
-        attributeName="transform"
-        repeatCount="indefinite"
-        keyTimes="0; 0.5; 1"
-        calcMode="spline"
-        type="translate"
-        begin="0s"
-        dur="4s"
-      />
+    <g transform="translate(0, -3)" class="macro-brand-loader-column" style="animation-delay: 0s">
       <g stroke-dasharray="0.5, 1">
         <path d="m8.454 26.169-4.6569-4.3976"/>
         <path d="m3.7971 21.772-3.3805 1.3255"/>

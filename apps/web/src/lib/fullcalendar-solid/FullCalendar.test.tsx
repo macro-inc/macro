@@ -20,6 +20,16 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { FullCalendar, useFullCalendar } from './FullCalendar';
 
 beforeEach(() => {
+  vi.spyOn(HTMLElement.prototype, 'clientWidth', 'get').mockReturnValue(800);
+  vi.spyOn(HTMLElement.prototype, 'clientHeight', 'get').mockReturnValue(600);
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
   vi.stubGlobal(
     'requestAnimationFrame',
     vi.fn(() => 1)
