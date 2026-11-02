@@ -60,11 +60,13 @@ reject the proposed handoff; they do not certify the larger auth system.
 
 ## Run it
 
-From the repository root, install the workspace dependencies (`bun install`)
-and Playwright Chromium (`bunx playwright install chromium`) if needed. Use
+The stack declares `playwright` as a dev dependency of the `infra` workspace.
+Install that workspace and Playwright's Chromium, then run the script with
 Node 22 or newer and Docker Compose with `--wait` support:
 
 ```sh
+bun install --cwd infra
+(cd infra && bunx playwright install chromium)
 node infra/stacks/fusionauth-instance/tests/reproduce-handoff-race.mjs
 ```
 
