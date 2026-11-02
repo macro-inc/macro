@@ -5848,7 +5848,7 @@
       },
       "post": {
         "tags": ["crm::inbound::axum_router::create_contact"],
-        "summary": "Manually create a contact under a CRM company. Access is enforced by\n[`CrmCompanyAccessLevelExtractor`]: the caller must be on the team\nthat owns the company (hidden companies are reachable for\nadmin/owner only, and the new contact then inherits `hidden`). The\nemail's domain must be one of the company's domains (400), the\ncompany must not already track the email (409), and the team's CRM\nkillswitch must be on (403).",
+        "summary": "Manually create a contact under a CRM company. Access is enforced by\n[`CrmCompanyAccessLevelExtractor`]: the caller must be on the team\nthat owns the company (hidden companies are reachable for\nadmin/owner only, and the new contact then inherits `hidden`). The\ncompany must not already track the email (409), and the team's CRM\nkillswitch must be on (403).",
         "operationId": "create_crm_contact",
         "parameters": [
           {
@@ -6222,7 +6222,7 @@
     "/crm/contacts/by-email": {
       "get": {
         "tags": ["crm::inbound::axum_router::get_contact_by_email"],
-        "summary": "Look up a CRM contact by email in the caller's team. Returns a null\n`contact` when no visible contact exists. Any team member may resolve a\nvisible contact; admin/owner callers may also resolve hidden contacts and\ncontacts under hidden companies.",
+        "summary": "Look up a CRM contact by email in the caller's team. Returns a null\n`contact` when no visible contact exists. Any team member may resolve a\nvisible contact; admin/owner callers may also resolve hidden contacts and\ncontacts under hidden companies. Returns 400 when several visible contacts\nmatch; callers must choose an explicit contact ID instead.",
         "operationId": "get_contact_by_email",
         "parameters": [
           {
@@ -6247,7 +6247,7 @@
             }
           },
           "400": {
-            "description": "",
+            "description": "Invalid email or multiple visible contacts match; choose a contact ID.",
             "content": {
               "application/json": {
                 "schema": {
@@ -19699,6 +19699,11 @@
   },
   "components": {
     "schemas": {
+      "AccentColor": {
+        "type": "string",
+        "description": "A color as `#rrggbb`, kept in lowercase.",
+        "pattern": "^#[0-9a-fA-F]{6}$"
+      },
       "AccessLevel": {
         "type": "string",
         "description": "Ordered from least to most access top -> bottom",
@@ -25808,11 +25813,11 @@
       "CreateCrmCompanyRequest": {
         "type": "object",
         "description": "Request body for `POST /crm/companies`.",
-        "required": ["name", "domain"],
+        "required": ["name"],
         "properties": {
           "domain": {
-            "type": "string",
-            "description": "The company's email domain, e.g. \"acme.com\". Must be a bare\ndomain (no scheme, path, or email) and not a generic email\nprovider domain."
+            "type": ["string", "null"],
+            "description": "Optional company domain, e.g. \"acme.com\". Omit for a name-only\ncompany. When supplied, must be a bare\ndomain (no scheme, path, or email) and not a generic email\nprovider domain."
           },
           "name": {
             "type": "string",
@@ -25827,7 +25832,7 @@
         "properties": {
           "email": {
             "type": "string",
-            "description": "The contact's email address, e.g. \"jane@example.com\". Its domain\nmust be one of the company's domains (400 otherwise)."
+            "description": "The contact's email address, including personal email providers.\nIt need not match a company domain."
           },
           "name": {
             "type": "string",
@@ -31729,6 +31734,7 @@
           "status",
           "closesAt",
           "confirmationMessage",
+          "branding",
           "createdAt",
           "updatedAt",
           "isHiddenInDrive"
@@ -31737,6 +31743,10 @@
           "audience": {
             "$ref": "#/components/schemas/Audience",
             "description": "Who may respond."
+          },
+          "branding": {
+            "$ref": "#/components/schemas/FormBranding",
+            "description": "Its logo, cover image and accent color."
           },
           "closesAt": {
             "type": ["string", "null"],
@@ -31813,6 +31823,34 @@
         "description": "The caller's level on a form: view responds, edit changes questions and\nreads responses, owner also sets the audience, closes and trashes it.",
         "enum": ["view", "edit", "owner"]
       },
+      "FormBranding": {
+        "type": "object",
+        "description": "A form's logo, cover image and accent color, each unset by default.",
+        "required": ["logoFileId", "coverFileId", "accentColor"],
+        "properties": {
+          "accentColor": {
+            "oneOf": [
+              {
+                "type": "null"
+              },
+              {
+                "$ref": "#/components/schemas/AccentColor",
+                "description": "The color of the page's buttons and selected answers."
+              }
+            ]
+          },
+          "coverFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The static file shown as a banner across the top of the page."
+          },
+          "logoFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "The static file shown as the logo above the title."
+          }
+        }
+      },
       "FormCollaboration": {
         "type": "object",
         "description": "A ready collaborative form and the result of publishing its latest draft.",
@@ -31877,6 +31915,7 @@
           "invalidName",
           "invalidSharing",
           "tallyHidden",
+          "invalidBranding",
           "conflict",
           "internal"
         ]
@@ -44566,8 +44605,13 @@
       },
       "UpdateForm": {
         "type": "object",
-        "description": "A change to a form's facts; what is left out stays. The description and\nconfirmation message take edit, the rest owner. A form is renamed\nthrough the entity mutation router.",
+        "description": "A change to a form's facts; what is left out stays. The description,\nconfirmation message and branding take edit, the rest owner. A form is renamed\nthrough the entity mutation router.",
         "properties": {
+          "accentColor": {
+            "type": ["string", "null"],
+            "description": "A new accent color, or `null` for the default.",
+            "pattern": "^#[0-9a-fA-F]{6}$"
+          },
           "audience": {
             "$ref": "#/components/schemas/Audience",
             "description": "Who may respond from now on."
@@ -44581,9 +44625,19 @@
             "type": "string",
             "description": "Its new confirmation message."
           },
+          "coverFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "A new cover image, or `null` to remove it."
+          },
           "description": {
             "type": "string",
             "description": "Its new description."
+          },
+          "logoFileId": {
+            "type": ["string", "null"],
+            "format": "uuid",
+            "description": "A new logo, or `null` to remove it."
           },
           "status": {
             "$ref": "#/components/schemas/FormStatus",
