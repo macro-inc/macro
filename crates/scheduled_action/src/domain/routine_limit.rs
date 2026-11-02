@@ -11,7 +11,7 @@ use super::models::ScheduledAction;
 mod test;
 
 const FREE_ACTIVE_ROUTINES: u32 = 10;
-const PRO_ACTIVE_ROUTINES: u32 = 100;
+const PRO_ACTIVE_ROUTINES: u32 = 1_000;
 const MAX_ACTIVE_ROUTINES: u32 = 10_000;
 
 /// The active routines an owner's plan allows at once. A write that would

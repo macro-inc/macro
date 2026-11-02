@@ -37,7 +37,7 @@ each run.
   stays available. Activating creates the caller's own routine with `template_id`
   pointing back. Filling variables happens in the client.
 - Active routines are capped by the owner's plan (`domain/routine_limit.rs`):
-  Free 10, Pro 100, Max 10,000, enterprise teams as Max. Active means
+  Free 10, Pro 1,000, Max 10,000, enterprise teams as Max. Active means
   `ScheduledAction::is_active`: enabled, and watching events or holding a
   next run. Only a write that makes a routine active is checked (create,
   enable, or an edit that reschedules a finished one-off), so pausing,

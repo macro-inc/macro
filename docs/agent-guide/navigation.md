@@ -1160,7 +1160,7 @@ loads those settings before further edits. While running, configuration is locke
 but cannot resume until the run ends. Completed one-offs remain visible with
 their history and do not repeat.
 
-Plans limit active routines: 10 on Free, 100 on Pro, and 10,000 on Max
+Plans limit active routines: 10 on Free, 1,000 on Pro, and 10,000 on Max
 (enterprise teams count as Max). A routine is active while it is enabled and
 either watches events or has a next run; paused routines and completed one-offs
 don't count. At the limit, creating, duplicating, or activating a template with
