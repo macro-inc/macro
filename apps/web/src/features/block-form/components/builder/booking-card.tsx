@@ -1,7 +1,7 @@
-import ArrowSquareOut from '@phosphor/arrow-square-out.svg';
-import CalendarCheck from '@phosphor/calendar-check.svg';
-import Check from '@phosphor/check.svg';
-import Warning from '@phosphor/warning.svg';
+import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
+import CalendarCheck from '@icon/system/regular/calendar-check.svg';
+import Check from '@icon/system/regular/check.svg';
+import Warning from '@icon/system/regular/warning.svg';
 import { cn, Dropdown } from '@ui';
 import { For, type JSX, Match, Show, Switch } from 'solid-js';
 import type { FormBookingLink } from '../../context/form-context';
@@ -33,7 +33,7 @@ export function BookingLinkMenu(props: {
   trigger: JSX.Element;
   triggerLabel?: string;
   triggerClass?: string;
-  triggerVariant: 'outline' | 'ghost';
+  triggerVariant: 'outline' | 'secondary' | 'ghost';
   disabled?: boolean;
   onChoose: (target: FormBookingTarget) => void;
   onCreate: () => void;
@@ -109,7 +109,11 @@ function BookingLinkItems(props: {
                           </Dropdown.ItemDescription>
                         </span>
                         <Show when={sameTarget(props.selected, link.target)}>
-                          <Check class="size-4" aria-label="Current" />
+                          <Check
+                            aria-hidden={false}
+                            class="size-4"
+                            aria-label="Current"
+                          />
                         </Show>
                       </Dropdown.Item>
                     )}

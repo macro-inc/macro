@@ -1,7 +1,32 @@
 use super::models::{
-    CatalogEntry, CatalogPage, ConnectToken, MacroUserIdStr, McpServer, PipedreamAccount,
-    PipedreamConnection,
+    CatalogEntry, CatalogPage, ConnectToken, ConnectorOverlay, MacroUserIdStr, McpServer,
+    PipedreamAccount, PipedreamConnection,
 };
+
+/// The catalog apps that connect through the native MCP stack instead of
+/// Pipedream.
+pub trait ConnectorOverlays: Send + Sync + 'static {
+    /// Every overlaid app.
+    fn overlays(&self) -> impl Future<Output = anyhow::Result<Vec<ConnectorOverlay>>> + Send;
+
+    /// The overlay for `app_slug`, if the app is overlaid.
+    fn overlay(
+        &self,
+        app_slug: &str,
+    ) -> impl Future<Output = anyhow::Result<Option<ConnectorOverlay>>> + Send;
+}
+
+/// A user's connections to overlaid apps, which live on the native MCP stack
+/// rather than in Pipedream.
+pub trait OverlayConnections: Send + Sync + 'static {
+    /// The display name of `user`'s enabled, authorized connection to
+    /// `overlay`'s MCP server, if they hold one.
+    fn connected_name(
+        &self,
+        user: &MacroUserIdStr<'static>,
+        overlay: &ConnectorOverlay,
+    ) -> impl Future<Output = anyhow::Result<Option<String>>> + Send;
+}
 
 /// Cross-user lookup for background integrations that follow a connected app.
 pub trait AppConnections: Send + Sync + 'static {
@@ -13,6 +38,10 @@ pub trait AppConnections: Send + Sync + 'static {
 }
 
 /// Port for persisting Pipedream-connected apps, keyed by user and app slug.
+///
+/// Reads never return a connection to an overlaid app (see
+/// [`ConnectorOverlays`]): once an app is overlaid, a Pipedream grant for it
+/// stops reaching tools, imports, and sandboxes everywhere at once.
 pub trait ConnectionStore: Send + Sync + 'static {
     /// Error type for store operations.
     type Err: Send + std::fmt::Debug;
@@ -97,6 +126,14 @@ pub trait PipedreamConnect: Send + Sync + 'static {
         account_id: &str,
     ) -> impl Future<Output = anyhow::Result<Option<PipedreamAccount>>> + Send;
 
+    /// List the accounts connected for `external_user_id` (our user ID) to
+    /// `app_slug`, in no particular order.
+    fn list_accounts(
+        &self,
+        external_user_id: &str,
+        app_slug: &str,
+    ) -> impl Future<Output = anyhow::Result<Vec<PipedreamAccount>>> + Send;
+
     /// Delete a connected account from Pipedream (revoking our copy of the
     /// grant).
     fn delete_account(&self, account_id: &str) -> impl Future<Output = anyhow::Result<()>> + Send;
@@ -110,7 +147,7 @@ pub trait ConnectorDirectory: Send + Sync + 'static {
     /// the opaque pagination cursor from a previous page. Implementations
     /// return entries most-popular-first, and only apps that can actually be
     /// connected and used (i.e. apps with an auth flow and at least one
-    /// action to expose as a tool).
+    /// action to expose as a tool) and that the catalog doesn't hide.
     fn search(
         &self,
         search: Option<&str>,
@@ -121,8 +158,9 @@ pub trait ConnectorDirectory: Send + Sync + 'static {
     /// Look up one app by its name slug.
     ///
     /// `Ok(None)` when Pipedream has no connectable app under that exact slug:
-    /// unknown, or an app with no auth flow (nothing to connect). A lookup
-    /// that cannot be completed is an error, not a miss.
+    /// unknown, an app with no auth flow (nothing to connect), or one the
+    /// catalog hides. A lookup that cannot be completed is an error, not a
+    /// miss.
     fn retrieve(
         &self,
         app_slug: &str,

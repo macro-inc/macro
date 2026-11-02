@@ -10,5 +10,5 @@ export type SetPropertyValueOneOfSevenType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SetPropertyValueOneOfSevenType = {
-  string: 'string',
+  number: 'number',
 } as const;

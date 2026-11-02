@@ -16,29 +16,29 @@ import type {
   SlideOutline,
 } from '@core/pptx-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowClockwise from '@icon/system/regular/arrow-clockwise.svg';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
+import CloudCheck from '@icon/system/regular/cloud-check.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import CopySimple from '@icon/system/regular/copy-simple.svg';
+import DownloadSimple from '@icon/system/regular/download-simple.svg';
+import EyeSlash from '@icon/system/regular/eye-slash.svg';
+import ImageSquare from '@icon/system/regular/image-square.svg';
+import Layout from '@icon/system/regular/layout.svg';
+import PaintBucket from '@icon/system/regular/paint-bucket.svg';
+import PencilSimpleLine from '@icon/system/regular/pencil-simple-line.svg';
+import Play from '@icon/system/regular/play.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import Printer from '@icon/system/regular/printer.svg';
+import Rectangle from '@icon/system/regular/rectangle.svg';
+import Scissors from '@icon/system/regular/scissors.svg';
+import SelectionAll from '@icon/system/regular/selection-all.svg';
+import SquaresFour from '@icon/system/regular/squares-four.svg';
+import Trash from '@icon/system/regular/trash.svg';
+import WarningIcon from '@icon/system/regular/warning.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
 import { Telemetry } from '@macro-inc/observability';
-import ArrowClockwise from '@phosphor/arrow-clockwise.svg';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import CloudCheck from '@phosphor/cloud-check.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import CopySimple from '@phosphor/copy-simple.svg';
-import DownloadSimple from '@phosphor/download-simple.svg';
-import EyeSlash from '@phosphor/eye-slash.svg';
-import ImageSquare from '@phosphor/image-square.svg';
-import Layout from '@phosphor/layout.svg';
-import PaintBucket from '@phosphor/paint-bucket.svg';
-import PencilSimpleLine from '@phosphor/pencil-simple-line.svg';
-import Play from '@phosphor/play.svg';
-import Plus from '@phosphor/plus.svg';
-import Printer from '@phosphor/printer.svg';
-import Rectangle from '@phosphor/rectangle.svg';
-import Scissors from '@phosphor/scissors.svg';
-import SelectionAll from '@phosphor/selection-all.svg';
-import SquaresFour from '@phosphor/squares-four.svg';
-import Trash from '@phosphor/trash.svg';
-import WarningIcon from '@phosphor/warning.svg';
 import { Button } from '@ui/components/Button';
 import {
   createEffect,
@@ -2467,7 +2467,7 @@ export function PptxEditor() {
         start={
           <Show when={!readonly()}>
             <RibbonButton
-              label="Undo"
+              aria-label="Undo"
               tooltip="Undo (⌘Z)"
               disabled={!session.history().canUndo}
               onClick={() => fireAndForget(undo(), 'pptx-editor')}
@@ -2475,7 +2475,7 @@ export function PptxEditor() {
               <ArrowCounterClockwise />
             </RibbonButton>
             <RibbonButton
-              label="Redo"
+              aria-label="Redo"
               tooltip="Redo (⇧⌘Z)"
               disabled={!session.history().canRedo}
               onClick={() => fireAndForget(redo(), 'pptx-editor')}
@@ -2507,7 +2507,7 @@ export function PptxEditor() {
               </button>
             </Show>
             <RibbonButton
-              label="Print"
+              aria-label="Print"
               tooltip="Print or save as PDF (⌘P)"
               data-testid="pptx-print-open"
               onClick={() => setPrinting(true)}
@@ -2515,7 +2515,7 @@ export function PptxEditor() {
               <Printer />
             </RibbonButton>
             <RibbonButton
-              label="Export"
+              aria-label="Export"
               tooltip="Export slides as pictures"
               data-testid="pptx-export-open"
               onClick={() => setExporting(true)}
@@ -2523,17 +2523,17 @@ export function PptxEditor() {
               <ImageSquare />
             </RibbonButton>
             <RibbonButton
-              label="Download"
+              aria-label="Download"
               tooltip="Download .pptx"
               onClick={() => fireAndForget(download(), 'pptx-download')}
             >
               <DownloadSimple />
             </RibbonButton>
             <Button
+              aria-label="Present"
               size="sm"
-              variant="accent"
+              variant="primary"
               class="h-6 gap-1 px-2 text-xs"
-              label="Present"
               tooltip="Present from current slide (⇧F5)"
               data-testid="pptx-present"
               onClick={() => present(true)}

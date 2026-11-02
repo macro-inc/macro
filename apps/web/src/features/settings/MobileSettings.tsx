@@ -1,10 +1,12 @@
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
+import { t } from '@app/lib/i18n';
 import { useLogout } from '@core/auth/logout';
 import { UserIcon } from '@core/component/UserIcon';
 import { enableEmailSignatures } from '@core/constant/featureFlags';
 import { useSettingsTabs } from '@core/constant/settingsTabsConfig';
 import { useEmail, useUserId } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { useOutlookAvailable } from '@queries/auth/outlook-link';
 import { isRealNamePart, useOwnUserName } from '@queries/auth/user-name-self';
 import { Show, Suspense } from 'solid-js';
 import { useMobileSettings } from './context/mobile-settings';
@@ -15,6 +17,8 @@ import { useTeamSettingsGroups } from './teamSettingsGroups';
 export function MobileSettings() {
   const settings = useMobileSettings();
   const signatures = useFeatureFlag(enableEmailSignatures);
+  // Always mounted on phones; read the providers only once settings open.
+  const outlook = useOutlookAvailable(settings.open);
   const { groups, searchGroups } = useSettingsTabs();
   const navGroups = useTeamSettingsGroups(groups);
   const userId = useUserId();
@@ -26,7 +30,7 @@ export function MobileSettings() {
     return (
       [value?.first_name, value?.last_name].filter(isRealNamePart).join(' ') ||
       email()?.split('@')[0] ||
-      'Your account'
+      t('settingsNav.yourAccount')
     );
   };
 
@@ -37,6 +41,7 @@ export function MobileSettings() {
       groups={navGroups()}
       searchGroups={searchGroups()}
       emailSignatures={signatures().enabled}
+      outlook={outlook()}
       name={displayName()}
       email={email() ?? ''}
       avatar={

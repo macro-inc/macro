@@ -1,0 +1,6 @@
+Extract subject, body, To recipients, CC and BCC. Expect a leading email/addressing line to supply recipients; expect the following lines to be the body (excluding recipient-routing metadata).
+For inline instructions, remove the addressing wrapper.
+Suggest a short subject from the outgoing body.
+People mentioned only inside the body are not additional recipients.
+Always include each explicitly addressed recipient. Separately stated To/Cc/Bcc routing metadata may appear elsewhere and is excluded from body. A nonempty body always gets a short subject.
+Preserve the author's full message, excluding addressing and recipient-routing metadata.

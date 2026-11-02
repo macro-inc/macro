@@ -30,6 +30,9 @@ const {
 vi.mock('@core/context/user', () => ({
   useUserId: () => () => 'dock-test-user',
 }));
+vi.mock('@app/features/universal-input/use-universal-input', () => ({
+  useUniversalInputEnabled: () => () => false,
+}));
 vi.mock('@core/constant/SettingsState', () => ({
   useSettingsState: () => ({ settingsOpen: () => false, toggleSettings }),
 }));
@@ -42,6 +45,8 @@ vi.mock('@core/mobile/virtualKeyboard', () => ({
 }));
 vi.mock('@ui', async () => ({
   Button: (await import('@ui/components/Button')).Button,
+  CommandMenuSearchInput: (await import('@ui/components/CommandMenuPrimitives'))
+    .CommandMenuSearchInput,
   cn: (...values: unknown[]) => values.filter(Boolean).join(' '),
   Layer: (props: ParentProps) => props.children,
 }));

@@ -58,7 +58,11 @@ impl Client {
                     self.disconnect().await;
                     self.reset_expected_disconnect();
                     let client = Arc::clone(&self);
-                    self.spawn(async move { client.auto_reconnect().await });
+                    self.spawn(async move {
+                        client
+                            .auto_reconnect(crate::telemetry::ConnectReason::KeepaliveTimeout)
+                            .await;
+                    });
                 }
             } else {
                 if error_count > 0 {

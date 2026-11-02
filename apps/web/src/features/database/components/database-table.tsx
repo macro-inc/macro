@@ -1,9 +1,9 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
+import CopyIcon from '@icon/system/regular/copy.svg';
+import PencilIcon from '@icon/system/regular/pencil-simple.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
-import ArrowSquareOutIcon from '@phosphor/arrow-square-out.svg';
-import CopyIcon from '@phosphor/copy.svg';
-import PencilIcon from '@phosphor/pencil-simple.svg';
-import TrashIcon from '@phosphor/trash.svg';
 import { Key } from '@solid-primitives/keyed';
 import { DragDropProvider, DragOverlay } from '@thisbeyond/solid-dnd';
 import { getHashedPaletteColor } from '@ui/utils/palette';

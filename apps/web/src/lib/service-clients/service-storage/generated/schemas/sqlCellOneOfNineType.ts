@@ -10,5 +10,5 @@ export type SqlCellOneOfNineType =
 
 // eslint-disable-next-line @typescript-eslint/no-redeclare
 export const SqlCellOneOfNineType = {
-  options: 'options',
+  dateRange: 'dateRange',
 } as const;

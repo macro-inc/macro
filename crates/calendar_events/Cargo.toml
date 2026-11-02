@@ -74,6 +74,7 @@ uuid = { workspace = true }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+wiremock = { workspace = true }
 entity_access = { path = "../entity_access", default-features = false, features = ["outbound", "ports"] }
 macro_db_migrator = { path = "../macro_db_migrator" }
 macro_user_id = { path = "../macro_user_id" }

@@ -1,5 +1,5 @@
 import { debounce } from '@solid-primitives/scheduled';
-import { createSignal, onCleanup } from 'solid-js';
+import { type Accessor, createSignal, onCleanup } from 'solid-js';
 import type {
   RoutineCreatorSource,
   RoutineDraftStorage,
@@ -8,6 +8,7 @@ import type { ScheduleDraft } from '../core/draft';
 import {
   createEmptyDraft,
   getErrorMessage,
+  validateRoutineApps,
   validateRoutineDraft,
 } from '../core/routine-draft';
 
@@ -15,7 +16,8 @@ export function createRoutineComposer(
   source: RoutineCreatorSource,
   storage: RoutineDraftStorage,
   defaultModel: string,
-  onCreated: (id: string) => void
+  onCreated: (id: string) => void,
+  connectedApps: Accessor<ReadonlySet<string> | undefined>
 ) {
   const restored = storage.load();
   const [draft, setDraft] = createSignal<ScheduleDraft>(
@@ -29,6 +31,9 @@ export function createRoutineComposer(
   );
   const [attempted, setAttempted] = createSignal(false);
   const [submitError, setSubmitError] = createSignal<string>();
+  const formError = () =>
+    validateRoutineDraft(draft(), true) ??
+    validateRoutineApps(draft().apps, connectedApps());
   const save = debounce((value: ScheduleDraft) => storage.save(value), 300);
   let dirty = false;
   function change(update: (draft: ScheduleDraft) => ScheduleDraft) {
@@ -47,7 +52,7 @@ export function createRoutineComposer(
   async function create() {
     if (source.pending()) return;
     setAttempted(true);
-    if (validateRoutineDraft(draft(), true)) return;
+    if (formError()) return;
     let id: string;
     try {
       id = await source.create(draft());
@@ -60,5 +65,5 @@ export function createRoutineComposer(
     storage.clear();
     onCreated(id);
   }
-  return { draft, change, attempted, submitError, create };
+  return { draft, change, attempted, formError, submitError, create };
 }

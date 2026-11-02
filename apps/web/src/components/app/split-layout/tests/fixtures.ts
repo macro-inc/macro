@@ -11,6 +11,8 @@ import {
   appRoute,
   channelDetailRoute,
   channelsSplitRoute,
+  externalChatRoute,
+  externalRoute,
   homeSplitRoute,
   legacyContentRoute,
   notFoundRoute,
@@ -33,6 +35,7 @@ const routes: SplitRoutes = {
       ...appRoute,
       children: [
         homeSplitRoute,
+        { ...externalRoute, children: [externalChatRoute] },
         { ...channelsSplitRoute, children: [channelDetailRoute] },
         legacyContentRoute,
         notFoundRoute,
@@ -48,7 +51,8 @@ const routes: SplitRoutes = {
  */
 export function createRoutedSplitLayout(
   orchestrator: BlockOrchestrator,
-  url: string
+  url: string,
+  stacked = false
 ): SplitManager {
   let manager: SplitManager | undefined;
   const router = createSplitRouter({
@@ -59,13 +63,14 @@ export function createRoutedSplitLayout(
       manager: () => manager,
       toContent: splitContentFromLocation,
       defaultLocation: () => homeLocation,
-      stacked: () => false,
+      stacked: () => stacked,
     }),
   });
   manager = createSplitLayout(orchestrator, {
     router,
     toLocation: (content) => resolveContentLocation(router.routes, content),
     toContent: splitContentFromLocation,
+    stacked: () => stacked,
   });
   return manager;
 }

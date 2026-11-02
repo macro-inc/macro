@@ -16,7 +16,10 @@ const draft = {
 let dispose = () => {};
 afterEach(() => dispose());
 
-function setup(create: () => Promise<string>) {
+function setup(
+  create: () => Promise<string>,
+  connected: () => ReadonlySet<string> | undefined = () => new Set()
+) {
   const storage: RoutineDraftStorage = {
     load: () => draft,
     save: vi.fn(),
@@ -37,7 +40,13 @@ function setup(create: () => Promise<string>) {
   };
   const composer = createRoot((cleanup) => {
     dispose = cleanup;
-    return createRoutineComposer(source, storage, 'default-model', onCreated);
+    return createRoutineComposer(
+      source,
+      storage,
+      'default-model',
+      onCreated,
+      connected
+    );
   });
   return { composer, storage, onCreated, source };
 }
@@ -90,5 +99,26 @@ describe('routine creation state without app providers', () => {
     expect(storage.save).toHaveBeenCalledWith(
       expect.objectContaining({ triggers: [] })
     );
+  });
+
+  it('creates a routine only once every app it requires is connected', async () => {
+    const [connected, setConnected] = createSignal<ReadonlySet<string>>(
+      new Set()
+    );
+    const { composer, source } = setup(async () => 'created', connected);
+    composer.change((current) => ({
+      ...current,
+      apps: [{ app_slug: 'linear', server_name: 'Linear' }],
+    }));
+    await composer.create();
+    expect(composer.formError()).toBe(
+      'Connect every app this routine requires.'
+    );
+    expect(source.create).not.toHaveBeenCalled();
+
+    setConnected(new Set(['linear']));
+    expect(composer.formError()).toBeNull();
+    await composer.create();
+    expect(source.create).toHaveBeenCalledOnce();
   });
 });

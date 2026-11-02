@@ -1,0 +1,30 @@
+[package]
+edition = "2024"
+name = "whatsapp_e2e"
+publish = false
+version = "0.1.0"
+description = "End-to-end tests of WhatsApp linked devices: session-service replicas, the linked-devices domain and MacroDB against a fake WhatsApp server."
+
+[dependencies]
+entity_access_db_utils = { path = "../entity_access_db_utils" }
+async-trait = { workspace = true }
+entity_access = { path = "../entity_access", default-features = false, features = ["ports"] }
+sqlx = { workspace = true }
+tokio = { workspace = true, features = ["macros", "rt-multi-thread", "sync", "time"] }
+tokio-util = { workspace = true, features = ["rt"] }
+tracing = { workspace = true }
+uuid = { workspace = true }
+whatsapp_fake_server = { path = "../whatsapp_fake_server" }
+external_chat = { path = "../external_chat", features = ["outbound"] }
+whatsapp_linked = { path = "../whatsapp_linked", features = ["outbound"] }
+whatsapp_session_service = { path = "../../services/whatsapp_session_service" }
+whatsapp_store_pg = { path = "../whatsapp_store_pg", features = ["fake-kms"] }
+whatsmeow = { path = "../whatsmeow" }
+workspace-hack = { version = "0.1", path = "../workspace-hack" }
+zeroize = { workspace = true }
+
+[dev-dependencies]
+macro_user_id = { path = "../macro_user_id" }
+chrono = { workspace = true }
+whatsmeow_signal = { path = "../whatsmeow_signal" }
+macro_db_migrator = { path = "../macro_db_migrator" }

@@ -17,6 +17,8 @@ pub enum ApiOperationKind {
     ListMessages,
     /// Modify labels on a message.
     ModifyMessageLabels,
+    /// Modify labels on many messages in one request.
+    BatchModifyMessageLabels,
     /// Fetch one message attachment.
     GetAttachment,
     /// Send a message.

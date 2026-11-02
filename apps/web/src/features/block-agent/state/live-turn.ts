@@ -19,6 +19,16 @@
 import type { FoldedMessage } from '@service-agent-fold/generated/types';
 import { lastTurnMessage } from './control-message';
 
+/** A model change is punctuation between turns, not beside one. */
+function isTurnBoundary(message: FoldedMessage): boolean {
+  const part = message.parts[0];
+  return (
+    message.parts.length === 1 &&
+    part?.kind === 'control' &&
+    part.control.kind === 'set_model'
+  );
+}
+
 /** The agent message of the running turn, or nothing when no turn runs. */
 export function liveTurnMessage(
   messages: readonly FoldedMessage[],
@@ -26,7 +36,15 @@ export function liveTurnMessage(
 ): FoldedMessage | undefined {
   if (!working) return undefined;
   const last = lastTurnMessage(messages);
-  return last?.author.kind === 'agent' ? last : undefined;
+  if (last?.author.kind !== 'agent') return undefined;
+  // The fold leaves a superseded turn at `stop: null`. Looking past a
+  // trailing model change would keep that turn shimmering above the line
+  // while "Working" also sits below it.
+  const index = messages.lastIndexOf(last);
+  if (index >= 0 && messages.slice(index + 1).some(isTurnBoundary)) {
+    return undefined;
+  }
+  return last;
 }
 
 /** Whether `message` is the live turn `live` names. */

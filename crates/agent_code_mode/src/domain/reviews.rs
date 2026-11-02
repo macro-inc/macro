@@ -76,8 +76,8 @@ pub struct CreateReview {
     /// time: {kind: "timed", startsAt: ISO datetime, endsAt: ISO datetime,
     /// timeZone?: IANA zone} or {kind: "allDay", startDate: ISO date,
     /// endDate: exclusive ISO date}, description?, location?, attendees?:
-    /// [{email, isOptional?}]}. Import: exactly one draft {source: "notion"},
-    /// presenting the plan ImportFromNotion staged.
+    /// [{email, isOptional?}]}. Import: exactly one draft {source: "notion" | "linear" | "jira"},
+    /// presenting the plan ImportFromNotion, ImportFromLinear or ImportFromJira staged.
     /// Creating any review only presents these drafts; the user acts separately.
     pub drafts: Vec<Value>,
 }
@@ -345,6 +345,7 @@ impl ReviewService {
         if input.title.trim().is_empty()
             || input.title.len() > 256
             || !(1..=100).contains(&input.drafts.len())
+            || (input.kind == ReviewKind::Import && input.drafts.len() != 1)
             || serde_json::to_vec(&input).map_err(|_| invalid())?.len() > MAX_INPUT_BYTES
         {
             return Err(invalid());

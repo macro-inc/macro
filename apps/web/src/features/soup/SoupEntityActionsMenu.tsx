@@ -1,5 +1,6 @@
 import type {
   EntityActionListState,
+  EntityActionNavigationHandler,
   EntityActionViewContext,
 } from '@app/features/next-soup/actions';
 import type { MarkDoneDelegate } from '@app/features/next-soup/actions/mark-done-delegate';
@@ -23,6 +24,12 @@ interface SoupEntityActionsMenuProps {
   extraItems?: JSX.Element;
   /** A list that completes its own rows, such as Home's work feed. */
   markDoneDelegate?: () => MarkDoneDelegate | undefined;
+  /** Where the view moves after an action that removes the row. */
+  createActionNavigationHandler?: () =>
+    | EntityActionNavigationHandler
+    | undefined;
+  /** The folder the list shows, when the split's content doesn't say. */
+  viewedProjectId?: string;
 }
 
 export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
@@ -40,10 +47,12 @@ export const SoupEntityActionsMenu = (props: SoupEntityActionsMenuProps) => {
     const content = panel.handle.content();
     return buildActionGroups(props.list, props.entities, {
       viewContext: props.viewContext,
-      viewedProjectId: viewedProjectIdFromContent(content),
+      viewedProjectId:
+        props.viewedProjectId ?? viewedProjectIdFromContent(content),
       openTagPicker: props.onEditTags,
       openProjectPicker: props.onSetProject,
       splitHandle: panel.handle,
+      createActionNavigationHandler: props.createActionNavigationHandler,
     });
   };
 

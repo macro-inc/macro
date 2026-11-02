@@ -426,6 +426,83 @@ describe('shared ops cache effects', () => {
     ).toBe(6);
     expect(queryClient.getQueryState(key)?.isInvalidated).toBe(false);
   });
+  it('reports committed row writes by kind without cell contents', async () => {
+    mock.applyOps.mockReturnValue(okAsync({ results: [], changes: [] }));
+    await applyDatabaseOps('db', [
+      {
+        kind: 'rows',
+        table: 'tasks',
+        change: { kind: 'insert', rows: [[], []] },
+      },
+      {
+        kind: 'rows',
+        table: 'tasks',
+        change: {
+          kind: 'update',
+          changes: { kind: 'uniform', rows: ['a', 'b', 'c'], cells: [] },
+        },
+      },
+      { kind: 'table', table: 'tasks', change: { kind: 'delete' } },
+    ]);
+    expect(mock.track).toHaveBeenCalledExactlyOnceWith('database_rows_edited', {
+      databaseId: 'db',
+      insertedRows: 2,
+      updatedRows: 3,
+      deletedRows: 0,
+    });
+  });
+  it('does not report schema-only or refused batches as row edits', async () => {
+    mock.applyOps.mockReturnValueOnce(okAsync({ results: [], changes: [] }));
+    await applyDatabaseOps('db', [
+      { kind: 'table', table: 'tasks', change: { kind: 'delete' } },
+    ]);
+    mock.applyOps.mockReturnValueOnce(
+      errAsync([{ code: 'CONFLICT', message: 'Changed.', refusal: null }])
+    );
+    await applyDatabaseOps('db', [
+      {
+        kind: 'rows',
+        table: 'tasks',
+        change: { kind: 'delete', rows: ['row'] },
+      },
+    ]);
+    expect(mock.track).not.toHaveBeenCalled();
+  });
+  it('does not report the cells a column type conversion copies as row edits', async () => {
+    mock.applyOps.mockReturnValue(okAsync({ results: [], changes: [] }));
+    await applyDatabaseOps('db', [
+      {
+        kind: 'column',
+        table: 'tasks',
+        column: 'status-as-select',
+        change: {
+          kind: 'create',
+          definition: {
+            source: 'new',
+            name: 'Status',
+            type: { type: 'select', multi: false },
+            options: [],
+          },
+          after: 'status',
+        },
+      },
+      {
+        kind: 'rows',
+        table: 'tasks',
+        change: {
+          kind: 'update',
+          changes: {
+            kind: 'per_row',
+            rows: [
+              { row: 'a', cells: [] },
+              { row: 'b', cells: [] },
+            ],
+          },
+        },
+      },
+    ]);
+    expect(mock.track).not.toHaveBeenCalled();
+  });
   it('invalidates optimistic state after a refused batch', async () => {
     queryClient.setQueryData(key, detail);
     mock.applyOps.mockReturnValue(

@@ -50,7 +50,7 @@ struct JudgeOutput {
 }
 
 /// Judges implicit triggers with [`PredefinedModel::Fast`], recording token
-/// usage against the message's sender.
+/// usage against the user the message invokes for.
 pub struct FastModelTriggerJudge {
     model: PredefinedModel,
     recorder: Arc<dyn UsageRecorder>,
@@ -77,7 +77,7 @@ impl ImplicitTriggerJudge for FastModelTriggerJudge {
         posted: &MessagePostedMetadata,
         transcript: &str,
     ) -> Result<bool> {
-        let Some(user) = posted.sender.as_user() else {
+        let Some(user) = posted.invoking_user() else {
             return Ok(false);
         };
         let schema = DynamicSchema {
@@ -101,7 +101,7 @@ impl ImplicitTriggerJudge for FastModelTriggerJudge {
                 }
             }),
         };
-        let ctx = UsageContext::new(AiFeature::Automation, user.clone());
+        let ctx = UsageContext::new(AiFeature::Automation, user);
 
         let blurbs =
             blurbs_for_attachments(self.images.as_ref(), &posted.attachments, ctx.clone()).await;

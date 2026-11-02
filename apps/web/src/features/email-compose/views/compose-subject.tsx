@@ -1,137 +1,26 @@
-import { cn } from '@ui';
-import { createSignal, createUniqueId, Show } from 'solid-js';
+import { ComposeSubjectField } from '../components/compose-subject-field';
 import { useCompose } from '../context/compose-context';
 import { subjectLimitHint } from '../core/subject-limit';
-
-function autosize(el: HTMLTextAreaElement) {
-  el.style.height = 'auto';
-  el.style.height = `${el.scrollHeight}px`;
-}
 
 export function ComposeSubject(props: {
   inputRef?: (el: HTMLElement) => void;
 }) {
   const ctx = useCompose();
-
-  // On mobile the subject wraps and grows while edited, and folds to a single
-  // truncated line on blur so the body starts near the top.
-  const [editing, setEditing] = createSignal(false);
-  let textareaRef: HTMLTextAreaElement | undefined;
-
-  const showSummary = () =>
-    ctx.isMobile() && !editing() && ctx.subject().length > 0;
-
-  const limitHintId = createUniqueId();
   const limitHint = () => {
-    const inboxId = ctx.selectedInboxId?.();
     const sender = ctx
       .fromInboxes?.()
-      .find((option) => option.inboxId === inboxId);
+      .find((option) => option.inboxId === ctx.selectedInboxId?.());
     return subjectLimitHint(ctx.subject(), sender?.provider);
   };
-
-  const blurOnEscape = (
-    e: KeyboardEvent & { currentTarget: HTMLInputElement }
-  ) => {
-    if (e.key !== 'Escape') return;
-    e.preventDefault();
-    e.currentTarget.blur();
-  };
-
   return (
-    <div
-      class={cn(
-        'w-full flex gap-2 border-b border-edge-muted focus-within:border-ink/20',
-        ctx.isMobile() ? 'items-start py-2' : 'items-center py-3'
-      )}
-    >
-      <div
-        class={cn(
-          'text-sm shrink-0 text-ink-placeholder',
-          ctx.isMobile() ? 'min-h-7 flex items-center' : 'w-14'
-        )}
-      >
-        {ctx.isMobile() ? 'Subject:' : 'Subject'}
-      </div>
-      <div class="flex-1 min-w-0">
-        <Show
-          when={ctx.isMobile()}
-          fallback={
-            <input
-              ref={props.inputRef}
-              type="text"
-              value={ctx.subject()}
-              placeholder="Subject"
-              class="w-full resize-none bg-transparent text-base text-ink placeholder:text-ink-placeholder outline-none"
-              onInput={(e) => ctx.setSubject(e.currentTarget.value)}
-              onKeyDown={blurOnEscape}
-              disabled={ctx.disabled()}
-              aria-invalid={limitHint() ? true : undefined}
-              aria-describedby={limitHint() ? limitHintId : undefined}
-            />
-          }
-        >
-          <Show
-            when={!showSummary()}
-            fallback={
-              <button
-                type="button"
-                class="ph-no-capture w-full min-h-7 flex items-center text-base text-ink text-left"
-                onClick={() => {
-                  setEditing(true);
-                  requestAnimationFrame(() => textareaRef?.focus());
-                }}
-                aria-describedby={limitHint() ? limitHintId : undefined}
-              >
-                <span class="truncate">{ctx.subject()}</span>
-              </button>
-            }
-          >
-            <textarea
-              ref={(el) => {
-                textareaRef = el;
-                props.inputRef?.(el);
-                requestAnimationFrame(() => autosize(el));
-              }}
-              rows="1"
-              value={ctx.subject()}
-              class="w-full resize-none overflow-hidden text-base p-1"
-              onInput={(e) => {
-                ctx.setSubject(e.currentTarget.value.replace(/\n/g, ' '));
-                autosize(e.currentTarget);
-              }}
-              onFocus={() => setEditing(true)}
-              onBlur={() => setEditing(false)}
-              onKeyDown={(e) => {
-                if (e.key === 'Escape') {
-                  e.preventDefault();
-                  e.currentTarget.blur();
-                  return;
-                }
-                if (e.key === 'Enter') {
-                  e.preventDefault();
-                  e.currentTarget.blur();
-                }
-              }}
-              disabled={ctx.disabled()}
-              aria-invalid={limitHint() ? true : undefined}
-              aria-describedby={limitHint() ? limitHintId : undefined}
-            />
-          </Show>
-        </Show>
-        <Show when={limitHint()}>
-          {(hint) => (
-            <div id={limitHintId} class="text-failure-ink text-sm mt-1">
-              {hint()}
-            </div>
-          )}
-        </Show>
-      </div>
-      <Show when={ctx.validationError('no_subject')}>
-        {(err) => (
-          <div class="text-failure-ink text-sm mt-1">{err().message}</div>
-        )}
-      </Show>
-    </div>
+    <ComposeSubjectField
+      value={ctx.subject()}
+      onChange={ctx.setSubject}
+      disabled={ctx.disabled()}
+      compact={ctx.isMobile()}
+      limitHint={limitHint()}
+      error={ctx.validationError('no_subject')?.message}
+      inputRef={props.inputRef}
+    />
   );
 }

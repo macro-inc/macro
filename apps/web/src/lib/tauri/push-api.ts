@@ -19,6 +19,12 @@ declare global {
   }
 }
 
+/** iOS reports provisional (quiet) delivery as granted plus this flag;
+ * Android and older iOS builds omit it. */
+export type PushPermissionStatus = ios.NotificationPermissionStatus & {
+  provisional?: boolean;
+};
+
 export function supportsNotificationLaunch(): boolean {
   return window.__MACRO_IOS_NOTIFICATION_LAUNCH__ === true;
 }
@@ -34,11 +40,11 @@ export function createPushApi(platform: 'android' | 'ios') {
   const android = platform === 'android';
   return {
     checkPermissions: () =>
-      android
-        ? invoke<ios.NotificationPermissionStatus>(
-            'plugin:android-push|check_permissions'
-          )
-        : ios.checkPermissions(),
+      invoke<PushPermissionStatus>(
+        android
+          ? 'plugin:android-push|check_permissions'
+          : 'plugin:notifications|check_permissions'
+      ),
     requestPermissions: () =>
       android
         ? invoke<ios.NotificationPermissionStatus>(

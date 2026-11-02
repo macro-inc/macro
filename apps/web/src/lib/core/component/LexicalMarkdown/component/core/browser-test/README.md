@@ -20,3 +20,31 @@ not authenticated app navigation or a VoiceOver session.
 
 Screenshots from the verified fixture: [desktop](proof/desktop.png) and
 [phone](proof/mobile.png).
+
+## Message links
+
+`links.browser.e2e.ts` mounts the production Markdown parser, renderer, composer,
+and link menu over the original App Store message. It checks pointer/keyboard
+navigation, encoded URLs, Markdown punctuation, literal code, and Remove link →
+save → reopen on desktop, tablet touch, and phone touch. Network requests outside
+the local fixture are intercepted. Run just this case by adding
+`links.browser.e2e.ts` to the command above.
+
+Screenshots: [desktop](proof/autolinks-desktop.png) and
+[phone](proof/autolinks-mobile.png).
+
+## Message quotes
+
+`quotes.browser.e2e.ts` selects three paragraphs backward and applies Quote
+through the real floating toolbar on desktop/tablet and the composer format
+ribbon on phones. It checks the first paragraph's quote styling and the saved
+message. Run just this case by adding `quotes.browser.e2e.ts` to the command above.
+It also creates a quote with `> ` and pastes multiple paragraphs from plain text,
+HTML, and Lexical clipboards, both into an empty quote and over selected text.
+All pasted paragraphs stay quoted, inline formatting and surrounding text survive,
+and typing at the paste caret and saving keep the quote formatting.
+Replacing adjacent quotes also preserves quoting, while ranges containing
+unquoted paragraphs retain normal paste behavior.
+
+Screenshots: [desktop](proof/quotes-desktop.png), [phone](proof/quotes-mobile.png),
+and [multi-paragraph paste](proof/quote-paste.png).

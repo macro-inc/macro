@@ -338,7 +338,10 @@ impl InboxLifecycleRepository for PgMailboxSync {
         &self,
         lease_id: Uuid,
     ) -> Result<Option<InboxLifecycleLease>, MailboxError> {
+        // Naming both values of the claim index's leading expression lets `available_at <= now()`
+        // end the scan. Without it, Postgres before 18 reads every backed-off row on each poll.
         let row=sqlx::query!(r#"WITH candidate AS (SELECT o.id FROM email_mailbox_lifecycle_outbox o WHERE o.available_at <= now()
+            AND (o.payload->>'kind' = 'gmail_history') IN (false,true)
             AND (o.lease_until IS NULL OR o.lease_until < now())
             AND NOT EXISTS (SELECT 1 FROM email_mailbox_lifecycle_outbox prerequisite WHERE prerequisite.link_id=o.link_id
                 AND ((o.payload->>'kind'='revoke_microsoft_grant' AND prerequisite.payload->>'kind'='cleanup_microsoft_watches')

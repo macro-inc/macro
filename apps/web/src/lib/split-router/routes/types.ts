@@ -150,6 +150,12 @@ export type SplitRouteDefinition<
     | readonly string[]
     | '*'
     | ((entry: Readonly<Entry>) => readonly string[]);
+  /**
+   * Routes sharing a `mountKey` keep one mounted view while the pane moves
+   * between them, so a workspace that renders several routes is not rebuilt on
+   * each step. Defaults to the route id.
+   */
+  mountKey?: string;
   remountKey?: {
     bivarianceHack(
       params: StandardSchemaV1.InferOutput<TParamsSchema>,

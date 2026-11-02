@@ -7,9 +7,9 @@
 import type { SetPropertyValueOneOfOneoneType } from './setPropertyValueOneOfOneoneType';
 
 /**
- * Multiple select options by ID (for multi-select properties)
+ * Select option by ID (for select-type properties)
  */
 export type SetPropertyValueOneOfOneone = {
-  option_ids: string[];
+  option_id: string;
   type: SetPropertyValueOneOfOneoneType;
 };

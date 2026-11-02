@@ -9,7 +9,7 @@ use rootcause::Report;
 use tracing::Level;
 
 use crate::domain::{
-    models::{MacroAuthorizationError, ValidatedIdentity},
+    models::{CredentialOrigin, MacroAuthorizationError, ValidatedCredential, ValidatedIdentity},
     ports::JwtValidator,
 };
 
@@ -34,14 +34,21 @@ impl MacroAuthJwtValidator {
 
 impl JwtValidator for MacroAuthJwtValidator {
     #[tracing::instrument(err(level = Level::DEBUG), skip(self, jwt))]
-    fn validate(&self, jwt: &str) -> Result<ValidatedIdentity, Report<MacroAuthorizationError>> {
+    fn validate_credential(
+        &self,
+        jwt: &str,
+    ) -> Result<ValidatedCredential, Report<MacroAuthorizationError>> {
         decode_jwt::handler(&self.jwt_validation_args, jwt)
             .map(identity_from_token)
             .map_err(validation_error)
     }
 }
 
-fn identity_from_token(token: JwtToken) -> ValidatedIdentity {
+fn identity_from_token(token: JwtToken) -> ValidatedCredential {
+    let origin = match &token {
+        JwtToken::MacroAccessToken(_) => CredentialOrigin::Session,
+        JwtToken::MacroApiToken(_) => CredentialOrigin::MacroApiJwt,
+    };
     let (user_id, fusion_user_id, organization_id, agent_id) = match token {
         JwtToken::MacroAccessToken(token) => (
             token.macro_user_id,
@@ -57,12 +64,15 @@ fn identity_from_token(token: JwtToken) -> ValidatedIdentity {
         ),
     };
 
-    ValidatedIdentity {
-        agent_id,
-        user_id,
-        fusion_user_id,
-        organization_id,
-        permissions: None,
+    ValidatedCredential {
+        origin,
+        identity: ValidatedIdentity {
+            agent_id,
+            user_id,
+            fusion_user_id,
+            organization_id,
+            permissions: None,
+        },
     }
 }
 

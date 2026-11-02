@@ -7,7 +7,7 @@ use super::session::StopReason;
 use crate::domain::events::AgentSessionLifecycleEvent;
 use agent_client_protocol::schema::v1::{McpServer, SessionId};
 use agent_fold::domain::model::TurnSignal;
-use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId};
+use agent_runtime_protocol::domain::action::{AgentAction, AgentActionId, PromptAttachment};
 use agent_runtime_protocol::domain::ports::Transport;
 use agent_runtime_protocol::domain::schema::v0::{ToRuntimeMessage, ToServerMessage};
 use bots::domain::models::BotId;
@@ -318,7 +318,7 @@ pub struct OpenManagedSession {
     pub owner: Owner,
     /// First prompt to deliver once the sandbox is attached. `None` opens an
     /// idle session its owner prompts from the session's own surface.
-    pub prompt: Option<String>,
+    pub prompt: Option<FirstPrompt>,
     /// A selected persona's authoritative runtime profile. `None` uses the
     /// deployment's default managed coding persona.
     pub profile: Option<SelectedManagedPersona>,
@@ -332,6 +332,37 @@ pub struct OpenManagedSession {
     pub source: SessionSource,
     /// Whether a routine run is listed; a person's session always is.
     pub visibility: SessionVisibility,
+}
+
+/// The prompt a managed session opens with, delivered as soon as it can run.
+#[derive(Debug, Clone)]
+pub struct FirstPrompt {
+    /// The id the caller already shows the prompt under, so the logged row
+    /// confirms it in place. `None` mints one.
+    pub action_id: Option<AgentActionId>,
+    /// What to tell the agent.
+    pub prompt: String,
+    /// Files the prompt refers to, in the order the user attached them.
+    pub attachments: Vec<PromptAttachment>,
+}
+
+impl FirstPrompt {
+    /// A plain text prompt under a minted id.
+    pub fn text(prompt: impl Into<String>) -> Self {
+        Self {
+            action_id: None,
+            prompt: prompt.into(),
+            attachments: Vec::new(),
+        }
+    }
+
+    /// The action this prompt delivers, under its id.
+    pub fn into_action(self) -> (AgentActionId, AgentAction) {
+        (
+            self.action_id.unwrap_or_else(AgentActionId::mint),
+            AgentAction::prompt_with_attachments(self.prompt, self.attachments),
+        )
+    }
 }
 
 /// Opens sessions, however they are served. Implemented by the harness, which
@@ -530,7 +561,8 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
         visibility: SessionVisibility,
     ) -> impl Future<Output = Result<()>> + Send;
 
-    /// Persist the user-facing session name. Idempotent.
+    /// Persist a name a person chose. Idempotent. The name stops being
+    /// generated, so retitling never replaces it.
     fn set_name(&self, id: AgentSessionId, name: &str) -> impl Future<Output = Result<()>> + Send;
 
     /// Archive or unarchive a session. Idempotent.
@@ -553,6 +585,24 @@ pub trait AgentSessionRepo: Send + Sync + 'static {
     fn set_name_if_default(
         &self,
         id: AgentSessionId,
+        name: &str,
+    ) -> impl Future<Output = Result<bool>> + Send;
+
+    /// The session's name while it is a generated one that retitling may
+    /// replace: `None` once a person named the session, while it still has
+    /// the default, or when it is archived.
+    fn generated_name(
+        &self,
+        id: AgentSessionId,
+    ) -> impl Future<Output = Result<Option<String>>> + Send;
+
+    /// Replace a generated name only while the session is still called
+    /// `current`, that name is still generated, and the session is not
+    /// archived. Whether the name changed.
+    fn replace_generated_name(
+        &self,
+        id: AgentSessionId,
+        current: &str,
         name: &str,
     ) -> impl Future<Output = Result<bool>> + Send;
 
@@ -1122,7 +1172,8 @@ impl SessionTurnObserver for LateBoundTurnObserver {
     }
 }
 
-/// Generates a concise display name from a session's first prompt.
+/// Generates a concise display name from a session's first prompt, and
+/// replaces it once the conversation has outgrown it.
 pub trait AgentSessionNameGenerator: Send + Sync + 'static {
     /// Generate a name, or `None` when naming is disabled for this service.
     fn generate_name(
@@ -1130,6 +1181,19 @@ pub trait AgentSessionNameGenerator: Send + Sync + 'static {
         session: &AgentSession,
         initial_prompt: &str,
     ) -> impl Future<Output = Result<Option<String>, rootcause::Report>> + Send;
+
+    /// A name that describes the conversation better than `current`, or
+    /// `None` to keep it. Asked after every finished turn of a session whose
+    /// name was generated, so a name should change only when it has clearly
+    /// stopped fitting. Keeps every name by default.
+    fn retitle(
+        &self,
+        _session: &AgentSession,
+        _current: &str,
+        _conversation: &super::retitle::ConversationDigest,
+    ) -> impl Future<Output = Result<Option<String>, rootcause::Report>> + Send {
+        async { Ok(None) }
+    }
 }
 
 /// Disables automatic agent-session naming.

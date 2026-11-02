@@ -199,6 +199,7 @@ export function toGraphqlSetPropertyValue(
   return match(value)
     .with({ type: 'boolean' }, (v) => ({ boolean: v.value }))
     .with({ type: 'date' }, (v) => ({ date: v.value }))
+    .with({ type: 'date_range' }, (v) => ({ dateRange: v.value }))
     .with({ type: 'number' }, (v) => ({ number: v.value }))
     .with({ type: 'string' }, (v) => ({ string: v.value }))
     .with({ type: 'select_option' }, (v) => ({ selectOption: v.option_id }))
@@ -291,6 +292,17 @@ async function prepareMutationArgs(
       }
       const oldGroupKeys = groupedPropertyKeys(input.property);
       const newGroupKeys = groupedPropertyKeys(input.apiValues);
+      const dateChange =
+        input.apiValues.valueType === 'DATE'
+          ? {
+              from:
+                'value' in input.property &&
+                input.property.value instanceof Date
+                  ? input.property.value
+                  : null,
+              to: input.apiValues.value,
+            }
+          : undefined;
       const grouped = await (
         prepareGrouped ?? createGroupedPropertyPreparation(host)
       )({
@@ -298,6 +310,7 @@ async function prepareMutationArgs(
         propertyDefinitionId,
         oldGroupKeys: oldGroupKeys ?? [],
         newGroupKeys: newGroupKeys ?? [],
+        ...(dateChange && { dateChange }),
         revalidateOnly:
           oldGroupKeys === undefined || newGroupKeys === undefined,
       });

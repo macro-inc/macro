@@ -72,6 +72,13 @@ describe('stringToItemType', () => {
     }
   );
 
+  test.each(['foreign', 'foreign_entity'])(
+    'reads the pull request spelling %s as a foreign entity',
+    (raw) => {
+      expect(stringToItemType(raw)).toBe('foreign');
+    }
+  );
+
   test.each(['channel_message', 'bogus'])('rejects %s', (raw) => {
     expect(stringToItemType(raw)).toBeUndefined();
   });

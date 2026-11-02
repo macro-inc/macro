@@ -1,9 +1,11 @@
+import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { match } from 'ts-pattern';
 import type {
   GroupedSoupInitialInput,
   GroupSoupQuery,
   SoupItemFieldsFragment,
 } from '../../../service-clients/service-storage/graphql/generated/graphql';
+import { propertyDateGroupKey } from '../grouped/date-ranges';
 import { reconcileGroupedSoup } from '../grouped/reconciliation';
 import type { LiveQuerySnapshot } from './create-predicate-query';
 import { soupItemKey } from './reconciliation';
@@ -21,12 +23,19 @@ export function localSoupGroupKeys(
     match(input.groupBy.field)
       // Entity type cannot change for a normalized identity. Retain its server key.
       .with('ENTITY_TYPE', () => undefined)
-      .with('PROJECT', () => {
-        if ('projectId' in item) return [item.projectId ?? ''];
-        if (item.__typename === 'GraphqlSoupProject')
-          return [item.parentId ?? ''];
-        return undefined;
-      })
+      .with('PROJECT', () =>
+        localSoupGroupKeys(
+          item,
+          {
+            ...input,
+            groupBy: {
+              field: 'PROPERTY',
+              propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+            },
+          },
+          now
+        )
+      )
       .with('PROPERTY', () => {
         if (!('properties' in item)) return undefined;
         const entityType = match(item)
@@ -40,12 +49,22 @@ export function localSoupGroupKeys(
           .with({ __typename: 'GraphqlSoupCall' }, () => 'CALL_RECORD')
           .otherwise((item) => item.entityType);
         if (input.groupBy.entityType && input.groupBy.entityType !== entityType)
-          return [''];
+          return input.groupBy.bucketing ? [] : [''];
         const property = item.properties.find(
           (property) =>
             property.propertyDefinitionId === input.groupBy.propertyDefinitionId
         );
         const value = property?.value;
+        if (input.groupBy.bucketing) {
+          return [
+            propertyDateGroupKey(
+              value?.__typename === 'GraphqlDatePropertyValue'
+                ? value.dateValue
+                : undefined,
+              input.groupBy.bucketing
+            ),
+          ];
+        }
         if (!value) return [''];
         const keys = match(value)
           .with(
@@ -146,6 +165,9 @@ export function projectLocalGroupedSoup(
   now: Date,
   untrustedKeys: ReadonlySet<string> = new Set()
 ): GroupedSoupBin[] {
+  const displayOrders = new Map(
+    baseline.map((bin) => [bin.key, bin.displayOrder])
+  );
   const original = new Map(
     baseline.flatMap((bin) =>
       bin.items.map((item) => [soupItemKey(item), item] as const)
@@ -158,7 +180,7 @@ export function projectLocalGroupedSoup(
       oldKeys.set(key, [...(oldKeys.get(key) ?? []), bin.key]);
     }
   const previousKeys = (key: string, item: SoupItemFieldsFragment) =>
-    input.groupBy.field === 'PROPERTY'
+    input.groupBy.field === 'PROPERTY' && !input.groupBy.bucketing
       ? untrustedKeys.has(key)
         ? undefined
         : localSoupGroupKeys(item, input, now)
@@ -195,6 +217,8 @@ export function projectLocalGroupedSoup(
   );
   return bins.map((bin) => ({
     key: bin.key,
+    displayOrder: displayOrders.get(bin.key) ?? null,
+    label: bin.label ?? null,
     totalCount: bin.totalCount,
     nextCursor: bin.nextCursor,
     items: bin.itemIds.flatMap((key) => {

@@ -15,15 +15,15 @@ import {
   type LayerRow as Row,
 } from '@core/psd-engine/types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import ArrowsOutCardinal from '@phosphor/arrows-out-cardinal.svg';
-import Checkerboard from '@phosphor/checkerboard.svg';
-import CircleHalf from '@phosphor/circle-half.svg';
-import FolderSimplePlus from '@phosphor/folder-simple-plus.svg';
-import LockSimple from '@phosphor/lock-simple.svg';
-import PaintBrush from '@phosphor/paint-brush.svg';
-import Plus from '@phosphor/plus.svg';
-import SquareHalf from '@phosphor/square-half.svg';
-import Trash from '@phosphor/trash.svg';
+import ArrowsOutCardinal from '@icon/system/regular/arrows-out-cardinal.svg';
+import Checkerboard from '@icon/system/regular/checkerboard.svg';
+import CircleHalf from '@icon/system/regular/circle-half.svg';
+import FolderSimplePlus from '@icon/system/regular/folder-simple-plus.svg';
+import LockSimple from '@icon/system/regular/lock-simple.svg';
+import PaintBrush from '@icon/system/regular/paint-brush.svg';
+import Plus from '@icon/system/regular/plus.svg';
+import SquareHalf from '@icon/system/regular/square-half.svg';
+import Trash from '@icon/system/regular/trash.svg';
 import { createSignal, For, onMount, Show } from 'solid-js';
 import {
   createDragKeys,

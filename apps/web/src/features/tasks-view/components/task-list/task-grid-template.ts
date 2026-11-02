@@ -2,6 +2,15 @@ import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { DataType } from '@service-storage/generated/schemas/dataType';
 import { EntityType } from '@service-storage/generated/schemas/entityType';
 
+export const TASK_DUE_DATE_COLUMN = {
+  id: 'dueDate',
+  label: 'Due date',
+  defId: SYSTEM_PROPERTY_IDS.DUE_DATE,
+  dataType: DataType.DATE,
+  isMultiSelect: false,
+  specificEntityType: null,
+  width: 'var(--task-col-due-date, 8.5rem)',
+} as const;
 export const TASK_GRID_COLUMNS = [
   {
     id: 'status',
@@ -32,6 +41,7 @@ export const TASK_GRID_COLUMNS = [
     specificEntityType: EntityType.USER,
     width: 'var(--task-col-assignees, 7rem)',
   },
+  TASK_DUE_DATE_COLUMN,
 ] as const;
 
 /** The task's project, shown only while Projects is enabled. */
@@ -75,4 +85,4 @@ export function taskGridTemplate(options: {
 }
 
 /** Column span for full-width rows such as group headers. */
-export const taskGridColumnCount = (project: boolean) => (project ? 8 : 7);
+export const taskGridColumnCount = (project: boolean) => (project ? 9 : 8);

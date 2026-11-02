@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT max(created_at) AS \"sent_at\"\n            FROM (\n                SELECT created_at\n                FROM comms_messages\n                WHERE id = $1 AND sender_id = $2 AND created_at < $3\n                UNION ALL\n                SELECT created_at\n                FROM comms_messages\n                WHERE thread_id = $1 AND sender_id = $2 AND created_at < $3\n                  AND deleted_at IS NULL\n            ) request\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "sent_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text",
+        "Timestamptz"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "bd42148ae46bf135b6acf9531d0f545db61637e5cd120c0a2497d771654dafc4"
+}

@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        WITH mine AS (\n            SELECT message_id, provider_label_id, seq, label_present\n            FROM email_gmail_pending_label_writes\n            WHERE message_id = ANY($1) AND write_id = $2\n        ), next AS (\n            SELECT DISTINCT ON (c.message_id, c.provider_label_id) c.seq, mine.label_present\n            FROM email_gmail_pending_label_writes c\n            JOIN mine ON c.message_id = mine.message_id\n                AND c.provider_label_id = mine.provider_label_id AND c.seq > mine.seq\n            ORDER BY c.message_id, c.provider_label_id, c.seq\n        ), falls_back AS (\n            UPDATE email_gmail_pending_label_writes c\n            SET label_present_before = next.label_present\n            FROM next\n            WHERE c.seq = next.seq\n        )\n        DELETE FROM email_gmail_pending_label_writes c\n        USING mine\n        WHERE c.message_id = mine.message_id\n            AND c.provider_label_id = mine.provider_label_id\n            AND c.seq <= mine.seq\n        ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Uuid"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "61d951608521ac57ffbe432fd208c4b24ebb0989ea86513c80e470f9c0c580b2"
+}

@@ -1,5 +1,5 @@
+import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import { Popover } from '@kobalte/core/popover';
-import CalendarIcon from '@phosphor/calendar-blank.svg';
 import { mergeRefs } from '@solid-primitives/refs';
 import {
   type ComponentProps,

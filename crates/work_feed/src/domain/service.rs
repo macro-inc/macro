@@ -109,7 +109,7 @@ fn candidate_request(viewer: &FeedViewer, scope: &WorkFeedScope) -> CandidateReq
         keying: CandidateKeying::ThreadScoped,
         own_work: scope.mode.own_work(),
         types: policy::candidate_types(&scope.types),
-        filter: policy::signal_filter(&viewer.user, scope.include_snippets),
+        filter: policy::signal_filter(&viewer.user, scope),
         limit: 0,
         after: None,
         only: None,
@@ -242,10 +242,15 @@ where
             after: query.after,
             ..candidate_request(&viewer, &query.scope)
         };
+        // Items with no reason left, and items in another state, are dropped,
+        // so the reader reads on until the page is full.
+        let state = query.state;
         let page = self
             .reader
             .page(request, |loaded| {
-                assemble_item(loaded).map(|assembled| assembled.entry)
+                assemble_item(loaded)
+                    .map(|assembled| assembled.entry)
+                    .filter(|entry| state.is_none_or(|state| entry.item.state == state))
             })
             .await?;
         Ok(WorkFeedPage {

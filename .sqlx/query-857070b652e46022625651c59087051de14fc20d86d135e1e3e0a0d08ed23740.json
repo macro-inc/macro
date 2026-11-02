@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_chat_membership SET consent_ended_at = COALESCE(consent_ended_at, now()) WHERE chat_id = $1 RETURNING account_id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "account_id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "857070b652e46022625651c59087051de14fc20d86d135e1e3e0a0d08ed23740"
+}

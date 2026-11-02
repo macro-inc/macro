@@ -1,0 +1,24 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT mime FROM external_chat_media_blob b\n            WHERE id = $1 AND chat_id = $2 AND user_id = $3\n              AND NOT EXISTS (SELECT 1 FROM external_chat_attachment a WHERE a.blob_id = b.id)",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "mime",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "dc284bf1d30c64c2e839326cbea8a1051a39910e88a4073a72d7e0c888182f24"
+}

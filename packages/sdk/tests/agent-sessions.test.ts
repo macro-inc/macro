@@ -304,6 +304,28 @@ describe('AgentSession', () => {
     });
   });
 
+  test('asks the agent-harness service whether a prompt needs a coding agent', async () => {
+    let request: Request | undefined;
+    globalThis.fetch = (async (input) => {
+      request = input instanceof Request ? input : new Request(input);
+      return Response.json({ mode: 'code' }, { status: 200 });
+    }) as typeof fetch;
+    const macro = new Macro({
+      token: 'user-token',
+      hosts: { 'agent-harness': 'https://agent.example.test' },
+    });
+
+    await expect(
+      macro.agentSessions.chooseMode('Fix the login bug'),
+    ).resolves.toBe('code');
+
+    expect(request?.method).toBe('POST');
+    expect(request?.url).toBe('https://agent.example.test/agent-mode-choice');
+    await expect(request?.json()).resolves.toEqual({
+      prompt: 'Fix the login bug',
+    });
+  });
+
   test('lists one repository branches through the agent-harness service', async () => {
     let request: Request | undefined;
     globalThis.fetch = (async (input) => {

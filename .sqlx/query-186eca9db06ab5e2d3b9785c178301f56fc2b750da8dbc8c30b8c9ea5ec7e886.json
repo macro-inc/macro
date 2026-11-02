@@ -1,0 +1,44 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH requested_entities AS (\n                SELECT entity_type, entity_id\n                FROM UNNEST($2::text[], $3::text[]) AS entity(entity_type, entity_id)\n            )\n            -- The primary entity reads only the viewer's rows from\n            -- idx_user_notification_viewer_entity; secondary entities and\n            -- message ids match few notifications each.\n            SELECT matched.notification_id AS \"notification_id!\"\n            FROM (\n                SELECT un.notification_id, un.created_at\n                FROM requested_entities entity\n                JOIN user_notification un\n                  ON un.event_item_type = entity.entity_type\n                 AND un.event_item_id = entity.entity_id\n                WHERE un.user_id = $1\n                  AND un.deleted_at IS NULL\n                  AND (un.state = ANY($4::notification_state[]) OR ($5 AND un.seen_at IS NULL))\n                UNION\n                SELECT un.notification_id, un.created_at\n                FROM requested_entities entity\n                JOIN notification n\n                  ON n.secondary_event_item_type = entity.entity_type\n                 AND n.secondary_event_item_id = entity.entity_id\n                CROSS JOIN LATERAL (\n                    SELECT un.notification_id, un.created_at\n                    FROM user_notification un\n                    WHERE un.user_id = $1 AND un.notification_id = n.id\n                      AND un.deleted_at IS NULL\n                      AND (un.state = ANY($4::notification_state[]) OR ($5 AND un.seen_at IS NULL))\n                    -- Probe the viewer's row per notification: a plain join\n                    -- can scan the viewer's whole history for each entity.\n                    OFFSET 0\n                ) un\n                UNION\n                SELECT un.notification_id, un.created_at\n                FROM requested_entities entity\n                JOIN notification n\n                  ON COALESCE(n.metadata->>'messageId', n.metadata->>'message_id', '') = entity.entity_id\n                CROSS JOIN LATERAL (\n                    SELECT un.notification_id, un.created_at\n                    FROM user_notification un\n                    WHERE un.user_id = $1 AND un.notification_id = n.id\n                      AND un.deleted_at IS NULL\n                      AND (un.state = ANY($4::notification_state[]) OR ($5 AND un.seen_at IS NULL))\n                    OFFSET 0\n                ) un\n                WHERE entity.entity_type = 'channel_message'\n            ) matched\n            ORDER BY matched.created_at, matched.notification_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "notification_id!",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "TextArray",
+        "TextArray",
+        {
+          "Custom": {
+            "name": "notification_state[]",
+            "kind": {
+              "Array": {
+                "Custom": {
+                  "name": "notification_state",
+                  "kind": {
+                    "Enum": [
+                      "unseen",
+                      "seen",
+                      "done"
+                    ]
+                  }
+                }
+              }
+            }
+          }
+        },
+        "Bool"
+      ]
+    },
+    "nullable": [
+      null
+    ]
+  },
+  "hash": "186eca9db06ab5e2d3b9785c178301f56fc2b750da8dbc8c30b8c9ea5ec7e886"
+}

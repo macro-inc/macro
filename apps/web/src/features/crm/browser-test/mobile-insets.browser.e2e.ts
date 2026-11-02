@@ -43,8 +43,8 @@ for (const device of [
             });
             await expect(search).toBeVisible();
             const searchBox = await search.boundingBox();
-            expect(searchBox!.y).toBeGreaterThanOrEqual(100);
-            expect(searchBox!.y).toBeLessThan(112);
+            expect(searchBox!.y).toBeGreaterThanOrEqual(108);
+            expect(searchBox!.y).toBeLessThan(120);
             await search.fill('proposal');
             await expect(page.getByText('Searching: proposal')).toBeVisible();
             await page

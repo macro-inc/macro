@@ -1,4 +1,5 @@
 import { ScopedPortal } from '@core/component/ScopedPortal';
+import PlusIcon from '@icon/system/regular/plus.svg';
 import {
   $computeTableMapSkipCellCheck,
   $getTableNodeFromLexicalNodeOrThrow,
@@ -8,7 +9,6 @@ import {
   getDOMCellFromTarget,
   getTableElement,
 } from '@lexical/table';
-import PlusIcon from '@phosphor/plus.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { Layer } from '@ui';
 import {

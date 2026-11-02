@@ -7,7 +7,7 @@ import UIKit
 import UserNotifications
 import WebKit
 
-private struct PermissionStatus: Encodable { let status: String }
+private struct PermissionStatus: Encodable { let status: String; var provisional = false }
 private struct RegistrationStatus: Encodable { let isRegistered: Bool; let token: String? }
 private struct RegistrationResult: Encodable { let success: Bool; let token: String?; let error: String? }
 private struct WatchArgs: Decodable { let channel: Channel; let launchAware: Bool? }
@@ -30,6 +30,9 @@ final class NotificationsPlugin: Plugin, UNUserNotificationCenterDelegate {
     private var frontendReady = false
     private var launchAware = false
     private var suppressPendingCover = false
+    /// Held until the launch-time provisional request settles, so a permission
+    /// check never reports the undecided status that request is replacing.
+    private let launchAuthorization = DispatchGroup()
 
     override init() {
         super.init()
@@ -45,7 +48,25 @@ final class NotificationsPlugin: Plugin, UNUserNotificationCenterDelegate {
             pendingStoreError = error
             Logger.error("[notification-open] phase=store_init outcome=failed")
         }
-        UNUserNotificationCenter.current().delegate = self
+        let center = UNUserNotificationCenter.current()
+        center.delegate = self
+        // Provisional (quiet) delivery needs no prompt and lists Macro under
+        // iOS Settings → Notifications, where users can turn on full alerts.
+        launchAuthorization.enter()
+        center.getNotificationSettings { [launchAuthorization] settings in
+            guard settings.authorizationStatus == .notDetermined else {
+                launchAuthorization.leave()
+                return
+            }
+            center.requestAuthorization(options: [.alert, .sound, .badge, .provisional]) { granted, error in
+                if error != nil {
+                    Logger.error("[notification-permission] phase=provisional_request outcome=failed")
+                } else {
+                    Logger.info("[notification-permission] phase=provisional_request granted=\(granted)")
+                }
+                launchAuthorization.leave()
+            }
+        }
     }
 
     @objc override public func load(webview: WKWebView) {
@@ -331,15 +352,21 @@ final class NotificationsPlugin: Plugin, UNUserNotificationCenterDelegate {
     }
 
     @objc override public func checkPermissions(_ invoke: Invoke) {
-        UNUserNotificationCenter.current().getNotificationSettings { settings in
-            let status: String
-            switch settings.authorizationStatus {
-            case .notDetermined: status = "prompt"
-            case .denied: status = "denied"
-            case .authorized, .provisional, .ephemeral: status = "granted"
-            @unknown default: status = "prompt"
+        launchAuthorization.notify(queue: .global()) {
+            UNUserNotificationCenter.current().getNotificationSettings { settings in
+                let status: String
+                switch settings.authorizationStatus {
+                case .notDetermined: status = "prompt"
+                case .denied: status = "denied"
+                case .authorized, .provisional, .ephemeral: status = "granted"
+                @unknown default: status = "prompt"
+                }
+                // Provisional delivery registers for push like any grant; the flag
+                // lets the frontend still offer the full-alert prompt.
+                invoke.resolve(PermissionStatus(
+                    status: status, provisional: settings.authorizationStatus == .provisional
+                ))
             }
-            invoke.resolve(PermissionStatus(status: status))
         }
     }
 
@@ -359,10 +386,12 @@ final class NotificationsPlugin: Plugin, UNUserNotificationCenterDelegate {
     }
 
     @objc public func registerForRemoteNotifications(_ invoke: Invoke) {
-        UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+        // Registration never prompts: requesting full authorization here would
+        // interrupt users who only have provisional (quiet) delivery.
+        UNUserNotificationCenter.current().getNotificationSettings { settings in
             DispatchQueue.main.async {
-                guard granted else {
-                    invoke.resolve(RegistrationResult(success: false, token: nil, error: error?.localizedDescription ?? "Push notifications are not authorized"))
+                guard [.authorized, .provisional, .ephemeral].contains(settings.authorizationStatus) else {
+                    invoke.resolve(RegistrationResult(success: false, token: nil, error: "Push notifications are not authorized"))
                     return
                 }
                 if let token = UserDefaults.standard.string(forKey: "deviceToken") {

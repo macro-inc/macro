@@ -6,7 +6,7 @@ import type { EmailMessage } from '@app/features/email-message/core/email-messag
 import { EmailMessageBody } from '@app/features/email-message/views/email-message-body';
 import { ImageGalleryPreview } from '@core/component/ImageGalleryPreview';
 import { VideoPreview } from '@core/component/VideoPreview';
-import CaretRight from '@phosphor/caret-right.svg';
+import CaretRight from '@icon/system/regular/caret-right.svg';
 import { Key } from '@solid-primitives/keyed';
 import type { JSX } from 'solid-js';
 import { createMemo, createSignal, For, Show } from 'solid-js';

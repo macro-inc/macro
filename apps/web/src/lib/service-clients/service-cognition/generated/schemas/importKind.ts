@@ -21,5 +21,8 @@ export const ImportKind = {
   database: 'database',
   data_source: 'data_source',
   row: 'row',
+  jira_issue: 'jira_issue',
+  jira_project: 'jira_project',
+  jira_epic: 'jira_epic',
   channel: 'channel',
 } as const;

@@ -11,6 +11,8 @@ import * as mobileSort from './utils/mobileSort';
 
 const mocks = vi.hoisted(() => ({
   crmEnabled: false,
+  whatsappEnabled: false,
+  whatsappUserIds: [] as string[],
   mobile: false,
   requestedBuckets: [] as string[],
   contacts: [] as import('@core/context/quickAccess').EntityItem[],
@@ -33,6 +35,20 @@ vi.mock('@app/features/crm/record-adapter', () => ({
   },
 }));
 
+vi.mock('@app/features/routines/routine-mentions', () => ({
+  useRoutineMentionSource:
+    (_searchTerm: () => string, enabled: () => boolean) => () =>
+      enabled()
+        ? [
+            {
+              kind: 'routine',
+              id: 'routine-1',
+              data: { id: 'routine-1', name: 'Weekly digest' },
+            },
+          ]
+        : [],
+}));
+
 vi.mock('@app/lib/analytics/analytics-context', () => ({
   useAnalytics: () => ({ track: vi.fn() }),
 }));
@@ -41,10 +57,54 @@ vi.mock('@core/block', () => ({
   useMaybeBlockId: () => undefined,
   useMaybeBlockName: () => undefined,
 }));
-vi.mock('@core/constant/featureFlags', () => ({
-  enableCrm: {},
-  isFeatureEnabled: () => mocks.crmEnabled,
-  ENABLE_BEARER_TOKEN_AUTH: false,
+vi.mock('@core/constant/featureFlags', () => {
+  const enableCrm = { name: 'crm' };
+  const enableWhatsappLinked = { name: 'whatsapp' };
+  return {
+    enableCrm,
+    enableWhatsappLinked,
+    isFeatureEnabled: (flag: unknown) =>
+      flag === enableWhatsappLinked ? mocks.whatsappEnabled : mocks.crmEnabled,
+    ENABLE_BEARER_TOKEN_AUTH: false,
+  };
+});
+vi.mock('@app/features/external-chat/queries/production-api', () => ({
+  externalChatApi: {},
+}));
+vi.mock('@queries/gate', () => ({
+  queryReadyGate: (query: { isSuccess: boolean }) => query.isSuccess,
+}));
+vi.mock('@queries/external-chats', () => ({
+  useExternalChatsQuery: (_api: unknown, userId: () => string) => ({
+    get isSuccess() {
+      mocks.whatsappUserIds.push(userId());
+      return userId() !== '';
+    },
+    data: [
+      {
+        id: 'group-1',
+        name: 'Design Crit',
+        ownerId: 'macro|gab@macro.com',
+        unreadCount: 0,
+        canSend: true,
+      },
+      {
+        id: 'group-2',
+        name: 'Launch Room',
+        ownerId: 'macro|gab@macro.com',
+        unreadCount: 0,
+        canSend: true,
+      },
+      // Shared with the viewer: only its owner may share it on.
+      {
+        id: 'group-3',
+        name: 'Design Review',
+        ownerId: 'macro|ana@macro.com',
+        unreadCount: 0,
+        canSend: false,
+      },
+    ],
+  }),
 }));
 vi.mock('@core/context/quickAccess', () => ({
   useQuickAccess: () => ({
@@ -70,6 +130,7 @@ vi.mock('@core/context/quickAccess', () => ({
 }));
 vi.mock('@core/context/user', () => ({
   useEmail: () => () => 'gab@macro.com',
+  useUserId: () => () => 'macro|gab@macro.com',
 }));
 vi.mock('@core/constant/allBlocks', () => ({
   fileTypeToBlockName: () => 'md',
@@ -126,6 +187,8 @@ const manyUsers: IUser[] = Array.from({ length: 20 }, (_, i) => ({
 
 afterEach(() => {
   mocks.crmEnabled = false;
+  mocks.whatsappEnabled = false;
+  mocks.whatsappUserIds = [];
   mocks.mobile = false;
   mocks.requestedBuckets = [];
   mocks.contacts = [];
@@ -425,4 +488,80 @@ it('records mentions against the editing source outside a legacy block', () => {
   expect(createItemHandler).toHaveBeenCalledWith(
     expect.objectContaining({ blockId: 'doc-1' })
   );
+});
+
+it("offers the viewer's own WhatsApp chats to share by mention, only in channel composers", () => {
+  mocks.whatsappEnabled = true;
+  Element.prototype.scrollIntoView = vi.fn();
+  vi.mocked(useEmailSearchMention).mockReturnValue({
+    emails: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  } as unknown as ReturnType<typeof useEmailSearchMention>);
+  const menu = createMenuOperations();
+  menu.openMenu();
+  menu.setSearchTerm('design');
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      block="channel"
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(screen.getByText('WhatsApp chats')).toBeTruthy();
+  expect(screen.getByText('Design Crit')).toBeTruthy();
+  expect(screen.queryByText('Launch Room')).toBeNull();
+  expect(screen.queryByText('Design Review')).toBeNull();
+  cleanup();
+
+  mocks.whatsappUserIds = [];
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(screen.queryByText('WhatsApp chats')).toBeNull();
+  expect(mocks.whatsappUserIds.every((id) => id === '')).toBe(true);
+});
+
+it("offers the viewer's routines to share by mention, only in channel composers", () => {
+  Element.prototype.scrollIntoView = vi.fn();
+  vi.mocked(useEmailSearchMention).mockReturnValue({
+    emails: () => [],
+    totalCount: () => 0,
+    hasMore: () => false,
+    isLoadingMore: () => false,
+    loadMore: async () => {},
+  } as unknown as ReturnType<typeof useEmailSearchMention>);
+  const menu = createMenuOperations();
+  menu.openMenu();
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      block="channel"
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(screen.getByText('Routines')).toBeTruthy();
+  expect(screen.getByText('Weekly digest')).toBeTruthy();
+  cleanup();
+
+  render(() => (
+    <MentionsMenu
+      menu={menu}
+      users={() => []}
+      anchor={document.createElement('div')}
+      onPick={vi.fn()}
+    />
+  ));
+  expect(screen.queryByText('Routines')).toBeNull();
 });

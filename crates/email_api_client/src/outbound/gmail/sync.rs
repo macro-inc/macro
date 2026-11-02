@@ -1,9 +1,9 @@
 //! Gmail mailbox-sync capability implementation.
 
-use crate::domain::models::{AccessToken, ChangeBatch, EmailApiError, SyncCursor};
+use crate::domain::models::{AccessToken, ChangePage, EmailApiError, SyncCursor};
 use crate::domain::ports::MailboxSyncClient;
 
-use super::convert::map_history_list_response_to_changes;
+use super::convert::map_history_page;
 use super::{GmailApiClientRepository, map_gmail_error, map_history_error};
 
 impl MailboxSyncClient for GmailApiClientRepository {
@@ -21,16 +21,17 @@ impl MailboxSyncClient for GmailApiClientRepository {
         })
     }
 
-    async fn list_changes(
+    async fn list_changes_page(
         &self,
         access_token: &AccessToken,
         cursor: &SyncCursor,
-    ) -> Result<ChangeBatch, EmailApiError> {
+        page_token: Option<&str>,
+    ) -> Result<ChangePage, EmailApiError> {
         let history = self
             .client
-            .get_history(access_token.expose_secret(), cursor.as_str())
+            .get_history_page(access_token.expose_secret(), cursor.as_str(), page_token)
             .await
             .map_err(map_history_error)?;
-        Ok(map_history_list_response_to_changes(history))
+        Ok(map_history_page(history))
     }
 }

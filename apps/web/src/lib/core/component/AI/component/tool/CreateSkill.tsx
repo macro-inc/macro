@@ -1,5 +1,5 @@
 import { ItemPreview } from '@core/component/ItemPreview';
-import Lightning from '@phosphor-icons/core/regular/lightning.svg';
+import Lightning from '@icon/system/regular/lightning.svg';
 import { createSignal, Show, Suspense } from 'solid-js';
 import { BaseTool } from './BaseTool';
 import { Tool } from './Tool';

@@ -67,8 +67,7 @@ export function AiUsageLimitDialogView(props: AiUsageLimitDialogProps) {
 
           <div class="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <Button
-              variant={props.freePlan ? 'accent' : 'ghost'}
-              depth={3}
+              variant={props.freePlan ? 'primary' : 'ghost'}
               class="px-3 py-1.5"
               onClick={props.onOpenSettings}
             >
@@ -77,7 +76,6 @@ export function AiUsageLimitDialogView(props: AiUsageLimitDialogProps) {
             <div class="flex gap-2 sm:justify-end">
               <Button
                 variant="ghost"
-                depth={3}
                 class="px-3 py-1.5"
                 onClick={props.onClose}
               >

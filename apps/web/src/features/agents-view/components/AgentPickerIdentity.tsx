@@ -1,5 +1,5 @@
 import { modelLabel } from '@core/component/AI/constant/model-label';
-import Check from '@phosphor/check.svg';
+import Check from '@icon/system/regular/check.svg';
 import { Show } from 'solid-js';
 import type { RosterAgent } from '../core/roster';
 import { AgentIcon } from './AgentGlyph';

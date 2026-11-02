@@ -1,11 +1,11 @@
 import { DatePickerUI } from '@core/component/DatePicker/DatePickerUI';
 import { useDateSearch } from '@core/util/dateSearch/useDateSearch';
 import { fireAndForget } from '@core/util/fireAndForget';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
 import {
   Combobox,
   type ComboboxRootItemComponentProps,
 } from '@kobalte/core/combobox';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
 import { useSearchInputFocus } from '@property/utils/focus';
 import { Surface } from '@ui';
 import { format, setHours, setMinutes, startOfDay } from 'date-fns';

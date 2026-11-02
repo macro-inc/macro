@@ -1,0 +1,53 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT p.state, p.qr_code, p.pair_code, p.passkey_challenge, p.expires_at, a.identity_jid\n            FROM whatsapp_pairing p JOIN whatsapp_linked_account a ON a.id = p.account_id\n            WHERE p.id = $1 AND p.user_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "state",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "qr_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "pair_code",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "passkey_challenge",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 4,
+        "name": "expires_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "identity_jid",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "a0aabb1dcd371ccc937d9df45b7a6097fdc9a0e1c610f49db233cac14e5b62a2"
+}

@@ -56,6 +56,9 @@ use roles_and_permissions::{
 };
 use sqlx::PgPool;
 use tokio_util::task::TaskTracker;
+use user_language::{
+    domain::service::UserLanguageServiceImpl, outbound::pg_user_language_repo::PgUserLanguageRepo,
+};
 
 use crate::account_link_state::AccountLinkStateKey;
 use crate::domain::microsoft::MicrosoftAuth;
@@ -133,6 +136,8 @@ pub(crate) type ReferralServiceType = ReferralServiceImpl<
 
 pub(crate) type GtmInviteServiceType = GtmInviteServiceImpl<PgGtmInviteRepo>;
 
+pub(crate) type UserLanguageServiceType = UserLanguageServiceImpl<PgUserLanguageRepo>;
+
 pub(crate) type GithubLinkServiceType = GithubLinkServiceImpl<
     PgGithubRepo,
     GithubOauthImpl,
@@ -151,6 +156,22 @@ pub(crate) type FavoritesServiceType = favorites::domain::service::FavoritesServ
 
 pub(crate) type AuthorizationService = MacroAuthorizationServiceImpl<MacroAuthJwtValidator>;
 
+pub(crate) type AgentApiKeysType = agent_api_keys::domain::AgentKeyService<
+    agent_api_keys::outbound::PgAgentKeyRepo,
+    agent_api_keys::outbound::KmsAgentKeyCipher<cursor_api_key::cipher::AwsKmsCiphertexts>,
+    agent_api_keys::outbound::EntitlementKeyPlans<
+        ai_billing::outbound::RolesTeamsEntitlementSource<
+            UserRolesAndPermissionsServiceImpl<MacroDB, MacroDB>,
+            teams::outbound::team_repo::TeamRepositoryImpl,
+        >,
+    >,
+>;
+
+pub(crate) type BotsServiceType = bots::domain::service::BotServiceImpl<
+    bots::outbound::pg_bots_repo::PgBotsRepo,
+    AuthenticationEventBroker,
+>;
+
 #[derive(Clone, FromRef)]
 pub(crate) struct ApiContext {
     pub db: PgPool,
@@ -161,6 +182,10 @@ pub(crate) struct ApiContext {
     pub microsoft_auth: Option<Arc<dyn MicrosoftAuth>>,
     /// Encrypts users' Cursor API keys.
     pub cursor_api_key_cipher: Arc<dyn CursorApiKeyCipher>,
+    /// Agents' own Anthropic and OpenAI API keys.
+    pub agent_api_keys: Arc<AgentApiKeysType>,
+    /// Who may change an agent, for its API key.
+    pub bots: Arc<BotsServiceType>,
     /// Owner-bound Codex OAuth lifecycle and cloud target settings.
     pub codex_connection: Option<Arc<dyn codex_connection::domain::ConnectionService>>,
     pub macro_cache_client: Arc<MacroCache>,
@@ -209,6 +234,7 @@ pub(crate) struct ApiContext {
     pub loops_client: Arc<LoopsClient>,
     pub referral_service: Arc<ReferralServiceType>,
     pub gtm_invite_service: Arc<GtmInviteServiceType>,
+    pub user_language_service: Arc<UserLanguageServiceType>,
     pub rate_limit_service: RateLimiter,
     /// The stripe price ids for each paid plan's seat
     pub stripe_prices: crate::api::user::stripe::StripePrices,

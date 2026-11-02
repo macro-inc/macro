@@ -1,7 +1,8 @@
 /** Shared accessible menu surface for the editor's tool and view menus. */
+
+import CaretRight from '@icon/system/regular/caret-right.svg';
+import Check from '@icon/system/regular/check.svg';
 import { DropdownMenu } from '@kobalte/core/dropdown-menu';
-import CaretRight from '@phosphor/caret-right.svg';
-import Check from '@phosphor/check.svg';
 import { For, type JSX, Show } from 'solid-js';
 
 export interface EditorMenuItem {

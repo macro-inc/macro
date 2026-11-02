@@ -5,13 +5,24 @@ import {
 } from './create-gantt-creation';
 import { GanttCalendarClip } from './gantt-clip';
 import { useGantt } from './gantt-context';
-import { formatGanttDay, type GanttDate } from './gantt-date';
+import { formatGanttDay, type GanttDate, type GanttRange } from './gantt-date';
 import { ganttCreationRange } from './gantt-interaction';
+import {
+  formatGanttTimeRange,
+  ganttPosition,
+  ganttTimedCreation,
+} from './gantt-time';
 
-/** Available space opens a host-owned composer without writing an entity. */
+/**
+ * Available space opens a host-owned composer without writing an entity. At
+ * hours zoom on a chart showing hours, the drawn range is timed, in quarter
+ * hours.
+ */
 export function GanttCreateArea(props: {
   onCreate?: (dates: GanttCreation) => void;
   minDate?: GanttDate;
+  /** An all-day selection's caption, from its days with an exclusive end; a due date by default. */
+  hint?: (range: GanttRange) => string;
 }) {
   const gantt = useGantt();
   const { draft } = createGanttCreation({
@@ -23,13 +34,32 @@ export function GanttCreateArea(props: {
     pointToDay: gantt.pointToDay,
     onCreate: () => props.onCreate,
     minDate: () => props.minDate,
+    timed: () => gantt.hours() && gantt.scale() === 'hour',
   });
 
   return (
     <Show when={draft()}>
       {(selection) => {
-        const range = () =>
-          ganttCreationRange(selection().first, selection().last);
+        const times = () =>
+          selection().timed
+            ? ganttTimedCreation(selection().first, selection().last)
+            : undefined;
+        const range = () => {
+          const exact = times();
+          return exact
+            ? {
+                start: ganttPosition(exact.start),
+                end: ganttPosition(exact.end),
+              }
+            : ganttCreationRange(selection().first, selection().last);
+        };
+        const caption = () => {
+          const exact = times();
+          if (exact) return formatGanttTimeRange(exact);
+          return (
+            props.hint?.(range()) ?? `Due ${formatGanttDay(range().end - 1)}`
+          );
+        };
         return (
           <div
             aria-hidden="true"
@@ -53,7 +83,7 @@ export function GanttCreateArea(props: {
                 translate: `clamp(calc(${(gantt.visibleRange().start - range().end) * gantt.pixelsPerDay() + 8}px + 100%), 0px, ${(gantt.visibleRange().end - range().end) * gantt.pixelsPerDay() - 8}px) 0`,
               }}
             >
-              Due {formatGanttDay(range().end - 1)}
+              {caption()}
             </span>
           </div>
         );

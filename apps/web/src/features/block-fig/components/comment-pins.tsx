@@ -6,8 +6,8 @@
  */
 
 import { fireAndForget } from '@core/util/fireAndForget';
-import CheckCircle from '@phosphor/check-circle.svg';
-import X from '@phosphor/x.svg';
+import CheckCircle from '@icon/system/regular/check-circle.svg';
+import X from '@icon/system/regular/x.svg';
 import { For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { type Camera, pageToScreen, screenToPage } from '../core/camera';

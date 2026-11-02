@@ -560,6 +560,158 @@ async fn background_naming_persists_then_publishes_the_generated_name() {
     );
 }
 
+/// A fixed conversation: a vague prompt and a specific reply.
+#[derive(Clone)]
+struct FixedConversation;
+
+impl FoldedMessageRepo for FixedConversation {
+    async fn messages(
+        &self,
+        _session: AgentSessionId,
+    ) -> std::result::Result<Vec<FoldedMessage>, rootcause::Report> {
+        let message = |turn, author, text: &str| FoldedMessage {
+            id: agent_fold::domain::model::TurnId(turn),
+            author,
+            request_id: None,
+            parts: non_empty::NonEmpty::new(vec![MessagePart::Text { text: text.into() }])
+                .expect("one part"),
+            stop: None,
+            pending: false,
+            posted_at: None,
+        };
+        Ok(vec![
+            message(0, Author::User { user_id: None }, "investigate issue"),
+            message(
+                0,
+                Author::Agent,
+                "The OAuth callback drops its trailing slash.",
+            ),
+        ])
+    }
+
+    async fn next_turn_id(
+        &self,
+        _session: AgentSessionId,
+    ) -> std::result::Result<agent_fold::domain::model::TurnId, rootcause::Report> {
+        Ok(agent_fold::domain::model::TurnId(1))
+    }
+}
+
+/// Retitles every session it is asked about.
+#[derive(Clone)]
+struct RetitlingNameGenerator;
+
+impl AgentSessionNameGenerator for RetitlingNameGenerator {
+    async fn generate_name(
+        &self,
+        _session: &AgentSession,
+        _initial_prompt: &str,
+    ) -> std::result::Result<Option<String>, rootcause::Report> {
+        Ok(Some("Investigate Issue".to_owned()))
+    }
+
+    async fn retitle(
+        &self,
+        _session: &AgentSession,
+        current: &str,
+        conversation: &ConversationDigest,
+    ) -> std::result::Result<Option<String>, rootcause::Report> {
+        assert_eq!(current, "Investigate Issue");
+        assert!(conversation.has_reply());
+        Ok(Some("OAuth Callback Redirect".to_owned()))
+    }
+}
+
+#[tokio::test]
+async fn retitling_replaces_a_generated_name_and_publishes_it() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    assert!(
+        repo.set_name_if_default(session, "Investigate Issue")
+            .await
+            .unwrap()
+    );
+    let realtime = RenameRealtime::default();
+    let lifecycle = RecordingLifecyclePublisher::new();
+
+    spawn_agent_session_retitle(
+        &TaskTracker::new(),
+        repo.clone(),
+        FixedConversation,
+        realtime.clone(),
+        Arc::new(lifecycle.clone()),
+        RetitlingNameGenerator,
+        session,
+    );
+    lifecycle.wait_for_published(1).await;
+
+    assert_eq!(
+        repo.get(session).await.unwrap().name,
+        "OAuth Callback Redirect"
+    );
+    assert_eq!(
+        realtime.0.lock().expect("rename store is not poisoned")[0].name,
+        "OAuth Callback Redirect"
+    );
+    // A retitled name is still generated, so a later turn may refine it.
+    assert_eq!(
+        repo.generated_name(session).await.unwrap().as_deref(),
+        Some("OAuth Callback Redirect")
+    );
+}
+
+#[tokio::test]
+async fn retitling_never_replaces_a_name_a_person_chose() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    repo.set_name_if_default(session, "Investigate Issue")
+        .await
+        .unwrap();
+    repo.set_name(session, "Investigate Issue").await.unwrap();
+    let realtime = RenameRealtime::default();
+    let tasks = TaskTracker::new();
+
+    spawn_agent_session_retitle(
+        &tasks,
+        repo.clone(),
+        FixedConversation,
+        realtime.clone(),
+        Arc::new(RecordingLifecyclePublisher::new()),
+        RetitlingNameGenerator,
+        session,
+    );
+    tasks.close();
+    tasks.wait().await;
+
+    assert_eq!(repo.get(session).await.unwrap().name, "Investigate Issue");
+    assert!(
+        realtime
+            .0
+            .lock()
+            .expect("rename store is not poisoned")
+            .is_empty()
+    );
+}
+
+#[tokio::test]
+async fn retitling_skips_a_session_named_while_it_ran() {
+    let repo = InMemoryAgentSessionRepo::new();
+    let session = test_session();
+    repo.insert_session(test_agent_session(session));
+    repo.set_name_if_default(session, "Investigate Issue")
+        .await
+        .unwrap();
+    assert!(
+        !repo
+            .replace_generated_name(session, "Something Else", "OAuth Callback Redirect")
+            .await
+            .unwrap()
+    );
+    assert_eq!(repo.get(session).await.unwrap().name, "Investigate Issue");
+}
+
 #[tokio::test]
 async fn background_naming_does_not_overwrite_a_manual_name() {
     let repo = InMemoryAgentSessionRepo::new();
@@ -704,6 +856,19 @@ impl AgentSessionRepo for BlockingPromptLogs {
 
     async fn set_name_if_default(&self, id: AgentSessionId, name: &str) -> Result<bool> {
         self.repo.set_name_if_default(id, name).await
+    }
+
+    async fn generated_name(&self, id: AgentSessionId) -> Result<Option<String>> {
+        self.repo.generated_name(id).await
+    }
+
+    async fn replace_generated_name(
+        &self,
+        id: AgentSessionId,
+        current: &str,
+        name: &str,
+    ) -> Result<bool> {
+        self.repo.replace_generated_name(id, current, name).await
     }
 
     async fn set_sandbox_size(&self, id: AgentSessionId, size: SandboxSize) -> Result<()> {

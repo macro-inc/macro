@@ -8,10 +8,10 @@
 
 import type { ExportSetting } from '@core/fig-engine/handoff-types';
 import { fireAndForget } from '@core/util/fireAndForget';
-import CaretDown from '@phosphor/caret-down.svg';
-import Copy from '@phosphor/copy.svg';
-import DotsThree from '@phosphor/dots-three.svg';
-import Minus from '@phosphor/minus.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import DotsThree from '@icon/system/regular/dots-three.svg';
+import Minus from '@icon/system/regular/minus.svg';
 import { createSignal, For, Index, onCleanup, Show } from 'solid-js';
 import {
   EXPORT_FORMATS,

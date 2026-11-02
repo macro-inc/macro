@@ -56,7 +56,7 @@ List the replies in this thread, oldest first.
 
 ### reply()
 
-> **reply**(`body`): `Promise`\<[`Message`](../../message/classes/Message.md)\>
+> **reply**(`body`, `opts?`): `Promise`\<[`Message`](../../message/classes/Message.md)\>
 
 Post a reply in this thread.
 
@@ -65,6 +65,8 @@ Post a reply in this thread.
 | Parameter | Type | Description |
 | ------ | ------ | ------ |
 | `body` | `string` \| [`RichMessage`](../../../../mentions/interfaces/RichMessage.md) | Plain text, or a rich body composed with msg. |
+| `opts?` | \{ `images?`: [`StaticImage`](../../../images/image/classes/StaticImage.md)[]; \} | - |
+| `opts.images?` | [`StaticImage`](../../../images/image/classes/StaticImage.md)[] | Static images to attach, such as one from `macro.images.generate()`. |
 
 #### Returns
 

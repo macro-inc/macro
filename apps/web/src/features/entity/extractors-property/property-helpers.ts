@@ -5,6 +5,7 @@ import {
 } from '@property/constants';
 import type { Property, PropertyOption, ValueType } from '@property/types';
 import type { SoupProperty } from '@service-storage/generated/schemas/soupProperty';
+import { timeRangeFromInstants } from '../../database/core/cell-date-range';
 import {
   COMPANY_STAGE_OPTIONS,
   TASK_STATUS_OPTIONS,
@@ -230,6 +231,17 @@ export function soupPropertyToProperty(soupProperty: SoupProperty): Property {
         }
       }
       return { ...baseProperty, valueType: 'DATE', value: null };
+    }
+
+    case 'DATE_RANGE': {
+      return {
+        ...baseProperty,
+        valueType: 'DATE_RANGE',
+        value:
+          (propertyValue?.type === 'DateRange' &&
+            timeRangeFromInstants(propertyValue.value)) ||
+          null,
+      };
     }
 
     case 'SELECT_STRING':

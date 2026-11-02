@@ -18,6 +18,7 @@ fn inbox(link_id: u128, email: &str) -> OwnedInbox {
         link_id: Uuid::from_u128(link_id),
         email: email.to_string(),
         provider: CalendarProvider::Google,
+        writable_calendar_ids: Vec::new(),
     }
 }
 

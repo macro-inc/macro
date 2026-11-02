@@ -1,6 +1,7 @@
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
+import { isMobile } from '@core/mobile/isMobile';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import CaretDownIcon from '@phosphor/caret-down.svg';
+import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import { Button, CalendarMonthMenu, Dropdown, formatCalendarMonth } from '@ui';
 import { createSignal, Match, Switch } from 'solid-js';
 import { useCalendarPager } from './CalendarPagerContext';
@@ -8,6 +9,9 @@ import { useCalendarPager } from './CalendarPagerContext';
 type MonthDrawerProps = {
   month: Date;
 };
+
+const FORMAT_MONTH = new Intl.DateTimeFormat(undefined, { month: 'long' })
+  .format;
 
 /** Month selector that uses a dropdown on desktop and a drawer on touch. */
 export function MonthDrawer(props: MonthDrawerProps) {
@@ -26,7 +30,11 @@ export function MonthDrawer(props: MonthDrawerProps) {
 
   const triggerContent = () => (
     <>
-      <span class="min-w-0 truncate">{formatCalendarMonth(props.month)}</span>
+      <span class="min-w-0 truncate">
+        {isMobile()
+          ? FORMAT_MONTH(props.month)
+          : formatCalendarMonth(props.month)}
+      </span>
       <CaretDownIcon class="size-3 shrink-0 text-ink-muted" />
     </>
   );
@@ -42,6 +50,7 @@ export function MonthDrawer(props: MonthDrawerProps) {
           preventScrollbarShift={false}
         >
           <MobileDrawer.Trigger
+            variant="ghost"
             as={Button}
             aria-label="Choose month"
             class="max-w-full min-w-0 shrink justify-start gap-1 rounded-full border-none bg-transparent px-1 text-base font-semibold text-ink not-touch:hover:bg-hover"

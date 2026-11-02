@@ -2,6 +2,7 @@ import { scopeChannelNotificationsForEntity } from '@app/features/soup/entity-no
 import type { EntityData } from '@entity';
 import { toNotificationEntity } from '@entity/utils/notification';
 import type { NotificationEntityRef } from '@queries/notification/entity-mutations';
+import { confirmEntityNotificationsDone } from '@queries/notification/state-cache';
 import { batch } from 'solid-js';
 import {
   executeMarkEntitiesDone,
@@ -160,15 +161,25 @@ export function createGraphqlDoneOperation(args: Args) {
               );
             ids = notifications.map(({ id }) => id);
           }
+          // An entity-wide Done changes only rows still open on the server.
+          // Known rows it left out were already done there; record that.
+          const missed =
+            outcome.kind === 'entity-notifications'
+              ? attempt.knownNotificationIds.filter((id) => !ids.includes(id))
+              : [];
+          const confirmed =
+            missed.length > 0 && confirmEntityNotificationsDone(missed);
           if (ids.length > 0) {
             attempt.receipt = {
               emailIds: [],
               notificationIds: ids,
             };
-          } else {
+          } else if (!confirmed) {
             // No matching receipt justifies neither a hide nor a restoration.
             // Release this attempt even when Undo was never requested: a stale
-            // reader might otherwise keep the row hidden indefinitely.
+            // reader might otherwise keep the row hidden indefinitely. A
+            // confirmed Done keeps the row hidden: its cached notifications
+            // now read done, and there is nothing to undo.
             attempt.state = 'noop';
             attempt.optimistic.rollback();
           }

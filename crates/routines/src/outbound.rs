@@ -92,8 +92,11 @@ impl RoutineClient {
                 }
                 Ok(body)
             }
-            400 | 422 => bail!(
+            400 => bail!(
                 "Invalid routine configuration or unavailable model/agent. Check the schedule and select an accessible agent from ListAgents using its bot.botId."
+            ),
+            422 => bail!(
+                "Invalid routine configuration, or a required app is not connected or unusable by the selected agent. Ask the user to connect each app in requiredApps (DiscoverConnectors gives a link) or remove it."
             ),
             401 | 403 | 404 => bail!("Routine or target is unavailable to this user."),
             402 => bail!("The user's AI allowance is exhausted, so the routine cannot run now."),
@@ -238,7 +241,16 @@ struct WireExecution {
 fn configuration_body(config: &RoutineConfiguration, now: DateTime<Utc>) -> Result<Value> {
     config.validate(now)?;
     let (schedule, timezone) = config.schedule.cron(now)?;
-    let mut task = serde_json::json!({ "prompt": "", "user_prompt": config.instructions });
+    let mcp_servers: Vec<Value> = config
+        .required_apps
+        .iter()
+        .map(|app| serde_json::json!({ "app_slug": app.app_slug, "server_name": app.name }))
+        .collect();
+    let mut task = serde_json::json!({
+        "prompt": "",
+        "user_prompt": config.instructions,
+        "mcp_servers": mcp_servers,
+    });
     match &config.target {
         RoutineTarget::Model { model } => task["model"] = model.clone().into(),
         RoutineTarget::Agent { agent_id } => {

@@ -14,6 +14,7 @@ use std::sync::{Arc, Mutex};
 struct FakeContext {
     message_count: i64,
     fail_existing_user_lookup: bool,
+    unregistered_users: HashSet<String>,
     document_mentions: Vec<ChannelDocumentMention>,
     bot_profile: Option<BotSenderProfile>,
     bot_profile_lookup_count: Arc<Mutex<usize>>,
@@ -25,6 +26,7 @@ impl Default for FakeContext {
         Self {
             message_count: 2,
             fail_existing_user_lookup: false,
+            unregistered_users: HashSet::new(),
             document_mentions: Vec::new(),
             bot_profile: Some(BotSenderProfile {
                 name: "Test Bot".to_string(),
@@ -53,6 +55,7 @@ impl ChannelSideEffectContext for FakeContext {
         Ok(user_ids
             .into_iter()
             .map(|user_id| user_id.as_ref().to_string())
+            .filter(|id| !self.unregistered_users.contains(id))
             .collect())
     }
 
@@ -100,6 +103,7 @@ impl ChannelRealtimePublisher for FakeRealtime {
 #[derive(Clone, Default)]
 struct FakeNotifications {
     effects: Arc<Mutex<Vec<ChannelNotificationEffect>>>,
+    fail_next: Arc<Mutex<bool>>,
 }
 
 impl ChannelNotificationSender for FakeNotifications {
@@ -107,6 +111,9 @@ impl ChannelNotificationSender for FakeNotifications {
 
     async fn send(&self, notification: ChannelNotificationEffect) -> Result<(), Self::Err> {
         self.effects.lock().unwrap().push(notification);
+        if std::mem::take(&mut *self.fail_next.lock().unwrap()) {
+            anyhow::bail!("notification queue unavailable");
+        }
         Ok(())
     }
 }
@@ -1299,4 +1306,218 @@ async fn handle_publishes_mention_events_alongside_channel_events() {
     assert_eq!(published[0].topic, "macro.mentions");
     assert_eq!(published[0].key, "bot-1");
     assert_eq!(published[0].envelope["event_type"], "mention.created");
+}
+
+#[tokio::test]
+async fn nonuser_dm_messages_email_once_including_mentions_and_replies() {
+    for message_count in [1, 2] {
+        for is_reply in [false, true] {
+            for mentioned in [false, true] {
+                let channel_id = Uuid::new_v4();
+                let message_id = Uuid::new_v4();
+                let recipient = user("new@example.com");
+                let sender = user("sender@example.com");
+                let notifications = FakeNotifications::default();
+                let service = ChannelSideEffectService::new(
+                    FakeContext {
+                        message_count,
+                        unregistered_users: HashSet::from([recipient.to_string()]),
+                        ..FakeContext::default()
+                    },
+                    FakeRealtime::default(),
+                    notifications.clone(),
+                    FakeContacts::default(),
+                );
+                let mut event = bot_message_posted_event(
+                    channel_id,
+                    message_id,
+                    is_reply.then(Uuid::new_v4),
+                    &[sender.as_ref(), recipient.as_ref()],
+                );
+                if let ChannelEvent::MessagePosted {
+                    metadata,
+                    message,
+                    mentions,
+                    ..
+                } = &mut event
+                {
+                    metadata.channel_type = ChannelType::DirectMessage;
+                    message.sender_id = Sender::new_from_user(sender.clone());
+                    if mentioned {
+                        mentions.push(SimpleMention::user(&recipient));
+                    }
+                }
+                service.handle(event).await;
+                let effects = notifications.effects.lock().unwrap();
+                let emails: Vec<_> = effects
+                    .iter()
+                    .filter_map(|effect| match effect {
+                        ChannelNotificationEffect::Invite {
+                            message_id,
+                            unregistered_recipient_ids,
+                            message_content,
+                            ..
+                        } if !unregistered_recipient_ids.is_empty() => {
+                            Some((message_id, unregistered_recipient_ids, message_content))
+                        }
+                        _ => None,
+                    })
+                    .collect();
+                assert_eq!(emails.len(), 1);
+                assert_eq!(*emails[0].0, Some(message_id));
+                assert_eq!(*emails[0].1, HashSet::from([recipient]));
+                assert_eq!(emails[0].2.as_deref(), Some("hello"));
+            }
+        }
+    }
+}
+
+#[tokio::test]
+async fn immediate_dm_email_excludes_registered_users_bots_and_silent_messages() {
+    for (registered, bot, policy, channel_type) in [
+        (
+            true,
+            false,
+            PostMessageNotificationPolicy::Default,
+            ChannelType::DirectMessage,
+        ),
+        (
+            false,
+            true,
+            PostMessageNotificationPolicy::Default,
+            ChannelType::DirectMessage,
+        ),
+        (
+            false,
+            false,
+            PostMessageNotificationPolicy::Silent,
+            ChannelType::DirectMessage,
+        ),
+        (
+            false,
+            false,
+            PostMessageNotificationPolicy::MentionsOnly,
+            ChannelType::DirectMessage,
+        ),
+        (
+            false,
+            false,
+            PostMessageNotificationPolicy::Default,
+            ChannelType::Private,
+        ),
+    ] {
+        let sender = user("sender@example.com");
+        let recipient = user("new@example.com");
+        let notifications = FakeNotifications::default();
+        let service = ChannelSideEffectService::new(
+            FakeContext {
+                unregistered_users: if registered {
+                    HashSet::new()
+                } else {
+                    HashSet::from([recipient.to_string()])
+                },
+                ..FakeContext::default()
+            },
+            FakeRealtime::default(),
+            notifications.clone(),
+            FakeContacts::default(),
+        );
+        let mut event = bot_message_posted_event(
+            Uuid::new_v4(),
+            Uuid::new_v4(),
+            None,
+            &[sender.as_ref(), recipient.as_ref()],
+        );
+        if let ChannelEvent::MessagePosted {
+            metadata,
+            message,
+            notification_policy,
+            ..
+        } = &mut event
+        {
+            metadata.channel_type = channel_type;
+            *notification_policy = policy;
+            if !bot {
+                message.sender_id = Sender::new_from_user(sender);
+            }
+        }
+        service.handle(event).await;
+        assert!(!notifications.effects.lock().unwrap().iter().any(|effect| matches!(effect, ChannelNotificationEffect::Invite { unregistered_recipient_ids, .. } if !unregistered_recipient_ids.is_empty())));
+    }
+}
+
+#[tokio::test]
+async fn creating_empty_dm_does_not_send_email_or_notifications() {
+    let recipient = user("new@example.com");
+    let notifications = FakeNotifications::default();
+    let service = ChannelSideEffectService::new(
+        FakeContext {
+            unregistered_users: HashSet::from([recipient.to_string()]),
+            ..FakeContext::default()
+        },
+        FakeRealtime::default(),
+        notifications.clone(),
+        FakeContacts::default(),
+    );
+    service
+        .handle(ChannelEvent::ChannelCreated {
+            channel_id: Uuid::new_v4(),
+            actor: Sender::new_from_user(user("sender@example.com")),
+            on_behalf_of: None,
+            channel_type: ChannelType::DirectMessage,
+            channel_name: None,
+            participant_user_ids: vec![user("sender@example.com"), recipient],
+        })
+        .await;
+    assert!(notifications.effects.lock().unwrap().is_empty());
+}
+
+#[tokio::test]
+async fn first_dm_email_fallback_preserves_message_deduplication_key() {
+    let sender = user("sender@example.com");
+    let recipient = user("new@example.com");
+    let message_id = Uuid::new_v4();
+    let notifications = FakeNotifications::default();
+    *notifications.fail_next.lock().unwrap() = true;
+    let service = ChannelSideEffectService::new(
+        FakeContext {
+            message_count: 1,
+            unregistered_users: HashSet::from([recipient.to_string()]),
+            ..FakeContext::default()
+        },
+        FakeRealtime::default(),
+        notifications.clone(),
+        FakeContacts::default(),
+    );
+    let mut event = bot_message_posted_event(
+        Uuid::new_v4(),
+        message_id,
+        None,
+        &[sender.as_ref(), recipient.as_ref()],
+    );
+    if let ChannelEvent::MessagePosted {
+        metadata, message, ..
+    } = &mut event
+    {
+        metadata.channel_type = ChannelType::DirectMessage;
+        message.sender_id = Sender::new_from_user(sender);
+    }
+    service.handle(event).await;
+    let effects = notifications.effects.lock().unwrap();
+    assert_eq!(effects.len(), 2);
+    for effect in effects.iter() {
+        let ChannelNotificationEffect::Invite {
+            message_id: key,
+            unregistered_recipient_ids,
+            ..
+        } = effect
+        else {
+            panic!("expected email attempt");
+        };
+        assert_eq!(*key, Some(message_id));
+        assert_eq!(
+            *unregistered_recipient_ids,
+            HashSet::from([recipient.clone()])
+        );
+    }
 }

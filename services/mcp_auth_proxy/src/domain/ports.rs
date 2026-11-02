@@ -2,7 +2,7 @@
 
 use std::{future::Future, pin::Pin};
 
-use super::models::{RefreshToken, RegisteredClient, UpstreamTokens};
+use super::models::{RefreshToken, RefreshTokenBinding, RegisteredClient, UpstreamTokens};
 
 /// Boxed future returning a token grant from the upstream provider.
 pub type UpstreamTokensFuture<'a> =
@@ -15,9 +15,16 @@ pub type StoreWriteFuture<'a> = Pin<Box<dyn Future<Output = anyhow::Result<()>> 
 pub type RegisteredClientFuture<'a> =
     Pin<Box<dyn Future<Output = anyhow::Result<Option<RegisteredClient>>> + Send + 'a>>;
 
-/// Boxed future returning a client id, if one is bound.
-pub type BoundClientIdFuture<'a> =
-    Pin<Box<dyn Future<Output = anyhow::Result<Option<String>>> + Send + 'a>>;
+/// Boxed future returning a refresh token binding, if one exists.
+pub type RefreshTokenBindingFuture<'a> =
+    Pin<Box<dyn Future<Output = anyhow::Result<Option<RefreshTokenBinding>>> + Send + 'a>>;
+
+/// Boxed future returning whether a grant has been revoked.
+pub type GrantRevokedFuture<'a> = Pin<Box<dyn Future<Output = anyhow::Result<bool>> + Send + 'a>>;
+
+/// Boxed future returning nothing once the upstream provider has acted.
+pub type UpstreamRevocationFuture<'a> =
+    Pin<Box<dyn Future<Output = anyhow::Result<()>> + Send + 'a>>;
 
 /// Store of clients created through dynamic client registration.
 ///
@@ -36,24 +43,32 @@ pub trait ClientRegistrationStore: Send + Sync {
     fn find_client<'a>(&'a self, client_id: &'a str) -> RegisteredClientFuture<'a>;
 }
 
-/// Store recording which client each outstanding refresh token was issued to.
+/// Store recording which client and grant each outstanding refresh token was
+/// issued to, and which grants have been revoked.
 ///
 /// Refresh tokens are keyed by digest rather than by their own value so the
 /// store never holds a usable credential.
 pub trait RefreshTokenBindingStore: Send + Sync {
-    /// Binds a refresh token digest to the client that obtained it, replacing
-    /// any existing binding for that digest.
+    /// Binds a refresh token digest to the client and grant it belongs to,
+    /// replacing any existing binding for that digest.
     fn bind<'a>(
         &'a self,
         refresh_token_digest: &'a str,
-        client_id: &'a str,
+        binding: &'a RefreshTokenBinding,
     ) -> StoreWriteFuture<'a>;
 
-    /// Returns the client a refresh token digest is bound to, if any.
-    fn bound_client<'a>(&'a self, refresh_token_digest: &'a str) -> BoundClientIdFuture<'a>;
+    /// Returns the binding for a refresh token digest, if any.
+    fn binding<'a>(&'a self, refresh_token_digest: &'a str) -> RefreshTokenBindingFuture<'a>;
 
     /// Drops the binding for a refresh token digest.
     fn unbind<'a>(&'a self, refresh_token_digest: &'a str) -> StoreWriteFuture<'a>;
+
+    /// Records that a grant is revoked, so no refresh token in its family is
+    /// honored again. Must outlive every binding that names the grant.
+    fn revoke_grant<'a>(&'a self, grant_id: &'a str) -> StoreWriteFuture<'a>;
+
+    /// Returns whether a grant has been revoked.
+    fn is_grant_revoked<'a>(&'a self, grant_id: &'a str) -> GrantRevokedFuture<'a>;
 }
 
 /// Upstream OAuth provider used by the broker.
@@ -69,4 +84,11 @@ pub trait OAuthProvider: Send + Sync {
         &'a self,
         refresh_token: &'a RefreshToken,
     ) -> UpstreamTokensFuture<'a>;
+
+    /// Revokes an upstream refresh token. Succeeds when the provider no longer
+    /// knows the token, so a revocation can be retried.
+    fn revoke_refresh_token<'a>(
+        &'a self,
+        refresh_token: &'a RefreshToken,
+    ) -> UpstreamRevocationFuture<'a>;
 }

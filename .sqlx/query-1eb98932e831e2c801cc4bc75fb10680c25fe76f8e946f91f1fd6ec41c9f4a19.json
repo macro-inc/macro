@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "INSERT INTO whatsapp_chat_membership (chat_id,account_id,generation,consent_at,remote_member,can_post,observed_at,reconciled)\n            VALUES ($1,$2,$3,clock_timestamp(),true,$4,$5,true)\n            ON CONFLICT (chat_id,account_id) DO UPDATE SET generation = excluded.generation,consent_ended_at = NULL,\n            remote_member = true,can_post = excluded.can_post,observed_at = excluded.observed_at,reconciled = true",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Int8",
+        "Bool",
+        "Timestamptz"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1eb98932e831e2c801cc4bc75fb10680c25fe76f8e946f91f1fd6ec41c9f4a19"
+}

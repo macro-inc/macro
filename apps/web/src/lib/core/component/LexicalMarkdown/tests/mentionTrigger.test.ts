@@ -238,6 +238,25 @@ describe('@ trigger position', () => {
     expect(harness.children()).toEqual(['text:hello ', 'inline-search:@jo']);
   });
 
+  test('filters while a software keyboard is still composing the word', () => {
+    const harness = setup(paragraphWithCaret('hello ', 6));
+    harness.type('@', true);
+
+    // Lexical keeps a zero-width space ahead of a word the keyboard is still
+    // composing, and removes it only when the word is committed.
+    harness.editor.update(
+      () => {
+        const selection = $getSelection();
+        if ($isRangeSelection(selection)) selection.insertText('\u200bjo');
+      },
+      { discrete: true }
+    );
+    harness.editor.read(() => {});
+
+    expect(harness.opened()).toBe(1);
+    expect(harness.searchTerms.at(-1)).toBe('jo');
+  });
+
   test('leaves the following word intact after a soft line break', () => {
     const harness = setup(paragraphWithCaret('helloworld', 5));
     harness.editor.update(
@@ -345,7 +364,7 @@ describe('@ trigger position', () => {
 
     expect(harness.children()).toEqual([
       'text:hello ',
-      'user-mention:Jo',
+      'user-mention:@Jo',
       'text:world',
     ]);
   });

@@ -20,6 +20,7 @@ use email::domain::{
     ports::EmailContentService,
 };
 use entity_access::domain::models::{EntityAccessReceipt, ViewAccessLevel, ViewOnly};
+use github::domain::models::GithubWebhookReceived;
 use lexical_client::{LexicalClient, parse_markdown::MarkdownTarget};
 use macro_user_id::user_id::MacroUserIdStr;
 use macro_uuid::Uuid;
@@ -41,7 +42,7 @@ use trigger_context::RoutineEvent;
 
 use crate::domain::{
     event_runs::{AuthorizedEventRun, EventAccessCapability, condition::EventContentReader},
-    event_trigger::{EventName, EventReference},
+    event_trigger::{EventName, EventReference, EventSource},
     ports::RoutineEventReader,
 };
 
@@ -152,6 +153,8 @@ enum EventContent {
     },
     /// The ended call; None once its record has been deleted.
     Call(Option<CallRecord>),
+    /// A GitHub delivery, as it was received.
+    Github(Box<GithubWebhookReceived>),
 }
 
 struct ChannelMessage {
@@ -186,6 +189,13 @@ where
             EventAccessCapability::Call(receipt) => {
                 Ok(EventContent::Call(self.call(receipt.clone()).await?))
             }
+            // External deliveries carry their own content; there is nothing to read.
+            EventAccessCapability::GithubInstallation { .. } => match event.source() {
+                EventSource::Github(delivery) => Ok(EventContent::Github(delivery.clone())),
+                EventSource::Entity { .. } => Err(rootcause::report!(
+                    "an external capability was minted for a Macro event"
+                )),
+            },
         }
     }
 
@@ -224,7 +234,7 @@ where
     ) -> Result<EventContent, Report> {
         let channel = self
             .channels
-            .get_channel_metadata(event.entity_id(), owner.clone())
+            .get_channel_metadata(entity_id(event)?, owner.clone())
             .await
             .map_err(|error| Report::new(error).into_dynamic())?;
         let Some(message_id) = event.message_id() else {
@@ -283,7 +293,7 @@ where
         receipt: &EntityAccessReceipt<ViewAccessLevel>,
         event: &EventReference,
     ) -> Result<EventContent, Report> {
-        let id = event.entity_id().to_string();
+        let id = entity_id(event)?.to_string();
         let document = self
             .documents
             .get_basic_document(&id)
@@ -364,7 +374,28 @@ fn content_json(event: &EventReference, content: &EventContent) -> Value {
                 call_json,
             ),
         }),
+        EventContent::Github(delivery) => json!({ "github": github_json(delivery) }),
     }
+}
+
+/// The Macro entity a Macro event names.
+fn entity_id(event: &EventReference) -> Result<Uuid, Report> {
+    event
+        .entity_id()
+        .ok_or_else(|| rootcause::report!("a Macro event without its entity"))
+}
+
+fn github_json(delivery: &GithubWebhookReceived) -> Value {
+    json!({
+        "event": delivery.event,
+        "action": delivery.action,
+        "repository": delivery.repository.as_ref().map(|repository| &repository.full_name),
+        "sender": delivery.sender.as_ref().map(|sender| &sender.login),
+        "payload": delivery
+            .payload
+            .clone()
+            .unwrap_or_else(|| unavailable("the payload was too large to carry")),
+    })
 }
 
 /// What every condition can rely on: what happened, when, and to whom.

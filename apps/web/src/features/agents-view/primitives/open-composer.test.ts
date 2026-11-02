@@ -96,6 +96,38 @@ describe('openAgentComposer', () => {
     expect(home.textContent).toBe('Keep this draft');
   });
 
+  it('seeds the composer draft in a new split', () => {
+    const manager = layout();
+    openAgentComposer(manager, true, { draft: '@Plan ' });
+    expect(manager.openWithSplit).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({ draft: '@Plan ' }),
+      }),
+      { referredFrom: 'launcher', preferNewSplit: true }
+    );
+  });
+
+  it('replaces the draft when an existing Agents split is reused', () => {
+    const manager = layout(true);
+    openAgentComposer(manager, true, { draft: 'first' });
+    openAgentComposer(manager, true, { draft: 'second' });
+    expect(manager.content().params).toEqual(
+      expect.objectContaining({ draft: 'second' })
+    );
+  });
+
+  it('opens in the given split instead of placing a new one', () => {
+    const manager = layout();
+    const handle = { id: 'search-split' } as unknown as SplitHandle;
+    openAgentComposer(manager, false, { draft: '', handle });
+    expect(manager.openWithSplit).toHaveBeenCalledWith(expect.anything(), {
+      referredFrom: 'launcher',
+      preferNewSplit: false,
+      handle,
+      allowDuplicate: true,
+    });
+  });
+
   it('does not steal focus when navigation is unavailable', () => {
     openAgentComposer({ openWithSplit: () => ({ status: 'unavailable' }) });
     expect(focus.target).toBeUndefined();

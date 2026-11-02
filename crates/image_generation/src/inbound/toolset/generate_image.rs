@@ -12,8 +12,8 @@ use serde::{Deserialize, Serialize};
 use super::ImageGenerationToolContext;
 use crate::domain::{
     models::{
-        GenerateImageError, ImageAspectRatio, ImageGenerationError, ImageReference,
-        NewGeneratedImage, ReadImageError, StoredGeneratedImage,
+        GenerateImageError, ImageAspectRatio, ImageReference, NewGeneratedImage,
+        StoredGeneratedImage,
     },
     ports::ImageGenerationService,
 };
@@ -129,30 +129,8 @@ impl ToolAnnotated for GenerateImage {
 }
 
 fn generate_error(error: GenerateImageError) -> ToolCallError {
-    let description = match &error {
-        GenerateImageError::BadRequest(message) => message.clone(),
-        GenerateImageError::Reference(ReadImageError::Internal(_)) => {
-            "could not read a reference image; check its ID and access, then retry".to_string()
-        }
-        GenerateImageError::Reference(error) => error.to_string(),
-        GenerateImageError::Generation(ImageGenerationError::Unavailable) => {
-            "image generation is not available in this workspace".to_string()
-        }
-        GenerateImageError::Generation(ImageGenerationError::Refused(reason)) => {
-            format!("the image model did not return an image: {reason}")
-        }
-        GenerateImageError::Generation(ImageGenerationError::Provider(_)) => {
-            "the image model request failed; try again shortly".to_string()
-        }
-        GenerateImageError::Markup(_) => {
-            "the image was saved but its channel markup could not be composed".to_string()
-        }
-        GenerateImageError::Storage(_) => {
-            "the image was generated but could not be saved to Macro".to_string()
-        }
-    };
     ToolCallError {
-        description,
+        description: error.public_message(),
         internal_error: error.into(),
     }
 }

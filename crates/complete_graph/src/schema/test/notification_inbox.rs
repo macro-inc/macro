@@ -77,6 +77,7 @@ fn doc_entry() -> InboxEntry<SoupProjectionHydration> {
         entity: SoupProjectionHydration {
             item: soup_document(DOC_ID),
             document_server_facts: None,
+            sort_key: None,
         },
         sort_at: at(7),
         rows: vec![InboxRow {

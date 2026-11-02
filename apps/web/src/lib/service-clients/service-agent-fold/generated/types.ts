@@ -502,7 +502,12 @@ export type FailureNoticeKind =
    */
   | 'provider_usage_limit'
   /**  The selected model cannot read image attachments in this conversation. */
-  | 'unsupported_image_input';
+  | 'unsupported_image_input'
+  /**
+   *  The provider ended the run in failure; its own page for the run is
+   *  where any detail it kept lives.
+   */
+  | 'provider_run_failed';
 
 /**  A file modification a tool reported. */
 export type FileDiff = {
@@ -700,9 +705,11 @@ export type ImportOutcome =
 
 /**  What an import plan proposes, once it is ready to approve. */
 export type ImportPlan = {
-  /**  Objects to copy as they are. */
+  /**  The workspace the import reads. */
+  source?: ImportWorkspace;
+  /**  Objects to copy as they are; projects for Linear and Jira. */
   copy: number;
-  /**  Data sources whose rows become tasks. */
+  /**  Data sources whose rows become tasks; issues for Linear and Jira. */
   taskLists: number;
   /**  Objects to leave in the source workspace. */
   skipped: number;
@@ -717,13 +724,18 @@ export type ImportSettlement =
 
 /**  The final report of an approved workspace import, with no page content. */
 export type ImportSettlement_Deserialize = {
+  /**  The workspace the import read. */
+  source?: ImportWorkspace;
   /**  How the write ended. */
   outcome: ImportOutcome;
   /**  Why it failed, or what went wrong in a completed write. */
   error: string | null;
   /**  Objects written into Macro. */
   imported: number;
-  /**  Objects the plan copies, as they are or as task lists. */
+  /**
+   *  Objects the plan copies: as they are or as task lists from Notion,
+   *  projects and issues from Linear or Jira.
+   */
   planned: number;
   /**  Planned documents. */
   documents: number;
@@ -731,11 +743,11 @@ export type ImportSettlement_Deserialize = {
   databases: number;
   /**  Rows those databases hold. */
   databaseRows: number;
-  /**  Planned task lists. */
+  /**  Planned task lists; issues that become tasks for Linear and Jira. */
   taskLists: number;
-  /**  Tasks those task lists become. */
+  /**  Tasks those task lists or issues become. */
   taskRows: number;
-  /**  Objects left in Notion. */
+  /**  Objects left in the source workspace. */
   skipped: number;
   /**  Planned objects that were not written. */
   notWritten: number;
@@ -755,13 +767,18 @@ export type ImportSettlement_Deserialize = {
 
 /**  The final report of an approved workspace import, with no page content. */
 export type ImportSettlement_Serialize = {
+  /**  The workspace the import read. */
+  source: ImportWorkspace;
   /**  How the write ended. */
   outcome: ImportOutcome;
   /**  Why it failed, or what went wrong in a completed write. */
   error?: string | null;
   /**  Objects written into Macro. */
   imported: number;
-  /**  Objects the plan copies, as they are or as task lists. */
+  /**
+   *  Objects the plan copies: as they are or as task lists from Notion,
+   *  projects and issues from Linear or Jira.
+   */
   planned: number;
   /**  Planned documents. */
   documents: number;
@@ -769,11 +786,11 @@ export type ImportSettlement_Serialize = {
   databases: number;
   /**  Rows those databases hold. */
   databaseRows: number;
-  /**  Planned task lists. */
+  /**  Planned task lists; issues that become tasks for Linear and Jira. */
   taskLists: number;
-  /**  Tasks those task lists become. */
+  /**  Tasks those task lists or issues become. */
   taskRows: number;
-  /**  Objects left in Notion. */
+  /**  Objects left in the source workspace. */
   skipped: number;
   /**  Planned objects that were not written. */
   notWritten: number;
@@ -790,6 +807,18 @@ export type ImportSettlement_Serialize = {
   /**  Objects left for the owner to handle by hand, at most [`MAX_IMPORT_ITEMS`]. */
   handItems: ImportItem_Serialize[];
 };
+
+/**
+ *  The workspace an import reads. Events stored before Linear and Jira
+ *  imports existed are Notion's.
+ */
+export type ImportWorkspace =
+  /**  Notion pages and databases. */
+  | 'notion'
+  /**  Linear projects and issues. */
+  | 'linear'
+  /**  Jira projects, epics and issues. */
+  | 'jira';
 
 /**  Review item state, shared with notification consumers. */
 export type ItemStatus =
@@ -905,6 +934,24 @@ export type MessagePart =
       kind: 'plan';
       /**  The tasks, in the order the agent listed them. */
       entries: PlanEntry[];
+    }
+  /**
+   *  A background task the harness reported on: a command, subagent or
+   *  monitor it started earlier finished or emitted an event. The harness
+   *  hands the agent this report as a user turn; it is shown as a system
+   *  fact, never as something a person said.
+   */
+  | {
+      kind: 'task_notification';
+      /**  Where the task ended up; absent for a monitor's mid-stream event. */
+      status: TaskStatus | null;
+      /**
+       *  The harness's one-line account, such as `Background command
+       *  "Run tests" completed (exit code 0)`.
+       */
+      summary: string;
+      /**  The line a monitor streamed, for a monitor event. */
+      event: string | null;
     }
   /**
    *  The agent asking the user a question.
@@ -1560,6 +1607,15 @@ export type SubagentResult = {
   stats: ToolStats | null;
 };
 
+/**  How a background task ended, per [`MessagePart::TaskNotification`]. */
+export type TaskStatus =
+  /**  It ran to the end. */
+  | 'completed'
+  /**  It ended with an error or a nonzero exit. */
+  | 'failed'
+  /**  It was stopped, or did not survive the previous session. */
+  | 'stopped';
+
 /**  Where a held call stands. */
 export type ToolApprovalStatus =
   /**  Held until the owner answers. */
@@ -1857,6 +1913,8 @@ export type TurnPhase =
 export type TurnState =
   /**  No turn is open. */
   | 'idle'
+  /**  No turn is open, and the newest agent reply failed. */
+  | 'failed'
   /**
    *  A prompt this client issued is on the wire, unconfirmed, and the agent
    *  has produced nothing. Only a speculative fold reports this.

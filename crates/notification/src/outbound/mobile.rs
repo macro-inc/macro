@@ -122,7 +122,7 @@ impl<P: MobilePushOps + Send + Sync + 'static> MobilePushAdapter<P> {
     /// Bypasses the normal notification pipeline — sent immediately without
     /// DB persistence. Wakes the app via PushKit so CallKit can report an
     /// incoming call.
-    #[tracing::instrument(err, skip(self, recipient_id, payload))]
+    #[tracing::instrument(name = "call.push.send", err, skip_all, fields(call.id = %payload.call_id, otel.kind = "producer"))]
     pub async fn send_voip_push(
         &self,
         endpoint_arn: &str,

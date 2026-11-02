@@ -15,9 +15,15 @@ and usage metering.
   behind `model/router.rs`, plus `predefined_model.rs`/`speed.rs` (the
   product-facing model/speed vocabulary) and `metering.rs` (usage recording
   hook into `ai_usage`).
+- `AgentLoop::with_streamed_tool_calls` opts hosts into early tool-call
+  announcements and argument deltas; the accumulator persists only final calls.
 - `src/stream.rs`: `StreamPart`/`ChatCompletionStream`, the wire shape
   callers consume.
 - `src/completion.rs`: one-shot, non-looping completions (no tools).
+- `src/tool_result_limit.rs`: `ToolResultLimit` cuts tool results too long for
+  the model (in the hook and on replay through `to_rig_messages_limited`) and
+  keeps them for the `ReadToolResult` pager tool; opt in with
+  `AgentLoop::with_tool_result_limit`.
 - `src/structured_output.rs`: prompted JSON generation with offline schema
   preflight and result validation; external schema references are rejected.
 - `src/tool_media.rs`: promotes explicit top-level `modelMedia` results to
@@ -55,6 +61,9 @@ and usage metering.
 
 - `rig-core`/`rig-agent` are pinned exact versions (not workspace deps);
   bump both together and check `test-utils` feature compatibility.
+- `AgentLoop::with_provider_api_key` rekeys only the loop's own model calls
+  (native Anthropic/OpenAI); call it after `with_model`. Tools and
+  `complete*` still use the deployment's keys.
 
 ## Related
 

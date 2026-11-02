@@ -1,0 +1,57 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            WITH stalled AS (\n                SELECT user_id FROM import_run\n                WHERE source = $6 AND status IN ('running', 'importing')\n                  AND ($1::text IS NULL OR user_id = $1)\n                  AND (lease_expires_at < NOW()\n                       OR (lease_expires_at IS NULL\n                           AND updated_at < NOW() - ($4::double precision * interval '1 second')))\n                ORDER BY updated_at\n                LIMIT $5\n                FOR UPDATE SKIP LOCKED\n            )\n            UPDATE import_run AS run\n            SET lease_owner = $2,\n                lease_expires_at = NOW() + ($3::double precision * interval '1 second'),\n                adoptions = run.adoptions + 1,\n                updated_at = NOW()\n            FROM stalled\n            WHERE run.user_id = stalled.user_id AND run.source = $6\n            RETURNING run.user_id, run.status::text AS \"status!\", run.scope, run.sharing,\n                      run.review_id,\n                      run.adoptions\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "user_id",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "status!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "scope",
+        "type_info": "Jsonb"
+      },
+      {
+        "ordinal": 3,
+        "name": "sharing",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 4,
+        "name": "review_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 5,
+        "name": "adoptions",
+        "type_info": "Int2"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Float8",
+        "Float8",
+        "Int8",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null,
+      true,
+      true,
+      true,
+      false
+    ]
+  },
+  "hash": "a3365cfd9be00c64c797e8fc91dc9d495d25921ad09288b81d5290700a5c8f37"
+}

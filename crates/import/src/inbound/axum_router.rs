@@ -2,7 +2,9 @@
 
 use crate::domain::models::{ImportSource, ImportState, NotionImportReport};
 use crate::domain::ports::ImportError;
-use crate::domain::service::{ImportService, NotionWorkspaceImporter, RunImportOutcome};
+use crate::domain::service::{
+    ImportService, NotionWorkspaceImporter, RunImportOutcome, WorkspaceImporter,
+};
 use axum::{
     Json, Router,
     extract::{FromRef, Path, State},
@@ -68,7 +70,7 @@ impl<T, Auth> FromRef<ImportRouterState<T, Auth>> for MacroAuthorizationState<Au
 /// Build the import router.
 pub fn import_router<T, Auth, S>(state: ImportRouterState<T, Auth>) -> Router<S>
 where
-    T: ImportService + NotionWorkspaceImporter,
+    T: ImportService + WorkspaceImporter,
     Auth: MacroAuthorizationService,
     S: Send + Sync + Clone + 'static,
 {
@@ -78,6 +80,14 @@ where
         .route(
             "/import/runs/{source}/discover",
             post(discover_handler::<T, Auth>),
+        )
+        .route(
+            "/import/workspaces/{source}",
+            get(workspace_report_handler::<T, Auth>),
+        )
+        .route(
+            "/import/workspaces/{source}/cancel",
+            post(cancel_workspace_handler::<T, Auth>),
         )
         .route("/import/notion", get(notion_report_handler::<T, Auth>))
         .route(
@@ -134,6 +144,47 @@ pub async fn cancel_notion_handler<T: NotionWorkspaceImporter, Auth: MacroAuthor
     match service.notion_import_report(&user).await {
         Ok(report) => Json(report).into_response(),
         Err(e) => error_response(e),
+    }
+}
+
+/// Report progress for one reviewed workspace source.
+#[utoipa::path(get, path = "/import/workspaces/{source}", params(("source" = ImportSource, Path)), responses((status = 200, body = NotionImportReport)), tag = "import")]
+#[tracing::instrument(skip(service, user), fields(user_id = %user.authorization.user.macro_user_id))]
+pub async fn workspace_report_handler<T: WorkspaceImporter, Auth: MacroAuthorizationService>(
+    State(service): State<Arc<T>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(source): Path<String>,
+) -> Response {
+    let Ok(source) = ImportSource::from_str(&source) else {
+        return unknown_source_response(&source);
+    };
+    match service
+        .workspace_import_report(&user.authorization.user.macro_user_id, source)
+        .await
+    {
+        Ok(report) => Json(report).into_response(),
+        Err(error) => error_response(error),
+    }
+}
+
+/// Cancel this source's plan or write, keeping completed entities.
+#[utoipa::path(post, path = "/import/workspaces/{source}/cancel", params(("source" = ImportSource, Path)), responses((status = 200, body = NotionImportReport)), tag = "import")]
+#[tracing::instrument(skip(service, user), fields(user_id = %user.authorization.user.macro_user_id))]
+pub async fn cancel_workspace_handler<T: WorkspaceImporter, Auth: MacroAuthorizationService>(
+    State(service): State<Arc<T>>,
+    user: MacroAuthorizationExtractor<Auth, UserOrInternal>,
+    Path(source): Path<String>,
+) -> Response {
+    let Ok(source) = ImportSource::from_str(&source) else {
+        return unknown_source_response(&source);
+    };
+    let user = user.authorization.user.macro_user_id;
+    if let Err(error) = service.cancel_workspace_import(&user, source).await {
+        return error_response(error);
+    }
+    match service.workspace_import_report(&user, source).await {
+        Ok(report) => Json(report).into_response(),
+        Err(error) => error_response(error),
     }
 }
 

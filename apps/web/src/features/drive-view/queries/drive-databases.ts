@@ -41,3 +41,26 @@ export function selectDriveDatabases(
     ];
   });
 }
+
+/** Every database the viewer can open, owned or shared, for the sidebar, alphabetical. */
+export function selectSidebarDatabases(
+  listed: readonly ListedDatabase[],
+  hidden: ReadonlySet<string>
+): DatabaseEntity[] {
+  return listed
+    .flatMap(({ database, grant }): DatabaseEntity[] =>
+      database.trashed_at || hidden.has(database.id)
+        ? []
+        : [
+            {
+              type: 'database',
+              id: database.id,
+              name: database.name,
+              ownerId: database.owner_id,
+              createdAt: database.created_at,
+              grant,
+            },
+          ]
+    )
+    .sort((a, b) => a.name.localeCompare(b.name));
+}

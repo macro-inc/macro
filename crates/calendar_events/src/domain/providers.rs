@@ -58,6 +58,25 @@ impl<G: CalendarMutationProvider, O: CalendarMutationProvider> CalendarMutationP
             }
         }
     }
+    async fn refresh_event(
+        &self,
+        access_token: &str,
+        target: &ProviderCalendarTarget,
+        master_provider_event_id: &str,
+    ) -> Result<Option<CalendarEventUpsert>, CalendarProviderError> {
+        match target.provider {
+            CalendarProvider::Google => {
+                self.google
+                    .refresh_event(access_token, target, master_provider_event_id)
+                    .await
+            }
+            CalendarProvider::Outlook => {
+                self.outlook
+                    .refresh_event(access_token, target, master_provider_event_id)
+                    .await
+            }
+        }
+    }
     async fn update_event_instance(
         &self,
         access_token: &str,
@@ -246,7 +265,7 @@ impl<G: CalendarMutationProvider, O: CalendarMutationProvider> CalendarMutationP
         &self,
         access_token: &str,
         target: &ProviderCalendarTarget,
-        source: &super::ics::CalendarEventExport,
+        source: &super::ics::EventSnapshot,
     ) -> Result<ProviderImportOutcome, CalendarProviderError> {
         match target.provider {
             CalendarProvider::Google => {

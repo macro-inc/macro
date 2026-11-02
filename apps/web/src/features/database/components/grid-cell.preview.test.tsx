@@ -58,9 +58,9 @@ it('keeps the current company preview mounted while searching and cancelling its
     }) as HTMLInputElement;
     expect(screen.getByTestId('company-preview')).toBe(original);
     expect(disposals).toBe(0);
-    expect(editor.value).toBe('');
+    expect(editor.value).toBe('@');
     expect(document.activeElement).toBe(editor);
-    fireEvent.input(editor, { target: { value: 'new company' } });
+    fireEvent.input(editor, { target: { value: '@new company' } });
     expect(picker?.search).toBe('new company');
     fireEvent.keyDown(editor, { key: 'Escape' });
     await waitFor(() => expect(document.activeElement).toBe(trigger));

@@ -18,7 +18,7 @@ type PropertyPillClassOptions = {
 export function propertyPillClasses(props: PropertyPillClassOptions = {}) {
   const options = {
     variant: props.variant ?? 'ghost',
-    size: props.size ?? 'sm',
+    size: props.size ?? 'xs',
     class: cn(
       'max-w-full text-left',
       props.empty && 'text-ink-extra-muted',

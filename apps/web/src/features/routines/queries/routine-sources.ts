@@ -46,6 +46,7 @@ function toRoutine(schedule: ScheduledAction): RoutineSnapshot {
       schedule.run_visibility,
     ]),
     draft: draftFromSchedule(schedule),
+    templateId: schedule.template_id ?? undefined,
   };
 }
 
@@ -79,12 +80,16 @@ export function createRoutineDetailSource(
   const activate = useSetScheduleEnabledMutation({
     onError: (error) => callbacks.onError('Failed to update routine', error),
   });
-  const duplicate = useCreateScheduleMutation({
-    onSuccess: (created) => {
-      if (created.id) callbacks.onDuplicated(created.id);
+  const duplicate = useCreateScheduleMutation(
+    {
+      onSuccess: (created) => {
+        if (created.id) callbacks.onDuplicated(created.id);
+      },
+      onError: (error) =>
+        callbacks.onError('Failed to duplicate routine', error),
     },
-    onError: (error) => callbacks.onError('Failed to duplicate routine', error),
-  });
+    'duplicate'
+  );
   const history = useScheduleHistoryQuery(id, () =>
     Boolean(raw() && raw()?.owner === userId())
   );

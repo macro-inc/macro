@@ -31,6 +31,7 @@ mod test;
 #[derive(Clone)]
 pub struct PgImportRepo {
     pool: PgPool,
+    workspace_source: ImportSource,
     notifications: Option<Arc<dyn NotificationWriter<PgConnection>>>,
 }
 
@@ -39,6 +40,7 @@ impl PgImportRepo {
     pub fn new(pool: PgPool) -> Self {
         Self {
             pool,
+            workspace_source: ImportSource::Notion,
             notifications: None,
         }
     }
@@ -511,7 +513,7 @@ impl ImportRepo for PgImportRepo {
                 last_error = 'the import was interrupted — select it again to retry',
                 updated_at = NOW()
             WHERE user_id = $1 AND status = 'importing'
-              AND NOT (source = 'notion' AND metadata->'plan' IS NOT NULL)
+              AND NOT (source IN ('notion', 'linear', 'jira') AND metadata->'plan' IS NOT NULL)
               AND updated_at < NOW() - ($2::double precision * interval '1 second')
             "#,
             user.as_ref(),
@@ -618,7 +620,7 @@ impl ImportRepo for PgImportRepo {
             SET status = 'running', error = NULL, updated_at = NOW(),
                 scanned_pages = NULL, scanned_data_sources = NULL,
                 lease_owner = NULL, lease_expires_at = NULL, adoptions = 0,
-                review_session_id = NULL
+                review_session_id = NULL, review_id = NULL
             WHERE import_run.status::text = ANY($3::text[])
             "#,
             user.as_ref(),
@@ -642,7 +644,7 @@ impl ImportRepo for PgImportRepo {
             SET status = 'failed',
                 error = 'discovery was interrupted — try again',
                 updated_at = NOW()
-            WHERE user_id = $1 AND status IN ('running', 'importing') AND source <> 'notion'
+            WHERE user_id = $1 AND status IN ('running', 'importing') AND source NOT IN ('notion', 'linear', 'jira')
               AND updated_at < NOW() - ($2::double precision * interval '1 second')
             "#,
             user.as_ref(),

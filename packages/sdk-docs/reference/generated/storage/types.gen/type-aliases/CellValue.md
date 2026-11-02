@@ -1,6 +1,6 @@
 # Type Alias: CellValue
 
-> **CellValue** = \{ `type`: `"text"`; `value`: `string`; \} \| \{ `type`: `"number"`; `value`: `number`; \} \| \{ `type`: `"boolean"`; `value`: `boolean`; \} \| \{ `type`: `"date"`; `value`: `string`; \} \| \{ `type`: `"link"`; `value`: `string`[]; \} \| \{ `type`: `"options"`; `value`: [`OptionRef`](OptionRef.md)[]; \} \| \{ `type`: `"entities"`; `value`: [`EntityRef`](EntityRef.md)[]; \} \| \{ `type`: `"rows"`; `value`: `string`[]; \} \| \{ `type`: `"clear"`; \}
+> **CellValue** = \{ `type`: `"text"`; `value`: `string`; \} \| \{ `type`: `"number"`; `value`: `number`; \} \| \{ `type`: `"boolean"`; `value`: `boolean`; \} \| \{ `type`: `"date"`; `value`: `string`; \} \| \{ `type`: `"date_range"`; `value`: [`DateRange`](DateRange.md); \} \| \{ `type`: `"link"`; `value`: `string`[]; \} \| \{ `type`: `"options"`; `value`: [`OptionRef`](OptionRef.md)[]; \} \| \{ `type`: `"entities"`; `value`: [`EntityRef`](EntityRef.md)[]; \} \| \{ `type`: `"rows"`; `value`: `string`[]; \} \| \{ `type`: `"clear"`; \}
 
 A cell's value. It must fit the column's type: text for a text column,
 options of the column for a select, and so on.
@@ -48,6 +48,17 @@ options of the column for a select, and so on.
 | ------ | ------ | ------ |
 | `type` | `"date"` | - |
 | `value` | `string` | A date-time. |
+
+***
+
+### Type Literal
+
+\{ `type`: `"date_range"`; `value`: [`DateRange`](DateRange.md); \}
+
+| Name | Type | Description |
+| ------ | ------ | ------ |
+| `type` | `"date_range"` | - |
+| `value` | [`DateRange`](DateRange.md) | A span of time; its end may not come before its start. |
 
 ***
 

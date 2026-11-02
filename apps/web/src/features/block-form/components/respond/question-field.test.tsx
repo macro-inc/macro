@@ -1,6 +1,7 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
+import userEvent from '@testing-library/user-event';
 import { createSignal } from 'solid-js';
-import { afterEach, expect, it } from 'vitest';
+import { afterEach, expect, it, vi } from 'vitest';
 import type { FormCellValue } from '../../core/form-model';
 import { QuestionField } from './question-field';
 
@@ -165,4 +166,66 @@ it('keeps multiple-choice answers independent with themed checkboxes', () => {
   expect(value()).toEqual({ type: 'options', value: [{ id: 'venue' }] });
   expect(catering.checked).toBe(false);
   expect(venue.checked).toBe(true);
+});
+
+it('answers a time range with whole days, or with times once All day is off', async () => {
+  vi.useFakeTimers({ toFake: ['Date'], now: new Date(2026, 2, 1, 9, 10) });
+  Element.prototype.scrollIntoView = vi.fn();
+  const changes: (FormCellValue | undefined)[] = [];
+  render(() => (
+    <QuestionField
+      scope="respond-trip"
+      question={{
+        id: 'q-trip',
+        columnId: 'trip',
+        helpText: '',
+        required: true,
+        widget: null,
+      }}
+      column={{
+        id: 'trip',
+        name: 'Trip',
+        kind: { type: 'date_range' },
+        options: [],
+      }}
+      widget={null}
+      number={1}
+      value={undefined}
+      problem={undefined}
+      disabled={false}
+      compact={false}
+      upload={async () => undefined}
+      renderEntityPicker={() => null}
+      renderRelationPicker={() => null}
+      onChange={(next) => changes.push(next)}
+    />
+  ));
+  await userEvent.click(
+    screen.getByRole('button', { name: 'Edit Trip start date' })
+  );
+  await userEvent.click(
+    screen
+      .getAllByRole('gridcell')
+      .find(
+        (cell) => cell.textContent === '16' && !cell.hasAttribute('disabled')
+      )!
+  );
+  await userEvent.click(screen.getByRole('switch', { name: 'All day' }));
+  expect(changes).toEqual([
+    {
+      type: 'date_range',
+      value: {
+        start: '2026-03-16T00:00:00.000Z',
+        end: '2026-03-16T00:00:00.000Z',
+      },
+    },
+    {
+      type: 'date_range',
+      value: {
+        start: new Date(2026, 2, 16, 10).toISOString(),
+        end: new Date(2026, 2, 16, 11).toISOString(),
+      },
+    },
+  ]);
+  vi.useRealTimers();
 });

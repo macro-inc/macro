@@ -291,7 +291,7 @@ export function CrmExport(props: {
                 Cancel
               </Button>
               <Button
-                variant="strong"
+                variant="secondary"
                 disabled={
                   pending() ||
                   !selectedColumns().length ||

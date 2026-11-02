@@ -5,7 +5,7 @@
  */
 
 import type { PublishedAsset } from '@core/fig-engine/library-types';
-import DiamondsFour from '@phosphor/diamonds-four.svg';
+import DiamondsFour from '@icon/system/regular/diamonds-four.svg';
 import { createResource, type JSX, Show } from 'solid-js';
 
 export function AssetThumbnail(props: {

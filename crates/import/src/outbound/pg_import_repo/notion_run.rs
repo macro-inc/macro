@@ -13,8 +13,8 @@ use uuid::Uuid;
 
 use super::{PgImportRepo, run_status_strings};
 use crate::domain::models::{
-    AdoptedRun, NotionJob, NotionSharing, ReviewedRun, RunReview, RunStatus, WrittenKind,
-    WrittenObject,
+    AdoptedRun, ImportSource, NotionJob, NotionSharing, ReviewedRun, RunReview, RunStatus,
+    WrittenKind, WrittenObject,
 };
 use crate::domain::ports::{ImportError, NotionRunRepo, Result, WrittenObjects};
 
@@ -47,6 +47,13 @@ impl TryFrom<WrittenDbRow> for WrittenObject {
 }
 
 impl NotionRunRepo for PgImportRepo {
+    fn for_source(&self, source: ImportSource) -> Self {
+        Self {
+            workspace_source: source,
+            ..self.clone()
+        }
+    }
+
     #[tracing::instrument(skip(self, job), err)]
     async fn take_run(
         &self,
@@ -61,6 +68,11 @@ impl NotionRunRepo for PgImportRepo {
                 Some(sharing.as_ref()),
                 None,
             ),
+            NotionJob::TrackerPlan { sharing } => (
+                Some(serde_json::json!({"tracker":true})),
+                Some(sharing.as_ref()),
+                None,
+            ),
             NotionJob::Write { review_id } => (None, None, Some(*review_id)),
         };
         let result = sqlx::query!(
@@ -69,7 +81,7 @@ impl NotionRunRepo for PgImportRepo {
             SET lease_owner = $2,
                 lease_expires_at = NOW() + ($3::double precision * interval '1 second'),
                 scope = $4, review_id = $5, sharing = $6, updated_at = NOW()
-            WHERE user_id = $1 AND source = 'notion' AND status IN ('running', 'importing')
+            WHERE user_id = $1 AND source = $7 AND status IN ('running', 'importing')
               AND lease_owner IS NULL AND lease_expires_at IS NULL
             "#,
             user.as_ref(),
@@ -78,6 +90,7 @@ impl NotionRunRepo for PgImportRepo {
             scope,
             review_id,
             sharing,
+            self.workspace_source.as_ref(),
         )
         .execute(&self.pool)
         .await?;
@@ -96,12 +109,13 @@ impl NotionRunRepo for PgImportRepo {
             UPDATE import_run
             SET lease_expires_at = NOW() + ($3::double precision * interval '1 second'),
                 updated_at = NOW()
-            WHERE user_id = $1 AND source = 'notion' AND status IN ('running', 'importing')
+            WHERE user_id = $1 AND source = $4 AND status IN ('running', 'importing')
               AND lease_owner = $2
             "#,
             user.as_ref(),
             owner,
             seconds(lease),
+            self.workspace_source.as_ref(),
         )
         .execute(&self.pool)
         .await?;
@@ -115,10 +129,11 @@ impl NotionRunRepo for PgImportRepo {
             r#"
             UPDATE import_run
             SET lease_owner = NULL, lease_expires_at = NOW()
-            WHERE user_id = $1 AND source = 'notion' AND lease_owner = $2
+            WHERE user_id = $1 AND source = $3 AND lease_owner = $2
             "#,
             user.as_ref(),
             owner,
+            self.workspace_source.as_ref(),
         )
         .execute(&self.pool)
         .await?;
@@ -138,7 +153,7 @@ impl NotionRunRepo for PgImportRepo {
             r#"
             WITH stalled AS (
                 SELECT user_id FROM import_run
-                WHERE source = 'notion' AND status IN ('running', 'importing')
+                WHERE source = $6 AND status IN ('running', 'importing')
                   AND ($1::text IS NULL OR user_id = $1)
                   AND (lease_expires_at < NOW()
                        OR (lease_expires_at IS NULL
@@ -153,7 +168,7 @@ impl NotionRunRepo for PgImportRepo {
                 adoptions = run.adoptions + 1,
                 updated_at = NOW()
             FROM stalled
-            WHERE run.user_id = stalled.user_id AND run.source = 'notion'
+            WHERE run.user_id = stalled.user_id AND run.source = $6
             RETURNING run.user_id, run.status::text AS "status!", run.scope, run.sharing,
                       run.review_id,
                       run.adoptions
@@ -163,6 +178,7 @@ impl NotionRunRepo for PgImportRepo {
             seconds(lease),
             seconds(stale_after),
             i64::from(limit),
+            self.workspace_source.as_ref(),
         )
         .fetch_all(&self.pool)
         .await?;
@@ -174,6 +190,14 @@ impl NotionRunRepo for PgImportRepo {
             let status = RunStatus::from_str(&row.status)
                 .map_err(|_| anyhow::anyhow!("unknown run status: {}", row.status))?;
             let job = match (status, row.scope, row.sharing, row.review_id) {
+                (RunStatus::Running, Some(_), Some(sharing), _)
+                    if self.workspace_source != ImportSource::Notion =>
+                {
+                    Some(NotionJob::TrackerPlan {
+                        sharing: NotionSharing::from_str(&sharing)
+                            .map_err(|_| anyhow::anyhow!("unknown import sharing: {sharing}"))?,
+                    })
+                }
                 (RunStatus::Running, Some(scope), Some(sharing), _) => Some(NotionJob::Plan {
                     scope: serde_json::from_value::<ImportScope>(scope)?,
                     sharing: NotionSharing::from_str(&sharing)
@@ -215,13 +239,14 @@ impl NotionRunRepo for PgImportRepo {
                               ELSE $2::text::import_run_status END,
                 error = CASE WHEN status = 'dismissed' THEN error ELSE $3 END,
                 updated_at = NOW(), lease_owner = NULL, lease_expires_at = NULL
-            WHERE user_id = $1 AND source = 'notion' AND status::text = ANY($4::text[])
+            WHERE user_id = $1 AND source = $5 AND status::text = ANY($4::text[])
             RETURNING status::text AS "status!", error, review_id, review_session_id
             "#,
             user.as_ref(),
             to.as_ref(),
             error,
             &from,
+            self.workspace_source.as_ref(),
         )
         .fetch_optional(&mut *transaction)
         .await?
@@ -255,8 +280,9 @@ impl NotionRunRepo for PgImportRepo {
     #[tracing::instrument(skip(self), err)]
     async fn root_folder(&self, user: &MacroUserIdStr<'static>) -> Result<Option<Uuid>> {
         let folder = sqlx::query_scalar!(
-            r#"SELECT root_folder_id FROM import_run WHERE user_id = $1 AND source = 'notion'"#,
+            r#"SELECT root_folder_id FROM import_run WHERE user_id = $1 AND source = $2"#,
             user.as_ref(),
+            self.workspace_source.as_ref(),
         )
         .fetch_optional(&self.pool)
         .await?;
@@ -266,9 +292,10 @@ impl NotionRunRepo for PgImportRepo {
     #[tracing::instrument(skip(self), err)]
     async fn set_root_folder(&self, user: &MacroUserIdStr<'static>, folder: Uuid) -> Result<()> {
         sqlx::query!(
-            r#"UPDATE import_run SET root_folder_id = $2 WHERE user_id = $1 AND source = 'notion'"#,
+            r#"UPDATE import_run SET root_folder_id = $2 WHERE user_id = $1 AND source = $3"#,
             user.as_ref(),
             folder,
+            self.workspace_source.as_ref(),
         )
         .execute(&self.pool)
         .await?;
@@ -283,11 +310,11 @@ impl NotionRunRepo for PgImportRepo {
             UPDATE import_entity AS mine
             SET status = 'staged', last_error = $2, team_id = NULL, waiting_on = NULL,
                 updated_at = NOW()
-            WHERE mine.user_id = $1 AND mine.source = 'notion' AND mine.status = 'importing'
+            WHERE mine.user_id = $1 AND mine.source = $3 AND mine.status = 'importing'
               AND mine.metadata->'plan' IS NOT NULL
               AND NOT EXISTS (
                   SELECT 1 FROM import_run
-                  WHERE user_id = $1 AND source = 'notion' AND status = 'importing'
+                  WHERE user_id = $1 AND source = $3 AND status = 'importing'
               )
               AND NOT EXISTS (
                   SELECT 1 FROM import_entity AS holder
@@ -297,6 +324,7 @@ impl NotionRunRepo for PgImportRepo {
             "#,
             user.as_ref(),
             reason,
+            self.workspace_source.as_ref(),
         )
         .fetch_all(&mut *transaction)
         .await?;

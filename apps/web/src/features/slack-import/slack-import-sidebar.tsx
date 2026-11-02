@@ -7,7 +7,7 @@ import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { openNewChannelModal } from '@channel/CreateChannelModal';
 import { enableSlackArchiveImport } from '@core/constant/featureFlags';
 import { lazyNamed } from '@core/util/lazyNamed';
-import FileZipIcon from '@phosphor/file-zip.svg';
+import FileZipIcon from '@icon/system/regular/file-zip.svg';
 import { useCurrentTeamQuery, useIsTeamAdmin } from '@queries/team/teams';
 import { Show, Suspense } from 'solid-js';
 

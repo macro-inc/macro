@@ -1,5 +1,5 @@
 import { EntityIcon } from '@core/component/EntityIcon';
-import CaretDown from '@phosphor/caret-down.svg';
+import CaretDown from '@icon/system/regular/caret-down.svg';
 import { Badge, badgeTriggerClasses } from '@ui/components/Badge';
 import { Checkbox } from '@ui/components/Checkbox';
 import { Tooltip } from '@ui/components/Tooltip';
@@ -256,7 +256,12 @@ export function ImportPlanRow(props: {
           </Checkbox>
         </Show>
         <EntityIcon
-          targetType={props.node.kind === 'database' ? 'database' : 'md'}
+          targetType={match(props.node.kind)
+            .with('database', () => 'database' as const)
+            .with('task', () => 'task' as const)
+            .with('project', () => 'initiative' as const)
+            .with('page', () => 'md' as const)
+            .exhaustive()}
           size="xs"
         />
         <span class="flex min-w-0 flex-1 flex-col">

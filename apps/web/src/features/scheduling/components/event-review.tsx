@@ -1,10 +1,10 @@
 import { fireAndForget } from '@core/util/fireAndForget';
-import CalendarBlank from '@phosphor/calendar-blank.svg';
-import CalendarCheck from '@phosphor/calendar-check.svg';
-import Copy from '@phosphor/copy.svg';
-import Power from '@phosphor/power.svg';
-import Question from '@phosphor/question.svg';
-import Warning from '@phosphor/warning.svg';
+import CalendarBlank from '@icon/system/regular/calendar-blank.svg';
+import CalendarCheck from '@icon/system/regular/calendar-check.svg';
+import Copy from '@icon/system/regular/copy.svg';
+import Power from '@icon/system/regular/power.svg';
+import Question from '@icon/system/regular/question.svg';
+import Warning from '@icon/system/regular/warning.svg';
 import { Button } from '@ui';
 import {
   type Component,
@@ -137,10 +137,11 @@ export function EventReview(props: {
                 </span>
                 <Show when={props.onCopyLink}>
                   <Button
+                    aria-label="Copy booking link"
+                    tooltip="Copy booking link"
                     type="button"
                     variant="ghost"
                     size="icon-sm"
-                    label="Copy booking link"
                     disabled={props.saving || copying() || !props.onCopyLink}
                     aria-invalid={copyError() ? true : undefined}
                     aria-describedby={copyError() ? copyErrorId : undefined}

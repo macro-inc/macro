@@ -53,7 +53,7 @@ export function FormLoadFailureView(props: {
         </Match>
         <Match when={props.failure.kind === 'failed'}>
           <p class="font-medium text-ink">This form couldn’t be opened</p>
-          <Button variant="outline" onClick={props.onRetry}>
+          <Button variant="secondary" onClick={props.onRetry}>
             Try again
           </Button>
         </Match>
