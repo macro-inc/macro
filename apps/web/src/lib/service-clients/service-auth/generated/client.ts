@@ -2578,14 +2578,21 @@ export type emailConnectionProvidersResponse400 = {
   status: 400;
 };
 
+export type emailConnectionProvidersResponse401 = {
+  data: ErrorResponse;
+  status: 401;
+};
+
 export type emailConnectionProvidersResponseSuccess =
   emailConnectionProvidersResponse200 & {
     headers: Headers;
   };
-export type emailConnectionProvidersResponseError =
-  emailConnectionProvidersResponse400 & {
-    headers: Headers;
-  };
+export type emailConnectionProvidersResponseError = (
+  | emailConnectionProvidersResponse400
+  | emailConnectionProvidersResponse401
+) & {
+  headers: Headers;
+};
 
 export type emailConnectionProvidersResponse =
   | emailConnectionProvidersResponseSuccess
