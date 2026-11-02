@@ -8,4 +8,4 @@ mod repository;
 pub use constants::{EffortOption, PriorityOption, StageOption, StatusOption, SystemPropertyKey};
 pub use error::SystemPropertyError;
 pub use inbound::{CrmRecordLink, EmailAttachmentInput, EmailAttachmentProperty, SourceEntity};
-pub use repository::PropertyRow;
+pub use repository::{ProjectTask, PropertyRow};

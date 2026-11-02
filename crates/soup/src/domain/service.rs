@@ -2035,6 +2035,14 @@ where
         self.viewable_items(receipts, team_receipt).await
     }
 
+    #[tracing::instrument(err, skip_all, fields(project_id = %project.entity().entity_id, task_count))]
+    async fn get_project_tasks(
+        &self,
+        project: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<SoupProjectionHydration>, SoupErr> {
+        self.project_tasks(project).await
+    }
+
     #[tracing::instrument(err, skip(self, req, team_receipt))]
     async fn get_user_soup_with_frecency<R>(
         &self,

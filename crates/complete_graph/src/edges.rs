@@ -722,25 +722,22 @@ impl<E> Clone for SoupInitiativeEdges<E> {
 
 #[Object]
 impl<E: SoupEntityEdges> SoupInitiativeEdges<E> {
-    /// The associated tasks this viewer may view, from the same access walk
-    /// as `taskIds` and in its order. A public link opens each task the same
-    /// way it opens the project, so a caller with no account reads them too.
+    /// Every task the project lists, in `taskIds` order. Viewing a project
+    /// lets the viewer list its tasks, a caller with no account included;
+    /// opening a task still needs the task's own access.
     async fn tasks(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<GraphqlSoupEntity<E>>> {
-        let receipts =
-            graphql_initiative::load_initiative_task_receipts(ctx, self.initiative_id).await?;
-        let order = receipts
-            .iter()
-            .map(|receipt| receipt.entity().entity_id.clone())
-            .collect::<Vec<_>>();
+        let listing =
+            graphql_initiative::load_initiative_task_listing(ctx, self.initiative_id).await?;
         let mut hydrated = ctx
             .data::<graphql_initiative::InitiativeEntityLoader>()?
             .0
-            .hydrate_receipted(receipts)
+            .hydrate_project_tasks(listing.project)
             .await?
             .into_iter()
             .map(|hydration| (hydration.item.entity().entity_id.into_owned(), hydration))
             .collect::<HashMap<_, _>>();
-        Ok(order
+        Ok(listing
+            .task_ids
             .iter()
             .filter_map(|id| hydrated.remove(id))
             .map(GraphqlSoupEntity::new_with_projection)
@@ -753,7 +750,7 @@ impl<E: SoupEntityEdges> SoupInitiativeEdges<E> {
         Ok(detail.member_ids.iter().map(ToString::to_string).collect())
     }
 
-    /// Associated task identifiers visible to this viewer.
+    /// Identifiers of every task the project lists.
     async fn task_ids(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<ID>> {
         let detail = graphql_initiative::load_initiative_detail(ctx, self.initiative_id).await?;
         Ok(detail.task_ids.iter().cloned().map(ID).collect())

@@ -337,3 +337,55 @@ async fn viewable_reads_hydrate_initiatives_the_listing_never_reaches(
     }
     Ok(())
 }
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_project_lists_its_live_tasks_and_no_others(pool: PgPool) -> anyhow::Result<()> {
+    let project = Uuid::now_v7();
+    let other = Uuid::now_v7();
+    let listed = "11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    let deleted = "11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+    let elsewhere = "11111111-cccc-cccc-cccc-cccccccccccc";
+    let two_projects = "11111111-dddd-dddd-dddd-dddddddddddd";
+    for (task, projects) in [
+        (listed, vec![project]),
+        (deleted, vec![project]),
+        (elsewhere, vec![other]),
+        (two_projects, vec![project, other]),
+    ] {
+        let references = projects
+            .iter()
+            .map(|id| serde_json::json!({ "entity_id": id.to_string(), "entity_type": "INITIATIVE" }))
+            .collect::<Vec<_>>();
+        sqlx::query!(
+            r#"
+            INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+            VALUES ($1, $2, 'TASK', $3, jsonb_build_object('type', 'EntityReference', 'value', $4::jsonb))
+            "#,
+            Uuid::now_v7(),
+            task,
+            system_properties::SystemPropertyKey::PROJECT_UUID,
+            serde_json::Value::Array(references),
+        )
+        .execute(&pool)
+        .await?;
+    }
+    sqlx::query!(
+        r#"UPDATE "Document" SET "deletedAt" = now() WHERE id = $1"#,
+        deleted
+    )
+    .execute(&pool)
+    .await?;
+
+    assert_eq!(
+        project_task_entities(&pool, project).await?,
+        [EntityType::Document.with_entity_string(listed.to_owned())],
+        "a deleted task, another project's task and a task naming two projects are left out"
+    );
+    Ok(())
+}

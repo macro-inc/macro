@@ -74,6 +74,13 @@ pub trait SoupRepo: Send + Sync + 'static {
         entities: &'a [Entity<'a>],
     ) -> impl Future<Output = Result<Vec<SoupProjectionHydration>, Self::Err>> + Send;
 
+    /// The live tasks whose Project property names exactly `project`, in id
+    /// order, as documents. Applies no access predicate.
+    fn project_task_entities(
+        &self,
+        project: uuid::Uuid,
+    ) -> impl Future<Output = Result<Vec<Entity<'static>>, Self::Err>> + Send;
+
     /// Fetch unexpanded soup items for an explicit list of entity ids.
     fn unexpanded_soup_by_ids<'a>(
         &self,
@@ -375,6 +382,25 @@ pub trait SoupService: Send + Sync + 'static {
         }
     }
 
+    /// Hydrate every live task `project` lists, to the viewer who holds its
+    /// View receipt. Viewing a project lets the viewer list its tasks, like a
+    /// folder lists its documents; opening a task still needs the task's own
+    /// access. Soup finds the tasks itself, so a caller cannot widen the set.
+    ///
+    /// Services without project task listing reject the request. The
+    /// production service overrides this method.
+    fn get_project_tasks(
+        &self,
+        project: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> impl Future<Output = Result<Vec<SoupProjectionHydration>, SoupErr>> + Send {
+        let _ = project;
+        async move {
+            Err(SoupErr::SoupDbErr(anyhow::anyhow!(
+                "this soup service does not list project tasks"
+            )))
+        }
+    }
+
     /// Fetch one hydrated page of the viewer's work feed: entities with live
     /// attention or own work, newest `sort_at` first, each with its reason
     /// timestamps and authoritative server facts.
@@ -518,6 +544,13 @@ where
         team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
     ) -> Result<Vec<SoupProjectionHydration>, SoupErr> {
         (**self).get_viewable_items(receipts, team_receipt).await
+    }
+
+    async fn get_project_tasks(
+        &self,
+        project: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<SoupProjectionHydration>, SoupErr> {
+        (**self).get_project_tasks(project).await
     }
 }
 

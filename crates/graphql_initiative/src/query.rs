@@ -56,7 +56,7 @@ pub async fn resolve_initiative<E: SoupEntityEdges>(
         .ok_or_else(|| graphql_error(initiative::domain::models::InitiativeError::NotFound))
 }
 
-/// Resolve the tasks of an initiative that the viewer, signed in or not, may view.
+/// Resolve the tasks an initiative lists, for a viewer, signed in or not, who may view it.
 pub async fn resolve_initiative_tasks(
     ctx: &Context<'_>,
     viewer: Option<MacroUserIdStr<'static>>,

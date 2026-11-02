@@ -3,7 +3,7 @@
 use models_properties::EntityType;
 
 use super::*;
-use crate::domain::model::{PropertyRow, SystemPropertyKey};
+use crate::domain::model::{ProjectTask, PropertyRow, SystemPropertyKey};
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Pool, Postgres};
 
@@ -576,5 +576,92 @@ async fn project_membership_reads_the_project_property(pool: Pool<Postgres>) -> 
         ]
     );
 
+    Ok(())
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn live_project_tasks_lists_the_project_tasks_that_still_exist(
+    pool: Pool<Postgres>,
+) -> anyhow::Result<()> {
+    const OWNER: &str = "macro|owner@project-tasks.example.com";
+    let macro_user_id = Uuid::now_v7();
+    sqlx::query!(
+        "INSERT INTO macro_user (id, username, email, stripe_customer_id) VALUES ($1, $2, $2, $2)",
+        macro_user_id,
+        OWNER,
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"INSERT INTO "User" ("id", "email", "macro_user_id") VALUES ($1, $1, $2)"#,
+        OWNER,
+        macro_user_id,
+    )
+    .execute(&pool)
+    .await?;
+    for task in ["done", "open", "deleted", "two-projects", "elsewhere"] {
+        sqlx::query!(
+            r#"INSERT INTO "Document" ("id", "name", "owner", "fileType") VALUES ($1, $1, $2, 'md')"#,
+            task,
+            OWNER,
+        )
+        .execute(&pool)
+        .await?;
+    }
+    sqlx::query!(r#"UPDATE "Document" SET "deletedAt" = now() WHERE id = 'deleted'"#)
+        .execute(&pool)
+        .await?;
+
+    let project = Uuid::now_v7();
+    let other = Uuid::now_v7();
+    let key = SystemPropertyKey::PROJECT_UUID;
+    for task in ["done", "open", "deleted"] {
+        set_task_reference(&pool, task, key, &project.to_string(), "INITIATIVE").await?;
+    }
+    set_task_reference(&pool, "elsewhere", key, &other.to_string(), "INITIATIVE").await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+        VALUES (gen_random_uuid(), 'two-projects', 'TASK', $1, jsonb_build_object(
+            'type', 'EntityReference',
+            'value', jsonb_build_array(
+                jsonb_build_object('entity_id', $2::text, 'entity_type', 'INITIATIVE'),
+                jsonb_build_object('entity_id', $3::text, 'entity_type', 'INITIATIVE')
+            )
+        ))
+        "#,
+        key,
+        project.to_string(),
+        other.to_string(),
+    )
+    .execute(&pool)
+    .await?;
+    sqlx::query!(
+        r#"
+        INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+        VALUES (gen_random_uuid(), 'done', 'TASK', $1,
+                jsonb_build_object('type', 'SelectOption', 'value', jsonb_build_array($2::text)))
+        "#,
+        SystemPropertyKey::STATUS_UUID,
+        StatusOption::COMPLETED_UUID.to_string(),
+    )
+    .execute(&pool)
+    .await?;
+    let repo = PgSystemPropertiesRepository::new(pool.clone());
+
+    assert_eq!(
+        repo.live_project_tasks(project).await?,
+        [
+            ProjectTask {
+                id: "done".to_string(),
+                status: Some(StatusOption::COMPLETED_UUID),
+            },
+            ProjectTask {
+                id: "open".to_string(),
+                status: None,
+            },
+        ],
+        "deleted tasks and malformed Project values are left out"
+    );
     Ok(())
 }

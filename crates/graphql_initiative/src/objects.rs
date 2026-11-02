@@ -60,15 +60,15 @@ impl From<SharePermissionV2> for GraphqlInitiativeSharePermission {
     }
 }
 
-/// A page of visible task references.
+/// A page of the task references a project lists.
 #[derive(SimpleObject)]
 #[graphql(name = "InitiativeTasksPage")]
 pub struct GraphqlInitiativeTasksPage {
-    /// Visible task identifiers in the current page.
+    /// Listed task identifiers in the current page.
     task_ids: Vec<ID>,
-    /// Continuation when another visible page exists.
+    /// Continuation when another page exists.
     next_cursor: Option<String>,
-    /// Total tasks visible to this viewer.
+    /// Total tasks the project lists.
     total: u32,
 }
 

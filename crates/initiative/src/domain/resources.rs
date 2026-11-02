@@ -10,7 +10,7 @@ use entity_access::domain::models::{
 
 use super::{
     models::{InitialPropertyValue, InitiativeError, InitiativeId},
-    reads::InitiativePropertySnapshot,
+    reads::{InitiativePropertySnapshot, ProjectTask},
 };
 
 /// Boxed asynchronous operation on an initiative dependency.
@@ -33,9 +33,9 @@ pub trait InitiativeResources: std::fmt::Debug + Send + Sync + 'static {
     /// Clean up properties after the initiative is deleted using its already-verified capability:
     /// its own values, and the Project values that put tasks in it.
     fn purge(&self, receipt: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()>;
-    /// Tasks whose Project property names the initiative, in id order. Callers authorize each
-    /// task before showing it.
-    fn project_tasks(&self, id: InitiativeId) -> ResourceFuture<'_, Vec<String>>;
+    /// Live tasks whose Project property names the initiative, in id order. A caller that
+    /// authorized the initiative may list them; opening one needs the task's own access.
+    fn project_task_list(&self, id: InitiativeId) -> ResourceFuture<'_, Vec<ProjectTask>>;
     /// Return a view capability for a related entity under the same user/bot scope.
     /// Missing and inaccessible entities return `None`; infrastructure failures remain errors.
     fn view(

@@ -299,9 +299,7 @@ where
             .map_err(Into::into)?
             .ok_or(InitiativeError::NotFound)?;
         detail.user_access_level = receipt_access_level(&receipt)?;
-        let tasks = self
-            .visible_tasks(receipt.auth(), self.resources.project_tasks(id).await?)
-            .await?;
+        let tasks = self.resources.project_task_list(id).await?;
         Ok(InitiativeRead::new(receipt, detail, tasks))
     }
 
@@ -475,10 +473,11 @@ where
         .await;
         detail.user_access_level = receipt_access_level(&receipt)?;
         detail.task_ids = self
-            .visible_tasks(receipt.auth(), self.resources.project_tasks(id).await?)
+            .resources
+            .project_task_list(id)
             .await?
             .into_iter()
-            .map(|task| task.entity().entity_id.clone())
+            .map(|task| task.id)
             .collect();
         Ok(detail)
     }

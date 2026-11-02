@@ -1,0 +1,28 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            SELECT ep.entity_id AS \"id!\", status.values->'value'->>0 AS \"status?\"\n            FROM entity_properties ep\n            JOIN \"Document\" task ON task.id = ep.entity_id AND task.\"deletedAt\" IS NULL\n            LEFT JOIN entity_properties status\n              ON status.entity_id = ep.entity_id\n             AND status.entity_type = 'TASK'\n             AND status.property_definition_id = '00000001-0000-0000-0000-000000000002'\n            WHERE ep.property_definition_id = '00000001-0000-0000-0000-000000000014'\n              AND ep.entity_type = 'TASK'\n              AND ep.values -> 'value' @> jsonb_build_array(jsonb_build_object(\n                  'entity_id', $1::text, 'entity_type', 'INITIATIVE'\n              ))\n              AND CASE WHEN jsonb_typeof(ep.values -> 'value') = 'array'\n                       THEN jsonb_array_length(ep.values -> 'value') END = 1\n            ORDER BY ep.entity_id\n            ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 1,
+        "name": "status?",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      null
+    ]
+  },
+  "hash": "365835fb51f5f5ae7dc14468bd8864cf0d1ffc563fc32fddf043eab746d58a95"
+}

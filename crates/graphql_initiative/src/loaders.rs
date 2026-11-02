@@ -21,7 +21,7 @@ use crate::{InitiativeGraphqlContext, graphql_error};
 /// Bound concurrent domain reads until the domain exposes bulk detail/summary reads.
 const MAX_CONCURRENT_READS: usize = 16;
 
-/// One viewer-scoped read shared by detail and progress fields, so task access is checked once.
+/// One viewer-scoped read shared by detail, task and progress fields, so they list the same tasks.
 pub struct LoadedInitiative {
     read: InitiativeRead,
     pub(crate) detail: Arc<InitiativeDetail>,
@@ -90,21 +90,28 @@ pub async fn load_initiative_detail(
     Ok(load_initiative(loader, id).await?.detail.clone())
 }
 
-/// Load the view receipts of the tasks this viewer may see, from the same
-/// read as detail, so hydrating them checks no access again.
-pub async fn load_initiative_task_receipts(
-    ctx: &Context<'_>,
-    id: Uuid,
-) -> async_graphql::Result<Vec<EntityAccessReceipt<ViewAccessLevel>>> {
-    let loader = ctx.data::<DataLoader<InitiativeLoader>>()?;
-    Ok(load_initiative(loader, id)
-        .await?
-        .read
-        .task_receipts()
-        .to_vec())
+/// The tasks a project lists, from the same read as detail.
+pub struct InitiativeTaskListing {
+    /// The project's View receipt, which authorizes listing its tasks.
+    pub project: EntityAccessReceipt<ViewAccessLevel>,
+    /// The listed task ids, in `taskIds` order.
+    pub task_ids: Vec<String>,
 }
 
-/// Load task progress only when a count field is requested, from the same visible tasks as detail.
+/// Load the project's View receipt and the ids of the tasks it lists.
+pub async fn load_initiative_task_listing(
+    ctx: &Context<'_>,
+    id: Uuid,
+) -> async_graphql::Result<InitiativeTaskListing> {
+    let loader = ctx.data::<DataLoader<InitiativeLoader>>()?;
+    let loaded = load_initiative(loader, id).await?;
+    Ok(InitiativeTaskListing {
+        project: loaded.read.receipt().clone(),
+        task_ids: loaded.detail.task_ids.clone(),
+    })
+}
+
+/// Load task progress only when a count field is requested, from the same listed tasks as detail.
 pub async fn load_initiative_summary(
     ctx: &Context<'_>,
     id: Uuid,

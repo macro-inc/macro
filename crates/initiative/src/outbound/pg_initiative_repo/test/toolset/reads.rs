@@ -25,16 +25,25 @@ impl InitiativeResources for VisibleResources {
     fn purge(&self, _: EntityAccessReceipt<EditAccessLevel>) -> ResourceFuture<'_, ()> {
         panic!("read-only fixture")
     }
-    fn project_tasks(&self, id: InitiativeId) -> ResourceFuture<'_, Vec<String>> {
+    fn project_task_list(
+        &self,
+        id: InitiativeId,
+    ) -> ResourceFuture<'_, Vec<crate::domain::reads::ProjectTask>> {
         use system_properties::SystemPropertiesService;
         let properties = system_properties::SystemPropertiesServiceImpl::new(
             system_properties::PgSystemPropertiesRepository::new(self.pool.clone()),
         );
         Box::pin(async move {
             Ok(properties
-                .project_task_ids(id.as_uuid())
+                .live_project_tasks(id.as_uuid())
                 .await
-                .expect("project tasks"))
+                .expect("project tasks")
+                .into_iter()
+                .map(|task| crate::domain::reads::ProjectTask {
+                    id: task.id,
+                    completed: task.status == Some(system_properties::StatusOption::COMPLETED_UUID),
+                })
+                .collect())
         })
     }
     fn view(
@@ -68,7 +77,7 @@ impl InitiativeResources for VisibleResources {
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn tool_cursors_enumerate_projects_and_more_than_two_hundred_visible_tasks(
+async fn tool_cursors_enumerate_projects_and_more_than_two_hundred_listed_tasks(
     pool: PgPool,
 ) -> anyhow::Result<()> {
     insert_user(&pool, OWNER).await?;
@@ -93,13 +102,20 @@ async fn tool_cursors_enumerate_projects_and_more_than_two_hundred_visible_tasks
     for task_id in &task_ids {
         set_project(&pool, task_id, projects[0].id).await?;
     }
-    let hidden_task = task_ids.remove(100);
+    // Every live task is listed; a deleted one is not.
+    let deleted_task = task_ids.remove(100);
+    sqlx::query!(
+        r#"UPDATE "Document" SET "deletedAt" = now() WHERE id = $1"#,
+        deleted_task
+    )
+    .execute(&pool)
+    .await?;
     let task_reads = Arc::new(std::sync::atomic::AtomicUsize::new(0));
     let context = context_with_resources(
         pool.clone(),
         Arc::new(Events::default()),
         Arc::new(VisibleResources {
-            hidden_task: hidden_task.clone(),
+            hidden_task: deleted_task.clone(),
             task_reads: task_reads.clone(),
             pool,
         }),
@@ -154,7 +170,7 @@ async fn tool_cursors_enumerate_projects_and_more_than_two_hundred_visible_tasks
             .map_err(|error| error.internal_error)?;
         assert_eq!(page.project.task_count, 201);
         assert!(page.project.task_ids.len() <= 100);
-        assert!(!page.project.task_ids.contains(&hidden_task));
+        assert!(!page.project.task_ids.contains(&deleted_task));
         assert_eq!(
             page.project.tasks_truncated,
             page.next_task_cursor.is_some()
@@ -170,8 +186,8 @@ async fn tool_cursors_enumerate_projects_and_more_than_two_hundred_visible_tasks
     assert_eq!(page_count, 3);
     assert_eq!(
         task_reads.load(std::sync::atomic::Ordering::SeqCst),
-        202 * page_count,
-        "each tool read should perform one task visibility scan"
+        0,
+        "listing a project's tasks checks no task's own access"
     );
     task_ids.sort();
     assert_eq!(found, task_ids);

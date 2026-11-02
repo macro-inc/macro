@@ -111,19 +111,19 @@ pub trait InitiativeRepo: Send + Sync + 'static {
 
 /// Inbound service port: the initiative API used by drivers (HTTP).
 pub trait InitiativeService: Send + Sync + 'static {
-    /// Read canonical properties and visible task progress for one authorized initiative.
+    /// Read canonical properties and progress over every task one authorized initiative lists.
     fn summary(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<InitiativePageRow, InitiativeError>> + Send;
 
-    /// Load an authorized initiative, checking each associated task's access once.
+    /// Load an authorized initiative with every live task it lists; no task's access is checked.
     fn read(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<InitiativeRead, InitiativeError>> + Send;
 
-    /// Canonical properties and progress of an earlier read, without re-checking task access.
+    /// Canonical properties and progress of an earlier read, over the tasks it listed.
     fn summarize(
         &self,
         read: &InitiativeRead,
@@ -136,7 +136,7 @@ pub trait InitiativeService: Send + Sync + 'static {
         request: InitiativePageRequest,
     ) -> impl Future<Output = Result<InitiativePage, InitiativeError>> + Send;
 
-    /// Page visible tasks within an authorized initiative.
+    /// Page the tasks an authorized initiative lists.
     fn tasks_page(
         &self,
         receipt: EntityAccessReceipt<ViewAccessLevel>,
