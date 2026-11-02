@@ -257,6 +257,7 @@ pub(super) fn form() -> Form {
         branding: FormBranding::default(),
         created_at: at,
         updated_at: at,
+        project_id: None,
         is_hidden_in_drive: false,
     }
 }

@@ -14,7 +14,9 @@ export const makeRemoveFromProjectAction = () => {
     entity.type === 'document' ||
     entity.type === 'chat' ||
     entity.type === 'project' ||
-    entity.type === 'email';
+    entity.type === 'email' ||
+    entity.type === 'database' ||
+    entity.type === 'form';
 
   const execute = async (entities: EntityData[]): Promise<boolean> => {
     // Failure toast is shown by the mutation
