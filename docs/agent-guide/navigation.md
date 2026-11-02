@@ -43,6 +43,8 @@ failure in the same build, the rail's update button (a toast on touch layouts)
 offers the reload; the offer reloads a hidden tab by itself only if that build's
 one automatic reload is unspent. A failed route chunk can still end on the
 root error screen, which hides the offer.
+The sidebar update button and its automatically opened popover are desktop-only,
+even when the sidebar is shown on a touch device.
 
 ## External links in the native app
 
@@ -647,6 +649,14 @@ final position on release. Check a rapid drag followed by immediate release,
 dragging at non-default zoom, and closing a split during a drag; later pointer
 movement must not keep resizing the removed split. Arrow keys still resize
 immediately, with Shift selecting the larger step.
+
+A view's narrow/wide layout reads its width when it mounts, then applies later
+split or window resizes on the next animation frame. Open a channel beside Home,
+drag the split gutter back and forth across the narrow breakpoint, and resize
+the window: the console should show no `ResizeObserver loop completed with
+undelivered notifications` errors, and the sidebar should switch between docked
+and overlay as the split crosses the breakpoint. Drive and other `virtua` lists
+can still report it from the virtualizer's own observer.
 
 Email, Tasks, and Agents use the same sidebar rows, including favorites, tags,
 inboxes, and recent agent chats: 32px high on desktop and 44px on touch devices,

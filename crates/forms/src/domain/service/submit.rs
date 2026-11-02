@@ -30,7 +30,9 @@ use crate::domain::models::{
     Answer, Audience, ColumnId, Form, FormError, FormLayout, FormResponse, FormSection, MyResponse,
     RecordedResponse, Respondent, ResponseStatus, RowId, Submission, SubmissionOutcome,
 };
-use crate::domain::ports::{Clock, FormAccessDirectory, FormEventPublisher, FormsRepo};
+use crate::domain::ports::{
+    Clock, FormAccessDirectory, FormEventPublisher, FormImageFiles, FormsRepo,
+};
 
 /// The cells of a new row: every answer, then the managed columns the table
 /// still has.
@@ -163,8 +165,8 @@ fn still_passes(
         )
 }
 
-impl<Repository, Databases, Access, Events, Now, Broker, Drafts>
-    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
+    FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
 where
     Repository: FormsRepo + FormDraftRepository,
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
@@ -173,6 +175,7 @@ where
     Now: Clock,
     Broker: MacroEventBroker,
     Drafts: FormDraftStore,
+    Images: FormImageFiles,
 {
     /// The form, its table and layout for a respondent about to write:
     /// refused when it is closed, its table is gone, or it takes signed-in
