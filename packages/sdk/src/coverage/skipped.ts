@@ -81,6 +81,7 @@ export const authExcluded = [
   'getSubscriptionStatus',
   'getTeamByInviteLink',
   'getTeamInviteLink',
+  'getSystemStatus',
   'getTeamInvites',
   // Introductory offers belong to the app's subscription checkout flow.
   'getTrialEligibility',
@@ -103,6 +104,7 @@ export const authExcluded = [
   'listCodexEnvironments',
   'listCursorModels',
   'listGtmInviteLinks',
+  'listSystemStatusHistory',
   'logout',
   'mergeGithubPullRequest',
   'oauth2Callback',
@@ -118,6 +120,7 @@ export const authExcluded = [
   'patchUserTutorial',
   'pollCodexLogin',
   'postProfilePictures',
+  'purchaseAiCredits',
   'putAgentApiKey',
   'putCursorApiKey',
   'putCursorDefaultModel',
@@ -136,6 +139,8 @@ export const authExcluded = [
   'sessionCreation',
   'sessionLogin',
   'setGithubPullRequestDraft',
+  'setGithubPullRequestState',
+  'setSystemStatus',
   'ssoLogin',
   'startCodexLogin',
   'toggleTeamAutoJoinDomain',
@@ -176,6 +181,7 @@ export const cognitionExcluded = [
   'healthHandler',
   'listMcpServers',
   'listPipedreamMcpConnections',
+  'listPipedreamMcpOverlays',
   'mcpAuthCallback',
   'mcpOauthClientMetadata',
   'recoverPipedreamMcpConnection',
@@ -194,6 +200,8 @@ export const cognitionExcluded = [
   // Sidebar setup and import cards remember dismissals per user (web app only).
   'dismissedPromptsHandler',
   'dismissPromptHandler',
+  // Proposes SQL for the web app's in-browser engine to execute.
+  'generateDatabaseQuery',
   'setPricingHandler',
   'startMcpAuth',
   'updateMcpServer',
@@ -208,6 +216,7 @@ export const cognitionBacklog =
 
 export const connectionExcluded = [
   'batchSendMessageHandler',
+  'broadcastMessageHandler',
   'getEntityHandler',
   'sendMessageHandler',
 ] as const satisfies readonly (keyof ConnectionSdk)[];
@@ -230,6 +239,7 @@ export const emailExcluded = [
   'getBackfillGmail',
   'getBackfillGmailActive',
   'getMessagesBatch',
+  'getReadReceiptPixel',
   'healthCheckLinks',
   'healthHandler',
   'initUser',
@@ -238,7 +248,11 @@ export const emailExcluded = [
   'resyncLink',
 ] as const satisfies readonly (keyof EmailSdk)[];
 
-export const emailBacklog = [] as const satisfies readonly (keyof EmailSdk)[];
+export const emailBacklog = [
+  // Belongs on CalendarEvent beside inviteGuests; the first release keeps
+  // forwarding to the app's own surfaces, since the SDK also reaches agents.
+  'forwardCalendarEvent',
+] as const satisfies readonly (keyof EmailSdk)[];
 
 export const notificationExcluded = [
   'bulkGetTypedNotificationsByEventItemIds',
@@ -329,7 +343,6 @@ export const storageExcluded = [
   'getAttachmentReferences',
   'getBatchCallRecordPreview',
   'getBatchChannelPreview',
-  'getBatchPreviewHandler',
   'getActiveCalls',
   'getBatchProjectPreview',
   'getBotOwnerProfiles',
@@ -394,8 +407,13 @@ export const storageExcluded = [
   'whatsappCancelPairing',
   'whatsappConnect',
   'whatsappDisconnect',
+  // History imports and phone-number lookups need the owner's own session:
+  // each wakes their phone, and WhatsApp bans bulk checks.
+  'whatsappImportHistory',
+  'whatsappLookup',
   'whatsappPairing',
   'whatsappPasskey',
+  'whatsappStartLookup',
 ] as const satisfies readonly (keyof StorageSdk)[];
 
 export const storageBacklog =

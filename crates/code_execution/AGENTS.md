@@ -25,6 +25,9 @@ run under a plain user token (public MCP) has. APIs that ask a program to
 confirm what a person picks by opening something read it; the calendar
 mutation routes demand the copy's `inbox` from such requests.
 
+The bootstrap replaces a result's `data` larger than `Limits::max_result_bytes`
+with an outline and preview, keeping `reviews`; the frame limit stays the backstop.
+
 ## Checks
 
 - `cargo test -p code_execution --lib -- --include-ignored` from the repository

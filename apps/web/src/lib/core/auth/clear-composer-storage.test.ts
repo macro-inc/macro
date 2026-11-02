@@ -13,13 +13,18 @@ it('clears scoped and legacy drafts and attachments while retaining preferences'
     'input-value-channel-1',
     'task-composer-submission:alice:first',
     'task-composer-submission:alice:first:editing',
+    'task-composer-draft',
+    'task-composer-draft:channel-1',
+    'routine-composer-draft',
     'attachment-tracker-agents-new-conversation-persist-v0:alice',
   ];
   for (const key of keys) localStorage.setItem(key, 'private draft');
   localStorage.setItem('macro-selected-theme', 'dark');
+  localStorage.setItem('task-composer-share-with-team', 'false');
   clearComposerStorage();
   for (const key of keys) expect(localStorage.getItem(key)).toBeNull();
   expect(localStorage.getItem('macro-selected-theme')).toBe('dark');
+  expect(localStorage.getItem('task-composer-share-with-team')).toBe('false');
 });
 
 it('retires mounted autosavers before wiping their saved data', () => {

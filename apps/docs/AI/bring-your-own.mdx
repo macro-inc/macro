@@ -51,7 +51,7 @@ You need a macOS, Linux, or Windows computer that can stay online and an install
         curl -fsSL https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.sh | sh
         ```
 
-        This installs `macrod` to `~/.local/bin`. If that folder is not on your `PATH`, the installer prints the line to add.
+        This installs `macrod` to `~/.local/bin` and adds that folder to your `PATH` in your shell's startup file (`~/.zshrc`, `~/.bashrc` and `~/.bash_profile`, or fish's `conf.d`), once. Open a new terminal afterwards. To leave your startup files alone, run `curl -fsSL … | sh -s -- --no-modify-path` or set `MACROD_NO_MODIFY_PATH=1`.
       </Tab>
       <Tab title="Windows">
         In PowerShell:
@@ -60,7 +60,7 @@ You need a macOS, Linux, or Windows computer that can stay online and an install
         irm https://raw.githubusercontent.com/macro-inc/macro/main/crates/coding_agent_worker/install/install.ps1 | iex
         ```
 
-        This installs `macrod.exe` to `%LOCALAPPDATA%\Programs\macrod` and adds it to your `PATH`. Open a new terminal afterwards.
+        This installs `macrod.exe` to `%LOCALAPPDATA%\Programs\macrod` and adds that folder to your user `PATH`. Open a new terminal afterwards.
       </Tab>
     </Tabs>
 
@@ -122,9 +122,25 @@ To reconnect later, run `macrod` from the same directory so it loads your saved 
 
 ## Update macrod
 
-Run the install command again. It replaces `macrod` with the latest release and keeps your `macrod.toml`. A running `macrod` keeps the old version until you restart it.
+`macrod` updates itself. While it runs, it checks for a new release every hour, downloads it, and verifies its checksum and that it starts. Your `macrod.toml` and pairing are kept. If an update fails, `macrod` keeps running the current version and shows the error in its **Logs** tab.
 
-To install a specific release instead, set the `MACROD_VERSION` environment variable to its tag, such as `v2026.10.18.0`, before running the install command.
+- **macOS and Linux:** `macrod` replaces itself in place as soon as no agent turn is running. Your agent keeps running through the update, so its sessions and anything it started stay alive.
+- **Windows:** the new version is installed next to the running one, and the footer shows **Update … ready — restart macrod to use it**. Quit `macrod` and start it again to use it. The `macrod` command always starts the newest installed version and removes older ones.
+
+To see what the updater did, read `~/.macrod/logs/update.log` (`%USERPROFILE%\.macrod\logs\update.log` on Windows). Each line is one JSON event: a `check` with the version found, a `download` with its size and whether the checksum matched, an `apply` with the versions and how the new one was started, and a `startup` line each time `macrod` starts, including after an update. The log never holds tokens or prompts. At about 1 MB it moves to `update.log.1`.
+
+To update right away, run the install command again and restart `macrod`.
+
+To install a specific release, set the `MACROD_VERSION` environment variable to its tag, such as `v2026.10.18.0`, before running the install command. A running `macrod` still updates itself to the latest release.
+
+To turn automatic updates off, add this to `macrod.toml`:
+
+```toml
+[update]
+auto = false
+```
+
+or start `macrod` with `MACROD_NO_UPDATE=1` set. `macrod` then only changes when you run the install command again.
 
 ## Troubleshooting
 

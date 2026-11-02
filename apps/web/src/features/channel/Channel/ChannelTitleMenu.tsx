@@ -33,9 +33,9 @@ export function ChannelTitleMenu(props: { channelId: string }) {
           entity={current()}
           list={list}
           viewContext={CHANNEL_ACTION_VIEW_CONTEXT}
-          triggerProps={{ size: 'icon-sm', label: 'Channel actions' }}
+          triggerProps={{ size: 'icon-sm', 'aria-label': 'Channel actions' }}
         >
-          <DotsThreeIcon />
+          <DotsThreeIcon class="size-4 shrink-0" />
         </SoupEntityActionsDropdown>
       )}
     </Show>

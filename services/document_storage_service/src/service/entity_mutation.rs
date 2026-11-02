@@ -36,11 +36,16 @@ use entity_mutation::{
     RestoreEntity, TrashEntity, UpdateEntitySharePolicy, UpdateEntitySharePolicyRequest,
     capability::MoveEntityRequest as CapabilityMoveEntityRequest,
 };
+use entity_registry::PurgeOwnedEntity;
 use futures::{StreamExt, stream};
 use model_entity::{Entity, EntityType};
 use models_permissions::share_permission::UpdateSharePermissionRequestV2;
-use projects_hex::domain::ports::ProjectService;
+use projects_hex::domain::{duplicate::ProjectDuplicator, ports::ProjectService};
+use tracing::Instrument;
 
+use project_contents::DssProjectContents;
+
+mod project_contents;
 #[cfg(test)]
 mod test;
 
@@ -230,7 +235,8 @@ where
         + UpdateEntitySharePolicy
         + TrashEntity
         + RestoreEntity
-        + DeleteEntityPermanently,
+        + DeleteEntityPermanently
+        + PurgeOwnedEntity,
     Databases:
         DatabasesService + RenameEntity + TrashEntity + RestoreEntity + DeleteEntityPermanently,
     Forms: RenameEntity
@@ -732,6 +738,40 @@ where
         )
     }
 
+    /// Duplicate a folder with its subfolders, documents, and chats. The copy
+    /// runs on its own task, so a dropped request cannot stop it between
+    /// creating the copy and discarding a failed one.
+    async fn duplicate_project(
+        &self,
+        actor: &EntityMutationActor,
+        requested: &Entity<'static>,
+        display_name: Option<String>,
+    ) -> Result<Vec<EntityMutationEffect>, EntityMutationErrorCode> {
+        let duplicator = ProjectDuplicator::new(
+            Arc::clone(&self.projects),
+            DssProjectContents {
+                documents: Arc::clone(&self.documents),
+                chats: Arc::clone(&self.chats),
+                access: Arc::clone(&self.access),
+                lifecycle: Arc::clone(&self.lifecycle),
+                actor: actor.clone(),
+            },
+        );
+        let receipt = self.receipt(actor, requested).await?;
+        let requested = requested.clone();
+        let user_id = actor.user_id.clone();
+        tokio::spawn(
+            async move {
+                duplicator
+                    .duplicate_entity(requested, receipt, user_id, display_name)
+                    .await
+            }
+            .in_current_span(),
+        )
+        .await
+        .map_err(|error| EntityMutationErrorCode::internal(rootcause::report!(error)))?
+    }
+
     #[tracing::instrument(skip_all, fields(entity_type = %request.entity.entity_type, entity_id = %request.entity.entity_id))]
     async fn duplicate_one(
         &self,
@@ -751,12 +791,15 @@ where
                 self.duplicate_with(&*self.chats, actor, &requested, display_name)
                     .await
             }
+            EntityType::Project => {
+                self.duplicate_project(actor, &requested, display_name)
+                    .await
+            }
             EntityType::User
             | EntityType::Team
             | EntityType::Channel
             | EntityType::ChannelMessage
             | EntityType::EmailThread
-            | EntityType::Project
             | EntityType::Call
             | EntityType::ForeignEntity
             | EntityType::StaticFile
@@ -807,7 +850,8 @@ where
         + UpdateEntitySharePolicy
         + TrashEntity
         + RestoreEntity
-        + DeleteEntityPermanently,
+        + DeleteEntityPermanently
+        + PurgeOwnedEntity,
     Databases:
         DatabasesService + RenameEntity + TrashEntity + RestoreEntity + DeleteEntityPermanently,
     Forms: RenameEntity

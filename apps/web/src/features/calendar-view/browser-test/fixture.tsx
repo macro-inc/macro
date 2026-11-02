@@ -103,7 +103,7 @@ function Fixture() {
       >
         <Button
           ref={setAnchor}
-          variant="outline"
+          variant="secondary"
           size="md"
           fullWidth
           onClick={() => setSelected(true)}

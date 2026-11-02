@@ -18,7 +18,7 @@ crm/
   crm-create.tsx / crm-link.tsx
   crm-actions.ts / crm-hide-action.ts / crm-action-items.ts / crm-user-action.tsx
   crm-search.ts / crm-tool-renderers.tsx
-  crm-route.ts  Route params, record trail, and legacy pipeline link decoding
+  crm-route.ts  Route params, record and item trails, and legacy pipeline link decoding
   route-views.tsx  Authenticated route and shared-view decoding
   crm-hosted-content.ts  Split content that opens Customers on a pipeline or record
   *-adapter.*   Production sources, navigation, persistence, download, collection wiring
@@ -75,12 +75,65 @@ links; Notes excludes task, snippet and skill Markdown subtypes. Email matches
 visible company domains/contact addresses in the viewer's own mailbox, without
 team-scope widening or requiring a property link on the email.
 
+Databases is a row-linked activity view, not a direct database-to-CRM relation.
+It opts into database rows with the same server-resolved CRM selector and lists
+each containing database once, intersected with authorized database discovery.
+A company includes rows linked to its visible contacts; a contact does not inherit
+its company's rows. Empty row matches never fall back to all databases. Preserve
+Soup pagination and CRM-link invalidation rather than enumerating CRM IDs or table
+IDs in the browser. Database creation uses the existing app action; a database
+joins the CRM list only after a row has a Companies or Contacts link.
+
+CRM collection and record lists use full-height empty states, horizontally
+centered and raised toward the toolbar, with
+creation guidance, distinct search-empty actions, retryable error states, and
+shared list skeletons with compact single-line rows, small icons, varied title
+widths, and supporting metadata columns that hide in narrow panes. Keep search
+and available header actions visible in every state. A failed continuation retains
+rows and retries that page.
+Workspace activity uses the shared single-row desktop header with New and an
+expandable Search control; record-detail tabs retain their section toolbar.
+Company and contact headers keep desktop section tabs; touch uses a labeled
+header island that opens the shared bottom drawer with the current section
+checked under **Switch view**. A collapsed host keeps the section icon and
+accessible label; embedded phone headers put the switcher below the breadcrumb
+and action row. Keep the
+workspace's mobile view strip separate. Copy-link islands
+are square on touch, with a 24px glyph and the standard 40px icon control.
+On touch, record list search has space below the header and fills the row beside
+any filter button. Email filters use the shared filter drawer. Each section's
+creation action replaces the default floating action above the navigation dock
+through `FloatRegion`; keyboard focus, higher-priority composers, and inactive
+panes suppress it. Preserve record context, disabled states, and feature gates.
+Keep the disabled New email action mounted when company email sync is off so
+the unrelated app-wide action does not replace it.
+Desktop creation controls remain in the toolbar.
+
 Activity rows render stored Companies and Contacts reference properties as inline
 pills through the shared Soup row. Pills use the shared property preview and open
 a record independently of the row; additional values use the shared overflow menu.
 Email still matches visible company domains and contact addresses for feed
 membership, but the row displays only stored properties, not inferred matches.
 No separate CRM association metadata lookup or row footer runs during paging.
+Linked Tasks, Email, Notes, Calls and Databases open through nested Customers
+routes from workspace activity and record sections. Tasks, Emails, Calls and
+Databases record sections append only `<item-id>` because their section determines
+the renderer; Tasks also omit the redundant `md/task` suffix. These sections reject
+redundant typed item URLs rather than retaining fallback routes. Workspace activity
+retains `<item-type>/<item-id>` and document metadata; record Files and overview
+notes use document-metadata routes restricted to those sections. The route stores
+the item name and record trail in entry state. Route params retain the record and
+section; pane search retains the workspace tab. `route-adapter.ts` owns item
+navigation and close/history restoration. Keep workspace/pipeline item variants
+in its shared route-family table and identify history entries through merged route
+params instead of enumerating item route IDs.
+`views/item-detail.tsx` renders authorized details in the existing CRM shell
+with source, record trail and item breadcrumbs, omitting section labels such as
+Tasks and Files. The current record breadcrumb returns to the captured section
+and entry state. Preview headers append their own live title and menu after the
+source trail without an extra separator; do not duplicate the selected title in
+the prefix. Modified clicks keep their existing split behavior.
+Standalone record previews retain their normal navigation outside the workspace.
 Record-detail lists and activity membership remain unchanged.
 Sidebar Tasks reuse the production Tasks filters, sort, grouping, and list/board/Gantt
 layouts (subject to the normal feature flags and touch fallback). They use a separate

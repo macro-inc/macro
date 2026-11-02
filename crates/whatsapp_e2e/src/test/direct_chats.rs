@@ -3,7 +3,7 @@
 //! phone number or LID landing in the same chat, and shared viewers reading
 //! without sending.
 
-use whatsapp_linked::domain::models::ReplyBlock;
+use external_chat::domain::models::ReplyBlock;
 
 use super::*;
 
@@ -70,8 +70,8 @@ async fn a_direct_chat_imports_its_history_and_works_both_ways(pool: PgPool) {
         (ExternalChatKind::Direct, true, "Customer")
     );
     let binding = world
-        .linked
-        .adopt(
+        .external
+        .add(
             &person(ALICE),
             &AddChat {
                 provider: ExternalChatProvider::WhatsApp,
@@ -83,6 +83,7 @@ async fn a_direct_chat_imports_its_history_and_works_both_ways(pool: PgPool) {
         .await
         .unwrap();
     assert_eq!(binding.kind, ExternalChatKind::Direct);
+    assert_eq!(world.import_history(ALICE).await, 1);
     assert_eq!(
         backfill_state(&world, &binding, &["done", "partial"])
             .await
@@ -168,8 +169,8 @@ async fn a_direct_chat_imports_its_history_and_works_both_ways(pool: PgPool) {
     .unwrap();
     tx.commit().await.unwrap();
     let bobs = world
-        .linked
-        .group_detail(&receipt::<ViewAccessLevel>(BOB, binding.id))
+        .external
+        .detail(&receipt::<ViewAccessLevel>(BOB, binding.id))
         .await
         .unwrap();
     assert_eq!(
@@ -178,7 +179,7 @@ async fn a_direct_chat_imports_its_history_and_works_both_ways(pool: PgPool) {
     );
     assert!(
         world
-            .linked
+            .external
             .send_reply(
                 &receipt::<ViewAccessLevel>(BOB, binding.id),
                 &SendReply {
@@ -195,7 +196,7 @@ async fn a_direct_chat_imports_its_history_and_works_both_ways(pool: PgPool) {
             .is_err()
     );
     let read = world
-        .linked
+        .external
         .messages(
             &receipt::<ViewAccessLevel>(BOB, binding.id),
             None,

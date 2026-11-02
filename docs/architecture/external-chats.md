@@ -100,11 +100,23 @@ and deleted from the static file service by DSS's drain.
 
 ## Code
 
-`crates/whatsapp_linked` holds both the generic domain (timeline, read
-state, sharing, sends, uploads, notification effects, router) and the
-WhatsApp provider. DSS composes it in `src/external_chat.rs`. The web app's
-conversation is `features/external-chat`; the External tab lists every
-provider's chats (`features/external-view`).
+`crates/external_chat` is the provider-neutral domain: timeline and read
+state, sharing, sends, uploads, attachment import, notification effects, the
+`external_chat_changed`/`external_chat_effects` signals, the
+`/external-chats` router and the Postgres adapters for the `external_chat*`
+tables. It reaches a provider only through its `ChatProvider` port
+(accounts, who can send, members and names, adding and detaching, the send
+outbox); `ExternalChatService<P: ChatProvider>` is generic over it, with no
+trait objects or registry. `crates/whatsapp_linked` implements the port
+(`WhatsAppProvider`) and keeps everything WhatsApp: pairing, the account's
+chat list (with saved contacts) and phone-number lookups, rosters, ingest,
+dispatch and the `/whatsapp` router; its ingest
+writes the generic tables with `external_chat::outbound::pg` helpers.
+Dependencies point from `whatsapp_linked` to `external_chat`, never back.
+DSS composes `ExternalChatService<WhatsAppProvider>` in
+`src/external_chat.rs`. The web app's conversation is
+`features/external-chat`; the External tab lists every provider's chats
+(`features/external-view`).
 
 ## Follow-ups
 

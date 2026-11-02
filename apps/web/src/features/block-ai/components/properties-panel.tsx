@@ -176,15 +176,15 @@ function IconButton(props: {
 }) {
   return (
     <Button
+      aria-label={props.label}
       variant="ghost"
       size="icon-sm"
-      label={props.label}
       tooltip={props.label}
       data-testid={props.testId}
       disabled={props.disabled}
       onClick={() => props.onClick()}
     >
-      <props.icon />
+      <props.icon class="size-3.5" />
     </Button>
   );
 }
@@ -711,7 +711,7 @@ export function PropertiesPanel(props: {
           <div class="flex flex-wrap gap-1">
             <Show when={m().can.group}>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 data-testid="ai-action-group"
                 onClick={() => a.onGroup()}
@@ -721,7 +721,7 @@ export function PropertiesPanel(props: {
             </Show>
             <Show when={m().can.ungroup}>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 data-testid="ai-action-ungroup"
                 onClick={() => a.onUngroup()}
@@ -731,7 +731,7 @@ export function PropertiesPanel(props: {
             </Show>
             <Show when={m().can.clip}>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 data-testid="ai-action-clip"
                 onClick={() => a.onClip()}
@@ -741,7 +741,7 @@ export function PropertiesPanel(props: {
             </Show>
             <Show when={m().can.release}>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 data-testid="ai-action-release"
                 onClick={() => a.onRelease()}
@@ -751,7 +751,7 @@ export function PropertiesPanel(props: {
             </Show>
             <Show when={m().can.outline}>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 data-testid="ai-action-outline"
                 onClick={() => a.onOutline()}

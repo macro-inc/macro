@@ -54,18 +54,22 @@ export function ReviewNavigation(props: {
           class="ml-auto flex shrink-0 items-center gap-0.5"
         >
           <Button
+            variant="ghost"
+            aria-label="Previous draft"
+            tooltip="Previous draft"
             size="icon-sm"
-            label="Previous draft"
             disabled={props.disabled || props.index === 0}
             onClick={() =>
               fireAndForget(props.onNavigate(props.index - 1), 'agent-reviews')
             }
           >
-            <CaretLeft />
+            <CaretLeft class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
           <Button
+            variant="ghost"
+            aria-label={`Choose draft, ${props.index + 1} of ${props.items.length}`}
+            tooltip={`Choose draft, ${props.index + 1} of ${props.items.length}`}
             size="sm"
-            label={`Choose draft, ${props.index + 1} of ${props.items.length}`}
             aria-haspopup="dialog"
             aria-expanded={open()}
             disabled={props.disabled}
@@ -77,14 +81,16 @@ export function ReviewNavigation(props: {
             <CaretDown class="size-3" />
           </Button>
           <Button
+            variant="ghost"
+            aria-label="Next draft"
+            tooltip="Next draft"
             size="icon-sm"
-            label="Next draft"
             disabled={props.disabled || props.index === props.items.length - 1}
             onClick={() =>
               fireAndForget(props.onNavigate(props.index + 1), 'agent-reviews')
             }
           >
-            <CaretRight />
+            <CaretRight class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </nav>
       </header>
@@ -121,6 +127,7 @@ export function ReviewNavigation(props: {
               >
                 {(item) => (
                   <Button
+                    variant="ghost"
                     fullWidth
                     class="h-auto min-h-14 justify-start gap-3 rounded-lg px-3 py-2 text-left whitespace-normal touch:min-h-14"
                     aria-current={
@@ -159,7 +166,7 @@ export function ReviewNavigation(props: {
             </div>
           </Panel.Body>
           <Panel.Footer class="justify-end p-3">
-            <Button size="sm" onClick={() => setOpen(false)}>
+            <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
               Done
             </Button>
           </Panel.Footer>

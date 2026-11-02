@@ -34,7 +34,7 @@ type Args = {
   tags: Record<string, string>;
 };
 
-/** Isolated maintenance worker: disabled initially, then preview before deleting. */
+/** Isolated maintenance worker with explicit scheduling and dry-run controls. */
 export class NotificationRetention extends pulumi.ComponentResource {
   readonly lambda: aws.lambda.Function;
 
@@ -116,7 +116,7 @@ export class NotificationRetention extends pulumi.ComponentResource {
     const rule = new aws.cloudwatch.EventRule(
       `${BASE_NAME}-schedule`,
       {
-        scheduleExpression: 'rate(5 minutes)',
+        scheduleExpression: 'rate(1 hour)',
         state: enabled ? 'ENABLED' : 'DISABLED',
         tags,
       },
@@ -175,12 +175,27 @@ export class NotificationRetention extends pulumi.ComponentResource {
     new aws.cloudwatch.MetricAlarm(
       `${BASE_NAME}-missing-invocations`,
       {
-        namespace: 'AWS/Lambda',
-        metricName: 'Invocations',
-        dimensions: { FunctionName: this.lambda.name },
-        statistic: 'Sum',
-        period: 900,
-        evaluationPeriods: 1,
+        metricQueries: [
+          {
+            id: 'invocations',
+            metric: {
+              namespace: 'AWS/Lambda',
+              metricName: 'Invocations',
+              dimensions: { FunctionName: this.lambda.name },
+              period: 3600,
+              stat: 'Sum',
+            },
+            returnData: false,
+          },
+          {
+            id: 'hourly_invocations',
+            // Fill silent hours so older samples cannot mask a stopped schedule.
+            expression: 'FILL(invocations, 0)',
+            returnData: true,
+          },
+        ],
+        evaluationPeriods: 3,
+        datapointsToAlarm: 3,
         threshold: 1,
         comparisonOperator: 'LessThanThreshold',
         treatMissingData: enabled ? 'breaching' : 'notBreaching',

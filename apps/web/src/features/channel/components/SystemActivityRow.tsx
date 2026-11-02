@@ -45,6 +45,10 @@ export function SystemActivityRow(props: {
       subject={description().subject}
       label={`${props.actorName} ${describeSystemActivity(props.event, props.participantName)}`}
       occurredAt={props.event.occurredAt}
+      wrap={
+        props.event.action.kind === 'participant_added' &&
+        props.event.action.participants.length > 1
+      }
     />
   );
 }
@@ -64,10 +68,18 @@ export function SystemActivityLine(props: {
   /** The whole line, for the tooltip. */
   label: string;
   occurredAt: string;
+  /**
+   * Wrap instead of truncating, for lines listing several names: the tooltip
+   * that reveals a truncated line is unavailable on touch devices.
+   */
+  wrap?: boolean;
 }) {
   return (
     <div
-      class="h-9 flex items-center gap-2 pl-(--message-padding-x) pr-2 text-sm text-ink-muted"
+      class={cn(
+        'flex items-center gap-2 pl-(--message-padding-x) pr-2 text-sm text-ink-muted',
+        props.wrap ? 'min-h-9 py-2' : 'h-9'
+      )}
       data-system-activity={props.id}
     >
       <span
@@ -81,10 +93,10 @@ export function SystemActivityLine(props: {
       </span>
       <Tooltip
         label={props.label}
-        class="min-w-0 max-w-max flex-1 truncate"
+        class={cn('min-w-0 max-w-max flex-1', !props.wrap && 'truncate')}
         as="span"
       >
-        <span class="truncate">
+        <span class={props.wrap ? undefined : 'truncate'}>
           <Show when={props.actor}>
             {(actor) => (
               <>

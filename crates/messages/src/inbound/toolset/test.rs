@@ -67,6 +67,7 @@ fn message(id: Uuid, thread_id: Option<Uuid>, sender: ChannelSender<'static>) ->
         imported_author: None,
         bot_profile: None,
         mentions: vec![],
+        triggered_via: None,
         triggered_by: None,
         content: format!("comment {id}"),
         created_at: at(),
@@ -553,6 +554,77 @@ async fn comment_on_a_project_posts_as_the_bot_for_the_user() {
     );
     assert!(post.anchor.is_none());
     assert!(messages.parent_lookups.lock().unwrap().is_empty());
+}
+
+/// A host running a specific agent (the public MCP for a self-hosted
+/// session, the in-memory runtime) posts each agent's comments as that agent,
+/// still on the acting user's behalf.
+#[tokio::test]
+async fn comments_from_two_agents_post_as_each_agent_for_the_user() {
+    let reviewer = bot_id::BotId::new_from_uuid(Uuid::from_u128(0xA1));
+    let planner = bot_id::BotId::new_from_uuid(Uuid::from_u128(0xA2));
+    let messages = FakeMessages::default();
+    for agent in [reviewer, planner] {
+        let ServiceContext(tool_context) = context(AccessLevel::Comment, messages.clone());
+        comment_on_initiative("Looks good.")
+            .call(ServiceContext(tool_context.with_actor(agent)), request())
+            .await
+            .unwrap();
+    }
+
+    let posts = messages.posts.lock().unwrap();
+    let authors: Vec<_> = posts
+        .iter()
+        .map(|(access, post)| {
+            let EntityAccessAuth::Bot(bot) = access.auth() else {
+                panic!("expected a bot post, got {:?}", access.auth());
+            };
+            assert_eq!(
+                access.acting_user_id().map(|user| user.as_ref()),
+                Some(USER)
+            );
+            assert_eq!(post.attribution, MessageAttribution::ActingUser);
+            bot.bot_id()
+        })
+        .collect();
+    assert_eq!(authors, [reviewer, planner]);
+}
+
+/// A user's MCP client posts as the Macro bot for the user, with the client
+/// named on the post; a pasted API key posts the same way without a label.
+#[tokio::test]
+async fn a_comment_through_an_mcp_client_names_the_client() {
+    let messages = FakeMessages::default();
+    let ServiceContext(tool_context) = context(AccessLevel::Comment, messages.clone());
+    comment_on_initiative("Looks good.")
+        .call(
+            ServiceContext(tool_context.clone().with_via("Claude Code".to_owned())),
+            request(),
+        )
+        .await
+        .unwrap();
+    comment_on_initiative("Looks good.")
+        .call(ServiceContext(tool_context), request())
+        .await
+        .unwrap();
+
+    let posts = messages.posts.lock().unwrap();
+    let [(via_access, via_post), (key_access, key_post)] = posts.as_slice() else {
+        panic!("expected two posts, got {}", posts.len());
+    };
+    for access in [via_access, key_access] {
+        let EntityAccessAuth::Bot(bot) = access.auth() else {
+            panic!("expected a bot post, got {:?}", access.auth());
+        };
+        assert_eq!(bot.bot_id(), bot_id::MACRO_AI_BOT_ID);
+    }
+    assert_eq!(
+        via_post.attribution,
+        MessageAttribution::ActingUserVia {
+            client: "Claude Code".to_owned()
+        }
+    );
+    assert_eq!(key_post.attribution, MessageAttribution::ActingUser);
 }
 
 #[tokio::test]

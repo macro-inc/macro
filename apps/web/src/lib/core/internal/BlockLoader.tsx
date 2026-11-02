@@ -74,6 +74,11 @@ export function BlockLoader<
   const currentSharedAccess = useSharedAccessUpdates(
     () => shareEntity(blockNameToItemType(props.definition.name), props.id),
     (level, previous) => {
+      if (level === null) {
+        clearLoadedDocument();
+        setError('UNAUTHORIZED');
+        return;
+      }
       const data = blockDataSignal.get();
       const hasLoadedPermissions =
         data != null && typeof data === 'object' && 'userAccessLevel' in data;
@@ -82,10 +87,7 @@ export function BlockLoader<
       const accessChanged = hasLoadedPermissions
         ? blockUserAccessSignal.get() !== level
         : previous !== undefined && previous !== level;
-      if (level === null) {
-        clearLoadedDocument();
-        setError('UNAUTHORIZED');
-      } else if (
+      if (
         (data != null && accessChanged) ||
         blockErrorSignal.get() === 'UNAUTHORIZED'
       ) {

@@ -1,8 +1,6 @@
-import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import { type JSX, Show, splitProps } from 'solid-js';
+import { type JSX, splitProps } from 'solid-js';
 import { cn } from '../utils/classname';
 import { Button, type ButtonProps } from './Button';
-import { Hotkey } from './Hotkey';
 
 type SlotProps = JSX.HTMLAttributes<HTMLDivElement>;
 
@@ -87,25 +85,21 @@ function Submit(props: ButtonProps & { hasContent: boolean }) {
     'children',
     'hasContent',
     'variant',
+    'tooltip',
   ]);
   return (
     <Button
       {...rest}
-      variant={local.variant ?? 'strong'}
-      depth={3}
-      class={cn(
-        'gap-3',
-        !isTouchDevice() && 'h-[33.75px] px-[15px]',
-        local.class
-      )}
+      variant={local.variant ?? 'primary'}
+      class={local.class}
+      tooltip={
+        local.tooltip ?? {
+          content: local.children,
+          shortcut: 'cmd+enter',
+        }
+      }
     >
       {local.children}
-      <Show when={!isTouchDevice()}>
-        <Hotkey
-          shortcut="cmd+enter"
-          theme={local.variant === 'outline' ? 'subtle' : 'current'}
-        />
-      </Show>
     </Button>
   );
 }

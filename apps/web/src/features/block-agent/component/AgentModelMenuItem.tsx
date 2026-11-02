@@ -63,7 +63,7 @@ function EffortModelSubmenu(
     <Dropdown.Sub open={open()} onOpenChange={setOpen} overlap>
       <Dropdown.SubTrigger
         disabled={props.disabled}
-        class="h-8 gap-2"
+        class="min-h-8 gap-2"
         textValue={props.option.label}
         title={props.option.description ?? props.option.label}
         onKeyDown={(event) => {
@@ -80,7 +80,7 @@ function EffortModelSubmenu(
         }}
       >
         <ModelIcon model={props.option.id} />
-        <span class="min-w-0 flex-1 truncate text-sm">
+        <span class="min-w-0 flex-1 whitespace-normal wrap-anywhere text-sm">
           {props.option.label}
         </span>
         <Show when={props.hint}>
@@ -101,7 +101,11 @@ function EffortModelSubmenu(
       >
         <Suspense>
           <Dropdown.Group>
-            <Dropdown.Item closeOnSelect onSelect={props.onSelect}>
+            <Dropdown.Item
+              closeOnSelect
+              class="whitespace-normal wrap-anywhere"
+              onSelect={props.onSelect}
+            >
               Use {props.option.label}
             </Dropdown.Item>
             <Dropdown.GroupLabel>Reasoning effort</Dropdown.GroupLabel>
@@ -132,7 +136,9 @@ function EffortModelSubmenu(
                         props.onClose?.();
                       }}
                     >
-                      <span class="flex-1">{option.name}</span>
+                      <span class="min-w-0 flex-1 whitespace-normal wrap-anywhere">
+                        {option.name}
+                      </span>
                       <Show
                         when={
                           props.selected &&

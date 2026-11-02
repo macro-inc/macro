@@ -4,21 +4,30 @@
 use super::*;
 use crate::domain::{
     events::{InboundEvent, InboundKind, Message, MessageKind, PairingUpdate},
-    ports::{LinkedResult, SendRateLimiter},
+    provider::WhatsAppProvider,
     session::SessionService,
 };
-use crate::outbound::pg::PgLinkedRepository;
+use crate::outbound::pg::PgWhatsAppRepository;
 use async_trait::async_trait;
 use axum::body::Body;
-use axum::http::{Method, Request};
+use axum::http::{Method, Request, header};
 use entity_access::{
     domain::{models::EntityType, service::EntityAccessServiceImpl},
     outbound::PgAccessRepository,
 };
+use external_chat::{
+    domain::{
+        models::*,
+        ports::{ExternalChatResult, SendRateLimiter},
+        service::ExternalChatService,
+    },
+    inbound::router::{ExternalChatRouterState, external_chats_router},
+    outbound::pg::PgExternalChatRepository,
+};
 use macro_authorization::{
-    BotActingUserClaims, BotAuthentication, BotScope, HarnessAuthentication,
+    BotActingUserClaims, BotAuthentication, BotScope, CredentialOrigin, HarnessAuthentication,
     HarnessAuthorizationOwner, InternalIdentityClaims, MacroAuthorizationError,
-    ValidatedCredential, ValidatedIdentity,
+    MacroUserAuthentication, ValidatedCredential, ValidatedIdentity,
 };
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use model_user::UserContext;
@@ -160,7 +169,10 @@ struct Unlimited;
 
 #[async_trait]
 impl SendRateLimiter for Unlimited {
-    async fn check(&self, _: &macro_user_id::user_id::MacroUserIdStr<'_>) -> LinkedResult<()> {
+    async fn check(
+        &self,
+        _: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> ExternalChatResult<()> {
         Ok(())
     }
 }
@@ -238,8 +250,13 @@ async fn every_route_enforces_its_credential_rules(pool: PgPool) {
     for id in [ALICE, BOB] {
         user(&pool, id).await;
     }
-    let repository = Arc::new(PgLinkedRepository::new(pool.clone()));
-    let service = Arc::new(LinkedService::new(repository.clone(), Arc::new(Unlimited)));
+    let repository = Arc::new(PgWhatsAppRepository::new(pool.clone()));
+    let service = Arc::new(WhatsAppService::new(repository.clone()));
+    let chats = Arc::new(ExternalChatService::new(
+        Arc::new(WhatsAppProvider::new(repository.clone())),
+        Arc::new(PgExternalChatRepository::new(pool.clone())),
+        Arc::new(Unlimited),
+    ));
     let session = SessionService::new(repository);
     let pairing = service
         .connect(&person(ALICE), false, SendAuthority::Human)
@@ -282,8 +299,8 @@ async fn every_route_enforces_its_credential_rules(pool: PgPool) {
         )
         .await
         .unwrap();
-    let binding = service
-        .adopt(
+    let binding = chats
+        .add(
             &person(ALICE),
             &AddChat {
                 provider: ExternalChatProvider::WhatsApp,
@@ -339,16 +356,25 @@ async fn every_route_enforces_its_credential_rules(pool: PgPool) {
         .await
         .unwrap();
 
-    let state = LinkedRouterState {
-        service: service.clone(),
-        entity_access_service: Arc::new(EntityAccessServiceImpl::new(PgAccessRepository::new(
-            pool.clone(),
-        ))),
-        authorization_state: MacroAuthorizationState::new(Arc::new(Credentials)),
-    };
+    let authorization_state = MacroAuthorizationState::new(Arc::new(Credentials));
     let app: Router = Router::new()
-        .nest("/external-chats", external_chats_router(state.clone()))
-        .nest("/whatsapp", whatsapp_router(state));
+        .nest(
+            "/external-chats",
+            external_chats_router(ExternalChatRouterState {
+                service: chats,
+                entity_access_service: Arc::new(EntityAccessServiceImpl::new(
+                    PgAccessRepository::new(pool.clone()),
+                )),
+                authorization_state: authorization_state.clone(),
+            }),
+        )
+        .nest(
+            "/whatsapp",
+            whatsapp_router(WhatsAppRouterState {
+                service: service.clone(),
+                authorization_state,
+            }),
+        );
     let group = binding.id;
     let generation = service
         .account(&person(ALICE))

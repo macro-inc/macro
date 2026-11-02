@@ -20,6 +20,7 @@ it.each(['view', 'comment', 'edit'] as const)(
       id: 'access-notification',
       entityId: 'document',
       entityType: 'DOCUMENT' as const,
+      targetEntityType: 'DOCUMENT' as const,
       state: 'UNSEEN' as const,
       sent: true,
       senderId: 'owner',
@@ -111,6 +112,21 @@ describe('email thread sort keys', () => {
     );
   });
 
+  it.each([false, true])(
+    'keeps whether an archived row has received mail (%s)',
+    (hasReceivedMail) => {
+      const item = mapGraphqlSoupItem({
+        ...thread,
+        inboxVisible: false,
+        hasReceivedMail,
+      } as SoupItemFieldsFragment);
+      expect(item?.data).toMatchObject({
+        inboxVisible: false,
+        hasReceivedMail,
+      });
+    }
+  );
+
   it('falls back to the thread update time when the view has no key', () => {
     const bare = {
       ...thread,
@@ -179,6 +195,7 @@ it('preserves the scheduled occurrence identity on reminder notifications', asyn
     id: 'notification-1',
     entityId: 'thread-1',
     entityType: 'EMAIL_THREAD',
+    targetEntityType: 'EMAIL_THREAD',
     eventType: 'reminder',
     state: 'UNSEEN',
     sent: true,
@@ -468,7 +485,11 @@ vi.mock('./graphql/generated/graphql', () => ({
   GroupSoupDocument: {},
   SoupDocument: {},
 }));
+vi.mock('./graphql-notification-receipt', () => ({
+  notificationReceiptExchange: () => ({ kind: 'notification-receipt' }),
+}));
 vi.mock('./graphql-soup-websocket', () => ({
+  publishNotificationPatch: vi.fn(),
   SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS: 0,
   shouldRetryGraphqlSoupWebSocket: () => false,
   waitToRetryGraphqlSoupWebSocket: vi.fn(),
@@ -484,9 +505,21 @@ vi.mock('@urql/core', () => ({
   createClient: (options: {
     exchanges: Array<{ kind?: string; host?: typeof mocks.host }>;
   }) => {
-    const cacheExchange = options.exchanges.find(
+    const cacheIndex = options.exchanges.findIndex(
       ({ kind }) => kind === 'cache'
     );
+    const subscriptionIndex = options.exchanges.findIndex(
+      ({ kind }) => kind === 'subscription'
+    );
+    if (subscriptionIndex >= 0) {
+      const receiptIndex = options.exchanges.findIndex(
+        ({ kind }) => kind === 'notification-receipt'
+      );
+      expect(receiptIndex).toBeGreaterThanOrEqual(0);
+      expect(receiptIndex).toBeLessThan(subscriptionIndex);
+      if (cacheIndex >= 0) expect(receiptIndex).toBeGreaterThan(cacheIndex);
+    }
+    const cacheExchange = options.exchanges[cacheIndex];
     if (!cacheExchange?.host) {
       return options.exchanges.some(({ kind }) => kind === 'subscription')
         ? mocks.realtimeClient
@@ -554,6 +587,7 @@ describe('legacy channel list notifications', () => {
     eventType: 'channel_message_send',
     entityId: 'channel',
     entityType: 'CHANNEL',
+    targetEntityType: 'CHANNEL',
     state: 'UNSEEN',
     sent: true,
     senderId: 'sender',
@@ -818,6 +852,9 @@ describe('GraphQL Soup browser cache session gate', () => {
     expect(payload.query).toContain('cacheProjection');
     expect(payload.query).toContain('@include');
     expect(payload.variables).toEqual({ includeId: true });
+    expect(
+      new Headers(transport.headers).get('x-macro-mail-cache-profile')
+    ).toBe('soup-mail-v5');
     expect(new Headers(transport.headers).get('traceparent')).toBe(
       mocks.traceparent
     );
@@ -1384,14 +1421,13 @@ describe('GraphQL Soup browser cache session gate', () => {
     const { NativeCacheUpgradeRequiredError } = await import(
       '@graphql-cache/host/tauri-host'
     );
+    const { nativeUpdateRequired, resetNativeUpdateRequiredForTests } =
+      await import('@core/mobile/nativeUpdateRequired');
+    resetNativeUpdateRequiredForTests();
     const cached = soup.getGraphqlSoupClient();
     mocks.failInitialization(new NativeCacheUpgradeRequiredError());
-    expect(mocks.toastFailure).toHaveBeenCalledWith(
-      'Macro update required',
-      expect.objectContaining({
-        subtext: expect.stringContaining('queued drafts are preserved'),
-      })
-    );
+    expect(nativeUpdateRequired()).toContain('queued drafts are preserved');
+    expect(mocks.toastFailure).not.toHaveBeenCalled();
     expect(soup.graphqlCacheEnabled()).toBe(false);
     expect(soup.getGraphqlSoupClient()).not.toBe(cached);
     expect(mocks.host.dispose).toHaveBeenCalledOnce();
@@ -1495,7 +1531,8 @@ it('preserves canonical external chat identity and notification metadata through
     id: 'notification',
     eventType: 'external_chat_message',
     entityId: 'chat-1',
-    entityType: 'EXTERNAL_CHAT',
+    entityType: 'DOCUMENT',
+    targetEntityType: 'EXTERNAL_CHAT',
     state: 'UNSEEN',
     sent: true,
     senderId: null,

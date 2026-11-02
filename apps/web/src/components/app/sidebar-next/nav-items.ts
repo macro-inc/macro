@@ -12,6 +12,7 @@ import GitPullRequestFillIcon from '@icon/system/fill/git-pull-request-fill.svg'
 import HouseFillIcon from '@icon/system/fill/house-fill.svg';
 import ListChecksFillIcon from '@icon/system/fill/list-checks-fill.svg';
 import PhoneCallFillIcon from '@icon/system/fill/phone-call-fill.svg';
+import PlugFillIcon from '@icon/system/fill/plug-fill.svg';
 import AgentFillIcon from '@icon/system/fill/sparkle-fill.svg';
 import BuildingsIcon from '@icon/system/regular/buildings.svg';
 import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
@@ -26,7 +27,6 @@ import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
 import PlugIcon from '@icon/system/regular/plug.svg';
 import PulseIcon from '@icon/system/regular/pulse.svg';
 import AgentIcon from '@icon/system/regular/sparkle.svg';
-import PlugFillIcon from '@phosphor-fill/plug-fill.svg';
 import PulseFillIcon from '@phosphor-fill/pulse-fill.svg';
 import type { NavIcon } from './nav-glyph';
 import type { SidebarPrefs } from './use-sidebar-prefs';

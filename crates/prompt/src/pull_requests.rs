@@ -1,10 +1,20 @@
 //! How a coding agent finishes a pull request.
 //!
-//! Shared by the Macro system prompt and the internal MCP instructions coding
-//! agents receive, so both say the same thing.
+//! Shared by the instructions external MCP clients receive and the internal
+//! MCP instructions coding agents receive, so both say the same thing.
+
+use crate::types::StaticPrompt;
 
 /// Standing instruction for opening a pull request a person can merge.
 pub const READY_PULL_REQUEST: &str = "When you open a pull request, open it ready for review, not as a draft, and get CI passing before you hand it off. A draft, or a pull request whose checks are failing or still running, is not finished. If it was created as a draft, mark it ready for review.";
+
+/// The pull-request section of the instructions for external MCP clients,
+/// which may be coding agents. In-app hosts have no repository to work in.
+pub static PROMPT: StaticPrompt<'static> = StaticPrompt::borrowed(
+    "Pull Requests",
+    READY_PULL_REQUEST,
+    "Pull requests are opened ready for review with CI passing, never left as drafts.",
+);
 
 /// Instructions advertised by Macro Internal MCP to coding agents.
 pub fn internal_mcp_instructions() -> String {

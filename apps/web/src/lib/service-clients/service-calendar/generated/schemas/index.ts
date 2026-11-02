@@ -116,6 +116,8 @@ export * from './prepareCalendarReplacementRequestRecurrenceId';
 export * from './refreshCalendarEvent';
 export * from './refreshCalendarEventOneOf';
 export * from './refreshCalendarEventOneOfEvent';
+export * from './refreshCalendarEventOneOfFive';
+export * from './refreshCalendarEventOneOfFiveEvent';
 export * from './refreshCalendarEventOneOfThree';
 export * from './refreshCalendarEventOneOfThreeEvent';
 export * from './replacementStatus';

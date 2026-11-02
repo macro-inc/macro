@@ -232,11 +232,49 @@ describe('CoordinatorCore', () => {
     ]);
   });
 
-  it('hands over only while no engine is changing the files', () => {
+  it('completes the handover once no engine is changing the files', () => {
     const activating = new CoordinatorCore('scope');
     activating.registerTab('tab-a');
     grantStorage(activating, 'tab-a', 1);
     expect(activating.supersede()).toEqual([]);
+    expect(activating.handingOver).toBe(true);
+    // The handover completes once the opening engine is ready.
+    expect(
+      activating.engineReady({
+        tabId: 'tab-a',
+        ownerEpoch: 1,
+        ownerLockName: OWNER_LOCK,
+        expectedOwnerLockName: OWNER_LOCK,
+        ownerLockHeld: true,
+        databaseActionProof: 'opened-existing',
+        openOutcome: 'opened-existing',
+      })
+    ).toEqual([
+      {
+        kind: 'broadcast-cache-superseded',
+        reason: expect.stringContaining('newer version of the app'),
+      },
+    ]);
+    expect(activating.superseded).toBe(true);
+
+    // A draining engine closes its files first, and nothing is elected after
+    // it even though a visible tab remains.
+    const draining = new CoordinatorCore('scope');
+    draining.registerTab('tab-a');
+    draining.registerTab('tab-b');
+    ready(draining, 'tab-a', 1, 'opened-existing');
+    expect(
+      action(draining.setTabVisibility('tab-a', false), 'drain-owner')
+    ).toMatchObject({ tabId: 'tab-a', handoff: true });
+    expect(draining.supersede()).toEqual([]);
+    expect(draining.handingOver).toBe(true);
+    const drained = draining.engineDrained('tab-a', 1);
+    expect(drained).toContainEqual({
+      kind: 'broadcast-cache-superseded',
+      reason: expect.stringContaining('newer version of the app'),
+    });
+    expect(drained.some((item) => item.kind === 'elect-owner')).toBe(false);
+    expect(draining.state.kind).toBe('waiting-for-tab');
 
     // An idle coordinator's tabs, already uncached, move on too.
     const idle = new CoordinatorCore('scope');
@@ -246,6 +284,33 @@ describe('CoordinatorCore', () => {
     expect(idle.supersede()).toEqual([
       {
         kind: 'broadcast-cache-superseded',
+        reason: expect.stringContaining('newer version of the app'),
+      },
+    ]);
+  });
+
+  it('hands over instead of wiping after losing an engine promised to a newer build', () => {
+    const core = new CoordinatorCore('scope');
+    core.registerTab('tab-a');
+    core.registerTab('tab-b');
+    grantStorage(core, 'tab-a', 1);
+    expect(core.supersede()).toEqual([]);
+
+    core.tabLost('tab-a');
+    expect(core.state.kind).toBe('resetting-after-loss');
+
+    expect(core.resumeAfterLoss()).toEqual([
+      {
+        kind: 'broadcast-cache-superseded',
+        reason: expect.stringContaining('newer version of the app'),
+      },
+    ]);
+    expect(core.superseded).toBe(true);
+    expect(core.state.kind).toBe('waiting-for-tab');
+    expect(core.registerTab('tab-c')).toEqual([
+      {
+        kind: 'notify-cache-unavailable',
+        tabId: 'tab-c',
         reason: expect.stringContaining('newer version of the app'),
       },
     ]);

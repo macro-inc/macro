@@ -12,13 +12,17 @@ export function EmailThreadControlGroups(props: {
 }) {
   return (
     <div class="flex items-center gap-2 touch:hidden">
-      <HeaderActionGroup label="Email actions">
-        <EmailThreadControls {...props.controls} />
+      <HeaderActionGroup label="Email actions" size="md">
+        <EmailThreadControls grouped {...props.controls} />
       </HeaderActionGroup>
       <Show when={props.navigation}>
         {(navigation) => (
-          <HeaderActionGroup label="Item navigation">
-            <ListNavigationButtons navigation={navigation()} class="gap-0" />
+          <HeaderActionGroup label="Item navigation" size="md">
+            <ListNavigationButtons
+              navigation={navigation()}
+              size="md"
+              class="gap-0"
+            />
           </HeaderActionGroup>
         )}
       </Show>
@@ -32,30 +36,17 @@ export function EmailThreadHeaderActions(props: {
   share?: JSX.Element;
 }) {
   return (
-    <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1 @max-[900px]/split-header:[&_[data-header-action]]:w-8 @max-[900px]/split-header:[&_[data-header-action]]:p-0 @max-[900px]/split-header:[&_[data-header-action-label]]:hidden">
+    <div class="ml-auto flex shrink-0 items-center gap-2 touch:gap-1">
       {props.controls}
-      <Show
-        when={!isTouchDevice()}
-        fallback={<SidePanel.HeaderActionsOutlet />}
-      >
-        <HeaderActionGroup
-          label="Actions"
-          class="has-[[data-side-panel-header-actions]:empty]:hidden [&_[data-header-action]]:size-8 [&_[data-header-action]]:p-0 [&_[data-header-action-label]]:hidden"
-        >
-          <SidePanel.HeaderActionsOutlet />
-        </HeaderActionGroup>
-      </Show>
+      <SidePanel.HeaderActionsOutlet />
       <Show when={props.share}>
         <Show when={!isTouchDevice()} fallback={props.share}>
-          <HeaderActionGroup
-            label="Sharing"
-            class="[&_[data-header-action]]:w-auto! [&_[data-header-action]]:px-3! [&_[data-header-action-label]]:inline!"
-          >
+          <HeaderActionGroup label="Sharing" size="md">
             {props.share}
           </HeaderActionGroup>
         </Show>
       </Show>
-      <SidePanel.Toggle />
+      <SidePanel.Toggle size="md" />
     </div>
   );
 }

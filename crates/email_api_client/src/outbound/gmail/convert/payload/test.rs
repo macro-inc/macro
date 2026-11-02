@@ -137,6 +137,99 @@ fn one_bad_part_does_not_sink_sibling_parts() {
 }
 
 #[test]
+fn a_bounce_reads_as_its_report_not_the_returned_original() {
+    let report = MessagePart {
+        part_id: "0".into(),
+        mime_type: "text/plain".into(),
+        filename: String::new(),
+        headers: Vec::new(),
+        body: Some(MessagePartBody {
+            attachment_id: None,
+            size: 36,
+            data_base64: Some(URL_SAFE.encode("Your message could not be delivered.")),
+        }),
+        parts: None,
+    };
+    let status = MessagePart {
+        part_id: "1".into(),
+        mime_type: "message/delivery-status".into(),
+        filename: String::new(),
+        headers: Vec::new(),
+        body: Some(MessagePartBody {
+            attachment_id: Some("status-id".into()),
+            size: 300,
+            data_base64: None,
+        }),
+        parts: None,
+    };
+    let original_html = MessagePart {
+        part_id: "2.0.0".into(),
+        mime_type: "text/html".into(),
+        filename: String::new(),
+        headers: Vec::new(),
+        body: Some(MessagePartBody {
+            attachment_id: None,
+            size: 23,
+            data_base64: Some(URL_SAFE.encode("<p>Original message</p>")),
+        }),
+        parts: None,
+    };
+    let original_file = MessagePart {
+        part_id: "2.0.1".into(),
+        mime_type: "application/pdf".into(),
+        filename: "contract.pdf".into(),
+        headers: vec![Header {
+            name: "Content-Disposition".into(),
+            value: "attachment; filename=\"contract.pdf\"".into(),
+        }],
+        body: Some(MessagePartBody {
+            attachment_id: Some("contract-id".into()),
+            size: 2048,
+            data_base64: None,
+        }),
+        parts: None,
+    };
+    let original = MessagePart {
+        part_id: "2".into(),
+        mime_type: "message/rfc822".into(),
+        filename: String::new(),
+        headers: Vec::new(),
+        body: Some(MessagePartBody {
+            attachment_id: None,
+            size: 0,
+            data_base64: None,
+        }),
+        parts: Some(vec![MessagePart {
+            part_id: "2.0".into(),
+            mime_type: "multipart/mixed".into(),
+            filename: String::new(),
+            headers: Vec::new(),
+            body: None,
+            parts: Some(vec![original_html, original_file]),
+        }]),
+    };
+    let mut root = payload("multipart/report", "");
+    root.body = None;
+    root.parts = Some(vec![report, status, original]);
+
+    let parsed = parse_gmail_payload(&root, "message").unwrap();
+
+    assert_eq!(
+        parsed.body_text.as_deref(),
+        Some("Your message could not be delivered.")
+    );
+    assert_eq!(parsed.body_html_sanitized, None);
+    assert_eq!(
+        parsed
+            .attachments_metadata
+            .iter()
+            .map(|attachment| attachment.filename.as_deref())
+            .collect::<Vec<_>>(),
+        vec![Some("contract.pdf")]
+    );
+}
+
+#[test]
 fn sanitizes_full_html_messages() {
     let encoded = URL_SAFE.encode("<html><body><p>Hello</p><script>bad()</script></body></html>");
     let parsed = parse_gmail_payload(&payload("text/html", &encoded), "message").unwrap();

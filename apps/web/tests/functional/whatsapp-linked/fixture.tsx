@@ -13,10 +13,11 @@ import { useUserId } from '@core/context/user';
 import { Route, Router } from '@solidjs/router';
 import { macroDarkTheme } from '@theme/themes/macro-dark';
 import { macroLightTheme } from '@theme/themes/macro-light';
-import { themeCssVars } from '@theme/utils/themeColorTokens';
+import { themeCssVars } from '@theme/utils/themeCssVars';
 import { onMount, Show, Suspense } from 'solid-js';
 // The app's styles, so the page and its screenshots look like the app.
 import '../../../src/index.css';
+import { WhatsAppHistoryImportPrompt } from '@app/features/whatsapp-linked/components/history-import-prompt';
 import {
   type PasskeyCapability,
   WhatsAppLinkedProvider,
@@ -47,6 +48,7 @@ declare global {
   }
 }
 window.openedChats = [];
+document.documentElement.dataset.touchDevice = String(isTouchDevice());
 
 /** The production adapter and real queries; only the network is the test's. */
 /**
@@ -186,6 +188,9 @@ function Page() {
       <main class="min-h-screen bg-panel p-4 text-ink">
         <WhatsAppPage />
       </main>
+      {/* The app shell's prompt, here beside the page it nudges toward. */}
+      <ToastRegion />
+      <WhatsAppHistoryImportPrompt />
     </WhatsAppLinkedProvider>
   );
 }

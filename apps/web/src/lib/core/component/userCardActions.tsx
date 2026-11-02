@@ -1,4 +1,5 @@
 import { createCrmUserCardAction } from '@app/features/crm/crm-user-action';
+import { createBotSettingsUserCardAction } from '@app/features/settings/bot-settings-user-action';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import { toast } from '@core/component/Toast/Toast';
 import { isBotPrincipalId } from '@core/constant/macroAgent';
@@ -28,6 +29,7 @@ type UserCardActionId =
   | 'copy-email'
   | 'copy-name'
   | 'open-contact'
+  | 'open-settings'
   | 'dm'
   | 'assign-task';
 
@@ -83,6 +85,7 @@ export function useUserCardActions(
     canTreatAsUser() && !isBotPrincipalId(userId());
 
   const contactAction = createCrmUserCardAction(() => target().email);
+  const settingsAction = createBotSettingsUserCardAction(userId);
 
   const copyAction = (
     id: UserCardActionId,
@@ -151,6 +154,9 @@ export function useUserCardActions(
 
     const contact = contactAction();
     if (contact) actions.push(contact);
+
+    const settings = settingsAction();
+    if (settings) actions.push(settings);
 
     if (canDirectMessage() && userId() !== currentUserId()) {
       actions.push({

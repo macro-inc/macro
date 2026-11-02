@@ -1,8 +1,8 @@
 use super::*;
-use crate::domain::rich::{
+use external_chat::domain::rich::{
     Location, Poll, PollOption, PollVote, RichContent, SystemAction, SystemLine,
 };
-use crate::domain::timeline::{
+use external_chat::domain::timeline::{
     ExternalChatMessageKind, ExternalChatPersonRef, ExternalChatPollOption, ExternalChatRichContent,
 };
 
@@ -29,7 +29,7 @@ fn person(name: &str, user: Option<&str>) -> ExternalChatPersonRef {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_system_line_names_people_and_never_notifies_or_counts_as_unread(pool: PgPool) {
-    let (linked, session, repository, binding, alice, _) = adopted(&pool).await;
+    let (linked, session, _, binding, alice, _) = adopted(&pool).await;
     let added = with(
         text(30, CUSTOMER_JID, "SYSTEM-ADD", ""),
         MessageKind::System,
@@ -46,6 +46,7 @@ async fn a_system_line_names_people_and_never_notifies_or_counts_as_unread(pool:
     session.ingest_event(alice, &added).await.unwrap();
 
     let messages = linked
+        .chats
         .messages(&receipt::<MessageView>(BOB, binding.id), None, Some(50))
         .await
         .unwrap()
@@ -59,14 +60,15 @@ async fn a_system_line_names_people_and_never_notifies_or_counts_as_unread(pool:
     assert_eq!(line.actor, Some(person("Customer", None)));
     assert_eq!(line.participants, vec![person("+15550000002", None)]);
     assert_eq!(
-        repository
-            .group_facts(binding.id, BOB)
+        linked
+            .store
+            .chat_facts(binding.id, BOB)
             .await
             .unwrap()
             .unread_count,
         0
     );
-    let effects = repository.pending_effects(10).await.unwrap();
+    let effects = linked.store.pending_effects(10).await.unwrap();
     assert_eq!(effects.len(), 1);
     assert!(effects[0].system);
     assert!(!effects[0].should_notify());
@@ -108,8 +110,9 @@ fn vote(event: u128, voter: &str, source: &str, revision: i64, selected: &[&str]
     event
 }
 
-async fn tallies(linked: &LinkedService, group: Uuid) -> Vec<ExternalChatPollOption> {
+async fn tallies(linked: &Linked, group: Uuid) -> Vec<ExternalChatPollOption> {
     let messages = linked
+        .chats
         .messages(&receipt::<MessageView>(ALICE, group), None, Some(50))
         .await
         .unwrap()
@@ -213,6 +216,7 @@ async fn a_re_imported_placeholder_gains_its_content_and_mentions_read_as_names(
     session.ingest_event(alice, &mention).await.unwrap();
 
     let messages = linked
+        .chats
         .messages(&receipt::<MessageView>(ALICE, binding.id), None, Some(50))
         .await
         .unwrap()
@@ -258,6 +262,7 @@ async fn a_change_whatsapp_made_without_naming_anyone_is_the_groups_own_line(poo
     session.ingest_event(alice, &renamed).await.unwrap();
 
     let messages = linked
+        .chats
         .messages(&receipt::<MessageView>(ALICE, binding.id), None, Some(50))
         .await
         .unwrap()

@@ -35,8 +35,9 @@ export function MarkupToolbar() {
       <div class="flex flex-row items-center">
         <Show when={canEdit()}>
           <Button
+            aria-label="Text Box"
+            tooltip="Text Box"
             size="icon-sm"
-            label="Text Box"
             variant="ghost"
             onClick={() => {
               pdf.markup.commands.beginPlacement(
@@ -44,28 +45,30 @@ export function MarkupToolbar() {
               );
             }}
           >
-            <Textbox />
+            <Textbox class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
           <Button
+            aria-label="Signature"
+            tooltip="Signature"
             size="icon-sm"
-            label="Signature"
             variant="ghost"
             onClick={() =>
               pdf.markup.commands.beginPlacement(PayloadMode.Signature)
             }
           >
-            <Signature />
+            <Signature class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </Show>
         <Button
+          aria-label="Comment"
+          tooltip="Comment"
           size="icon-sm"
-          label="Comment"
           variant="ghost"
           onClick={() => {
             pdf.markup.commands.beginPlacement(PayloadMode.Thread);
           }}
         >
-          <ChatTeardrop />
+          <ChatTeardrop class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
         <Show
           when={showCancel()}
@@ -74,8 +77,8 @@ export function MarkupToolbar() {
               when={showDelete()}
               fallback={
                 <div class="invisible">
-                  <Button size="icon-sm">
-                    <Cancel />
+                  <Button variant="ghost" size="icon-sm">
+                    <Cancel class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                   </Button>
                 </div>
               }
@@ -90,7 +93,7 @@ export function MarkupToolbar() {
                   deletePlaceable(activePlaceableIndex_);
                 }}
               >
-                <Trash />
+                <Trash class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Button>
             </Show>
           }
@@ -103,7 +106,7 @@ export function MarkupToolbar() {
               pdf.markup.commands.cancelPlacement();
             }}
           >
-            <Cancel />
+            <Cancel class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Button>
         </Show>
       </div>

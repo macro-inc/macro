@@ -458,6 +458,10 @@ pub struct Message {
     pub mentions: Vec<SimpleMention>,
     /// User who triggered a bot-authored message.
     pub triggered_by: Option<String>,
+    /// Self-reported name of the client the user triggered it through, such
+    /// as "Claude Code"; a display label only.
+    #[serde(default)]
+    pub triggered_via: Option<String>,
     /// Macro Markdown body.
     pub content: String,
     /// Creation time.
@@ -521,13 +525,29 @@ pub enum PatchMessageNotificationPolicy {
 }
 
 /// Attribution of a trusted bot post, distinct from the scope used to authorize it.
-#[derive(Debug, Clone, Copy, Default, PartialEq, Eq)]
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
 pub enum MessageAttribution {
     /// A user invoked the agent; use the verified acting user from its capability.
     #[default]
     ActingUser,
+    /// A user invoked the agent through a named client, such as an MCP client;
+    /// the post records the acting user and the client's label.
+    ActingUserVia {
+        /// The client's self-reported name, for display only.
+        client: String,
+    },
     /// Autonomous webhook delivery has no invoking user.
     Unprompted,
+}
+
+impl MessageAttribution {
+    /// Whether the post records the verified acting user as its trigger.
+    pub fn has_acting_user(&self) -> bool {
+        match self {
+            Self::ActingUser | Self::ActingUserVia { .. } => true,
+            Self::Unprompted => false,
+        }
+    }
 }
 
 /// Create a root or reply. Thread state may only be supplied on a root.

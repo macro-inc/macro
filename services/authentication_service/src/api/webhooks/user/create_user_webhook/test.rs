@@ -11,10 +11,24 @@ use model::authentication::webhooks::{
 };
 use serde_json::Value;
 
+use macro_user_id::user_id::MacroUserIdStr;
+
 use super::{
-    UserCreateWebhookError, dispatch_user_create_webhook, identity_provider_name,
-    support_channel_name, user_create_webhook_error_response,
+    MACRO_SUPPORT_EMAILS, UserCreateWebhookError, dispatch_user_create_webhook,
+    identity_provider_name, support_channel_name, user_create_webhook_error_response,
 };
+
+/// A bad entry would skip support channel creation for every signup.
+#[test]
+fn support_emails_are_distinct_user_ids() {
+    let participants = MACRO_SUPPORT_EMAILS
+        .into_iter()
+        .map(MacroUserIdStr::try_from_email)
+        .collect::<Result<std::collections::HashSet<_>, _>>()
+        .expect("every support email is a valid user id");
+
+    assert_eq!(participants.len(), MACRO_SUPPORT_EMAILS.len());
+}
 
 #[test]
 fn support_channel_name_uses_email_local_part() {

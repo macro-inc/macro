@@ -1,7 +1,8 @@
 use anyhow::Context;
-use redis::AsyncCommands;
+use macro_sha_count_client::SHA_REFERENCE_TTL;
 
-/// Increments the value of a key by the given amount
+/// Adds `value` to the counter and restarts its expiry in one MULTI/EXEC, so a
+/// recounted SHA never leaves a counter without an expiry.
 #[tracing::instrument(skip(client))]
 pub(in crate::service::redis) async fn increment(
     client: &redis::Client,
@@ -13,17 +14,13 @@ pub(in crate::service::redis) async fn increment(
         .await
         .context("unable to connect to redis")?;
 
-    // Set the key if it doesn't exist
-    redis_connection
-        .set_nx::<&str, i32, bool>(key, 0)
+    redis::pipe()
+        .atomic()
+        .incr(key, value)
+        .ignore()
+        .expire(key, SHA_REFERENCE_TTL.as_secs() as i64)
+        .ignore()
+        .query_async::<()>(&mut redis_connection)
         .await
-        .map_err(anyhow::Error::from)?;
-
-    // increments sha key by 1
-    redis_connection
-        .incr::<&str, i64, i32>(key, value)
-        .await
-        .map_err(anyhow::Error::from)?;
-
-    Ok(())
+        .context("unable to set sha count")
 }

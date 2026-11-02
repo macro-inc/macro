@@ -1,5 +1,5 @@
 use super::*;
-use crate::domain::{
+use external_chat::domain::{
     media::MediaService,
     ports::{FileImport, FileStore, MediaRepository},
 };
@@ -25,11 +25,11 @@ struct Files {
 
 #[async_trait]
 impl FileStore for Files {
-    async fn store(&self, import: &FileImport, bytes: Vec<u8>) -> LinkedResult<Uuid> {
+    async fn store(&self, import: &FileImport, bytes: Vec<u8>) -> ExternalChatResult<Uuid> {
         let mut fail = self.fail.lock().unwrap();
         if *fail > 0 {
             *fail -= 1;
-            return Err(LinkedError::Unavailable.into());
+            return Err(ExternalChatError::Unavailable.into());
         }
         let file_id = Uuid::now_v7();
         self.stored.lock().unwrap().push(StoredFile {
@@ -41,7 +41,7 @@ impl FileStore for Files {
         Ok(file_id)
     }
 
-    async fn delete(&self, file_id: Uuid) -> LinkedResult<()> {
+    async fn delete(&self, file_id: Uuid) -> ExternalChatResult<()> {
         self.deleted.lock().unwrap().push(file_id);
         Ok(())
     }
@@ -84,7 +84,7 @@ async fn content(pool: &PgPool, chat_id: Uuid) -> Vec<String> {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_inbound_photo_is_downloaded_once_and_becomes_a_static_file(pool: PgPool) {
-    let (linked, session, repository, binding, alice, bob) = adopted(&pool).await;
+    let (linked, session, _, binding, alice, bob) = adopted(&pool).await;
     let bytes = b"jpeg bytes".to_vec();
     session
         .ingest_event(alice, &photo(1, CUSTOMER_JID, "3EB0PIC", &bytes))
@@ -120,7 +120,7 @@ async fn an_inbound_photo_is_downloaded_once_and_becomes_a_static_file(pool: PgP
             .await
             .unwrap_err()
             .current_context(),
-        LinkedError::Invalid(_)
+        ExternalChatError::Invalid(_)
     ));
     assert_eq!(content(&pool, binding.id).await, vec![""]);
     let first = sqlx::query_scalar!(
@@ -131,6 +131,7 @@ async fn an_inbound_photo_is_downloaded_once_and_becomes_a_static_file(pool: PgP
     .await
     .unwrap();
     let states = linked
+        .chats
         .message_attachments(&receipt::<MessageView>(ALICE, binding.id), &[first])
         .await
         .unwrap();
@@ -149,7 +150,7 @@ async fn an_inbound_photo_is_downloaded_once_and_becomes_a_static_file(pool: PgP
         .unwrap();
     let files = Arc::new(Files::default());
     *files.fail.lock().unwrap() = 1;
-    let media = MediaService::new(repository.clone(), files.clone());
+    let media = MediaService::new(linked.store.clone(), files.clone());
     assert_eq!(media.import_pending().await.unwrap(), 0);
     sqlx::query!("UPDATE external_chat_attachment SET retry_at = now() WHERE state = 'downloaded'")
         .execute(&pool)
@@ -182,6 +183,7 @@ async fn an_inbound_photo_is_downloaded_once_and_becomes_a_static_file(pool: PgP
     .await
     .unwrap();
     let states = linked
+        .chats
         .message_attachments(&receipt::<MessageView>(ALICE, binding.id), &[second])
         .await
         .unwrap();
@@ -225,7 +227,7 @@ async fn an_inbound_photo_is_downloaded_once_and_becomes_a_static_file(pool: PgP
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn deleting_a_chats_owner_deletes_its_files(pool: PgPool) {
-    let (_, session, repository, binding, alice, _) = adopted(&pool).await;
+    let (linked, session, _, binding, alice, _) = adopted(&pool).await;
     let bytes = b"jpeg bytes".to_vec();
     session
         .ingest_event(alice, &photo(1, CUSTOMER_JID, "3EB0PIC", &bytes))
@@ -237,7 +239,7 @@ async fn deleting_a_chats_owner_deletes_its_files(pool: PgPool) {
         .await
         .unwrap();
     let files = Arc::new(Files::default());
-    let media = MediaService::new(repository, files.clone());
+    let media = MediaService::new(linked.store.clone(), files.clone());
     assert_eq!(media.import_pending().await.unwrap(), 1);
     let file_id = files.stored.lock().unwrap()[0].file_id;
     assert!(released_files(&pool).await.is_empty());
@@ -253,7 +255,7 @@ async fn deleting_a_chats_owner_deletes_its_files(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn a_file_stored_after_its_message_was_deleted_is_deleted(pool: PgPool) {
-    let (_, session, repository, _, alice, _) = adopted(&pool).await;
+    let (linked, session, _, _, alice, _) = adopted(&pool).await;
     let bytes = b"jpeg bytes".to_vec();
     session
         .ingest_event(alice, &photo(1, CUSTOMER_JID, "3EB0PIC", &bytes))
@@ -264,7 +266,7 @@ async fn a_file_stored_after_its_message_was_deleted_is_deleted(pool: PgPool) {
         .complete_media_import(alice, &claimed[0].attachment, &bytes)
         .await
         .unwrap();
-    let imports = repository.due_imports(8).await.unwrap();
+    let imports = linked.store.due_imports(8).await.unwrap();
     let mut delete = text(2, CUSTOMER_JID, "3EB0DEL", "");
     if let InboundKind::Message(message) = &mut delete.kind {
         message.kind = MessageKind::Delete;
@@ -276,7 +278,7 @@ async fn a_file_stored_after_its_message_was_deleted_is_deleted(pool: PgPool) {
     session.ingest_event(alice, &delete).await.unwrap();
     // The import was already under way: its file has no attachment to go to.
     let late = Uuid::now_v7();
-    repository.import_stored(&imports[0], late).await.unwrap();
+    linked.store.import_stored(&imports[0], late).await.unwrap();
     assert_eq!(released_files(&pool).await, vec![late]);
     let ready = sqlx::query_scalar!(
         r#"SELECT count(*) AS "count!" FROM external_chat_attachment WHERE file_id IS NOT NULL"#
@@ -289,9 +291,10 @@ async fn a_file_stored_after_its_message_was_deleted_is_deleted(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn an_uploaded_attachment_is_sent_once_and_becomes_the_messages_file(pool: PgPool) {
-    let (linked, session, repository, binding, alice, _) = adopted(&pool).await;
+    let (linked, session, _, binding, alice, _) = adopted(&pool).await;
     let bytes = b"%PDF-1.7 quote".to_vec();
     let uploaded = linked
+        .chats
         .upload_attachment(
             &receipt::<MessageWrite>(ALICE, binding.id),
             "quote.pdf",
@@ -304,6 +307,7 @@ async fn an_uploaded_attachment_is_sent_once_and_becomes_the_messages_file(pool:
     assert_eq!(uploaded.kind, MediaKind::Document);
     assert!(
         linked
+            .chats
             .upload_attachment(
                 &receipt::<MessageWrite>(ALICE, binding.id),
                 "tool.exe",
@@ -325,6 +329,7 @@ async fn an_uploaded_attachment_is_sent_once_and_becomes_the_messages_file(pool:
     };
     assert!(
         linked
+            .chats
             .send_reply(
                 &receipt::<MessageWrite>(BOB, binding.id),
                 &media(None),
@@ -334,6 +339,7 @@ async fn an_uploaded_attachment_is_sent_once_and_becomes_the_messages_file(pool:
             .is_err()
     );
     let progress = linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(ALICE, binding.id),
             &media(Some("Signed quote")),
@@ -375,7 +381,7 @@ async fn an_uploaded_attachment_is_sent_once_and_becomes_the_messages_file(pool:
         "attachment state is separate from the plain caption"
     );
     let files = Arc::new(Files::default());
-    MediaService::new(repository, files.clone())
+    MediaService::new(linked.store.clone(), files.clone())
         .import_pending()
         .await
         .unwrap();
@@ -391,6 +397,7 @@ async fn a_passkey_assertion_is_forwarded_once(pool: PgPool) {
     workspace(&pool).await;
     let (linked, session, _) = services(&pool);
     let pairing = linked
+        .whatsapp
         .connect(&person(ALICE), false, SendAuthority::Human)
         .await
         .unwrap();
@@ -398,6 +405,7 @@ async fn a_passkey_assertion_is_forwarded_once(pool: PgPool) {
     let assertion = serde_json::json!({ "id": "credential", "response": {} });
     assert!(
         linked
+            .whatsapp
             .passkey(&person(ALICE), pairing.id, &assertion, SendAuthority::Human)
             .await
             .is_err(),
@@ -414,6 +422,7 @@ async fn a_passkey_assertion_is_forwarded_once(pool: PgPool) {
         .await
         .unwrap();
     let state = linked
+        .whatsapp
         .pair_state(&person(ALICE), pairing.id, SendAuthority::Human)
         .await
         .unwrap();
@@ -423,11 +432,13 @@ async fn a_passkey_assertion_is_forwarded_once(pool: PgPool) {
     );
     assert!(
         linked
+            .whatsapp
             .passkey(&person(BOB), pairing.id, &assertion, SendAuthority::Human)
             .await
             .is_err()
     );
     linked
+        .whatsapp
         .passkey(&person(ALICE), pairing.id, &assertion, SendAuthority::Human)
         .await
         .unwrap();
@@ -492,6 +503,7 @@ async fn a_sent_image_keeps_the_size_read_from_its_file(pool: PgPool) {
         .write_to(&mut std::io::Cursor::new(&mut png), image::ImageFormat::Png)
         .unwrap();
     let uploaded = linked
+        .chats
         .upload_attachment(
             &receipt::<MessageWrite>(ALICE, binding.id),
             "plan.png",
@@ -502,6 +514,7 @@ async fn a_sent_image_keeps_the_size_read_from_its_file(pool: PgPool) {
         .await
         .unwrap();
     let progress = linked
+        .chats
         .send_reply(
             &receipt::<MessageWrite>(ALICE, binding.id),
             &SendReply {

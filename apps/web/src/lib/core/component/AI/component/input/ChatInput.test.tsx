@@ -197,9 +197,7 @@ describe('compact mobile chat drafts', () => {
     expect(wrapper.classList.contains('max-h-5')).toBe(true);
     mocks.startDictation();
     expect(wrapper.classList.contains('max-h-5')).toBe(false);
-    const cancel = document.querySelector<HTMLButtonElement>(
-      '[label="Cancel dictation"]'
-    )!;
+    const cancel = screen.getByRole('button', { name: 'Cancel dictation' });
     input.focus();
     cancel.focus();
     expect(wrapper.classList.contains('max-h-5')).toBe(false);

@@ -1,7 +1,7 @@
 use super::*;
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn shared_viewer_without_whatsapp_reads_history_and_unread_but_cannot_send(pool: PgPool) {
-    let (linked, session, repository, binding, alice, _) = adopted(&pool).await;
+    let (linked, session, _, binding, alice, _) = adopted(&pool).await;
     session
         .ingest_event(alice, &text(20, CUSTOMER_JID, "VIEWER", "Shared history"))
         .await
@@ -33,12 +33,16 @@ async fn shared_viewer_without_whatsapp_reads_history_and_unread_but_cannot_send
         )
         .await
         .unwrap();
-    let detail = linked.group_detail(&receipt).await.unwrap();
+    let detail = linked.chats.detail(&receipt).await.unwrap();
     assert_eq!(detail.chat.name, "Customer escalations");
     assert_eq!(detail.chat.unread_count, 1);
     assert_eq!(detail.chat.send_reason, Some(ReplyBlock::NoAccount));
     assert!(detail.sending_identity.is_none());
-    let messages = linked.messages(&receipt, None, Some(50)).await.unwrap();
+    let messages = linked
+        .chats
+        .messages(&receipt, None, Some(50))
+        .await
+        .unwrap();
     assert_eq!(messages.messages[0].body, "Shared history");
     let bot_access = EntityAccessReceipt::<MessageView>::try_new_bot(
         "bot|00000000-0000-0000-0000-000000000123"
@@ -59,6 +63,7 @@ async fn shared_viewer_without_whatsapp_reads_history_and_unread_but_cannot_send
     .unwrap();
     assert_eq!(
         linked
+            .chats
             .messages(&bot_access, None, Some(50))
             .await
             .unwrap()
@@ -66,22 +71,25 @@ async fn shared_viewer_without_whatsapp_reads_history_and_unread_but_cannot_send
             .body,
         "Shared history"
     );
-    let bot_detail = linked.group_detail(&bot_access).await.unwrap();
+    let bot_detail = linked.chats.detail(&bot_access).await.unwrap();
     assert!(!bot_detail.chat.can_send);
     assert!(bot_detail.sending_identity.is_none());
     assert!(
         linked
+            .chats
             .mark_read(&bot_access, messages.messages[0].id)
             .await
             .is_err()
     );
     linked
+        .chats
         .mark_read(&receipt, messages.messages[0].id)
         .await
         .unwrap();
     assert_eq!(
-        repository
-            .group_facts(binding.id, CAROL)
+        linked
+            .store
+            .chat_facts(binding.id, CAROL)
             .await
             .unwrap()
             .unread_count,
@@ -97,14 +105,16 @@ async fn shared_viewer_without_whatsapp_reads_history_and_unread_but_cannot_send
     };
     assert_eq!(
         *linked
+            .chats
             .send_reply(&receipt, &request, SendAuthority::UserApiToken)
             .await
             .unwrap_err()
             .current_context(),
-        LinkedError::Disconnected
+        ExternalChatError::Disconnected
     );
     assert!(
         linked
+            .chats
             .upload_attachment(
                 &receipt,
                 "test.txt",
@@ -144,7 +154,7 @@ async fn shared_viewer_without_whatsapp_reads_history_and_unread_but_cannot_send
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn timeline_cursor_and_read_cursor_are_group_scoped_and_monotone(pool: PgPool) {
-    let (linked, session, repository, binding, alice, _) = adopted(&pool).await;
+    let (linked, session, _, binding, alice, _) = adopted(&pool).await;
     let mut early = text(30, CUSTOMER_JID, "EARLY", "older");
     early.source_at = Utc::now();
     let mut late = text(31, CUSTOMER_JID, "LATE", "newer");
@@ -152,32 +162,41 @@ async fn timeline_cursor_and_read_cursor_are_group_scoped_and_monotone(pool: PgP
     session.ingest_event(alice, &early).await.unwrap();
     session.ingest_event(alice, &late).await.unwrap();
     let receipt = receipt::<MessageView>(BOB, binding.id);
-    let page = linked.messages(&receipt, None, Some(1)).await.unwrap();
+    let page = linked
+        .chats
+        .messages(&receipt, None, Some(1))
+        .await
+        .unwrap();
     assert_eq!(page.messages[0].body, "newer");
     let next = linked
+        .chats
         .messages(&receipt, page.next_cursor, Some(1))
         .await
         .unwrap();
     assert_eq!(next.messages[0].body, "older");
     assert!(next.next_cursor.is_none());
     linked
+        .chats
         .mark_read(&receipt, page.messages[0].id)
         .await
         .unwrap();
     linked
+        .chats
         .mark_read(&receipt, next.messages[0].id)
         .await
         .unwrap();
     assert_eq!(
-        repository
-            .group_facts(binding.id, BOB)
+        linked
+            .store
+            .chat_facts(binding.id, BOB)
             .await
             .unwrap()
             .unread_count,
         0
     );
     assert!(
-        repository
+        linked
+            .store
             .mark_read(Uuid::now_v7(), &person(BOB), page.messages[0].id)
             .await
             .is_err()
@@ -201,8 +220,8 @@ async fn timeline_cursor_and_read_cursor_are_group_scoped_and_monotone(pool: PgP
 #[derive(Default)]
 struct Notifications(std::sync::Mutex<Vec<Uuid>>);
 #[async_trait]
-impl GroupPublisher for Notifications {
-    async fn publish(&self, effect: &GroupEffect) -> LinkedResult<()> {
+impl ChatPublisher for Notifications {
+    async fn publish(&self, effect: &ChatEffect) -> ExternalChatResult<()> {
         self.0.lock().unwrap().push(effect.message_id);
         Ok(())
     }
@@ -210,10 +229,10 @@ impl GroupPublisher for Notifications {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn notifications_are_once_for_live_messages_and_never_history_or_edits(pool: PgPool) {
-    let (_, session, repository, _, alice, _) = adopted(&pool).await;
+    let (linked, session, _, _, alice, _) = adopted(&pool).await;
     let notifications = Arc::new(Notifications::default());
     let effects =
-        crate::domain::effects::EffectsService::new(repository.clone(), notifications.clone());
+        external_chat::domain::effects::EffectsService::new(linked.store, notifications.clone());
     let mut history = text(40, CUSTOMER_JID, "HISTORY", "old message");
     if let InboundKind::Message(message) = &mut history.kind {
         message.history = true;
@@ -254,26 +273,23 @@ async fn canonical_team_sharing_is_owner_only_and_reversible(pool: PgPool) {
     };
     assert!(
         linked
+            .chats
             .update_permissions(&viewer, &update, SendAuthority::Human)
             .await
             .is_err()
     );
-    assert!(
-        linked
-            .adopted_groups(&person(CAROL))
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    assert!(linked.chats.list(&person(CAROL)).await.unwrap().is_empty());
     linked
+        .chats
         .update_permissions(&owner, &update, SendAuthority::Human)
         .await
         .unwrap();
-    let shared = linked.adopted_groups(&person(CAROL)).await.unwrap();
+    let shared = linked.chats.list(&person(CAROL)).await.unwrap();
     assert_eq!(shared[0].id, binding.id);
     assert_eq!(shared[0].send_reason, Some(ReplyBlock::NoAccount));
     assert_eq!(
         linked
+            .chats
             .permissions(&owner)
             .await
             .unwrap()
@@ -281,6 +297,7 @@ async fn canonical_team_sharing_is_owner_only_and_reversible(pool: PgPool) {
         Some(AccessLevel::View)
     );
     linked
+        .chats
         .update_permissions(
             &owner,
             &models_permissions::share_permission::UpdateSharePermissionRequestV2 {
@@ -291,13 +308,7 @@ async fn canonical_team_sharing_is_owner_only_and_reversible(pool: PgPool) {
         )
         .await
         .unwrap();
-    assert!(
-        linked
-            .adopted_groups(&person(CAROL))
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    assert!(linked.chats.list(&person(CAROL)).await.unwrap().is_empty());
     session
         .ingest_event(alice, &text(50, CUSTOMER_JID, "PUBLIC", "Link sharing"))
         .await
@@ -311,6 +322,7 @@ async fn canonical_team_sharing_is_owner_only_and_reversible(pool: PgPool) {
     };
     for refused in [AccessLevel::Comment, AccessLevel::Edit] {
         let error = linked
+            .chats
             .update_permissions(
                 &owner,
                 &UpdateSharePermissionRequestV2 {
@@ -321,20 +333,18 @@ async fn canonical_team_sharing_is_owner_only_and_reversible(pool: PgPool) {
             )
             .await
             .unwrap_err();
-        assert!(matches!(error.current_context(), LinkedError::Invalid(_)));
+        assert!(matches!(
+            error.current_context(),
+            ExternalChatError::Invalid(_)
+        ));
     }
     linked
+        .chats
         .update_permissions(&owner, &public, SendAuthority::Human)
         .await
         .unwrap();
     // Public links grant known-ID access, never global group discovery.
-    assert!(
-        linked
-            .adopted_groups(&person(CAROL))
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    assert!(linked.chats.list(&person(CAROL)).await.unwrap().is_empty());
     use entity_access::domain::ports::EntityAccessService;
     let access = entity_access::domain::service::EntityAccessServiceImpl::new(
         entity_access::outbound::PgAccessRepository::new(pool.clone()),
@@ -360,16 +370,19 @@ async fn canonical_team_sharing_is_owner_only_and_reversible(pool: PgPool) {
         )
         .await
         .unwrap();
-    let page = linked.messages(&shared, None, Some(50)).await.unwrap();
+    let page = linked
+        .chats
+        .messages(&shared, None, Some(50))
+        .await
+        .unwrap();
     linked
+        .chats
         .mark_read(&shared, page.messages[0].id)
         .await
         .unwrap();
-    assert_eq!(
-        linked.adopted_groups(&person(CAROL)).await.unwrap().len(),
-        1
-    );
+    assert_eq!(linked.chats.list(&person(CAROL)).await.unwrap().len(), 1);
     linked
+        .chats
         .update_permissions(
             &owner,
             &UpdateSharePermissionRequestV2 {
@@ -381,7 +394,7 @@ async fn canonical_team_sharing_is_owner_only_and_reversible(pool: PgPool) {
         )
         .await
         .unwrap();
-    let permission = linked.permissions(&owner).await.unwrap();
+    let permission = linked.chats.permissions(&owner).await.unwrap();
     assert_eq!(permission.link_share, Some(LinkShare::Public));
     assert_eq!(permission.link_share_access_level, Some(AccessLevel::View));
     assert_eq!(
@@ -396,6 +409,7 @@ async fn canonical_team_sharing_is_owner_only_and_reversible(pool: PgPool) {
         Some(AccessLevel::View)
     );
     linked
+        .chats
         .update_permissions(
             &owner,
             &UpdateSharePermissionRequestV2 {
@@ -418,13 +432,7 @@ async fn canonical_team_sharing_is_owner_only_and_reversible(pool: PgPool) {
             .unwrap(),
         None
     );
-    assert!(
-        linked
-            .adopted_groups(&person(CAROL))
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    assert!(linked.chats.list(&person(CAROL)).await.unwrap().is_empty());
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -439,10 +447,11 @@ async fn shared_sender_uses_own_roster_without_adopting_again(pool: PgPool) {
     .await
     .unwrap();
     let access = receipt::<MessageView>(BOB, binding.id);
-    let detail = linked.group_detail(&access).await.unwrap();
+    let detail = linked.chats.detail(&access).await.unwrap();
     assert!(detail.chat.can_send);
     assert_eq!(detail.sending_identity.as_deref(), Some(BOB_JID));
     let progress = linked
+        .chats
         .send_reply(
             &access,
             &SendReply {
@@ -483,13 +492,7 @@ async fn a_group_mentioned_in_a_channel_is_readable_by_its_current_members(pool:
     .execute(&pool)
     .await
     .unwrap();
-    assert!(
-        linked
-            .adopted_groups(&person(CAROL))
-            .await
-            .unwrap()
-            .is_empty()
-    );
+    assert!(linked.chats.list(&person(CAROL)).await.unwrap().is_empty());
     // What mentioning the group in the channel writes.
     let mut tx = pool.begin().await.unwrap();
     entity_access_db_utils::channel_share::insert_if_absent(
@@ -502,7 +505,7 @@ async fn a_group_mentioned_in_a_channel_is_readable_by_its_current_members(pool:
     .await
     .unwrap();
     tx.commit().await.unwrap();
-    let listed = linked.adopted_groups(&person(CAROL)).await.unwrap();
+    let listed = linked.chats.list(&person(CAROL)).await.unwrap();
     assert_eq!(listed.len(), 1);
     assert_eq!(listed[0].id, binding.id);
     assert_eq!(listed[0].send_reason, Some(ReplyBlock::NoAccount));
@@ -515,11 +518,7 @@ async fn a_group_mentioned_in_a_channel_is_readable_by_its_current_members(pool:
     .await
     .unwrap();
     assert!(
-        linked
-            .adopted_groups(&person(CAROL))
-            .await
-            .unwrap()
-            .is_empty(),
+        linked.chats.list(&person(CAROL)).await.unwrap().is_empty(),
         "leaving the channel ends access"
     );
 }
@@ -538,12 +537,16 @@ async fn only_the_owners_own_session_changes_sharing(pool: PgPool) {
     };
     for authority in [SendAuthority::UserApiToken, SendAuthority::Automation] {
         let error = linked
+            .chats
             .update_permissions(&owner, &public, authority)
             .await
             .unwrap_err();
-        assert_eq!(error.current_context(), &LinkedError::Forbidden);
+        assert_eq!(error.current_context(), &ExternalChatError::Forbidden);
     }
-    assert_eq!(linked.permissions(&owner).await.unwrap().link_share, None);
+    assert_eq!(
+        linked.chats.permissions(&owner).await.unwrap().link_share,
+        None
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -581,6 +584,7 @@ async fn the_owner_sees_and_revokes_channel_grants(pool: PgPool) {
     transaction.commit().await.unwrap();
     assert_eq!(
         linked
+            .chats
             .permissions(&owner)
             .await
             .unwrap()
@@ -591,6 +595,7 @@ async fn the_owner_sees_and_revokes_channel_grants(pool: PgPool) {
         }])
     );
     let error = linked
+        .chats
         .update_permissions(
             &owner,
             &grants(UpdateOperation::Replace, Some(AccessLevel::Edit)),
@@ -598,8 +603,12 @@ async fn the_owner_sees_and_revokes_channel_grants(pool: PgPool) {
         )
         .await
         .unwrap_err();
-    assert!(matches!(error.current_context(), LinkedError::Invalid(_)));
+    assert!(matches!(
+        error.current_context(),
+        ExternalChatError::Invalid(_)
+    ));
     linked
+        .chats
         .update_permissions(
             &owner,
             &grants(UpdateOperation::Remove, None),
@@ -609,6 +618,7 @@ async fn the_owner_sees_and_revokes_channel_grants(pool: PgPool) {
         .unwrap();
     assert_eq!(
         linked
+            .chats
             .permissions(&owner)
             .await
             .unwrap()
@@ -627,10 +637,18 @@ async fn one_message_reads_like_its_timeline_entry(pool: PgPool) {
             .unwrap();
     }
     let viewer = receipt::<MessageView>(BOB, binding.id);
-    let page = linked.messages(&viewer, None, Some(50)).await.unwrap();
+    let page = linked
+        .chats
+        .messages(&viewer, None, Some(50))
+        .await
+        .unwrap();
     let older = page.messages.last().unwrap();
-    let one = linked.message(&viewer, older.id).await.unwrap();
+    let one = linked.chats.message(&viewer, older.id).await.unwrap();
     assert_eq!((one.id, one.body.as_str()), (older.id, older.body.as_str()));
-    let missing = linked.message(&viewer, Uuid::now_v7()).await.unwrap_err();
-    assert_eq!(missing.current_context(), &LinkedError::NotFound);
+    let missing = linked
+        .chats
+        .message(&viewer, Uuid::now_v7())
+        .await
+        .unwrap_err();
+    assert_eq!(missing.current_context(), &ExternalChatError::NotFound);
 }

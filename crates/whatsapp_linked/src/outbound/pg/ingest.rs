@@ -5,6 +5,7 @@
 use super::*;
 use crate::domain::events::*;
 use chrono::{DateTime, Utc};
+use external_chat::domain::rich::RichContent;
 
 /// Deferred and quarantined events kept per account before ingestion pushes back.
 const MAX_RETAINED_EVENTS: i64 = 4096;
@@ -17,7 +18,7 @@ pub(super) struct Reservation {
     pub observer: Uuid,
     /// External author of a reaction, distinct from the target's author.
     pub reaction_actor: Option<Uuid>,
-    pub binding: Binding,
+    pub binding: ChatRef,
     /// Verified external person who authored the source message.
     pub person: Uuid,
     /// Group message.
@@ -66,9 +67,9 @@ pub(super) async fn observed_bindings_in(
     group: &str,
     source_at: DateTime<Utc>,
     history: bool,
-) -> LinkedResult<Vec<Binding>> {
+) -> ExternalChatResult<Vec<ChatRef>> {
     sqlx::query_as!(
-        bindings::BindingRow,
+        ChatRow,
         r#"SELECT b.id, b.provider, b.remote_id, b.kind, b.user_id, b.state, b.adopted_at
         FROM external_chat b JOIN whatsapp_chat_membership m ON m.chat_id = b.id
         WHERE b.provider = 'whatsapp' AND b.remote_id = $1 AND b.state = 'active'
@@ -91,7 +92,7 @@ pub(super) async fn observed_bindings_in(
     .await
     .map_err(failure)?
     .into_iter()
-    .map(bindings::binding)
+    .map(chat_ref)
     .collect()
 }
 
@@ -101,11 +102,11 @@ pub(super) async fn reserve_in(
     tx: &mut Transaction<'_, Postgres>,
     observer: Uuid,
     generation: i64,
-    binding: &Binding,
+    binding: &ChatRef,
     event: &InboundEvent,
     message: &Message,
     accepted_send: Option<Uuid>,
-) -> LinkedResult<Reserve> {
+) -> ExternalChatResult<Reserve> {
     let current = sqlx::query_scalar!(
         "SELECT state FROM external_chat WHERE id = $1 FOR UPDATE",
         binding.id
@@ -183,7 +184,7 @@ pub(super) async fn reserve_in(
         let target = message
             .target
             .as_ref()
-            .ok_or(LinkedError::Invalid("reaction without a target"))?;
+            .ok_or(ExternalChatError::Invalid("reaction without a target"))?;
         let row = sqlx::query!(
             r#"SELECT m.person_id, m.message_id, m.origin, m.deleted_at, m.revision_content, m.content_revision, m.revised_at
             FROM external_chat_message m JOIN whatsapp_identity_alias a ON a.chat_id = m.chat_id AND a.person_id = m.person_id
@@ -217,7 +218,7 @@ pub(super) async fn reserve_in(
         message
             .target
             .as_ref()
-            .ok_or(LinkedError::Invalid("revision without a target"))?
+            .ok_or(ExternalChatError::Invalid("revision without a target"))?
             .source_id
             .clone()
     } else {
@@ -242,7 +243,7 @@ pub(super) async fn reserve_in(
         .map_err(failure)?
     };
     if accepted_send.is_some() && !revision && send.is_none() {
-        return Err(LinkedError::Conflict.into());
+        return Err(ExternalChatError::Conflict.into());
     }
     let new_origin = if send.is_some() {
         "macro"
@@ -361,7 +362,7 @@ async fn reserve_attachments_in(
     tx: &mut Transaction<'_, Postgres>,
     r: &Reservation,
     message: &Message,
-) -> LinkedResult<()> {
+) -> ExternalChatResult<()> {
     for (ordinal, media) in message.media.iter().enumerate() {
         let state = if MediaKind::of(&media.mime).is_some() {
             "pending"
@@ -405,11 +406,11 @@ pub(super) async fn persist_in(
     event: &InboundEvent,
     message: &Message,
     r: &Reservation,
-) -> LinkedResult<bool> {
+) -> ExternalChatResult<bool> {
     if message.kind == MessageKind::PollVote {
         let (Some(actor), Some(RichContent::PollVote(vote))) = (r.reaction_actor, &message.rich)
         else {
-            return Err(LinkedError::Invalid("poll vote without a choice").into());
+            return Err(ExternalChatError::Invalid("poll vote without a choice").into());
         };
         return Ok(sqlx::query!(
             r#"INSERT INTO external_chat_poll_vote (message_id, person_id, selected, user_id, source_id, revision, updated_at)
@@ -489,7 +490,7 @@ pub(super) async fn finish_in(
     tx: &mut Transaction<'_, Postgres>,
     r: &Reservation,
     changed: bool,
-) -> LinkedResult<()> {
+) -> ExternalChatResult<()> {
     if r.reaction_actor.is_none() {
         sqlx::query!(
             r#"UPDATE external_chat_message SET message_id = $4, effect_revision = effect_revision + CASE WHEN $5 THEN 1 ELSE 0 END,
@@ -532,12 +533,12 @@ pub(super) async fn finish_in(
         .map_err(failure)?;
     }
     if changed {
-        notify(tx, signals::CHAT_EFFECTS, r.message).await?;
+        notify(tx, external_chat::signals::CHAT_EFFECTS, r.message).await?;
     }
     if changed || r.actor.is_some() {
         notify_change(
             tx,
-            signals::Change::Chat {
+            Change::Chat {
                 chat_id: r.binding.id,
             },
         )
@@ -561,7 +562,7 @@ async fn resolve_sender_in(
     account: &Fenced,
     group: &str,
     message: &Message,
-) -> LinkedResult<Identity> {
+) -> ExternalChatResult<Identity> {
     let mut sender = message.sender.clone();
     if message.from_me
         && let Some(own) = &account.identity_jid
@@ -600,7 +601,7 @@ async fn retain_in(
     account: &Fenced,
     event: &InboundEvent,
     state: &str,
-) -> LinkedResult<()> {
+) -> ExternalChatResult<()> {
     let retained = sqlx::query_scalar!(
         r#"SELECT count(*) AS "count!" FROM whatsapp_inbound_event WHERE account_id = $1"#,
         account.id
@@ -609,7 +610,7 @@ async fn retain_in(
     .await
     .map_err(failure)?;
     if retained >= MAX_RETAINED_EVENTS {
-        return Err(LinkedError::Backlogged.into());
+        return Err(ExternalChatError::Backlogged.into());
     }
     let payload = serde_json::to_value(event).map_err(failure)?;
     sqlx::query!(
@@ -633,7 +634,7 @@ async fn apply_in(
     tx: &mut Transaction<'_, Postgres>,
     account: &Fenced,
     event: &InboundEvent,
-) -> LinkedResult<IngestOutcome> {
+) -> ExternalChatResult<IngestOutcome> {
     match &event.kind {
         InboundKind::Left => {
             groups::left_in(tx, account, &event.group_jid, event.observed_at).await?;
@@ -723,12 +724,12 @@ async fn apply_in(
     }
 }
 
-impl PgLinkedRepository {
+impl PgWhatsAppRepository {
     pub(super) async fn ingest_event(
         &self,
         scope: SessionScope,
         event: &InboundEvent,
-    ) -> LinkedResult<IngestOutcome> {
+    ) -> ExternalChatResult<IngestOutcome> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         if account.state != AccountState::Connected {
@@ -750,7 +751,7 @@ impl PgLinkedRepository {
                 tx.commit().await.map_err(failure)?;
                 Ok(outcome)
             }
-            Err(error) if matches!(error.current_context(), LinkedError::Unavailable) => {
+            Err(error) if matches!(error.current_context(), ExternalChatError::Unavailable) => {
                 // Infrastructure failure: retain the event for retry when possible.
                 tx.rollback().await.map_err(failure)?;
                 let mut tx = self.pool.begin().await.map_err(failure)?;
@@ -785,7 +786,7 @@ impl PgLinkedRepository {
         &self,
         scope: SessionScope,
         event: &InboundEvent,
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         let observed = sqlx::query_scalar!(
@@ -813,7 +814,7 @@ impl PgLinkedRepository {
         .await
         .map_err(failure)?;
         if retained >= MAX_RETAINED_EVENTS {
-            return Err(LinkedError::Backlogged.into());
+            return Err(ExternalChatError::Backlogged.into());
         }
         let payload = serde_json::to_value(event).map_err(failure)?;
         sqlx::query!(
@@ -834,7 +835,7 @@ impl PgLinkedRepository {
         &self,
         scope: SessionScope,
         limit: i64,
-    ) -> LinkedResult<Vec<InboundEvent>> {
+    ) -> ExternalChatResult<Vec<InboundEvent>> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         let dropped = sqlx::query_scalar!(

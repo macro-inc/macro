@@ -18,8 +18,14 @@ import { createContentInstanceRegistry } from './split-layout/contentInstanceReg
 import { SplitLayoutContext } from './split-layout/context';
 import type { SplitManager } from './split-layout/layoutManager';
 
-let manager: Pick<SplitManager, 'findOpenView' | 'registerOpenViews'>;
+let manager: Pick<
+  SplitManager,
+  'findOpenView' | 'registerOpenViews' | 'getOrchestrator'
+>;
+const goToLocationFromParams = vi.fn();
+const getBlockHandle = vi.fn(async () => ({ goToLocationFromParams }));
 const activate = vi.hoisted(() => vi.fn());
+vi.mock('@app/signal/splitLayout', () => ({ globalSplitManager: vi.fn() }));
 vi.mock('@core/component/Toast/Toast', () => ({ toast: { alert: vi.fn() } }));
 vi.mock('./split-layout/layoutUtils', () => ({
   useSplitPanelOrThrow: () => ({ handle: { activate } }),
@@ -39,9 +45,15 @@ beforeEach(() => {
   manager = {
     findOpenView: registry.find,
     registerOpenViews: registry.register,
+    getOrchestrator: () =>
+      ({ getBlockHandle }) as unknown as ReturnType<
+        SplitManager['getOrchestrator']
+      >,
   };
   vi.mocked(toast.alert).mockClear();
   activate.mockClear();
+  getBlockHandle.mockClear();
+  goToLocationFromParams.mockClear();
 });
 
 it('activates the split owning a preview and stops exposing it after close', () => {
@@ -247,3 +259,39 @@ it('treats Markdown as single-instance and allows revisiting the owning preview'
   first.unmount();
   second.unmount();
 });
+
+it.each([undefined, 'thread'])(
+  'navigates to a message in the owning preview (thread: %s)',
+  async (threadId) => {
+    const first = setup();
+    const second = setup();
+    first.stack.reset({ type: 'channel', id: 'channel' });
+    second.stack.reset({ type: 'email', id: 'email' });
+    const current = second.stack.active();
+    const target = {
+      blockType: 'channel' as const,
+      blockId: 'channel',
+      aliasContext: undefined,
+      params: {
+        channel_message_id: 'reply',
+        ...(threadId ? { channel_thread_id: threadId } : {}),
+      },
+    };
+
+    expect(second.selectionGuard.canSelect(target)).toBe(false);
+    expect(activate).toHaveBeenCalledOnce();
+    await getBlockHandle.mock.results[0].value;
+    expect(goToLocationFromParams).toHaveBeenCalledWith(target.params);
+    expect(getBlockHandle).toHaveBeenCalledWith('channel', 'channel');
+    expect(second.stack.active()).toBe(current);
+    expect(toast.alert).not.toHaveBeenCalled();
+
+    getBlockHandle.mockClear();
+    activate.mockClear();
+    expect(second.selectionGuard.canSelect(target, 'restore')).toBe(false);
+    expect(getBlockHandle).not.toHaveBeenCalled();
+    expect(activate).not.toHaveBeenCalled();
+    first.unmount();
+    second.unmount();
+  }
+);

@@ -92,8 +92,7 @@ export function BillingPlanCard(props: {
           <Show when={props.onSelectPlan}>
             <Button
               class="w-full py-1.5 px-3 @sm/plan-card:w-auto @sm/plan-card:justify-self-end"
-              depth={2}
-              variant="cta"
+              variant="primary"
               disabled={
                 props.state.pending ||
                 (!props.state.hasPaid &&

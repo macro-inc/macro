@@ -297,16 +297,18 @@ function ToastContent(props: {
               <ActionButtons actions={actions()!} />
             </div>
           </Show>
-          <Toast.CloseButton
-            as={Button}
-            variant="ghost"
-            size="icon-xs"
-            aria-label="Close"
-            class="macro-toast-corner-close shrink-0"
-            onClick={() => props.onUserDismiss?.()}
-          >
-            <XIcon class="size-3.5" />
-          </Toast.CloseButton>
+          <Show when={!isMobile()}>
+            <Toast.CloseButton
+              as={Button}
+              variant="ghost"
+              size="icon-xs"
+              aria-label="Close"
+              class="macro-toast-corner-close shrink-0"
+              onClick={() => props.onUserDismiss?.()}
+            >
+              <XIcon class="size-2.5" />
+            </Toast.CloseButton>
+          </Show>
         </div>
       </div>
     </Toast>

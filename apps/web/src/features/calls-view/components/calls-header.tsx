@@ -52,10 +52,11 @@ export function CallsHeader() {
         title={<ViewSidebar.Title caret={false}>{title()}</ViewSidebar.Title>}
       >
         <HeaderActionGroup label="Call filters">
-          <UnifiedFilterDropdown hideLabel variant="ghost" />
+          <UnifiedFilterDropdown grouped hideLabel variant="ghost" />
         </HeaderActionGroup>
         <HeaderActionGroup label="Call view options">
           <ListSortDropdown
+            grouped
             label="Sort calls"
             value={
               DEFAULT_SORT_OPTIONS.find(
@@ -71,7 +72,7 @@ export function CallsHeader() {
             open={sortOpen()}
             onOpenChange={setSortOpen}
           />
-          <SoupViewContextGroup hideLabel variant="ghost" />
+          <SoupViewContextGroup grouped hideLabel variant="ghost" />
         </HeaderActionGroup>
         <NewCallButton />
         <ListHeaderSearch

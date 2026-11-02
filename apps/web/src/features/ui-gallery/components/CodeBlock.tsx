@@ -48,13 +48,19 @@ function CopyButton(props: { code: string }) {
 
   return (
     <Button
+      aria-label={copied() ? 'Copied' : 'Copy code'}
+      tooltip={copied() ? 'Copied' : 'Copy code'}
       variant="ghost"
       size="icon-sm"
-      label={copied() ? 'Copied' : 'Copy code'}
       onClick={copy}
     >
-      <Show when={copied()} fallback={<CopyIcon />}>
-        <CheckIcon class="text-success" />
+      <Show
+        when={copied()}
+        fallback={
+          <CopyIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+        }
+      >
+        <CheckIcon class="text-success size-3.5 touch:size-6 shrink-0 pointer-events-none" />
       </Show>
     </Button>
   );

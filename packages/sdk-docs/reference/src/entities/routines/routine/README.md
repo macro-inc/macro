@@ -4,6 +4,7 @@
 
 - [Routine](classes/Routine.md)
 - [RoutineExecution](classes/RoutineExecution.md)
+- [RoutineTemplate](classes/RoutineTemplate.md)
 
 ## Interfaces
 

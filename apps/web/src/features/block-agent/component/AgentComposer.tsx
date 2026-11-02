@@ -1,4 +1,5 @@
 import { SpeedToggle } from '@core/component/AI/component/input/SpeedToggle';
+import { modelLabel } from '@core/component/AI/constant/model-label';
 import {
   acceleratedSpeed,
   speedForModel,
@@ -80,6 +81,7 @@ export function AgentComposer(props: {
     queue,
     sendNext,
     steer,
+    steerFailed,
     turn,
     registerQuoteInsert,
     initialInput,
@@ -134,7 +136,9 @@ export function AgentComposer(props: {
   const busy = () => {
     const state = turn();
     return (
-      (state !== 'idle' && state !== 'disconnected' && state !== 'stopping') ||
+      state === 'starting' ||
+      state === 'running' ||
+      state === 'blocked' ||
       resuming()
     );
   };
@@ -236,6 +240,7 @@ export function AgentComposer(props: {
         prompt: entry.prompt ?? undefined,
         attachments: entry.attachments,
         queuedBy: actor && actor !== userId() ? displayName(actor) : undefined,
+        sendFailed: steerFailed().has(entry.actionId),
       };
     });
 
@@ -248,17 +253,11 @@ export function AgentComposer(props: {
               {queuedItems().length} queued
             </span>
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               class="touch:min-h-11"
               aria-label="Send next queued message now"
-              disabled={
-                readOnly() ||
-                loadFailed() ||
-                pending() ||
-                turn() === 'stopping' ||
-                turn() === 'starting'
-              }
+              disabled={readOnly() || loadFailed() || pending()}
               onClick={() => {
                 if (!readOnly()) sendNext();
               }}
@@ -280,10 +279,7 @@ export function AgentComposer(props: {
                   fireAndForget(queue.remove(actionId), 'agent-composer');
               }}
               onSteer={
-                busy() &&
-                !readOnly() &&
-                turn() !== 'stopping' &&
-                turn() !== 'starting'
+                (busy() || turn() === 'stopping') && !readOnly()
                   ? (actionId) => steer(actionId)
                   : undefined
               }
@@ -334,16 +330,6 @@ export function AgentComposer(props: {
         autofocus={props.autofocus}
         busy={busy()}
         hasQueuedMessages={queuedItems().length > 0}
-        // Read off the fold's turn discriminant, never `pending`, which
-        // clears as soon as the log confirms a cancel - well before the
-        // runtime winds the turn down, and every Enter in that gap posted
-        // another cancel. `stopping` is a stop already working on this turn.
-        // `starting` is the prompt the last advance showed as sent, still
-        // unconfirmed: the server has not dispatched it, so a stop now would
-        // end the turn already ending and the server would dispatch *that*
-        // head - the next one would sit as a sent-looking bubble while it
-        // waits. Enter is admitted again once the log confirms the head.
-        sendNextHeld={turn() === 'stopping' || turn() === 'starting'}
         // Prompts go straight to the service, so sending needs a session to
         // post to — a block whose create is still on the wire can be typed
         // into, but not sent from, until the id lands.
@@ -361,6 +347,12 @@ export function AgentComposer(props: {
         onSendNext={() => {
           if (!readOnly()) sendNext();
         }}
+        modelName={modelLabel(
+          metadata()?.model ?? undefined,
+          metadata()?.supportedModels.find(
+            (model) => model.id === metadata()?.model
+          )?.name
+        )}
         supportsImages={
           metadata()?.supportedModels.find(
             (model) => model.id === metadata()?.model

@@ -12,6 +12,7 @@ pub struct ScheduledContext {
     pub s3_client: s3_client::S3,
     pub attachment_bucket: String,
     pub macro_event_broker: PubSubEventBroker,
+    pub read_receipts: crate::composition::ReadReceipts,
 }
 
 impl ScheduledContext {
@@ -32,6 +33,7 @@ impl ScheduledContext {
             s3_client: self.s3_client.clone(),
             attachment_bucket: self.attachment_bucket.clone(),
             macro_event_broker: self.macro_event_broker.clone(),
+            read_receipts: self.read_receipts.clone(),
         }
     }
 }

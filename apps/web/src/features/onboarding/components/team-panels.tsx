@@ -49,7 +49,7 @@ export function InvitesPanel(props: {
               {invite.invitedBy} invited you to their team
             </span>
             <Button
-              variant="cta"
+              variant="primary"
               size="sm"
               class="ml-auto shrink-0"
               disabled={props.joining}

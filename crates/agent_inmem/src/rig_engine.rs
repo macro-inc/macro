@@ -3,10 +3,9 @@
 //!
 //! Consumption mirrors the scheduled-action executor
 //! (`crates/scheduled_action/src/outbound/inprocess_executor/agent_task.rs`):
-//! the full static toolset, the agent's name and handle, the agent-session
-//! preamble, the static Macro prompt (immediately before any session
-//! instructions), and the owner's memory, with usage recorded per turn
-//! against the session owner.
+//! the full static toolset, the agent-session preamble, the static Macro
+//! prompt, the agent's name and handle, any session instructions, and the
+//! owner's memory, with usage recorded per turn against the session owner.
 //!
 //! User tools (`SendEmail`, `CreateCalendarEvent`) are the chat host's
 //! deferring ones, finished inside the turn: the turn's [`TurnRequest`]
@@ -39,7 +38,7 @@ use tokio::sync::mpsc;
 use tracing::Instrument as _;
 
 use crate::domain::auto_model::{AutoModelSelector, DefaultAutoModel, JevAutoModel};
-use crate::domain::engine::{AgentIdentity, TurnEngine, TurnRequest};
+use crate::domain::engine::{AgentIdentity, ReplyDelivery, TurnEngine, TurnRequest};
 use crate::domain::tool_gate::{NativeToolGate, NativeToolVerdict, UngatedNativeTools};
 use crate::domain::tool_mode::{StandardTools, ToolMode, ToolModeSelector};
 use crate::inbound::ask_user::{AskUser, AskUserContext};
@@ -450,6 +449,7 @@ async fn drive_turn(
 ) -> Result<(), AgentError> {
     let TurnRequest {
         purpose,
+        delivery,
         session_id,
         awaiting,
         owner,
@@ -493,6 +493,10 @@ async fn drive_turn(
             "the agent's API key does not serve {model}"
         )));
     }
+    // The opening line runs on Macro's own fast model, so a turn the agent's
+    // key pays for goes without one; so does a reply read only once it is
+    // finished, which gains nothing from it.
+    let opening = !summarizing && agent_key.is_none() && delivery == ReplyDelivery::Streamed;
 
     // Started before anything else so its line is out before the turn's
     // model has a first token.
@@ -506,7 +510,7 @@ async fn drive_turn(
     // reply), `silent` (no line fit this follow-up), `turn_first` (the
     // turn's model spoke first), `no_verdict` (the
     // fast model failed or answered without one) or `timeout`.
-    let opener_span = if summarizing {
+    let opener_span = if !opening {
         tracing::Span::none()
     } else {
         tracing::info_span!(
@@ -519,9 +523,7 @@ async fn drive_turn(
         )
     };
     // A closed receiver has no verdict, and the turn's own stream follows.
-    // The opening line runs on Macro's own fast model, so a turn the agent's
-    // key pays for goes without one.
-    let mut opening_line = if summarizing || agent_key.is_some() {
+    let mut opening_line = if !opening {
         mpsc::channel(1).1
     } else {
         opener_span.in_scope(|| {
@@ -567,10 +569,11 @@ async fn drive_turn(
             }
         };
         let (user_memory, sdk_docs) = tokio::join!(fetch_user_memory(memory, &owner), docs);
-        let tools_prompt = format!("{}{}", native_tools.prompt, sdk_docs);
         let prompt = system_prompt(
-            &tools_prompt,
+            &native_tools.prompt,
+            &sdk_docs,
             session_id,
+            delivery,
             identity.as_ref(),
             instructions.as_deref(),
             user_memory.as_deref(),
@@ -607,11 +610,14 @@ async fn drive_turn(
     // reach the session actor as ACP frames, and the actor projects those onto
     // `invoke_agent` / `execute_tool` spans for every harness alike. Enriching
     // rig's spans too would report each turn twice.
+    // Calls stream as the model writes them, so the transcript shows a call
+    // from the moment it is named rather than once its arguments are whole.
     let mut agent_loop = AgentLoop::new(base_context.recorder.clone())
         .with_model(&model)
         .with_reasoning_effort(reasoning_effort)
         .with_speed(speed)?
         .with_genai_telemetry(false)
+        .with_streamed_tool_calls()
         .with_tool_result_limit(tool_results.clone());
     // Only the loop's own model calls run on the agent's key, so only they are
     // recorded against it; tools keep `usage_ctx`, since they call models on
@@ -838,43 +844,45 @@ fn elapsed_ms(since: tokio::time::Instant) -> u64 {
     u64::try_from(since.elapsed().as_millis()).unwrap_or(u64::MAX)
 }
 
-/// The turn's system prompt: the agent's identity, the agent-session
-/// preamble, the note that an opening line is already out (see [`opener`]),
-/// the static Macro prompt (how to use the product: mentions,
-/// tools, terminology), then the session's own instructions when there are
-/// any, which session this is, and the owner's memory when there is any.
+/// The turn's system prompt, ordered so the longest possible prefix is
+/// cached: the agent-session preamble (which notes that an opening line may
+/// already be out, see [`opener`]; a session whose replies are read whole is
+/// told otherwise in its own part) and the static Macro prompt (how to use the
+/// product: mentions, tools, terminology), which are the same for every
+/// session of every agent; then the agent's identity, the session's own
+/// instructions when there are any, which session this is, and the owner's
+/// memory when there is any; and last the SDK documentation picked for this
+/// turn.
 ///
-/// Identity comes first so a named agent (even one with no instructions)
-/// knows who it is before reading anything else. The static Macro prompt
-/// sits immediately before `<session_instructions>` so it is the preamble
-/// the model reads as it takes in the caller's word — the same reason DCS
-/// puts `additional_instructions` after the standing prompt. Memory stays
-/// last so a remembered fact is never read as an instruction.
-///
-/// The prompt is split after the static Macro prompt: everything before is
-/// the same for every session of the agent and is cached on its own, so a
-/// session whose instructions name its own task still reads it back.
+/// The prompt is split after the static Macro prompt, so every session reads
+/// it back from the cache whatever its agent or instructions. Identity opens
+/// the session's part so a named agent (even one with no instructions) knows
+/// who it is before its instructions, and `<session_instructions>` follows
+/// the standing prompt so the model reads it as the caller's word — the same
+/// reason DCS puts `additional_instructions` after the standing prompt.
+/// Memory stays after the instructions so a remembered fact is never read as
+/// an instruction. The turn's documentation goes after everything the loop
+/// adds, because each turn picks different documentation.
 fn system_prompt(
     tools_prompt: &impl std::fmt::Display,
+    sdk_docs: &str,
     session_id: agent_session::domain::model::AgentSessionId,
+    delivery: ReplyDelivery,
     identity: Option<&AgentIdentity>,
     instructions: Option<&str>,
     user_memory: Option<&str>,
 ) -> SystemPrompt {
     let mut shared = String::new();
+    shared.push_str(&prompt::agent_session::PROMPT.to_string());
+    shared.push_str(&tools_prompt.to_string());
+    let mut rest = String::new();
     if let Some(identity) = identity {
-        shared.push_str(&prompt::agent_identity::render(
+        rest.push('\n');
+        rest.push_str(&prompt::agent_identity::render(
             &identity.name,
             &identity.handle,
         ));
-        shared.push('\n');
     }
-    shared.push_str(&prompt::agent_session::PROMPT.to_string());
-    shared.push('\n');
-    shared.push_str(opener::ALREADY_OPENED);
-    shared.push('\n');
-    shared.push_str(&tools_prompt.to_string());
-    let mut rest = String::new();
     // Blank instructions are "none" stated clumsily. A delimited section with
     // nothing in it is worse than no section: the model has to decide what an
     // empty instruction means.
@@ -889,12 +897,16 @@ fn system_prompt(
          words of anything said earlier, summarized or not, run ContentSearch with \
          agentSessionIds [\"{session_id}\"]. ContentSearch remains a direct tool for scoped session-history search.\n</agent_session>"
     ));
+    if delivery == ReplyDelivery::Whole {
+        rest.push('\n');
+        rest.push_str(opener::NOT_OPENED);
+    }
     if let Some(memory) = user_memory {
         rest.push_str("\n<user_memory>\n");
         rest.push_str(memory);
         rest.push_str("\n</user_memory>");
     }
-    SystemPrompt::split(shared, rest)
+    SystemPrompt::split(shared, rest).with_turn(sdk_docs)
 }
 
 /// The owner's memory block, or `None` when it is missing or failed to load.

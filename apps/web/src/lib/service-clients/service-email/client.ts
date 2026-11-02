@@ -38,6 +38,7 @@ import type {
   GetAttachmentResponse,
   GetScheduledResponse,
   GetThreadResponse,
+  InitResponse,
   ListBackfillJobsResponse,
   ListContactsResponse,
   ListEmailFiltersResponse,
@@ -52,6 +53,7 @@ import type {
   SendMessageRequest,
   SendMessageResponse,
   SharedInboxConflictResponse,
+  ThreadReadReceipts,
   TransferDraftRequest,
   TransferDraftResponse,
   TransferRecoveryResponse,
@@ -65,6 +67,9 @@ import type {
   UpsertScheduledResponse,
 } from './generated/schemas';
 import type { EmptyResponse } from './generated/schemas/emptyResponse';
+import { ForwardCalendarEventErrorCode } from './generated/schemas/forwardCalendarEventErrorCode';
+import type { ForwardCalendarEventRequest } from './generated/schemas/forwardCalendarEventRequest';
+import type { ForwardCalendarEventResponse } from './generated/schemas/forwardCalendarEventResponse';
 import type { InvitationResolution } from './generated/schemas/invitationResolution';
 
 const emailHost: string = SERVER_HOSTS['email-service'];
@@ -104,6 +109,24 @@ async function calendarMutationErrorHandler(response: Response) {
   const code =
     body?.code && body.code in CalendarMutationErrorCode
       ? (body.code as CalendarMutationErrorCode)
+      : undefined;
+  if (code) {
+    return { code, message: body?.message ?? '' };
+  }
+  return {
+    code: 'HTTP_ERROR' as const,
+    message: `HTTP error! status: ${response.status}`,
+  };
+}
+
+async function forwardCalendarEventErrorHandler(response: Response) {
+  const body = (await response.json().catch(() => null)) as {
+    code?: string;
+    message?: string;
+  } | null;
+  const code =
+    body?.code && body.code in ForwardCalendarEventErrorCode
+      ? (body.code as ForwardCalendarEventErrorCode)
       : undefined;
   if (code) {
     return { code, message: body?.message ?? '' };
@@ -192,6 +215,24 @@ export const emailClient = {
       }
     );
   },
+  async forwardCalendarEvent(
+    eventId: string,
+    args: ForwardCalendarEventRequest
+  ) {
+    return fetchWithToken<
+      ForwardCalendarEventResponse,
+      ForwardCalendarEventErrorCode
+    >(`${emailHost}/email/calendar-events/${eventId}/forward`, {
+      method: 'POST',
+      body: JSON.stringify(args),
+      errorResponseHandler: forwardCalendarEventErrorHandler,
+    });
+  },
+  async getThreadReadReceipts(threadId: string) {
+    return emailFetch<ThreadReadReceipts>(
+      `/email/threads/${threadId}/read-receipts`
+    );
+  },
   async init(args?: { linkId?: string; forceShare?: boolean }) {
     const params = new URLSearchParams();
     if (args?.linkId) params.set('link_id', args.linkId);
@@ -199,7 +240,7 @@ export const emailClient = {
     const query = params.toString();
     const path = query ? `/email/init?${query}` : '/email/init';
 
-    return fetchWithToken<EmptyResponse, InitErrorCode>(`${emailHost}${path}`, {
+    return fetchWithToken<InitResponse, InitErrorCode>(`${emailHost}${path}`, {
       method: 'POST',
       // A custom handler replaces safeFetch's default status mapping. 409 carries
       // the shared-inbox conflict fields and 400 a machine-readable code; other
@@ -264,6 +305,13 @@ export const emailClient = {
         method: 'GET',
       })
     ).map((result) => result);
+  },
+  /** The message's original source as `.eml` bytes. */
+  async getMessageEml(args: { message_id: string }) {
+    return fetchWithToken<Uint8Array<ArrayBuffer>>(
+      `${emailHost}/email/messages/${args.message_id}/eml`,
+      { method: 'GET' }
+    );
   },
   async getUserLabels() {
     return (

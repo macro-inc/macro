@@ -602,7 +602,7 @@ export function ExternalChatView(props: {
                                 from its owner.
                               </p>
                               <Button
-                                variant="outline"
+                                variant="secondary"
                                 size="sm"
                                 onClick={() => {
                                   source.chat.refetch();
@@ -847,7 +847,7 @@ export function ExternalChatView(props: {
                               }
                             >
                               <Button
-                                variant="outline"
+                                variant="secondary"
                                 size="sm"
                                 onClick={props.onConnect}
                               >

@@ -44,6 +44,7 @@ import {
 import type { BoardPositions } from '../database/views/database-board-view';
 import { DatabaseRecords } from '../database/views/database-records';
 import type { DatabaseRecordsActions } from '../database/views/database-records-view';
+import { CrmListSkeleton } from './components/list-state';
 import { StageRequirementsDialog } from './components/stage-requirements-dialog';
 import type { Pipeline } from './core/pipeline';
 import { createPipelineApi } from './queries/pipeline-data';
@@ -90,11 +91,7 @@ export function PipelineDatabaseEditor(props: {
       class="@container/database flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-canvas-base text-ink"
       style={{ '--database-title-column-width': '18rem' }}
     >
-      <Suspense
-        fallback={
-          <div class="p-4 text-sm text-ink-muted">Loading pipeline…</div>
-        }
-      >
+      <Suspense fallback={<CrmListSkeleton label="Loading pipeline" />}>
         <Show when={props.pipeline.id} keyed>
           {(_id) => (
             <PipelineRecords
@@ -311,7 +308,7 @@ function PipelineToolbar(props: {
         <>
           <Show when={props.canEdit}>
             <Button
-              variant="outline"
+              variant="secondary"
               disabled={!queryReadyGate(requirements.query)}
               onClick={() => setConfiguring(true)}
             >
@@ -329,7 +326,7 @@ function PipelineToolbar(props: {
                 onClose={() => setConfiguring(false)}
               />
             </Show>
-            <Button variant="outline" onClick={() => props.onCompose({})}>
+            <Button variant="secondary" onClick={() => props.onCompose({})}>
               <PlusIcon class="size-4" />
               {props.pipeline.recordType === 'company'
                 ? 'Add deal'

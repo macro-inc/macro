@@ -6,10 +6,10 @@ import type {
 import { describe, expect, it } from 'vitest';
 import {
   openReply,
+  openRun,
+  phaseRow,
   replyToTurn,
   segmentRows,
-  streamingProse,
-  typingLabel,
 } from './live-reply';
 
 function reply(
@@ -59,7 +59,7 @@ describe('live reply', () => {
     expect(replyToTurn([done, running], 0)).toBe(done);
   });
 
-  it('streams only an unfinished passage', () => {
+  it('finds the run the agent is in the middle of, and no finished one', () => {
     const writing = reply(
       0,
       [
@@ -91,7 +91,7 @@ describe('live reply', () => {
         prose(2, 2, false),
       ]
     );
-    expect(streamingProse(writing)).toBe('Still writing');
+    expect(openRun(writing)).toBeUndefined();
     expect(segmentRows(writing, 1)).toEqual([
       { id: 't1', label: 'Ran', detail: 'ls', status: 'completed' },
     ]);
@@ -101,14 +101,30 @@ describe('live reply', () => {
       [{ kind: 'text', text: 'All done' }],
       [prose(0, 0, true)]
     );
-    expect(streamingProse(finished)).toBeUndefined();
+    expect(openRun(finished)).toBeUndefined();
+    const working = reply(
+      0,
+      [],
+      [
+        prose(0, 0, true),
+        {
+          index: 1,
+          kind: 'activity',
+          start: 1,
+          end: 2,
+          sealed: false,
+          rows: [],
+        },
+      ]
+    );
+    expect(openRun(working)?.index).toBe(1);
+    expect(openRun(undefined)).toBeUndefined();
   });
 
-  it('says what the agent is doing in words', () => {
-    expect(typingLabel('Macro', 'writing')).toBe('Macro is typing');
-    expect(typingLabel('Scout', 'working')).toBe('Scout is working');
-    expect(typingLabel('Scout', 'waiting')).toBe(
-      'Scout is waiting for an answer'
-    );
+  it('says what the turn is doing in words', () => {
+    expect(phaseRow('thinking').label).toBe('Thinking');
+    expect(phaseRow('writing').label).toBe('Writing');
+    expect(phaseRow('working').label).toBe('Working');
+    expect(phaseRow('waiting').label).toBe('Waiting for an answer');
   });
 });

@@ -387,6 +387,10 @@ impl InfraEnv {
             "CODEX_OAUTH_KMS_KEY_ID".into(),
             resources::CODEX_OAUTH_KMS_ALIAS.into(),
         );
+        env.insert(
+            "MCP_OAUTH_KMS_KEY_ID".into(),
+            resources::MCP_OAUTH_KMS_ALIAS.into(),
+        );
         // Dummy creds: the SDK talks to LocalStack, never real AWS.
         env.insert("AWS_ACCESS_KEY_ID".into(), "test".into());
         env.insert("AWS_SECRET_ACCESS_KEY".into(), "test".into());

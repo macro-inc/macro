@@ -90,23 +90,22 @@ const property: SelectProperty = {
 function setup(value = property) {
   const pending = Promise.withResolvers<void>();
   const onSave = vi.fn(() => pending.promise);
-  const onRefresh = vi.fn();
   const [editorOpen, setEditorOpen] = createSignal(true);
   const context: PropertyRootContextValue = {
     property: () => value,
+    pickedEntityName: () => undefined,
     canEdit: () => true,
     editorOpen,
     openEditor: () => setEditorOpen(true),
     closeEditor: () => setEditorOpen(false),
     onSave,
-    onRefresh,
   };
   render(() => (
     <PropertyRootContext.Provider value={context}>
       <SelectEditor />
     </PropertyRootContext.Provider>
   ));
-  return { pending, onSave, onRefresh, context };
+  return { pending, onSave, context };
 }
 
 afterEach(cleanup);
@@ -191,7 +190,7 @@ it('does not rewrite an existing project status when its picker is dismissed', (
 
 describe('SelectEditor save dismissal', () => {
   it('closes immediately while saving the selected status', async () => {
-    const { pending, onSave, onRefresh, context } = setup();
+    const { pending, onSave, context } = setup();
 
     fireEvent.click(screen.getByText('Pick option'));
 
@@ -200,19 +199,17 @@ describe('SelectEditor save dismissal', () => {
       valueType: 'SELECT_STRING',
       values: ['doing'],
     });
-    expect(onRefresh).not.toHaveBeenCalled();
 
     // A slow earlier save must not dismiss a newly opened editor.
     context.openEditor();
     expect(screen.queryByRole('dialog')).not.toBeNull();
     pending.resolve();
     await pending.promise;
-    expect(onRefresh).toHaveBeenCalledOnce();
     expect(screen.queryByRole('dialog')).not.toBeNull();
   });
 
-  it('stays closed on a failed save without refreshing or resubmitting', async () => {
-    const { pending, onSave, onRefresh } = setup();
+  it('stays closed on a failed save without resubmitting', async () => {
+    const { pending, onSave } = setup();
 
     fireEvent.click(screen.getByText('Pick option'));
     expect(screen.queryByRole('dialog')).toBeNull();
@@ -222,17 +219,15 @@ describe('SelectEditor save dismissal', () => {
 
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(onSave).toHaveBeenCalledOnce();
-    expect(onRefresh).not.toHaveBeenCalled();
   });
 
   it('closes without saving when nothing changed', () => {
-    const { onSave, onRefresh } = setup();
+    const { onSave } = setup();
 
     fireEvent.click(screen.getByText('Dismiss'));
 
     expect(screen.queryByRole('dialog')).toBeNull();
     expect(onSave).not.toHaveBeenCalled();
-    expect(onRefresh).not.toHaveBeenCalled();
   });
 
   it('captures accumulated multi-select values before unmounting on dismissal', async () => {

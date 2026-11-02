@@ -217,7 +217,7 @@ it('says while history imports and shows older messages as they land', () => {
   });
   fake.setMessages(messages);
   expect(screen.getByRole('status').textContent).toBe(
-    'Waiting for your phone to import history'
+    'Earlier messages not imported. Open WhatsApp on your phone, then import them.'
   );
   const ids = [...document.querySelectorAll('[data-message-id]')].map((row) =>
     row.getAttribute('data-message-id')
@@ -262,7 +262,7 @@ it('tells a shared viewer whose phone the import waits for', () => {
   });
   mount(fake);
   expect(
-    screen.getAllByText(/Waiting for the owner's phone to import history/)
+    screen.getAllByText(/Earlier messages wait for the owner's phone/)
   ).toHaveLength(2);
   // Not "No messages yet" while history is still coming.
   expect(screen.queryByText(/No messages yet/)).toBeNull();
@@ -699,7 +699,7 @@ it('opens members, sharing and syncing in the side panel', async () => {
   });
   const { share } = mount(fake);
   expect(screen.queryByRole('list', { name: 'WhatsApp members' })).toBeNull();
-  fireEvent.click(screen.getByRole('button', { name: /side panel/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
 
   const members = await screen.findByRole('list', {
     name: 'WhatsApp members',
@@ -734,7 +734,7 @@ it('lets the owner stop syncing a direct chat from its details', async () => {
     chat: { ...chat, kind: 'direct', name: 'Ana Ruiz', members: [] },
   });
   mount(fake);
-  fireEvent.click(screen.getByRole('button', { name: /side panel/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
   expect(
     await screen.findByRole('button', { name: 'Stop syncing' })
   ).toBeTruthy();
@@ -747,7 +747,7 @@ it('keeps syncing controls from a shared viewer', async () => {
     chat: { ...chat, accessLevel: 'view', canSend: false },
   });
   mount(fake);
-  fireEvent.click(screen.getByRole('button', { name: /side panel/i }));
+  fireEvent.click(screen.getByRole('button', { name: 'Show details' }));
   expect(await screen.findByRole('button', { name: 'Share…' })).toBeTruthy();
   expect(screen.queryByRole('button', { name: 'Stop syncing' })).toBeNull();
 });

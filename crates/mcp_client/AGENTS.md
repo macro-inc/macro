@@ -8,22 +8,27 @@ ones) and executes their tools for agents.
 
 ## How it works
 
-A user connects a server through the HTTP routes (OAuth callback if needed);
-the server config and OAuth tokens are stored via the outbound adapters
-(Postgres, Redis). When an agent calls one of that server's tools, the
+A user connects a server through the HTTP routes, or an agent adds one with
+the `ConnectMcpServer` AI tool and the user signs in afterwards (OAuth
+callback if needed). Both paths go through `ServerDirectory`, which only lets
+agents add public `https` destinations. The server config and OAuth tokens
+are stored via the outbound adapters (Postgres, Redis). When an agent calls one of that server's tools, the
 service orchestration layer looks up the connection and executes the tool
 through `rmcp`, returning the result to the caller's tool-calling loop.
 
 ## Start here
 
 - `src/domain/service/`: connection/tool-execution orchestration
-  (`toolset.rs`, `server_access.rs`, `persisting_credential_store.rs`).
+  (`toolset.rs`, `server_access.rs`, `persisting_credential_store.rs`), and
+  `server_directory.rs` for adding servers.
 - `src/domain/ports.rs`: `McpServerStore`, `OAuthStateStore`, and the OAuth
   port the outbound adapters implement.
 - `src/domain/provider_registry.rs` (feature `providers`): pre-registered
   OAuth credentials for known MCP providers, keyed off `macro_env_var`.
 - `src/inbound/axum_router.rs`: HTTP routes for server management and the
   OAuth callback.
+- `src/inbound/toolset.rs`: the `ConnectMcpServer` AI tool, wired through
+  `ai_tools` where the MCP credentials key is configured.
 - `src/outbound/`: `oauth.rs` (RMCP-backed OAuth), `pg_server_repo.rs`
   (Postgres server store), `redis_state_store.rs` (OAuth state).
 
@@ -54,6 +59,10 @@ through `rmcp`, returning the result to the caller's tool-calling loop.
 - OAuth state lives in Redis (`redis_state_store.rs`) separately from the
   server config in Postgres (`pg_server_repo.rs`) — a server record surviving
   doesn't mean its OAuth state did.
+- `ServerDirectory`'s public-destination check for agent-added servers judges
+  hostnames by name and never resolves them, so a public name that resolves
+  to a private address passes. Protection against that belongs where the
+  backend connects, for every stored server.
 
 ## Related
 

@@ -14,12 +14,12 @@ import {
   testFacets,
 } from '../../soup';
 import type { CrmActivityViewState } from '../core/activity-view';
-import type { CrmActivityTab } from '../core/navigation';
+import type { CrmSoupActivityTab } from '../core/navigation';
 import { crmActivityBody } from './activity-filter';
 
 /** Refine, never replace, the fixed CRM and entity-type predicates. */
 export function buildCrmActivityQuery(
-  tab: CrmActivityTab,
+  tab: CrmSoupActivityTab,
   options?: CrmActivityViewState,
   facetContext: TagFacetContext = EMPTY_TAG_FACET_CONTEXT
 ): SoupAstItemsQueryArgs {
@@ -42,7 +42,7 @@ export function buildCrmActivityQuery(
 /** Attachment and audience predicates mirror the ordinary Email and Calls lists. */
 export function crmActivityItemMatches(
   entity: EntityData,
-  tab: CrmActivityTab,
+  tab: CrmSoupActivityTab,
   options: CrmActivityViewState,
   facetContext: TagFacetContext
 ): boolean {

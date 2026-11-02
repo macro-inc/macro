@@ -56,15 +56,17 @@ export function DriveHeader() {
           title={<DriveBreadcrumbsOutlet aria-label="Drive location" />}
         >
           <Show when={state.value().location.kind === 'tab'}>
-            <HeaderActionGroup label="File filters">
+            <HeaderActionGroup label="File filters" size="md">
               <Suspense>
-                <DriveFilterMenu />
+                <DriveFilterMenu grouped size="icon-md" />
               </Suspense>
             </HeaderActionGroup>
           </Show>
           <Show when={!isRecent()}>
-            <HeaderActionGroup label="File view options">
+            <HeaderActionGroup label="File view options" size="md">
               <ListSortDropdown
+                grouped
+                size="icon-md"
                 label="Sort files"
                 value={state.value().sort}
                 onChange={state.setSort}

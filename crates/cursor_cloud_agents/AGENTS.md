@@ -14,6 +14,8 @@ notifications as it arrives.
 - `src/domain/translate.rs`: the Cursor→ACP event translation state machine
   (`TranslateMachine`), mirroring `agent_fold`'s `FoldMachine`.
 - `src/domain/service.rs`: ties a prompt to a run.
+- `src/domain/prompt_image.rs` + `src/outbound/http_prompt_images.rs`: convert
+  pasted public raster-image links and ACP images into Cursor prompt images.
 - `src/api.rs` (`src/api/`): the Cursor cloud REST + SSE client.
 - `src/inbound/acp.rs`: newline-delimited JSON-RPC ACP adapter (stdio or
   in-process duplex pipe).
@@ -54,6 +56,13 @@ notifications as it arrives.
   path only.
 
 ## Gotchas
+
+Prompt image resolution preserves the prompt text, tries up to eight unique links
+within a ten-second budget, and sends at most five images of 15 MiB each.
+HTTP resolution disables proxies, validates literal addresses and connection-time
+DNS answers, and checks each redirect. Stop cancels resolution and journals the prompt as aborted
+without creating remote work. Fetch failures leave links as text; never log link URLs
+or image bytes. Images are journaled as ACP image blocks for live display and replay.
 
 - `REPLAY.md`'s migration-rollout section documents a one-time consolidation
   of four old migrations into `20260906060601_cursor_session_replay`; don't

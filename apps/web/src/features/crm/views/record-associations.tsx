@@ -1,7 +1,11 @@
-import { createSignal } from 'solid-js';
+import EmptyStateCallsGraphic from '@design/empty-state-calls.svg';
+import EmptyStateDocGraphic from '@design/empty-state-doc.svg';
+import { createSignal, Show } from 'solid-js';
+import { CrmListEmpty, CrmListSkeleton } from '../components/list-state';
 import { RecordSection } from '../components/record-section';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmRecordScope } from '../core/record';
+import { CrmDatabasesView } from './databases';
 import { RecordItemList } from './record-item-list';
 
 /**
@@ -10,14 +14,34 @@ import { RecordItemList } from './record-item-list';
  */
 export function RecordFilesSection(props: { scope?: CrmRecordScope }) {
   const [search, setSearch] = createSignal('');
-  const files = useCrmContext().createRecordFiles(() => props.scope);
+  const crm = useCrmContext();
+  const files = crm.createRecordFiles(() => props.scope);
   return (
-    <RecordSection title="Files" search={search()} onSearchChange={setSearch}>
+    <RecordSection
+      title="Files"
+      search={search()}
+      onSearchChange={setSearch}
+      createAction={{
+        label: 'New note',
+        onClick: () => crm.openCreateItem('notes'),
+      }}
+    >
       <RecordItemList
         source={files}
         search={search()}
         pending={!props.scope}
-        empty={`No files with this ${props.scope?.type ?? 'record'} yet.`}
+        onClearSearch={() => setSearch('')}
+        emptyContent={
+          <CrmListEmpty
+            graphic={EmptyStateDocGraphic}
+            title="No files linked yet"
+            description={`Create a note and link it to this ${props.scope?.type ?? 'record'} through its Companies or Contacts property.`}
+            action={{
+              label: 'New note',
+              onClick: () => crm.openCreateItem('notes'),
+            }}
+          />
+        }
       />
     </RecordSection>
   );
@@ -29,16 +53,48 @@ export function RecordFilesSection(props: { scope?: CrmRecordScope }) {
  */
 export function RecordCallsSection(props: { scope?: CrmRecordScope }) {
   const [search, setSearch] = createSignal('');
-  const calls = useCrmContext().createRecordCalls(() => props.scope);
+  const crm = useCrmContext();
+  const calls = crm.createRecordCalls(() => props.scope);
   return (
-    <RecordSection title="Calls" search={search()} onSearchChange={setSearch}>
+    <RecordSection
+      title="Calls"
+      search={search()}
+      onSearchChange={setSearch}
+      createAction={{
+        label: 'New call',
+        onClick: () => crm.openCreateItem('calls'),
+      }}
+    >
       <RecordItemList
         source={calls}
         search={search()}
         pending={!props.scope}
-        empty={`No calls with this ${props.scope?.type ?? 'record'} yet.`}
+        onClearSearch={() => setSearch('')}
+        emptyContent={
+          <CrmListEmpty
+            graphic={EmptyStateCallsGraphic}
+            title="No calls linked yet"
+            description={`Calls with a Companies or Contacts link to this ${props.scope?.type ?? 'record'} will appear here.`}
+            action={{
+              label: 'New call',
+              onClick: () => crm.openCreateItem('calls'),
+            }}
+          />
+        }
       />
     </RecordSection>
+  );
+}
+
+/** Databases require a loaded record so pending details never request workspace scope. */
+export function RecordDatabasesSection(props: { scope?: CrmRecordScope }) {
+  return (
+    <Show
+      when={props.scope}
+      fallback={<CrmListSkeleton label="Loading databases" />}
+    >
+      {(scope) => <CrmDatabasesView scope={scope()} />}
+    </Show>
   );
 }
 

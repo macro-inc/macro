@@ -7,13 +7,13 @@ import { CopyButton } from './CopyButton';
 function VariantsDemo() {
   return (
     <div class="flex flex-wrap items-center gap-3">
-      <For each={['ghost', 'outline', 'strong'] as const}>
+      <For each={['ghost', 'outline', 'secondary'] as const}>
         {(variant) => (
           <CopyButton
             variant={variant}
             onClick={() => navigator.clipboard.writeText('Copied from Macro')}
           >
-            <CopyIcon />
+            <CopyIcon class="size-4" />
             Copy {variant}
           </CopyButton>
         )}
@@ -30,12 +30,13 @@ function SizesDemo() {
       <For each={['sm', 'md', 'lg', 'icon-md'] as const}>
         {(size) => (
           <CopyButton
+            aria-label="Copy example"
+            tooltip="Copy example"
             size={size}
-            variant="outline"
-            label="Copy example"
+            variant="secondary"
             onClick={() => navigator.clipboard.writeText('Copied from Macro')}
           >
-            <CopyIcon />
+            <CopyIcon class="size-4" />
             {size !== 'icon-md' && 'Copy'}
           </CopyButton>
         )}

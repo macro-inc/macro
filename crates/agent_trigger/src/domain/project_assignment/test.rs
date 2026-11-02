@@ -35,6 +35,7 @@ fn update(
         actor_user_id: Some(user()),
         actor: None,
         on_behalf_of: None,
+        source: None,
         value: project_value(project),
         previous_value: project_value(previous),
         updated_at: Utc::now(),

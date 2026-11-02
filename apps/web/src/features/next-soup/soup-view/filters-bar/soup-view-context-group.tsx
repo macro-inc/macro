@@ -13,6 +13,7 @@ import type { ButtonVariant } from '@ui';
 import { createMemo, createSignal, Show } from 'solid-js';
 
 export const SoupViewContextGroup = (props: {
+  grouped?: boolean;
   hideLabel?: boolean;
   variant?: ButtonVariant;
 }) => {
@@ -50,6 +51,7 @@ export const SoupViewContextGroup = (props: {
     <Show when={groupByEnabled().enabled}>
       <Show when={isComponentListView('tasks')}>
         <GroupDropdown
+          grouped={props.grouped}
           value={value}
           onChange={onChange}
           options={TASK_GROUP_OPTIONS}
@@ -63,6 +65,7 @@ export const SoupViewContextGroup = (props: {
           applies to the list mode. */}
       <Show when={extensions?.groupOptions?.visible()}>
         <GroupDropdown
+          grouped={props.grouped}
           value={value}
           onChange={onChange}
           options={extensions?.groupOptions?.options ?? []}
@@ -74,6 +77,7 @@ export const SoupViewContextGroup = (props: {
       </Show>
       <Show when={component() === 'tag'}>
         <GroupDropdown
+          grouped={props.grouped}
           value={value}
           onChange={onChange}
           options={TAG_VIEW_GROUP_OPTIONS}

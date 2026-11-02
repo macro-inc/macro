@@ -115,7 +115,7 @@ export function PipelineImport(props: {
                 Close
               </Button>
               <Button
-                variant="strong"
+                variant="secondary"
                 disabled={reading() || pending() || !plan()}
                 onClick={() => fireAndForget(run(), 'crm')}
               >

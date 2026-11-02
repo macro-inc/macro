@@ -393,6 +393,8 @@ pub struct NewDocument {
     pub share_with_team: bool,
     /// Custom creation timestamp.
     pub created_at: Option<chrono::DateTime<chrono::Utc>>,
+    /// Custom last-edit timestamp; defaults to `created_at`.
+    pub updated_at: Option<chrono::DateTime<chrono::Utc>>,
     /// Sub type of the document — task or snippet (MD files only).
     pub sub_type: Option<document_sub_type::DocumentSubType>,
     /// Whether to skip adding to user history.

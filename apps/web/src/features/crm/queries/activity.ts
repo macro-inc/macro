@@ -6,13 +6,13 @@ import {
   tagFacetReady,
 } from '../../soup';
 import type { CrmActivityViewState } from '../core/activity-view';
-import type { CrmActivityTab } from '../core/navigation';
+import type { CrmSoupActivityTab } from '../core/navigation';
 import { buildCrmActivityQuery } from './activity-options';
 
 /** A bounded query for the complete authorized CRM activity feed. */
 export function useCrmActivityQuery(
   createQuery: typeof useSoupAstItemsQuery,
-  tab: Accessor<CrmActivityTab>,
+  tab: Accessor<CrmSoupActivityTab>,
   userId: Accessor<string | undefined>,
   options?: Accessor<CrmActivityViewState>,
   facetContext: Accessor<TagFacetContext> = () => EMPTY_TAG_FACET_CONTEXT,

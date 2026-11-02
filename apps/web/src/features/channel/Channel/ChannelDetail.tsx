@@ -1,3 +1,11 @@
+import {
+  type PriorityCollapser,
+  useRegisterPriorityCollapseItem,
+} from '@app/components/priority-collapse/createPriorityCollapser';
+import {
+  createPriorityCollapseController,
+  PriorityCollapseOverflowSensor,
+} from '@app/components/priority-collapse/PriorityCollapseOverflowSensor';
 import { ViewShell } from '@app/components/view-shell';
 import { ChatWithAgentButton } from '@app/features/chat/ChatWithAgentButton';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
@@ -18,15 +26,9 @@ import { ChannelParticipantsTab } from '@channel/Participants/ChannelParticipant
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import {
-  createPriorityCollapseController,
-  PriorityCollapseOverflowSensor,
-} from '@components/app/split-layout/components/PriorityCollapseOverflowSensor';
-import {
-  useRegisterPriorityCollapseItem,
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
-import type { PriorityCollapser } from '@components/app/split-layout/utils/createPriorityCollapser';
 import { ENABLE_CALLS } from '@core/constant/featureFlags';
 import {
   useChannel,
@@ -142,6 +144,7 @@ export function ChannelDetailTabs(props: {
   return (
     <Tabs
       aria-label="Channel sections"
+      size="md"
       touch="inset"
       class="shrink-0"
       options={isCollapsed() ? withChannelTabIcons(tabs()) : tabs()}
@@ -180,13 +183,17 @@ export function ChannelDetailActions(props: ChannelDetailHeaderProps) {
           when={ENABLE_CALLS && !channel()?.agent_dm && !call.isInThisChannel()}
         >
           <DebugSuspense name="ChannelDetail.call-button">
-            <ChannelCallButton channelId={props.channelId} />
+            <ChannelCallButton grouped channelId={props.channelId} />
           </DebugSuspense>
         </Show>
         <Show when={askMacroEntity()}>
           {(entity) => (
             <DebugSuspense name="ChannelDetail.ask-macro">
-              <ChatWithAgentButton entity={entity()} label="Ask Macro" />
+              <ChatWithAgentButton
+                grouped
+                entity={entity()}
+                label="Ask Macro"
+              />
             </DebugSuspense>
           )}
         </Show>
@@ -215,11 +222,12 @@ export function ChannelDetailTopBar(
 
   return (
     <ViewShell.TopBar ref={collapse.setRow} class="gap-3 py-0">
+      {/* Reserve room for the tab outline inside the clipped, measured region. */}
       <PriorityCollapseOverflowSensor
         controller={collapse}
         truncateAsLastResort
         class="relative h-full min-w-0 shrink overflow-hidden"
-        contentClass="flex h-full items-center gap-3"
+        contentClass="flex h-full items-center gap-3 not-touch:pr-1"
       >
         <div class="flex min-w-0 shrink items-center gap-1">
           <DebugSuspense name="ChannelDetail.title">

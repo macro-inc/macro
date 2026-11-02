@@ -35,6 +35,7 @@ export function ReminderScheduleIndicator(props: {
         open={focused() ? true : isTouchDevice() ? false : undefined}
       >
         <Button
+          variant="ghost"
           size="icon-sm"
           data-reminder-action
           aria-label={props.label}

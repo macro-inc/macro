@@ -25,6 +25,7 @@ import {
   userThemes,
 } from '../signals/themeSignals';
 import type { ThemeColorTokens, ThemeV3 } from '../types/themeTypes';
+import { buttonAccentVars } from './buttonTheme';
 import { formatOklch } from './colorUtil';
 import { resolveThemeColors } from './resolvedThemeColors';
 import {
@@ -99,7 +100,20 @@ function renderThemeColorToken(token: string, value: string): void {
 
 /** Applies a color token for an editor drag without updating persisted state. */
 export function previewLiveThemeColorToken(token: string, value: string): void {
+  const tokens = { ...themeColorTokens(), [token]: value };
+  const colors = resolveThemeColors(tokens, liveThemeMode());
+  const accentVars = buttonAccentVars(colors);
   renderThemeColorToken(token, value);
+  document.documentElement.dataset.themeLight = String(
+    colors['surface-0'].l > colors['content-0'].l
+  );
+  renderButtonAccentVars(accentVars);
+}
+
+function renderButtonAccentVars(vars: Record<string, string>): void {
+  for (const [name, value] of Object.entries(vars)) {
+    document.documentElement.style.setProperty(name, value);
+  }
 }
 
 /** Writes all VNext authored tokens to the root and updates editor state. */
@@ -134,6 +148,7 @@ export function setLiveThemeColorTokens(tokens: ThemeColorTokens): void {
     '--theme-comment-ink-lightness',
     String(colors['content-1'].l)
   );
+  renderButtonAccentVars(buttonAccentVars(colors));
   setThemeColorTokens(normalizedTokens);
 }
 

@@ -19,6 +19,7 @@ anyhow = { workspace = true }
 aws-sdk-secretsmanager = { workspace = true }
 macro_aws_config = { path = "../macro_aws_config" }
 axum = { workspace = true }
+calendar_events = { path = "../calendar_events" }
 chrono = { workspace = true }
 channels = { path = "../channels", default-features = false, features = ["outbound"] }
 comms_db_client = { path = "../comms_db_client" }

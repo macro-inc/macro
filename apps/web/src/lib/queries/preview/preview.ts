@@ -48,11 +48,19 @@ const PREVIEW_STALE_TIME = 60 * 1000 * 60 * 24; // 24 hours
  * stale on the mention-preview cadence rather than the 24h default. */
 const CALENDAR_EVENT_PREVIEW_STALE_TIME = 60 * 1000;
 
+// Callers may pass component props; the cached queryFn keeps only a plain copy.
+function itemRequest(entity: ItemEntity): ItemEntity {
+  return entity.type === 'channel'
+    ? { id: entity.id, type: 'channel', messageId: entity.messageId }
+    : { id: entity.id, type: entity.type };
+}
+
 function itemPreviewQueryOptions(
-  item: ItemEntity,
+  entity: ItemEntity,
   enabled = true,
   staleTime = PREVIEW_STALE_TIME
 ) {
+  const item = itemRequest(entity);
   if (item.type === 'agent_session') staleTime = Math.min(staleTime, 30_000);
   if (item.type === 'calendar_event') {
     staleTime = Math.min(staleTime, CALENDAR_EVENT_PREVIEW_STALE_TIME);

@@ -381,10 +381,7 @@ where
                     return Err(JoinTeamError::TeamError(TeamError::TeamNotPaying).into());
                 }
 
-                if let Err(e) = self
-                    .backfill_legacy_team_subscription_or_free(&team_id)
-                    .await
-                {
+                if let Err(e) = self.backfill_legacy_team_subscription(&team_id).await {
                     self.rollback_add_user_to_team(
                         &team_id,
                         user_id,
@@ -1184,11 +1181,15 @@ where
     }
 
     /// Backfills legacy teams that were created without a team subscription id.
-    #[tracing::instrument(skip(self), err)]
+    /// A team whose owner has no Stripe customer, or no active or trialing
+    /// subscription, is a free team rather than an error, and its size does
+    /// not require an upgrade. Returns whether the team now pays through the
+    /// owner's subscription.
+    #[tracing::instrument(skip(self), fields(outcome = tracing::field::Empty), err)]
     async fn backfill_legacy_team_subscription(
         &self,
         team_id: &uuid::Uuid,
-    ) -> Result<(), GetTeamSubscriptionError> {
+    ) -> Result<bool, GetTeamSubscriptionError> {
         let team_owner = self
             .team_repository
             .get_team_by_id(team_id)
@@ -1197,19 +1198,25 @@ where
             .team
             .owner_id;
 
-        let customer_id = self
+        let Some(customer_id) = self
             .team_repository
             .get_stripe_customer_id(&team_owner)
             .await
             .map_err(GetTeamSubscriptionError::Team)?
-            .ok_or(CustomerError::NoStripeCustomerId)
-            .map_err(GetTeamSubscriptionError::Customer)?;
+        else {
+            tracing::Span::current().record("outcome", "no_customer");
+            return Ok(false);
+        };
 
-        let subscription_id = self
+        let Some(subscription_id) = self
             .customer_repository
             .get_subscription_id_for_customer(&customer_id)
             .await
-            .map_err(GetTeamSubscriptionError::Customer)?;
+            .map_err(GetTeamSubscriptionError::Customer)?
+        else {
+            tracing::Span::current().record("outcome", "no_subscription");
+            return Ok(false);
+        };
 
         self.customer_repository
             .convert_subscription_to_team(&subscription_id, team_id, &team_owner)
@@ -1226,25 +1233,8 @@ where
             .await
             .map_err(GetTeamSubscriptionError::Team)?;
 
-        Ok(())
-    }
-
-    /// Runs [`Self::backfill_legacy_team_subscription`], treating "the owner
-    /// simply has no active subscription" as a benign outcome: the team is a
-    /// free team rather than an error. Team size does not require an upgrade.
-    /// Every other failure still propagates. Returns whether the team now
-    /// pays through the owner's subscription.
-    async fn backfill_legacy_team_subscription_or_free(
-        &self,
-        team_id: &uuid::Uuid,
-    ) -> Result<bool, GetTeamSubscriptionError> {
-        match self.backfill_legacy_team_subscription(team_id).await {
-            Ok(()) => Ok(true),
-            Err(GetTeamSubscriptionError::Customer(
-                CustomerError::NoStripeCustomerId | CustomerError::SubscriptionNotActive,
-            )) => Ok(false),
-            Err(e) => Err(e),
-        }
+        tracing::Span::current().record("outcome", "linked");
+        Ok(true)
     }
 
     /// Best-effort rollback of a direct team add (from
@@ -1470,17 +1460,10 @@ where
             return Ok(None);
         };
 
-        match self
-            .customer_repository
+        self.customer_repository
             .get_subscription_id_for_customer(&customer_id)
             .await
-        {
-            Ok(subscription_id) => Ok(Some(subscription_id)),
-            Err(CustomerError::NoStripeCustomerId | CustomerError::SubscriptionNotActive) => {
-                Ok(None)
-            }
-            Err(e) => Err(TeamError::StorageLayerError(e.into())),
-        }
+            .map_err(|e| TeamError::StorageLayerError(e.into()))
     }
 
     #[tracing::instrument(skip(self), fields(invitee_plan = tracing::field::Empty), err)]
@@ -1520,7 +1503,7 @@ where
                 }
                 (false, None) => {
                     let linked = self
-                        .backfill_legacy_team_subscription_or_free(&team_id)
+                        .backfill_legacy_team_subscription(&team_id)
                         .await
                         .map_err(GetTeamSubscriptionError::into_invite_users_to_team_error)?;
                     if linked {
@@ -1877,7 +1860,7 @@ where
                 }
 
                 if let Err(e) = self
-                    .backfill_legacy_team_subscription_or_free(&accepted_invite.member.team_id)
+                    .backfill_legacy_team_subscription(&accepted_invite.member.team_id)
                     .await
                 {
                     self.team_repository

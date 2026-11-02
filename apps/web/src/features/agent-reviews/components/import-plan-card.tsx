@@ -305,7 +305,7 @@ function PlanContents(
           <Show when={props.onReload}>
             {(reload) => (
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 disabled={props.working}
                 onClick={() => reload()()}
@@ -430,7 +430,7 @@ function PlanContents(
             Dismiss
           </Button>
           <Button
-            variant="cta"
+            variant="primary"
             size="sm"
             disabled={!props.editable || props.count === 0}
             onClick={() => props.onApprove()}

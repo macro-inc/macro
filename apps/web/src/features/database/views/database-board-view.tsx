@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import type { DatabaseOpsError } from '@service-storage/databases';
 import type { CardPosition } from '@service-storage/generated/schemas/cardPosition';
 import type { ViewLayout } from '@service-storage/generated/schemas/viewLayout';
@@ -135,6 +136,7 @@ export function DatabaseBoardView(props: DatabaseBoardViewProps) {
             <Show when={props.onViewChange}>
               {(changeView) => (
                 <Button
+                  variant="ghost"
                   size="sm"
                   class="mt-3"
                   onClick={() =>
@@ -233,17 +235,20 @@ function GroupedBoard(
     // Pending moves supply visual optimism; saved positions change only on success.
     // A refusal then reveals the original order without overwriting a later move.
     setMoves((current) => [...current, { move }]);
-    void persist(move)
-      .map(({ positions, tableVersion }) => {
-        props.positions.setPositions?.((current) =>
-          withPositions(current, positions)
-        );
-        taken(move, tableVersion);
-      })
-      .mapErr((failure) => {
-        forget(move);
-        toast.failure(databaseOpMessage(failure, 'this card'));
-      });
+    fireAndForget(
+      persist(move)
+        .map(({ positions, tableVersion }) => {
+          props.positions.setPositions?.((current) =>
+            withPositions(current, positions)
+          );
+          taken(move, tableVersion);
+        })
+        .mapErr((failure) => {
+          forget(move);
+          toast.failure(databaseOpMessage(failure, 'this card'));
+        }),
+      'database'
+    );
   }
   function drop(row: string, lane: LaneKey, next?: string) {
     const shown = board();

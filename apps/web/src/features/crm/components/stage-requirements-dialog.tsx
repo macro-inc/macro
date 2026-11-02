@@ -91,7 +91,7 @@ export function StageRequirementsDialog(props: {
                   {t('crm.stageRequirements')}
                 </Dialog.Title>
                 <Button
-                  size="icon-composer"
+                  size="icon-md"
                   aria-label={t('common.close')}
                   disabled={pending()}
                   onClick={close}
@@ -188,7 +188,11 @@ export function StageRequirementsDialog(props: {
                 </Show>
               </EntityComposer.Main>
               <EntityComposer.Footer class="justify-end">
-                <Button variant="outline" disabled={pending()} onClick={close}>
+                <Button
+                  variant="secondary"
+                  disabled={pending()}
+                  onClick={close}
+                >
                   {t('common.cancel')}
                 </Button>
                 <EntityComposer.Submit

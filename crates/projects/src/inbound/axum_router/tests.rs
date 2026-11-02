@@ -135,6 +135,14 @@ impl ProjectService for FakeProjectService {
         Ok(Vec::new())
     }
 
+    async fn get_project_tree(
+        &self,
+        _receipt: EntityAccessReceipt<entity_access::domain::models::ViewAccessLevel>,
+        _limit: usize,
+    ) -> Result<crate::domain::models::ProjectTree, ProjectError> {
+        unreachable!("no HTTP route loads a project tree")
+    }
+
     async fn get_project_permissions(
         &self,
         _receipt: EntityAccessReceipt<entity_access::domain::models::OwnerAccessLevel>,
@@ -163,6 +171,14 @@ impl ProjectService for FakeProjectService {
             .expect("create principal lock poisoned")
             .push(principal.clone());
         Ok(project())
+    }
+
+    async fn create_project_dated_by_contents(
+        &self,
+        _principal: &CreationPrincipal,
+        _args: CreateProjectRequest,
+    ) -> Result<Project, ProjectError> {
+        panic!("dated projects are not created by these tests")
     }
 
     async fn edit_project(

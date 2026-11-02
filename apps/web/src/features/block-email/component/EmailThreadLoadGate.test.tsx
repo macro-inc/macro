@@ -122,6 +122,7 @@ it('clears the previous thread and read marker when a reused host navigates', ()
       link_id: `${id}-inbox`,
       access_level: 'owner',
       inbox_visible: true,
+      has_received_mail: true,
       is_read: false,
       messages: [],
       created_at: '2026-09-01T10:00:00Z',

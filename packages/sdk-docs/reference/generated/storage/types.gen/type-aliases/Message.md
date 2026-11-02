@@ -1,6 +1,6 @@
 # Type Alias: Message
 
-> **Message** = \{ `attachments`: [`MessageAttachment`](MessageAttachment.md)[]; `bot_profile?`: `null` \| [`BotSenderProfile`](BotSenderProfile.md); `content`: `string`; `created_at`: `string`; `deleted_at?`: `string` \| `null`; `edited_at?`: `string` \| `null`; `guest_name?`: `string` \| `null`; `id`: `string`; `imported_author?`: `null` \| [`ImportedAuthor`](ImportedAuthor.md); `mentions`: [`SimpleMention`](SimpleMention.md)[]; `parent`: [`MessageParent`](MessageParent.md); `reactions`: [`CountedReaction`](CountedReaction.md)[]; `sender_id`: `string`; `thread_id?`: `string` \| `null`; `triggered_by?`: `string` \| `null`; `updated_at`: `string`; \}
+> **Message** = \{ `attachments`: [`MessageAttachment`](MessageAttachment.md)[]; `bot_profile?`: `null` \| [`BotSenderProfile`](BotSenderProfile.md); `content`: `string`; `created_at`: `string`; `deleted_at?`: `string` \| `null`; `edited_at?`: `string` \| `null`; `guest_name?`: `string` \| `null`; `id`: `string`; `imported_author?`: `null` \| [`ImportedAuthor`](ImportedAuthor.md); `mentions`: [`SimpleMention`](SimpleMention.md)[]; `parent`: [`MessageParent`](MessageParent.md); `reactions`: [`CountedReaction`](CountedReaction.md)[]; `sender_id`: `string`; `thread_id?`: `string` \| `null`; `triggered_by?`: `string` \| `null`; `triggered_via?`: `string` \| `null`; `updated_at`: `string`; \}
 
 Shared message representation for channel timelines and entity discussions.
 
@@ -23,4 +23,5 @@ Shared message representation for channel timelines and entity discussions.
 | <a id="property-sender_id"></a> `sender_id` | `string` | Authenticated actor or owner of imported content. |
 | <a id="property-thread_id"></a> `thread_id?` | `string` \| `null` | Root message UUID for replies; absent on roots. |
 | <a id="property-triggered_by"></a> `triggered_by?` | `string` \| `null` | User who triggered a bot-authored message. |
+| <a id="property-triggered_via"></a> `triggered_via?` | `string` \| `null` | Self-reported name of the client the user triggered it through, such as "Claude Code"; a display label only. |
 | <a id="property-updated_at"></a> `updated_at` | `string` | Last persisted update. |
