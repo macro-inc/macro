@@ -301,7 +301,10 @@ retaining normalized contacts. Foreground contact variants share Soup's bounded
 64-page / 512 KiB snapshot budget. `cache-turso/tests/contacts.rs` and the OPFS
 suite hydrate the real client operation, reopen, search, materialize bounded
 fragments with target `userId` intact, and reset account identity. The background
-runner and UI migration remain in the [contacts plan](../../docs/design/disk-backed-contacts.md).
+runner now shares Soup's leadership and commits pages through `HydrationScope`:
+expected/response identity and durable generation must still match under the
+engine lock. Legacy unscoped foreground behavior is unchanged. UI migration and
+removal reconciliation remain in the [contacts plan](../../docs/design/disk-backed-contacts.md).
 
 ## Browser OPFS writes
 

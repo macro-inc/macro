@@ -14,7 +14,7 @@
 use cache_core::deps::OpId;
 use cache_core::engine::{
     BeginOptimisticWrite, CommitOptimisticWriteResult, DeferOptimisticWriteResult, Engine,
-    InitialClaimOutcome, NetworkWrite, QueryRegistration, ReadResult,
+    HydrationScope, InitialClaimOutcome, NetworkWrite, QueryRegistration, ReadResult,
     RollbackOptimisticWriteResult, WriteResult,
 };
 use cache_core::entity_resolver::EntityResolver;
@@ -759,6 +759,7 @@ impl EngineHandle {
         variables: Variables,
         data: serde_json::Value,
         identity: Option<String>,
+        hydration_scope: Option<HydrationScope>,
     ) -> Result<HydrationWriteResultWire, String> {
         let mut state = self.inner.hydrate().await?;
         let EngineState { engine, ops, .. } = &mut *state;
@@ -771,17 +772,35 @@ impl EngineHandle {
             identity.as_deref(),
         )
         .await?;
-        let result = engine
-            .hydrate_query_with_projections(
-                &query,
-                operation_name.as_deref(),
-                &variables,
-                &data,
-                identity.as_deref(),
-                projections,
-            )
-            .await
-            .map_err(|error| error.to_string())?;
+        let result = match hydration_scope {
+            Some(scope) => {
+                engine
+                    .hydrate_query_in_scope(
+                        NetworkWrite {
+                            query: &query,
+                            operation_name: operation_name.as_deref(),
+                            variables: &variables,
+                            data: &data,
+                            identity: identity.as_deref(),
+                        },
+                        &scope,
+                        projections,
+                    )
+                    .await
+            }
+            None => {
+                engine
+                    .hydrate_query_with_projections(
+                        &query,
+                        operation_name.as_deref(),
+                        &variables,
+                        &data,
+                        identity.as_deref(),
+                        projections,
+                    )
+                    .await
+            }
+        }.map_err(|error| error.to_string())?;
         // Invalidation evidence is optional: a failed proof must not reject a committed hydration.
         let unchanged_views = engine
             .unchanged_observed_windows()

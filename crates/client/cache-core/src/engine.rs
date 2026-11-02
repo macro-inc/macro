@@ -3,6 +3,8 @@
 //! Tauri) expose over RPC.
 
 mod calendar;
+mod hydration;
+pub use hydration::HydrationScope;
 #[cfg(test)]
 mod test;
 
@@ -110,6 +112,9 @@ pub enum EngineError<S: std::error::Error + 'static> {
     Storage(#[source] S),
     #[error("cache revision overflow")]
     RevisionOverflow,
+    /// The background response belongs to an obsolete account or generation.
+    #[error("cache hydration scope changed")]
+    StaleHydrationScope,
 }
 
 /// Result of a cache read.
@@ -426,15 +431,9 @@ impl<S: Storage> Engine<S> {
         &self.schema
     }
 
-    /// Returns the durable identity of the currently stored cache data.
-    ///
-    /// A fresh generation is installed when the marker is absent or malformed.
-    /// Existing records are preserved when upgrading a cache without this marker.
-    /// Logical clears, identity changes, and physical resets
-    /// remove the marker with the data, so old hydration checkpoints cannot resume.
-    /// Read storage each time: engine replacement and external resets must not
-    /// leave an in-memory generation that outlives its records.
-    pub async fn current_storage_generation(&mut self) -> Result<Uuid, EngineError<S::Error>> {
+    /// Reads without creating metadata so rejected background responses do not
+    /// change cleared storage. Do not memoize a generation beyond its records.
+    async fn stored_storage_generation(&self) -> Result<Option<Uuid>, EngineError<S::Error>> {
         let key = EntityKey(STORAGE_GENERATION_META_KEY.into());
         let fetched = self
             .storage
@@ -446,9 +445,23 @@ impl<S: Storage> Engine<S> {
                 record.fields.get(STORAGE_GENERATION_VALUE_FIELD)
             && let Ok(generation) = Uuid::parse_str(value)
         {
+            return Ok(Some(generation));
+        }
+        Ok(None)
+    }
+
+    /// Returns the durable identity of the currently stored cache data.
+    ///
+    /// A fresh generation is installed when the marker is absent or malformed.
+    /// Existing records are preserved when upgrading a cache without this marker.
+    /// Logical clears, identity changes, and physical resets remove the marker
+    /// with the data, so old hydration checkpoints cannot resume. Engine
+    /// replacement with preserved data retains the same generation.
+    pub async fn current_storage_generation(&mut self) -> Result<Uuid, EngineError<S::Error>> {
+        if let Some(generation) = self.stored_storage_generation().await? {
             return Ok(generation);
         }
-
+        let key = EntityKey(STORAGE_GENERATION_META_KEY.into());
         let generation = Uuid::now_v7();
         let mut record = Record::default();
         record.fields.insert(

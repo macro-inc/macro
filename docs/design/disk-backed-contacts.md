@@ -2,11 +2,12 @@
 
 **Status:** phase 1 backend contract implemented. Phase 2 now has cache-side
 contact hydration, bounded page retention, a `person` projection, and a generated
-cursor-only backfill result. No background contact runner or UI consumer is wired;
-the frontend still retains the full directory.
-**Next step:** wire account/generation-guarded, checkpointed hydration, then the
-first bounded cached contact consumer. Reject stale payloads before cache writes,
-not merely when saving their continuation.
+cursor-only backfill result. Background hydration is now wired under Soup's
+existing authenticated tab leadership and cache flag. It admits pages under an
+engine-checked account/storage generation and saves only committed cursors.
+The frontend UI still retains the full directory through legacy hooks.
+**Next step:** the first bounded cached contact consumer, including before-limit
+DM ranking/exclusions and exact selected-contact resolution.
 
 ## Goal and scope
 
@@ -120,12 +121,15 @@ bounded point reads before resolving names.
 
 ## Phase 2 — cache ingestion and query-driven search
 
-- [ ] Hydrate one bounded page at a time, persist it, then release its payload.
-  Keep checkpoints scoped to the account and durable storage generation.
+- [x] Hydrate one 500-row page at a time, persist it, then release its payload.
+  Checkpoints belong to the account and durable storage generation. Fetch-only
+  transport checks cancellation before explicit hydration; the shared core
+  checks generation and both expected/response identities under its engine lock.
+  Reset, account change, disposal, and failed writes cannot advance the cursor.
 - [x] Omit contact page and exact-lookup wrappers during core hydration. Foreground
   contact queries share the existing 64-page / 512 KiB viewer-snapshot budget
   with Soup. `ContactDirectoryBackfill` marks nodes `@cacheOnly` and generates
-  its cursor-only result; this alone is not an account-safe background runner.
+  its cursor-only result. The background runner uses scoped cache admission.
 - [x] Project `GraphqlContact` names/emails into `person` through the existing
   covering index and borrowed-row ranker (projection version 5). Public `User` /
   `GraphqlUser` profiles no longer imply contact membership. No timestamps are
@@ -146,7 +150,8 @@ bounded point reads before resolving names.
   type, but its handwritten search projection still needs a rebuilt native binary.
   Gate local contact-search capability rather than treating missing support as no matches.
   Search responses now advertise `projectionVersion`; missing or below 5 means
-  the engine lacks contact projection/retention. Frontend gating is not wired yet.
+  the engine lacks contact projection/retention. The background runner and native
+  guarded-write boundary now gate on this capability; UI fallback is still pending.
 - [ ] Wire Quick Access `person` materialization and query-driven shared recipient
   selection; remove global contact indexing and full-directory recipient transforms.
 
@@ -155,7 +160,11 @@ bounded point reads before resolving names.
 Use resumable paginated hydration and coalesced refreshes rather than introducing
 a new change-log subsystem. Existing `contacts_invalidation` notifications should
 schedule bounded work, not cause a complete 100k-contact scan on every event.
-Choose a refresh/coalescing policy that prevents continuous rescans under activity.
+The runner uses 250 ms between pages, a 15-minute maintenance cadence, and a
+15-minute minimum between completed scans. Invalidations do not interrupt or
+rewind an active pass. Hourly passes refresh profile/address-book names even
+without graph events. Leadership/account/generation changes interrupt the job;
+interrupted scans resume from their last durable cursor.
 
 Track cold, partial, complete, and failed synchronization distinctly. Discard stale
 async responses after account/generation changes. Interrupted or failed scans never
@@ -164,8 +173,9 @@ prove that omitted contacts were removed.
 Name freshness needs an explicit policy: contact-relationship timestamps do not
 capture profile or email-contact name updates. Address this through bounded name
 refresh and directory refresh behavior; do not claim graph timestamps synchronize
-all display fields. Determine removal reconciliation from authoritative source
-semantics, not absence from an incomplete scan.
+all display fields. Removal reconciliation remains pending: keyset scans are not a transactional
+snapshot, so even a completed pass does not delete omitted records. A completion
+checkpoint describes a cached snapshot, not current authoritative membership.
 
 ## Phase 3 — eliminate remaining full-list consumers
 

@@ -405,6 +405,7 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
     data: serde_json::Value,
     identity: Option<String>,
     traceparent: Option<String>,
+    hydration_scope: Option<cache_core::engine::HydrationScope>,
 ) -> Result<HydrationResultWire, String> {
     let result = engine_handle(&state)?
         .hydrate_query(
@@ -413,6 +414,7 @@ pub async fn graphql_cache_hydrate<R: Runtime>(
             variables.unwrap_or_default(),
             data,
             identity,
+            hydration_scope,
         )
         .await?;
     if result.write_result.reset {

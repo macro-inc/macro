@@ -1192,8 +1192,17 @@ can gate contact search rather than interpreting unsupported projection as empty
 generated cursor-only projection. Hydration omits viewer contact-page and exact
 lookup wrappers. Foreground contact query variants share Soup's 64-page / 512 KiB
 budget; retention version 2 compacts older viewers without clearing entities,
-queue state, or storage generation. Background synchronization and UI migration
-are still pending; see [the contacts checklist](../../../docs/design/disk-backed-contacts.md).
+queue state, or storage generation.
+
+Contact synchronization shares Soup's authenticated leader and rollout gate.
+Fetch-only transport returns one 500-row page for explicit scoped admission:
+the core checks the captured generation and expected/response identities under
+the same engine lock as the write, without switching accounts. Coordinator
+protocol 11 forwards that scope; native hosts refuse guarded writes on older
+engines. Checkpoints advance only after persistence and a generation recheck.
+Invalidations coalesce on a 15-minute cadence without interrupting active scans;
+hourly passes refresh names. Scan omissions never delete records. UI migration
+and authoritative removal reconciliation are pending; see [the contacts checklist](../../../docs/design/disk-backed-contacts.md).
 
 ## Cached email Quick Access
 

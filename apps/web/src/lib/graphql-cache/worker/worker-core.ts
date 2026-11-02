@@ -582,7 +582,8 @@ export class CacheWorkerCore {
           request.operationName,
           request.variables,
           request.data,
-          request.identity
+          request.identity,
+          request.hydrationScope
         );
         result.revision = parseCacheRevision(result.revision);
         // Only cache-only consumers opt into hydration. Do not invalidate

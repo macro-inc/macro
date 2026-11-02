@@ -30,6 +30,8 @@ const graphqlMocks = vi.hoisted(() => ({
   hydrateGraphqlSoup: vi.fn(),
 }));
 
+vi.mock('../contacts/backfill', () => ({ useContactBackfill: () => {} }));
+
 const mailAccounts = vi.hoisted(() => vi.fn());
 vi.mock('../email/mail-accounts', () => ({
   useMailAccountsQuery: mailAccounts,

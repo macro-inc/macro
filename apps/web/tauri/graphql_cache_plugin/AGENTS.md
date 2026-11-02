@@ -1,0 +1,34 @@
+# graphql_cache_plugin
+
+## What it is
+
+The native Tauri IPC adapter for the shared normalized GraphQL cache. It owns
+one locked engine across webviews; cache policy belongs in `cache-core`.
+
+## Start here
+
+- `src/commands.rs`: IPC parsing and change notifications.
+- `src/engine.rs`: engine locking, schema installation, and shared-core calls.
+- `src/engine/soup.rs`: composition of Soup-specific projection adapters.
+- `src/engine/test.rs` and `src/engine/test/`: native persistence and IPC contracts.
+
+## Scope
+
+- Owns: native storage lifetime, operation IDs, IPC results, and event fanout.
+- Not here: authorization or cache admission policy → `crates/client/cache-core`.
+- Used by: `apps/web/src/lib/graphql-cache/host/tauri-host.ts`.
+
+## Checks
+
+From the repository root:
+
+- `nix develop .#tauri-linux --command cargo test --manifest-path apps/web/tauri/Cargo.toml -p graphql_cache_plugin` (unset `SQLX_OFFLINE`).
+- Format through the Tauri workspace manifest, not the root workspace.
+
+## Gotchas
+
+- Hold the engine lock across scoped hydration's generation/identity check and
+  write. A stale background response must not clear or rebind the current account.
+- OTA JS cannot add native policy: scoped hydration is gated by projection 5
+  support before IPC, while legacy unscoped callers retain their deployed API.
+- Keep `apps/web/tauri/Cargo.lock` current when shared client dependencies change.
