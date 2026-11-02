@@ -13,26 +13,20 @@ import {
   enableSupportedSoupForeignEntities,
   isFeatureEnabled,
 } from '@core/constant/featureFlags';
+import { createDateClock } from '@core/util/createDateClock';
 import { revalidateNotificationReaders } from '@queries/notification/revalidation';
 import {
   getGraphqlCacheHost,
   getGraphqlSoupClient,
   subscribeGraphqlSoupReconnected,
 } from '@service-storage/graphql-soup';
-import {
-  type Accessor,
-  createMemo,
-  createSignal,
-  onCleanup,
-  onMount,
-} from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import type { HomeFacetContext } from '../home-facets';
 import {
   admitHomeEntities,
   emptyHomeAdmission,
   type HomeAdmission,
 } from '../queries/home-admission';
-import { homeClock } from '../queries/home-date-buckets';
 import { groupHomeEntitiesByDate } from '../queries/home-results';
 import type {
   HomeDataSource,
@@ -89,11 +83,10 @@ export function useWorkFeedHomeDataSource(
     revalidateNotifications: revalidateNotificationReaders,
   });
 
-  const [now, setNow] = createSignal(homeClock());
-  onMount(() => {
-    const timer = setInterval(() => setNow(homeClock()), 30_000);
-    onCleanup(() => clearInterval(timer));
-  });
+  const now = createDateClock(
+    () => enabled() && state.groupBy === 'date',
+    60_000
+  );
 
   const facetContext = (): HomeFacetContext => ({ notificationSource });
   // The server filtered pages by this state; admitting by the same state

@@ -8,7 +8,8 @@ import {
 } from '@app/features/soup/search';
 import { useGlobalNotificationSource } from '@components/app/GlobalAppState';
 import { useUserId } from '@core/context/user';
-import { type Accessor, createMemo, type Setter } from 'solid-js';
+import { createLazyMemo } from '@solid-primitives/memo';
+import type { Accessor, Setter } from 'solid-js';
 import { buildSoupSearchRequest } from '../queries/search-request';
 
 interface CreateSearchStateArgs {
@@ -47,7 +48,7 @@ export const createSearchState = ({
   });
 
   const { entityPool } = useSearchContext();
-  const localPool = createMemo(() => {
+  const localPool = createLazyMemo(() => {
     const pool = entityPool();
     const activeIds = soup.predicates
       .activeIds()

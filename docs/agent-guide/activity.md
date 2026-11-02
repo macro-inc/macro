@@ -44,6 +44,11 @@ reconnecting the websocket, verify recovery without requiring another action.
 Hidden tabs defer refresh until visible; purges refresh all mounted activity
 queries through the normal access checks.
 
+Overview dates retain their server calendar day in every viewer timezone. Check
+the year grid, tooltips and streaks across a daylight-saving transition and leap
+day; mounting the same cached overview must not shift or omit a day. The shared
+activity date owner uses UTC calendar arithmetic, without timezone lookup per cell.
+
 GitHub-style actions heatmap (one a11y node per day — makes snapshots huge; prefer saving the
 snapshot to a file), then a `Most active` section header (styled like the feed's day headers)
 over a wrapping row of pill chips (entity icon, name, action count; click opens the entity,
@@ -63,7 +68,10 @@ with a `Retry` button and automatic paging stops until it is pressed. There is n
 button.
 Once the heatmap card scrolls away, the day header for the topmost visible row stays pinned at
 the top of the list (`[data-activity-pinned-day]`, a non-interactive copy), so a snapshot taken
-mid-scroll shows that label twice at most. The heatmap always shows the whole year, including
+mid-scroll shows that label twice at most. The overview's calendar-date labels must remain unchanged across viewer zones,
+DST boundaries and leap days. Check the same cell labels in UTC and a zone with
+DST; the loading skeleton must cover the same 365 dates as the loaded graph.
+The heatmap always shows the whole year, including
 the partial first and current weeks, and spans the card at every width: in a wide pane the
 space between week columns opens up, its cells shrink from 14px to 8px as the pane narrows, and
 below that (a phone) the week area scrolls sideways with the month letters, opened on the newest
@@ -78,3 +86,9 @@ agent tools) lands on the acting user's feed as `You created/edited/deleted <dat
 the mention opens the database. Databases also appear in the Ctrl+K command menu under
 **All** and **Files**, ordered by creation time. Home's merged feed and the Recent view read Soup, which
 does not list databases.
+
+For heatmap QA, hover the earliest and latest visible dates: the shared hint
+must follow the square and show its current count. Move through a gap, then
+leave the grid; the hint hides. Refresh counts while hovering and check the
+new value; removing the graph must remove its hint. Loading placeholders and
+touch scrolling show no hover hint.

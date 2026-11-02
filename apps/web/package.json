@@ -72,6 +72,7 @@
     "@corvu/dialog": "^0.2.4",
     "@corvu/drawer": "^0.2.4",
     "@date-fns/tz": "^1.4.1",
+    "@date-fns/utc": "^2.1.1",
     "@effect/platform-browser": "4.0.0-rc.111",
     "@floating-ui/dom": "^1.7.4",
     "@fontsource-variable/inter": "^5.2.8",

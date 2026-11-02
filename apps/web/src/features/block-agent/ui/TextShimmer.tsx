@@ -1,3 +1,4 @@
+import { pauseOffscreenAnimations } from '@core/util/animationVisibility';
 /**
  * A sweeping gradient shimmer over a piece of text while `active`, crossfading
  * back to plain text when it settles.
@@ -64,6 +65,7 @@ export function TextShimmer(props: TextShimmerProps) {
         {props.text}
       </span>
       <span
+        ref={pauseOffscreenAnimations}
         aria-hidden="true"
         class="col-start-1 row-start-1 transition-opacity duration-200 motion-reduce:transition-none"
         // Share the page clock so a newly mounted status continues the sweep.

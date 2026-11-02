@@ -1623,7 +1623,7 @@ Other participants can copy a link for people who already have access, but
 cannot grant access or change sharing settings. Copying a link alone never changes permissions. New,
 unsaved session drafts do not offer sharing.
 
-Agent sessions in the `@` menu use the shared Quick Access feed, loaded when the app opens. Search matches session titles and agent names. The initial feed covers the 500 most recently updated accessible sessions; it does not load transcripts.
+Agent sessions in the `@` menu use the shared Quick Access feed, loaded when an enabled picker mounts. Search matches session titles and agent names. The initial feed covers the 500 most recently updated accessible sessions; it does not load transcripts.
 
 ### Replying to selected agent text
 

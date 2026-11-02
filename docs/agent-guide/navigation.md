@@ -36,6 +36,11 @@ must load through the webview, not native HTTP. A `vite:preloadError` with
 `scheme tauri not supported` indicates an asset-routing failure; reloading the
 same bundle does not resolve it.
 
+For route/preload changes, open an existing document and channel directly, reload
+each, and return Home. Use the hash-route equivalents in the native app. A
+transition with no available pane should show the outlet's fallback and continue
+when its pane appears, without reaching the root error screen.
+
 A `vite:preloadError` (a lazy chunk or its CSS failed, usually after a deploy)
 reloads the tab right away, once per build per tab session, when it is online,
 holds no call or upload, and has no text being typed. Otherwise, and on a second
@@ -1480,7 +1485,12 @@ Split back/forward navigation skips entries whose entities are open elsewhere,
 without moving focus or showing a toast. Those entries remain in history and
 become reachable again after their owning view releases them. A direction is
 unavailable when no reachable entries remain. Mobile swipe navigation reuses
-an already-mounted conversation without losing the other pane.
+an already-mounted conversation without losing the other pane. The two native
+mobile slots keep their state, but the resting behind pane has no layout box.
+Touch start reveals it before swipe movement; forward/back transitions keep both
+panes laid out until settlement. Check swipe completion, cancellation, forward
+navigation and a resized calendar behind the current pane with
+`apps/web/src/lib/fullcalendar-solid/browser-test/playwright.config.ts`.
 History controls update when an inline detail claims or releases an entry,
 including when the detail closes.
 Resetting a split clears its previous history and starts at the default view;
@@ -1593,3 +1603,35 @@ Universal Input observability uses one draft trace, timed classification/extract
 and submission spans, and events for queue wait, predictions, readiness and edits. Inspect `input.outcome`, safe failure
 categories and provider fallback spans in Tempo. Never include draft contents
 or field values in telemetry. Browser tracing requires its existing OTEL flag.
+
+### Cold-start admission
+
+Check authenticated Home, Mail and a document deep link with a fresh context,
+then reload in the same context. At 100ms RTT/10Mbps and4×CPU, record at least
+five samples per route/cache condition. Compare request starts/ends relative
+to navigation and content readiness followed by two animation frames; the boot
+shell's first paint is not the first view's data paint. Warm contexts can restore
+query data before a network response.
+
+The browser's independent session entry checks the existing login hint before
+refreshing cookies. Signed-out entry without
+a hint must make neither speculative refresh nor account-data requests. Native
+entry waits for its native cookie transport. Account confirmation and data remain
+with the normal auth/query owners. Navigation commit keeps speculative imports
+alive; disposing the account router must prevent late query admission.
+
+For editor admission changes, also measure five real list clicks from warm Home
+after the same fixed reading interval in each artifact, under HTTP2. Record the
+pointerdown-to-editable-content interval followed by two animation frames, plus
+WASM request start/end relative to the click. Do not call a loader from the test
+or wait for an after-only warm condition. Compare against five cold deep links
+and Home/Mail controls; preparing WASM must not construct an editor before open.
+
+Before interpreting warm boot measurements, verify certificate-clean asset
+responses and actual HTTP cache hits in both artifacts; rendering through
+`ignoreHTTPSErrors` is insufficient. Follow the [local CA trust guide](../../infra/local/certs/README.md),
+or use a temporary browser's narrowly pinned development certificate exception
+and disable generic certificate-error bypass. Record security/cache flags and
+transferred bytes. Serve both artifacts with the publisher's actual cache headers
+(immutable static assets; no-store entrypoints). Preserve bypass/header-control
+runs as diagnostics rather than presenting them as production warm-cache data.

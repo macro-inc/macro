@@ -1,3 +1,4 @@
+import { pauseOffscreenAnimations } from '@core/util/animationVisibility';
 /**
  * The tail of an open turn that has produced nothing to read yet.
  *
@@ -27,7 +28,9 @@ export function WorkingLine(props: WorkingLineProps) {
   return (
     <div class="flex min-h-7 items-center gap-1 py-1 text-xs leading-5 text-ink-extra-muted">
       <span
+        ref={pauseOffscreenAnimations}
         aria-hidden="true"
+        style={{ '--working-wave-phase': `${-performance.now()}ms` }}
         class="agent-working-wave flex size-4 shrink-0 items-center justify-center gap-[2px]"
       >
         <span class="size-[3px] rounded-full bg-current" />

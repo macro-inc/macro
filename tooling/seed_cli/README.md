@@ -33,6 +33,49 @@ pipelines by name and record type, and rows by their company/contact reference;
 existing values and sharing choices are preserved. Fixture data is in
 [`seed/crm.json`](seed/crm.json).
 
+### Performance dataset through the public APIs
+
+Use an existing local backend and a dedicated local test account. This does not
+manage the stack, write databases directly, or delete existing content:
+
+```bash
+bun tooling/seed_cli/seed-performance.ts \
+  --origin https://localhost:21709 --email user@example.com \
+  --manifest /tmp/performance-fixture/manifest.json --size small
+# Grow the same fixture by repeating with --size large and the same manifest.
+```
+
+The `smoke`, `small`, and `large` presets create respectively 3/30/3,000 markdown
+documents, 2/15/1,500 tasks, 3/10/500 folders, 2/3/30 task projects (initiatives),
+10/50/5,000 channel messages including replies, 100/100/10,000 database rows, and
+1/2/50 named idle agent sessions. Each preset also creates one 2,000-paragraph
+document, one private channel, and one database with six columns. Compare a short
+document with the long document separately; its size does not grow between presets.
+Tasks vary status, priority, assignment and due date. The large folder tree has
+250 roots and 250 children; message threads have up to twenty replies. No agent
+is prompted and no external integration is connected. Only the dataset's own
+sessions are renamed. Default concurrency is two, bounded to four.
+
+Keep the manifest and its adjacent `.jsonl` journal outside the checkout. They
+contain local entity IDs, never credentials. Their private file permissions and
+single-writer lock keep independent runs apart. The journal binds to backend and
+account, records intent before each mutation and reuses acknowledged IDs on
+reruns. Growing a preset preserves those IDs and existing contents. Use a new
+manifest for a separate dataset, rather than deleting this one and duplicating it.
+SIGINT/SIGTERM drains current requests and stops new work. A terminated process
+can leave a `.lock`; check that its recorded PID is no longer running before
+removing that lock.
+
+A lost response or failed request drains current work, records the failure in the
+manifest, and makes later resumption refuse ambiguous writes. Inspect the public
+API before recovery: an acknowledged creation may be appended as a journal
+`done` event with its key and returned value; a *verified absent* creation may be
+cleared by a `not-created` event with its key. Never clear an ambiguous write just
+to retry it. A truncated journal requires reconciliation too. Later categories do
+not start; any blocked category returns a nonzero exit. Backend-version rejections
+remain explicit failures, not silently smaller fixtures. The API passwordless login must return a local one-time code;
+this workflow cannot log in to a hosted deployment.
+
 ### Permission scenarios
 
 A scenario file describes a complete world — users, teams, channels, and

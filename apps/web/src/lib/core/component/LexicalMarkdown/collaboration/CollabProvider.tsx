@@ -8,14 +8,14 @@ import {
 } from '@core/component/LexicalMarkdown/collaboration/LexicalAwareness';
 import { $reconcileLexicalState } from '@core/component/LexicalMarkdown/collaboration/reconcile';
 import { useRemoteCursors } from '@core/component/LexicalMarkdown/collaboration/remote-cursor';
-import type { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
+import { MarkdownEditorErrors } from '@core/component/LexicalMarkdown/constants';
 import type { PluginManager } from '@core/component/LexicalMarkdown/plugins';
 import {
   initializeEditorEmpty,
   initializeEditorWithVersionedState,
   isStateEmpty,
-  loroSyncState,
 } from '@core/component/LexicalMarkdown/utils';
+import { createLoroStateSerializer } from '@core/component/LexicalMarkdown/utils/create-loro-state-serializer';
 import { useUserId } from '@core/context/user';
 import {
   $isCodeHighlightNode,
@@ -122,6 +122,7 @@ export const FORCE_SYNC_COMMAND = createCommand<void>('FORCE_SYNC_COMMAND');
 export function CollabProvider(props: CollabProviderProps) {
   const [didFirstSync, setDidFirstSync] = createSignal(false);
   const loroManager = props.loroManager;
+  const serializeState = createLoroStateSerializer();
   const syncSource = props.syncSource;
   const userId = useUserId();
 
@@ -363,7 +364,7 @@ export function CollabProvider(props: CollabProviderProps) {
           discrete: true,
           tag: CODE_HIGHLIGHT_IDS_TAG,
           onUpdate: async () => {
-            const stateToSync = loroSyncState(props.editor.getEditorState());
+            const stateToSync = serializeState(props.editor.getEditorState());
             await syncEngine.syncStateToLoro(stateToSync as any);
             $afterSyncCursorUpdate(loroManager);
           },
@@ -416,7 +417,7 @@ export function CollabProvider(props: CollabProviderProps) {
       }
 
       // Clean the state to remove any state properties that should not be synced
-      const stateToSync = loroSyncState(state);
+      const stateToSync = serializeState(state);
       await syncEngine.syncStateToLoro(stateToSync as any);
     }
 
@@ -440,7 +441,7 @@ export function CollabProvider(props: CollabProviderProps) {
       props.editor.registerCommand(
         FORCE_SYNC_COMMAND,
         () => {
-          const stateToSync = loroSyncState(props.editor.getEditorState());
+          const stateToSync = serializeState(props.editor.getEditorState());
           syncEngine.syncStateToLoro(stateToSync as any).catch(reportSyncError);
           return true;
         },
@@ -500,6 +501,7 @@ export function CollabProvider(props: CollabProviderProps) {
                 'editor init: no state from loroManager — editor will NOT become ready (skeleton stays)',
             });
             props.span?.error('Editor initial state is missing');
+            props.setEditorError(MarkdownEditorErrors.EMPTY_SOURCE);
             return;
           }
 

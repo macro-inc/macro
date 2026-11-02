@@ -167,6 +167,13 @@ The banner stays visible as partial results arrive and disappears when sync fini
 Errors retain the separate retry state. Verify delayed occurrence
 responses: switch Month/Week/Day rapidly and navigate without blanking the grid.
 Confirm mixed event shapes, stable positions, clean handoff, and an uncovered Retry.
+The shared calendar connector owns container resizing. Verify height-only and
+width changes in a split or embed, then hide the container, change its settings,
+and reveal it: the current grid and settings must appear without hidden layout
+work. Pager neighbors retain positive dimensions for swipe preparation. The
+backend-free connector regression is
+`apps/web/src/lib/fullcalendar-solid/browser-test/playwright.config.ts`.
+
 Reduced-motion mode disables pulses and transitions. The page stays busy until the
 handoff starts. Hidden pages do not animate. Resize to confirm skeleton alignment.
 
@@ -1533,3 +1540,15 @@ For an Outlook invitation you attend, `Open in Outlook` below the RSVP controls
 opens the actual occurrence so you can clear your own response there.
 
 Calendar's New menus explain Event, Call, and Booking link with icons and muted descriptions. Call and Booking link keep their existing feature gates. Booking link opens the personal Scheduling workspace with an unsaved link editor; canceling creates nothing. The URL request is consumed once after the profile is ready.
+
+Empty occurrence results keep a stable presentation as query status and calendar
+metadata settle. An empty calendar must not repeatedly reset FullCalendar's event
+source; real events and source-color changes still update normally. A calendar
+without teammate overlays reuses its own event list rather than building an
+equivalent merged array. Verify empty → populated transitions and event colors.
+
+For Calendar performance QA, separate option-reset work from total view paint.
+Unrelated settings or selection updates must not reset the grid; genuine narrow
+header changes must still update it, and event clicks must use the latest handler.
+The Grid contract test covers these cases. Repeat measured opens with the same
+Week/Day/Month choice and copied local preferences on both versions.

@@ -142,18 +142,24 @@ export function createAgentSession(
   const upsert = (messages: FoldedMessage[]) =>
     batch(() => {
       for (const message of messages) {
-        // The list is short and appends dominate, so scan from the tail
-        // rather than binary-searching.
-        let index = list.length - 1;
-        while (index >= 0 && compareMessages(list[index]!, message) > 0) {
-          index--;
+        // The fold publishes ordered snapshots as well as individual updates.
+        // Find the row without scanning settled history for each snapshot row.
+        let start = 0;
+        let end = list.length;
+        while (start < end) {
+          const middle = (start + end) >>> 1;
+          if (compareMessages(list[middle]!, message) < 0) start = middle + 1;
+          else end = middle;
         }
-        if (index >= 0 && sameMessage(list[index]!, message)) {
-          // Path-scoped reconcile: a streaming turn replaces its message
-          // hundreds of times; only the changed content re-renders.
-          setList(index, reconcile(message));
+        if (start < list.length && sameMessage(list[start]!, message)) {
+          // Path-scoped reconcile preserves settled rows and streaming parts.
+          setList(start, reconcile(message));
+        } else if (start === list.length) {
+          // Producing the whole array unwraps all earlier messages on every
+          // append. Write only the new index, including during initial load.
+          setList(start, message);
         } else {
-          const at = index + 1;
+          const at = start;
           setList(
             produce((current: FoldedMessage[]) =>
               current.splice(at, 0, message)

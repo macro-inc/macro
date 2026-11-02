@@ -15,6 +15,7 @@ import {
   hasPermissions,
   Permissions,
 } from '@core/component/SharePermissions';
+import { createLoadOwner } from '@core/util/createLoadOwner';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import type { Span } from '@macro-inc/observability';
@@ -99,7 +100,7 @@ function FileDetailBodyState(props: {
 }
 
 export function FileDetailLoadGate<
-  T extends { userAccessLevel: AccessLevel },
+  T extends { userAccessLevel: AccessLevel; source?: { cleanup: () => void } },
 >(props: {
   documentId: string;
   /** The block the document opens as, reported on `open_entity`. */
@@ -110,13 +111,17 @@ export function FileDetailLoadGate<
 }) {
   const analytics = useAnalytics();
   const flow = useFlow();
+  const loadOwner = createLoadOwner();
   const [document, { refetch, mutate }] = createResource(
     () => props.documentId,
     (documentId) => {
       return flow.task('document.load', (span) => {
         span.setAttr('doc.type', props.entityType);
         span.setAttr('document.id', documentId);
-        return props.load(documentId, span);
+        return loadOwner.run(
+          () => props.load(documentId, span),
+          (data) => data.source?.cleanup()
+        );
       });
     }
   );
@@ -125,7 +130,7 @@ export function FileDetailLoadGate<
   // changes and retries reload the same document without reopening it.
   let trackedDocumentId: string | undefined;
   createEffect(() => {
-    if (document.state !== 'ready') return;
+    if (document.state !== 'ready' || !document.latest?.value) return;
     const documentId = props.documentId;
     if (trackedDocumentId === documentId) return;
     trackedDocumentId = documentId;
@@ -144,10 +149,12 @@ export function FileDetailLoadGate<
     () => shareEntity('document', props.documentId),
     (level) => {
       if (level === null) {
+        loadOwner.invalidate();
         mutate(undefined);
         return;
       }
-      const loaded = document.state === 'ready' ? document.latest : undefined;
+      const loaded =
+        document.state === 'ready' ? document.latest?.value : undefined;
       if (loaded?.userAccessLevel !== level) reload();
     }
   );
@@ -178,21 +185,24 @@ export function FileDetailLoadGate<
             />
           )}
         </Match>
-        <Match when={document()}>
-          {(data) => (
-            <ErrorBoundary
-              fallback={(error, reset) => (
-                <FileDetailBodyState
-                  label={props.label}
-                  error={error}
-                  actionLabel="Reset"
-                  onAction={reset}
-                />
-              )}
-            >
-              {props.children(data())}
-            </ErrorBoundary>
-          )}
+        <Match keyed when={document()?.value}>
+          {(data) => {
+            document()?.adopt();
+            return (
+              <ErrorBoundary
+                fallback={(error, reset) => (
+                  <FileDetailBodyState
+                    label={props.label}
+                    error={error}
+                    actionLabel="Reset"
+                    onAction={reset}
+                  />
+                )}
+              >
+                {props.children(data)}
+              </ErrorBoundary>
+            );
+          }}
         </Match>
       </Switch>
     </Suspense>

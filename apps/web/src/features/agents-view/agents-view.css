@@ -194,7 +194,7 @@
 
 	:where(.agents-view, .agents-view-portal) .stdot.running::before {
 		background: var(--green);
-		animation: pulse 1.6s ease-in-out infinite;
+		animation: pulse 1.6s steps(4, end) infinite;
 	}
 
 	:where(.agents-view, .agents-view-portal) .stdot.waiting::before {

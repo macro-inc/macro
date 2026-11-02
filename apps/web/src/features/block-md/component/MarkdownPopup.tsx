@@ -967,8 +967,9 @@ export function MarkdownPopup(props: {
             );
             background-size: 250% 100%;
             background-repeat: no-repeat;
-            animation: ai-edit-swipe 1.6s ease-in-out infinite;
+            animation: ai-edit-swipe 1.6s steps(8, end) infinite;
           }
+          @media (prefers-reduced-motion: reduce) { .ai-edit-highlight-running { animation: none; } }
         `}</style>
         <LocationHighlight
           editor={editor}

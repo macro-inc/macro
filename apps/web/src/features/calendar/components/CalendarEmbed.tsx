@@ -1,5 +1,5 @@
 import { createResizeObserver } from '@solid-primitives/resize-observer';
-import { createSignal, type JSX, onCleanup } from 'solid-js';
+import { createSignal, type JSX } from 'solid-js';
 import type { CalendarEvent } from '../types';
 import { multiDayTimedDisplayRange } from '../utils/calendar-date';
 import {
@@ -38,20 +38,8 @@ function CalendarEmbedHost(props: {
   onWidthChange: (width: number) => void;
   children?: (handle: CalendarGridHandle) => JSX.Element;
 }) {
-  let resizeFrame: number | undefined;
-
   createResizeObserver(props.handle.element, ({ width }) => {
-    if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
-
-    resizeFrame = requestAnimationFrame(() => {
-      resizeFrame = undefined;
-      props.onWidthChange(width);
-      props.handle.api()?.updateSize();
-    });
-  });
-
-  onCleanup(() => {
-    if (resizeFrame !== undefined) cancelAnimationFrame(resizeFrame);
+    if (width > 0) props.onWidthChange(width);
   });
 
   return <>{props.children?.(props.handle)}</>;

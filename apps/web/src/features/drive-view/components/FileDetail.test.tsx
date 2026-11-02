@@ -67,8 +67,14 @@ afterEach(() => {
   document.body.replaceChildren();
 });
 
-type Loaded = { userAccessLevel: AccessLevel };
-function mount(load: () => Promise<Loaded>, cleanupEditor?: () => void) {
+type Loaded = {
+  userAccessLevel: AccessLevel;
+  source?: { cleanup: () => void };
+};
+function mount(
+  load: (id: string) => Promise<Loaded>,
+  cleanupEditor?: () => void
+) {
   const container = document.createElement('div');
   document.body.appendChild(container);
   dispose = render(
@@ -250,4 +256,43 @@ it('holds the view flow while the shared document resource loads', async () => {
   await published.promise;
   await settled.promise;
   expect(ready).toHaveBeenCalledOnce();
+});
+
+it('cleans up a sync source returned after its view is disposed', async () => {
+  const pending = Promise.withResolvers<Loaded>();
+  const cleanupSource = vi.fn();
+  const loaded = {
+    userAccessLevel: 'view' as const,
+    source: { cleanup: cleanupSource },
+  };
+  mount(() => pending.promise);
+  dispose?.();
+  dispose = undefined;
+  pending.resolve(loaded);
+  await pending.promise;
+  await Promise.resolve();
+  expect(cleanupSource).toHaveBeenCalledOnce();
+});
+
+it('reauthorizes after revocation and a late resource at the same access level', async () => {
+  const pending = Promise.withResolvers<Loaded>();
+  const cleanupSource = vi.fn();
+  const load = vi
+    .fn<() => Promise<Loaded>>()
+    .mockReturnValueOnce(pending.promise)
+    .mockResolvedValue({ userAccessLevel: 'view' });
+  const container = mount(load);
+  notifyAccess?.(null);
+  pending.resolve({
+    userAccessLevel: 'view',
+    source: { cleanup: cleanupSource },
+  });
+  await pending.promise;
+  await Promise.resolve();
+  notifyAccess?.('view');
+  await vi.waitFor(() =>
+    expect(container.textContent).toContain('Document content: view')
+  );
+  expect(load).toHaveBeenCalledTimes(2);
+  expect(cleanupSource).toHaveBeenCalledOnce();
 });

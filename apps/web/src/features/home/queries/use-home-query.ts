@@ -24,6 +24,7 @@ import {
 } from '@core/constant/featureFlags';
 import { useUserId } from '@core/context/user';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { createDateClock } from '@core/util/createDateClock';
 import {
   type EntityData,
   isSnippetEntity,
@@ -36,13 +37,7 @@ import {
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import { startOfDay, subWeeks } from 'date-fns';
-import {
-  type Accessor,
-  createMemo,
-  createSignal,
-  onCleanup,
-  onMount,
-} from 'solid-js';
+import { type Accessor, createMemo } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
   noiseFilter,
@@ -56,7 +51,7 @@ import {
   emptyHomeAdmission,
   type HomeAdmission,
 } from './home-admission';
-import { homeClock, homeTimestamp } from './home-date-buckets';
+import { homeTimestamp } from './home-date-buckets';
 import { soupItemMatchesHomeTab } from './home-item-filter';
 import { getHomePagination } from './home-pagination';
 import {
@@ -284,11 +279,10 @@ function useSoupHomeDataSource(
   } = useHomeEntitiesQuery(state, options);
   const notificationsLoading = () => awaitingViewer() || query.isLoading;
 
-  const [now, setNow] = createSignal(homeClock());
-  onMount(() => {
-    const timer = setInterval(() => setNow(homeClock()), 30_000);
-    onCleanup(() => clearInterval(timer));
-  });
+  const now = createDateClock(
+    () => options.enabled() && state.groupBy === 'date',
+    60_000
+  );
 
   // Only desktop Home merges the viewer's own recents into Signal; touch
   // devices keep Signal a pure notification feed, like the legacy

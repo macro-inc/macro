@@ -1,4 +1,5 @@
 import { ViewSidebar } from '@app/components/view-shell';
+import { pauseOffscreenAnimations } from '@core/util/animationVisibility';
 import { cn, pressHandlers } from '@ui';
 import { children, type JSX, Show } from 'solid-js';
 import {
@@ -89,6 +90,7 @@ export function AgentSessionStatusIndicator(props: {
       }
     >
       <span
+        ref={pauseOffscreenAnimations}
         data-agent-status-indicator
         aria-label={props.unread ? 'Unread' : undefined}
         class={cn(

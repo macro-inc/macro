@@ -14,14 +14,48 @@
   and the ast-grep rules `ts-browser-floor-apis` and `tsx-browser-floor-apis`
   ban APIs that turned out to be newer; add one there when it bites, or raise
   the floor.
+- Generate GraphQL documents through `scripts/shared-typed-document-node-codegen.ts`;
+  it preserves upstream typed ASTs while sharing named fragment definitions.
+  Regenerate with `bun run gen-graphql` and run its AST-parity regression.
 - The app does not register a service worker. Keep `public/sw.js` as a retirement
   endpoint for existing installations; see the [startup bundle rule](../../.agents/rules/web/startup-bundle.md).
-  Loro uses async WASM loading and HTML preloads independently of service workers.
 - Web asset publication and cache headers are covered by
   [web-app delivery](../../infra/stacks/web-app/README.md); its publisher tests
   are backend-free, and its Pulumi tests must not run real staging/cloud commands.
 
+## Native transport
+
+- Keep desktop authentication and remote service traffic, including configured
+  same-origin/loopback service URLs in `servers.ts`, on the native HTTP cookie
+  jar. Same-origin assets, data/blob URLs, browser-origin public APIs
+  (`webviewFetch` at their client) and Tauri's IPC endpoint
+  (`convertFileSrc('', 'ipc')`; native routing recursively expands its bodies)
+  stay on webview fetch. The entry point captures and installs the transport.
+  Telemetry export is in `packages/observability/README.md`.
+- Use `ensureFreshSession` for proactive socket setup and `fetchToken` after a
+  server 401; account reset clears recent-refresh reuse. Test with
+  `platformFetch.test.ts` and `fetchWithToken.spec.ts`.
+- The native cache host's live-view tokens and read coalescing are specified in
+  [native IPC transport](docs/graphql-normalized-cache-plan.md#native-ipc-transport);
+  run `host/tauri-live-query.test.ts`, `host/tauri-host.test.ts` and the
+  native-command manifest check when changing them.
+- Native diagnostics heartbeat every 30 seconds while visible, plus immediate
+  visibility/connectivity events (`native-diagnostics.test.ts`).
+- Run native probes in the memory-capped scope from the
+  [running guide](../../docs/development/running-locally.md).
+
 ## Verifying a change in a real browser
+
+Before every commit touching app code, load the real app and require visible
+welcome/app text and zero `pageerror` events, even when the script exits zero;
+fixtures, unit tests and type checks do not replace this. The backend-free
+complete dev-entry smoke is
+`bunx playwright test --config src/components/app/browser-test/playwright.config.ts`
+(first in `just test-signup-browser`; keep it on the regular Vite config with
+Solid refresh, see its README). For shell or import changes, repeat after an
+authorized login, e.g. `S=<perf-tools-dir> URL=https://localhost:<vite-port>/app
+node <perf-tools-dir>/smoke.mjs` where that helper exists. Merge integration
+branches with `--no-commit` so the merged tree passes before the merge commit.
 
 During iterative visual tweaks, use focused browser verification; defer full typechecks and CI checks until the batch is ready or the user requests them.
 
@@ -142,6 +176,10 @@ boosts (Cmd+K's channel and DM boosts) order rows within those groups and never
 lift a row past a better name match. The one exception: Cmd+K then keeps Macro
 users and DMs ahead of CRM contacts across the people positions, whatever their
 match. Tune name relevance there for every menu.
+Snapshot display labels per query, never across queries, and resolve the clock
+once per scoring pass. The cache path preselects up to 500 typed hits; never
+copy the whole cache corpus into a JS index. See the
+[scale fixture](src/features/command/browser-test/README.md).
 Name groups and match position use the row's label (`getDisplayName`), so search
 text can add emails, aliases, or command keywords before or after it. Mention
 menus rank loaded entity sources together with `MENTION_RANKING_CONFIG` in
@@ -376,6 +414,10 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Reject already-routed optimistic enqueues with missing replies as uncertain on
   every owner departure; never forward them through network fallback, because
   their durable queue entries may survive the old engine.
+- Give foreground cache writes priority over pending background hydration in
+  each engine owner. Superseded hydration must refetch the same page without
+  advancing its checkpoint; never replay it after the live write. Calendar
+  callers await persisted occurrence fetches before committing coverage.
 - Dispatch live GraphQL notification callbacks before cache persistence so hidden
   tabs can show browser alerts; keep cache-dependent channel reconciliation
   behind ordered writes and never replay alerts when the cache resumes. Link
@@ -537,9 +579,19 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   and asserts every observed row-ID state on revisits and an OPFS reload.
   It also verifies that cold empty Mail tabs stay loading until HTTP settles.
   It also runs in `just test-cache-wasm-browser`.
+- Profile Mail engine/worker/projection costs with `scripts/benchmark-mail-evaluation.ts`
+  and the adapter's `mail_window_benchmark` fixture generator; keep through-window
+  scan policy in the shared Rust Mail adapter, not in screen-specific limits.
 - Trace initial Soup loading through pending flow phases; aggregate incremental
   cache activity in `cache-activity-telemetry.ts`. Never start a root span per
   cache revision or choose a root by comparing no-op span identity.
+- Coalesce Soup cache-change refreshes through `subscribeToVisibleCacheChanges`;
+  fence network acknowledgements immediately, retain dirty state while hidden,
+  and preserve keyed rows when only the revision changes. Search bucket hints
+  do not cover Soup property/membership changes; do not use them to skip Soup
+  hydration reads. Skip only immutable accepted-window proofs from the shared
+  engine; missing/evicted proofs refresh conservatively. The backend-free churn regression runs with the Soup browser
+  suite above (`churn.browser.e2e.ts`).
 - Reactive GraphQL reads use `createLiveQuery` for a document and
   `useSoupAstItemsQuery` (backed by `createSoupLiveQuery`) for Soup lists; see
   [choosing a reactive read](docs/graphql-normalized-cache-plan.md#choosing-a-reactive-read).
@@ -799,6 +851,14 @@ On a physical iPhone, WKWebView still synthesises the compatibility `mousedown`/
 Use the existing status dot in Home and Agents rows with `bg-failure` when the
 persisted `turnState` is `failed`; open the session to inspect its error.
 
+### Agent transcript projection
+
+Keep folded messages ordered by turn and author in the transcript store: append
+at the new index, reconcile matching rows in place, binary-search earlier
+updates, and splice only for real insertion/removal. Never `produce` the whole
+array per append; it makes initial projection quadratic. Check with the
+[session-open runner](src/features/block-agent/browser-test/README.md).
+
 ### Agent system events
 
 Agent activity labels share `block-agent/ui/TextShimmer.tsx` and the global
@@ -890,6 +950,9 @@ and bot personas share one renderer; keep surface sizing in the caller.
 
 ## Performance
 
+Startup-bundle conventions (lazy entries, validators, session bootstrap, Loro
+admission) are in the [startup bundle rule](../../.agents/rules/web/startup-bundle.md).
+
 ### Tracing
 
 - Instrument loading with the flow API in the `instrumentation` skill; read the
@@ -917,3 +980,83 @@ and bot personas share one renderer; keep surface sizing in the caller.
   static `data-input-surface` categories on editor/field owners, never caller
   labels.
 - Keep record names, addresses, answers and query text out of attributes.
+
+### Loading and preloading
+
+- `routes/block-preloads.tsx` maps row/link intent to router locations;
+  `appRoute.preload` (`routes/route-preloads.ts`) owns code/data admission; the
+  account-keyed `core/block-preload.ts` only warms code at idle. Block
+  definitions own mounted loading; add no second speculative data API.
+- Speculative admission follows the router lifetime: committing a navigation
+  must not abort imports before their reads start; only disposal or an account
+  change cancels. Gate speculative account reads on the login hint.
+- Block activation never awaits speculative reads; its mounted consumer
+  coalesces with warm-up. Only explicit hover preload callers await data. Keep
+  code and data concurrent; publish mounted data after component evaluation.
+- Warm-up yields paint and waits for router readiness, idle time and inactive
+  queries; persist only recent safe block type names.
+- Initial block loads take parent spans, not cancellation signals for shared
+  reads. Use `createLoadOwner` to retire late resources on retry, revocation,
+  supersession and teardown. Share database detail queries between block
+  loaders and their mounted views.
+- Channel routes carry canonical target params through `toReference`.
+  `Entity.Root` exposes its model at the DOM event boundary, without feature
+  field mappings or preload attributes, and requires the preload context.
+- Keep Quick Access sources dormant until an enabled list mounts, warm per
+  account across menu closes, and disposed on account change. Cache getters
+  never activate queries or build the full index; block command metadata
+  misses resolve the exact id through Soup at the command owner.
+- Shared mention hooks take the owning menu's `enabled` accessor; closed
+  mounted editors must not start Quick Access, snippet, skill or people sources
+  (a mounted canvas asset picker is active). Soup's local search pool stays lazy.
+  Notification and call-ringing listeners stay live from boot; device-change
+  watching starts at the first browser-call enumeration.
+
+### Runtime overhead
+
+- Measure horizontal container border-box sizes with `@core/util/createElementSize`
+  (null until the first ResizeObserver entry, transforms excluded); never read
+  rectangles at render, and keep callers' initial fallback until observation.
+  Enforced by `ts/tsx-element-size-owner`.
+- SplitPanel publishes its header-height inset only on touch layouts; on desktop
+  it would invalidate descendant styles.
+- The pinned solid-presence 0.1.8 (Kobalte) and 0.2.0 (Corvu) patches defer
+  computed styles to hide/animation events; keep JS and JSX entries aligned and
+  rerun `presence.browser.e2e.ts` when upgrading or removing them.
+- Date-group clocks use `createDateClock` at minute (Home) or UTC-day (Mail)
+  boundaries and stop while their view is disabled or hidden. Intl formatter
+  caches resolve an omitted timezone before lookup; fixed English row
+  timestamps use date-fns rather than an Intl formatter per row.
+- Entity pill compaction shares resize observation and reads all dirty widths
+  before writing; each row owns its mutation observer.
+- These are covered by
+  `bunx playwright test --config src/lib/core/util/runtime-browser-test/playwright.config.ts`
+  (port 3009, `RUNTIME_BROWSER_PORT`).
+- Keep `ListEntity` layout fields independently reactive; a dynamic object spread
+  makes selection revisit unrelated inputs. See the
+  [entity collection profile](src/features/entity/browser-test/README.md).
+- Live collaborative editors own one `createLoroStateSerializer` per provider:
+  cache immutable Lexical exports weakly, visit children under each snapshot,
+  keep raw changes in omitted completions for search text, and never transform
+  shared exports in place (Mirror can freeze them). Cold `loroSyncState` uses
+  the same serializer without a cache.
+- Composer wrapping reads the live compact editor and queues one measurement per
+  frame; cancel hidden-tab work and remeasure on reveal.
+- `lib/fullcalendar-solid`'s host observer owns calendar container resizing,
+  including height-only changes; hosts without a layout box defer option updates
+  until revealed, and pager neighbors stay prelaid out. Check with
+  `bunx playwright test --config src/lib/fullcalendar-solid/browser-test/playwright.config.ts`.
+- `CalendarGrid` owns option identities: isolate the day-header format from
+  unrelated settings and keep event-click dispatch stable
+  (`CalendarGrid.test.tsx`). Keep empty occurrence lists stable and reuse the
+  input list when no team overlay merges; new empty identities reset all three
+  FullCalendar pages.
+- Native mobile keeps at most two pane slots; the resting behind slot leaves
+  layout and returns on touch start and during transitions, keeping mounted
+  state.
+- Activity dates use the UTC calendar owner `activity/core/activity-dates.ts`;
+  test in a DST timezone (`TZ=America/Los_Angeles`). One heatmap tooltip follows
+  the hovered date through the Tooltip virtual-anchor API:
+  `bunx playwright test --config src/features/activity/browser-test/playwright.config.ts`.
+- Alias base64 Loro fixtures to the bare package (`/^loro-crdt$/`) so asset URL
+  subpaths still resolve to the vendor file.

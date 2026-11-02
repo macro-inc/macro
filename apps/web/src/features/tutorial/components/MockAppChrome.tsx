@@ -2,6 +2,7 @@ import { GO_TO_COMMAND_SCOPE, GO_TO_LEADER_KEY } from '@app/constants/hotkeys';
 import { getIconConfig } from '@core/component/EntityIcon';
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import type { ValidHotkey } from '@core/hotkey/types';
+import { pauseOffscreenAnimations } from '@core/util/animationVisibility';
 import MacroIcon from '@icon/macro-logo.svg';
 import GearIcon from '@icon/system/regular/gear.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
@@ -149,13 +150,14 @@ export function MockAppChrome(props: MockAppChromeProps) {
   onCleanup(() => group.dispose());
 
   return (
-    <div class="size-full p-4 bg-surface">
+    <div ref={pauseOffscreenAnimations} class="size-full p-4 bg-surface">
       <style>{`
         @keyframes sidebar-glow-pulse {
           0%, 100% { box-shadow: 0 0 0 0 rgb(from var(--color-accent) r g b / 0.7), 0 0 6px 1px rgb(from var(--color-accent) r g b / 0.7), 0 0 12px 3px rgb(from var(--color-accent) r g b / 0.4); }
           50%      { box-shadow: 0 0 0 1px rgb(from var(--color-accent) r g b / 0.4), 0 0 10px 3px rgb(from var(--color-accent) r g b / 0.9), 0 0 18px 6px rgb(from var(--color-accent) r g b / 0.6); }
         }
-        .sidebar-glow { animation: sidebar-glow-pulse 1.8s ease-in-out infinite; border-radius: 4px; }
+        .sidebar-glow { animation: sidebar-glow-pulse 1.8s steps(3, end) infinite; animation-play-state: var(--animation-play-state, running); border-radius: 4px; }
+        @media (prefers-reduced-motion: reduce) { .sidebar-glow { animation: none; } }
       `}</style>
       <div class="flex size-full bg-surface rounded-sm border border-edge-muted">
         <div class="px-2 shrink-0 bg-panel flex flex-col items-center py-3 gap-1">

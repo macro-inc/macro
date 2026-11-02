@@ -56,7 +56,7 @@
 
 @media (prefers-reduced-motion: no-preference) {
 	.calendar-view [data-calendar-loading-placeholder] {
-		animation: calendar-skeleton-pulse 1.8s ease-in-out infinite;
+		animation: calendar-skeleton-pulse 1.8s steps(3, end) infinite;
 	}
 	.calendar-view-host[data-calendar-loading-state="revealing"] .fc-event:not(.fc-event-mirror) {
 		animation: calendar-event-enter 180ms ease-out;

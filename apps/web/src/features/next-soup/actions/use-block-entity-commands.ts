@@ -37,6 +37,7 @@ import {
   makeMuteAction,
   makeRenameAction,
 } from './index';
+import { useBlockCommandEntity } from './use-block-command-entity';
 
 const reportEntityActionError = (error: unknown) =>
   Telemetry.error(error, { surface: 'entity-actions' });
@@ -47,13 +48,9 @@ const reportEntityActionError = (error: unknown) =>
  * Note: several of these do not register with an actual hot key so that they
  * can be found by the command menu.
  *
- * `resolveEntity` lets a block supply its own entity for blocks quick access
- * cannot resolve. Quick access is built from history, channels, users, companies
- * and snippets — email threads appear in none of them, so without an override
- * `getEntity` returns undefined there and every command below silently drops
- * out of the command menu. Blocks that pass one must use a non-suspending
- * source: `condition()` runs inside command-menu evaluation, where a pending
- * query must not suspend.
+ * `resolveEntity` lets a block supply metadata it already owns. Otherwise the
+ * command owner resolves its exact id through Soup, using Quick Access only as
+ * a cache. Conditions never activate account-wide search or suspend on data.
  */
 export type UseBlockEntityCommandsOptions = {
   id?: string;
@@ -116,13 +113,13 @@ export const useBlockEntityCommands = (
   const priority = () => propertyById(SYSTEM_PROPERTY_IDS.PRIORITY);
   const assignees = () => propertyById(SYSTEM_PROPERTY_IDS.ASSIGNEES);
 
-  const getEntity = (): EntityData | undefined => {
+  const getEntity = useBlockCommandEntity(blockId, () => {
     const provided = options.resolveEntity?.();
     if (provided) return provided;
     const item = quickAccess.getById(blockId);
     if (item?.kind === 'entity') return item.data;
     return undefined;
-  };
+  });
 
   const openPropertyEditorIfSelected = (
     mode: 'selector' | 'direct' = 'selector',

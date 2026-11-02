@@ -857,11 +857,19 @@ function createCallState() {
 
   // --- device enumeration ---
 
+  let watchingDevices = false;
   async function enumerateDevices() {
     // Device lists are only consumed after a browser call has loaded LiveKit.
     // Native calls own device selection outside this JS context.
     const livekitModule = getLivekit();
     if (!livekitModule) return;
+    if (!watchingDevices) {
+      watchingDevices = true;
+      navigator.mediaDevices?.addEventListener(
+        'devicechange',
+        handleDeviceChange
+      );
+    }
     const { Room } = livekitModule;
 
     try {
@@ -1071,10 +1079,15 @@ function createCallState() {
   }
 
   // Re-enumerate when devices change (e.g. headphones plugged in)
-  const handleDeviceChange = () => {
+  function handleDeviceChange() {
     fireAndForget(enumerateDevices(), 'call-devices');
-  };
-  navigator.mediaDevices?.addEventListener('devicechange', handleDeviceChange);
+  }
+  onCleanup(() =>
+    navigator.mediaDevices?.removeEventListener(
+      'devicechange',
+      handleDeviceChange
+    )
+  );
 
   const currentConnectionState = () => {
     const native = currentNativeCallSnapshot();

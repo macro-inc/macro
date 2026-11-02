@@ -404,7 +404,9 @@ phones and stays visible after you choose the action, including with the iOS
 keyboard open. Trending GIFs show first; tap search to filter, then tap a GIF
 to insert it without sending the draft.
 
-Closed mention menus do not gather, rank, or paginate candidates. When checking
+Closed mention, snippet and skill menus do not start Quick Access lists, gather,
+rank, or paginate results. Check network admission on a cold composer mount,
+then open each menu with an empty query and confirm its lists load. When checking
 channel-switch performance, include touch navigation back to the list and reopening
 a cached channel without typing `@`. Then open mentions, search, close, and reopen:
 results must reflect current people and entities, and scrolling or keyboard

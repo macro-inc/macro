@@ -12,7 +12,12 @@ sync disconnect with pending edits. The historical flag name is unchanged. Local
 
 The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the
-sharing dialog; copying a link is a separate action.
+sharing dialog; copying a link is a separate action. The shared opener loads
+the dialog body on first open. Check a cold open from a list menu, closing it,
+and reopening it; permissions and optional-message controls must still appear.
+On native mobile, an incoming share opens the drawer before its composer loads;
+Cancel stays available while loading. Cancelling must not restore a discarded
+batch when the composer finishes loading.
 
 In the Share dialog's **Optional message**, paste an image with Cmd/Ctrl+V,
 use **Attach files**, or drop a file into the composer. Images show a removable
@@ -3110,3 +3115,21 @@ an empty circle, and subtype-only previews use their completion flag. See
 Sharing labels describe their audience: Only people with access, Anyone with the link, and Team members with the link. Permission choices say Can view, Can comment, and Can edit. Copying a restricted link still does not grant access. The existing immediately opening dialog and its deferred loading remain unchanged.
 
 Drive's existing New controls open a wide menu with icons and short descriptions for creation and uploads, while preserving the current destination and feature gates.
+
+Large-document input latency checks use the real collaborative editor fixture
+in `LexicalMarkdown/collaboration/browser-test/large-undo.html?paragraphs=2000`.
+The sync provider reuses immutable exports of unchanged nodes while visiting
+snapshot-relative children; no edit is deferred or reordered. Verify undo,
+remote edits, draft comments, completion omission and search text when changing
+serialization. The fixture omits app menus and overlays, so also type in an
+owned app document before claiming whole-editor coverage.
+
+Reference hover cards and mobile preview sheets load their shared preview body
+on first display, showing the existing preview skeleton while it loads. Check
+first-open and repeated-open behavior when changing preview boundaries.
+
+Home loads through the standard route loader and shows its existing pending
+layout while loading. Check cold Home and Mail entry, Home return from another
+view, and Home inline document/calendar routes after a hard reload.
+On phones, switching to Agents loads its floating composer in the existing 48px
+pending slot; other views keep their create actions without loading that editor.

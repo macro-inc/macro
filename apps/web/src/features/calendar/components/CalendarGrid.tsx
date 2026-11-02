@@ -6,6 +6,7 @@ import {
 import type {
   DateSelectArg,
   DatesSetArg,
+  EventClickArg,
   EventInput,
 } from '@fullcalendar/core';
 import dayGridPlugin from '@fullcalendar/daygrid';
@@ -184,6 +185,21 @@ export function CalendarGrid(props: CalendarGridProps) {
       };
     })
   );
+  const useNarrowDayHeaders = createMemo(
+    () => props.settings.useNarrowDayHeaders
+  );
+  const dayHeaderFormat = createMemo(() => ({
+    weekday: useNarrowDayHeaders() ? ('narrow' as const) : ('short' as const),
+  }));
+  const canSelectEvent = createMemo(
+    () => props.selection.onEventSelect !== undefined
+  );
+  const handleEventClick = ({ el, event, jsEvent }: EventClickArg) => {
+    jsEvent.preventDefault();
+    const selectedEvent = eventByRenderId(calendarEventRenderId(event));
+    if (selectedEvent) props.selection.onEventSelect?.(selectedEvent, el);
+  };
+
   const [eventInteractionActive, setEventInteractionActive] =
     createSignal(false);
   const renderedEvents = createMemo<EventInput[]>(
@@ -286,18 +302,7 @@ export function CalendarGrid(props: CalendarGridProps) {
       selectMinDistance={0}
       snapDuration="00:30:00"
       select={(selection) => props.selection.onDateSelect?.(selection)}
-      eventClick={
-        props.selection.onEventSelect
-          ? ({ el, event, jsEvent }) => {
-              jsEvent.preventDefault();
-              const selectedEvent = eventByRenderId(
-                calendarEventRenderId(event)
-              );
-              if (selectedEvent)
-                props.selection.onEventSelect?.(selectedEvent, el);
-            }
-          : undefined
-      }
+      eventClick={canSelectEvent() ? handleEventClick : undefined}
       eventDidMount={({ el, event, isMirror }) => {
         const eventId = calendarEventRenderId(event);
         const calendarEvent = eventByRenderId(eventId);
@@ -328,9 +333,7 @@ export function CalendarGrid(props: CalendarGridProps) {
         }
       }}
       datesSet={(info) => props.onDatesSet?.(info)}
-      dayHeaderFormat={{
-        weekday: props.settings.useNarrowDayHeaders ? 'narrow' : 'short',
-      }}
+      dayHeaderFormat={dayHeaderFormat()}
       dayCellClassNames={({ date, view }) =>
         isSameLocalDate(date, view.calendar.getDate())
           ? ['calendar-day-selected']

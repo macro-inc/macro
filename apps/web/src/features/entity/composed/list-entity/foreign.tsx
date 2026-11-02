@@ -1,3 +1,4 @@
+import { createDateClock } from '@core/util/createDateClock';
 import ArrowSquareOut from '@icon/system/regular/arrow-square-out.svg';
 import ChatCircle from '@icon/system/regular/chat-circle.svg';
 import Check from '@icon/system/regular/check.svg';
@@ -8,14 +9,7 @@ import { Popover } from '@kobalte/core/popover';
 import CheckCircle from '@phosphor-icons/core/assets/fill/check-circle-fill.svg?component-solid';
 import XCircle from '@phosphor-icons/core/assets/fill/x-circle-fill.svg?component-solid';
 import { Button, cn, Layer, Surface } from '@ui';
-import {
-  createSignal,
-  For,
-  type JSX,
-  onCleanup,
-  onMount,
-  Show,
-} from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { rowPillClasses } from '../../components/row-pill';
 import type { GithubPullRequestEntity } from '../../types/entity';
@@ -303,12 +297,13 @@ function GithubPullRequestChecksPopover(props: {
 }) {
   const checks = () => props.entity.metadata.checks;
   const counts = () => checkCounts(props.entity);
-  const [now, setNow] = createSignal(Date.now());
-
-  onMount(() => {
-    const interval = setInterval(() => setNow(Date.now()), 1000);
-    onCleanup(() => clearInterval(interval));
-  });
+  const now = createDateClock(
+    () =>
+      checks().some(
+        (check) => check.status !== 'completed' && !!check.startedAt
+      ),
+    1000
+  );
 
   return (
     <div class="w-full flex flex-col gap-0.5 text-left">

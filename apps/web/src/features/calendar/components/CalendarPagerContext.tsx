@@ -236,14 +236,6 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     }
   });
 
-  const updateSize = () => {
-    listenForPageRegistryChange();
-
-    for (const handle of pageHandles.values()) {
-      handle.api()?.updateSize();
-    }
-  };
-
   const scheduleActiveUpdate = () => {
     pager.cancel();
     renderQueue.clear();
@@ -390,7 +382,6 @@ function createCalendarPagerContext(props: CalendarPagerContextProps) {
     initialDateFor: (id: CalendarPageId) => initialDates[id],
     isActive: (id: CalendarPageId) => activePageId() === id,
     registerPage,
-    updateSize,
     gotoDate,
     navigateToDate,
     navigateToToday: () => navigateToDate(new Date()),

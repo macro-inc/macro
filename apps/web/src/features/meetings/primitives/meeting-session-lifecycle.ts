@@ -6,10 +6,10 @@ async function waitForBoth(previous: Promise<void>, current: Promise<void>) {
 
 /** Keep unfinished attempts and cleanup alive across individual route owners. */
 export function createMeetingSessionLifecycle(): MeetingSessionLifecycle {
-  let pending = Promise.resolve();
+  let pending: Promise<void> | undefined;
   return {
     begin() {
-      const previous = pending;
+      const previous = pending ?? Promise.resolve();
       let complete!: () => void;
       const current = new Promise<void>((resolve) => {
         complete = resolve;
