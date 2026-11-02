@@ -202,7 +202,8 @@ impl AgentTask {
     }
 }
 
-/// Canonical client configuration. Ownership and execution state are server-owned.
+/// Client configuration, the create body. Ownership and execution state are
+/// server-owned.
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
 #[serde(deny_unknown_fields)]
 pub struct ActionConfiguration {
@@ -217,67 +218,7 @@ pub struct ActionConfiguration {
     pub run_visibility: RunVisibility,
 }
 
-/// Deprecated cron-only input, accepted during the compatibility rollout.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
-#[serde(deny_unknown_fields)]
-pub struct LegacyActionConfiguration {
-    pub name: String,
-    pub schedule: Schedule,
-    pub kind: ActionKind,
-    #[schema(value_type = String)]
-    pub timezone: Tz,
-    #[schema(value_type = Object)]
-    pub task: Value,
-    pub enabled: bool,
-}
-
-impl From<LegacyActionConfiguration> for ActionConfiguration {
-    fn from(input: LegacyActionConfiguration) -> Self {
-        Self {
-            name: input.name,
-            trigger: ActionTrigger::Cron {
-                schedule: input.schedule,
-                timezone: input.timezone,
-            },
-            kind: input.kind,
-            task: input.task,
-            enabled: input.enabled,
-            run_visibility: RunVisibility::default(),
-        }
-    }
-}
-
-/// Exactly one representation is accepted, even if mixed fields agree or are null.
-#[derive(Serialize, Debug, Clone, ToSchema)]
-#[serde(untagged)]
-pub enum CreateScheduledAction {
-    Canonical(ActionConfiguration),
-    Legacy(LegacyActionConfiguration),
-}
-
-/// Whether a request body is the deprecated cron-only shape: a top-level
-/// `schedule` and no `trigger`. Picking the shape up front, rather than trying
-/// each, lets a rejection say which field is wrong.
-fn is_legacy_request(input: &serde_json::Map<String, Value>) -> bool {
-    input.contains_key("schedule") && !input.contains_key("trigger")
-}
-
-impl<'de> Deserialize<'de> for CreateScheduledAction {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let input = serde_json::Map::deserialize(deserializer)?;
-        if is_legacy_request(&input) {
-            serde_json::from_value(Value::Object(input)).map(Self::Legacy)
-        } else {
-            serde_json::from_value(Value::Object(input)).map(Self::Canonical)
-        }
-        .map_err(serde::de::Error::custom)
-    }
-}
-
-/// Canonical configuration replacement. Activation has its own endpoint, so
+/// Configuration replacement, the update body. Activation has its own endpoint, so
 /// omitting `enabled` keeps the stored value; omitting `run_visibility` keeps
 /// it too, so clients that predate the setting do not reset it.
 #[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
@@ -296,55 +237,17 @@ pub struct ActionConfigurationUpdate {
     pub run_visibility: Option<RunVisibility>,
 }
 
-/// Full replacement of client configuration, not of server-owned action state.
-#[derive(Serialize, Debug, Clone, ToSchema)]
-#[serde(untagged)]
-pub enum UpdateScheduledAction {
-    Canonical(ActionConfigurationUpdate),
-    Legacy(LegacyActionConfiguration),
-}
-
-impl<'de> Deserialize<'de> for UpdateScheduledAction {
-    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
-    where
-        D: serde::Deserializer<'de>,
-    {
-        let input = serde_json::Map::deserialize(deserializer)?;
-        if is_legacy_request(&input) {
-            serde_json::from_value(Value::Object(input)).map(Self::Legacy)
-        } else {
-            serde_json::from_value(Value::Object(input)).map(Self::Canonical)
-        }
-        .map_err(serde::de::Error::custom)
-    }
-}
-
-impl UpdateScheduledAction {
+impl ActionConfigurationUpdate {
     /// The replacement configuration, keeping the stored values of fields
     /// the input omits.
     pub fn into_configuration(self, stored: &ScheduledAction) -> ActionConfiguration {
-        match self {
-            Self::Canonical(input) => ActionConfiguration {
-                name: input.name,
-                trigger: input.trigger,
-                kind: input.kind,
-                task: input.task,
-                enabled: input.enabled.unwrap_or(stored.enabled),
-                run_visibility: input.run_visibility.unwrap_or(stored.run_visibility),
-            },
-            Self::Legacy(input) => ActionConfiguration {
-                run_visibility: stored.run_visibility,
-                ..input.into()
-            },
-        }
-    }
-}
-
-impl From<CreateScheduledAction> for ActionConfiguration {
-    fn from(input: CreateScheduledAction) -> Self {
-        match input {
-            CreateScheduledAction::Canonical(input) => input,
-            CreateScheduledAction::Legacy(input) => input.into(),
+        ActionConfiguration {
+            name: self.name,
+            trigger: self.trigger,
+            kind: self.kind,
+            task: self.task,
+            enabled: self.enabled.unwrap_or(stored.enabled),
+            run_visibility: self.run_visibility.unwrap_or(stored.run_visibility),
         }
     }
 }
