@@ -11,7 +11,7 @@ vi.mock('@core/signal/unfurl', () => ({
   useUnfurl: () => [() => undefined],
 }));
 
-const base = {
+const BASE = {
   propertyDefinitionId: 'definition',
   propertyId: 'assignment',
   displayName: 'Value',
@@ -21,16 +21,16 @@ const base = {
   updatedAt: new Date(0),
 } as const;
 
-const NUMBER: Property = { ...base, valueType: 'NUMBER', value: 3 };
-const TEXT: Property = { ...base, valueType: 'STRING', value: 'Draft' };
+const NUMBER: Property = { ...BASE, valueType: 'NUMBER', value: 3 };
+const TEXT: Property = { ...BASE, valueType: 'STRING', value: 'Draft' };
 const LINKS: Property = {
-  ...base,
+  ...BASE,
   valueType: 'LINK',
   isMultiSelect: true,
   value: ['https://example.com/one'],
 };
-const LINK: Property = { ...base, valueType: 'LINK', value: null };
-const FLAG: Property = { ...base, valueType: 'BOOLEAN', value: false };
+const LINK: Property = { ...BASE, valueType: 'LINK', value: null };
+const FLAG: Property = { ...BASE, valueType: 'BOOLEAN', value: false };
 
 function setup(property: Property) {
   const saves: PromiseWithResolvers<void>[] = [];
@@ -144,6 +144,22 @@ describe.each([
     expect(onSave).toHaveBeenCalledOnce();
     expect(field.isConnected).toBe(true);
     saves[0]!.resolve();
+    await settle();
+  });
+
+  it('leaves Enter and Escape to an IME while it composes', async () => {
+    const { onSave } = setup(property);
+    const field = await startEditing(value(current));
+
+    type(field, next);
+    fireEvent.keyDown(field, { key: 'Enter', isComposing: true });
+    fireEvent.keyDown(field, { key: 'Enter', keyCode: 229 });
+    fireEvent.keyDown(field, { key: 'Escape', isComposing: true });
+    await settle();
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(field.isConnected).toBe(true);
+    expect(focused()).toBe(field);
   });
 
   it('keeps the field open and focused when the save fails', async () => {
@@ -223,6 +239,18 @@ describe('link value', () => {
     await settle();
 
     expect(focused()).toBe(add());
+  });
+
+  it('leaves Enter to an IME while it composes', async () => {
+    const { onSave } = setup(LINKS);
+    const field = await startEditing(add());
+
+    type(field, URL_TWO);
+    fireEvent.keyDown(field, { key: 'Enter', isComposing: true });
+    await settle();
+
+    expect(onSave).not.toHaveBeenCalled();
+    expect(focused()).toBe(field);
   });
 
   it('adds once when focus leaves while the save runs', async () => {

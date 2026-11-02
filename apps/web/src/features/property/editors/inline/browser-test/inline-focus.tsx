@@ -5,7 +5,7 @@ import { withApiValues } from '@property/utils/transforms';
 import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
 
-const base = {
+const BASE = {
   isMultiSelect: false,
   owner: { scope: 'system' },
   createdAt: new Date(0),
@@ -14,7 +14,7 @@ const base = {
 
 const PROPERTIES: PropertyT[] = [
   {
-    ...base,
+    ...BASE,
     propertyId: 'number',
     propertyDefinitionId: 'number',
     displayName: 'Points',
@@ -22,7 +22,7 @@ const PROPERTIES: PropertyT[] = [
     value: 3,
   },
   {
-    ...base,
+    ...BASE,
     propertyId: 'text',
     propertyDefinitionId: 'text',
     displayName: 'Summary',
@@ -30,7 +30,7 @@ const PROPERTIES: PropertyT[] = [
     value: 'Draft',
   },
   {
-    ...base,
+    ...BASE,
     propertyId: 'links',
     propertyDefinitionId: 'links',
     displayName: 'Links',
@@ -39,7 +39,7 @@ const PROPERTIES: PropertyT[] = [
     value: ['https://example.com/one'],
   },
   {
-    ...base,
+    ...BASE,
     propertyId: 'link',
     propertyDefinitionId: 'link',
     displayName: 'Link',
@@ -47,7 +47,7 @@ const PROPERTIES: PropertyT[] = [
     value: null,
   },
   {
-    ...base,
+    ...BASE,
     propertyId: 'flag',
     propertyDefinitionId: 'flag',
     displayName: 'Done',
@@ -57,7 +57,7 @@ const PROPERTIES: PropertyT[] = [
 ];
 
 type HeldSave = PromiseWithResolvers<void>;
-const held: HeldSave[] = [];
+const HELD: HeldSave[] = [];
 
 declare global {
   interface Window {
@@ -66,15 +66,15 @@ declare global {
     heldSaves: () => number;
   }
 }
-window.finishSave = () => held.shift()?.resolve();
-window.failSave = () => held.shift()?.reject(new Error('Save failed'));
-window.heldSaves = () => held.length;
+window.finishSave = () => HELD.shift()?.resolve();
+window.failSave = () => HELD.shift()?.reject(new Error('Save failed'));
+window.heldSaves = () => HELD.length;
 
 function Row(props: { property: PropertyT }) {
   const [property, setProperty] = createSignal(props.property);
   const save = async (saved: PropertyT, value: PropertyApiValues) => {
     const hold = Promise.withResolvers<void>();
-    held.push(hold);
+    HELD.push(hold);
     await hold.promise;
     setProperty(withApiValues(saved, value));
   };

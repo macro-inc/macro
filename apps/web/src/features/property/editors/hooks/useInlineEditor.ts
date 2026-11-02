@@ -94,6 +94,9 @@ export function useInlineEditor(): {
   };
 
   const handleKeyDown = (e: KeyboardEvent) => {
+    // An IME owns Enter and Escape while it composes; WebKit reports its
+    // confirming keydown as 229 after composition ends.
+    if (e.isComposing || e.keyCode === 229) return;
     if (e.key === 'Enter') {
       e.preventDefault();
       fireAndForget(saveFromKeyboard(), 'property-editor');
