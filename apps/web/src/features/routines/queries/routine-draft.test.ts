@@ -521,13 +521,11 @@ describe('routines with steps', () => {
     task: {
       steps: [
         {
-          type: 'tool',
-          tool: 'UpdateThreadLabels',
-          arguments: {
-            thread_id: '{{trigger.entity_id}}',
-            label: 'INBOX',
-            add: false,
-          },
+          type: 'code',
+          id: 'archive_it',
+          title: 'Archive it',
+          source: 'export async function main() {}',
+          writes: ['email'],
         },
         { type: 'agent', model: 'claude', instructions: 'Draft a reply' },
       ],
@@ -536,7 +534,7 @@ describe('routines with steps', () => {
 
   it('edits a stored program and keeps its untouched task', () => {
     const parsed = draftFromSchedule(program);
-    expect(parsed?.steps?.map((step) => step.kind)).toEqual(['tool', 'agent']);
+    expect(parsed?.steps?.map((step) => step.kind)).toEqual(['code', 'agent']);
     expect(parsed?.prompt).toBe('Draft a reply');
     expect(validateRoutineDraft(parsed!)).toBeNull();
     // Unchanged steps write back the exact stored task.
@@ -551,13 +549,11 @@ describe('routines with steps', () => {
     expect(draftToUpdateBody(edited, program)?.task).toEqual({
       steps: [
         {
-          type: 'tool',
-          tool: 'UpdateThreadLabels',
-          arguments: {
-            thread_id: '{{trigger.entity_id}}',
-            label: 'INBOX',
-            add: false,
-          },
+          type: 'code',
+          id: 'archive_it',
+          title: 'Archive it',
+          source: 'export async function main() {}',
+          writes: ['email'],
         },
       ],
     });
@@ -570,8 +566,8 @@ describe('routines with steps', () => {
     const repicked = {
       ...parsed,
       steps: parsed.steps!.map((step) =>
-        step.kind === 'tool'
-          ? { ...step, arguments: { ...step.arguments } }
+        step.kind === 'code'
+          ? { ...step, writes: [...step.writes] }
           : { ...step }
       ),
     };
@@ -626,16 +622,18 @@ describe('routines with steps', () => {
       ...steps,
       {
         id: 'x',
-        kind: 'tool',
-        tool: 'CreateDocument',
-        arguments: { documentName: 'A', isTask: true },
+        kind: 'code',
+        title: 'Create a task',
+        summary: '',
+        source: 'export async function main() {}',
+        writes: ['workspace'],
       },
     ]);
     expect(added.steps).toHaveLength(2);
     expect(draftToUpdateBody(added, events)?.task).toMatchObject({
       steps: [
         { type: 'agent', instructions: 'Summarize updates' },
-        { type: 'tool' },
+        { type: 'code' },
       ],
     });
   });
@@ -659,15 +657,17 @@ describe('routines with steps', () => {
       ...steps,
       {
         id: 'x',
-        kind: 'tool',
-        tool: 'UpdateThreadLabels',
-        arguments: { label: 'INBOX', add: false },
+        kind: 'code',
+        title: 'Archive it',
+        summary: '',
+        source: 'export async function main() {}',
+        writes: ['email'],
       },
     ]);
     expect(draftToUpdateBody(added, stored)?.task).toMatchObject({
       steps: [
         { type: 'agent', instructions: 'Be brief.\n\nSummarize updates' },
-        { type: 'tool' },
+        { type: 'code' },
       ],
     });
   });

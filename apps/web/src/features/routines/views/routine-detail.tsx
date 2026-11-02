@@ -23,7 +23,6 @@ import {
   getErrorMessage,
   withDraftSteps,
 } from '../core/routine-draft';
-import { stepsNeedEvent } from '../core/routine-steps';
 import { type RunItem, runStartLine } from '../core/run-start';
 import {
   describeHistoryStep,
@@ -146,14 +145,6 @@ export function RoutineDetailView(props: {
     return 'Fix the routine before turning it on';
   };
   /** Manual runs have no triggering item for steps to read. */
-  const needsEvent = () => {
-    const steps = state()?.steps;
-    return steps !== undefined && stepsNeedEvent(steps);
-  };
-  const runHint = () =>
-    needsEvent()
-      ? 'This routine acts on the item that triggers it, so it runs on activity'
-      : undefined;
   return (
     <Show
       when={schedule()}
@@ -225,8 +216,7 @@ export function RoutineDetailView(props: {
                 </Show>
                 <RoutineRunButton
                   enabled={isActive()}
-                  runDisabled={runDisabled() || needsEvent()}
-                  runHint={runHint()}
+                  runDisabled={runDisabled()}
                   activationDisabled={activationDisabled()}
                   copyDisabled={!prompt()}
                   onRun={runNow}
@@ -328,7 +318,7 @@ export function RoutineDetailView(props: {
                 )}
               </Show>
               {/* Touch has no tooltips: say why a control is off. */}
-              <Show when={activationHint() ?? runHint()}>
+              <Show when={activationHint()}>
                 {(hint) => (
                   <span class="hidden basis-full text-xs text-ink-muted touch:block">
                     {hint()}
@@ -433,13 +423,7 @@ export function RoutineDetailView(props: {
                 }
                 onOpenItem={props.onOpenItem}
                 describeStep={(step, record) =>
-                  describeHistoryStep(
-                    step,
-                    stepsForRun(record, routine()),
-                    // Runs recorded before step kinds were stored read
-                    // them from the routine as it is now.
-                    state()?.steps
-                  )
+                  describeHistoryStep(step, stepsForRun(record, routine()))
                 }
                 isPending={props.source.historyLoading()}
                 createChatMetadata={props.slots.createChatMetadata}

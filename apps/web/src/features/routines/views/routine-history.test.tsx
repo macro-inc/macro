@@ -8,6 +8,7 @@ import {
 } from '@solidjs/testing-library';
 import { createResource, createSignal, type JSX, Suspense } from 'solid-js';
 import { afterEach, describe, expect, it, vi } from 'vitest';
+import type { HistoryStep } from '../core/history';
 import { toHistoryRecord } from '../queries/run-resource';
 import {
   type HistoryMetadata,
@@ -370,23 +371,21 @@ describe('skipped runs', () => {
 });
 
 describe('routine history steps', () => {
+  const code = (path: string, error?: string) => ({
+    path,
+    kind: 'code' as const,
+    calls: [],
+    calls_truncated: false,
+    ...(error ? { error } : {}),
+  });
   function triage() {
     return toHistoryRecord({
       id: 'run-steps',
       result: {
         version: 1,
         resource: null,
-        error: 'SendChannelMessage failed: No access',
-        steps: [
-          { path: '0', kind: 'choose', choices: ['Invoice'], probability: 0.9 },
-          { path: '0.options.0.0', kind: 'tool', tool: 'UpdateThreadLabels' },
-          {
-            path: '0.options.0.1',
-            kind: 'tool',
-            tool: 'SendChannelMessage',
-            error: 'No access',
-          },
-        ],
+        error: 'Post the update failed: No access',
+        steps: [code('0'), code('1', 'No access')],
       },
       start_time: '2026-10-09T10:00:00Z',
       end_time: '2026-10-09T10:00:03Z',
@@ -399,31 +398,24 @@ describe('routine history steps', () => {
       result: {
         version: 1,
         resource: null,
-        steps: [
-          { path: '0', kind: 'tool', tool: 'CreateDocument' },
-          { path: '1', kind: 'if', answer: false, probability: 0.2 },
-        ],
+        steps: [code('0'), { path: '1', kind: 'agent' }],
       },
       start_time: '2026-10-08T10:00:00Z',
       is_success: true,
     });
   }
-  const describeRunStep = (
-    step: Parameters<
-      NonNullable<Parameters<typeof RoutineHistory>[0]['describeStep']>
-    >[0]
-  ) =>
-    step.kind === 'tool'
-      ? `${step.tool}${step.error ? ` failed: ${step.error}` : ''}`
-      : step.kind === 'choose'
-        ? `Chose ${step.choices?.join(', ')}`
-        : step.kind === 'if'
-          ? `Urgent? ${step.answer ? 'yes' : 'no'}`
-          : 'Asked AI';
+  const TITLES: Record<string, string> = {
+    'run-steps:0': 'Label invoices',
+    'run-steps:1': 'Post the update',
+    'run-weekly:0': 'Find stuck tasks',
+  };
+  const describeRunStep = (step: HistoryStep, record: HistoryRecord) =>
+    step.kind === 'code'
+      ? `${TITLES[`${record.id}:${step.path}`] ?? 'Ran code'}${step.error ? ` failed: ${step.error}` : ''}`
+      : 'Asked AI';
 
   it('opens why a run failed before any step', () => {
-    const reason =
-      'This routine decides about or reads the item that triggered it, so it only runs when an activity event triggers it.';
+    const reason = 'The item that triggered this routine couldn’t be read.';
     const failed = toHistoryRecord({
       id: 'run-failed',
       result: { version: 1, resource: null, error: reason },
@@ -463,27 +455,24 @@ describe('routine history steps', () => {
       />
     ));
     // Its first step names the run; the failed step says why it stopped.
-    const run = within(row('Chose Invoice'));
+    const run = within(row('Label invoices'));
     expect(
-      run.getByText('SendChannelMessage failed: No access').className
+      run.getByText('Post the update failed: No access').className
     ).toContain('text-failure');
-    expect(within(row('CreateDocument')).getByText('Urgent? no')).toBeTruthy();
+    expect(within(row('Find stuck tasks')).getByText('Asked AI')).toBeTruthy();
 
     const details = within(screen.getByRole('region', { name: 'Run details' }));
     expect(
-      details.getByRole('heading', { name: 'Chose Invoice' })
+      details.getByRole('heading', { name: 'Label invoices' })
     ).toBeTruthy();
-    expect(details.getByText(/Failed · took 3\.0 s · 1 AI call/)).toBeTruthy();
-    expect(details.getByText('90%')).toBeTruthy();
-    expect(details.getByText('SendChannelMessage')).toBeTruthy();
+    expect(details.getByText(/^.*Failed · took 3\.0 s$/)).toBeTruthy();
     expect(details.getByText('No access').className).toContain('text-failure');
 
-    fireEvent.click(within(row('CreateDocument')).getByRole('button'));
+    fireEvent.click(within(row('Find stuck tasks')).getByRole('button'));
     expect(
-      details.queryByRole('heading', { name: 'Chose Invoice' })
+      details.queryByRole('heading', { name: 'Label invoices' })
     ).toBeNull();
-    expect(details.getByText('No')).toBeTruthy();
-    expect(details.getByText('80%')).toBeTruthy();
+    expect(details.getByText(/1 AI call/)).toBeTruthy();
 
     // A run that only asked its agent opens the conversation instead.
     fireEvent.click(within(row('Agent agent-run')).getByRole('button'));
@@ -544,10 +533,7 @@ describe('routine history steps', () => {
       result: {
         version: 1,
         resource: { type: 'agent', id: 'program' },
-        steps: [
-          { path: '0', kind: 'if', answer: true, probability: 0.97 },
-          { path: '0.then.0', kind: 'agent' },
-        ],
+        steps: [code('0'), { path: '1', kind: 'agent' }],
       },
     });
     render(() => (
@@ -560,7 +546,6 @@ describe('routine history steps', () => {
     ));
     expect(source.createAgentMetadata).not.toHaveBeenCalled();
     const details = within(screen.getByRole('region', { name: 'Run details' }));
-    expect(details.getByText('97%')).toBeTruthy();
     fireEvent.click(details.getByRole('button', { name: /Open conversation/ }));
     expect(source.onOpen).toHaveBeenCalledWith(
       { type: 'agent', id: 'program' },
@@ -577,15 +562,15 @@ describe('routine history steps', () => {
         describeStep={describeRunStep}
       />
     ));
-    fireEvent.click(within(row('CreateDocument')).getByRole('button'));
+    fireEvent.click(within(row('Find stuck tasks')).getByRole('button'));
     expect(
-      within(row('CreateDocument'))
+      within(row('Find stuck tasks'))
         .getByRole('button')
         .getAttribute('aria-current')
     ).toBe('true');
     fireEvent.click(screen.getByRole('button', { name: 'Runs' }));
     expect(
-      within(row('Chose Invoice'))
+      within(row('Label invoices'))
         .getByRole('button')
         .getAttribute('aria-current')
     ).toBe('true');

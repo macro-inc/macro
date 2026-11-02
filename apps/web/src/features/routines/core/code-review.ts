@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import {
   type CodeStepDraft,
-  flattenSteps,
+  codeSteps as codeStepsOf,
   stepsFromTask,
 } from './routine-steps';
 
@@ -35,9 +35,7 @@ export function taskSdk(task: unknown): string | undefined {
 }
 
 function codeSteps(task: unknown): CodeStepDraft[] {
-  return flattenSteps(stepsFromTask(task) ?? []).filter(
-    (step): step is CodeStepDraft => step.kind === 'code'
-  );
+  return codeStepsOf(stepsFromTask(task) ?? []);
 }
 
 /**

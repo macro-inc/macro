@@ -8,8 +8,7 @@ import type { ScheduleDraft } from '../core/draft';
 import { createEmptyDraft } from '../core/routine-draft';
 import {
   type CodeStepDraft,
-  flattenSteps,
-  mapSteps,
+  codeSteps,
   type StepDraft,
   stepsFromTask,
   withNamedOutputs,
@@ -185,13 +184,11 @@ ${JSON.stringify({
 })}`;
 }
 
-/** The code steps a drafted routine's output contains, anywhere in it. */
+/** The code steps a drafted routine's output contains. */
 export function draftedCodeSteps(output: unknown): CodeStepDraft[] {
   const parsed = compositionSchema.safeParse(output);
   if (!parsed.success) return [];
-  return flattenSteps(stepsFromTask({ steps: parsed.data.steps }) ?? []).filter(
-    (step): step is CodeStepDraft => step.kind === 'code'
-  );
+  return codeSteps(stepsFromTask({ steps: parsed.data.steps }) ?? []);
 }
 
 /** Ask for the routine again with its code fixed, keeping the rest. */
@@ -227,11 +224,9 @@ function withCodeProblems(
 ): StepDraft[] {
   // Failures count code steps in program order, as the check does.
   const indexes = new Map(
-    flattenSteps(steps)
-      .filter((step) => step.kind === 'code')
-      .map((step, index) => [step.id, index])
+    codeSteps(steps).map((step, index) => [step.id, index])
   );
-  return mapSteps(steps, (step) => {
+  return steps.map((step) => {
     if (step.kind !== 'code') return step;
     const index = indexes.get(step.id);
     const failure = failures.find((item) => item.index === index);

@@ -156,7 +156,7 @@ describe('fillTemplateTrigger', () => {
 });
 
 describe('templateShareBody', () => {
-  it('shares references from every agent and every tool step’s text', () => {
+  it('shares references from the Ask AI step’s text', () => {
     const draft = {
       ...createEmptyDraft(''),
       triggers: [
@@ -168,31 +168,18 @@ describe('templateShareBody', () => {
       ],
       steps: [
         {
-          id: 'decide',
-          kind: 'if' as const,
-          condition: 'Is it urgent?',
-          yes: [
-            {
-              id: 'file',
-              kind: 'agent' as const,
-              target: { kind: 'model' as const, model: 'model' },
-              instructions: 'File it',
-            },
-          ],
-          no: [
-            {
-              id: 'tell',
-              kind: 'agent' as const,
-              target: { kind: 'model' as const, model: 'model' },
-              instructions: `Tell ${AUTHOR}`,
-            },
-          ],
+          id: 'label',
+          kind: 'code' as const,
+          title: 'Label it',
+          summary: '',
+          source: 'export async function main() {}',
+          writes: [],
         },
         {
-          id: 'post',
-          kind: 'tool' as const,
-          tool: 'SendChannelMessage' as const,
-          arguments: { channel_id: 'channel-1', content: `cc ${TEAMMATE}` },
+          id: 'tell',
+          kind: 'agent' as const,
+          target: { kind: 'model' as const, model: 'model' },
+          instructions: `Tell ${AUTHOR}, cc ${TEAMMATE}`,
         },
       ],
     };

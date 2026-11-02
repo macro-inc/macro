@@ -30,11 +30,7 @@ function lastRun(routine: RoutineSnapshot): RoutineRow['lastRun'] {
   return {
     at: runTime(at),
     outcome: runOutcome(record),
-    summary: summarizeRun(
-      record,
-      stepsForRun(record, routine),
-      routine.draft?.steps
-    ),
+    summary: summarizeRun(record, stepsForRun(record, routine)),
   };
 }
 

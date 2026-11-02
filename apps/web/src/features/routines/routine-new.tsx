@@ -15,7 +15,6 @@ import { createRoutineConnectedApps, RoutineApps } from './routine-apps';
 import { onRoutineDraftStarted } from './routine-draft-start';
 import { RoutineExecutionPicker } from './routine-execution-picker';
 import { RoutinePromptEditor } from './routine-prompt-editor';
-import { routineToolSlots } from './routine-step-pickers';
 import { RoutineTriggers } from './routine-triggers';
 import { RoutineNewView } from './views/routine-new';
 
@@ -56,7 +55,6 @@ export function RoutineNew(props: {
               Triggers: RoutineTriggers,
               Apps: RoutineApps,
               createConnectedApps: createRoutineConnectedApps,
-              ...routineToolSlots,
             }}
             onCreated={props.onCreated}
             onCancel={props.onCancel}

@@ -28,25 +28,6 @@ const conditionSchema = z.discriminatedUnion('status', [
 const stepSchema = z.discriminatedUnion('kind', [
   z.object({
     path: z.string(),
-    kind: z.literal('if'),
-    answer: z.boolean(),
-    probability: z.number(),
-  }),
-  z.object({
-    path: z.string(),
-    kind: z.literal('choose'),
-    choices: z.array(z.string()).optional(),
-    probability: z.number().optional(),
-  }),
-  z.object({
-    path: z.string(),
-    kind: z.literal('tool'),
-    tool: z.string(),
-    output: z.unknown().optional(),
-    error: z.string().optional(),
-  }),
-  z.object({
-    path: z.string(),
     kind: z.literal('agent'),
     error: z.string().optional(),
   }),

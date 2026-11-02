@@ -2,8 +2,7 @@ import { ToggleSwitch } from '@ui';
 import { Show } from 'solid-js';
 import type { StepDraft } from '../core/routine-steps';
 import type { RoutineTriggerDraft } from '../core/routine-triggers';
-import { triggerScope, triggerSubject } from '../core/step-catalog';
-import { aiCallsPerRun, subjectNoun } from '../core/step-headline';
+import { aiCallsPerRun, runSubject } from '../core/step-headline';
 import {
   type RoutineRunView,
   type RoutineStepsProps,
@@ -35,7 +34,7 @@ export function RoutineStepsSummary(props: {
   showRun: boolean;
   onShowRun(show: boolean): void;
 }) {
-  const subject = () => triggerSubject(props.triggers);
+  const subject = () => runSubject(props.triggers);
   // A trigger's AI check is a call of its own, before the steps run.
   const calls = () =>
     aiCallsPerRun(props.steps) +
@@ -46,7 +45,7 @@ export function RoutineStepsSummary(props: {
       : 0);
   const cost = () =>
     calls()
-      ? `${calls()} AI ${calls() === 1 ? 'call' : 'calls'} per ${subjectNoun(subject())}`
+      ? `${calls()} AI ${calls() === 1 ? 'call' : 'calls'} per ${subject() ?? 'run'}`
       : undefined;
   return (
     <span class="flex min-w-0 flex-wrap items-center justify-end gap-x-2 gap-y-1 text-xs text-ink-muted empty:hidden">
@@ -79,14 +78,13 @@ export function RoutineStepsSummary(props: {
 }
 
 /**
- * A routine's steps as numbered cards, branches indented under their
- * decision. The page puts `RoutineStepsSummary` on the Steps heading.
+ * A routine's steps as numbered cards. The page puts `RoutineStepsSummary`
+ * on the Steps heading.
  */
 export function RoutineSteps(props: RoutineStepsProps & { showRun: boolean }) {
-  const scope = () => triggerScope(triggerSubject(props.triggers));
   return (
     <StepsProvider {...props}>
-      <StepList steps={props.steps} onChange={props.onChange} scope={scope()} />
+      <StepList steps={props.steps} onChange={props.onChange} />
     </StepsProvider>
   );
 }

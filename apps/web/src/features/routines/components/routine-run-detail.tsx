@@ -42,49 +42,15 @@ function runMeta(record: HistoryRecord): string {
       : Number.NaN;
   if (Number.isFinite(took) && took >= 0) parts.push(`took ${seconds(took)}`);
   const steps = record.steps ?? [];
-  // One classifier call answers every decision; each agent is its own call.
-  const calls =
-    (steps.some((step) => step.kind === 'if' || step.kind === 'choose')
-      ? 1
-      : 0) + steps.filter((step) => step.kind === 'agent').length;
+  // The Ask AI step is a call; code's own AI calls are among its calls.
+  const calls = steps.filter((step) => step.kind === 'agent').length;
   if (calls) parts.push(calls === 1 ? '1 AI call' : `${calls} AI calls`);
   return parts.join(' · ');
 }
 
 /** The step as it would read had it succeeded; its error shows apart. */
 function withoutError(step: HistoryStep): HistoryStep {
-  return step.kind === 'tool' || step.kind === 'agent' || step.kind === 'code'
-    ? { ...step, error: undefined }
-    : step;
-}
-
-function percent(value: number): string {
-  return `${Math.round(value * 100)}%`;
-}
-
-/** How sure AI was of what it decided, as labelled bars. */
-function decisionBars(
-  step: HistoryStep
-): { label: string; value: number; chosen: boolean }[] {
-  if (step.kind === 'if') {
-    return [
-      {
-        label: step.answer ? 'Yes' : 'No',
-        value: step.answer ? step.probability : 1 - step.probability,
-        chosen: true,
-      },
-    ];
-  }
-  if (step.kind !== 'choose' || step.probability === undefined) return [];
-  return step.choices?.length
-    ? [
-        {
-          label: step.choices.join(', '),
-          value: step.probability,
-          chosen: true,
-        },
-      ]
-    : [{ label: 'Best option', value: step.probability, chosen: false }];
+  return { ...step, error: undefined };
 }
 
 /** A step's output as JSON, indented. */
@@ -114,43 +80,15 @@ function StepOutput(props: { output: unknown }) {
   );
 }
 
-function DecisionBar(props: { label: string; value: number; chosen: boolean }) {
-  return (
-    <span
-      class={cn(
-        'grid grid-cols-[7rem_minmax(0,1fr)_2.5rem] items-center gap-2.5 text-xs',
-        props.chosen ? 'text-ink-muted' : 'text-ink-extra-muted'
-      )}
-    >
-      <span class="truncate">{props.label}</span>
-      <span class="h-1.5 min-w-10 overflow-hidden rounded-full bg-hover">
-        <span
-          class={cn(
-            'block h-full rounded-full',
-            props.chosen ? 'bg-accent' : 'bg-edge'
-          )}
-          style={{ width: percent(props.value) }}
-        />
-      </span>
-      <span class="text-right tabular-nums">{percent(props.value)}</span>
-    </span>
-  );
-}
-
-/** One step of a run on the timeline: what AI decided, or what ran. */
+/** One step of a run on the timeline: what ran, and how it ended. */
 function RunStep(props: {
   step: HistoryStep;
   describe: (step: HistoryStep) => string;
   last: boolean;
   onOpenConversation?: () => void;
 }) {
-  const error = () =>
-    props.step.kind === 'tool' ||
-    props.step.kind === 'agent' ||
-    props.step.kind === 'code'
-      ? props.step.error
-      : undefined;
-  const ai = () => props.step.kind !== 'tool' && props.step.kind !== 'code';
+  const error = () => props.step.error;
+  const ai = () => props.step.kind === 'agent';
   return (
     <li class="relative grid grid-cols-[1.375rem_minmax(0,1fr)] gap-x-3 gap-y-1.5 pb-4">
       <Show when={!props.last}>
@@ -207,20 +145,12 @@ function RunStep(props: {
       </Show>
       <Show
         when={
-          (props.step.kind === 'tool' || props.step.kind === 'code') &&
-          props.step.output !== undefined
+          props.step.kind === 'code' && props.step.output !== undefined
             ? props.step
             : undefined
         }
       >
         {(step) => <StepOutput output={step().output} />}
-      </Show>
-      <Show when={decisionBars(props.step).length}>
-        <span class="col-start-2 grid gap-1.5">
-          <For each={decisionBars(props.step)}>
-            {(bar) => <DecisionBar {...bar} />}
-          </For>
-        </span>
       </Show>
       <Show when={props.step.kind === 'agent' && props.onOpenConversation}>
         {(open) => (

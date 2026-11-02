@@ -252,9 +252,9 @@ describe('drafting code steps', () => {
       kind: 'code',
       problems: failing.problems,
     });
-    expect(
-      validateSteps(draft.steps ?? [], draft.triggers ?? [], () => null)
-    ).toContain('doesn’t type-check yet');
+    expect(validateSteps(draft.steps ?? [])).toContain(
+      'doesn’t type-check yet'
+    );
     // Problems are the editor's; they are never saved.
     expect(JSON.stringify(draftToCreateBody(draft))).not.toContain('TS2339');
   });

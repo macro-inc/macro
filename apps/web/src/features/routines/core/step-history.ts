@@ -1,41 +1,15 @@
 import { isSameDay, isSameYear, subDays } from 'date-fns';
 import { match } from 'ts-pattern';
 import type { HistoryRecord, HistorySkip, HistoryStep } from './history';
-import type { StepDraft, ToolStepDraft } from './routine-steps';
-import { describeToolStep, stepActionKey } from './step-catalog';
+import type { StepDraft } from './routine-steps';
 
-/**
- * The step a run recorded at `path` (`1.then.0`, `2.options.1.0`), if the
- * routine still has one there.
- */
+/** The step a run recorded at `path` (its index), if the routine still has one there. */
 export function stepAtPath(
   steps: StepDraft[] | undefined,
   path: string
 ): StepDraft | undefined {
-  const parts = path.split('.');
-  let list = steps;
-  let step: StepDraft | undefined;
-  for (let index = 0; index < parts.length; ) {
-    const position = Number(parts[index]);
-    step = Number.isInteger(position) ? list?.[position] : undefined;
-    index += 1;
-    if (!step || index >= parts.length) break;
-    const branch = parts[index];
-    index += 1;
-    list = match([step, branch] as const)
-      .returnType<StepDraft[] | undefined>()
-      .with([{ kind: 'if' }, 'then'], ([step]) => step.yes)
-      .with([{ kind: 'if' }, 'else'], ([step]) => step.no)
-      .with([{ kind: 'choose' }, 'otherwise'], ([step]) => step.otherwise)
-      .with([{ kind: 'choose' }, 'options'], ([step]) => {
-        const option = step.options[Number(parts[index])];
-        index += 1;
-        return option?.steps;
-      })
-      .otherwise(() => undefined);
-    step = undefined;
-  }
-  return step;
+  const position = Number(path);
+  return Number.isInteger(position) ? steps?.[position] : undefined;
 }
 
 /**
@@ -51,47 +25,6 @@ export function stepsForRun(
     : undefined;
 }
 
-/** What a tool did, from its name alone. */
-function toolDone(tool: string): string {
-  return match(tool)
-    .with('UpdateThreadLabels', () => 'Changed labels')
-    .with('SetSenderPolicy', () => 'Set the sender’s policy')
-    .with('SetEntityProperty', () => 'Set a property')
-    .with('CreateDocument', () => 'Created a document')
-    .with('Comment', () => 'Commented')
-    .with('SendChannelMessage', () => 'Sent a message')
-    .with('MoveToProject', () => 'Moved to a folder')
-    .otherwise(() => tool.replace(/([a-z])([A-Z])/g, '$1 $2'));
-}
-
-/**
- * What a tool did, by the kind of action the routine's step there takes now:
- * its arguments may have changed since, but a Create task step still made a
- * task.
- */
-function actionDone(step: ToolStepDraft): string {
-  return match(stepActionKey(step))
-    .with('add_label', () => 'Added a label')
-    .with('remove_label', () => 'Removed a label')
-    .with('archive', () => 'Archived')
-    .with('mark_read', () => 'Marked as read')
-    .with('star', () => 'Starred')
-    .with('mark_important', () => 'Marked important')
-    .with('sender_policy', () => 'Set the sender’s policy')
-    .with('add_tag', () => 'Added a tag')
-    .with('set_status', () => 'Set the status')
-    .with('set_priority', () => 'Set the priority')
-    .with('assign', () => 'Assigned')
-    .with('move', () => 'Moved to a folder')
-    .with('create_task', () => 'Created a task')
-    .with('create_document', () => 'Created a document')
-    .with('comment', () => 'Commented')
-    .with('send_message', () => 'Sent a message')
-    .with('reply_in_thread', () => 'Replied in the thread')
-    .with('other', () => toolDone(step.tool))
-    .exhaustive();
-}
-
 /** How many SDK calls a code step made: "3 calls", or "128+ calls" when more ran than were kept. */
 export function callCount(count: number, truncated: boolean): string {
   if (truncated) return `${count}+ calls`;
@@ -99,37 +32,15 @@ export function callCount(count: number, truncated: boolean): string {
 }
 
 /**
- * A short description of what a run did at one step: by the step in the
- * configuration the run used, else by the kind of step there now
- * (`current`), else by its tool alone.
+ * A short description of what a run did at one step, by the step in the
+ * configuration the run used when it's known.
  */
 export function describeHistoryStep(
   record: HistoryStep,
-  steps: StepDraft[] | undefined,
-  current?: StepDraft[]
+  steps: StepDraft[] | undefined
 ): string {
   const step = stepAtPath(steps, record.path);
   return match(record)
-    .with({ kind: 'if' }, (record) => {
-      const question = step?.kind === 'if' ? step.condition.trim() : '';
-      const answer = record.answer ? 'yes' : 'no';
-      return question ? `${question} ${answer}` : `Decided ${answer}`;
-    })
-    .with({ kind: 'choose' }, (record) =>
-      record.choices?.length
-        ? `Chose ${record.choices.map((choice) => `“${choice}”`).join(', ')}`
-        : 'No option fit'
-    )
-    .with({ kind: 'tool' }, (record) => {
-      const now = stepAtPath(current, record.path);
-      const label =
-        step?.kind === 'tool' && step.tool === record.tool
-          ? describeToolStep(step)
-          : now?.kind === 'tool' && now.tool === record.tool
-            ? actionDone(now)
-            : toolDone(record.tool);
-      return record.error ? `${label} failed: ${record.error}` : label;
-    })
     .with({ kind: 'agent' }, (record) =>
       record.error ? `AI failed: ${record.error}` : 'Asked AI'
     )
@@ -181,8 +92,11 @@ export function runOutcome(record: HistoryRecord): RunOutcome {
   if (!record.id) return 'running';
   if (record.skipped) return 'skipped';
   if (!record.success) return 'failed';
+  // Code acted when one of its writes went through.
   const acted = record.steps?.some(
-    (step) => step.kind === 'tool' || step.kind === 'agent'
+    (step) =>
+      step.kind === 'agent' ||
+      step.calls.some((call) => call.write && call.status === 'completed')
   );
   return record.steps?.length && !acted ? 'nothing' : 'succeeded';
 }
@@ -195,21 +109,14 @@ export function describeSkip(skip: HistorySkip): string {
 }
 
 /** The step that failed a run, if one did. */
-export function failedStep(
-  record: HistoryRecord
-): Extract<HistoryStep, { kind: 'tool' | 'agent' }> | undefined {
-  return record.steps?.find(
-    (step): step is Extract<HistoryStep, { kind: 'tool' | 'agent' }> =>
-      (step.kind === 'tool' || step.kind === 'agent') && Boolean(step.error)
-  );
+export function failedStep(record: HistoryRecord): HistoryStep | undefined {
+  return record.steps?.find((step) => Boolean(step.error));
 }
 
 /** A run in a line: why it was skipped or failed, or what it did first. */
 export function summarizeRun(
   record: HistoryRecord,
-  steps: StepDraft[] | undefined,
-  /** The routine's steps now, for a run of an older configuration. */
-  current?: StepDraft[]
+  steps: StepDraft[] | undefined
 ): string {
   if (record.skipped) {
     return record.skipped.reason === 'not_met'
@@ -221,7 +128,7 @@ export function summarizeRun(
     return reason ? `Failed: ${reason}` : 'Failed';
   }
   const [first] = record.steps ?? [];
-  return first ? describeHistoryStep(first, steps, current) : 'Ran';
+  return first ? describeHistoryStep(first, steps) : 'Ran';
 }
 
 /** Runs of one day, newest first, under the day's label. */

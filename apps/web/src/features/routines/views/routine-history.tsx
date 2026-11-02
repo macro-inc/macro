@@ -175,9 +175,7 @@ function RunRow(props: RunRowProps) {
 
 /** The step as it would read had it succeeded; its error shows apart. */
 function withoutError(step: HistoryStep): HistoryStep {
-  return step.kind === 'tool' || step.kind === 'agent'
-    ? { ...step, error: undefined }
-    : step;
+  return { ...step, error: undefined };
 }
 
 /** Whether a run has steps worth showing beyond its agent's transcript. */

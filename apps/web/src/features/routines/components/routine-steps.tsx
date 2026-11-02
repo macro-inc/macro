@@ -1,26 +1,13 @@
 import { IS_MAC } from '@core/constant/isMac';
 import { isEditableInput } from '@core/util/isEditableInput';
-import ArchiveIcon from '@icon/system/regular/archive.svg';
 import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
 import ArrowUpIcon from '@icon/system/regular/arrow-up.svg';
-import ChatIcon from '@icon/system/regular/chat-circle-text.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
-import CheckSquareIcon from '@icon/system/regular/check-square.svg';
 import CodeIcon from '@icon/system/regular/code.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
 import DotsIcon from '@icon/system/regular/dots-three.svg';
-import EnvelopeIcon from '@icon/system/regular/envelope-simple.svg';
-import FileTextIcon from '@icon/system/regular/file-text.svg';
-import FlagIcon from '@icon/system/regular/flag.svg';
-import FolderIcon from '@icon/system/regular/folder-simple.svg';
-import GitBranchIcon from '@icon/system/regular/git-branch.svg';
-import GitForkIcon from '@icon/system/regular/git-fork.svg';
-import PaperPlaneIcon from '@icon/system/regular/paper-plane-tilt.svg';
 import SparkleIcon from '@icon/system/regular/sparkle.svg';
-import StarIcon from '@icon/system/regular/star.svg';
-import TagIcon from '@icon/system/regular/tag.svg';
 import TrashIcon from '@icon/system/regular/trash-simple.svg';
-import UserPlusIcon from '@icon/system/regular/user-plus.svg';
 import WarningIcon from '@icon/system/regular/warning-circle.svg';
 import { Badge, cn, Dropdown } from '@ui';
 import {
@@ -38,38 +25,18 @@ import {
 import { Dynamic } from 'solid-js/web';
 import { match } from 'ts-pattern';
 import type { HistoryStep } from '../core/history';
-import type {
-  AgentStepDraft,
-  ChooseStepDraft,
-  IfStepDraft,
-  StepDraft,
-} from '../core/routine-steps';
+import type { AgentStepDraft, StepDraft } from '../core/routine-steps';
 import type { RoutineTarget } from '../core/routine-target';
 import type { RoutineTriggerDraft } from '../core/routine-triggers';
-import {
-  pickAction,
-  type StepActionKey,
-  type StepScope,
-  scopeAfter,
-  stepActionKey,
-  stepNeedsInput,
-  TRIGGER_ID,
-} from '../core/step-catalog';
-import { copyStep, wrapInIf } from '../core/step-edits';
+import { copyStep } from '../core/step-edits';
 import { stepHeadline } from '../core/step-headline';
 import { callCount } from '../core/step-history';
 import { AddStep } from './routine-add-step';
-import { CodeStepBody } from './routine-code-step';
-import { DecisionBody, DecisionBranches } from './routine-decision-step';
+import { CodeStepBody, StepNote } from './routine-code-step';
 import { RoutineSurface, RoutineTray } from './routine-editor';
-import {
-  menuMount,
-  type RoutineToolSlots,
-  StepNote,
-  ToolStepBody,
-} from './routine-tool-step';
+import { menuMount } from './routine-search-menu';
 
-export type RoutineStepSlots = RoutineToolSlots & {
+export type RoutineStepSlots = {
   PromptEditor: Component<{
     initialValue: string;
     onChange(value: string): void;
@@ -88,18 +55,14 @@ export type RoutineRunView = {
 };
 
 type StepsContextValue = {
-  /** The whole routine, so new outputs get unused names. */
+  /** The whole routine. */
   steps: Accessor<StepDraft[]>;
-  /** Decisions need trigger conditions and activity triggers. */
-  decisions: Accessor<'on' | 'needs-event' | 'off'>;
   defaultTarget: Accessor<RoutineTarget>;
   slots: RoutineStepSlots;
   /** Steps added while editing, which open for their first edit. */
   fresh: Set<string>;
   /** What the shown run did at each step path. */
   run: Accessor<ReadonlyMap<string, HistoryStep> | undefined>;
-  /** Each step's number, counted through branches in reading order. */
-  number(id: string): number | undefined;
 };
 
 const StepsContext = createContext<StepsContextValue>();
@@ -115,62 +78,29 @@ export type RoutineStepsProps = {
   onChange(steps: StepDraft[]): void;
   triggers: RoutineTriggerDraft[];
   defaultTarget: RoutineTarget;
-  /** Decisions need trigger conditions, which are rolled out separately. */
-  decisionsEnabled: boolean;
   slots: RoutineStepSlots;
   /** The latest run, shown on the steps it touched. */
   lastRun?: RoutineRunView;
 };
 
-/**
- * Every step that shows as a card, in reading order: a pick's values live
- * in its card, so their steps don't count.
- */
-function shownSteps(steps: StepDraft[]): StepDraft[] {
-  return steps.flatMap((step) => [
-    step,
-    ...match(step)
-      .returnType<StepDraft[]>()
-      .with({ kind: 'agent' }, { kind: 'code' }, { kind: 'tool' }, () => [])
-      .with({ kind: 'if' }, (step) => shownSteps([...step.yes, ...step.no]))
-      .with({ kind: 'choose' }, (step) =>
-        shownSteps([
-          ...step.options.flatMap((option) =>
-            pickAction(step) ? option.steps.slice(1) : option.steps
-          ),
-          ...step.otherwise,
-        ])
-      )
-      .exhaustive(),
-  ]);
-}
-
-/** What every step editor reads: slots, decisions and the shown run. */
+/** What every step editor reads: slots and the shown run. */
 export function StepsProvider(
   props: RoutineStepsProps & { showRun: boolean; children: JSX.Element }
 ) {
-  const allEvents = () =>
-    props.triggers.length > 0 &&
-    props.triggers.every((trigger) => trigger.kind === 'event');
   const run = () => {
     const lastRun = props.lastRun;
     return lastRun && props.showRun
       ? new Map(lastRun.steps.map((step) => [step.path, step] as const))
       : undefined;
   };
-  const numbers = () =>
-    new Map(shownSteps(props.steps).map((step, index) => [step.id, index + 1]));
   return (
     <StepsContext.Provider
       value={{
         steps: () => props.steps,
-        decisions: () =>
-          !props.decisionsEnabled ? 'off' : allEvents() ? 'on' : 'needs-event',
         defaultTarget: () => props.defaultTarget,
         slots: props.slots,
         fresh: new Set(),
         run,
-        number: (id) => numbers().get(id),
       }}
     >
       {props.children}
@@ -178,67 +108,39 @@ export function StepsProvider(
   );
 }
 
-/**
- * Steps in order, then "+ Step". `path` is where the list sits in the
- * program (empty at the top), so each step finds what the shown run did.
- */
+/** The routine's steps in order, then "+ Add step" in a tray under them. */
 export function StepList(props: {
   steps: StepDraft[];
   onChange(steps: StepDraft[]): void;
-  /** What the first step can use. */
-  scope: StepScope;
-  path?: string;
-  /** Where the first shown step sits in the list; earlier ones show elsewhere. */
-  from?: number;
-  /** Names the list for "+ Step", e.g. a branch. */
-  place?: string;
-  /** Say "Do nothing" while the list is empty, as a decision's branch does. */
-  doNothing?: boolean;
 }) {
-  const from = () => props.from ?? 0;
-  // Each step can use what the steps before it created.
-  const scopeAt = (index: number) =>
-    props.steps.slice(0, index).reduce(scopeAfter, props.scope);
-  const pathAt = (index: number) =>
-    props.path ? `${props.path}.${index}` : String(index);
   const replace = (id: string, next: StepDraft) =>
     props.onChange(props.steps.map((step) => (step.id === id ? next : step)));
   const move = (id: string, delta: number) => {
     const at = props.steps.findIndex((step) => step.id === id);
     const to = at + delta;
-    if (at < 0 || to < from() || to >= props.steps.length) return;
+    if (at < 0 || to < 0 || to >= props.steps.length) return;
     const steps = [...props.steps];
     const [step] = steps.splice(at, 1);
     if (step) steps.splice(to, 0, step);
     props.onChange(steps);
   };
-  const shown = () => props.steps.slice(from()).map((step) => step.id);
-  const endsInCard = () => {
-    const last = props.steps.at(-1);
-    return (
-      shown().length > 0 &&
-      last !== undefined &&
-      last.kind !== 'if' &&
-      last.kind !== 'choose'
-    );
-  };
+  const ids = () => props.steps.map((step) => step.id);
   return (
     <div class="grid min-w-0 gap-2">
-      <For each={shown()}>
+      <For each={ids()}>
         {(id) => {
           const index = () => props.steps.findIndex((step) => step.id === id);
           return (
             <Show when={props.steps[index()]}>
               {(step) => (
-                <StepNode
+                <StepCard
                   step={step()}
-                  first={index() === from()}
+                  number={index() + 1}
+                  first={index() === 0}
                   last={index() === props.steps.length - 1}
-                  path={pathAt(index())}
-                  scope={scopeAt(index())}
+                  path={String(index())}
                   onChange={(next) => replace(id, next)}
                   onMove={(delta) => move(id, delta)}
-                  onReplace={(next) => replace(id, next)}
                   onDuplicate={(copy) => {
                     const steps = [...props.steps];
                     steps.splice(index() + 1, 0, copy);
@@ -253,97 +155,28 @@ export function StepList(props: {
           );
         }}
       </For>
-      <Show
-        when={!props.path}
-        fallback={
-          <div class="flex min-w-0 items-center gap-2">
-            <Show when={props.doNothing && !shown().length}>
-              <DoNothing />
-            </Show>
-            <AddStep
-              place={props.place}
-              scope={scopeAt(props.steps.length)}
-              onAdd={(step) => props.onChange([...props.steps, step])}
-            />
-          </div>
-        }
+      {/* Steps are added from a tray under the last card. */}
+      <RoutineTray
+        attached={props.steps.length > 0}
+        // Into the list's gap, and behind the last card's corners.
+        class={props.steps.length > 0 ? '-mt-5' : undefined}
       >
-        {/* The routine's own list adds steps from a tray under its last card.
-            A decision ends in its branches, not a card, so the tray then
-            stands on its own below them. */}
-        <RoutineTray
-          attached={endsInCard()}
-          // Into the list's gap, and behind the last card's corners.
-          class={endsInCard() ? '-mt-5' : undefined}
-        >
-          <AddStep
-            variant="tray"
-            place={props.place}
-            scope={scopeAt(props.steps.length)}
-            onAdd={(step) => props.onChange([...props.steps, step])}
-          />
-        </RoutineTray>
-      </Show>
+        <AddStep onAdd={(step) => props.onChange([...props.steps, step])} />
+      </RoutineTray>
     </div>
   );
-}
-
-/** A step's card, and under a decision its branches. */
-function StepNode(props: StepCardProps) {
-  const decision = () =>
-    props.step.kind === 'if' || props.step.kind === 'choose'
-      ? props.step
-      : undefined;
-  return (
-    <div class="grid min-w-0 gap-2">
-      <StepCard {...props} />
-      <Show when={decision()}>
-        {(step) => (
-          <DecisionBranches
-            step={step()}
-            path={props.path}
-            scope={props.scope}
-            onChange={props.onChange}
-          />
-        )}
-      </Show>
-    </div>
-  );
-}
-
-export function actionIcon(key: StepActionKey): Component<{ class?: string }> {
-  return match(key)
-    .with('archive', () => ArchiveIcon)
-    .with('star', 'mark_important', () => StarIcon)
-    .with('add_label', 'remove_label', () => TagIcon)
-    .with('mark_read', 'sender_policy', () => EnvelopeIcon)
-    .with('add_tag', () => TagIcon)
-    .with('set_status', 'set_priority', () => FlagIcon)
-    .with('assign', () => UserPlusIcon)
-    .with('move', () => FolderIcon)
-    .with('create_task', () => CheckSquareIcon)
-    .with('create_document', () => FileTextIcon)
-    .with('comment', () => ChatIcon)
-    .with('send_message', 'reply_in_thread', () => PaperPlaneIcon)
-    .with('other', () => SparkleIcon)
-    .exhaustive();
 }
 
 export function stepIcon(step: StepDraft): Component<{ class?: string }> {
   return match(step)
     .with({ kind: 'agent' }, () => SparkleIcon)
     .with({ kind: 'code' }, () => CodeIcon)
-    .with({ kind: 'if' }, () => GitBranchIcon)
-    .with({ kind: 'choose' }, (step) =>
-      pickAction(step) ? SparkleIcon : GitForkIcon
-    )
-    .with({ kind: 'tool' }, (step) => actionIcon(stepActionKey(step)))
     .exhaustive();
 }
 
-/** Steps where AI judges something: agents and decisions. */
+/** Steps where AI does the work: Ask AI. */
 function usesAi(step: StepDraft): boolean {
-  return step.kind !== 'tool' && step.kind !== 'code';
+  return step.kind === 'agent';
 }
 
 export function StepIcon(props: { step: StepDraft }) {
@@ -361,32 +194,17 @@ export function StepIcon(props: { step: StepDraft }) {
   );
 }
 
-const percent = (probability: number | undefined) =>
-  probability === undefined ? '' : ` ${Math.round(probability * 100)}%`;
-
 type RunOutcome = {
   failed?: string;
-  /** A decision's answer. */
+  /** What it did, in a few words. */
   text?: string;
-  /** The answer was no, or nothing fit. */
-  quiet?: boolean;
 };
 
-/** What a run did at one step: an error, a decision's answer, or plain success. */
+/** What a run did at one step: an error, its calls, or plain success. */
 export function runOutcome(record: HistoryStep): RunOutcome {
   return match(record)
     .returnType<RunOutcome>()
-    .with({ kind: 'if' }, (record) => ({
-      text: `${record.answer ? 'Yes' : 'No'}${percent(record.probability)}`,
-      quiet: !record.answer,
-    }))
-    .with({ kind: 'choose' }, (record) => ({
-      text: record.choices?.length
-        ? `${record.choices.join(', ')}${percent(record.probability)}`
-        : 'Nothing fit',
-      quiet: !record.choices?.length,
-    }))
-    .with({ kind: 'tool' }, { kind: 'agent' }, (record) =>
+    .with({ kind: 'agent' }, (record) =>
       record.error ? { failed: record.error } : {}
     )
     .with({ kind: 'code' }, (record) =>
@@ -429,9 +247,7 @@ export function RunStatus(props: { path: string }) {
           <Match when={result().text}>
             {(text) => (
               <span class="flex min-w-0 shrink items-center gap-1 text-xs text-ink-muted">
-                <Show when={!result().quiet}>
-                  <CheckIcon class="size-3.5 shrink-0 text-success" />
-                </Show>
+                <CheckIcon class="size-3.5 shrink-0 text-success" />
                 <span class="truncate">{text()}</span>
               </span>
             )}
@@ -444,49 +260,29 @@ export function RunStatus(props: { path: string }) {
 
 type StepCardProps = {
   step: StepDraft;
+  number: number;
   first: boolean;
   last: boolean;
   path: string;
-  scope: StepScope;
   onChange(step: StepDraft): void;
   onMove(delta: number): void;
-  /** Swap the step for another, e.g. a question wrapped around it. */
-  onReplace(step: StepDraft): void;
   onDuplicate(copy: StepDraft): void;
   onRemove(): void;
 };
 
 /**
- * One step: closed, a single line ("Add label  Finance" and what the shown
- * run did); open, its settings under its name.
+ * One step: closed, a single line (its title, what it does and what the
+ * shown run did); open, its settings or code under its name.
  */
 function StepCard(props: StepCardProps) {
   const steps = useSteps();
   // Open where there is something to do; a finished routine reads as a list.
-  // A routine that is a single action or agent opens it; a lone decision
-  // reads better as its branches.
   const [open, setOpen] = createSignal(
-    (steps.steps().length === 1 &&
-      steps.steps()[0]?.id === props.step.id &&
-      props.step.kind !== 'if' &&
-      props.step.kind !== 'choose') ||
+    (steps.steps().length === 1 && steps.steps()[0]?.id === props.step.id) ||
       steps.fresh.has(props.step.id) ||
-      stepNeedsInput(props.step)
+      (props.step.kind === 'agent' && !props.step.instructions.trim())
   );
   const headline = () => stepHeadline(props.step);
-  // A step acting on an item an earlier step created says so.
-  const onTarget = () =>
-    props.step.kind === 'tool'
-      ? props.scope.items.find(
-          (item) =>
-            item.ref !== TRIGGER_ID &&
-            JSON.stringify(props.step).includes(item.ref)
-        )
-      : undefined;
-  const summary = () =>
-    [headline().summary, onTarget() && `on the new ${onTarget()?.subject}`]
-      .filter(Boolean)
-      .join(' · ');
   let header: HTMLButtonElement | undefined;
   return (
     <RoutineSurface>
@@ -518,12 +314,12 @@ function StepCard(props: StepCardProps) {
             onClick={() => setOpen(!open())}
           >
             <span class="w-4.5 shrink-0 text-right text-xs tabular-nums text-ink-extra-muted">
-              {steps.number(props.step.id)}
+              {props.number}
             </span>
             <StepIcon step={props.step} />
             <span class="shrink-0 text-sm font-medium">{headline().title}</span>
             <span class="min-w-0 flex-1 truncate text-sm text-ink-muted">
-              {open() ? '' : summary()}
+              {open() ? '' : headline().summary}
             </span>
             <Show when={headline().mode}>
               {(mode) => (
@@ -546,7 +342,6 @@ function StepCard(props: StepCardProps) {
             <StepBody
               step={props.step}
               path={props.path}
-              scope={props.scope}
               onChange={props.onChange}
             />
           </div>
@@ -564,9 +359,8 @@ function MenuShortcut(props: { children: JSX.Element }) {
   );
 }
 
-/** Move, duplicate, wrap in a question, or delete a step. */
+/** Move, duplicate, or delete a step. */
 function StepMenu(props: StepCardProps & { open: boolean }) {
-  const steps = useSteps();
   let trigger: HTMLButtonElement | undefined;
   return (
     <Dropdown placement="bottom-end">
@@ -602,30 +396,11 @@ function StepMenu(props: StepCardProps & { open: boolean }) {
             <MenuShortcut>{ALT}↓</MenuShortcut>
           </Dropdown.Item>
           <Dropdown.Item
-            onSelect={() =>
-              props.onDuplicate(copyStep(props.step, steps.steps()))
-            }
+            onSelect={() => props.onDuplicate(copyStep(props.step))}
           >
             <CopyIcon class="size-4" />
             Duplicate
           </Dropdown.Item>
-          <Show when={steps.decisions() !== 'off'}>
-            <Dropdown.Item
-              disabledReason={
-                steps.decisions() === 'needs-event'
-                  ? 'Questions need an activity trigger, like a new email or task.'
-                  : undefined
-              }
-              onSelect={() => {
-                const wrapped = wrapInIf(props.step);
-                steps.fresh.add(wrapped.id);
-                props.onReplace(wrapped);
-              }}
-            >
-              <GitBranchIcon class="size-4" />
-              Wrap in “If yes or no”
-            </Dropdown.Item>
-          </Show>
         </Dropdown.Group>
         <Dropdown.Group>
           <Dropdown.Item class="text-failure-ink" onSelect={props.onRemove}>
@@ -642,10 +417,8 @@ function StepMenu(props: StepCardProps & { open: boolean }) {
 export function StepBody(props: {
   step: StepDraft;
   path: string;
-  scope: StepScope;
   onChange(step: StepDraft): void;
 }) {
-  const steps = useSteps();
   return (
     <Switch>
       <Match when={props.step.kind === 'agent' && props.step}>
@@ -653,31 +426,6 @@ export function StepBody(props: {
       </Match>
       <Match when={props.step.kind === 'code' && props.step}>
         {(step) => <CodeStepBody step={step()} path={props.path} />}
-      </Match>
-      <Match when={props.step.kind === 'tool' && props.step}>
-        {(step) => (
-          <ToolStepBody
-            step={step()}
-            onChange={props.onChange}
-            slots={steps.slots}
-            scope={props.scope}
-          />
-        )}
-      </Match>
-      <Match
-        when={
-          (props.step.kind === 'if' || props.step.kind === 'choose') &&
-          props.step
-        }
-      >
-        {(step) => (
-          <DecisionBody
-            step={step() as IfStepDraft | ChooseStepDraft}
-            path={props.path}
-            scope={props.scope}
-            onChange={props.onChange}
-          />
-        )}
       </Match>
     </Switch>
   );
@@ -734,9 +482,4 @@ function AgentBody(props: {
       </Field>
     </div>
   );
-}
-
-/** For a decision's empty branch. */
-export function DoNothing() {
-  return <span class="text-xs text-ink-muted">Do nothing</span>;
 }

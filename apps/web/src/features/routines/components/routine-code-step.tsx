@@ -1,11 +1,15 @@
 import { Badge, cn } from '@ui';
-import { For, Show } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
 import { match } from 'ts-pattern';
 import type { CallStatus, HistoryCall } from '../core/history';
 import { type CodeStepDraft, WRITE_SCOPE_LABELS } from '../core/routine-steps';
 import { callCount } from '../core/step-history';
 import { Field, useSteps } from './routine-steps';
-import { StepNote } from './routine-tool-step';
+
+/** A short muted note under a step's settings. */
+export function StepNote(props: { children: JSX.Element }) {
+  return <p class="text-xs text-ink-muted">{props.children}</p>;
+}
 
 /** A code step: what it does, where it may make changes, and its code. AI writes and changes it. */
 export function CodeStepBody(props: { step: CodeStepDraft; path: string }) {

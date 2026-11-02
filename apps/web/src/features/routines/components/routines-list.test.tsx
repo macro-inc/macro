@@ -52,8 +52,8 @@ const rows: RoutineRow[] = [
     createdAt: '',
     when: 'New email received',
     whenKind: 'email',
-    does: 'Invoice, Newsletter · 4 actions',
-    ai: 'AI picks',
+    does: 'Label invoices · Archive newsletters',
+    ai: 'Ask AI',
     group: 'activity',
     lastRun: {
       at: 'Monday',
@@ -140,9 +140,10 @@ describe('routines list', () => {
       'On a schedule1',
     ]);
     // How AI takes part reads as a chip before what the routine does.
-    expect(screen.getByText('AI picks')).toBeTruthy();
-    expect(screen.getByText('Invoice, Newsletter · 4 actions')).toBeTruthy();
-    expect(screen.getByText('Ask AI')).toBeTruthy();
+    expect(screen.getAllByText('Ask AI').length).toBe(2);
+    expect(
+      screen.getByText('Label invoices · Archive newsletters')
+    ).toBeTruthy();
     const table = screen.getByRole('table', { name: 'Routines' });
     expect(table.textContent).toContain(
       'Monday · Failed: No label named "Receipts" in this thread\'s inbox.'

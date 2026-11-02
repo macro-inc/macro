@@ -32,7 +32,6 @@ import {
   Show,
   Switch,
 } from 'solid-js';
-import { match } from 'ts-pattern';
 import { StepsOutline } from './components/routine-steps-outline';
 import { TemplateCard } from './components/template-card';
 import { stepsFromTask } from './core/routine-steps';
@@ -40,11 +39,9 @@ import { describeTrigger } from './core/routine-triggers';
 import type { Activator } from './core/template';
 import {
   createTemplateActivation,
-  templateDestinations,
   templatePrompt,
 } from './primitives/template-activation';
 import { parseRoutineTriggers } from './queries/routine-trigger-mapping';
-import { useRoutineTags } from './queries/step-sources';
 import {
   publishRoutineTemplate,
   useActivateTemplateMutation,
@@ -123,26 +120,13 @@ function ActivateTemplate(
   }
 ) {
   const activator = useActivator();
-  // Steps' fixed channels, folders and documents are checked like mentions.
-  const access = useReferenceAccess(() => [
-    ...itemReferences(props.template.variables),
-    ...templateDestinations(props.template),
-  ]);
-  const tags = useRoutineTags();
+  const access = useReferenceAccess(() =>
+    itemReferences(props.template.variables)
+  );
   const activation = createTemplateActivation({
     template: () => props.template,
     activator,
     access,
-    // Cached tags still say what the activator can apply after a failed
-    // refresh; with none, activation waits for a retry.
-    tags: () =>
-      match(tags.status())
-        .with('pending', () => undefined)
-        .with('error', () =>
-          tags().length ? new Set(tags().map((tag) => tag.optionId)) : undefined
-        )
-        .with('ready', () => new Set(tags().map((tag) => tag.optionId)))
-        .exhaustive(),
   });
   const mutation = useActivateTemplateMutation();
   const [error, setError] = createSignal<string>();
@@ -196,16 +180,6 @@ function ActivateTemplate(
       choices={activation.choices()}
       onChoose={activation.choose}
       undecided={activation.undecided().length}
-      checking={activation.checking()}
-      onRetry={
-        activation.checking() && tags.status() === 'error'
-          ? () => tags.retry()
-          : undefined
-      }
-      unreachable={
-        activation.unreachable().length + activation.missingTags().length
-      }
-      blocked={activation.blocked().length}
       pending={mutation.isPending}
       error={error()}
       onActivate={() => fireAndForget(activate(), 'routines')}

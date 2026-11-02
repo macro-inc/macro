@@ -5,26 +5,16 @@ import type {
 } from '@service-scheduled-action/generated/schemas';
 import { type Accessor, createMemo, createSignal } from 'solid-js';
 import { DEFAULT_RUN_VISIBILITY } from '../core/draft';
-import {
-  firstAgent,
-  flattenSteps,
-  mapSteps,
-  stepsFromTask,
-  stepsToWire,
-} from '../core/routine-steps';
+import { firstAgent, stepsFromTask, stepsToWire } from '../core/routine-steps';
 import {
   type Activator,
-  argumentDestinations,
-  fillStepArguments,
   fillTemplatePrompt,
   fillTemplateTrigger,
-  keepsAuthor,
   mapStepTexts,
   needsDecision,
   type ReferenceChoice,
   type ReferenceState,
   referenceState,
-  type StepDestination,
   variableKey,
 } from '../core/template';
 
@@ -47,47 +37,13 @@ export function templatePrompt(
   return typeof prompt === 'string' ? prompt : '';
 }
 
-/** The fixed channels, folders and documents a template's steps act on. */
-export function templateDestinations(
-  template: Pick<RoutineTemplate, 'task'>
-): StepDestination[] {
-  const steps = stepsFromTask(template.task) ?? [];
-  const seen = new Set<string>();
-  return flattenSteps(steps).flatMap((step) =>
-    step.kind === 'tool'
-      ? argumentDestinations(step.arguments).filter(
-          (destination) =>
-            !seen.has(destination.id) && Boolean(seen.add(destination.id))
-        )
-      : []
-  );
-}
-
-/** The tag options a template's steps apply. */
-function templateTagOptions(template: Pick<RoutineTemplate, 'task'>): string[] {
-  const steps = stepsFromTask(template.task) ?? [];
-  return [
-    ...new Set(
-      flattenSteps(steps).flatMap((step) =>
-        step.kind === 'tool' && Array.isArray(step.arguments.add_option_ids)
-          ? step.arguments.add_option_ids.filter(
-              (id): id is string => typeof id === 'string'
-            )
-          : []
-      )
-    ),
-  ];
-}
-
 /**
- * The template's task filled in for the activator: each tool step's
- * destinations and people, then every text that can mention someone (each
- * agent's instructions and each tool step's text, branches included).
+ * The template's task filled in for the activator: every text that can
+ * mention someone (each Ask AI step's instructions).
  */
 function filledTask(
   task: RoutineTemplate['task'],
-  fill: (text: string) => string,
-  fillArguments: (args: Record<string, unknown>) => Record<string, unknown>
+  fill: (text: string) => string
 ) {
   const steps = stepsFromTask(task);
   if (!steps)
@@ -96,12 +52,7 @@ function filledTask(
       ...(typeof task.prompt === 'string' ? { prompt: fill(task.prompt) } : {}),
       user_prompt: fill(templatePrompt({ task })),
     };
-  const withArguments = mapSteps(steps, (step) =>
-    step.kind === 'tool'
-      ? { ...step, arguments: fillArguments(step.arguments) }
-      : step
-  );
-  return { ...task, steps: stepsToWire(mapStepTexts(withArguments, fill)) };
+  return { ...task, steps: stepsToWire(mapStepTexts(steps, fill)) };
 }
 
 /**
@@ -111,13 +62,8 @@ function filledTask(
 export function createTemplateActivation(args: {
   template: Accessor<RoutineTemplate>;
   activator: Accessor<Activator | undefined>;
-  /**
-   * Whether the activator can open each mentioned item and each step's fixed
-   * destination (`templateDestinations`), by item ID.
-   */
+  /** Whether the activator can open each mentioned item, by item ID. */
   access: Accessor<ReadonlyMap<string, boolean>>;
-  /** Tag options the activator can apply; undefined until they're known. */
-  tags?: Accessor<ReadonlySet<string> | undefined>;
 }) {
   const [choices, setChoices] = createSignal<
     ReadonlyMap<string, ReferenceChoice>
@@ -154,59 +100,12 @@ export function createTemplateActivation(args: {
     return activator ? fill(activator)(instructions) : instructions;
   };
 
-  const destinations = createMemo(() => templateDestinations(args.template()));
-  const tagIds = createMemo(() => templateTagOptions(args.template()));
-  /** Still learning what the activator can open and apply. */
-  const checking = () =>
-    destinations().some((destination) => !args.access().has(destination.id)) ||
-    (tagIds().length > 0 && args.tags?.() === undefined);
-  /** Tags the steps apply that the activator can't: those steps start empty. */
-  const missingTags = () => {
-    const available = args.tags?.();
-    return available ? tagIds().filter((id) => !available.has(id)) : [];
-  };
-  /** Channels and folders the activator can't open: their steps start empty. */
-  const unreachable = () =>
-    destinations().filter(
-      (destination) =>
-        destination.blockName !== 'md' &&
-        args.access().get(destination.id) === false
-    );
-  /**
-   * Documents the activator can't open. A step acting on one has nothing to
-   * act on in their routine, so the template can't be activated as is.
-   */
-  const blocked = () =>
-    destinations().filter(
-      (destination) =>
-        destination.blockName === 'md' &&
-        args.access().get(destination.id) === false
-    );
-
   /** The routine to create, once every reference that needs one has a decision. */
   const request = (): CreateScheduledAction | undefined => {
     const activator = args.activator();
-    if (
-      !activator ||
-      undecided().length > 0 ||
-      checking() ||
-      blocked().length > 0
-    )
-      return undefined;
+    if (!activator || undecided().length > 0) return undefined;
     const template = args.template();
-    const context = {
-      authorId: template.author,
-      activator,
-      keepAuthor: keepsAuthor(template.variables, template.author),
-      inaccessible: new Set(unreachable().map((destination) => destination.id)),
-      tags: args.tags?.(),
-    };
-    let cleared = false;
-    const task = filledTask(template.task, fill(activator), (stepArgs) => {
-      const filled = fillStepArguments(stepArgs, context);
-      cleared ||= filled.cleared;
-      return filled.args;
-    });
+    const task = filledTask(template.task, fill(activator));
     return {
       name: template.name,
       trigger: fillTemplateTrigger({
@@ -216,8 +115,7 @@ export function createTemplateActivation(args: {
       }),
       kind: 'Agent',
       task,
-      // A step left without its destination can't run; it starts off.
-      enabled: !cleared,
+      enabled: true,
       run_visibility: DEFAULT_RUN_VISIBILITY,
       ...(template.description ? { description: template.description } : {}),
     };
@@ -232,9 +130,5 @@ export function createTemplateActivation(args: {
     },
     prompt,
     request,
-    checking,
-    unreachable,
-    missingTags,
-    blocked,
   };
 }

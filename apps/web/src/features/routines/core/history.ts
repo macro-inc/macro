@@ -24,16 +24,6 @@ export type HistoryCall = {
 };
 /** What one step did in a run, in the order it happened. */
 export type HistoryStep =
-  | { path: string; kind: 'if'; answer: boolean; probability: number }
-  | { path: string; kind: 'choose'; choices?: string[]; probability?: number }
-  | {
-      path: string;
-      kind: 'tool';
-      tool: string;
-      /** What it returned, as JSON. */
-      output?: unknown;
-      error?: string;
-    }
   | { path: string; kind: 'agent'; error?: string }
   | {
       path: string;

@@ -110,7 +110,6 @@ export function routineSections(props: {
                     model: props.defaultModel,
                   }
                 }
-                decisionsEnabled={props.decisionsEnabled}
                 slots={props.slots}
                 lastRun={props.lastRun?.()}
                 showRun={showRun()}

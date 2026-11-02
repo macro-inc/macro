@@ -827,49 +827,6 @@ describe('routine editor triggers', () => {
     fireEvent.click(screen.getByRole('tab', { name: 'Runs' }));
     expect(screen.getByText('Run transcript')).toBeTruthy();
   });
-  it('keeps instructions stored ahead of the prompt when steps are added', async () => {
-    setSchedules([
-      { ...events, task: { ...(events.task as object), prompt: 'Be brief.' } },
-    ]);
-    render(() => <Routine />);
-    // Before steps are added, the saved instructions show above the step.
-    expect(screen.getByText('Saved instructions that run first')).toBeTruthy();
-    expect(screen.getByText('Be brief.')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Add step' }));
-    fireEvent.click(await screen.findByRole('option', { name: /Create task/ }));
-    // Merged into the agent's instructions, they no longer show apart.
-    expect(screen.queryByText('Saved instructions that run first')).toBeNull();
-    // The closing menu can leave the page aria-hidden for a moment.
-    const agent = screen.getByRole('group', { name: 'Ask AI', hidden: true });
-    // Its card's header toggle comes first.
-    fireEvent.click(
-      within(agent).getAllByRole('button', {
-        expanded: false,
-        hidden: true,
-      })[0]!
-    );
-    const editor = within(agent).getByRole<HTMLTextAreaElement>('textbox', {
-      name: 'Instructions',
-      hidden: true,
-    });
-    expect(editor.value).toBe('Be brief.\n\nSummarize updates');
-    fireEvent.input(editor, { target: { value: `${editor.value} now` } });
-    await vi.advanceTimersByTimeAsync(300);
-    expect(mocks.update).toHaveBeenLastCalledWith({
-      scheduleId: 'routine-id',
-      body: expect.objectContaining({
-        task: expect.objectContaining({
-          steps: expect.arrayContaining([
-            expect.objectContaining({
-              type: 'agent',
-              instructions: 'Be brief.\n\nSummarize updates now',
-            }),
-          ]),
-        }),
-      }),
-    });
-  });
-
   it('retains cron editing, duplication, run-now, and history navigation', async () => {
     render(() => <Routine />);
     fireEvent.input(screen.getByRole('textbox', { name: 'Instructions' }), {

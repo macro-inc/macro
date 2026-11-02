@@ -246,11 +246,10 @@ describe('step outputs and run starts in run history', () => {
           },
           {
             path: '1',
-            kind: 'tool',
-            tool: 'CreateDocument',
+            kind: 'code',
             output: { documentId: 'doc-1' },
           },
-          { path: '2', kind: 'tool', tool: 'Comment' },
+          { path: '2', kind: 'agent' },
         ],
         run: {
           at: '2026-11-01T08:00:00Z',
@@ -265,14 +264,8 @@ describe('step outputs and run starts in run history', () => {
   it('keeps what each step returned', () => {
     const steps = run({ kind: 'manual', by: 'macro|owner@example.com' }).steps;
     expect(
-      steps?.map((step) =>
-        step.kind === 'tool' || step.kind === 'code' ? step.output : null
-      )
-    ).toEqual([
-      { count: 2, ids: ['a', 'b'] },
-      { documentId: 'doc-1' },
-      undefined,
-    ]);
+      steps?.map((step) => (step.kind === 'code' ? step.output : null))
+    ).toEqual([{ count: 2, ids: ['a', 'b'] }, { documentId: 'doc-1' }, null]);
   });
 
   it('decodes what started the run, when it counts as happening, and the run before', () => {

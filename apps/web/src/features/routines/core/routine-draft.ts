@@ -20,11 +20,6 @@ import {
 } from './routine-steps';
 import { routineTargetSchema } from './routine-target';
 import { describeTriggers, validateTriggers } from './routine-triggers';
-import {
-  describeToolStep,
-  validateStepSubjects,
-  validateToolStep,
-} from './step-catalog';
 
 export { getDefaultTimezone } from '@core/util/cron';
 
@@ -142,9 +137,6 @@ export function deriveRoutineName(draft: ScheduleDraft): string {
   const [first] = draft.steps;
   if (!first) return deriveScheduleName('');
   return match(first)
-    .with({ kind: 'tool' }, (step) => describeToolStep(step))
-    .with({ kind: 'if' }, (step) => deriveScheduleName(step.condition))
-    .with({ kind: 'choose' }, (step) => deriveScheduleName(step.question))
     .with({ kind: 'agent' }, (step) => deriveScheduleName(step.instructions))
     .with({ kind: 'code' }, (step) => deriveScheduleName(step.title))
     .exhaustive();
@@ -211,11 +203,7 @@ function validateProgramDraft(
   const triggers = draft.triggers ?? [];
   if (draft.apps.length && !firstAgent(steps))
     return 'Apps are for an Ask AI step. Add one, or remove the apps.';
-  return (
-    validateSteps(steps, triggers, validateToolStep) ??
-    validateStepSubjects(steps, triggers) ??
-    validateTriggers(triggers, creating)
-  );
+  return validateSteps(steps) ?? validateTriggers(triggers, creating);
 }
 
 export function validateRoutineDraft(

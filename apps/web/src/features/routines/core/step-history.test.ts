@@ -14,113 +14,55 @@ const steps =
   stepsFromTask({
     steps: [
       {
-        type: 'tool',
-        tool: 'UpdateThreadLabels',
-        arguments: { label: 'INBOX', add: false },
+        type: 'code',
+        title: 'Label invoices',
+        source: 'export async function main() {}',
       },
-      {
-        type: 'choose',
-        options: [
-          {
-            label: 'Invoice',
-            steps: [
-              {
-                type: 'tool',
-                tool: 'CreateDocument',
-                arguments: { isTask: true },
-              },
-            ],
-          },
-          { label: 'Other', steps: [] },
-        ],
-        otherwise: [
-          {
-            type: 'if',
-            condition: 'Is it urgent?',
-            // biome-ignore lint/suspicious/noThenProperty: the scheduler's step format names the yes branch `then`.
-            then: [{ type: 'agent', model: 'm', instructions: 'Go' }],
-          },
-        ],
-      },
+      { type: 'agent', model: 'm', instructions: 'Go' },
     ],
   }) ?? [];
 
+const call = (write: boolean) => ({
+  operation: 'email.addLabel',
+  label: 'Add Label',
+  write,
+  status: 'completed' as const,
+  startedMs: 0,
+});
+
 describe('routine step history', () => {
   it('finds steps by their recorded path', () => {
-    expect(stepAtPath(steps, '0')?.kind).toBe('tool');
-    expect(stepAtPath(steps, '1.options.0.0')?.kind).toBe('tool');
-    expect(stepAtPath(steps, '1.otherwise.0')?.kind).toBe('if');
-    expect(stepAtPath(steps, '1.otherwise.0.then.0')?.kind).toBe('agent');
-    expect(stepAtPath(steps, '1.options.3.0')).toBeUndefined();
+    expect(stepAtPath(steps, '0')?.kind).toBe('code');
+    expect(stepAtPath(steps, '1')?.kind).toBe('agent');
     expect(stepAtPath(steps, '7')).toBeUndefined();
     expect(stepAtPath(undefined, '0')).toBeUndefined();
   });
 
-  it('describes what a run did with the current step labels', () => {
-    expect(
-      describeHistoryStep(
-        { path: '0', kind: 'tool', tool: 'UpdateThreadLabels' },
-        steps
-      )
-    ).toBe('Archive');
-    expect(
-      describeHistoryStep(
-        {
-          path: '1.options.0.0',
-          kind: 'tool',
-          tool: 'CreateDocument',
-          error: 'No access',
-        },
-        steps
-      )
-    ).toBe('Create task failed: No access');
-    expect(
-      describeHistoryStep(
-        { path: '1', kind: 'choose', choices: ['Invoice'], probability: 0.9 },
-        steps
-      )
-    ).toBe('Chose “Invoice”');
-    expect(
-      describeHistoryStep(
-        { path: '1.otherwise.0', kind: 'if', answer: true, probability: 0.8 },
-        steps
-      )
-    ).toBe('Is it urgent? yes');
-    // A step that moved since the run still reads sensibly.
-    expect(
-      describeHistoryStep(
-        { path: '9', kind: 'tool', tool: 'SendChannelMessage' },
-        steps
-      )
-    ).toBe('Sent a message');
+  it('describes what a run did with the step labels', () => {
+    const ran = {
+      path: '0',
+      kind: 'code' as const,
+      calls: [],
+      callsTruncated: false,
+    };
+    expect(describeHistoryStep(ran, steps)).toBe('Label invoices');
+    expect(describeHistoryStep({ ...ran, error: 'No access' }, steps)).toBe(
+      'Label invoices failed: No access'
+    );
+    expect(describeHistoryStep({ path: '1', kind: 'agent' }, steps)).toBe(
+      'Asked AI'
+    );
+    // A step the routine no longer has still reads sensibly.
+    expect(describeHistoryStep({ ...ran, path: '9' }, steps)).toBe('Ran code');
   });
 
   it('reads a run against the steps of the configuration it ran', () => {
     const routine = { revision: 3, draft: { steps } };
     const run = { revision: 3, steps: [] };
     expect(stepsForRun(run, routine)).toBe(steps);
-    // After an edit, the same path can hold another step; describe the run
-    // from what it recorded instead.
-    const older = { ...run, revision: 2 };
-    expect(stepsForRun(older, routine)).toBeUndefined();
-    expect(
-      describeHistoryStep(
-        { path: '0', kind: 'tool', tool: 'UpdateThreadLabels' },
-        stepsForRun(older, routine)
-      )
-    ).toBe('Changed labels');
-    expect(
-      describeHistoryStep(
-        { path: '1.otherwise.0', kind: 'if', answer: true, probability: 0.8 },
-        stepsForRun(older, routine)
-      )
-    ).toBe('Decided yes');
-
-    const step = {
-      path: '0',
-      kind: 'tool' as const,
-      tool: 'UpdateThreadLabels',
-    };
+    // After an edit, the same path can hold another step.
+    expect(stepsForRun({ ...run, revision: 2 }, routine)).toBeUndefined();
+    const step = { path: '1', kind: 'agent' as const };
     const ran = (revision: number, startedAt: string) => ({
       revision,
       startedAt,
@@ -131,43 +73,6 @@ describe('routine step history', () => {
       latestStepRun([ran(3, '2026-10-01'), ran(2, '2026-10-02')], 3)?.startedAt
     ).toBe('2026-10-01');
     expect(latestStepRun([ran(2, '2026-10-02')], 3)).toBeUndefined();
-  });
-});
-
-describe('summaries of runs of an older configuration', () => {
-  const createTask =
-    stepsFromTask({
-      steps: [
-        {
-          type: 'tool',
-          tool: 'CreateDocument',
-          arguments: { documentName: 'Follow up', isTask: true },
-        },
-      ],
-    }) ?? [];
-  const run = {
-    id: 'run',
-    success: true,
-    revision: 1,
-    steps: [{ path: '0', kind: 'tool' as const, tool: 'CreateDocument' }],
-  };
-
-  it('names the action by the kind of step there now', () => {
-    // The routine was edited since, so the run's own steps are unknown.
-    expect(summarizeRun(run, undefined, createTask)).toBe('Created a task');
-    // Without any steps to go on, only the tool is known.
-    expect(summarizeRun(run, undefined)).toBe('Created a document');
-    // A different tool there now says nothing about this run.
-    expect(
-      summarizeRun(
-        {
-          ...run,
-          steps: [{ path: '0', kind: 'tool' as const, tool: 'Comment' }],
-        },
-        undefined,
-        createTask
-      )
-    ).toBe('Commented');
   });
 });
 
@@ -190,27 +95,26 @@ describe('routine run outcomes', () => {
         undefined
       )
     ).toBe('Skipped: condition couldn’t be checked');
-    expect(
-      runOutcome({
-        ...ran,
-        steps: [{ path: '0', kind: 'choose', choices: [] }],
-      })
-    ).toBe('nothing');
-    expect(
-      runOutcome({
-        ...ran,
-        steps: [
-          { path: '0', kind: 'choose', choices: ['A'] },
-          { path: '0.options.0.0', kind: 'tool', tool: 'Comment' },
-        ],
-      })
-    ).toBe('succeeded');
+    // Code that only read changed nothing; a write that went through did.
+    const code = (write: boolean) => ({
+      ...ran,
+      steps: [
+        {
+          path: '0',
+          kind: 'code' as const,
+          calls: [call(write)],
+          callsTruncated: false,
+        },
+      ],
+    });
+    expect(runOutcome(code(false))).toBe('nothing');
+    expect(runOutcome(code(true))).toBe('succeeded');
     expect(
       summarizeRun(
         {
           ...ran,
           success: false,
-          steps: [{ path: '0', kind: 'tool', tool: 'Comment', error: 'Gone' }],
+          steps: [{ path: '0', kind: 'agent', error: 'Gone' }],
         },
         undefined
       )
