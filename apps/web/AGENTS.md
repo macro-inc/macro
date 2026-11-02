@@ -877,6 +877,14 @@ See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files
 - Keep transient toasts in their bounded stack and persistent prompts/reminders in separate regions; preserve keyboard dismissal, full mobile descriptions, and remaining-time pause on hover/focus. Mobile toasts dismiss by swiping left or right and have no corner close button. Phone prompts stay in their own stack under the modal layer, never on `z-toast-region`, and never hide with a document-wide `:has()` (#8840).
 - Notification sounds are off by default and saved per user per device; map each new notification event in `features/notification-sounds/core/categories.ts` and keep system alerts silent when Macro plays its own sound. See the [notification sounds walkthrough](../../docs/agent-guide/notifications.md#notification-sounds).
 
+### Inline property values
+
+Inline property fields stay `readOnly`, never `disabled`, while they save: a
+browser moves focus off a disabled field, so a failed save would strand it. Enter
+and Escape return focus to the value through `Property.Root`; tabbing or clicking
+away leaves focus where the user put it. The backend-free regression is
+`bunx playwright test --config src/features/property/editors/inline/browser-test/playwright.config.ts`.
+
 ### Sidebar tag dragging
 
 Email and Calls sidebar tags can be dragged onto taggable desktop list rows.

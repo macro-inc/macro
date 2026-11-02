@@ -112,6 +112,11 @@ the originating tab breadcrumb, a task tab, or a tag to return to the list.
 Shift-click a row or favorite to open it in a new split
 instead. Keyboard list navigation only moves focus; press Enter to open the focused task.
 
+Number, text, and link values in the Properties side panel edit in place. Enter
+saves and Escape cancels, and both return focus to the value, or to **+** on a link
+list, so the keyboard stays on the row. A failed save leaves the field open and
+focused. Tab or a click elsewhere saves and leaves focus where it went.
+
 In the task's Properties side panel, hover or focus a row for **Pin below title**
 or **Unpin from title**. Pinning adds the property to the title row; unpinning keeps
 its saved value and the side-panel row. The title pill's hover card also offers
