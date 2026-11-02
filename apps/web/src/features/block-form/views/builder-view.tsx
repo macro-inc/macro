@@ -85,9 +85,9 @@ import { placementOf, stepPlacement } from '../core/drop-target';
 import {
   bookingStep,
   brokenRuleColumns,
-  ruleColumns,
   type QuestionPlacement,
   questionNumbers,
+  ruleColumns,
 } from '../core/form-layout';
 import type {
   FormBookingTarget,
