@@ -43,6 +43,8 @@ failure in the same build, the rail's update button (a toast on touch layouts)
 offers the reload; the offer reloads a hidden tab by itself only if that build's
 one automatic reload is unspent. A failed route chunk can still end on the
 root error screen, which hides the offer.
+The sidebar update button and its automatically opened popover are desktop-only,
+even when the sidebar is shown on a touch device.
 
 ## External links in the native app
 

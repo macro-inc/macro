@@ -15,7 +15,7 @@ export interface AgentSessionFilters {
 default — see [`crate::ast::agent_session::AgentSessionLiteral::Include`].
 Asking for specific `ids` or `owners` also opts in. */
   include?: boolean;
-  /** Filter by session owner principal — a user ('macro|user1@example.com'), a bot
+  /** Filter by session owner principal — a user ('macro|user1@user.com'), a bot
 ('bot|<uuid>'), or a team (a bare hyphenated uuid). Empty to include every
 owner. */
   owners?: string[];

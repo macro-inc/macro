@@ -23,9 +23,9 @@ export interface DocumentFilters {
   is_email_attachment?: DocumentFiltersIsEmailAttachment;
   /** Filter by document notification state. */
   notification_filters?: NotificationFilters;
-  /** Filter by document owner principal — a user ('macro|user1@example.com'), a bot
+  /** Filter by document owner principal — a user ('macro|user1@user.com'), a bot
 ('bot|<uuid>'), or a team (a bare hyphenated uuid). Examples:
-['macro|user1@example.com'], ['macro|user1@example.com', 'bot|0199...']. Empty to
+['macro|user1@user.com'], ['macro|user1@user.com', 'bot|0199...']. Empty to
 search all owners. */
   owners?: string[];
   /** A list of project ids to search within. Examples: ['project1'].
