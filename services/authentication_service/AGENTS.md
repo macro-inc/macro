@@ -104,6 +104,15 @@ inputs cannot select an agent, and ordinary user credentials remain unattributed
   when present; see `README.md` before changing signup behavior.
 - Denial responses and policy errors must never disclose configured allowlist
   addresses; never paste operational addresses into code, logs, or docs.
+- New Outlook connections need the deployment switch
+  `OUTLOOK_CONNECTIONS_ENABLED` and the user's PostHog flag `enable-outlook`
+  (`src/domain/microsoft.rs`), read with `crates/feature_flags` for the Macro
+  user id the web app identifies with. `/link/email/providers` answers
+  `outlook: false` and `/link/outlook` answers 404 for a new connection when
+  either is off; reconnecting an inbox reads neither. A failed flag load
+  closes new connections and logs one warning. Without `POSTHOG_API_KEY`
+  (local, tests) the switch alone decides. Each decision is the
+  `outlook.flag` span field (`on`, `off`, `error`, `unconfigured`).
 - `/oauth2/{provider}/callback` verifies two signed `state` kinds
   (`src/account_link_state.rs`): account links, which expire, and Microsoft
   admin-consent returns, which do not. A consent screen that ends without a
