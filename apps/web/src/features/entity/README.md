@@ -36,6 +36,8 @@ hover actions.
 `ProjectBreadCrumb.collapsed` keeps a keyboard-accessible, borderless ghost folder
 button with its link color and a circular icon-only target. Its hover card shows
 the folder heading and full path on separate rows.
+The list folder glyph is 16px on desktop and 20px on phones, matching neighboring
+property icons while keeping its existing pill and touch target.
 Task grids use their existing measured overflow controller to collapse folder
 labels before tags or title truncation.
 

@@ -62,7 +62,7 @@ export function ProjectBreadCrumb(props: {
         </div>
       }
     >
-      <FolderIcon class="size-[1em] shrink-0" />
+      <FolderIcon class="size-4 shrink-0 mobile:size-5" />
       <Show when={!props.collapsed}>
         <Suspense fallback={<ListSkeleton.Bar class="h-2 w-10" />}>
           <Show when={projectQuery.data}>
