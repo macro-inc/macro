@@ -35,6 +35,10 @@ vi.mock('@solid-primitives/resize-observer', () => ({
   }),
 }));
 
+vi.mock('./create-frame-width', () => ({
+  createFrameWidth: () => () => measurement.width(),
+}));
+
 vi.mock('@ui', async () => ({
   ...(await import('../ui/utils/classname')),
   ...(await import('../ui/utils/press')),
