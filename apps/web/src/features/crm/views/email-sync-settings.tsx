@@ -9,7 +9,10 @@ import {
   SettingsRow,
   SettingsSection,
 } from '../../settings/primitives';
-import { type CompanyOption, CompanySelect } from '../components/company-select';
+import {
+  type CompanyOption,
+  CompanySelect,
+} from '../components/company-select';
 import { useCrmContext } from '../context/crm-context';
 import { isCompanyDomain } from '../core/pipeline-record';
 import {
@@ -177,7 +180,7 @@ function BlockedDomainsRows() {
                 class="settings-input min-w-40 flex-1"
               />
               <Button
-                variant="secondary"
+                variant="outline"
                 size="sm"
                 class="shrink-0"
                 disabled={!isCompanyDomain(domain()) || pending()}

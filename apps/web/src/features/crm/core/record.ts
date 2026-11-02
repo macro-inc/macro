@@ -3,7 +3,7 @@ export type CrmRecordTarget = { type: 'company' | 'contact'; id: string };
 /** Record identity and already-loaded associations for a new task. */
 export type CrmTaskRecord =
   | { type: 'company'; id: string }
-  | { type: 'contact'; id: string; companyId?: string };
+  | { type: 'contact'; id: string; companyId?: string | null };
 /** A CRM record whose associated files, tasks and calls a record tab lists. */
 export type CrmRecordScope =
   | { type: 'company'; id: string; domains: string[] }

@@ -137,9 +137,16 @@ const createContactHandler = createToolRenderer({
     <BaseTool icon={UserPlus} renderContext={ctx.renderContext} type="call">
       <div class="min-w-0 flex-1">
         {ctx.response ? 'Added' : 'Add'} contact{' '}
-        <span class="text-ink">{ctx.tool.data.name}</span> (
-        {ctx.tool.data.email}) to{' '}
-        <CompanyPreview companyId={ctx.tool.data.companyId} />
+        <span class="text-ink">{ctx.tool.data.name}</span>
+        <Show when={ctx.tool.data.email}>{(email) => <> ({email()})</>}</Show>
+        <Show when={ctx.tool.data.companyId}>
+          {(companyId) => (
+            <>
+              {' '}
+              to <CompanyPreview companyId={companyId()} />
+            </>
+          )}
+        </Show>
       </div>
     </BaseTool>
   ),

@@ -10,7 +10,7 @@ import { RecordItemList } from './record-item-list';
 import { useContactEmailsQuery } from './use-crm';
 
 export function ContactEmailsSection(props: { contact?: CrmContactResponse }) {
-  const email = () => props.contact?.email;
+  const email = () => props.contact?.email ?? undefined;
   const [search, setSearch] = createSignal('');
   const [view, setView] = createSignal<EmailView>('team');
   const [signalView, setSignalView] = createSignal<EmailSignalView>('all');

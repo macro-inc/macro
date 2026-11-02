@@ -13,6 +13,7 @@ import type { CrmActivityTab } from '../core/navigation';
 import type { Pipeline } from '../core/pipeline';
 import type { CrmRecordScope, CrmTaskRecord } from '../core/record';
 import type {
+  BlockedDomainsSource,
   CompanyImporter,
   CompanySource,
   ContactSource,
@@ -28,7 +29,6 @@ import type {
   ListsSource,
   PersonalViewsSource,
   PropertyCommands,
-  BlockedDomainsSource,
   TeamConfigSource,
   TeamSource,
   TeamViewsSource,
@@ -119,7 +119,7 @@ export type CrmContext = {
     query: { readonly isLoading: boolean };
   };
   createContactSuggestions(): {
-    contacts: Accessor<{ id: string; name: string; email: string }[]>;
+    contacts: Accessor<{ id: string; name: string; email?: string | null }[]>;
     query: { readonly isLoading: boolean };
   };
   exportCompanies(

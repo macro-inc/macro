@@ -412,13 +412,13 @@ export type CrmCompanyEntity = EntityBase & {
 export type CrmContactEntity = EntityBase & {
   type: 'crm_contact';
   teamId?: string;
-  companyName?: string;
+  companyName?: string | null;
   firstInteraction?: string;
   lastInteraction?: string;
-  /** The company the contact belongs to. */
-  companyId: string;
-  /** The contact's email address. */
-  email: string;
+  /** The company the contact belongs to; absent without a company. */
+  companyId?: string | null;
+  /** The contact's email address; absent for a contact added by name. */
+  email?: string | null;
   /** Whether the contact has been hidden from the CRM listings. Only
    * admin/owner team members can see `hidden: true` rows. */
   hidden: boolean;
@@ -653,6 +653,13 @@ export const isCrmContactEntity = (
 /** The full-email identity shared by CRM contacts and Macro users. Plus
  * aliases stay distinct, as in the backend's authorized contact deduplication. */
 export const crmContactEmailKey = (email: string) => email.trim().toLowerCase();
+
+/** One key per person: the normalized email, or the record id for a contact
+ * added without one, which never merges with anyone else. */
+export const crmContactIdentityKey = (contact: {
+  id: string;
+  email?: string | null;
+}) => (contact.email ? crmContactEmailKey(contact.email) : `id:${contact.id}`);
 
 export const isDocumentEntity = (
   entity: EntityData

@@ -1,6 +1,9 @@
 import type { EntityItem, UserItem } from '@core/context/quickAccess';
 import { resolveContactPeople } from '@core/context/quickAccess/crm-contacts';
-import { crmContactEmailKey } from '@entity/types/entity';
+import {
+  crmContactEmailKey,
+  crmContactIdentityKey,
+} from '@entity/types/entity';
 import type { GroupMentionItem } from '../../../../utils/mentionsUtils';
 
 /** Preserve real user mentions; CRM duplicates retain one navigable team record. */
@@ -21,7 +24,7 @@ export function mergePeopleMentions(
     contacts,
     availableUsers
   )) {
-    const key = crmContactEmailKey(contact.data.email);
+    const key = crmContactIdentityKey(contact.data);
     if (seen.has(key)) continue;
     seen.add(key);
     result.push(user ?? contact);

@@ -51,6 +51,7 @@ import { PipelineDatabaseEditor, PipelineShare } from './pipeline-adapter';
 import { createCrmPipelineEntries } from './pipeline-entries-adapter';
 import { createCrmPermissions } from './primitives/team-config';
 import { useCrmActivityQuery } from './queries/activity';
+import { useBlockedDomains } from './queries/blocked-domains';
 import {
   createCompanyImporter,
   useCompanyQuery,
@@ -84,7 +85,6 @@ import {
   useResetCrmStagesMutation,
 } from './queries/stages';
 import { useTeamCrmConfig } from './queries/team-config';
-import { useBlockedDomains } from './queries/blocked-domains';
 import { useQuickAccessCrmContactsQuery } from './record-adapter';
 import { createAppDealStages } from './stage-adapter';
 import { crmTaskComposerContext } from './task-composer';

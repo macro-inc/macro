@@ -80,8 +80,7 @@ export function CreateContactModal(props: {
   const contactName = createMemo(() => name().trim());
   const contactEmail = createMemo(() => email().trim().toLowerCase());
   const canSubmit = createMemo(
-    () =>
-      contactName().length > 0 && !createContactMutation.isPending
+    () => contactName().length > 0 && !createContactMutation.isPending
   );
 
   function reset() {

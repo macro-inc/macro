@@ -88,7 +88,7 @@ async function handleCrmMention(
     documentId: entity.id,
     documentName:
       entity.type === 'crm_contact'
-        ? entity.name || entity.email
+        ? entity.name || entity.email || ''
         : entityDisplayName(item),
     blockName: entity.type === 'crm_contact' ? 'contact' : 'company',
     ...(mentionUuid ? { mentionUuid } : {}),
