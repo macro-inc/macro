@@ -33,4 +33,5 @@ async fn scoped_hydration_rejects_a_late_browser_response() {
             .unwrap(),
         generation
     );
+    resolved(engine.close()).await;
 }

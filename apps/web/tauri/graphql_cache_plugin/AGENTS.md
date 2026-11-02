@@ -29,6 +29,8 @@ From the repository root:
 
 - Hold the engine lock across scoped hydration's generation/identity check and
   write. A stale background response must not clear or rebind the current account.
-- OTA JS cannot add native policy: scoped hydration is gated by projection 5
-  support before IPC, while legacy unscoped callers retain their deployed API.
+- OTA JS cannot add native policy: scoped hydration requires projection 5 and
+  the distinct `graphql_cache_hydrate_scoped` command. Never fall back to the
+  deployed unscoped command after a guarded-write failure. Register new commands
+  in `../src-tauri/src/lib.rs` as well as defining their plugin handler.
 - Keep `apps/web/tauri/Cargo.lock` current when shared client dependencies change.

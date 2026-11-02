@@ -644,17 +644,21 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
         if (!(await scopedHydrationSupported))
           throw new Error('Scoped cache hydration is unsupported');
       }
-      const result = await request<NativeHydrationResult>(
-        'graphql_cache_hydrate',
-        {
-          hydrationScope: args.hydrationScope,
-          query: args.query,
-          operationName: args.operationName,
-          variables: args.variables,
-          data: args.data,
-          identity: args.identity,
-        }
-      );
+      const payload = {
+        query: args.query,
+        operationName: args.operationName,
+        variables: args.variables,
+        data: args.data,
+        identity: args.identity,
+      };
+      const result = args.hydrationScope
+        ? await request<NativeHydrationResult>('graphql_cache_hydrate_scoped', {
+            request: { ...payload, hydrationScope: args.hydrationScope },
+          })
+        : await request<NativeHydrationResult>(
+            'graphql_cache_hydrate',
+            payload
+          );
       const newlyObserved = observeRevision(
         parseCacheRevision(result.revision)
       );
