@@ -23,11 +23,11 @@ Typed **All** and **People** name searches also find known teammates before thei
 first DM, with or without CRM. Existing one-to-one DMs replace person rows while
 preserving name/email matches; selecting a person opens their DM. Verify both
 categories with a teammate who has no conversation or CRM record.
-Name search here and in Command K finds a conversation by its participants in
-any order, separated by spaces or commas, with name prefixes allowed. A query
-naming exactly its participants ranks it with exact names, above a larger group
-holding the same people. A person's first name alone also counts as exact for
-their DM or person row.
+Name search here, in Command K, and in the Chat sidebar finds a conversation by
+its participants in any order, separated by spaces or commas, with name prefixes
+allowed. A query naming exactly its participants ranks it first, above a larger
+group holding the same people. In Command K and mobile name search, a person's
+first name alone also counts as exact for their DM or person row.
 On phones, name-result icons and avatars are scaled to 150% (16px artwork
 becomes 24px), preserving row height and text alignment.
 

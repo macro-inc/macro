@@ -269,6 +269,27 @@ describe('createFreshSearch with comma-separated channel matching', () => {
     expect(results[0].fuzzyScore).toBe(1);
     expect(results[1].fuzzyScore).toBeLessThan(1);
   });
+
+  it('ranks the exact participants above a newer larger group without name ranking', () => {
+    const items: MockItem[] = [
+      {
+        id: 'group',
+        name: 'Avery Morgan, Blair Chen, Casey Reed',
+        type: 'channel',
+        viewedAt: new Date(),
+      },
+      {
+        id: 'pair',
+        name: 'Avery Morgan, Blair Chen',
+        type: 'channel',
+        viewedAt: applyDurationToDate(new Date(), { value: -20, unit: 'd' }),
+      },
+    ];
+
+    const results = createCommaSeparatedSearch()(items, 'blair, avery');
+
+    expect(results.map((result) => result.item.id)).toEqual(['pair', 'group']);
+  });
 });
 
 describe('normalizeFuzzyScore', () => {

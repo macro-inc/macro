@@ -159,12 +159,13 @@ users and DMs ahead of CRM contacts across the people positions, whatever their
 match. Tune name relevance there for every menu.
 Cmd+K and mobile name search widen the first group: a query equal to the first
 word of a DM or person name counts as exact, so a person's first name reaches
-their full-name DM, and so does a query naming every participant of a
-comma-separated channel name, in any order and by name prefixes. A group with
-more people than the query names stays out of that group. Those menus and
-Quick Access also match channels and DMs by terms in any order
-(`commaSeparatedChannelMatch`), adding to uFuzzy's in-order matches, because
-names are generated from participants and people type them in any order.
+their full-name DM. `commaSeparatedChannelMatch` (Cmd+K, mobile name search,
+Quick Access, and Soup search including the Chat sidebar) matches channels and
+DMs by terms in any order, adding to uFuzzy's in-order matches, because names
+are generated from participants and people type them in any order. It also
+ranks a query naming every participant first, by name prefixes; a group with
+more people than the query names stays below, and one term never names two
+people.
 Commas separate query terms like spaces in the cache search
 (`cache-core/search.rs`, mirrored by `matchesTokenSubsequences`) and in the
 server's channel name search; keep the three together.

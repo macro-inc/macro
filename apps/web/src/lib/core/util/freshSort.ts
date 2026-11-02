@@ -50,7 +50,7 @@ export interface FreshSortConfig<T = unknown> {
   channelBoost?: number;
   /** Boost multiplier for DM items. Default: 1.0 (no boost) */
   dmBoost?: number;
-  /** Also match channel names holding every query term in any order. When enabled, query "b,a" matches channel name "a,c,b", which the fuzzy matcher alone misses. Default: false */
+  /** Also match channel names holding every query term in any order, and rank channels whose participants the query names exactly first. When enabled, query "b,a" matches channel name "a,c,b", which the fuzzy matcher alone misses. Default: false */
   commaSeparatedChannelMatch?: boolean;
   /** Function to calculate per-item boost. Returns a boost multiplier (e.g., 0.2 for +20% boost). Default: undefined */
   boostFn?: BoostFn<T>;
@@ -58,7 +58,7 @@ export interface FreshSortConfig<T = unknown> {
   gapPenaltyWeight?: number;
   /** How much to penalize matches that start later in the string. Higher values penalize later starts more. Default: 0 */
   startBonusDecay?: number;
-  /** Rank names equal to the query first, then names starting with it, then other matches, ignoring case; the blended score orders each group. Channels whose participants the query names exactly, in any order, and people whose first name it equals, count as equal. Default: false */
+  /** Rank names equal to the query first, then names starting with it, then other matches, ignoring case; the blended score orders each group. People whose first name equals the query count as equal to it. Default: false */
   rankNameMatchesFirst?: boolean;
 }
 
@@ -76,7 +76,7 @@ export interface FreshSortResult<T> {
   timeScore: number;
   brevityScore: number;
   combinedScore: number;
-  /** 2 for an exact name, participant set, or person's first name, 1 for a name starting with the query, else 0; always 0 unless `rankNameMatchesFirst`. */
+  /** 2 for an exact name, person's first name, or participant set, 1 for a name starting with the query, else 0. Without `rankNameMatchesFirst` only participant sets rank above 0, under `commaSeparatedChannelMatch`. */
   nameMatchRank: number;
 }
 
@@ -170,16 +170,13 @@ function namesEveryParticipant(normalizedName: string, term: string): boolean {
 }
 
 function calculateNameMatchRank(
-  name: string,
+  normalizedName: string,
   term: string,
-  rowKind: { isChannel: boolean; isPerson: boolean }
+  isPerson: boolean
 ): number {
   if (!term) return 0;
-  const normalizedName = name.trim().toLocaleLowerCase();
   if (normalizedName === term) return 2;
-  if (rowKind.isPerson && normalizedName.split(/\s+/)[0] === term) return 2;
-  if (rowKind.isChannel && namesEveryParticipant(normalizedName, term))
-    return 2;
+  if (isPerson && normalizedName.split(/\s+/)[0] === term) return 2;
   if (normalizedName.startsWith(term)) return 1;
   return 0;
 }
@@ -391,13 +388,18 @@ export function createFreshSearch<T>({
     const finalConfig = { ...DEFAULT_CONFIG, ...config };
     const trimmedQuery = query.trim();
     const term = trimmedQuery.toLocaleLowerCase();
-    const getNameMatchRank = (item: T) =>
-      finalConfig.rankNameMatchesFirst
-        ? calculateNameMatchRank(getDisplayName(item), term, {
-            isChannel: isChannelItem(item),
-            isPerson: isPersonItem(item),
-          })
+    const getNameMatchRank = (item: T) => {
+      const name = getDisplayName(item).trim().toLocaleLowerCase();
+      const namesParticipants =
+        finalConfig.commaSeparatedChannelMatch &&
+        isChannelItem(item) &&
+        namesEveryParticipant(name, term);
+      if (namesParticipants) return 2;
+
+      return finalConfig.rankNameMatchesFirst
+        ? calculateNameMatchRank(name, term, isPersonItem(item))
         : 0;
+    };
 
     const hasComma = trimmedQuery.includes(',');
     const hasSpace = trimmedQuery.includes(' ');
