@@ -1078,8 +1078,11 @@ label it Finance and make a task to pay it", using the workspace's label, tag,
 channel, folder, people and agent names), **Templates** (with
 `enable-routine-starter-templates` on; Macro's cards: **Sort
 my inbox**, **Triage new tasks**, **Morning brief**, **Chase stuck tasks**, and
-**Share updates** only where AI decisions are enabled; each shows its icon,
-what it does and its trigger → first step), and **Start fresh** beside the
+**Share updates** only where AI decisions are enabled, for its trigger
+condition; each shows its icon, what it does and its trigger → first step.
+**Sort my inbox**, **Triage new tasks** and **Share updates** start with the
+scheduler's starter code, or an Ask AI step where code can't be saved), and
+**Start fresh** beside the
 close button. Each choice closes it and opens the new routine's page at
 `/app/routines/new`, as do the list's template cards directly. That page is
 laid out like a saved routine's (**Routines → New routine**, no tabs): an
@@ -1095,61 +1098,25 @@ starting another routine (the creator or a template card) while the page is
 open replaces it with the new one. A routine
 whose only step is **Ask AI** saves in the original single-agent form.
 
-**Steps.** A routine runs its steps in order and stops at the first failed step.
-**Add step** (in the tray under the last step card, like the tray under
-Home's composer; on its own before there are steps or after an **If yes or no**
-or **Choose between options** step, whose branches end the list) and **+ Step** inside each
-branch (read as **Add step to “Yes”** by screen readers) open a searchable list,
-plain actions first, then AI steps:
+**Steps.** A routine runs its steps in order and stops at the first failed
+step. There are two kinds. **Code** steps run TypeScript against Macro's SDK;
+AI writes them (**Draft it**, the starter templates, or a conversation about
+the routine), and they open read-only: summary, **Can change** scopes and the
+code. **Ask AI** hands the run to a model or agent with instructions; it sees
+the triggering event and what earlier steps returned, a routine has one, and
+its required apps go to it. **Add step** (in the tray under the last step card,
+like the tray under Home's composer) offers **Ask AI** while the routine has
+none, and says that AI writes code steps.
 
-- **Email** (email triggers): **Add label** / **Remove label** (a label name,
-  suggested from the inbox and matched in each thread's own inbox), **Archive**,
-  **Mark as read**, **Star**, **Mark important**, **Mark sender as noise**
-  (noise, signal or blocked).
-- **Item** acts on the triggering item or on a task/document an earlier step in
-  the same branch created, so it also works on schedules after **Create task**:
-  **Add tag**, **Move to folder** (emails, tasks, documents), and for tasks
-  **Set status**, **Set priority**, **Assign**, plus **Comment** for tasks and
-  documents. When several items fit, or the step acts on a created one, an
-  **On** menu picks which. Without any item the menu explains what's needed.
-- **Create → Create task** / **Create document**: title and description or
-  content; later steps can act on it.
-- **Messages**: **Send message** to a chosen channel, or **Reply in thread** for
-  channel triggers.
-- **Let AI decide** (when `enable-routine-conditions` is on; with a schedule
-  trigger it only shows "Needs an activity trigger"): **Label with AI** (email),
-  **Tag with AI**, and for tasks **Set priority with AI** (Urgent/High/Medium/Low
-  prefilled with descriptions) and **Assign with AI**; **If yes or no** asks a
-  yes/no question; **Choose between options** takes labelled options. All
-  questions are answered in one classifier call before any step runs.
-- **Hand off → Ask AI** (**1 per run**): hand the run to a model or agent with instructions. It sees the
-  triggering event and what earlier steps did. A run reaches at most one agent;
-  agents in different branches are fine. A routine's required apps go to it.
-
-Steps are numbered, labelled groups that read as one line closed (**Add label  Finance**,
-**Set priority  High · on the new task**) and open into a card of labelled rows
-(Label, Title, Details, Folder, Priority, Treat as …); click the header to open or
-close one. New steps, steps missing input and a routine's only step start open.
-Choices are tokens with their own menus (labels and tags are searchable;
-priority, status and sender policy are segmented). Branches indent under their
-decision on a left rule: a choice shows each option's label and description,
-its steps and **+ Step**, then **Nothing fits** (**Do nothing**); **If** shows
-**Yes** / **No**. Opened, a choice edits **What AI decides**, **Which answers
-run** (**Best match / All that apply**) and **Options · 2 to 8** (label, when it
-fits, ×, **+ Option**); the "with AI" presets list values instead (label, tag,
-priority or person, its when-it-fits text). On a routine's page the **Steps**
-heading carries **Show last run** (a switch) and how many AI calls a run makes
-(**2 AI calls per email**); with it on, each step shows what the latest run did:
-a check, **Failed**, or a decision's answer such as **Invoice 94%**. Text fields
-show inserted fields as chips (**Pay: Email subject**); their **{ }** button
-inserts one at the caret, grouped **From the email** (or message, item) and
-**From earlier steps**. Each step's ⋯ menu has **Move up** / **Move down**
-(also Alt/⌥+↑/↓ on the card outside its text fields, keeping focus on the
-moved card), **Duplicate**, **Wrap in “If yes or no”** and
-**Delete step**. Steps that decide about or act on the
-triggering item need activity triggers only; combining them with schedules shows
-an error, and **Run now** is disabled for such routines (its tooltip explains
-why; on touch the reason shows under the title line).
+Steps are numbered, labelled groups that read as one line closed (a code step's
+title and summary with a **Code** badge; **Ask AI** and the first line of its
+instructions); click the header to open or close one. New steps and a routine's
+only step start open. On a routine's page the **Steps** heading carries **Show
+last run** (a switch) and how many AI calls a run makes (**1 AI call per
+email**); with it on, each step shows what the latest run did: a check,
+**Failed**, or a code step's call count. Each step's ⋯ menu has **Move up** /
+**Move down** (also Alt/⌥+↑/↓ on the card outside its text fields, keeping
+focus on the moved card), **Duplicate** and **Delete step**.
 
 **Add trigger** opens a menu with **Search triggers** and one row per kind:
 **Schedule** (**On a schedule**, **Once**), **Email**, **Tasks**, **Channels**,
@@ -1369,13 +1336,9 @@ MCP and Macro agent tools expose **CreateRoutine**, **ListRoutines**,
 (`once` with a future RFC3339 `at`, `cron` with a six-field `expression` and IANA
 `timezone`, or `event` with `events`, optional item `ids` and an optional yes/no
 `condition`), `steps`, a JSON array encoded as a string, and `requiredApps`.
-Step types are `tool` (one of UpdateThreadLabels, SetSenderPolicy,
-SetEntityProperty, CreateDocument, Comment, SendChannelMessage or
-MoveToProject, with the tool's own `arguments`), `if`, `choose` and `agent`
-(`model`, or `agent.bot_id` from **ListAgents**, plus `instructions`). Arguments
-can embed `{{trigger.…}}` and `{{steps.<id>.…}}` placeholders.
-**UpdateThreadLabels** also accepts a label by name (`label: "INBOX"`) instead
-of `label_id`. Routine ownership comes from the authenticated caller, never a
+Step types are `code` (TypeScript against Macro's SDK, type-checked when saved,
+with the areas it changes in `writes`) and `agent` (`model`, or `agent.bot_id`
+from **ListAgents**, plus `instructions`). Routine ownership comes from the authenticated caller, never a
 model-supplied user ID.
 
 ## Command menu (Ctrl+K)

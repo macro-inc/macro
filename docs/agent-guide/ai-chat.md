@@ -748,20 +748,24 @@ and how long it took; arguments and results are never shown. Under its title,
 a line says what started the run (the schedule and its time zone, the event,
 or **Run by** a person), when it was due if it started a minute or more
 later, and **since** the previous run's start (**first run** otherwise); an
-email, channel or task event adds **Open item**. Each tool and code step has
+email, channel or task event adds **Open item**. Each code step has
 **Show output**, collapsed by default, with what the step returned as JSON.
-Runs recorded before this change have neither.
+Runs recorded before this change have neither, and runs recorded with the
+removed tool or decision steps show their outcome without per-step detail.
 
-**Draft it** on a new routine can write code steps too. It reads the same
+**Draft it** on a new routine writes code and Ask AI steps. It reads the same
 code-step guide CreateRoutine does, plus SDK signatures relevant to the
-description, then type-checks the routine's code steps together (a step that
-misreads an earlier step's output fails) and asks the model to fix errors,
-twice at most. A step that still fails stays in the draft with its
+description and the starter routines as worked examples, then type-checks the
+routine's code steps together (a step that misreads an earlier step's output
+fails) and asks the model to fix errors, twice at most. A step that still fails stays in the draft with its
 errors listed, and the routine can't be created until it is drafted again or
 the step is removed.
 
-Code steps (written by AI through CreateRoutine) open read-only on the routine's
-Overview: summary, **Can change** scopes and the code. When an SDK release
+Code steps (written by AI through Draft it, CreateRoutine or the starter
+templates) open read-only on the routine's Overview: summary, **Can change**
+scopes and the code. The starters that sort email, set task priorities and
+post updates come from the scheduler as code; where code can't be saved they
+start with an Ask AI step instead. When an SDK release
 breaks a routine's code and AI's update fails its checks, the routine pauses
 and its Overview leads with **Paused: its code needs an update**: the reason,
 **Review the update** (each changed step before and after) and **Approve and
@@ -2122,9 +2126,9 @@ also exercise direct ACP model-change requests, downgrade, and resume.
 
 The built-in **Compose Routines** skill walks an agent through creating or
 changing a routine with `CreateRoutine`, `ReadRoutine` and `UpdateRoutine`: read
-the existing routine first, pick schedule or activity triggers, prefer plain
-tool steps, route with `if`/`choose` decisions (one classifier call), keep to
-one agent step per run, resolve every id before writing, and send the complete
+the existing routine first, pick schedule or activity triggers, write code steps
+that act and decide (`macro.ai.decide`), keep to one Ask AI step, resolve every
+id before writing, and send the complete
 configuration, since an update replaces name, triggers, steps and required apps.
 GitHub triggers are set on the routine's page, not through these tools.
 **Compose with agent** (right of **Enabled** and **Owned by** under a routine's

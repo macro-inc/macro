@@ -42,13 +42,9 @@ the selected agent. Use `ListRoutines` to avoid duplicates, `ReadRoutine` to
 inspect settings/results, and `UpdateRoutine` to pause or change future work. A
 routine should not create a replacement of itself on each run.
 
-Routines can also act without an agent: activity triggers such as a new email
-or a created task can run deterministic tool steps (label, archive, tag, set
-status, move to a folder, create a task, post in a channel), and `if` / `choose`
-steps branch on yes/no or multiple-choice questions about the triggering item.
-A `choose` with `"multiple": true` runs every option that fits, so a choice
-whose options each apply one label lets the classifier label email by topic.
-Steps can also act on a task an earlier step created (`{{steps.task.documentId}}`),
-which works on schedules too. A `code` step runs TypeScript against Macro's SDK
-for work that needs more than one call; it is type-checked when saved and can
-change only the areas it lists in `writes`.
+Routines can also act without an agent: a `code` step runs TypeScript against
+Macro's SDK to label, archive, tag, set status, move to a folder, create a task
+or post in a channel, and decides with `macro.ai.decide` (yes/no questions about
+the triggering item or anything it has read). It is type-checked when saved,
+can change only the areas it lists in `writes`, and a later code step reads its
+output as `steps.<id>`.
