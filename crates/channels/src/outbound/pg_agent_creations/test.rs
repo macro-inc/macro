@@ -106,7 +106,7 @@ async fn the_request_is_the_persons_latest_message_in_the_thread_before_the_repl
 
     assert_eq!(
         creations
-            .request_sent_at(CHANNEL, THREAD_ROOT, &person(), reply_at)
+            .request_sent_at(THREAD_ROOT, &person(), reply_at)
             .await
             .unwrap(),
         Some(follow_up_at.trunc_subsecs(6)),
@@ -114,12 +114,7 @@ async fn the_request_is_the_persons_latest_message_in_the_thread_before_the_repl
     );
     assert_eq!(
         creations
-            .request_sent_at(
-                CHANNEL,
-                THREAD_ROOT,
-                &person(),
-                root_at + Duration::seconds(1)
-            )
+            .request_sent_at(THREAD_ROOT, &person(), root_at + Duration::seconds(1))
             .await
             .unwrap(),
         Some(root_at.trunc_subsecs(6)),
@@ -127,7 +122,7 @@ async fn the_request_is_the_persons_latest_message_in_the_thread_before_the_repl
     );
     assert_eq!(
         creations
-            .request_sent_at(Uuid::from_u128(9), Uuid::from_u128(9), &person(), reply_at)
+            .request_sent_at(Uuid::from_u128(9), &person(), reply_at)
             .await
             .unwrap(),
         None
@@ -135,9 +130,7 @@ async fn the_request_is_the_persons_latest_message_in_the_thread_before_the_repl
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
-async fn a_bot_message_that_starts_its_own_thread_answers_the_persons_latest_channel_message(
-    pool: PgPool,
-) {
+async fn the_channel_request_is_the_persons_latest_message_anywhere_in_the_channel(pool: PgPool) {
     let asked_at = Utc::now() - Duration::minutes(5);
     let posted_at = asked_at + Duration::minutes(2);
     post(
@@ -169,7 +162,7 @@ async fn a_bot_message_that_starts_its_own_thread_answers_the_persons_latest_cha
 
     assert_eq!(
         PgAgentCreations::new(pool)
-            .request_sent_at(CHANNEL, bot_post, &person(), posted_at)
+            .channel_request_sent_at(CHANNEL, &person(), posted_at)
             .await
             .unwrap(),
         Some(asked_at.trunc_subsecs(6))

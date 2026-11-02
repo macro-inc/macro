@@ -73,10 +73,13 @@ impl ChannelReferenceSharePermissions for Log {
     }
 }
 
-/// What bots created for MEMBER, who asked in the thread when `asked` is set.
+/// What bots created for MEMBER, who asked in the thread when `asked` is set
+/// and elsewhere in the channel when `asked_in_channel` is.
 #[derive(Clone, Default)]
 struct Creations {
     asked: bool,
+    asked_in_channel: bool,
+    channel_lookups: Arc<Mutex<usize>>,
     created: Arc<Mutex<Vec<(BotId, ReferencedShareItem)>>>,
     lookups: Arc<Mutex<usize>>,
 }
@@ -85,18 +88,27 @@ impl AgentCreations for Creations {
     type Err = anyhow::Error;
     async fn request_sent_at(
         &self,
-        _: Uuid,
         thread_root: Uuid,
         person: &MacroUserIdStr<'static>,
         _: DateTime<Utc>,
     ) -> Result<Option<DateTime<Utc>>, Self::Err> {
-        assert_eq!(
-            thread_root,
-            Uuid::from_u128(1),
+        assert!(
+            [Uuid::from_u128(1), REPLIED_THREAD].contains(&thread_root),
             "the root message is the thread"
         );
         assert_eq!(person.as_ref(), MEMBER);
         Ok(self.asked.then(Utc::now))
+    }
+    async fn channel_request_sent_at(
+        &self,
+        channel_id: Uuid,
+        person: &MacroUserIdStr<'static>,
+        _: DateTime<Utc>,
+    ) -> Result<Option<DateTime<Utc>>, Self::Err> {
+        assert_eq!(channel_id, CHANNEL);
+        assert_eq!(person.as_ref(), MEMBER);
+        *self.channel_lookups.lock().unwrap() += 1;
+        Ok(self.asked_in_channel.then(Utc::now))
     }
     async fn created_since(
         &self,
@@ -115,6 +127,7 @@ impl AgentCreations for Creations {
 }
 
 const CHANNEL: Uuid = Uuid::from_u128(2);
+const REPLIED_THREAD: Uuid = Uuid::from_u128(9);
 const MEMBER: &str = "macro|member@example.com";
 const SENDER: &str = "macro|sender@example.com";
 const BOT: &str = "bot|00000000-0000-0000-0000-00000000b07a";
@@ -593,6 +606,57 @@ async fn a_reply_to_no_request_from_the_person_shares_nothing() {
 
     assert!(log.shares.lock().unwrap().is_empty());
     assert_eq!(*creations.lookups.lock().unwrap(), 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_top_level_agent_post_answers_the_persons_latest_channel_message() {
+    let log = Log::default();
+    let creations = Creations {
+        asked: false,
+        asked_in_channel: true,
+        ..asked_and(BotId::TEST_A, vec![document(DOCUMENT)])
+    };
+    let delivery = ChannelMessageDelivery::new(
+        repo(),
+        log.clone(),
+        log.clone(),
+        log.clone(),
+        creations.clone(),
+    );
+
+    let _ = delivery.publish(agent_post(Some(MEMBER))).await;
+
+    assert_eq!(
+        *log.shares.lock().unwrap(),
+        [(MEMBER.to_owned(), vec![DOCUMENT.to_string()])]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_agent_reply_in_a_thread_the_person_never_wrote_in_shares_nothing() {
+    let log = Log::default();
+    let creations = Creations {
+        asked: false,
+        asked_in_channel: true,
+        ..asked_and(BotId::TEST_A, vec![document(DOCUMENT)])
+    };
+    let delivery = ChannelMessageDelivery::new(
+        repo(),
+        log.clone(),
+        log.clone(),
+        log.clone(),
+        creations.clone(),
+    );
+    let mut reply = agent_post(Some(MEMBER));
+    if let MessageChange::Posted { message, .. } = &mut reply.change {
+        message.thread_id = Some(REPLIED_THREAD);
+    }
+
+    delivery.publish(reply).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(60)).await;
+
+    assert!(log.shares.lock().unwrap().is_empty());
+    assert_eq!(*creations.channel_lookups.lock().unwrap(), 0);
 }
 
 #[tokio::test(start_paused = true)]

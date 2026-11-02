@@ -30,41 +30,51 @@ impl AgentCreations for PgAgentCreations {
     #[tracing::instrument(skip(self, person), err)]
     async fn request_sent_at(
         &self,
-        channel_id: Uuid,
         thread_root: Uuid,
         person: &MacroUserIdStr<'static>,
         before: DateTime<Utc>,
     ) -> Result<Option<DateTime<Utc>>, Self::Err> {
-        // The root by primary key, replies by the (thread_id, created_at)
-        // index, and the channel fallback by the parent timeline index.
+        // The root by primary key, replies by the (thread_id, created_at) index.
         sqlx::query_scalar!(
             r#"
-            SELECT COALESCE(
-                (
-                    SELECT max(created_at)
-                    FROM (
-                        SELECT created_at
-                        FROM comms_messages
-                        WHERE id = $1 AND sender_id = $2 AND created_at < $3
-                        UNION ALL
-                        SELECT created_at
-                        FROM comms_messages
-                        WHERE thread_id = $1 AND sender_id = $2 AND created_at < $3
-                          AND deleted_at IS NULL
-                    ) in_thread
-                ),
-                (
-                    SELECT max(created_at)
-                    FROM comms_messages
-                    WHERE parent_entity_type = 'channel' AND parent_entity_id = $4
-                      AND sender_id = $2 AND created_at < $3 AND deleted_at IS NULL
-                )
-            ) AS "sent_at"
+            SELECT max(created_at) AS "sent_at"
+            FROM (
+                SELECT created_at
+                FROM comms_messages
+                WHERE id = $1 AND sender_id = $2 AND created_at < $3
+                UNION ALL
+                SELECT created_at
+                FROM comms_messages
+                WHERE thread_id = $1 AND sender_id = $2 AND created_at < $3
+                  AND deleted_at IS NULL
+            ) request
             "#,
             thread_root,
             person.as_ref(),
             before,
+        )
+        .fetch_one(&self.pool)
+        .await
+    }
+
+    #[tracing::instrument(skip(self, person), err)]
+    async fn channel_request_sent_at(
+        &self,
+        channel_id: Uuid,
+        person: &MacroUserIdStr<'static>,
+        before: DateTime<Utc>,
+    ) -> Result<Option<DateTime<Utc>>, Self::Err> {
+        // The parent timeline index, filtered to the person.
+        sqlx::query_scalar!(
+            r#"
+            SELECT max(created_at) AS "sent_at"
+            FROM comms_messages
+            WHERE parent_entity_type = 'channel' AND parent_entity_id = $1
+              AND sender_id = $2 AND created_at < $3 AND deleted_at IS NULL
+            "#,
             channel_id.to_string(),
+            person.as_ref(),
+            before,
         )
         .fetch_one(&self.pool)
         .await
