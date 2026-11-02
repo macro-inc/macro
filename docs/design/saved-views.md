@@ -20,7 +20,7 @@ main Tasks screen.
 | Item access | Sharing never grants access to matching entities. |
 | Management | Only the owner can rename, update, delete, share, or unshare. |
 | Relative people | “Me” means the current viewer; explicitly selected people remain fixed. |
-| Contents | Filters, selected layout, grouping, and ordered sorting, including implicit person conditions. No search text or scroll state. |
+| Contents | Filters, selected layout, grouping, ordered sorting, and task-list property visibility, including implicit person conditions. No search text or scroll state. |
 | Editing | Explicit Save changes, Reset, and Duplicate. |
 | Navigation | Leaving discards temporary edits without a confirmation prompt. |
 | Creation | Desktop sidebar `+` or the shared empty-state Create view action starts an unsaved view; mobile also captures changed filters, layout, grouping, or sort in the filter drawer. |
@@ -132,7 +132,7 @@ Keep the existing JSON `config` column. New consumers use a versioned envelope:
 - `kind`: a stable consumer identifier, initially `tasks`.
 - `version`: the consumer's definition version, initially `1` for Tasks.
 - `filters`: that consumer's declarative filter definition.
-- Task-specific `layout`, `groupBy`, and `sort`: selected layout, grouping, and ordered sort fields/directions.
+- Task-specific `layout`, `groupBy`, `sort`, and `propertyDisplay`: selected layout, grouping, ordered sort fields/directions, and list property visibility.
 
 The backend validates generic write bounds and stores the configuration without
 interpreting Task fields. It can filter lists by `config.kind`. The consumer owns
@@ -155,6 +155,15 @@ The proposed shape below uses explanatory UUID placeholders, not real IDs:
   "layout": "board",
   "groupBy": "priority",
   "sort": [{ "id": "updated_at", "reversed": false }],
+  "propertyDisplay": {
+    "priority": "hide_when_empty",
+    "tags": "show",
+    "dueDate": "show",
+    "project": "show",
+    "assignees": "show",
+    "updated": "show",
+    "createdBy": "show"
+  },
   "filters": {
     "statusOptionIds": ["<in-progress-option-uuid>"],
     "priorityOptionIds": [],
@@ -193,13 +202,21 @@ requests. Search text is not saved, but search results must satisfy every saved
 filter. In particular, search must use stored tag bindings rather than silently
 dropping tags absent from the viewer's metadata. If a search backend cannot
 express a condition, block that search with an explicit unsupported state;
-never run it with fewer conditions. Layout, grouping, and sort changes dirty the
+never run it with fewer conditions. Layout, grouping, sort, and property-display changes dirty the
 saved definition and participate in Save changes, Reset, and Duplicate. Missing
 layout, grouping, and sort use List, Priority, and updated-at descending defaults.
 Unsupported layouts fall back to List; unsupported grouping falls back to Priority;
 unsupported sort entries are skipped, preserving supported order,
 with updated-at descending used when no supported sort remains. Mobile and
 feature-flag fallbacks never replace the raw selected layout on save.
+
+`propertyDisplay` defaults every property to `show` when absent. Priority, Due date,
+Project, and Assignees accept `show`, `hide_when_empty`, and `hide`; Tags, Updated,
+and Created by accept `show` and `hide`. Status and the title remain visible.
+Unsaved task lists use account-scoped device preferences; saved-view edits never
+write those preferences. New drafts capture the current device choices. Empty-only
+hiding suppresses the desktop placeholder without shifting columns and removes the
+empty detail on phones. Invalid fields retain diagnostics while valid fields apply.
 
 Apply supported conditions immediately, omitting unsupported or malformed entries
 and conflicting tag bindings. Show a danger-colored banner above the results that

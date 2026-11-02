@@ -4,6 +4,12 @@ import { z } from 'zod';
 import { TASK_DEFAULT_GROUP_BY } from '../constants';
 import { TASK_DUE_DATE_BUCKETS } from '../core/task-due-date';
 import { isProjectTab } from '../core/task-navigation';
+import {
+  DEFAULT_TASK_PROPERTY_DISPLAY,
+  readTaskPropertyDisplay,
+  type TaskPropertyDisplay,
+  taskPropertyDisplaySchema,
+} from '../core/task-property-display';
 import type { TasksViewState, TaskTab } from '../types';
 import {
   TASK_PRIORITY_OPTIONS,
@@ -104,6 +110,9 @@ const taskSavedViewSchema = z
     layout: layoutSchema.default('list'),
     groupBy: groupBySchema.default(TASK_DEFAULT_GROUP_BY['team-tasks']),
     sort: sortSchema.default([{ id: 'updated_at', reversed: false }]),
+    propertyDisplay: taskPropertyDisplaySchema.default(
+      DEFAULT_TASK_PROPERTY_DISPLAY
+    ),
   })
   .strict();
 const readableTaskSavedViewSchema = taskSavedViewSchema
@@ -138,6 +147,7 @@ function canonical(config: TaskSavedViewConfig): TaskSavedViewConfig {
     layout: config.layout,
     groupBy: config.groupBy,
     sort: config.sort.map((item) => ({ ...item, reversed: !!item.reversed })),
+    propertyDisplay: taskPropertyDisplaySchema.parse(config.propertyDisplay),
     filters: {
       statusOptionIds: uniqueSorted(filters.statusOptionIds, String),
       priorityOptionIds: uniqueSorted(filters.priorityOptionIds, String),
@@ -198,6 +208,7 @@ export function readTaskSavedView(value: unknown): TaskSavedViewRead {
         layout: 'list',
         groupBy: TASK_DEFAULT_GROUP_BY['team-tasks'],
         sort: [{ id: 'updated_at', reversed: false }],
+        propertyDisplay: { ...DEFAULT_TASK_PROPERTY_DISPLAY },
         filters: {
           statusOptionIds: [],
           priorityOptionIds: [],
@@ -279,6 +290,7 @@ export function readTaskSavedView(value: unknown): TaskSavedViewRead {
         ? groupBy.data
         : TASK_DEFAULT_GROUP_BY['team-tasks'],
       sort,
+      propertyDisplay: readTaskPropertyDisplay(readable.data.propertyDisplay),
       ...(dueDate.success && dueDate.data && { dueDate: dueDate.data }),
       filters: {
         statusOptionIds: readEntries(
@@ -331,6 +343,7 @@ export function captureTaskSavedView(input: {
   layout?: TasksViewState['layout'];
   groupBy?: TasksViewState['groupBy'];
   sort?: TasksViewState['sort'];
+  propertyDisplay?: TaskPropertyDisplay;
   dueDate?: TasksViewState['dueDate'];
   context: TaskFacetContext;
 }): Result<TaskSavedViewConfig, string> {
@@ -360,6 +373,7 @@ export function captureTaskSavedView(input: {
     layout: input.layout,
     groupBy: input.groupBy,
     sort: input.sort,
+    propertyDisplay: input.propertyDisplay,
     ...(input.dueDate && { dueDate: input.dueDate }),
     filters: {
       statusOptionIds: (input.facets.status ?? []).map((id) =>
@@ -382,6 +396,7 @@ export function materializeTaskSavedView(config: TaskSavedViewConfig): {
   layout: TasksViewState['layout'];
   groupBy: TasksViewState['groupBy'];
   sort: TasksViewState['sort'];
+  propertyDisplay: TaskPropertyDisplay;
   dueDate?: TasksViewState['dueDate'];
 } {
   const filters = config.filters;
@@ -394,6 +409,7 @@ export function materializeTaskSavedView(config: TaskSavedViewConfig): {
     layout: config.layout,
     groupBy: config.groupBy,
     sort: config.sort.map((item) => ({ ...item })),
+    propertyDisplay: { ...config.propertyDisplay },
     dueDate: config.dueDate ? { ...config.dueDate } : undefined,
     facets: {
       status: filters.statusOptionIds.map((id) =>

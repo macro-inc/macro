@@ -115,7 +115,7 @@ export function TaskListHeader(props: {
   columns: readonly TaskGridColumnId[];
   onTimestampWidthChange?: (width: number) => void;
 }) {
-  const showTaskProject = () => props.columns.includes('initiative');
+  const visible = (column: TaskGridColumnId) => props.columns.includes(column);
   return (
     <div
       role="row"
@@ -130,45 +130,53 @@ export function TaskListHeader(props: {
       >
         Task
       </span>
-      <SortableHeader
-        label="Due date"
-        area="dueDate"
-        sortId="due_date_earliest"
-        reverseSortId="due_date_latest"
-        narrowIcon={<CalendarIcon class="size-4" />}
-      />
-      <Show when={showTaskProject()}>
+      <Show when={visible('dueDate')}>
+        <SortableHeader
+          label="Due date"
+          area="dueDate"
+          sortId="due_date_earliest"
+          reverseSortId="due_date_latest"
+          narrowIcon={<CalendarIcon class="size-4" />}
+        />
+      </Show>
+      <Show when={visible('initiative')}>
         <SortableHeader
           label="Project"
           area="initiative"
           narrowIcon={<ProjectIcon class="size-4" />}
         />
       </Show>
-      <SortableHeader
-        label="Assignees"
-        area="assignees"
-        class="@max-[840px]/u-list:justify-start @max-[840px]/u-list:pl-1"
-        narrowIcon={<UsersIcon class="size-4" />}
-      />
-      <SortableHeader
-        label="Updated"
-        area="timestamp"
-        sortId="updated_at"
-        class="task-updated-cell"
-        align="end"
-        narrowIcon={<ClockIcon class="size-4" />}
-        onWidthChange={props.onTimestampWidthChange}
-      />
-      <span
-        role="columnheader"
-        aria-label="Created by"
-        class="task-creator-cell ms-2 flex items-center justify-end"
-        style={{ 'grid-area': 'createdBy' }}
-      >
-        <Tooltip label="Created by" as="span" tabIndex={0}>
-          <UserPlusIcon class="size-4" role="img" aria-label="Created by" />
-        </Tooltip>
-      </span>
+      <Show when={visible('assignees')}>
+        <SortableHeader
+          label="Assignees"
+          area="assignees"
+          class="@max-[840px]/u-list:justify-start @max-[840px]/u-list:pl-1"
+          narrowIcon={<UsersIcon class="size-4" />}
+        />
+      </Show>
+      <Show when={visible('timestamp')}>
+        <SortableHeader
+          label="Updated"
+          area="timestamp"
+          sortId="updated_at"
+          class="task-updated-cell"
+          align="end"
+          narrowIcon={<ClockIcon class="size-4" />}
+          onWidthChange={props.onTimestampWidthChange}
+        />
+      </Show>
+      <Show when={visible('createdBy')}>
+        <span
+          role="columnheader"
+          aria-label="Created by"
+          class="task-creator-cell ms-2 flex items-center justify-end"
+          style={{ 'grid-area': 'createdBy' }}
+        >
+          <Tooltip label="Created by" as="span" tabIndex={0}>
+            <UserPlusIcon class="size-4" role="img" aria-label="Created by" />
+          </Tooltip>
+        </span>
+      </Show>
     </div>
   );
 }

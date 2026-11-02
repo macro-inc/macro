@@ -148,9 +148,7 @@ it('applies mobile group and sort changes in a sheet and restores focus on dismi
   fireEvent.click(trigger);
   const status = await screen.findByRole('radio', { name: 'Status' });
   await waitFor(() =>
-    expect(document.activeElement).toBe(
-      screen.getByRole('radio', { name: 'Priority' })
-    )
+    expect(document.activeElement).toBe(screen.getByRole('dialog'))
   );
   fireEvent.click(status);
   fireEvent.click(screen.getByRole('radio', { name: 'Created' }));

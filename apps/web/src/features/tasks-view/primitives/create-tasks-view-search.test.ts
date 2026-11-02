@@ -3,6 +3,7 @@ import { createStore } from 'solid-js/store';
 import { afterEach, expect, it, vi } from 'vitest';
 import type { SavedView } from '../../saved-views/core/saved-view';
 import { TASK_DEFAULT_GROUP_BY } from '../constants';
+import { DEFAULT_TASK_PROPERTY_DISPLAY } from '../core/task-property-display';
 import { DEFAULT_TASK_FACET_SELECTION } from '../filters/task-facets';
 import {
   captureTaskSavedView,
@@ -44,6 +45,7 @@ function setup(
       groupBy: 'priority',
       sort: [{ id: 'updated_at' }],
       facets: { priority: ['high'] },
+      propertyDisplay: { ...DEFAULT_TASK_PROPERTY_DISPLAY },
       collapsedGroupIds: ['collapsed'],
       collapsedSidebarSectionIds: [],
       ...options.state,
@@ -415,6 +417,7 @@ it('keeps edits reverted during a save until confirmed presentation is explicitl
       groupBy: 'none',
       sort: [{ id: 'updated_at' }],
       facets: {},
+      propertyDisplay: { ...DEFAULT_TASK_PROPERTY_DISPLAY },
       collapsedGroupIds: [],
       collapsedSidebarSectionIds: [],
     });
@@ -439,12 +442,14 @@ it('keeps edits reverted during a save until confirmed presentation is explicitl
   fixture.setState('dueDate', { type: 'range', start: '2026-10-21' });
   fixture.setState('layout', 'board');
   fixture.setState('groupBy', 'assignee');
+  fixture.setState('propertyDisplay', 'priority', 'hide_when_empty');
   const submitted = fixture.draft.capture();
   if (submitted.isErr()) throw new Error(submitted.error);
   const release = fixture.draft.retain();
   fixture.setState('dueDate', { type: 'today' });
   fixture.setState('layout', 'list');
   fixture.setState('groupBy', 'priority');
+  fixture.setState('propertyDisplay', 'priority', 'hide');
   const confirmed = { ...fixture.record, revision: 2, config: submitted.value };
   fixture.setSource(confirmed);
   expect(fixture.state.layout).toBe('list');
@@ -452,11 +457,13 @@ it('keeps edits reverted during a save until confirmed presentation is explicitl
   release();
   expect(fixture.state.layout).toBe('list');
   expect(fixture.state.groupBy).toBe('priority');
+  expect(fixture.state.propertyDisplay.priority).toBe('hide');
   expect(fixture.draft.view()).toMatchObject({ kind: 'saved', dirty: true });
   fixture.draft.reset();
   expect(fixture.state.layout).toBe('board');
   expect(fixture.state.groupBy).toBe('assignee');
   expect(fixture.state.dueDate).toEqual({ type: 'range', start: '2026-10-21' });
+  expect(fixture.state.propertyDisplay.priority).toBe('hide_when_empty');
   expect(fixture.draft.view()).toMatchObject({ kind: 'saved', dirty: false });
 });
 
@@ -472,6 +479,7 @@ it.each(['my-tasks', 'created-by-me', 'team-tasks'] as const)(
         groupBy: TASK_DEFAULT_GROUP_BY[tab],
         sort: [{ id: 'updated_at', reversed: false }],
         facets: DEFAULT_TASK_FACET_SELECTION,
+        propertyDisplay: { ...DEFAULT_TASK_PROPERTY_DISPLAY },
         collapsedGroupIds: [],
         collapsedSidebarSectionIds: [],
       });

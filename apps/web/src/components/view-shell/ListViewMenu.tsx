@@ -23,6 +23,7 @@ export type ListViewMenuProps<TGroup extends string, TSort extends string> = {
   open?: boolean;
   onOpenChange?: (open: boolean) => void;
   triggerRef?: (element: HTMLButtonElement) => void;
+  children?: JSX.Element;
 };
 
 function selectionLabel<T extends string>(selection: ViewSelection<T>) {
@@ -87,7 +88,7 @@ function DesktopOptions<T extends string>(props: {
             {option.icon?.()}
             <span class="flex-1">{option.label}</span>
             <Dropdown.ItemIndicator>
-              <CheckIcon class="size-3.5" />
+              <CheckIcon class="size-3.5 text-accent" />
             </Dropdown.ItemIndicator>
           </Dropdown.RadioItem>
         )}
@@ -122,7 +123,7 @@ function MobileSelection<T extends string>(props: {
                 {option.icon?.()}
                 <span class="flex-1">{option.label}</span>
                 <Show when={props.selection.value === option.id}>
-                  <CheckIcon class="size-4 shrink-0" />
+                  <CheckIcon class="size-4 shrink-0 text-accent" />
                 </Show>
               </MobileDrawer.Item>
             )}
@@ -189,6 +190,7 @@ export function ListViewMenu<TGroup extends string, TSort extends string>(
                 )}
               </Show>
             </Dropdown.Group>
+            {props.children}
           </Dropdown.Content>
         </Dropdown>
       }
@@ -246,6 +248,7 @@ export function ListViewMenu<TGroup extends string, TSort extends string>(
                   />
                 )}
               </Show>
+              {props.children}
             </MobileDrawer.ScrollBody>
           </MobileDrawer.Content>
         </MobileDrawer.Portal>

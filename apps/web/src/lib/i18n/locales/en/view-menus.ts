@@ -71,6 +71,12 @@ export default {
   groupList: 'Group list',
   filterList: 'Filter list',
   clearFilters: 'Clear filters',
+  properties: 'Properties',
+  showProperty: 'Show',
+  hideWhenEmpty: 'Hide when empty',
+  hideProperty: 'Hide',
+  assignees: 'Assignees',
+  propertyDisplaySummary: 'Properties: {{settings}}',
 
   // Filter menu
   filter: 'Filter',

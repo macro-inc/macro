@@ -37,6 +37,10 @@ import {
   DeleteSavedViewDialog,
   SavedViewDialog,
 } from '../../saved-views/views/saved-view-dialogs';
+import {
+  TASK_DISPLAY_PROPERTIES,
+  taskPropertyModeLabel,
+} from '../components/TaskPropertyMenu';
 import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
 import { TASK_DUE_DATE_BUCKETS } from '../core/task-due-date';
 import {
@@ -113,6 +117,14 @@ function TaskSavedViewSummary(props: {
               `${TASK_SORT_OPTIONS.find((option) => option.id === sort.id)?.label} (${sort.id.startsWith('due_date_') ? 'missing last' : sort.id === 'status' || sort.id === 'priority' ? (sort.reversed ? 'reverse order' : 'option order') : sort.reversed ? 'oldest first' : 'newest first'})`
           )
           .join(', ') || 'Default'}
+      </p>
+      <p>
+        {t('viewMenus.propertyDisplaySummary', {
+          settings: TASK_DISPLAY_PROPERTIES.map(
+            (property) =>
+              `${property.label}: ${taskPropertyModeLabel(props.config.propertyDisplay[property.id])}`
+          ).join(', '),
+        })}
       </p>
       <Show when={state.search.trim()}>
         <p>Search text is not included.</p>
@@ -220,7 +232,11 @@ function useCreateTaskSavedViewDialog(owner = getOwner()) {
                 groupBy: restored.groupBy,
                 sort: restored.sort,
                 dueDate: restored.dueDate,
+                propertyDisplay: restored.propertyDisplay,
               });
+            } else {
+              // Move the live device choices into the new saved-view draft.
+              setState('propertyDisplay', { ...state.propertyDisplay });
             }
             selectCreatedSavedView(created.id);
           });

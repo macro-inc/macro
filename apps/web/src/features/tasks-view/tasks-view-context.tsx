@@ -60,10 +60,16 @@ import { TASK_DEFAULT_GROUP_BY } from './constants';
 import { toTaskBoardGrouping } from './core/task-board';
 import type { DateBucketBoundaries } from './core/task-due-date';
 import { isProjectTab } from './core/task-navigation';
+import {
+  DEFAULT_TASK_PROPERTY_DISPLAY,
+  type TaskPropertyDisplayMode,
+  type TaskPropertyId,
+} from './core/task-property-display';
 import type { TaskFacetContext } from './filters/task-facets';
 import { DEFAULT_TASK_FACET_SELECTION } from './filters/task-facets';
 import { createTasksViewPersistence } from './persistence';
 import { createDateBucketBoundariesSignal } from './primitives/create-date-bucket-boundaries';
+import { createTaskPropertyDisplay } from './primitives/create-task-property-display';
 import {
   createTaskSavedViewDraft,
   type TaskSavedViewDraft,
@@ -143,6 +149,10 @@ export type TasksViewContext = {
   showTaskProject: Accessor<boolean>;
   ganttEnabled: Accessor<boolean>;
   setState: SetStoreFunction<TasksViewState>;
+  setPropertyDisplay: (
+    property: TaskPropertyId,
+    mode: TaskPropertyDisplayMode
+  ) => void;
   selectedTask: Accessor<TaskDetailTarget | undefined>;
   source: TasksDataSource;
   list: TasksListController;
@@ -221,6 +231,10 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
           initial.facets ?? DEFAULT_TASK_FACET_SELECTION
         ),
         dueDate: initial.dueDate,
+        propertyDisplay: {
+          ...DEFAULT_TASK_PROPERTY_DISPLAY,
+          ...initial.propertyDisplay,
+        },
         collapsedGroupIds: [...(initial.collapsedGroupIds ?? [])],
         collapsedSidebarSectionIds: [
           ...(initial.collapsedSidebarSectionIds ?? []),
@@ -238,12 +252,21 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const [persistedState, setState] = props.scopeKey
     ? withSplitPanelOwner(ownedSlot('view-state'), createState)
     : createState();
+  const savedViewActive = () =>
+    Boolean(props.savedViewSource && (newSavedView() || tabSearch.savedView));
+  const propertyDisplay = createTaskPropertyDisplay({
+    userId,
+    savedViewActive,
+    saved: () => persistedState.propertyDisplay,
+    setSaved: (display) => setState('propertyDisplay', reconcile(display)),
+  });
   // Rollout fallbacks must not overwrite saved tab or layout selections.
   const state = mergeProps(persistedState, {
     get savedViewActive() {
-      return Boolean(
-        props.savedViewSource && (newSavedView() || tabSearch.savedView)
-      );
+      return savedViewActive();
+    },
+    get propertyDisplay() {
+      return propertyDisplay.value();
     },
     get layout() {
       if (
@@ -369,6 +392,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     });
   const startSavedView = () =>
     batch(() => {
+      setState('propertyDisplay', reconcile(propertyDisplay.preferences()));
       setNewSavedView(true);
       applyTaskFacets('team-tasks', DEFAULT_TASK_FACET_SELECTION);
       setState('dueDate', undefined);
@@ -389,14 +413,19 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       selectedId: () => tabSearch.savedView,
       viewerId: userId,
       creating: () => Boolean(newSavedView()),
-      state: persistedState,
+      state: mergeProps(persistedState, {
+        get propertyDisplay() {
+          return state.propertyDisplay;
+        },
+      }),
       facetContext,
-      apply: ({ facets, layout, groupBy, sort, dueDate }) =>
+      apply: ({ facets, layout, groupBy, sort, dueDate, propertyDisplay }) =>
         batch(() => {
           applyTaskFacets('team-tasks', facets);
           setState('dueDate', dueDate);
           setState('layout', layout);
           setState('groupBy', groupBy);
+          setState('propertyDisplay', reconcile(propertyDisplay));
           setState(
             'sort',
             sort.map((item) => ({ ...item }))
@@ -680,6 +709,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     showTaskProject,
     ganttEnabled,
     setState: setStateWithSearch,
+    setPropertyDisplay: propertyDisplay.set,
     selectedTask,
     source,
     list,

@@ -8,10 +8,11 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 
 - `tasks-view.tsx` and `tasks-view-context.tsx`: independent saved-view list/detail query composition, filter state, router integration, and task-list source ownership.
 - `filters/task-saved-view.ts`: strict capture and permissive reading of supported filters, with diagnostics for skipped conditions.
-- `primitives/create-task-saved-view-draft.ts`: confirmed filter/due-date/layout/grouping/sort snapshots, dirty state, skipped-setting diagnostics, and revision-aware reconciliation; receives only the detail source, without navigation, mutation, or dialog state.
+- `primitives/create-task-saved-view-draft.ts`: confirmed filter/due-date/layout/grouping/sort/property-display snapshots, dirty state, skipped-setting diagnostics, and revision-aware reconciliation; receives only the detail source, without navigation, mutation, or dialog state.
 - `views/task-saved-views.tsx`: compound sidebar/mobile lists, filter summaries, imperative action dialogs, and request-scoped write/reload completion; the Tasks host owns selection and navigation.
 - `queries/use-tasks-query.ts`: shared list, board, Gantt, and search filtering.
-- `components/TasksViewMenu.tsx`: adapts task state to the shared `ListViewMenu`; desktop combines layout, grouping, and sorting, while touch shows grouping and sorting in a separate View sheet.
+- `components/TasksViewMenu.tsx`: adapts task state to the shared `ListViewMenu`; desktop combines layout, grouping, sorting, and list property visibility, while touch keeps its separate View sheet.
+- `core/task-property-display.ts` and `primitives/create-task-property-display.ts`: property modes and account-scoped device preferences, separate from saved-view drafts.
 
 ## Gotchas
 
@@ -28,14 +29,17 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Keep leading task status icons at 18px and priority icons at 16px desktop/20px phone without flex shrinking; use 16px Status/Priority selector icons, the shared 12px property default elsewhere unless a surface overrides it, and preserve 16px group-header carets and existing hit targets.
 - Give list Due date glyphs the shared 12px base size and the existing 16px compact-column override; never leave calendar SVG dimensions implicit.
 - Use the matching `task-status-*` theme token for each status icon and group-header tint; default Completed to accent while preserving explicit theme overrides and independent global colors.
-- Edit priority then status through leading `TaskPropertyControl` icons on desktop and mobile; place status directly beside the title, and keep separate Status/Priority columns and duplicate trailing mobile pills removed.
+- When enabled, edit priority before the always-visible status through leading `TaskPropertyControl` icons on desktop and mobile; keep status beside the title without duplicate Status/Priority columns or mobile pills.
 - Order trailing task properties as Due date, Project, then Assignees in wide and narrow rows and title pills; show both avatars for exactly two compact assignees, otherwise one avatar plus the remaining count, anchored left in a fixed-width slot so overflow grows right.
 - At container widths up to 840px, use tooltip-labeled icons for Project, Assignees, Due date, and Updated headers; keep Project at 32px and Assignees at 44px, with the assignee header aligned to the first avatar and collapsed property pills padded 4px on both axes.
 - Size Updated from its measured, untruncated header with a 56px content minimum for single-line timestamps; share the width across rows, retain existing Created by spacing, and fade/collapse Updated over 160ms at 600px, disabling motion for reduced-motion preferences.
-- Keep Created by visible above 600px alongside Updated, with a 16px user-plus header icon, unclipped 20px owner avatars at container widths up to 840px, and a keyboard-focusable “Created by” tooltip; show the title's shared badge only while the creator column is hidden, with a 4px layout gap after the title.
+- When enabled, keep Created by visible above 600px alongside Updated, with a 16px user-plus header icon, unclipped 20px owner avatars at container widths up to 840px, and a keyboard-focusable “Created by” tooltip; show the title's shared badge while the creator column is hidden, with a 4px layout gap after the title.
 - Scope task-only column widths with `.task-grid-row.task-grid-icon-creator` so shared Soup `.task-grid-row` rules cannot override them when stylesheets load in a different order.
 - Pass enabled grid columns as a typed ordered array; default Project before Assignees and derive full-row spans from the same array.
 - Include each visible task cell's 8px leading inset inside its track and keep the grid's column gap at zero so hidden metadata columns reserve no space.
+- Give Priority, Due date, Project, and Assignees Show / Hide when empty / Hide modes; give Tags, Updated, and Created by Show / Hide, keep Status and title visible, and default all configurable properties to Show.
+- Keep empty-only hiding within the shared desktop grid track; remove that detail entirely in phone rows, and never reintroduce desktop-only metadata on phones.
+- Remember unsaved-list property visibility per account on the device, synchronize mounted task lists, and keep saved definitions and drafts isolated from those preferences; render View-menu checkmarks in accent ink.
 - Reuse `PropertyEmptyIcon` for absent values in list rows, board cards, and group or board-column headers: 30%-opacity wide priority bars, a dashed user circle, a corner-dashed project cube, and a slashed calendar for no due date; use the regular cube for set projects.
 - Use shared ghost-button interaction styling for editable list properties; dim empty icons and labels without applying opacity twice to No priority.
 - Register task-row collapse items with the shared `src/components/priority-collapse/` controller and sensor, not split-layout wrappers.
@@ -43,14 +47,14 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 - Keep the tag chip or collapsed multi-tag overflow after the title on phone rows instead of dropping tags with the desktop columns.
 - Tab and Shift+Tab cycle sidebar tabs only over a list. Keep `TasksSidebar`'s key-time check for an open project or task: the sidebar remounts whenever the view crosses its layout breakpoint, so it registers after an open pane and eclipses any override the pane holds.
 
-- Save filters, relative due dates or valid calendar bounds, selected layout, grouping, and ordered sort directions; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.
+- Save filters, relative due dates or valid calendar bounds, selected layout, grouping, ordered sort directions, and property-display modes; keep text search and scroll state local, and capture implicit person conditions as normal OR-valued facets.
 - Preserve stable tag/property bindings when labels disappear; skip unsupported or malformed conditions without discarding supported filters.
 - Label the semantic viewer token Me, explain it with “Matches whoever opens this saved view,” and resolve it only when executing a filter; a selected fixed user stays fixed.
 - Keep saved views on All Tasks with every restriction in editable facets; accept only the final v1 person-filter format, without a separate Scope control.
 - Do not persist temporary saved-view filters, including due-date predicates, in entry snapshots; detail navigation discards those edits but retains the saved-view ID.
 - Pass saved-view state through the existing Tasks search codec; split URLs namespace it as `s0.tasks.savedView`.
 - Keep embedded Project/CRM task consumers free of saved-view management.
-- Show filled Save view and Save changes actions; place mobile creation in a borderless, edge-to-edge info banner overlaying filter content immediately above the footer with unpunctuated copy and a leading bookmark icon on its button only when filters, due date, layout, grouping, or sort differ from the built-in tab defaults, excluding search.
+- Show filled Save view and Save changes actions; place mobile creation in a borderless, edge-to-edge info banner overlaying filter content immediately above the footer with unpunctuated copy and a leading bookmark icon on its button only when filters, due date, layout, grouping, sort, or property visibility differ from the built-in defaults, excluding search.
 - Render Save view and draft Cancel as separate standalone buttons; preserve their existing dialog and cancellation behavior.
 - Keep sidebar actions targeted to their own record; Edit combines naming and sharing without saving temporary settings, and Duplicate starts with a prefilled private copy and warns before omitting unsupported settings.
 - Keep saved-view names and menus in the mobile picker; overlay creation above the filter drawer footer on a drawer-colored backing without blocking the last scrollable controls, and put Save changes at the footer's right edge, opposite Clear all.

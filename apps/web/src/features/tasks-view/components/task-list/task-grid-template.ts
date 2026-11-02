@@ -1,6 +1,7 @@
 import { SYSTEM_PROPERTY_IDS } from '@property/constants';
 import { DataType } from '@service-storage/generated/schemas/dataType';
 import { EntityType } from '@service-storage/generated/schemas/entityType';
+import type { TaskPropertyDisplay } from '../../core/task-property-display';
 
 export type TaskGridColumnId =
   | 'indicator'
@@ -105,6 +106,22 @@ export const TASK_LIST_COLUMNS = [
   'timestamp',
   'createdBy',
 ] as const satisfies readonly TaskGridColumnId[];
+
+export function taskListColumns(
+  display: TaskPropertyDisplay,
+  showProject: boolean
+) {
+  const visible = {
+    indicator: true,
+    content: true,
+    dueDate: display.dueDate !== 'hide',
+    initiative: showProject && display.project !== 'hide',
+    assignees: display.assignees !== 'hide',
+    timestamp: display.updated !== 'hide',
+    createdBy: display.createdBy !== 'hide',
+  };
+  return TASK_LIST_COLUMNS.filter((column) => visible[column]);
+}
 
 export function taskGridTemplate(
   columns: readonly TaskGridColumnId[] = DEFAULT_TASK_GRID_COLUMNS

@@ -5,10 +5,12 @@ import {
 } from '@app/components/view-shell/ListViewMenu';
 import { t } from '@app/lib/i18n';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
+import { Show } from 'solid-js';
 import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
 import { TASK_BOARD_GROUP_OPTIONS } from '../core/task-board';
 import { useTasksView } from '../tasks-view-context';
 import type { TaskGroupBy, TaskSortId } from '../types';
+import { TaskPropertyMenu } from './TaskPropertyMenu';
 
 export function TasksViewMenu(
   props: Pick<
@@ -16,8 +18,15 @@ export function TasksViewMenu(
     'open' | 'onOpenChange' | 'triggerRef'
   >
 ) {
-  const { state, setPrimarySort, setState, projectsEnabled, ganttEnabled } =
-    useTasksView();
+  const {
+    state,
+    setPrimarySort,
+    setState,
+    setPropertyDisplay,
+    projectsEnabled,
+    showTaskProject,
+    ganttEnabled,
+  } = useTasksView();
   const groupOptions = () => {
     if (state.layout !== 'board') return TASK_GROUP_OPTIONS;
     return TASK_GROUP_OPTIONS.filter(
@@ -56,6 +65,14 @@ export function TasksViewMenu(
           ? t('viewMenus.searchOrderDescription')
           : undefined,
       }}
-    />
+    >
+      <Show when={state.layout === 'list'}>
+        <TaskPropertyMenu
+          display={state.propertyDisplay}
+          showProject={showTaskProject()}
+          onChange={setPropertyDisplay}
+        />
+      </Show>
+    </ListViewMenu>
   );
 }
