@@ -12,7 +12,7 @@ use sqlx::{Pool, Postgres};
 use std::sync::Arc;
 use uuid::Uuid;
 
-const USER_1: &str = "macro|user-1@test.com";
+const USER_1: &str = "macro|user-1@example.com";
 const DOC_A: &str = "11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const DOC_B: &str = "11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 const DOC_C: &str = "11111111-cccc-cccc-cccc-cccccccccccc";
