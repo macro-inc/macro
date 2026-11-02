@@ -735,9 +735,11 @@ raise `min-native-build.json` to the first build with it, or handle
 
 Keep `nix/tauri-desktop.nix` in sync with generated WASM dependencies: desktop
 releases run Vite directly and do not call `just build-tauri` or `build-wasm`.
-Build and copy the agent-fold JavaScript glue and WASM before Vite runs, and
-check that both appear in the output. Without them, Vite leaves the worker's
-relative imports unchanged and Tauri can serve HTML for the missing module.
+A new `build-*-wasm` package under `src/lib/core/` gets an entry in
+`coreWasmPackages`, which builds its JavaScript glue and WASM before Vite runs
+and checks that both appear in the output. Without them, Vite leaves the
+loader's relative imports unchanged and Tauri serves HTML for the missing
+module, so that file type fails to open on desktop.
 
 ## macOS desktop runtime: Chromium (CEF)
 `tauri/desktop-cef` builds the shipped macOS app with Chromium in its own Cargo
