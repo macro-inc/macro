@@ -121,13 +121,15 @@ function rowEntity(
   entity: EntityData,
   notifications: UnifiedNotification[]
 ): InboxRowContent['entity'] {
-  const withNotifications = { ...entity, notifications: () => notifications };
+  const read = () => notifications;
   const [newest] = notifications;
-  if (!newest || entity.type !== 'channel') return withNotifications;
+  if (!newest || entity.type !== 'channel') {
+    return { ...entity, notifications: read };
+  }
   const { messageId, threadId } = getChannelNotificationParams(newest);
   return messageId
-    ? { ...withNotifications, target: { messageId, threadId } }
-    : withNotifications;
+    ? { ...entity, notifications: read, target: { messageId, threadId } }
+    : { ...entity, notifications: read };
 }
 
 /**
