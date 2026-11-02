@@ -53,6 +53,6 @@ When the user asks a question about their data or asks for a chart, answer with 
 1. Check the SELECT with `QueryDatabase` and read the numbers.
 2. Save exactly that SQL with `SaveDatabaseQuery`, passing `databaseId`, a short `title`, the user's question as `prompt`, and a `displayMode`: `scalar` for one number, `table` for rows, or `bar`, `line`, `area`, `scatter` or `pie` with `chart: {x, y}` naming result columns by their `AS` aliases (`color` splits one `y` series by a third column; `stack` stacks bar or area series).
 3. Paste the returned `markdown`, the `<m-db-query>…</m-db-query>` block, verbatim into your reply beside a sentence stating the answer. It renders as a live number, table or chart that re-runs for each viewer with their permissions.
-4. When the user asks to put it in a document, paste the same block into the document with `CreateDocument` or `EditDocument`, when those tools are available.
+4. When the user asks to put it in a document, paste the same block into the document with `CreateDocument`, or quote it verbatim in `EditDocument`'s `instructions`, when those tools are available. `EditDocument` can also restyle a block already in a document (chart type, title, height) and switch an embedded database to another table or view by its `tableId`/`viewId`.
 
 Never hand-write or edit an `<m-db-query>` block: save a new question for a changed one. A query result, a saved question, and a document containing its block are different outcomes: say which happened.
