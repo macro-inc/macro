@@ -1,4 +1,5 @@
 import type { ListFilterGroup } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
 import { match } from 'ts-pattern';
 import {
   INBOX_CATEGORIES,
@@ -10,16 +11,16 @@ import { InboxRowIcon } from './inbox-row-icon';
 
 const categoryLabel = (category: InboxCategory) =>
   match(category)
-    .with('mentions', () => 'Mentions')
-    .with('replies', () => 'Replies')
-    .with('messages', () => 'Messages')
-    .with('comments', () => 'Comments')
-    .with('email', () => 'Email')
-    .with('tasks', () => 'Tasks')
-    .with('pull_requests', () => 'Pull requests')
-    .with('calendar', () => 'Calendar')
-    .with('access', () => 'Access requests')
-    .with('agents', () => 'Agents')
+    .with('mentions', () => t('notificationsInbox.categoryMentions'))
+    .with('replies', () => t('notificationsInbox.categoryReplies'))
+    .with('messages', () => t('notificationsInbox.categoryMessages'))
+    .with('comments', () => t('notificationsInbox.categoryComments'))
+    .with('email', () => t('notificationsInbox.categoryEmail'))
+    .with('tasks', () => t('notificationsInbox.categoryTasks'))
+    .with('pull_requests', () => t('notificationsInbox.categoryPullRequests'))
+    .with('calendar', () => t('notificationsInbox.categoryCalendar'))
+    .with('access', () => t('notificationsInbox.categoryAccess'))
+    .with('agents', () => t('notificationsInbox.categoryAgents'))
     .exhaustive();
 
 /** The glyph a category's rows show. */
@@ -40,28 +41,52 @@ const categoryRowType = (category: InboxCategory): InboxRowType =>
 export type InboxFilterGroupId = 'status' | 'type';
 export type InboxFilterOptionId = InboxStatus | InboxCategory;
 
-/** The Status and Type groups, shared by the desktop menu and the touch drawer. */
+/**
+ * The Status and Type groups, shared by the desktop menu and the touch drawer.
+ * Labels are getters so a module constant follows the interface language.
+ */
 export const INBOX_FILTER_GROUPS: ListFilterGroup<
   InboxFilterGroupId,
   InboxFilterOptionId
 >[] = [
   {
     id: 'status',
-    label: 'Status',
+    get label() {
+      return t('notificationsInbox.status');
+    },
     selectionMode: 'single',
     defaultOptionId: 'all',
     options: [
-      { id: 'unread', label: 'Unread' },
-      { id: 'read', label: 'Read' },
-      { id: 'all', label: 'All' },
+      {
+        id: 'unread',
+        get label() {
+          return t('notificationsInbox.statusUnread');
+        },
+      },
+      {
+        id: 'read',
+        get label() {
+          return t('notificationsInbox.statusRead');
+        },
+      },
+      {
+        id: 'all',
+        get label() {
+          return t('notificationsInbox.statusAll');
+        },
+      },
     ],
   },
   {
     id: 'type',
-    label: 'Type',
+    get label() {
+      return t('notificationsInbox.type');
+    },
     options: INBOX_CATEGORIES.map((category) => ({
       id: category,
-      label: categoryLabel(category),
+      get label() {
+        return categoryLabel(category);
+      },
       icon: () => (
         <InboxRowIcon
           type={categoryRowType(category)}

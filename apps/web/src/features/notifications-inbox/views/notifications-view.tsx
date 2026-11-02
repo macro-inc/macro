@@ -9,6 +9,7 @@ import {
   ViewSidebar,
 } from '@app/components/view-shell';
 import { ListSkeleton } from '@app/components/view-shell/ListSkeleton';
+import { t } from '@app/lib/i18n';
 import { createPreviewSelectionGuard } from '@components/app/createPreviewSelectionGuard';
 import { useGlobalBlockOrchestrator } from '@components/app/GlobalAppState';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
@@ -31,10 +32,10 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import type { EntityData } from '@entity';
 import { formatTimestamp } from '@entity/utils/timestamp';
-import ArrowCounterClockwise from '@phosphor/arrow-counter-clockwise.svg';
-import BellIcon from '@phosphor/bell.svg';
-import CheckIcon from '@phosphor/check.svg';
-import GearSixIcon from '@phosphor/gear-six.svg';
+import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
+import BellIcon from '@icon/system/regular/bell.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
+import GearSixIcon from '@icon/system/regular/gear-six.svg';
 import { useMutationUndoContext } from '@queries/undo';
 import { createElementSize } from '@solid-primitives/resize-observer';
 import { debounce } from '@solid-primitives/scheduled';
@@ -84,16 +85,16 @@ const LOAD_MORE_DISTANCE_PX = 300;
 
 const decisionOutcome = (decision: InboxDecision) =>
   match(decision)
-    .with('approve', () => 'Access granted')
-    .with('deny', () => 'Access request denied')
-    .with('accept', () => 'Added to the event')
-    .with('decline', () => 'Join request declined')
+    .with('approve', () => t('notificationsInbox.accessGranted'))
+    .with('deny', () => t('notificationsInbox.accessDenied'))
+    .with('accept', () => t('notificationsInbox.joinAccepted'))
+    .with('decline', () => t('notificationsInbox.joinDeclined'))
     .exhaustive();
 
 const decisionFailure = (decision: InboxDecision) =>
   match(decision)
-    .with('approve', 'deny', () => 'Couldn’t answer the access request')
-    .with('accept', 'decline', () => 'Couldn’t answer the join request')
+    .with('approve', 'deny', () => t('notificationsInbox.accessAnswerFailed'))
+    .with('accept', 'decline', () => t('notificationsInbox.joinAnswerFailed'))
     .exhaustive();
 
 /**
@@ -109,12 +110,15 @@ const previewSelection = (
 
 function NotificationsBreadcrumb(props: { onReturn: () => void }) {
   return (
-    <nav aria-label="Notifications location" class="flex items-center gap-0.5">
+    <nav
+      aria-label={t('notificationsInbox.location')}
+      class="flex items-center gap-0.5"
+    >
       <ViewBreadcrumbs.ReturnButton
         data-allow-focus-in-preview
         onClick={props.onReturn}
       >
-        Notifications
+        {t('nav.notifications')}
       </ViewBreadcrumbs.ReturnButton>
       <ViewBreadcrumbs.Separator />
     </nav>
@@ -127,7 +131,7 @@ function ListHeader(props: { actions: JSX.Element }) {
       <ViewSidebar.Header>
         <div class="flex min-w-0 flex-1 items-center gap-1">
           <ViewSidebar.CloseButton class="shrink-0" />
-          <ViewSidebar.Title>Notifications</ViewSidebar.Title>
+          <ViewSidebar.Title>{t('nav.notifications')}</ViewSidebar.Title>
           <div class="ml-auto flex shrink-0 items-center gap-1">
             {props.actions}
           </div>
@@ -164,13 +168,11 @@ export function NotificationsView(props: NotificationsViewProps) {
       pushUndo: (entry) => pushUndo(entry),
       announceDone: (count, undo) => {
         const id = toast.success(
-          count > 1
-            ? `Marked ${count} notifications as done`
-            : 'Marked as done',
+          t('notificationsInbox.markedDone', { count }),
           {
             actions: [
               {
-                label: 'Undo',
+                label: t('notificationsInbox.undo'),
                 icon: ArrowCounterClockwise,
                 onClick: () => fireAndForget(undo(), 'notifications-inbox'),
               },
@@ -189,14 +191,14 @@ export function NotificationsView(props: NotificationsViewProps) {
     (row) => statusIncludes(filters.filters().status, row.unseen)
   );
 
-  onMount(() => panel.handle.setDisplayName('Notifications'));
+  onMount(() => panel.handle.setDisplayName(t('nav.notifications')));
 
   const [filterOpen, setFilterOpen] = createSignal(false);
   useViewControlHotkeys({
     scopeId: panel.splitHotkeyScope,
     enabled: panel.isPanelActive,
     filter: {
-      description: 'Filter notifications',
+      description: t('notificationsInbox.filter'),
       run: () => {
         setFilterOpen(true);
       },
@@ -313,7 +315,7 @@ export function NotificationsView(props: NotificationsViewProps) {
     },
     activation: {
       createMetadata: (intent) => ({ newSplit: intent === 'alternate' }),
-      alternateDescription: 'Open in new split',
+      alternateDescription: t('nav.openInNewSplit'),
     },
   });
 
@@ -321,7 +323,7 @@ export function NotificationsView(props: NotificationsViewProps) {
     hotkey: ['e'],
     hotkeyToken: TOKENS.entity.action.markDone,
     scopeId: panel.splitHotkeyScope,
-    description: 'Mark done',
+    description: () => t('notificationsInbox.markDone'),
     condition: () => panel.isPanelActive() && list.focus.item() !== undefined,
     keyDownHandler: (event) => {
       if (event?.repeat) return true;
@@ -377,7 +379,7 @@ export function NotificationsView(props: NotificationsViewProps) {
     <Switch>
       <Match when={!filters.showsNothing() && view().t === 'loading'}>
         <ListSkeleton.Root
-          label="Loading notifications"
+          label={t('notificationsInbox.loading')}
           class="px-(--sidebar-gutter) pt-2 touch:pt-(--mobile-content-inset-top)"
         >
           <For each={[0, 1, 2, 3, 4]}>
@@ -392,7 +394,7 @@ export function NotificationsView(props: NotificationsViewProps) {
       </Match>
       <Match when={view().t === 'error'}>
         <ListStatus>
-          <span>Notifications couldn’t be loaded.</span>
+          <span>{t('notificationsInbox.loadFailed')}</span>
           <Button
             variant="secondary"
             size="sm"
@@ -400,23 +402,23 @@ export function NotificationsView(props: NotificationsViewProps) {
               fireAndForget(inbox.refresh(), 'notifications-inbox')
             }
           >
-            Try again
+            {t('notificationsInbox.tryAgain')}
           </Button>
         </ListStatus>
       </Match>
       <Match when={filters.showsNothing()}>
         <ListStatus>
-          <span>Every kind of notification is hidden.</span>
+          <span>{t('notificationsInbox.allHidden')}</span>
           <Button variant="secondary" size="sm" onClick={filters.reset}>
-            Reset filters
+            {t('notificationsInbox.resetFilters')}
           </Button>
         </ListStatus>
       </Match>
       <Match when={view().t === 'empty' && filters.activeCount() > 0}>
         <ListStatus>
-          <span>No notifications match these filters.</span>
+          <span>{t('notificationsInbox.noMatches')}</span>
           <Button variant="secondary" size="sm" onClick={filters.reset}>
-            Reset filters
+            {t('notificationsInbox.resetFilters')}
           </Button>
         </ListStatus>
       </Match>
@@ -424,8 +426,8 @@ export function NotificationsView(props: NotificationsViewProps) {
         <div class="min-h-0 flex-1 overflow-y-auto touch:pt-(--mobile-content-inset-top)">
           <EmptyStatePanel
             graphic={BellIcon}
-            title="You’re all caught up"
-            description="Mentions, replies, requests, and anything else that needs you will show up here."
+            title={t('notificationsInbox.caughtUpTitle')}
+            description={t('notificationsInbox.caughtUpDescription')}
           />
         </div>
       </Match>
@@ -527,7 +529,7 @@ export function NotificationsView(props: NotificationsViewProps) {
           <header class="pointer-events-none absolute inset-x-0 top-0 z-split-panel-chrome flex shrink-0 flex-col px-(--mobile-chrome-gutter) pt-[calc(var(--safe-top,0px)+0.5rem)]">
             <div class="pointer-events-auto flex h-10 min-w-0 items-center gap-2">
               <h1 class="min-w-0 flex-1 truncate text-lg font-semibold text-ink">
-                Notifications
+                {t('nav.notifications')}
               </h1>
               <InboxFilterDrawer {...filterControls} />
             </div>
@@ -546,7 +548,7 @@ export function NotificationsView(props: NotificationsViewProps) {
           >
             <div
               role="grid"
-              aria-label="Notifications"
+              aria-label={t('nav.notifications')}
               class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden"
             >
               {listBody()}
@@ -583,8 +585,8 @@ export function NotificationsView(props: NotificationsViewProps) {
                       <Button
                         size="icon-md"
                         variant="ghost"
-                        aria-label="Notification settings"
-                        tooltip="Notification settings"
+                        aria-label={t('notificationsInbox.settings')}
+                        tooltip={t('notificationsInbox.settings')}
                         onClick={() => props.onOpenSettings()}
                       >
                         <GearSixIcon class="size-4" />
@@ -594,7 +596,7 @@ export function NotificationsView(props: NotificationsViewProps) {
                 />
                 <div
                   role="grid"
-                  aria-label="Notifications"
+                  aria-label={t('nav.notifications')}
                   aria-activedescendant={list.focus.key()}
                   tabIndex={0}
                   class="relative flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden outline-none"
@@ -608,8 +610,10 @@ export function NotificationsView(props: NotificationsViewProps) {
                   fallback={
                     <EmptyStatePanel
                       graphic={BellIcon}
-                      title="No notification selected"
-                      description="Pick a notification to see it here."
+                      title={t('notificationsInbox.noneSelectedTitle')}
+                      description={t(
+                        'notificationsInbox.noneSelectedDescription'
+                      )}
                     />
                   }
                 >

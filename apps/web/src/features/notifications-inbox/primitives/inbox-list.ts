@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import type {
   InboxFeedSource,
   NotificationInboxRow,
@@ -76,22 +77,20 @@ export function createInboxList(
       );
     } catch {
       notices.announceFailure(
-        rows.length > 1
-          ? 'Couldn’t mark these notifications as done'
-          : 'Couldn’t mark this notification as done'
+        t('notificationsInbox.markDoneFailed', { count: rows.length })
       );
       return;
     }
     let dismiss = () => {};
     const handle = notices.pushUndo({
-      label: 'Mark Done',
+      label: t('notificationsInbox.markDone'),
       undo: async () => {
         try {
           await traceInboxRows('notifications_inbox.row_undo', rows, () =>
             result.undo()
           );
         } catch (error) {
-          notices.announceFailure('Failed to undo');
+          notices.announceFailure(t('notificationsInbox.undoFailed'));
           throw error;
         }
       },

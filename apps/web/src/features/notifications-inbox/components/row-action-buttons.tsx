@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { Button } from '@ui';
 import { For } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -5,13 +6,13 @@ import type { InboxDecision, InboxRowAction } from '../core/inbox-row';
 
 const actionLabel = (action: InboxRowAction) =>
   match(action.kind)
-    .with('open', () => 'Open')
-    .with('answer', () => 'Answer')
-    .with('review', () => 'Review')
-    .with('approve', () => 'Approve')
-    .with('deny', () => 'Deny')
-    .with('accept', () => 'Accept')
-    .with('decline', () => 'Decline')
+    .with('open', () => t('notificationsInbox.actionOpen'))
+    .with('answer', () => t('notificationsInbox.actionAnswer'))
+    .with('review', () => t('notificationsInbox.actionReview'))
+    .with('approve', () => t('notificationsInbox.actionApprove'))
+    .with('deny', () => t('notificationsInbox.actionDeny'))
+    .with('accept', () => t('notificationsInbox.actionAccept'))
+    .with('decline', () => t('notificationsInbox.actionDecline'))
     .exhaustive();
 
 /**

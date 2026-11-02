@@ -1,4 +1,5 @@
 import { MobileFilterDrawer } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
 import { Accordion } from '@kobalte/core/accordion';
 import { For } from 'solid-js';
 import type { InboxCategory, InboxStatus } from '../core/inbox-filters';
@@ -22,8 +23,8 @@ export function InboxFilterDrawer(props: {
 
   return (
     <MobileFilterDrawer
-      triggerLabel="Filter notifications"
-      label="Notification filters"
+      triggerLabel={t('notificationsInbox.filter')}
+      label={t('notificationsInbox.filters')}
       activeCount={props.activeCount}
       onClear={props.onReset}
     >

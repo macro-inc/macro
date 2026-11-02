@@ -1,6 +1,7 @@
+import { t } from '@app/lib/i18n';
 import { StaticMarkdown } from '@core/component/LexicalMarkdown/component/core/StaticMarkdown';
 import { unifiedListMarkdownTheme } from '@core/component/LexicalMarkdown/theme';
-import CheckIcon from '@phosphor/check.svg';
+import CheckIcon from '@icon/system/regular/check.svg';
 import { Button, cn } from '@ui';
 import { type JSX, Show } from 'solid-js';
 import type { InboxRow } from '../core/inbox-row';
@@ -66,7 +67,7 @@ export function NotificationRow(props: NotificationRowProps) {
             </span>
             <Show when={props.unseen}>
               <span
-                aria-label="Unread"
+                aria-label={t('notificationsInbox.unread')}
                 class="size-1.5 shrink-0 rounded-full bg-accent"
               />
             </Show>
@@ -104,8 +105,8 @@ export function NotificationRow(props: NotificationRowProps) {
         <Button
           size="icon-sm"
           variant="ghost"
-          aria-label="Mark done"
-          tooltip="Mark done"
+          aria-label={t('notificationsInbox.markDone')}
+          tooltip={t('notificationsInbox.markDone')}
           onClick={(event) => {
             event.stopPropagation();
             props.onDone();

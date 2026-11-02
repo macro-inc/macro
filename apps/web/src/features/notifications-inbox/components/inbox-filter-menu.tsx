@@ -1,4 +1,5 @@
 import { ListFilterDropdown } from '@app/components/view-shell';
+import { t } from '@app/lib/i18n';
 import {
   INBOX_CATEGORIES,
   type InboxCategory,
@@ -22,7 +23,7 @@ export function InboxFilterMenu(props: {
 }) {
   return (
     <ListFilterDropdown
-      label="Filter notifications"
+      label={t('notificationsInbox.filter')}
       groups={INBOX_FILTER_GROUPS}
       open={props.open}
       onOpenChange={props.onOpenChange}
@@ -45,7 +46,7 @@ export function InboxFilterMenu(props: {
         props.onShownChange(option, selected);
       }}
       onClear={props.onReset}
-      clearLabel="Reset filters"
+      clearLabel={t('notificationsInbox.resetFilters')}
     />
   );
 }

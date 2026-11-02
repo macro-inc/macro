@@ -11,7 +11,11 @@ import type {
   NotificationsInboxContext,
 } from '../context/notifications-inbox-context';
 
-/** What a row says: a muted "actor verb place" line and its subject. */
+/**
+ * What a row says: a muted "actor verb place" line and its subject. The line
+ * shares `getNotificationAction`'s vocabulary with the other notification
+ * surfaces, which isn't translated yet, so it stays in English with them.
+ */
 export type InboxRowDisplay = {
   action: string;
   subject: string;

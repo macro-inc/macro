@@ -8,6 +8,7 @@ import entityActions from './en/entity-actions';
 import localRuntime from './en/local-runtime';
 import mobile from './en/mobile';
 import nav from './en/nav';
+import notificationsInbox from './en/notifications-inbox';
 import settingsLanguage from './en/settings-language';
 import settingsNav from './en/settings-nav';
 import splitMenu from './en/split-menu';
@@ -29,6 +30,7 @@ export default {
   localRuntime,
   mobile,
   nav,
+  notificationsInbox,
   settingsLanguage,
   settingsNav,
   splitMenu,
