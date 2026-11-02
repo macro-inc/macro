@@ -1327,15 +1327,16 @@ its requested cache buckets, so a document-only category must not read the email
 catalog. Switching categories still discovers previously unopened buckets;
 renames, subtype moves, DM priority, and stable tie ordering remain unchanged.
 
-With CRM enabled, normal `@` menus include CRM contacts under **People** in
-documents, channels, discussions, and composers. Contact search loads paged
-GraphQL results from all accessible CRM-enabled teams, excludes hidden contacts
-and companies, and collapses duplicate full email addresses case-insensitively.
-The most recently active visible team record represents each email. An eligible
-Macro user with the same email takes precedence and keeps normal user-mention
-notifications. External contacts insert a link to their original CRM record;
-they do not invite or notify that email address. Assignee and other user-only
-pickers continue to list Macro users only.
+With CRM enabled, normal `@` menus include companies and contacts under **CRM**
+in documents, channels, discussions, and composers. **People** contains only
+Macro users and groups. Contact search loads paged GraphQL results from all
+accessible CRM-enabled teams, excludes hidden contacts and companies, and
+collapses duplicate full email addresses case-insensitively. The most recently
+active visible team record represents each email. Picking a CRM contact inserts
+a link to that original CRM record, even if a Macro user shares its email; it
+does not invite or notify that email address. Assignee and other user-only
+pickers continue to list Macro users only. Mobile keeps a single list, with
+only Macro users and groups pinned ahead of ranked entity results.
 
 Typed Cmd+K **People** and **All** queries find known Macro users, including
 teammates supplied by the contacts service, before their first DM and without a

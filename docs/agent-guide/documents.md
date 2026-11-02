@@ -2512,10 +2512,14 @@ To verify nesting, give a list item a child and grandchild, then swipe the
 parent right and left: all three should shift one level together, preserving
 their relative depths and order.
 
-## CRM company mentions
+## CRM company and contact mentions
 
 With CRM enabled, type `@` followed by a company name or domain in an editor or
-composer. Companies appear in their own mention bucket. With
+composer. Companies and contacts appear together under **CRM**; **People** holds
+Macro users and groups only. Selecting a CRM contact inserts its record link,
+including when its email matches a Macro user. User-only pickers exclude CRM
+records. On mobile, the single list includes both CRM record types, while only
+Macro people and groups are pinned. With
 `ENABLE_GRAPHQL_SOUP` enabled, results include cached companies even if they are
 absent from the first 500 companies in the REST Quick Access feed; the REST feed
 remains a fallback. Cache search covers synchronized companies, not the entire CRM.
