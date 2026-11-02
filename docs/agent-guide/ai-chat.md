@@ -333,6 +333,15 @@ you can follow up there. Reloading the chat restores the same session card.
 Failed dispatches do not show a successful session card. If no coding agents are
 available, configure one in Agents before retrying.
 
+Ask a chat agent what your coding agents need from you and it calls
+`ListAgentUpdates`: your non-archived coding sessions waiting on a permission,
+question, or tool approval, plus sessions running with no activity for 20
+minutes (at most 25 sessions; the result says when it was truncated). The
+result shows the same live cards as the Agents home, so you answer in place;
+agents cannot answer for you. To send a coding agent instructions the chat uses
+`ManageAgentSession`, and to recall earlier decisions it searches past agent
+conversations with `ContentSearch` and reads them with `ReadAgentSession`.
+
 ## Where chats live
 
 The Agents conversation list shows row skeletons after a short delay on first
@@ -399,6 +408,10 @@ the shimmer.
   Pull request filters; choices within a category are ORed and categories are
   ANDed. Grouping and filters are remembered per user. Clear filters from the menu
   or an empty filtered list.
+  With the `enable-agent-updates` flag, an **Open PRs** section sits above
+  Conversations: your non-archived coding sessions whose pull request is open or
+  draft, newest first, using the same rows (they stay in Conversations too). It
+  is hidden when empty.
   Chat rows use a chat icon; coding rows use `</>` (the PR status icon when a
   pull request is linked). Home and the Agents sidebar share these agent rows.
   Rows have no agent or runtime-status subtext. A session that is starting or
@@ -538,6 +551,15 @@ the shimmer.
   including when it is the agent’s configured default; there is no separate default row.
   Disconnected Cursor offers **Connect Cursor**, opening Settings → Agents → Runtimes.
   The built-in sandbox and paired macrod runtimes are not offered here.
+- With the `enable-agent-updates` flag, the New conversation page shows a stack
+  of pending updates from your coding sessions under the composer: one card per
+  permission request, question, or tool approval of a blocked session, plus
+  sessions running with no activity for 20 minutes. The stack rests collapsed
+  (front card plus two peeking) so the page does not scroll; click it or **Show
+  all** to unstack. Cards answer in place with the session's own options, and
+  every card has **Chat about this** (adds a mention of that session to the
+  composer draft) and **Open session**. Answered cards leave once the session
+  stops waiting. Check with a coding session blocked on a permission prompt.
 - Selecting an agent changes the heading: **What should we work on?** for chat
   agents and **What should we build?** for coding agents. The draft stays intact
   when changing agents. Unsent New conversation text and attachments also come
