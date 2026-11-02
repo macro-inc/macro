@@ -93,6 +93,9 @@ that listener is ready. Cancellation can stop the gate before startup finishes.
   (both reject unknown fields, and older clients omit it), plus every query in
   `pg_scheduled_action_repo.rs` and the event-run claim in `pg_event_run_repo.rs`,
   which builds its own `ScheduledAction`.
+- Create and update bodies pick the legacy cron-only shape only when `schedule`
+  is present and `trigger` absent, never by trying each shape, so the 400 body
+  names the field that failed. Cron schedules have 6 or 7 fields.
 - `template_id` is a plain pointer, not a foreign key: activated routines keep
   it after the template is unshared or its source routine is deleted.
 - `run_visibility` is copied onto each run's agent session when the run is

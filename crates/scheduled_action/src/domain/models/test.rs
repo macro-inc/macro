@@ -92,6 +92,45 @@ fn mixed_representations_are_rejected_even_when_the_values_agree() {
     assert!(serde_json::from_value::<UpdateScheduledAction>(input).is_err());
 }
 
+/// A five-field cron is what most callers write first; the rejection must say
+/// which format is expected instead of that no representation matched.
+#[test]
+fn rejected_schedules_explain_the_cron_format_in_both_representations() {
+    let canonical = json!({"name":"routine", "kind":"Agent", "task":{}, "enabled":true,
+        "trigger":{"type":"cron", "schedule":"*/10 * * * *", "timezone":"UTC"}});
+    let legacy = json!({"name":"routine", "kind":"Agent", "task":{}, "enabled":true,
+        "schedule":"*/10 * * * *", "timezone":"UTC"});
+    for input in [canonical, legacy] {
+        for error in [
+            serde_json::from_value::<CreateScheduledAction>(input.clone())
+                .unwrap_err()
+                .to_string(),
+            serde_json::from_value::<UpdateScheduledAction>(input)
+                .unwrap_err()
+                .to_string(),
+        ] {
+            assert_eq!(
+                error,
+                "cron schedule `*/10 * * * *` has 5 fields; use 6 or 7 \
+                 (second minute hour day-of-month month day-of-week [year]), \
+                 e.g. `0 */10 * * * *` for every ten minutes"
+            );
+        }
+    }
+}
+
+#[test]
+fn rejected_canonical_requests_name_the_missing_field() {
+    let input = json!({"name":"routine", "kind":"Agent", "task":{},
+        "trigger":{"type":"cron", "schedule":"0 */10 * * * *", "timezone":"UTC"}});
+    assert_eq!(
+        serde_json::from_value::<CreateScheduledAction>(input)
+            .unwrap_err()
+            .to_string(),
+        "missing field `enabled`"
+    );
+}
+
 #[test]
 fn legacy_task_round_trips_without_changing_instructions() {
     let payload = json!({

@@ -506,7 +506,8 @@ impl IntoResponse for ScheduledActionApiError {
                 } else {
                     StatusCode::BAD_REQUEST
                 };
-                return (status, "invalid scheduled action request").into_response();
+                // The caller's own input, naming the field it rejected.
+                return (status, rejection.body_text()).into_response();
             }
             Self::Service(error) => error,
         };

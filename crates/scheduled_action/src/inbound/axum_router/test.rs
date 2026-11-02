@@ -495,6 +495,21 @@ async fn mixed_unknown_and_server_owned_input_is_bad_request_for_create_and_upda
 }
 
 #[tokio::test]
+async fn rejected_create_bodies_return_the_validation_message() {
+    let app = router(false);
+    let mut input = serde_json::to_value(configuration(false)).unwrap();
+    input["trigger"]["schedule"] = json!("*/10 * * * *");
+    let (status, body) = request(&app, "POST", "/scheduled-actions", "owner", input).await;
+    assert_eq!(status, StatusCode::BAD_REQUEST);
+    assert!(
+        body.as_str()
+            .unwrap()
+            .contains("cron schedule `*/10 * * * *` has 5 fields; use 6 or 7"),
+        "{body}"
+    );
+}
+
+#[tokio::test]
 async fn owner_can_read_cron_and_event_routines_but_missing_ids_return_not_found() {
     let app = router(true);
     for events in [false, true] {

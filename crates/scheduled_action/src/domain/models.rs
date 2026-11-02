@@ -1,4 +1,4 @@
-use anyhow::Result;
+use anyhow::{Result, bail};
 use bot_id::BotId;
 use bots::domain::models::AgentMcpServer;
 use chrono::{DateTime, Duration, Utc};
@@ -29,7 +29,17 @@ impl Schedule {
     /// Parse a cron expression in the 6-/7-field format required by the `cron`
     /// crate (`sec min hour dom mon dow [year]`).
     pub fn from_cron(cron: String) -> Result<Self> {
-        CronSchedule::from_str(&cron).map_err(anyhow::Error::from)?;
+        let fields = cron.split_whitespace().count();
+        if !(6..=7).contains(&fields) {
+            bail!(
+                "cron schedule `{cron}` has {fields} fields; use 6 or 7 \
+                 (second minute hour day-of-month month day-of-week [year]), \
+                 e.g. `0 */10 * * * *` for every ten minutes"
+            );
+        }
+        if let Err(error) = CronSchedule::from_str(&cron) {
+            bail!("invalid cron schedule `{cron}`: {error}");
+        }
         Ok(Self(cron))
     }
 
@@ -238,11 +248,33 @@ impl From<LegacyActionConfiguration> for ActionConfiguration {
 }
 
 /// Exactly one representation is accepted, even if mixed fields agree or are null.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[derive(Serialize, Debug, Clone, ToSchema)]
 #[serde(untagged)]
 pub enum CreateScheduledAction {
     Canonical(ActionConfiguration),
     Legacy(LegacyActionConfiguration),
+}
+
+/// Whether a request body is the deprecated cron-only shape: a top-level
+/// `schedule` and no `trigger`. Picking the shape up front, rather than trying
+/// each, lets a rejection say which field is wrong.
+fn is_legacy_request(input: &serde_json::Map<String, Value>) -> bool {
+    input.contains_key("schedule") && !input.contains_key("trigger")
+}
+
+impl<'de> Deserialize<'de> for CreateScheduledAction {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let input = serde_json::Map::deserialize(deserializer)?;
+        if is_legacy_request(&input) {
+            serde_json::from_value(Value::Object(input)).map(Self::Legacy)
+        } else {
+            serde_json::from_value(Value::Object(input)).map(Self::Canonical)
+        }
+        .map_err(serde::de::Error::custom)
+    }
 }
 
 /// Canonical configuration replacement. Activation has its own endpoint, so
@@ -265,11 +297,26 @@ pub struct ActionConfigurationUpdate {
 }
 
 /// Full replacement of client configuration, not of server-owned action state.
-#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[derive(Serialize, Debug, Clone, ToSchema)]
 #[serde(untagged)]
 pub enum UpdateScheduledAction {
     Canonical(ActionConfigurationUpdate),
     Legacy(LegacyActionConfiguration),
+}
+
+impl<'de> Deserialize<'de> for UpdateScheduledAction {
+    fn deserialize<D>(deserializer: D) -> std::result::Result<Self, D::Error>
+    where
+        D: serde::Deserializer<'de>,
+    {
+        let input = serde_json::Map::deserialize(deserializer)?;
+        if is_legacy_request(&input) {
+            serde_json::from_value(Value::Object(input)).map(Self::Legacy)
+        } else {
+            serde_json::from_value(Value::Object(input)).map(Self::Canonical)
+        }
+        .map_err(serde::de::Error::custom)
+    }
 }
 
 impl UpdateScheduledAction {
