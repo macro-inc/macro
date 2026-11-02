@@ -424,6 +424,13 @@ pub trait PropertiesRepo: Send + Sync + 'static {
         entity_reference: &EntityReference,
     ) -> impl Future<Output = Result<(), Self::Err>> + Send;
 
+    /// The project each live task lists in: its Project property, when it
+    /// names exactly one project. Other tasks are absent.
+    fn task_listing_projects(
+        &self,
+        task_ids: &[String],
+    ) -> impl Future<Output = Result<HashMap<String, Uuid>, Self::Err>> + Send;
+
     /// Resolve document subtype facts in one batch.
     ///
     /// Missing IDs and documents without a subtype are omitted. Callers treat

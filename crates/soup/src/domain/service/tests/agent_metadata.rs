@@ -86,7 +86,7 @@ async fn metadata_is_batched_and_only_uses_visible_prs_and_captured_branches() {
     super::super::agent_metadata::enrich(
         &foreign,
         Some(&branches),
-        user.to_owned(),
+        Some(user.to_owned()),
         vec![SourceId::user(user)],
         &mut items,
     )
@@ -138,7 +138,7 @@ async fn no_pr_links_skip_foreign_entity_lookup() {
     super::super::agent_metadata::enrich(
         &foreign,
         Some(&branches),
-        "macro|owner@example.com".to_owned(),
+        Some("macro|owner@example.com".to_owned()),
         vec![SourceId::user("macro|owner@example.com")],
         &mut items,
     )
@@ -171,7 +171,7 @@ async fn runtime_branch_without_pr_survives_enrichment_and_takes_precedence() {
     super::super::agent_metadata::enrich(
         &foreign,
         Some(&branches),
-        "macro|owner@example.com".to_owned(),
+        Some("macro|owner@example.com".to_owned()),
         vec![SourceId::user("macro|owner@example.com")],
         &mut items,
     )
@@ -210,7 +210,7 @@ async fn changed_or_missing_repository_does_not_restore_an_old_captured_branch()
         super::super::agent_metadata::enrich(
             &foreign,
             Some(&branches),
-            "macro|owner@example.com".to_owned(),
+            Some("macro|owner@example.com".to_owned()),
             vec![SourceId::user("macro|owner@example.com")],
             &mut items,
         )

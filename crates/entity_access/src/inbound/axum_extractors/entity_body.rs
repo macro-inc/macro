@@ -18,7 +18,7 @@ use tracing::Level;
 
 use super::{ExtractorError, RequiredPermission, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
-    models::{Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType},
+    models::{Entity, EntityAccessReceipt, EntityPermission, EntityType},
     ports::EntityAccessService,
 };
 
@@ -124,20 +124,16 @@ where
                 .ok_or(ExtractorError::Unauthorized)?;
             EntityPermission::AccessLevel { access_level }
         };
-        if !entity_permission.satisfies::<T>() {
-            return Err(ExtractorError::Unauthorized);
-        }
 
         Ok(Self {
-            entity_access_receipt: EntityAccessReceipt {
-                auth: EntityAccessAuth::Authenticated(user),
-                entity: Entity {
+            entity_access_receipt: EntityAccessReceipt::try_new_authenticated_user(
+                user,
+                Entity {
                     entity_id,
                     entity_type,
                 },
                 entity_permission,
-                _marker: PhantomData,
-            },
+            )?,
             inner: deserialize_body(json)?,
             _marker: PhantomData,
         })

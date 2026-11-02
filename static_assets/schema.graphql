@@ -9281,11 +9281,17 @@ type GraphqlSoupInitiative implements GraphqlSoupEntity {
 	"""
 	activity(limit: Int): [GraphqlActivityEvent!]!
 	"""
+	Every task the project lists, in `taskIds` order. Viewing a project
+	lets the viewer list its tasks, a caller with no account included;
+	opening a task still needs the task's own access.
+	"""
+	tasks: [GraphqlSoupEntity!]!
+	"""
 	Collaborators, independent of assignees.
 	"""
 	memberIds: [String!]!
 	"""
-	Associated task identifiers visible to this viewer.
+	Identifiers of every task the project lists.
 	"""
 	taskIds: [ID!]!
 	"""
@@ -9641,11 +9647,11 @@ type GraphqlUser {
 	"""
 	One initiative accessible to the authenticated viewer.
 	"""
-	initiative(initiativeId: ID!): GraphqlSoupInitiative!
+	initiative(initiativeId: ID!): GraphqlSoupInitiative! @deprecated(reason: "Use the root initiative field. Remove after 2026-12-15.")
 	"""
 	A permission-filtered page of task identifiers within an initiative.
 	"""
-	initiativeTasks(initiativeId: ID!, input: InitiativeTasksInput): InitiativeTasksPage!
+	initiativeTasks(initiativeId: ID!, input: InitiativeTasksInput): InitiativeTasksPage! @deprecated(reason: "Use the root initiativeTasks field. Remove after 2026-12-15.")
 	"""
 	AI routines the authenticated user can access.
 	"""
@@ -9747,7 +9753,7 @@ type GraphqlUser {
 	Fetch one accessible agent session by id, with its protocol log
 	reachable through `log`.
 	"""
-	agentSession(sessionId: ID!): GraphqlSoupAgentSession
+	agentSession(sessionId: ID!): GraphqlSoupAgentSession @deprecated(reason: "Use the root agentSession field. Remove after 2026-12-15.")
 	"""
 	Fetch one accessible Soup entity, read from the primary so an entity
 	opened right after it is created or edited reflects that write.
@@ -9983,7 +9989,7 @@ input InitiativeSharePermissionInput {
 }
 
 """
-Cursor pagination for visible initiative tasks.
+Cursor pagination for an initiative's listed tasks.
 """
 input InitiativeTasksInput {
 	"""
@@ -9997,19 +10003,19 @@ input InitiativeTasksInput {
 }
 
 """
-A page of visible task references.
+A page of the task references a project lists.
 """
 type InitiativeTasksPage {
 	"""
-	Visible task identifiers in the current page.
+	Listed task identifiers in the current page.
 	"""
 	taskIds: [ID!]!
 	"""
-	Continuation when another visible page exists.
+	Continuation when another page exists.
 	"""
 	nextCursor: String
 	"""
-	Total tasks visible to this viewer.
+	Total tasks the project lists.
 	"""
 	total: Int!
 }
@@ -10729,6 +10735,22 @@ type SoupQueryRoot {
 	The authenticated user.
 	"""
 	user: GraphqlUser!
+	"""
+	One initiative the caller may view, signed in or not. Access is the
+	initiative's own: a public or team link opens it like any other share.
+	"""
+	initiative(initiativeId: ID!): GraphqlSoupInitiative!
+	"""
+	A page of the tasks in an initiative the caller may view, signed in or
+	not, holding only the tasks they may view themselves.
+	"""
+	initiativeTasks(initiativeId: ID!, input: InitiativeTasksInput): InitiativeTasksPage!
+	"""
+	One agent session the caller may view, signed in or not, with its
+	protocol log reachable through `log`. A public link opens it like any
+	other share.
+	"""
+	agentSession(sessionId: ID!): GraphqlSoupAgentSession
 }
 
 """

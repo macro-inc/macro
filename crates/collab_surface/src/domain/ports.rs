@@ -181,12 +181,14 @@ pub trait CollabSurfaceService: Send + Sync + 'static {
 
     /// Mint a sync-service connection token for a `ready` surface, at the
     /// access level implied by the caller's permission on the parent entity.
+    /// A caller with no account (`viewer` is `None`) holds at most View, so
+    /// reads a surface a public link opens and edits none.
     /// A form's surface needs Edit on the form.
     /// A surface whose id names a document is refused
     /// ([`CollabSurfaceError::IdReserved`]), whenever it was bound.
     fn mint_token(
         &self,
-        user_id: &MacroUserIdStr<'_>,
+        viewer: Option<&MacroUserIdStr<'_>>,
         parent_receipt: EntityAccessReceipt<AnyEntityPermission>,
         id: Uuid,
     ) -> impl Future<Output = Result<DocumentPermissionToken, CollabSurfaceError>> + Send;

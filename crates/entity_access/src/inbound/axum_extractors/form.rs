@@ -22,8 +22,7 @@ use tracing::Level;
 use super::{ExtractorError, bot::generate_bot_entity_access_receipt};
 use crate::domain::{
     models::{
-        AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
-        RequiredPermission,
+        AccessLevel, Entity, EntityAccessReceipt, EntityPermission, EntityType, RequiredPermission,
     },
     ports::EntityAccessService,
 };
@@ -37,7 +36,8 @@ struct FormAccessParams {
 /// named by an `id` path parameter.
 ///
 /// A request with no credentials asks the form's public audience: a public,
-/// live form yields a View receipt with [`EntityAccessAuth::Unauthenticated`].
+/// live form yields a View receipt with
+/// [`EntityAccessAuth::Unauthenticated`](crate::domain::models::EntityAccessAuth::Unauthenticated).
 /// Anything above View can never be met anonymously, so such requirements are
 /// refused before any lookup.
 ///
@@ -109,17 +109,10 @@ where
         // own machinery, not a person whose grants we could look up.
         if macro_user_id.is_none() && is_internal_access {
             return Ok(Self {
-                entity_access_receipt: EntityAccessReceipt {
-                    entity: Entity {
-                        entity_id: form_id,
-                        entity_type: EntityType::Form,
-                    },
-                    auth: EntityAccessAuth::Internal,
-                    entity_permission: EntityPermission::AccessLevel {
-                        access_level: AccessLevel::Owner,
-                    },
-                    _marker: PhantomData,
-                },
+                entity_access_receipt: EntityAccessReceipt::dangerously_assert_internal_user(
+                    &form_id,
+                    EntityType::Form,
+                ),
                 _marker: PhantomData,
             });
         }
@@ -133,27 +126,22 @@ where
             .await
             .map_err(ExtractorError::from)?;
 
-        if !permission.satisfies::<Permission>() {
-            return Err(ExtractorError::Unauthorized);
-        }
-
         Ok(Self {
-            entity_access_receipt: EntityAccessReceipt {
-                entity: Entity {
+            entity_access_receipt: EntityAccessReceipt::try_new_authenticated_user(
+                macro_user_id,
+                Entity {
                     entity_id: form_id,
                     entity_type: EntityType::Form,
                 },
-                auth: EntityAccessAuth::Authenticated(macro_user_id),
-                entity_permission: permission,
-                _marker: PhantomData,
-            },
+                permission,
+            )?,
             _marker: PhantomData,
         })
     }
 }
 
-/// The receipt for a caller with no credentials: the public audience answers
-/// View at most, so a requirement View cannot meet is refused unasked.
+/// The receipt for a caller with no credentials, who holds View at most, so a
+/// requirement View cannot meet is refused before the lookup.
 async fn public_receipt<Permission, AccessService, Authorization>(
     service: &AccessService,
     form_id: String,
@@ -162,35 +150,33 @@ where
     Permission: RequiredPermission,
     AccessService: EntityAccessService,
 {
-    let public_permission = EntityPermission::AccessLevel {
-        access_level: AccessLevel::View,
+    let form = Entity {
+        entity_id: form_id,
+        entity_type: EntityType::Form,
     };
-    if !public_permission.satisfies::<Permission>() {
+    let strongest_grant = EntityPermission::AccessLevel {
+        access_level: AccessLevel::Owner,
+    };
+    if EntityAccessReceipt::<Permission>::try_new_for_user(None, form.clone(), strongest_grant)
+        .is_err()
+    {
         return Err(ExtractorError::Unauthorized);
     }
 
     let Some(access_level) = service
-        .get_access_level(None, &form_id, EntityType::Form)
+        .get_access_level(None, &form.entity_id, EntityType::Form)
         .await
         .map_err(ExtractorError::from)?
     else {
         return Err(ExtractorError::Unauthorized);
     };
-    let permission = EntityPermission::AccessLevel { access_level };
-    if !permission.satisfies::<Permission>() {
-        return Err(ExtractorError::Unauthorized);
-    }
 
     Ok(FormAccessLevelExtractor {
-        entity_access_receipt: EntityAccessReceipt {
-            entity: Entity {
-                entity_id: form_id,
-                entity_type: EntityType::Form,
-            },
-            auth: EntityAccessAuth::Unauthenticated,
-            entity_permission: permission,
-            _marker: PhantomData,
-        },
+        entity_access_receipt: EntityAccessReceipt::try_new_for_user(
+            None,
+            form,
+            EntityPermission::AccessLevel { access_level },
+        )?,
         _marker: PhantomData,
     })
 }

@@ -2,7 +2,10 @@ use std::{collections::HashMap, sync::Arc};
 
 use async_graphql::{Context, Enum, SimpleObject, Union, dataloader::DataLoader};
 use entity_access::domain::{
-    models::{AccessError, AccessLevel, EntityPermission, ParticipantRole, TeamRole},
+    models::{
+        AccessError, AccessLevel, AnyEntityPermission, Entity as AccessEntity, EntityAccessReceipt,
+        EntityPermission, ParticipantRole, TeamRole,
+    },
     ports::EntityAccessService,
 };
 use futures::{StreamExt, stream};
@@ -159,11 +162,12 @@ impl GraphqlEntityPermission {
 
 /// Permission reader used by GraphQL entity edges.
 pub trait EntityPermissionEdgeReader: Send + Sync + 'static {
-    /// Resolve permissions for the requested entities. Missing or inaccessible
+    /// Resolve the permissions `viewer` holds on the requested entities; a
+    /// viewer with no account holds at most View. Missing or inaccessible
     /// entities map to `None` instead of leaking their existence.
     fn get_entity_permissions<'a>(
         &'a self,
-        user_id: &'a MacroUserIdStr<'static>,
+        viewer: Option<&'a MacroUserIdStr<'static>>,
         organization_id: Option<i64>,
         entities: Vec<Entity<'static>>,
     ) -> impl Future<
@@ -178,7 +182,7 @@ where
 {
     async fn get_entity_permissions(
         &self,
-        user_id: &MacroUserIdStr<'static>,
+        viewer: Option<&MacroUserIdStr<'static>>,
         organization_id: Option<i64>,
         entities: Vec<Entity<'static>>,
     ) -> Result<HashMap<Entity<'static>, Option<EntityPermission>>, rootcause::Report> {
@@ -187,7 +191,7 @@ where
             futures.push(async move {
                 let permission = self
                     .get_entity_permission(
-                        Some(user_id),
+                        viewer.map(|user| &**user),
                         &entity.entity_id,
                         entity.entity_type,
                         organization_id,
@@ -208,7 +212,19 @@ where
         for (entity, permission) in permissions {
             match permission {
                 Ok(permission) => {
-                    result.insert(entity, Some(permission));
+                    // The receipt applies the caller's ceiling: a public link
+                    // shared at Edit still gives a caller with no account View.
+                    let held = EntityAccessReceipt::<AnyEntityPermission>::try_new_for_user(
+                        viewer.cloned(),
+                        AccessEntity {
+                            entity_id: entity.entity_id.to_string(),
+                            entity_type: entity.entity_type,
+                        },
+                        permission,
+                    )
+                    .ok()
+                    .map(|receipt| *receipt.entity_permission());
+                    result.insert(entity, held);
                 }
                 Err(
                     AccessError::Unauthorized
@@ -231,7 +247,7 @@ pub struct NoOpEntityPermissionEdgeReader;
 impl EntityPermissionEdgeReader for NoOpEntityPermissionEdgeReader {
     async fn get_entity_permissions(
         &self,
-        _user_id: &MacroUserIdStr<'static>,
+        _viewer: Option<&MacroUserIdStr<'static>>,
         _organization_id: Option<i64>,
         entities: Vec<Entity<'static>>,
     ) -> Result<HashMap<Entity<'static>, Option<EntityPermission>>, rootcause::Report> {
@@ -241,8 +257,8 @@ impl EntityPermissionEdgeReader for NoOpEntityPermissionEdgeReader {
 
 /// Request-scoped DataLoader for current-viewer entity permissions.
 pub struct EntityPermissionLoader<R> {
-    /// Authenticated viewer whose permissions are requested.
-    user_id: MacroUserIdStr<'static>,
+    /// Viewer whose permissions are requested; `None` has no account.
+    viewer: Option<MacroUserIdStr<'static>>,
     /// Organization context used when resolving permissions.
     organization_id: Option<i64>,
     /// Domain-facing reader that resolves effective access.
@@ -250,10 +266,14 @@ pub struct EntityPermissionLoader<R> {
 }
 
 impl<R> EntityPermissionLoader<R> {
-    /// Construct a permission loader for one authenticated viewer.
-    pub fn new(user_id: MacroUserIdStr<'static>, organization_id: Option<i64>, reader: R) -> Self {
+    /// Construct a permission loader for one viewer, signed in or not.
+    pub fn new(
+        viewer: Option<MacroUserIdStr<'static>>,
+        organization_id: Option<i64>,
+        reader: R,
+    ) -> Self {
         Self {
-            user_id,
+            viewer,
             organization_id,
             reader,
         }
@@ -273,7 +293,7 @@ where
     ) -> Result<HashMap<OwnedEntity, Self::Value>, Self::Error> {
         let entities = keys.iter().map(|key| key.as_entity().clone()).collect();
         self.reader
-            .get_entity_permissions(&self.user_id, self.organization_id, entities)
+            .get_entity_permissions(self.viewer.as_ref(), self.organization_id, entities)
             .await
             .map(|permissions| {
                 permissions
@@ -285,9 +305,9 @@ where
     }
 }
 
-/// Build a permission DataLoader scoped to the authenticated viewer.
+/// Build a permission DataLoader scoped to one viewer, signed in or not.
 pub fn entity_permission_loader<R>(
-    user_id: MacroUserIdStr<'static>,
+    viewer: Option<MacroUserIdStr<'static>>,
     organization_id: Option<i64>,
     reader: R,
 ) -> DataLoader<EntityPermissionLoader<R>>
@@ -295,7 +315,7 @@ where
     R: EntityPermissionEdgeReader,
 {
     DataLoader::new(
-        EntityPermissionLoader::new(user_id, organization_id, reader),
+        EntityPermissionLoader::new(viewer, organization_id, reader),
         tokio::spawn,
     )
 }

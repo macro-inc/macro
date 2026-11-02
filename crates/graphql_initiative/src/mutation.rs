@@ -45,7 +45,7 @@ impl<E: SoupEntityEdges> InitiativeMutationRoot<E> {
             .map_err(graphql_error)?;
         load_from_soup(
             &ctx.data::<InitiativeEntityLoader>()?.0,
-            user,
+            Some(user),
             detail.id.as_uuid(),
         )
         .await?
@@ -69,7 +69,7 @@ impl<E: SoupEntityEdges> InitiativeMutationRoot<E> {
             .map_err(graphql_error)?;
         load_from_soup(
             &ctx.data::<InitiativeEntityLoader>()?.0,
-            user,
+            Some(user),
             detail.id.as_uuid(),
         )
         .await?

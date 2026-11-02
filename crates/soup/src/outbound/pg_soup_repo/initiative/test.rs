@@ -300,3 +300,104 @@ async fn initiatives_grouping_and_property_enrichment(pool: PgPool) -> anyhow::R
     }
     Ok(())
 }
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    fixtures("test/initiatives.sql"),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn viewable_reads_hydrate_initiatives_the_listing_never_reaches(
+    pool: PgPool,
+) -> anyhow::Result<()> {
+    // Rows 5 and 6 carry no grant the viewer can use: only a left channel and nothing.
+    let requested = [5, 6].map(|id| {
+        EntityType::Initiative.with_entity_string(
+            Uuid::from_u128(0xad000000000000000000000000000000 + id).to_string(),
+        )
+    });
+    assert!(
+        by_ids(
+            &pool,
+            AdvancedSortParams {
+                user_id: user(),
+                entities: &requested,
+            },
+        )
+        .await?
+        .is_empty(),
+        "the listing's by-ID read keeps its access predicate"
+    );
+
+    for viewer in [Some(user()), None] {
+        let mut names = viewable_by_ids(&pool, viewer, &requested)
+            .await?
+            .into_iter()
+            .map(|item| match item {
+                SoupItem::Initiative(initiative) => initiative.name,
+                _ => unreachable!("only initiatives were requested"),
+            })
+            .collect::<Vec<_>>();
+        names.sort();
+        assert_eq!(
+            names,
+            ["Launch 5", "Launch 6"],
+            "a receipt already authorized the read"
+        );
+    }
+    Ok(())
+}
+
+#[sqlx::test(
+    fixtures(
+        path = "../../../../../macro_db_client/fixtures",
+        scripts("mixed_items_expanded")
+    ),
+    migrator = "MACRO_DB_MIGRATIONS"
+)]
+async fn a_project_lists_its_live_tasks_and_no_others(pool: PgPool) -> anyhow::Result<()> {
+    let project = Uuid::now_v7();
+    let other = Uuid::now_v7();
+    let listed = "11111111-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
+    let deleted = "11111111-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
+    let elsewhere = "11111111-cccc-cccc-cccc-cccccccccccc";
+    let two_projects = "11111111-dddd-dddd-dddd-dddddddddddd";
+    for (task, projects) in [
+        (listed, vec![project]),
+        (deleted, vec![project]),
+        (elsewhere, vec![other]),
+        (two_projects, vec![project, other]),
+    ] {
+        let references = projects
+            .iter()
+            .map(|id| serde_json::json!({ "entity_id": id.to_string(), "entity_type": "INITIATIVE" }))
+            .collect::<Vec<_>>();
+        sqlx::query!(
+            r#"
+            INSERT INTO entity_properties (id, entity_id, entity_type, property_definition_id, values)
+            VALUES ($1, $2, 'TASK', $3, jsonb_build_object('type', 'EntityReference', 'value', $4::jsonb))
+            "#,
+            Uuid::now_v7(),
+            task,
+            system_properties::SystemPropertyKey::PROJECT_UUID,
+            serde_json::Value::Array(references),
+        )
+        .execute(&pool)
+        .await?;
+    }
+    sqlx::query!(
+        r#"UPDATE "Document" SET "deletedAt" = now() WHERE id = $1"#,
+        deleted
+    )
+    .execute(&pool)
+    .await?;
+
+    assert_eq!(
+        project_task_entities(&pool, project).await?,
+        [EntityType::Document.with_entity_string(listed.to_owned())],
+        "a deleted task, another project's task and a task naming two projects are left out"
+    );
+    Ok(())
+}

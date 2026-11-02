@@ -26,7 +26,7 @@ async fn mint_token_maps_channel_role_to_edit() {
 
     let mint_receipt = receipt_for("macro|a@b.c", EntityType::Channel, "chan-1", channel_role);
     let token = svc
-        .mint_token(&user("macro|a@b.c"), mint_receipt, surface.id)
+        .mint_token(Some(&user("macro|a@b.c")), mint_receipt, surface.id)
         .await
         .unwrap();
 
@@ -68,7 +68,7 @@ async fn mint_token_rejects_receipt_for_wrong_parent() {
         edit_permission(),
     );
     let err = svc
-        .mint_token(&user("macro|a@b.c"), wrong_receipt, surface.id)
+        .mint_token(Some(&user("macro|a@b.c")), wrong_receipt, surface.id)
         .await
         .unwrap_err();
     assert!(matches!(err, CollabSurfaceError::AccessDenied));
@@ -161,7 +161,7 @@ async fn mint_token_refuses_a_pending_surface() {
 
     // A pending row has not proven its session is its own.
     let err = svc
-        .mint_token(&user("macro|a@b.c"), receipt(), id)
+        .mint_token(Some(&user("macro|a@b.c")), receipt(), id)
         .await
         .unwrap_err();
     assert!(matches!(err, CollabSurfaceError::NotReady));
@@ -199,7 +199,7 @@ async fn parent_comment_access_mints_a_read_only_token() {
         (AccessLevel::Owner, AccessLevel::Owner),
     ] {
         let token = svc
-            .mint_token(&user("macro|a@b.c"), receipt(parent), id)
+            .mint_token(Some(&user("macro|a@b.c")), receipt(parent), id)
             .await
             .unwrap();
         let claims: model::document::DocumentPermissionsToken =

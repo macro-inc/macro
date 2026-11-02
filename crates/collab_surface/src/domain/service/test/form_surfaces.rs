@@ -300,7 +300,7 @@ async fn a_form_surface_token_requires_edit_on_the_form() {
     // Respondents hold View; the draft is not theirs to read.
     for denied in [AccessLevel::View, AccessLevel::Comment] {
         let err = svc
-            .mint_token(&user("macro|a@b.c"), form_receipt(id, denied), id)
+            .mint_token(Some(&user("macro|a@b.c")), form_receipt(id, denied), id)
             .await
             .unwrap_err();
         assert!(
@@ -311,7 +311,7 @@ async fn a_form_surface_token_requires_edit_on_the_form() {
 
     for allowed in [AccessLevel::Edit, AccessLevel::Owner] {
         let token = svc
-            .mint_token(&user("macro|a@b.c"), form_receipt(id, allowed), id)
+            .mint_token(Some(&user("macro|a@b.c")), form_receipt(id, allowed), id)
             .await
             .unwrap();
         let claims: model::document::DocumentPermissionsToken =
@@ -339,10 +339,7 @@ async fn an_anonymous_visitor_never_gets_a_form_surface_token() {
     )
     .unwrap();
 
-    let err = svc
-        .mint_token(&user("macro|a@b.c"), anonymous, id)
-        .await
-        .unwrap_err();
+    let err = svc.mint_token(None, anonymous, id).await.unwrap_err();
 
     assert!(matches!(err, CollabSurfaceError::AccessDenied));
 }
@@ -362,7 +359,7 @@ async fn other_parents_keep_view_tokens() {
     );
 
     let token = svc
-        .mint_token(&user("macro|a@b.c"), receipt, id)
+        .mint_token(Some(&user("macro|a@b.c")), receipt, id)
         .await
         .unwrap();
     let claims: model::document::DocumentPermissionsToken =

@@ -471,11 +471,16 @@ fn initiative_reads_and_mutations_share_the_canonical_soup_entity() {
             .unwrap()
             .0
     };
+    // Single-item reads sit at the root, open to anyone the initiative's
+    // own access admits; the viewer-scoped field remains for deployed clients.
     assert_sdl_line(
-        object("GraphqlUser"),
+        object("SoupQueryRoot"),
         "initiative(initiativeId: ID!): GraphqlSoupInitiative!",
     );
-    assert!(!object("SoupQueryRoot").contains("initiative"));
+    assert_sdl_line(
+        object("GraphqlUser"),
+        r#"initiative(initiativeId: ID!): GraphqlSoupInitiative! @deprecated(reason: "Use the root initiative field. Remove after 2026-12-15.")"#,
+    );
     for field in [
         "id: ID!",
         "properties: [GraphqlProperty!]!",

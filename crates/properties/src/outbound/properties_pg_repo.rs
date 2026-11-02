@@ -612,6 +612,14 @@ impl PropertiesRepo for PropertiesPgRepo {
         metadata_queries::get_document_sub_types(&self.pool, document_ids).await
     }
 
+    #[tracing::instrument(skip_all, fields(task_count = task_ids.len()), err)]
+    async fn task_listing_projects(
+        &self,
+        task_ids: &[String],
+    ) -> Result<HashMap<String, Uuid>, Self::Err> {
+        metadata_queries::task_listing_projects(&self.pool, task_ids).await
+    }
+
     #[tracing::instrument(skip(self), err)]
     async fn get_document_metadata(
         &self,

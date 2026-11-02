@@ -28,7 +28,7 @@ use graphql_permission::{
     EntityPermissionEdgeReader, GraphqlEntityPermission, load_entity_permission,
 };
 use graphql_properties::{EntityPropertyReader, GraphqlProperty, load_entity_properties};
-use graphql_soup::SoupEntityEdges;
+use graphql_soup::{GraphqlSoupEntity, SoupEntityEdges};
 use predicate_index::{RecordKey, utc_timestamp_micros};
 use soup_filter_projection::{
     MailCacheProjectionFacts, SoupCacheProjectionSupplement, encode_cache_projection_supplement,
@@ -77,7 +77,7 @@ where
     type ActivityEvent = GraphqlActivityEvent;
     type EmailThreadEdges = SoupEmailThreadEdges<ER>;
     type AgentSessionEdges = SoupAgentSessionEdges;
-    type InitiativeEdges = SoupInitiativeEdges;
+    type InitiativeEdges = SoupInitiativeEdges<Self>;
     type CrmRecordEdges = SoupCrmRecordEdges;
 
     fn from_entity(entity: model_entity::Entity<'static>) -> Self {
@@ -136,7 +136,10 @@ where
     }
 
     fn initiative_edges(initiative_id: Uuid) -> Self::InitiativeEdges {
-        SoupInitiativeEdges { initiative_id }
+        SoupInitiativeEdges {
+            initiative_id,
+            _edges: PhantomData,
+        }
     }
 
     fn crm_record_edges(record: model_entity::Entity<'static>) -> Self::CrmRecordEdges {
@@ -711,21 +714,53 @@ where
 }
 
 /// Initiative detail fields composed onto the canonical Soup entity.
-#[derive(Clone)]
-pub struct SoupInitiativeEdges {
+pub struct SoupInitiativeEdges<E> {
     /// Initiative whose domain-authorized details are requested.
     initiative_id: Uuid,
+    /// The edge set its tasks resolve with.
+    _edges: PhantomData<fn() -> E>,
+}
+
+impl<E> Clone for SoupInitiativeEdges<E> {
+    fn clone(&self) -> Self {
+        Self {
+            initiative_id: self.initiative_id,
+            _edges: PhantomData,
+        }
+    }
 }
 
 #[Object]
-impl SoupInitiativeEdges {
+impl<E: SoupEntityEdges> SoupInitiativeEdges<E> {
+    /// Every task the project lists, in `taskIds` order. Viewing a project
+    /// lets the viewer list its tasks, a caller with no account included;
+    /// opening a task still needs the task's own access.
+    async fn tasks(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<GraphqlSoupEntity<E>>> {
+        let listing =
+            graphql_initiative::load_initiative_task_listing(ctx, self.initiative_id).await?;
+        let mut hydrated = ctx
+            .data::<graphql_initiative::InitiativeEntityLoader>()?
+            .0
+            .hydrate_project_tasks(listing.project)
+            .await?
+            .into_iter()
+            .map(|hydration| (hydration.item.entity().entity_id.into_owned(), hydration))
+            .collect::<HashMap<_, _>>();
+        Ok(listing
+            .task_ids
+            .iter()
+            .filter_map(|id| hydrated.remove(id))
+            .map(GraphqlSoupEntity::new_with_projection)
+            .collect())
+    }
+
     /// Collaborators, independent of assignees.
     async fn member_ids(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<String>> {
         let detail = graphql_initiative::load_initiative_detail(ctx, self.initiative_id).await?;
         Ok(detail.member_ids.iter().map(ToString::to_string).collect())
     }
 
-    /// Associated task identifiers visible to this viewer.
+    /// Identifiers of every task the project lists.
     async fn task_ids(&self, ctx: &Context<'_>) -> async_graphql::Result<Vec<ID>> {
         let detail = graphql_initiative::load_initiative_detail(ctx, self.initiative_id).await?;
         Ok(detail.task_ids.iter().cloned().map(ID).collect())

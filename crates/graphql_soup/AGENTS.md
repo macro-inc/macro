@@ -18,6 +18,18 @@ viewer pattern), which apply to every type defined here.
   serves lists. A thread shared through a team's CRM, a project, or a share
   therefore opens through `emailThread` even though it lives in a teammate's
   inbox.
+- Initiatives and agent sessions also hydrate through view receipts
+  (`SoupViewAuthorizer`, then `SoupService::get_viewable_items`), never through
+  Soup's listing policy, which deliberately leaves out public links. Its key's
+  viewer is optional: a caller with no account reads exactly these types, and
+  nothing that needs an inbox or a listing. To open another type to links,
+  add it to `hydrates_through_receipts` and to Soup's viewable hydration.
+  Documents hydrate through the listing first; only a document the listing
+  leaves out (a link-shared file) gets a per-item view check, so realtime
+  patches, which go to a document's own grantees, rarely pay for one.
+  A project's `tasks` list through `SoupItemDataLoader::hydrate_project_tasks`:
+  the project's View receipt authorizes listing every task in it, with no
+  per-task check, and opening a task still checks the task.
 - Property grouping accepts optional `groupBy.bucketing` with `type: DATE_RANGES`,
   caller-defined half-open UTC `ranges`, and `missingValueBucketKey`; client query
   keys restart pagination when ranges change.

@@ -1,12 +1,12 @@
 //! Entity access service implementation.
 
-use std::{collections::HashMap, marker::PhantomData, str::FromStr};
+use std::{collections::HashMap, str::FromStr};
 
 use crate::domain::{
     models::{
         AccessError, AccessLevel, AgentSessionParent, BotAccessScope, BotId, CallChannelInfo,
-        ChannelRoleResult, CrmEntityAccess, Entity, EntityAccessAuth, EntityAccessReceipt,
-        EntityPermission, EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
+        ChannelRoleResult, CrmEntityAccess, Entity, EntityAccessReceipt, EntityPermission,
+        EntityType, RequiredPermission, TeamRole, UserTeamInfo, ViewAccessLevel,
     },
     ports::{
         AccessRepository, AccessibleDatabases, AccessibleForms, AccessiblePipelines,
@@ -349,19 +349,14 @@ where
             .get_entity_permission(Some(user_id), entity_id, entity_type, user_org_id)
             .await?;
 
-        if !entity_permission.satisfies::<T>() {
-            return Err(AccessError::Unauthorized);
-        }
-
-        Ok(EntityAccessReceipt {
-            auth: EntityAccessAuth::Authenticated(MacroUserIdStr(user_id.clone().into_owned())),
-            entity: Entity {
+        EntityAccessReceipt::try_new_authenticated_user(
+            MacroUserIdStr(user_id.clone().into_owned()),
+            Entity {
                 entity_id: entity_id.to_string(),
                 entity_type,
             },
             entity_permission,
-            _marker: PhantomData,
-        })
+        )
     }
 
     #[tracing::instrument(skip_all, fields(row_count = row_ids.len()))]
@@ -478,19 +473,16 @@ where
             if owned_ids.contains(&id) {
                 receipts.insert(
                     thread_id.clone(),
-                    Ok(EntityAccessReceipt {
-                        auth: EntityAccessAuth::Authenticated(MacroUserIdStr(
-                            user_id.clone().into_owned(),
-                        )),
-                        entity: Entity {
+                    EntityAccessReceipt::try_new_authenticated_user(
+                        MacroUserIdStr(user_id.clone().into_owned()),
+                        Entity {
                             entity_id: thread_id,
                             entity_type: EntityType::EmailThread,
                         },
-                        entity_permission: EntityPermission::AccessLevel {
+                        EntityPermission::AccessLevel {
                             access_level: AccessLevel::Owner,
                         },
-                        _marker: PhantomData,
-                    }),
+                    ),
                 );
             } else {
                 remaining.push(thread_id);

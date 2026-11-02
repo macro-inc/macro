@@ -59,6 +59,11 @@ table.
   sync-service session — it's a one-way lifecycle step.
 - The parent reference is polymorphic with no FK cascade; wiring retirement
   into the parent feature's own cleanup is the caller's responsibility.
+- `POST /collab_surfaces/{id}/token` also answers callers with no account:
+  their parent receipt holds at most View, so they read a surface a public
+  link opens, with a token that names no user. A form's surface still needs
+  Edit. Every other route needs an account, and nothing a visitor calls
+  ensures a surface.
 
 ## Related
 

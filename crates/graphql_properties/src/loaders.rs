@@ -1,7 +1,12 @@
-use std::{collections::HashMap, sync::Arc};
+use std::{
+    collections::{HashMap, HashSet},
+    sync::Arc,
+};
 
 use async_graphql::dataloader::{DataLoader, Loader};
-use entity_access::domain::models::{EntityAccessReceipt, EntityPermission, ViewAccessLevel};
+use entity_access::domain::models::{
+    Entity, EntityAccessReceipt, EntityPermission, ViewAccessLevel,
+};
 use entity_access::domain::ports::EntityAccessService;
 use futures::{StreamExt, stream};
 use macro_user_id::user_id::MacroUserIdStr;
@@ -50,11 +55,12 @@ pub trait EntityPropertyReader: Send + Sync + 'static {
         property_definition_ids: &[Uuid],
     ) -> impl Future<Output = Result<HashMap<Uuid, Vec<PropertyOption>>, rootcause::Report>> + Send;
 
-    /// Load properties for the requested entity keys on behalf of the given
-    /// user. Entities the user cannot view yield an empty property list.
+    /// Load properties for the requested entity keys on behalf of a viewer,
+    /// signed in or not. Entities the viewer cannot view yield an empty
+    /// property list.
     fn get_properties(
         &self,
-        user_id: &MacroUserIdStr<'static>,
+        viewer: Option<&MacroUserIdStr<'static>>,
         keys: &[model_entity::Entity<'static>],
     ) -> impl Future<
         Output = Result<
@@ -88,7 +94,7 @@ impl EntityPropertyReader for NoOpEntityPropertyReader {
 
     async fn get_properties(
         &self,
-        _user_id: &MacroUserIdStr<'static>,
+        _viewer: Option<&MacroUserIdStr<'static>>,
         keys: &[model_entity::Entity<'static>],
     ) -> Result<
         HashMap<model_entity::Entity<'static>, Vec<EntityPropertyWithDefinition>>,
@@ -145,6 +151,92 @@ impl<P, A: EntityAccessService> PropertiesEntityPropertyReader<P, A> {
     }
 }
 
+impl<P, A> PropertiesEntityPropertyReader<P, A>
+where
+    P: properties::PropertiesService,
+    A: EntityAccessService,
+{
+    /// Properties of the tasks among `keys` the viewer can't open but can
+    /// list: a project the viewer may view lists them, and viewing a project
+    /// shows its tasks with their properties. Runs only for refused tasks, so
+    /// a list of items the viewer holds grants on makes no extra queries.
+    async fn listed_task_properties(
+        &self,
+        viewer: Option<&MacroUserIdStr<'static>>,
+        keys: &[model_entity::Entity<'static>],
+        receipts: &[EntityAccessReceipt<ViewAccessLevel>],
+    ) -> Result<
+        HashMap<properties::PropertyTargetKey, Vec<EntityPropertyWithDefinition>>,
+        rootcause::Report,
+    > {
+        let granted = receipts
+            .iter()
+            .filter(|receipt| receipt.entity().entity_type == model_entity::EntityType::Document)
+            .map(|receipt| receipt.entity().entity_id.as_str())
+            .collect::<HashSet<_>>();
+        let refused = keys
+            .iter()
+            .filter(|key| key.entity_type == model_entity::EntityType::Document)
+            .filter(|key| !granted.contains(key.entity_id.as_ref()))
+            .map(|key| key.entity_id.to_string())
+            .collect::<Vec<_>>();
+        if refused.is_empty() {
+            return Ok(HashMap::new());
+        }
+        let mut tasks_by_project = HashMap::<Uuid, Vec<String>>::new();
+        for (task_id, project) in self
+            .properties_service
+            .task_listing_projects(&refused)
+            .await
+            .map_err(|err| rootcause::report!(err))?
+        {
+            tasks_by_project.entry(project).or_default().push(task_id);
+        }
+        let projects = tasks_by_project
+            .keys()
+            .map(|project| {
+                model_entity::EntityType::Initiative.with_entity_string(project.to_string())
+            })
+            .collect::<Vec<_>>();
+        let project_receipts = load_view_receipts(&projects, |key| async move {
+            let permission = self
+                .entity_access_service
+                .get_entity_permission(
+                    viewer.map(|user| &**user),
+                    &key.entity_id,
+                    key.entity_type,
+                    None,
+                )
+                .await?;
+            EntityAccessReceipt::try_new_for_user(
+                viewer.cloned(),
+                Entity {
+                    entity_id: key.entity_id.to_string(),
+                    entity_type: key.entity_type,
+                },
+                permission,
+            )
+        })
+        .await;
+        let mut listed = HashMap::new();
+        for project in project_receipts {
+            let Some(tasks) = Uuid::parse_str(&project.entity().entity_id)
+                .ok()
+                .and_then(|id| tasks_by_project.get(&id))
+            else {
+                continue;
+            };
+            listed.extend(
+                self.properties_service
+                    .get_project_task_properties(&project, tasks)
+                    .await
+                    .map_err(|err| rootcause::report!(err))?,
+            );
+        }
+        Ok(listed)
+    }
+}
+
 impl<P, A> EntityPropertyReader for PropertiesEntityPropertyReader<P, A>
 where
     P: properties::PropertiesService,
@@ -191,7 +283,7 @@ where
     #[tracing::instrument(skip_all, fields(entity_count = keys.len()), err)]
     async fn get_properties(
         &self,
-        user_id: &MacroUserIdStr<'static>,
+        viewer: Option<&MacroUserIdStr<'static>>,
         keys: &[model_entity::Entity<'static>],
     ) -> Result<
         HashMap<model_entity::Entity<'static>, Vec<EntityPropertyWithDefinition>>,
@@ -210,26 +302,42 @@ where
                 .iter()
                 .cloned()
                 .partition(|key| key.entity_type == model_entity::EntityType::DatabaseRow);
-            let row_ids = row_keys
-                .iter()
-                .map(|key| key.entity_id.to_string())
-                .collect::<Vec<_>>();
-            let mut receipts = self
-                .entity_access_service
-                .generate_database_row_view_access_receipts(user_id, &row_ids)
-                .await
-                .into_values()
-                .filter_map(Result::ok)
-                .collect::<Vec<_>>();
-            receipts.extend(
-                load_view_receipts(&other_keys, |key| {
+            // Database rows are read through their database's members; a
+            // caller with no account reads none.
+            let mut receipts = match viewer {
+                Some(user_id) => {
+                    let row_ids = row_keys
+                        .iter()
+                        .map(|key| key.entity_id.to_string())
+                        .collect::<Vec<_>>();
                     self.entity_access_service
-                        .generate_entity_access_receipt::<ViewAccessLevel>(
-                            user_id,
-                            None,
+                        .generate_database_row_view_access_receipts(user_id, &row_ids)
+                        .await
+                        .into_values()
+                        .filter_map(Result::ok)
+                        .collect::<Vec<_>>()
+                }
+                None => Vec::new(),
+            };
+            receipts.extend(
+                load_view_receipts(&other_keys, |key| async move {
+                    let permission = self
+                        .entity_access_service
+                        .get_entity_permission(
+                            viewer.map(|user| &**user),
                             &key.entity_id,
                             key.entity_type,
+                            None,
                         )
+                        .await?;
+                    EntityAccessReceipt::try_new_for_user(
+                        viewer.cloned(),
+                        Entity {
+                            entity_id: key.entity_id.to_string(),
+                            entity_type: key.entity_type,
+                        },
+                        permission,
+                    )
                 })
                 .await,
             );
@@ -241,19 +349,24 @@ where
         ))
         .await;
 
-        if receipts.is_empty() {
+        let listed = self.listed_task_properties(viewer, keys, &receipts).await?;
+        if receipts.is_empty() && listed.is_empty() {
             return Ok(result);
         }
 
-        let properties_by_entity = self
-            .properties_service
-            .get_bulk_entity_properties(&receipts, Vec::new())
-            .instrument(tracing::info_span!(
-                "graphql_properties.hydrate",
-                entity_count = receipts.len()
-            ))
-            .await
-            .map_err(|err| rootcause::report!(err))?;
+        let mut properties_by_entity = if receipts.is_empty() {
+            HashMap::new()
+        } else {
+            self.properties_service
+                .get_bulk_entity_properties(&receipts, Vec::new())
+                .instrument(tracing::info_span!(
+                    "graphql_properties.hydrate",
+                    entity_count = receipts.len()
+                ))
+                .await
+                .map_err(|err| rootcause::report!(err))?
+        };
+        properties_by_entity.extend(listed);
 
         // Merge back under the original canonical loader keys.
         for key in keys {
@@ -275,15 +388,16 @@ where
 
 /// DataLoader for entity property edges.
 pub struct EntityPropertiesLoader<R> {
-    /// User on whose behalf properties are loaded.
-    user_id: MacroUserIdStr<'static>,
+    /// Viewer on whose behalf properties are loaded; `None` has no account,
+    /// reads entity properties through links, and owns no definitions.
+    user_id: Option<MacroUserIdStr<'static>>,
     /// Property reader used to fulfill batches.
     reader: R,
 }
 
 impl<R> EntityPropertiesLoader<R> {
-    /// Create a new entity properties DataLoader scoped to the requesting user.
-    pub fn new(user_id: MacroUserIdStr<'static>, reader: R) -> Self {
+    /// Create a new entity properties DataLoader scoped to the requesting viewer.
+    pub fn new(user_id: Option<MacroUserIdStr<'static>>, reader: R) -> Self {
         Self { user_id, reader }
     }
 }
@@ -295,8 +409,11 @@ impl<R: EntityPropertyReader> EntityPropertiesLoader<R> {
         scope: GraphqlPropertyDefinitionScope,
         for_entity_type: Option<models_properties::EntityType>,
     ) -> Result<Vec<PropertyDefinition>, rootcause::Report> {
+        let Some(user_id) = &self.user_id else {
+            return Ok(Vec::new());
+        };
         self.reader
-            .get_definitions(&self.user_id, scope, for_entity_type)
+            .get_definitions(user_id, scope, for_entity_type)
             .await
     }
 }
@@ -306,8 +423,11 @@ impl<R: EntityPropertyReader> Loader<Uuid> for EntityPropertiesLoader<R> {
     type Error = rootcause::Report<Dynamic, Cloneable>;
 
     async fn load(&self, keys: &[Uuid]) -> Result<HashMap<Uuid, Self::Value>, Self::Error> {
+        let Some(user_id) = &self.user_id else {
+            return Ok(HashMap::new());
+        };
         self.reader
-            .get_options(&self.user_id, keys)
+            .get_options(user_id, keys)
             .await
             .map_err(|error| error.into_cloneable())
     }
@@ -330,7 +450,7 @@ where
             .collect::<Vec<_>>();
         let loaded = self
             .reader
-            .get_properties(&self.user_id, &entities)
+            .get_properties(self.user_id.as_ref(), &entities)
             .await
             .map_err(|error| error.into_cloneable())?;
 
@@ -345,9 +465,9 @@ where
     }
 }
 
-/// Build a DataLoader for entity property edges scoped to the requesting user.
+/// Build a DataLoader for entity property edges scoped to the requesting viewer.
 pub fn entity_properties_loader<R>(
-    user_id: MacroUserIdStr<'static>,
+    user_id: Option<MacroUserIdStr<'static>>,
     reader: R,
 ) -> DataLoader<EntityPropertiesLoader<R>>
 where

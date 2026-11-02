@@ -5450,7 +5450,7 @@
             }
           },
           "401": {
-            "description": "Missing or invalid credentials",
+            "description": "Invalid credentials",
             "content": {
               "application/json": {
                 "schema": {

@@ -15,7 +15,7 @@ use system_properties::{StatusOption, SystemPropertiesService, SystemPropertyKey
 
 use crate::domain::{
     models::{InitialPropertyValue, InitiativeError, InitiativeId},
-    reads::InitiativePropertySnapshot,
+    reads::{InitiativePropertySnapshot, ProjectTask},
     resources::{InitiativeResources, ResourceFuture},
 };
 
@@ -155,12 +155,19 @@ impl<P: PropertiesService, S: SystemPropertiesService, A: EntityAccessService> I
             Ok(())
         })
     }
-    fn project_tasks(&self, id: InitiativeId) -> ResourceFuture<'_, Vec<String>> {
+    fn project_task_list(&self, id: InitiativeId) -> ResourceFuture<'_, Vec<ProjectTask>> {
         Box::pin(async move {
-            self.system_properties
-                .project_task_ids(id.as_uuid())
+            Ok(self
+                .system_properties
+                .live_project_tasks(id.as_uuid())
                 .await
-                .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))
+                .map_err(|error| InitiativeError::Internal(rootcause::report!(error).into()))?
+                .into_iter()
+                .map(|task| ProjectTask {
+                    id: task.id,
+                    completed: task.status == Some(StatusOption::COMPLETED_UUID),
+                })
+                .collect())
         })
     }
     fn view(

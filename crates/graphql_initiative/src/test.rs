@@ -241,8 +241,15 @@ impl RecordingApi {
         current
     }
 
-    fn record(&self, user: &MacroUserIdStr<'static>, call: &str) -> Result<(), InitiativeError> {
-        self.viewers.lock().unwrap().push(user.to_string());
+    fn record(
+        &self,
+        viewer: Option<&MacroUserIdStr<'static>>,
+        call: &str,
+    ) -> Result<(), InitiativeError> {
+        self.viewers
+            .lock()
+            .unwrap()
+            .push(viewer.map_or_else(|| "anonymous".to_owned(), ToString::to_string));
         self.calls.lock().unwrap().push(call.to_string());
         if self.denied {
             return Err(InitiativeError::Unauthorized);
@@ -257,9 +264,13 @@ impl RecordingApi {
 }
 
 impl InitiativeApi for RecordingApi {
-    fn read(&self, user: MacroUserIdStr<'static>, id: Uuid) -> ApiFuture<'_, InitiativeRead> {
+    fn read(
+        &self,
+        viewer: Option<MacroUserIdStr<'static>>,
+        id: Uuid,
+    ) -> ApiFuture<'_, InitiativeRead> {
         Box::pin(async move {
-            self.record(&user, "read")?;
+            self.record(viewer.as_ref(), "read")?;
             if self.denied_ids.lock().unwrap().contains(&id) {
                 return Err(InitiativeError::Unauthorized);
             }
@@ -281,7 +292,7 @@ impl InitiativeApi for RecordingApi {
         _id: Uuid,
     ) -> ApiFuture<'_, ()> {
         Box::pin(async move {
-            self.record(&user, "ensure_description_surface")?;
+            self.record(Some(&user), "ensure_description_surface")?;
             Ok(())
         })
     }
@@ -302,7 +313,7 @@ impl InitiativeApi for RecordingApi {
         input: UpdateInitiativeRequest,
     ) -> ApiFuture<'_, InitiativeDetail> {
         Box::pin(async move {
-            self.record(&user, "update")?;
+            self.record(Some(&user), "update")?;
             if let Some(name) = &input.name {
                 *self.name.lock().unwrap() = Some(name.clone());
             }
@@ -322,19 +333,19 @@ impl InitiativeApi for RecordingApi {
         input: CreateInitiativeRequest,
     ) -> ApiFuture<'_, InitiativeDetail> {
         Box::pin(async move {
-            self.record(&user, "create")?;
+            self.record(Some(&user), "create")?;
             *self.name.lock().unwrap() = Some(input.name);
             Ok(self.current_detail())
         })
     }
     fn tasks(
         &self,
-        user: MacroUserIdStr<'static>,
+        viewer: Option<MacroUserIdStr<'static>>,
         _id: Uuid,
         _input: InitiativeTasksRequest,
     ) -> ApiFuture<'_, InitiativeTasksPage> {
         Box::pin(async move {
-            self.record(&user, "tasks")?;
+            self.record(viewer.as_ref(), "tasks")?;
             Ok(InitiativeTasksPage {
                 task_ids: vec![],
                 next_cursor: None,
@@ -343,7 +354,7 @@ impl InitiativeApi for RecordingApi {
         })
     }
     fn delete(&self, user: MacroUserIdStr<'static>, _id: Uuid) -> ApiFuture<'_, ()> {
-        Box::pin(async move { self.record(&user, "delete") })
+        Box::pin(async move { self.record(Some(&user), "delete") })
     }
 }
 
@@ -372,7 +383,7 @@ fn schema_with_readers(
         .data(context.clone())
         .data(replica.loader())
         .data(InitiativeEntityLoader(primary.loader()))
-        .data(initiative_loader(context, user()))
+        .data(initiative_loader(context, Some(user())))
         .finish()
 }
 
@@ -648,8 +659,8 @@ async fn detail_loaders_isolate_viewers_failures_and_subsequent_reads() {
     api.denied_ids.lock().unwrap().push(hidden);
     let other = MacroUserIdStr::try_from_email("other@example.com").unwrap();
     let context = InitiativeGraphqlContext(api.clone());
-    let viewer_loader = initiative_loader(context.clone(), user());
-    let other_loader = initiative_loader(context, other);
+    let viewer_loader = initiative_loader(context.clone(), Some(user()));
+    let other_loader = initiative_loader(context, Some(other));
     let results = viewer_loader.load_many([project, hidden]).await.unwrap();
     assert!(results[&project].is_ok());
     assert!(results[&hidden].is_err());
