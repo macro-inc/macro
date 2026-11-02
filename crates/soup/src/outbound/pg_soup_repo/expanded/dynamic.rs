@@ -1346,8 +1346,8 @@ fn document_top_clause(sort_method: SimpleSortMethod, needs_sub_type_join: bool)
 
 /// The document access gate. With a project Soup has confirmed the viewer
 /// can view, the request's filter already admits only that project's tasks,
-/// and the viewer can view every one of them, so the gate is the project's
-/// task set alone. Unioning it with the viewer's grants made the planner
+/// and viewing a project lets the viewer list every one of them, so the gate
+/// is the project's task set alone. Unioning it with the viewer's grants made the planner
 /// hash every document a heavy user can reach (hundreds of milliseconds on
 /// production-sized data, against about two for the task set). The project
 /// id is a literal so a generic plan can prove the partial predicate of

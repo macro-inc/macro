@@ -256,6 +256,13 @@ impl SoupRepo for PgSoupRepo {
         Ok(items)
     }
 
+    async fn project_task_entities(
+        &self,
+        project: uuid::Uuid,
+    ) -> Result<Vec<Entity<'static>>, Self::Err> {
+        initiative::project_task_entities(&self.pool.0, project).await
+    }
+
     async fn expanded_viewable_by_ids<'a>(
         &self,
         viewer: Option<MacroUserIdStr<'a>>,

@@ -59,6 +59,24 @@ pub(super) async fn viewable_by_ids(
     .collect()
 }
 
+/// The live tasks whose Project property names exactly `project`, in id
+/// order. Applies no access predicate: the caller holds the project's View
+/// receipt, which authorizes listing them.
+pub(super) async fn project_task_entities(
+    db: &PgPool,
+    project: Uuid,
+) -> Result<Vec<Entity<'static>>, sqlx::Error> {
+    Ok(sqlx::query_file_scalar!(
+        "src/outbound/pg_soup_repo/initiative/project_task_ids.sql",
+        project.to_string(),
+    )
+    .fetch_all(db)
+    .await?
+    .into_iter()
+    .map(|id| EntityType::Document.with_entity_string(id))
+    .collect())
+}
+
 fn initiative_ids(entities: &[Entity<'_>]) -> Vec<Uuid> {
     entities
         .iter()

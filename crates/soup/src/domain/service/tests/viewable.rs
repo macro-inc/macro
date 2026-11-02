@@ -100,3 +100,50 @@ async fn receipts_for_different_viewers_are_refused() {
 
     assert!(result.is_err());
 }
+
+#[tokio::test]
+async fn a_project_receipt_lists_the_tasks_soup_finds_for_its_viewer() {
+    let project = Uuid::now_v7();
+    let tasks = [Uuid::now_v7(), Uuid::now_v7()]
+        .map(|task| EntityType::Document.with_entity_string(task.to_string()));
+    let mut soup_mock = MockSoupRepo::new();
+    let listed = tasks.clone();
+    soup_mock
+        .expect_project_task_entities()
+        .times(1)
+        .returning(move |requested| {
+            assert_eq!(requested, project);
+            let listed = listed.to_vec();
+            Box::pin(async move { Ok(listed) })
+        });
+    soup_mock
+        .expect_expanded_viewable_by_ids()
+        .times(1)
+        .returning(move |viewer, entities| {
+            assert_eq!(viewer, None, "the project's viewer, with no account");
+            assert_eq!(entities, tasks, "exactly the tasks Soup found");
+            Box::pin(async move { Ok(Vec::new()) })
+        });
+
+    service(soup_mock, RecordingPullRequestListing::new(Vec::new()))
+        .get_project_tasks(receipt(None, EntityType::Initiative, project))
+        .await
+        .unwrap();
+}
+
+#[tokio::test]
+async fn only_a_project_receipt_lists_tasks() {
+    let mut soup_mock = MockSoupRepo::new();
+    soup_mock.expect_project_task_entities().never();
+    soup_mock.expect_expanded_viewable_by_ids().never();
+
+    let result = service(soup_mock, RecordingPullRequestListing::new(Vec::new()))
+        .get_project_tasks(receipt(
+            Some("macro|one@example.com"),
+            EntityType::Document,
+            Uuid::now_v7(),
+        ))
+        .await;
+
+    assert!(result.is_err());
+}

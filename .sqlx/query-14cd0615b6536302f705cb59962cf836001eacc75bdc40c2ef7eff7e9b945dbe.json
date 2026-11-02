@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "-- The Project property id is a literal so a generic plan proves the partial\n-- predicate of idx_ep_project_value_gin. A Project value holds exactly one\n-- reference, as entity access requires.\nSELECT ep.entity_id AS \"id!\"\nFROM entity_properties ep\nJOIN \"Document\" task ON task.id = ep.entity_id AND task.\"deletedAt\" IS NULL\nWHERE ep.property_definition_id = '00000001-0000-0000-0000-000000000014'\n  AND ep.entity_type = 'TASK'\n  AND ep.values -> 'value' @> jsonb_build_array(jsonb_build_object('entity_id', $1::text, 'entity_type', 'INITIATIVE'))\n  AND CASE WHEN jsonb_typeof(ep.values -> 'value') = 'array'\n           THEN jsonb_array_length(ep.values -> 'value') END = 1\nORDER BY ep.entity_id\n",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Text"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "14cd0615b6536302f705cb59962cf836001eacc75bdc40c2ef7eff7e9b945dbe"
+}

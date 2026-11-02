@@ -1,8 +1,9 @@
-//! Single-item hydration authorized by entity access receipts.
+//! Hydration authorized by entity access receipts.
 //!
 //! Listings enumerate what Soup's per-type policy reaches; a single item is
 //! readable whenever entity access grants View, which includes public and team
-//! links the listings deliberately never enumerate.
+//! links the listings deliberately never enumerate. A project's View receipt
+//! also authorizes listing its tasks, like a folder lists its documents.
 use super::*;
 use entity_access::domain::models::ViewAccessLevel;
 
@@ -43,9 +44,48 @@ where
                     .with_entity_string(entity.entity_id.clone())
             })
             .collect::<Vec<_>>();
+        self.hydrate_viewable(viewer, &entities, team_receipt).await
+    }
+
+    /// Hydrate every live task `project` lists. Soup finds the tasks itself;
+    /// the receipt proves only that the viewer may view the project.
+    pub(super) async fn project_tasks(
+        &self,
+        project: EntityAccessReceipt<ViewAccessLevel>,
+    ) -> Result<Vec<SoupProjectionHydration>, SoupErr> {
+        let entity = project.entity();
+        if entity.entity_type != EntityType::Initiative {
+            return Err(SoupErr::SoupDbErr(anyhow::anyhow!(
+                "project tasks were requested for a {}",
+                entity.entity_type
+            )));
+        }
+        let project_id = Uuid::parse_str(&entity.entity_id).map_err(anyhow::Error::new)?;
+        let tasks = self
+            .soup_storage
+            .project_task_entities(project_id)
+            .await
+            .map_err(anyhow::Error::from)?;
+        tracing::Span::current().record("task_count", tasks.len());
+        if tasks.is_empty() {
+            return Ok(Vec::new());
+        }
+        // Tasks are documents, so no agent session needs the viewer's team.
+        self.hydrate_viewable(project.acting_user_id().cloned(), &tasks, None)
+            .await
+    }
+
+    /// Hydrate `entities` for `viewer` with no listing predicate; the caller
+    /// has already authorized every one.
+    async fn hydrate_viewable(
+        &self,
+        viewer: Option<MacroUserIdStr<'static>>,
+        entities: &[Entity<'_>],
+        team_receipt: Option<EntityAccessReceipt<MemberTeamRole>>,
+    ) -> Result<Vec<SoupProjectionHydration>, SoupErr> {
         let items = self
             .soup_storage
-            .expanded_viewable_by_ids(viewer.clone(), &entities)
+            .expanded_viewable_by_ids(viewer.clone(), entities)
             .await
             .map_err(anyhow::Error::from)?;
 
