@@ -15,6 +15,7 @@ Main Tasks and reusable task-list hosts. Projects and CRM embed `TasksViewProvid
 ## Gotchas
 
 - Group task lists by the Project property, matching the Project column and Board. The server labels project groups with the initiative name the viewer can read, and the cache's local grouping projection carries that label; a header resolves the name through the authorized project identity query only while its group is still labeled by its key. Projects sort by name with No Project last in every layout.
+- Keep Priority groups in Urgent, High, Medium, Low order with unset priority last through the shared Soup group comparator; group presentation does not follow item sort direction or stored option display order.
 - Keep project navigation in a separate Projects section above Saved views, with assigned-to-me, all-accessible, and created-by-me views; replace individual-project shortcuts and use one mobile Projects picker.
 - Preserve project scope through detail navigation, history, pagination, and editable-filter clearing; keep project views out of task queries and saved-task-view capture.
 - Tab and Shift+Tab cycle sidebar tabs only over a list. Keep `TasksSidebar`'s key-time check for an open project or task: the sidebar remounts whenever the view crosses its layout breakpoint, so it registers after an open pane and eclipses any override the pane holds.
