@@ -655,9 +655,11 @@ movement must not keep resizing the removed split. Arrow keys still resize
 immediately, with Shift selecting the larger step.
 
 A view's narrow/wide layout reads its width when it mounts, then applies later
-split or window resizes on the next animation frame. Open a channel beside Home,
-drag the split gutter back and forth across the narrow breakpoint, and resize
-the window: the console should show no `ResizeObserver loop completed with
+split or window resizes on the next animation frame. Opening Home in either a
+wide or narrow split must settle immediately, without sliding or growing its
+content from zero width. Later split resizes still animate sidebar closure.
+Open a channel beside Home, drag the split gutter across the narrow breakpoint,
+and resize the window: the console should show no `ResizeObserver loop completed with
 undelivered notifications` errors, and the sidebar should switch between docked
 and overlay as the split crosses the breakpoint. Drive and other `virtua` lists
 can still report it from the virtualizer's own observer.
