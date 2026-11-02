@@ -32,6 +32,12 @@ The root adapters construct production dependencies. `context` defines the
 capabilities; it does not import their implementations. Views consume these
 capabilities, primitives receive narrow inputs, and components render props.
 Core modules remain independent of Solid, service clients, and app state.
+`mark-record-notifications-seen.ts` integrates with shared list activation so
+opening a company or contact clears its row's unread notifications immediately.
+It uses the row's attached notifications before falling back to an entity read;
+the shared notification source owns optimistic state and failure rollback.
+The discussion's message reader remains visibility-gated and reads a separate
+global feed, so it cannot guarantee that opening a record clears its row's dot.
 UI rollout gates read `useFeatureFlag` directly where used; do not pass rollout
 booleans through component props or the CRM source contract.
 
