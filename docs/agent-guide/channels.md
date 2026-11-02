@@ -421,10 +421,17 @@ An `@` inside a word stays literal text. Check hardware-keyboard input too;
 it should open only one menu.
 The same software-keyboard check applies to `:` for emoji and `/` for formatting
 commands: type a search and tap a result without sending the draft.
-Type `/gif` or choose **GIF** from `+`. The picker opens above the composer on
-phones and stays visible after you choose the action, including with the iOS
-keyboard open. Trending GIFs show first; tap search to filter, then tap a GIF
-to insert it without sending the draft.
+Type `/gif` or choose **GIF** from `+`. The rounded picker opens above the
+composer on phones and stays visible after you choose the action, including
+with the iOS keyboard open. Both the `/` formatting menu and the GIF picker
+span the available chat width on phones, using the mentions menu's side gutters.
+The larger desktop GIF picker stays within the viewport on narrow screens.
+Trending GIFs show first; tap search to filter, then tap a
+GIF to insert it without sending the draft. On desktop, arrow keys move through
+the two-column grid and scroll the selected GIF into view; Enter inserts it and
+Escape closes the picker. Check that GIFs animate in the picker, in the draft,
+after sending, and in the enlarged image viewer. Public Klipy GIFs load directly
+with CORS instead of depending on image-proxy authentication.
 
 Closed mention menus do not gather, rank, or paginate candidates. When checking
 channel-switch performance, include touch navigation back to the list and reopening

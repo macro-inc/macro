@@ -2,6 +2,7 @@ import { type PortalScope, ScopedPortal } from '@core/component/ScopedPortal';
 import clickOutside from '@core/directive/clickOutside';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCanEdit } from '@core/signal/permissions';
+import { useIsKeyPressActive } from '@core/util/useIsKeyPressActive';
 import MagnifyingGlassIcon from '@icon/system/regular/magnifying-glass.svg';
 import { createCallback } from '@solid-primitives/rootless';
 import { debounce } from '@solid-primitives/scheduled';
@@ -46,7 +47,7 @@ const COLUMNS = 2;
 const RESULT_LIMIT = 30;
 // Search field, padding, and "Powered by" row around the grid.
 const PANEL_CHROME_HEIGHT = 76;
-const MAX_GRID_HEIGHT = 280;
+const MAX_GRID_HEIGHT = 360;
 
 /**
  * GIF search, opened via TRY_INSERT_GIF_COMMAND (`/gif` or a composer's +).
@@ -87,6 +88,7 @@ export function FloatingGifMenu(
   // The search field takes focus, so the editor's caret is kept to insert at.
   let insertAt: BaseSelection | null = null;
   let inputRef: HTMLInputElement | undefined;
+  let gridRef: HTMLDivElement | undefined;
 
   const debouncedSetSearch = debounce(setDebouncedSearchTerm, 300);
   const updateSearch = (term: string) => {
@@ -162,12 +164,17 @@ export function FloatingGifMenu(
     });
   });
 
+  const { isKeypressActive } = useIsKeyPressActive();
+  const selectFromPointer = (index: number) => {
+    if (!isKeypressActive()) setSelectedIndex(index);
+  };
+
   const moveSelection = (delta: number) => {
     const lastIndex = gifList().length - 1;
     if (lastIndex < 0) return;
-    setSelectedIndex((index) =>
-      Math.min(lastIndex, Math.max(0, index + delta))
-    );
+    const nextIndex = Math.min(lastIndex, Math.max(0, selectedIndex() + delta));
+    setSelectedIndex(nextIndex);
+    gridRef?.children[nextIndex]?.scrollIntoView({ block: 'nearest' });
   };
 
   useMenuKeyboardNavigation({
@@ -188,7 +195,7 @@ export function FloatingGifMenu(
       <ScopedPortal scope={props.portalScope}>
         <div
           data-holds-prompts
-          class="w-80 cursor-default select-none z-modal-content menu-open-animation"
+          class="w-[28rem] mobile:w-[calc(100cqw-1rem-2px)] max-w-[calc(100cqw-1rem-2px)] cursor-default select-none z-modal-content menu-open-animation"
           use:floatWithSelection={{
             selection: untrack(() => window.getSelection()),
             reactiveOnContainer: editor()?.getRootElement(),
@@ -206,7 +213,11 @@ export function FloatingGifMenu(
             if (event.target !== inputRef) event.preventDefault();
           }}
         >
-          <Surface depth={2} class="menu-surface flex flex-col gap-1.5 p-1.5">
+          <Surface
+            depth={2}
+            hideBorder
+            class="menu-surface rounded-xl flex flex-col gap-1.5 p-1.5"
+          >
             <InputGroup size="sm">
               <InputGroup.Input
                 ref={inputRef}
@@ -249,20 +260,24 @@ export function FloatingGifMenu(
                   </div>
                 </Match>
                 <Match when={true}>
-                  <div class="grid grid-cols-2 auto-rows-24 gap-1.5 p-0.5">
+                  <div
+                    ref={gridRef}
+                    class="grid grid-cols-2 auto-rows-28 gap-1.5 p-0.5"
+                  >
                     <For each={gifList()}>
                       {(gif, index) => (
                         <button
                           type="button"
                           aria-label={gif.title}
                           onClick={() => insertGif(gif)}
-                          onPointerEnter={() => setSelectedIndex(index())}
+                          onPointerEnter={() => selectFromPointer(index())}
                           class={cn(
                             'size-full overflow-hidden rounded-lg bg-ink/5 outline-none',
                             selectedIndex() === index() && 'ring-2 ring-accent'
                           )}
                         >
                           <img
+                            crossorigin="anonymous"
                             src={gif.previewUrl}
                             alt=""
                             loading="lazy"
