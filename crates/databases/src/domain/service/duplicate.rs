@@ -8,6 +8,8 @@ use serde::Serialize;
 use serde::de::DeserializeOwned;
 
 use super::*;
+use crate::domain::catalog::{ColumnEntry, StorageTable};
+use crate::domain::derivation::Derivation;
 use crate::domain::duplicate::{DatabaseDuplicateRepo, DatabaseDuplicateService};
 use crate::domain::journal::{JournalPlan, RestoredRow};
 use crate::domain::models::{
@@ -256,6 +258,43 @@ fn plan(
         }
     }
 
+    // Formula values are stored like other cells; the store computes the
+    // copy's once its rows are in, from its own columns.
+    let mut derivations = Vec::new();
+    for table in &source.tables {
+        let entry = StorageTable {
+            table: Table {
+                id: table_id(table.id),
+                database_id: copy.id,
+                ..table.clone()
+            },
+            columns: columns
+                .iter()
+                .filter(|column| column.table_id == table.id)
+                .filter_map(|column| {
+                    let definition = source.definitions.get(&column.property_definition_id)?;
+                    Some((column, definition))
+                })
+                .map(|(column, definition)| {
+                    Ok(ColumnEntry {
+                        column: Column {
+                            id: ColumnId::from_uuid(remap.id(column.id.into_uuid())),
+                            table_id: table_id(column.table_id),
+                            property_definition_id: definition_id(column.property_definition_id),
+                            config: remap.value(&column.config)?,
+                            protections: Vec::new(),
+                            ..(*column).clone()
+                        },
+                        definition: remap.value(definition)?,
+                        writable: true,
+                    })
+                })
+                .collect::<Result<_, DatabaseError>>()?,
+            views: Vec::new(),
+        };
+        derivations.extend(Derivation::every(&entry));
+    }
+
     let mut related_rows = Vec::new();
     for table in &source.tables {
         let rows = source.rows.get(&table.id).map(Vec::as_slice).unwrap_or(&[]);
@@ -323,6 +362,8 @@ fn plan(
         writes.push(Write::InsertRows {
             table_id: table_id(table.id),
             rows: cells,
+            // The batch's derivations store every formula value below.
+            derivation: None,
             restored: rows
                 .iter()
                 .map(|row| RestoredRow {
@@ -376,6 +417,7 @@ fn plan(
         // The copy's history starts at the copy: none of the source's
         // changes are its to undo.
         journal: JournalPlan::default(),
+        derivations,
     })
 }
 

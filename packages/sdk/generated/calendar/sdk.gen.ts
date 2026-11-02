@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { CalendarEventProviderUrlData, CalendarEventProviderUrlErrors, CalendarEventProviderUrlResponses, CalendarReplacementStatusData, CalendarReplacementStatusErrors, CalendarReplacementStatusResponses, ConfirmCalendarReplacementData, ConfirmCalendarReplacementErrors, ConfirmCalendarReplacementResponses, CopyCalendarEventData, CopyCalendarEventErrors, CopyCalendarEventResponses, CreateCalendarEventData, CreateCalendarEventErrors, CreateCalendarEventResponses, DeleteCalendarEventData, DeleteCalendarEventErrors, DeleteCalendarEventResponses, DiscardCalendarReplacementData, DiscardCalendarReplacementErrors, DiscardCalendarReplacementResponses, DocumentNoteLinksData, DocumentNoteLinksResponses, EventNotesData, EventNotesResponses, GetAvailabilityCalendarsData, GetAvailabilityCalendarsResponses, GetTeamSharingData, GetTeamSharingResponses, HealthHandlerData, HealthHandlerResponses, InviteCalendarEventGuestsData, InviteCalendarEventGuestsErrors, InviteCalendarEventGuestsResponses, LinkEventNoteData, LinkEventNoteResponses, ListCalendarsData, ListCalendarsErrors, ListCalendarsResponses, NoteDocumentsData, NoteDocumentsResponses, PrepareCalendarReplacementData, PrepareCalendarReplacementErrors, PrepareCalendarReplacementResponses, RespondToJoinRequestData, RespondToJoinRequestErrors, RespondToJoinRequestResponses, RsvpCalendarEventData, RsvpCalendarEventErrors, RsvpCalendarEventResponses, SetAvailabilityCalendarData, SetAvailabilityCalendarResponses, SetTeamSharingData, SetTeamSharingResponses, UnlinkEventNoteData, UnlinkEventNoteResponses, UpdateCalendarEventData, UpdateCalendarEventErrors, UpdateCalendarEventResponses } from './types.gen';
+import type { CalendarEventProviderUrlData, CalendarEventProviderUrlErrors, CalendarEventProviderUrlResponses, CalendarReplacementStatusData, CalendarReplacementStatusErrors, CalendarReplacementStatusResponses, ConfirmCalendarReplacementData, ConfirmCalendarReplacementErrors, ConfirmCalendarReplacementResponses, CopyCalendarEventData, CopyCalendarEventErrors, CopyCalendarEventResponses, CreateCalendarEventData, CreateCalendarEventErrors, CreateCalendarEventResponses, DeleteCalendarEventData, DeleteCalendarEventErrors, DeleteCalendarEventResponses, DiscardCalendarReplacementData, DiscardCalendarReplacementErrors, DiscardCalendarReplacementResponses, GetAvailabilityCalendarsData, GetAvailabilityCalendarsResponses, GetTeamSharingData, GetTeamSharingResponses, HealthHandlerData, HealthHandlerResponses, InviteCalendarEventGuestsData, InviteCalendarEventGuestsErrors, InviteCalendarEventGuestsResponses, ListCalendarsData, ListCalendarsErrors, ListCalendarsResponses, PrepareCalendarReplacementData, PrepareCalendarReplacementErrors, PrepareCalendarReplacementResponses, RespondToJoinRequestData, RespondToJoinRequestErrors, RespondToJoinRequestResponses, RsvpCalendarEventData, RsvpCalendarEventErrors, RsvpCalendarEventResponses, SetAvailabilityCalendarData, SetAvailabilityCalendarResponses, SetTeamSharingData, SetTeamSharingResponses, UpdateCalendarEventData, UpdateCalendarEventErrors, UpdateCalendarEventResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -157,34 +157,6 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * List notes visible through this meeting occurrence.
-     */
-    public eventNotes<ThrowOnError extends boolean = false>(options: Options<EventNotesData, ThrowOnError>): RequestResult<EventNotesResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<EventNotesResponses, unknown, ThrowOnError>({ url: '/events/{event_id}/notes', ...options });
-    }
-    
-    /**
-     * Remove this meeting's grant without deleting the document.
-     */
-    public unlinkEventNote<ThrowOnError extends boolean = false>(options: Options<UnlinkEventNoteData, ThrowOnError>): RequestResult<UnlinkEventNoteResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).delete<UnlinkEventNoteResponses, unknown, ThrowOnError>({ url: '/events/{event_id}/notes/{document_id}', ...options });
-    }
-    
-    /**
-     * Idempotently link a markdown document and its optional team audience.
-     */
-    public linkEventNote<ThrowOnError extends boolean = false>(options: Options<LinkEventNoteData, ThrowOnError>): RequestResult<LinkEventNoteResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).put<LinkEventNoteResponses, unknown, ThrowOnError>({
-            url: '/events/{event_id}/notes/{document_id}',
-            ...options,
-            headers: {
-                'Content-Type': 'application/json',
-                ...options.headers
-            }
-        });
-    }
-    
-    /**
      * Resolve an authorized event's provider link for Outlook-only actions.
      */
     public calendarEventProviderUrl<ThrowOnError extends boolean = false>(options: Options<CalendarEventProviderUrlData, ThrowOnError>): RequestResult<CalendarEventProviderUrlResponses, CalendarEventProviderUrlErrors, ThrowOnError> {
@@ -240,20 +212,6 @@ export class Sdk extends HeyApiClient {
                 ...options.headers
             }
         });
-    }
-    
-    /**
-     * Suggest the caller's markdown documents and extra team audiences.
-     */
-    public noteDocuments<ThrowOnError extends boolean = false>(options?: Options<NoteDocumentsData, ThrowOnError>): RequestResult<NoteDocumentsResponses, unknown, ThrowOnError> {
-        return (options?.client ?? this.client).get<NoteDocumentsResponses, unknown, ThrowOnError>({ url: '/meeting-notes/documents', ...options });
-    }
-    
-    /**
-     * List a document's visible meeting links; owners also see unavailable grants.
-     */
-    public documentNoteLinks<ThrowOnError extends boolean = false>(options: Options<DocumentNoteLinksData, ThrowOnError>): RequestResult<DocumentNoteLinksResponses, unknown, ThrowOnError> {
-        return (options.client ?? this.client).get<DocumentNoteLinksResponses, unknown, ThrowOnError>({ url: '/meeting-notes/documents/{document_id}/links', ...options });
     }
     
     /**

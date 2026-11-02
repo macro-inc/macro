@@ -327,6 +327,7 @@ async fn a_refused_duplicate_leaves_no_database_behind(pool: PgPool) {
                 related_rows: vec![(guests.table_id, missing)],
                 expected_versions: vec![],
                 journal: JournalPlan::default(),
+                derivations: vec![],
             },
         )
         .await
