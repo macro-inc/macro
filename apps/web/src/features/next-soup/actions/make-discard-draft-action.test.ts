@@ -1,4 +1,5 @@
 import type { EntityData } from '@entity';
+import { err, ok } from 'neverthrow';
 import { createRoot } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import type { EntityActionListState } from './entity-action-context';
@@ -25,7 +26,7 @@ vi.mock('@macro-inc/observability', () => ({
   Telemetry: {
     error: vi.fn(),
     span: (_name: string, run: (span: object) => unknown) =>
-      run({ setAttr: vi.fn() }),
+      run({ setAttr: vi.fn(), error: vi.fn() }),
   },
 }));
 vi.mock('@queries/email/thread-drafts', () => ({
@@ -75,7 +76,7 @@ const createAction = () =>
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.queueActive.mockReturnValue(true);
-  mocks.readThreadDrafts.mockResolvedValue([draft]);
+  mocks.readThreadDrafts.mockResolvedValue(ok([draft]));
   mocks.deleteQueued.mockResolvedValue({ kind: 'committed' });
   mocks.deleteRest.mockResolvedValue(undefined);
 });
@@ -96,7 +97,7 @@ describe('makeDiscardDraftAction', () => {
     const hold = vi.fn(() => order.push('hold'));
     mocks.readThreadDrafts.mockImplementation(async () => {
       order.push('read');
-      return [draft];
+      return ok([draft]);
     });
 
     await action.executeWithSoup([email()], listWithHold(hold));
@@ -115,9 +116,9 @@ describe('makeDiscardDraftAction', () => {
 
   it('deletes through REST when the draft queue is off', async () => {
     mocks.queueActive.mockReturnValue(false);
-    mocks.readThreadDrafts.mockResolvedValue([
-      { ...draft, inboxId: 'work-inbox' },
-    ]);
+    mocks.readThreadDrafts.mockResolvedValue(
+      ok([{ ...draft, inboxId: 'work-inbox' }])
+    );
     const { action, dispose } = createAction();
 
     await action.execute([email()]);
@@ -141,6 +142,19 @@ describe('makeDiscardDraftAction', () => {
 
     expect(mocks.failure).toHaveBeenCalledOnce();
     expect(mocks.success).not.toHaveBeenCalled();
+    dispose();
+  });
+
+  it('reports a thread it cannot read', async () => {
+    mocks.readThreadDrafts.mockResolvedValue(
+      err({ kind: 'thread-unavailable', codes: ['NOT_FOUND'] })
+    );
+    const { action, dispose } = createAction();
+
+    await action.execute([email()]);
+
+    expect(mocks.deleteQueued).not.toHaveBeenCalled();
+    expect(mocks.failure).toHaveBeenCalledOnce();
     dispose();
   });
 

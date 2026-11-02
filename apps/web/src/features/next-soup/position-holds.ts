@@ -95,5 +95,3 @@ export function createPositionHolds(options: { scope: Accessor<string> }) {
 
   return { hold, apply, sortTs };
 }
-
-export type PositionHolds = ReturnType<typeof createPositionHolds>;

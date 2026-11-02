@@ -14,10 +14,20 @@ import {
   readThreadDrafts,
   type ThreadDraftHandle,
 } from '@queries/email/thread-drafts';
+import { err, ok, type Result, ResultAsync } from 'neverthrow';
+import { match } from 'ts-pattern';
 import type { EntityActionListState } from './entity-action-context';
 
-/** The queue already reported this rejection with its own notice. */
-class DraftDeleteRejected extends Error {}
+type DiscardFailure =
+  | { kind: 'thread-unavailable'; codes: string[] }
+  /** The draft queue already showed its own notice for this rejection. */
+  | { kind: 'rejected'; code: string }
+  | { kind: 'delete-failed'; error: unknown };
+
+const deleteFailed = (error: unknown): DiscardFailure => ({
+  kind: 'delete-failed',
+  error,
+});
 
 /**
  * Discards the drafts on email thread rows, as the composer's discard
@@ -32,53 +42,88 @@ export const makeDiscardDraftAction = () => {
   const canExecute = (entity: EntityData): entity is EmailEntity =>
     isEmailEntity(entity) && entity.isDraft;
 
-  const deleteDraft = async (threadId: string, draft: ThreadDraftHandle) => {
+  const deleteDraft = async (
+    threadId: string,
+    draft: ThreadDraftHandle
+  ): Promise<Result<void, DiscardFailure>> => {
     if (draftQueueActive()) {
-      const outcome = await deleteEmailDraftQueued({
-        draftId: draft.draftId,
-        draftGeneration: draft.draftGeneration,
-        threadId,
-      });
-      if (outcome.kind === 'rejected')
-        throw new DraftDeleteRejected(outcome.code);
+      const outcome = await ResultAsync.fromPromise(
+        deleteEmailDraftQueued({
+          draftId: draft.draftId,
+          draftGeneration: draft.draftGeneration,
+          threadId,
+        }),
+        deleteFailed
+      );
+      if (outcome.isErr()) return err(outcome.error);
+      if (outcome.value.kind === 'rejected')
+        return err({ kind: 'rejected', code: outcome.value.code });
     } else {
-      await remove.mutateAsync({
-        draftId: draft.draftId,
-        draftGeneration: draft.draftGeneration,
-        threadId,
-        linkId: toHeaderLinkId(draft.inboxId),
-      });
+      const removed = await ResultAsync.fromPromise(
+        remove.mutateAsync({
+          draftId: draft.draftId,
+          draftGeneration: draft.draftGeneration,
+          threadId,
+          linkId: toHeaderLinkId(draft.inboxId),
+        }),
+        deleteFailed
+      );
+      if (removed.isErr()) return err(removed.error);
       markThreadDraftSaved(threadId);
     }
     // An open composer on this draft rereads it and closes.
     publishDraftLifecycleChange(draft.draftId, draft.inboxId);
+    return ok(undefined);
   };
 
-  const discardThreadDrafts = (thread: EmailEntity) =>
+  const discardThreadDrafts = (
+    thread: EmailEntity
+  ): Promise<Result<number, DiscardFailure>> =>
     Telemetry.span('email.draft_discard.list', async (span) => {
       span.setAttr('email.thread_id', thread.id);
       const drafts = await readThreadDrafts(thread.id);
-      span.setAttr('email.draft_discard.count', drafts.length);
-      for (const draft of drafts) await deleteDraft(thread.id, draft);
-      return drafts.length;
+      if (drafts.isErr()) {
+        span.error('Thread drafts unavailable');
+        return err(drafts.error);
+      }
+      span.setAttr('email.draft_discard.count', drafts.value.length);
+      for (const draft of drafts.value) {
+        const deleted = await deleteDraft(thread.id, draft);
+        if (deleted.isErr()) {
+          span.error(`Draft discard ${deleted.error.kind}`);
+          return err(deleted.error);
+        }
+      }
+      return ok(drafts.value.length);
     });
+
+  const reportFailure = (failure: DiscardFailure) =>
+    match(failure)
+      .with({ kind: 'thread-unavailable' }, ({ codes }) =>
+        Telemetry.error(
+          new Error(`Thread drafts unavailable: ${codes.join(', ')}`)
+        )
+      )
+      .with({ kind: 'rejected' }, () => undefined)
+      .with({ kind: 'delete-failed' }, ({ error }) => Telemetry.error(error))
+      .exhaustive();
 
   const execute = async (entities: EntityData[]) => {
     const threads = entities.filter(canExecute);
     if (threads.length === 0) return;
 
-    const results = await Promise.allSettled(threads.map(discardThreadDrafts));
+    const results = await Promise.all(threads.map(discardThreadDrafts));
     const failures = results.flatMap((result) =>
-      result.status === 'rejected' ? [result.reason] : []
+      result.isErr() ? [result.error] : []
     );
     if (failures.length > 0) {
-      failures.forEach((error) => Telemetry.error(error));
-      if (failures.some((error) => !(error instanceof DraftDeleteRejected)))
+      failures.forEach(reportFailure);
+      if (failures.some((failure) => failure.kind !== 'rejected'))
         toast.failure(t('entityActions.toastDiscardDraftFailed'));
       return;
     }
     const discarded = results.reduce(
-      (sum, result) => sum + (result.status === 'fulfilled' ? result.value : 0),
+      (sum, result) => sum + (result.isOk() ? result.value : 0),
       0
     );
     if (discarded === 0) return;
