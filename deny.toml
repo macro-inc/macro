@@ -96,6 +96,7 @@ ignore = [
   { id = "RUSTSEC-2026-0367", reason = "zip 3.0.0 is a utoipa-swagger-ui build-dependency that reads its vendored Swagger UI archive entry by entry and never calls extract(); no release uses patched zip >= 9" },
   { id = "RUSTSEC-2026-0368", reason = "zip 3.0.0 is a utoipa-swagger-ui build-dependency that reads its vendored Swagger UI archive entry by entry and never calls extract(); no release uses patched zip >= 9" },
   { id = "RUSTSEC-2026-0369", reason = "zip 3.0.0 is a utoipa-swagger-ui build-dependency that reads its vendored Swagger UI archive entry by entry and never calls extract(); no release uses patched zip >= 9" },
+  { id = "RUSTSEC-2026-0429", reason = "zip 3.0.0 is a utoipa-swagger-ui build-dependency that reads its vendored Swagger UI archive entry by entry and never calls extract(); no release uses patched zip >= 9" },
   # 0.26.11 only re-exports webpki-roots 1.x; the bans below require patched roots.
   # Remove this exception when SQLx and the remaining callers stop using the wrapper.
   { id = "RUSTSEC-2026-0381", reason = "webpki-roots 0.26.11 contains no certificates and re-exports patched 1.0.10; bans reject every other version below 1.0.10" },
