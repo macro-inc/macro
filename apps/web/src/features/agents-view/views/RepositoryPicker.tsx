@@ -115,7 +115,7 @@ export function RepositoryPicker(props: {
       : !!props.repoUrl && sameRepository(props.repoUrl, choice.url);
   const rowLabel = (choice: RepositoryChoice) =>
     match(choice)
-      .with({ kind: 'automatic' }, () => 'Choose automatically')
+      .with({ kind: 'automatic' }, () => 'Auto-detect')
       .with({ kind: 'listed' }, ({ url }) => repositoryLabel(url))
       .exhaustive();
   const nothingReachable = () =>
@@ -199,9 +199,7 @@ export function RepositoryPicker(props: {
           <>
             <GithubIcon class="size-4 shrink-0" />
             <span class="truncate">
-              {props.repoUrl
-                ? repositoryLabel(props.repoUrl)
-                : 'Choose automatically'}
+              {props.repoUrl ? repositoryLabel(props.repoUrl) : 'Auto-detect'}
             </span>
             <CaretDownIcon class="size-3 shrink-0" />
           </>

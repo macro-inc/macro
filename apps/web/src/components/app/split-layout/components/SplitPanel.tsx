@@ -3,6 +3,7 @@ import { AccessRequestVisitProvider } from '@app/features/access-requests/contex
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
+import { t } from '@app/lib/i18n';
 import { type PaneId, SplitRouter } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
@@ -20,6 +21,7 @@ import { Button, cn, Panel } from '@ui';
 import { createEffect, createSignal, Show, Suspense } from 'solid-js';
 import { createMutable } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
+import { createPriorityCollapseController } from '../../../priority-collapse/PriorityCollapseOverflowSensor';
 import { splitBackInterceptor } from '../back-interceptor';
 import {
   type SplitBottomPanelRegistration,
@@ -33,7 +35,6 @@ import { shouldShowSplitCloseButton } from '../layoutUtils';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
 import { createSplitAutofocus } from '../utils/createSplitAutofocus';
-import { createPriorityCollapseController } from './PriorityCollapseOverflowSensor';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitToolbar } from './SplitToolbar';
@@ -383,9 +384,9 @@ export function SplitPanel(props: SplitPanelProps) {
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  aria-label="Close split"
+                  aria-label={t('splitMenu.closeSplit')}
                   tooltip={{
-                    content: 'Close split',
+                    content: t('splitMenu.closeSplit'),
                     hotkey: TOKENS.split.close,
                   }}
                   class={cn(
