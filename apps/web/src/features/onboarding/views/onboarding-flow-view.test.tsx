@@ -336,6 +336,44 @@ describe('onboarding flow', () => {
     });
   });
 
+  it('passes over the team step for someone who already joined a team', async () => {
+    const { fake } = setup({
+      resume: 'tools',
+      world: { teams: [{ name: 'Acme' }] },
+    });
+    await heading('Connect your tools.');
+    click('Continue');
+    await heading('Free Claude & GPT for 30 days.');
+    expect(screen.queryByText("You're on Acme")).toBeNull();
+    expect(fake.events()).toContainEqual({
+      event: 'onboarding_v4_team',
+      data: { action: 'already_on_team' },
+    });
+    click('Back to previous step');
+    await heading('Connect your tools.');
+  });
+
+  it('finishes from the tools step for a licensed member of a team', async () => {
+    const { navigate } = setup({
+      resume: 'tools',
+      world: {
+        teams: [{ name: 'Acme' }],
+        viewer: {
+          id: FAKE_VIEWER_ID,
+          email: 'ada@acme.com',
+          tutorialComplete: false,
+          licensed: true,
+        },
+      },
+    });
+    await heading('Connect your tools.');
+    click('Continue');
+    await waitFor(() =>
+      expect(navigate).toHaveBeenCalledExactlyOnceWith('/home')
+    );
+    expect(screen.queryByText("You're on Acme")).toBeNull();
+  });
+
   it('confirms an existing team membership', async () => {
     const { fake } = setup({
       resume: 'team',
