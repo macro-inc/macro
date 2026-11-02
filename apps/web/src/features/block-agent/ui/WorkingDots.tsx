@@ -1,31 +1,37 @@
 /**
- * The loader leading an open agent turn: the dots of a 3×3 grid brighten one
- * at a time in a scattered order and fade out completely between turns, on
- * the `agent-working-dot` keyframes in `index.css`, so at any moment a few
- * of the nine are gone.
+ * The loader leading an open agent turn: a plus of five dots - a 3×3 grid
+ * without its corners - that turns to an × and back in 45° steps while its
+ * dots brighten one at a time in a scattered order, on the
+ * `agent-working-twirl` and `agent-working-dot` keyframes in `index.css`.
  */
 
-import { For } from 'solid-js';
+import { For, Show } from 'solid-js';
 
 /** One dot's brighten-and-fade; matches `agent-working-dot` in `index.css`. */
-const TWINKLE_MS = 1600;
+const TWINKLE_MS = 1400;
 
-/** When each dot, row by row, brightens within a cycle; scattered so no path reads. */
-const TWINKLE_OFFSETS_MS = [0, 700, 300, 1100, 500, 900, 200, 1300, 600];
+/**
+ * When each cell, row by row, brightens within a cycle: the arms clockwise
+ * from the top at 0, 840, 1120 and 560ms, the center at 280ms, so no path
+ * reads. A corner has no dot.
+ */
+const TWINKLE_OFFSETS_MS = [null, 0, null, 560, 280, 840, null, 1120, null];
 
 export function WorkingDots() {
   return (
     <span
       aria-hidden="true"
-      class="grid size-[13px] shrink-0 grid-cols-3 gap-[2px] text-ink-muted"
+      class="agent-working-twirl grid size-[13px] shrink-0 grid-cols-3 gap-[2px] text-ink-muted"
     >
       <For each={TWINKLE_OFFSETS_MS}>
         {(offset) => (
-          <span
-            class="agent-working-dot size-[3px] rounded-full bg-current"
-            // Negative delays start each dot mid-cycle, so none wait blank on mount.
-            style={{ 'animation-delay': `${offset - TWINKLE_MS}ms` }}
-          />
+          <Show when={offset !== null} fallback={<span />}>
+            <span
+              class="agent-working-dot size-[3px] rounded-full bg-current"
+              // Negative delays start each dot mid-cycle, so none wait dim on mount.
+              style={{ 'animation-delay': `${(offset ?? 0) - TWINKLE_MS}ms` }}
+            />
+          </Show>
         )}
       </For>
     </span>

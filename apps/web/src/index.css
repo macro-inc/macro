@@ -1363,13 +1363,13 @@ html[data-platform='ios'][data-touch-device='true'] :is(
   }
 }
 
-/* One dot of `WorkingDots`: it brightens, then fades out completely and stays
-   gone for the rest of its cycle. */
+/* One dot of `WorkingDots`: it brightens, then fades back to faint for the
+   rest of its cycle. */
 @keyframes agent-working-dot {
   0%,
   70%,
   100% {
-    opacity: 0;
+    opacity: 0.15;
   }
   35% {
     opacity: 1;
@@ -1377,10 +1377,58 @@ html[data-platform='ios'][data-touch-device='true'] :is(
 }
 
 .agent-working-dot {
-  animation: agent-working-dot 1.6s ease-in-out infinite;
+  animation: agent-working-dot 1.4s ease-in-out infinite;
+}
+
+/* `WorkingDots` turning a full circle in eighths, so the loop ends where it
+   began and no dot jumps: each 45° step turns for 0.2s, then holds for 0.4s. */
+@keyframes agent-working-twirl {
+  0%,
+  8.5% {
+    transform: rotate(0deg);
+  }
+  12.5%,
+  21% {
+    transform: rotate(45deg);
+  }
+  25%,
+  33.5% {
+    transform: rotate(90deg);
+  }
+  37.5%,
+  46% {
+    transform: rotate(135deg);
+  }
+  50%,
+  58.5% {
+    transform: rotate(180deg);
+  }
+  62.5%,
+  71% {
+    transform: rotate(225deg);
+  }
+  75%,
+  83.5% {
+    transform: rotate(270deg);
+  }
+  87.5%,
+  96% {
+    transform: rotate(315deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+.agent-working-twirl {
+  animation: agent-working-twirl 4.8s ease-in-out infinite;
 }
 
 @media (prefers-reduced-motion: reduce) {
+  .agent-working-twirl {
+    animation: none;
+  }
+
   .agent-working-dot {
     animation: none;
     opacity: 0.6;
