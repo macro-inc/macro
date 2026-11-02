@@ -379,7 +379,9 @@ await macro.channels
 ### Routines
 
 Create scheduled or event-triggered agent tasks through `macro.routines`.
-Routine configuration takes typed agent and event resource handles:
+In ExecuteCode, use a routine to check back later instead of sleeping or
+polling inside the 30-second run. Routine configuration takes typed agent
+and event resource handles:
 
 ```ts
 const routine = await macro.routines.create({

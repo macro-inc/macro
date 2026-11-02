@@ -184,6 +184,38 @@ fn both_execute_code_descriptions_share_one_runtime_contract() {
     assert!(session.contains("execution.reviews.create"));
     assert!(!user.contains("execution.reviews.create"));
     assert!(user.contains("DescribeCodeTools with task"));
+    for description in [&session, &user] {
+        assert!(description.contains("macro.routines.create"));
+        assert!(description.contains("Do not sleep or poll"));
+    }
+}
+
+#[tokio::test]
+async fn describe_code_tools_steers_follow_ups_to_routines() {
+    for host in [CodeHost::Session, CodeHost::User] {
+        let response = describe(
+            DescribeCodeTools {
+                task: None,
+                names: vec![],
+                topics: vec![],
+            },
+            host,
+        )
+        .await
+        .unwrap();
+        assert!(response.instructions.contains("macro.routines.create"));
+        assert!(response.instructions.contains("Do not sleep or poll"));
+        assert!(
+            response
+                .sdk_guide
+                .as_deref()
+                .unwrap()
+                .contains("macro.routines.create")
+        );
+    }
+    let description = &toolset().tools["DescribeCodeTools"].description;
+    assert!(description.contains("macro.routines.create"));
+    assert!(description.contains("Do not sleep or poll"));
 }
 
 #[test]

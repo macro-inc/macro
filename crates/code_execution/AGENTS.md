@@ -28,6 +28,10 @@ mutation routes demand the copy's `inbox` from such requests.
 The bootstrap replaces a result's `data` larger than `Limits::max_result_bytes`
 with an outline and preview, keeping `reviews`; the frame limit stays the backstop.
 
+The bootstrap bans `setTimeout`, `setInterval`, and `Atomics.wait` after
+constructing the SDK client. Programs cannot sleep away the 30s budget; tell
+agents to create a routine for follow-ups.
+
 ## Checks
 
 - `cargo test -p code_execution --lib -- --include-ignored` from the repository

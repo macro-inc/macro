@@ -62,6 +62,43 @@ globalThis.console = {
   log: consoleMethod("info"), info: consoleMethod("info"),
   debug: consoleMethod("debug"), warn: consoleMethod("warn"), error: consoleMethod("error"),
 };
+const TIMER_MESSAGE =
+  "Sleeping or polling burns the 30s budget. To check back later on a spawned session, a long-running job, or an external event, create a routine with macro.routines.create instead.";
+function banTimers() {
+  const ban = (name) => {
+    if (!(name in globalThis)) return;
+    Object.defineProperty(globalThis, name, {
+      value: () => {
+        throw new Error(`${name} is unavailable in ExecuteCode. ${TIMER_MESSAGE}`);
+      },
+      writable: false,
+      configurable: false,
+    });
+  };
+  for (const name of ["setTimeout", "setInterval", "setImmediate"]) ban(name);
+  if (typeof Atomics !== "object" || Atomics === null) return;
+  const banned = {};
+  for (const key of Object.getOwnPropertyNames(Atomics)) {
+    const value = Atomics[key];
+    banned[key] =
+      key === "wait" || key === "waitAsync"
+        ? () => {
+            throw new Error(`Atomics.${key} is unavailable in ExecuteCode. ${TIMER_MESSAGE}`);
+          }
+        : typeof value === "function"
+          ? value.bind(Atomics)
+          : value;
+  }
+  try {
+    Object.defineProperty(globalThis, "Atomics", {
+      value: Object.freeze(banned),
+      writable: false,
+      configurable: false,
+    });
+  } catch {
+    // Some realms freeze Atomics on the global; the supervisor still caps busy-waits.
+  }
+}
 try {
   const {maxResultBytes, ...context} = await new Response(Deno.stdin.readable).json();
   const originalFetch = globalThis.fetch.bind(globalThis);
@@ -93,6 +130,7 @@ try {
   const macro = new Macro({token: context.token, hosts: context.hosts});
   const session = context.sessionId ? macro.agentSessions.byId(context.sessionId) : undefined;
   const execution = session && context.executionId ? session.codeExecutions.byId(context.executionId) : undefined;
+  banTimers();
   // A literal dynamic import joins Deno's initial static graph, bypassing read
   // permissions. Compute this specifier so the entire generated graph is loaded
   // at runtime and every local module read requires the scratch permission.

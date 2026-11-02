@@ -1028,6 +1028,9 @@ in `{data}`. The optional `reviews` array contains saved review references and
 defaults to `[]` when omitted. Loops, early breaks and bounded parallel
 promises are supported. Preserve the user's source filters, source IDs, errors,
 and coverage limits; stopping a paginated iterator does not prove exhaustiveness.
+Timers such as `setTimeout` are unavailable. To check back later on a spawned
+session or other long-running work, create a routine with `macro.routines.create`
+instead of sleeping inside the execution.
 
 Code execution hides program source and raw returned JSON. Observed SDK operations
 use the same **Calling N tools** peek window as ordinary consecutive tool calls:

@@ -204,7 +204,7 @@ impl AsyncTool<UserCodeModeToolContext> for UserExecuteCode {
 #[serde(deny_unknown_fields)]
 #[schemars(
     title = "DescribeCodeTools",
-    description = "Find Macro SDK methods for ExecuteCode. Before writing a program, pass task, a short description of what the program must do, to receive the index of every relevant SDK entity in one call; skip it only when the indexes you need are already in context. An index lists each class, method and type by symbol with its signature; read the symbols you need with ReadCodeDocs. Request up to five entity names together for their indexes, e.g. entities omitted for size. Request topics for workflow guides. With no arguments, returns the compact entity catalog."
+    description = "Find Macro SDK methods for ExecuteCode. Before writing a program, pass task, a short description of what the program must do, to receive the index of every relevant SDK entity in one call; skip it only when the indexes you need are already in context. An index lists each class, method and type by symbol with its signature; read the symbols you need with ReadCodeDocs. Request up to five entity names together for their indexes, e.g. entities omitted for size. Request topics for workflow guides. With no arguments, returns the compact entity catalog. Do not sleep or poll inside ExecuteCode; create a routine with macro.routines.create to check back later."
 )]
 pub struct DescribeCodeTools {
     /// What the next program must do; selects relevant references.

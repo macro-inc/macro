@@ -381,6 +381,13 @@ mod tests {
     }
 
     #[test]
+    fn code_mode_routing_steers_follow_ups_to_routines() {
+        let routing = tool_usage::CODE_MODE_ROUTING.to_string();
+        assert!(routing.contains("Do not sleep or poll inside ExecuteCode"));
+        assert!(routing.contains("macro.routines.create"));
+    }
+
+    #[test]
     fn agent_identity_names_the_agent_before_the_session_preamble() {
         let identity = agent_identity::render("Grunk", "grunk");
         assert!(identity.starts_with("# Identity\n"));

@@ -479,10 +479,49 @@ async fn total_output_budget_applies_across_small_frames() {
         ..Limits::default()
     })
     .await;
-    let (_, outcome) = run(&service, "export async function main() { for(let i = 0; i < 20; i++) { console.log('x'.repeat(500)); await new Promise(resolve => setTimeout(resolve, 1)); } return null; }", 5000).await;
+    let (_, outcome) = run(&service, "export async function main() { for(let i = 0; i < 20; i++) { console.log('x'.repeat(500)); await Promise.resolve(); } return null; }", 5000).await;
     assert!(
         matches!(outcome, Outcome::Failed { error } if error.code == FailureCode::Limit && error.message == "process output limit exceeded")
     );
+    service.shutdown().await;
+}
+
+#[tokio::test]
+#[ignore = "requires pinned Deno runtime"]
+async fn rejects_timers_and_points_at_routines() {
+    let (_root, service) = setup(Limits::default()).await;
+    for body in [
+        "setTimeout(() => {}, 1)",
+        "setInterval(() => {}, 1)",
+        "await new Promise((resolve) => setTimeout(resolve, 20_000))",
+        "Atomics.wait()",
+    ] {
+        let (_, outcome) = run(
+            &service,
+            &format!("export async function main() {{ {body}; return null; }}"),
+            5000,
+        )
+        .await;
+        let Outcome::Failed { error } = outcome else {
+            panic!("{body} was allowed: {outcome:?}");
+        };
+        assert_eq!(error.code, FailureCode::Runtime);
+        assert!(
+            error.message.contains("unavailable in ExecuteCode"),
+            "{body}: {}",
+            error.message
+        );
+        assert!(
+            error.message.contains("macro.routines.create"),
+            "{body}: {}",
+            error.message
+        );
+        assert!(
+            error.message.contains("check back later"),
+            "{body}: {}",
+            error.message
+        );
+    }
     service.shutdown().await;
 }
 

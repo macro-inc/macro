@@ -68,6 +68,13 @@ To skip: add the method name, alphabetically, to `<camelService>Excluded` in
    events come from the storage spec via `src/events/types.ts` — regenerate, never
    hand-write.
 
+## Code mode
+
+Agents call this SDK from ExecuteCode with a 30s budget and no timers.
+Do not document sleeping or polling for a later result. Follow-ups use
+`macro.routines.create` (scheduled, event-triggered, or one-shot when
+that trigger is available).
+
 ## Never
 
 - Hand-edit `generated/` or `specs/` — build output.
