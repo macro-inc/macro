@@ -37,7 +37,7 @@ afterEach(() => {
 });
 
 describe('browser notification prompt', () => {
-  it('waits in the phone prompt region, which steps aside for open sheets', () => {
+  it('waits in the phone prompt region, which open sheets cover', () => {
     mocks.mobile = true;
     render(() => <BrowserNotificationModal />);
 

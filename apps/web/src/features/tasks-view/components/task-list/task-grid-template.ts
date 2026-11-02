@@ -9,6 +9,7 @@ export type TaskGridColumnId =
   | 'priority'
   | 'initiative'
   | 'assignees'
+  | 'dueDate'
   | 'createdBy'
   | 'timestamp';
 
@@ -19,10 +20,20 @@ const COLUMN_WIDTHS: Record<TaskGridColumnId, string> = {
   priority: 'var(--task-col-priority, 7rem)',
   initiative: 'var(--task-col-initiative, 8rem)',
   assignees: 'var(--task-col-assignees, 7rem)',
+  dueDate: 'var(--task-col-due-date, 8.5rem)',
   createdBy: 'var(--task-col-created-by, 7rem)',
   timestamp: 'var(--task-col-timestamp, 5rem)',
 };
 
+export const TASK_DUE_DATE_COLUMN = {
+  id: 'dueDate',
+  label: 'Due date',
+  defId: SYSTEM_PROPERTY_IDS.DUE_DATE,
+  dataType: DataType.DATE,
+  isMultiSelect: false,
+  specificEntityType: null,
+  width: COLUMN_WIDTHS.dueDate,
+} as const;
 export const TASK_GRID_COLUMNS = [
   {
     id: 'status',
@@ -53,6 +64,7 @@ export const TASK_GRID_COLUMNS = [
     specificEntityType: EntityType.USER,
     width: COLUMN_WIDTHS.assignees,
   },
+  TASK_DUE_DATE_COLUMN,
 ] as const;
 
 /** The task's project, shown only while Projects is enabled. */
@@ -78,6 +90,7 @@ export const DEFAULT_TASK_GRID_COLUMNS = [
   'priority',
   'initiative',
   'assignees',
+  'dueDate',
   'createdBy',
   'timestamp',
 ] as const satisfies readonly TaskGridColumnId[];
@@ -88,6 +101,7 @@ export const TASK_LIST_COLUMNS = [
   'content',
   'initiative',
   'assignees',
+  'dueDate',
   'timestamp',
   'createdBy',
 ] as const satisfies readonly TaskGridColumnId[];

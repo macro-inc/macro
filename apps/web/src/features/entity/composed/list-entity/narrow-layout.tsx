@@ -2,7 +2,7 @@ import { isMobile } from '@core/mobile/isMobile';
 import { EntityRowTags } from '@property/tags';
 import { EntityType } from '@service-properties/generated/schemas/entityType';
 import { cn } from '@ui';
-import { Show } from 'solid-js';
+import { children, type ParentProps, Show } from 'solid-js';
 import { UnreadIndicator } from '../../components/UnreadIndicator';
 import { Entity } from '../../entity';
 import { TaskPropertyControl } from '../../extractors-property/task-property-control';
@@ -25,8 +25,9 @@ import { RowEnd } from './row-end';
 import { SOUP_ROW_CLASS } from './row-geometry';
 import { type LayoutProps, RowIndicator } from './shared';
 
-export function NarrowLayout(props: LayoutProps) {
+export function NarrowLayout(props: ParentProps<LayoutProps>) {
   const compactTask = () => isMobile() && isTaskEntity(props.entity);
+  const trailingMetadata = children(() => props.children);
   const pullRequest = () => {
     const entity = props.entity;
     return isGithubPrEntity(entity) ? entity : undefined;
@@ -166,6 +167,7 @@ export function NarrowLayout(props: LayoutProps) {
 
       <Show
         when={
+          trailingMetadata() ||
           props.referenceProperties ||
           props.scheduleStatus ||
           (!props.hasNotifications &&
@@ -178,6 +180,7 @@ export function NarrowLayout(props: LayoutProps) {
         >
           {props.referenceProperties}
           {props.scheduleStatus}
+          {trailingMetadata()}
           <Show when={!props.hasNotifications}>
             <RowEnd actions={props.actions} leadingAction={props.leadingAction}>
               <Show

@@ -4,10 +4,14 @@
  * search_service
  * OpenAPI spec version: 0.1.0
  */
+import type { CalendarEventMetadataCalendarName } from './calendarEventMetadataCalendarName';
 import type { CalendarEventMetadataConferenceUrl } from './calendarEventMetadataConferenceUrl';
+import type { CalendarEventMetadataContributesToAvailability } from './calendarEventMetadataContributesToAvailability';
 import type { CalendarEventMetadataDescription } from './calendarEventMetadataDescription';
+import type { CalendarEventMetadataInbox } from './calendarEventMetadataInbox';
 import type { CalendarEventMetadataOccurrence } from './calendarEventMetadataOccurrence';
 import type { CalendarEventMetadataOrganizer } from './calendarEventMetadataOrganizer';
+import type { CalendarEventMetadataRole } from './calendarEventMetadataRole';
 import type { CalendarEventSearchTime } from './calendarEventSearchTime';
 
 /**
@@ -18,12 +22,24 @@ should display depends on when the query ran, so it is resolved here
 rather than indexed.
  */
 export interface CalendarEventMetadata {
+  /** Display name of the calendar holding this copy. Absent on an event
+shared with the user, which is on none of their calendars. */
+  calendarName?: CalendarEventMetadataCalendarName;
   /** Direct conference join URL when known. */
   conferenceUrl?: CalendarEventMetadataConferenceUrl;
+  /** Whether a calendar holding this copy is on the user's schedule. The
+user can see calendars that are not theirs, such as a colleague's: a
+row without this, and that they do not attend, says what that calendar
+shows, not where the user is. */
+  contributesToAvailability?: CalendarEventMetadataContributesToAvailability;
   createdAt: string;
   /** Free-text description, when the event carries one. May contain HTML from
 the source; clients render a plain-text preview. */
   description?: CalendarEventMetadataDescription;
+  /** The connected inbox syncing that calendar. It stays the user's own
+address on a colleague's calendar, so it never says whose calendar it
+is. */
+  inbox?: CalendarEventMetadataInbox;
   /** Whether the canonical source prohibits mutation. */
   isReadOnly: boolean;
   /** Whether the series carries a recurrence rule. Lets a row render a
@@ -31,6 +47,7 @@ recurring badge without parsing the rules. */
   isRecurring: boolean;
   occurrence?: CalendarEventMetadataOccurrence;
   organizer?: CalendarEventMetadataOrganizer;
+  role?: CalendarEventMetadataRole;
   /** Canonical status (`confirmed`, `tentative`, `cancelled`). */
   status: string;
   /** The series' own span. */

@@ -543,6 +543,76 @@ fn property_changes_ignore_other_entities_noops_and_bot_writes() {
     }
 }
 
+fn unattributed_status_change() -> Value {
+    let mut data = property_metadata();
+    data["actor"] = json!(null);
+    data["actor_user_id"] = json!(null);
+    data
+}
+
+fn github_source() -> Value {
+    json!({
+        "type": "github_pull_request",
+        "url": "https://github.com/my-org/my-repo/pull/42",
+        "account": {"id": "444", "login": "someone-else"}
+    })
+}
+
+#[test]
+fn a_status_change_from_github_needs_no_macro_actor() {
+    let mut data = unattributed_status_change();
+    data["source"] = github_source();
+
+    let event = property_event("entity_property.updated", data)
+        .normalize()
+        .unwrap();
+
+    assert_eq!(event.event_name(), EventName::TaskStatusChanged);
+    assert_eq!(
+        event.change_source(),
+        Some(&serde_json::from_value(github_source()).unwrap())
+    );
+    let stored = serde_json::to_value(&event).unwrap();
+    assert_eq!(
+        serde_json::from_value::<EventReference>(stored).unwrap(),
+        event
+    );
+}
+
+#[test]
+fn an_unattributed_status_change_with_no_source_stays_ignored() {
+    assert_eq!(
+        property_event("entity_property.updated", unattributed_status_change()).normalize(),
+        Err(EventRejection::UnsafeAttribution)
+    );
+}
+
+#[test]
+fn a_github_source_only_opens_status_changes() {
+    let mut data = unattributed_status_change();
+    data["source"] = github_source();
+    data["property_definition_id"] = json!(SystemPropertyKey::PRIORITY_UUID);
+
+    assert_eq!(
+        property_event("entity_property.updated", data).normalize(),
+        Err(EventRejection::UnsafeAttribution)
+    );
+}
+
+#[test]
+fn a_source_does_not_admit_a_change_made_by_a_bot_or_for_someone_else() {
+    for (field, value) in [("actor", BOT), ("on_behalf_of", HUMAN)] {
+        let mut data = unattributed_status_change();
+        data["source"] = github_source();
+        data[field] = json!(value);
+
+        assert_eq!(
+            property_event("entity_property.updated", data).normalize(),
+            Err(EventRejection::UnsafeAttribution)
+        );
+    }
+}
+
 #[test]
 fn mention_trigger_is_only_for_the_mentioned_user() {
     let owner = MacroUserIdStr::parse_from_str(HUMAN).unwrap();

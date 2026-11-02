@@ -401,6 +401,29 @@ it('updates task title chips in place when the properties emit new objects', asy
   );
 });
 
+it('keeps the Project chip mounted when saving assigns its placeholder an ID', async () => {
+  mocks.kind = 'task';
+  mocks.projectsEnabled = true;
+  setup(taskProperties);
+  const project = await screen.findByRole('button', { name: 'Unpin Project' });
+
+  mocks.setProperties?.([
+    ...taskProperties,
+    {
+      ...property,
+      propertyId: 'project-assignment',
+      propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+      displayName: 'Project saved',
+    },
+  ]);
+
+  await waitFor(() =>
+    expect(screen.getByRole('button', { name: 'Unpin Project saved' })).toBe(
+      project
+    )
+  );
+});
+
 it('keeps all task title pins cleared after serialization and reopening', async () => {
   mocks.kind = 'task';
   const editor = setup(taskProperties);

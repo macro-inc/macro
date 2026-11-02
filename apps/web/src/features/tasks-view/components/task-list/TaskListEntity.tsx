@@ -17,7 +17,6 @@ import {
   unreadFilterFn,
   useIsShared,
 } from '@entity';
-import { NarrowLayout } from '@entity/composed/list-entity/narrow-layout';
 import {
   type BaseListEntityProps,
   hasSearchContentHits,
@@ -36,6 +35,7 @@ import {
 } from '@service-connection/stream-events';
 import { mergeRefs } from '@solid-primitives/refs';
 import { cn } from '@ui/utils/classname';
+import type { Accessor } from 'solid-js';
 import {
   createEffect,
   createSignal,
@@ -45,10 +45,12 @@ import {
   Switch,
   useContext,
 } from 'solid-js';
+import type { DateBucketBoundaries } from '../../core/task-due-date';
 import { TaskGridLayout } from './TaskGridLayout';
 
 type TaskListEntityProps = Omit<BaseListEntityProps, 'entity'> & {
   entity: TaskEntityWithProperties;
+  calendar: Accessor<DateBucketBoundaries>;
   rowId?: string;
   showUnrollNotifications?: boolean;
   /** Show the Project column (Projects enabled). */
@@ -80,9 +82,8 @@ function MaybeEntityRow(props: {
 }
 
 /**
- * Task-specific list entity that renders properties (Status, Priority,
- * Assignees, Due Date) in fixed-width grid columns so they line up
- * vertically across rows in a list.
+ * Task-specific list entity with leading Priority and Status controls and aligned
+ * Project, Assignees, Due date, Updated, and Created by grid columns.
  */
 export function TaskListEntity(props: TaskListEntityProps) {
   const unread = () => unreadFilterFn(props.entity);
@@ -120,6 +121,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
 
   const layoutProps = () => ({
     entity: props.entity,
+    calendar: props.calendar,
     checked: props.checked,
     hideCheckbox: props.hideCheckbox,
     onChecked: props.onChecked,
@@ -185,7 +187,7 @@ export function TaskListEntity(props: TaskListEntityProps) {
             entityId={props.entity.id}
             config={props.entityRowConfig}
           >
-            <NarrowLayout {...layoutProps()} />
+            <TaskGridLayout {...layoutProps()} compact />
             <Show when={props.referencePropertyIds}>
               {(ids) => (
                 <div class="px-3 pb-1">

@@ -2,6 +2,7 @@
   --task-col-status: 7.25rem;
   --task-col-priority: 7rem;
   --task-col-assignees: 9rem;
+  --task-col-due-date: 8.5rem;
   --task-col-created-by: 7rem;
   --task-col-timestamp: 5rem;
   --task-col-initiative: 8rem;
@@ -10,6 +11,7 @@
 /* Include spacing inside visible tracks so hidden columns leave no grid gaps. */
 .task-grid-row.task-grid-icon-creator {
   --task-col-assignees: 9.5rem;
+  --task-col-due-date: 9rem;
   --task-col-created-by: 2rem;
   --task-col-timestamp: calc(max(3.5rem, var(--task-updated-header-width, 4rem)) + 0.5rem);
   --task-col-initiative: 8.5rem;
@@ -33,19 +35,21 @@
   }
 }
 
-/* Narrow containers: collapse property columns to icons */
+/* Narrow containers: collapse property values to icons. */
 @container u-list (max-width: 840px) {
   .task-grid-row {
     --task-col-status: 2rem;
     --task-col-priority: 2rem;
     --task-col-assignees: 3rem;
+    --task-col-due-date: 2rem;
     --task-col-created-by: 0rem;
-    --task-col-timestamp: 5rem;
+    --task-col-timestamp: 0rem;
     --task-col-initiative: 6rem;
   }
 
   .task-grid-row.task-grid-icon-creator {
     --task-col-assignees: 3.25rem;
+    --task-col-due-date: 2.5rem;
     --task-col-initiative: 2.5rem;
   }
 }

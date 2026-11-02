@@ -2,7 +2,7 @@
   "version": "2.5.0",
   "bundle": {
     "android": {
-      "versionCode": 19
+      "versionCode": 20
     }
   },
   "$schema": "https://schema.tauri.app/config/2",

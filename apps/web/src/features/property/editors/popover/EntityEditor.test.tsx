@@ -148,6 +148,7 @@ function setup(
   const [editorOpen, setEditorOpen] = createSignal(true);
   const context: PropertyRootContextValue = {
     property: () => value,
+    pickedEntityName: () => undefined,
     canEdit: () => true,
     editorOpen,
     openEditor: () => setEditorOpen(true),
@@ -200,13 +201,17 @@ describe('assigning an agent through task and project properties', () => {
       expect(onSave).not.toHaveBeenCalled();
       fireEvent.click(screen.getByText('Dismiss'));
       await waitFor(() =>
-        expect(onSave).toHaveBeenCalledExactlyOnceWith(property, {
-          valueType: 'ENTITY',
-          refs: [
-            { entity_id: userId, entity_type: 'USER' },
-            { entity_id: agentId, entity_type: 'USER' },
-          ],
-        })
+        expect(onSave).toHaveBeenCalledExactlyOnceWith(
+          property,
+          {
+            valueType: 'ENTITY',
+            refs: [
+              { entity_id: userId, entity_type: 'USER' },
+              { entity_id: agentId, entity_type: 'USER' },
+            ],
+          },
+          new Map([[agentId, 'Research assistant']])
+        )
       );
     }
   );
@@ -226,10 +231,11 @@ describe('assigning an agent through task and project properties', () => {
       fireEvent.click(screen.getByText('Research assistant'));
       fireEvent.click(screen.getByText('Dismiss'));
       await waitFor(() =>
-        expect(onSave).toHaveBeenCalledExactlyOnceWith(assigned, {
-          valueType: 'ENTITY',
-          refs: null,
-        })
+        expect(onSave).toHaveBeenCalledExactlyOnceWith(
+          assigned,
+          { valueType: 'ENTITY', refs: null },
+          new Map([[agentId, 'Research assistant']])
+        )
       );
     }
   );
@@ -267,35 +273,60 @@ describe('people in a picker sheet', () => {
     fireEvent.click(screen.getByText('Research assistant'));
     fireEvent.click(screen.getByText('Done'));
     await waitFor(() =>
-      expect(onSave).toHaveBeenCalledExactlyOnceWith(property, {
-        valueType: 'ENTITY',
-        refs: [
-          { entity_id: userId, entity_type: 'USER' },
-          { entity_id: agentId, entity_type: 'USER' },
-        ],
-      })
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        property,
+        {
+          valueType: 'ENTITY',
+          refs: [
+            { entity_id: userId, entity_type: 'USER' },
+            { entity_id: agentId, entity_type: 'USER' },
+          ],
+        },
+        new Map([[agentId, 'Research assistant']])
+      )
     );
   });
 });
 
 describe('the Project property', () => {
+  const project: EntityProperty = {
+    ...property,
+    propertyId: 'project-property',
+    propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
+    displayName: 'Project',
+    isMultiSelect: false,
+    specificEntityType: 'INITIATIVE',
+    value: [{ entity_id: 'project-launch', entity_type: 'INITIATIVE' }],
+  };
+
+  it('saves a picked project with the name the picker showed', async () => {
+    const unassigned: EntityProperty = { ...project, value: [] };
+    const onSave = setup(
+      { entityType: 'TASK', blockId: 'task-id' },
+      unassigned
+    );
+    fireEvent.click(screen.getByText('Launch'));
+    await waitFor(() =>
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        unassigned,
+        {
+          valueType: 'ENTITY',
+          refs: [{ entity_id: 'project-launch', entity_type: 'INITIATIVE' }],
+        },
+        new Map([['project-launch', 'Launch']])
+      )
+    );
+  });
+
   it('clears the project when the selected project is clicked again', async () => {
-    const project: EntityProperty = {
-      ...property,
-      propertyId: 'project-property',
-      propertyDefinitionId: SYSTEM_PROPERTY_IDS.PROJECT,
-      displayName: 'Project',
-      isMultiSelect: false,
-      specificEntityType: 'INITIATIVE',
-      value: [{ entity_id: 'project-launch', entity_type: 'INITIATIVE' }],
-    };
     const onSave = setup({ entityType: 'TASK', blockId: 'task-id' }, project);
     fireEvent.click(screen.getByText('Launch'));
     await waitFor(() =>
-      expect(onSave).toHaveBeenCalledExactlyOnceWith(project, {
-        valueType: 'ENTITY',
-        refs: null,
-      })
+      expect(onSave).toHaveBeenCalledExactlyOnceWith(
+        project,
+        { valueType: 'ENTITY', refs: null },
+        new Map([['project-launch', 'Launch']])
+      )
     );
   });
 });

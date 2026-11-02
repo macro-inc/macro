@@ -43,6 +43,15 @@ export function TaskBoardColumnIcon(props: {
       </Match>
       <Match
         when={
+          props.id &&
+          props.id !== 'no_due_date' &&
+          props.propertyDefinitionId === SYSTEM_PROPERTY_IDS.DUE_DATE
+        }
+      >
+        <CalendarIcon class="size-4 text-ink-muted" />
+      </Match>
+      <Match
+        when={
           props.id && props.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PROJECT
         }
       >
@@ -73,6 +82,7 @@ export function TaskBoardProperty(props: {
   canEdit: boolean;
   iconOnly?: boolean;
   onSave: PropertySaveFn;
+  dueDateUrgency?: 'danger' | 'warning';
 }) {
   return (
     <Property.Root
@@ -123,7 +133,15 @@ export function TaskBoardProperty(props: {
                     </Show>
                   </Match>
                   <Match when={isDate()}>
-                    <CalendarIcon class="size-3.5 shrink-0" />
+                    <Show when={shown().value != null}>
+                      <CalendarIcon
+                        class="size-3.5 shrink-0"
+                        classList={{
+                          'text-failure': props.dueDateUrgency === 'danger',
+                          'text-warning': props.dueDateUrgency === 'warning',
+                        }}
+                      />
+                    </Show>
                   </Match>
                   <Match when={hasSelectIcon()}>
                     <Property.Icon
@@ -136,7 +154,7 @@ export function TaskBoardProperty(props: {
                   <Property.Text
                     property={shown()}
                     resolveSingleEntity={isProject()}
-                    class="min-w-0 truncate"
+                    class={`min-w-0 truncate ${isDate() && props.dueDateUrgency === 'danger' ? 'text-failure' : ''} ${isDate() && props.dueDateUrgency === 'warning' ? 'text-warning' : ''}`}
                     fallback={<span>{shown().displayName}</span>}
                   />
                 </Show>

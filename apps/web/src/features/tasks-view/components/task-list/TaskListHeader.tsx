@@ -1,4 +1,5 @@
 import ArrowDownIcon from '@icon/system/regular/arrow-down.svg';
+import CalendarIcon from '@icon/system/regular/calendar.svg';
 import ClockIcon from '@icon/system/regular/clock.svg';
 import ProjectIcon from '@icon/system/regular/cube.svg';
 import UserPlusIcon from '@icon/system/regular/user-plus.svg';
@@ -14,14 +15,21 @@ function SortableHeader(props: {
   label: string;
   area: string;
   sortId?: TaskSortId;
+  reverseSortId?: TaskSortId;
   align?: 'start' | 'end';
   class?: string;
   narrowIcon?: JSX.Element;
   onWidthChange?: (width: number) => void;
 }) {
   const { state, setPrimarySort } = useTasksView();
-  const active = () => state.sort[0]?.id === props.sortId;
-  const reversed = () => active() && state.sort[0]?.reversed === true;
+  const active = () =>
+    state.sort[0]?.id === props.sortId ||
+    (props.reverseSortId !== undefined &&
+      state.sort[0]?.id === props.reverseSortId);
+  const reversed = () =>
+    active() &&
+    (state.sort[0]?.id === props.reverseSortId ||
+      state.sort[0]?.reversed === true);
   const alignment = () => {
     if (props.align === 'end') return 'justify-end';
     return 'justify-start';
@@ -77,7 +85,13 @@ function SortableHeader(props: {
                 'flex h-full w-max shrink-0 items-center gap-1 whitespace-nowrap text-ink-extra-muted hover:text-ink',
                 active() && 'text-ink'
               )}
-              onClick={() => setPrimarySort(sortId())}
+              onClick={() => {
+                if (props.reverseSortId && state.sort[0]?.id === sortId()) {
+                  setPrimarySort(props.reverseSortId);
+                  return;
+                }
+                setPrimarySort(sortId());
+              }}
             >
               {label()}
               <ArrowDownIcon
@@ -128,6 +142,13 @@ export function TaskListHeader(props: {
         area="assignees"
         class="@max-[840px]/u-list:justify-start @max-[840px]/u-list:pl-1"
         narrowIcon={<UsersIcon class="size-4" />}
+      />
+      <SortableHeader
+        label="Due date"
+        area="dueDate"
+        sortId="due_date_earliest"
+        reverseSortId="due_date_latest"
+        narrowIcon={<CalendarIcon class="size-4" />}
       />
       <SortableHeader
         label="Updated"

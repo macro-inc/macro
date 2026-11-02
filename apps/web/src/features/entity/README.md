@@ -43,3 +43,6 @@ labels before tags or title truncation.
 users, bots, teams, and unknown owners; ordinary owner labels remain unchanged.
 Pass `OwnerLabel.iconClass` to size the owner glyph at the call site; the override
 applies consistently to user, bot, team, and unknown owners.
+Compose persistent trailing metadata through `NarrowLayout` children, before
+standard row actions and properties; keep feature-specific rendering and styling
+in the caller.

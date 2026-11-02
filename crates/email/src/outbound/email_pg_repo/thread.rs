@@ -114,12 +114,12 @@ pub(super) async fn thread_mail_projections_by_ids(
                     CASE WHEN draft.macro_draft AND thread.has_received_mail THEN m.updated_at END
                 ) AS inbound_ts,
                 GREATEST(
-                    CASE WHEN NOT (facts.in_junk OR facts.in_trash) THEN m.internal_date_ts END,
-                    CASE WHEN draft.macro_draft THEN m.updated_at END
+                    CASE WHEN NOT (facts.in_junk OR facts.in_trash) THEN COALESCE(m.internal_date_ts, CASE WHEN m.is_draft THEN m.created_at END) END,
+                    CASE WHEN draft.macro_draft AND NOT (facts.in_junk OR facts.in_trash) THEN m.updated_at END
                 ) AS all_ts,
                 CASE WHEN m.is_sent AND NOT facts.in_trash THEN m.internal_date_ts END AS sent_ts,
-                CASE WHEN NOT facts.in_trash THEN COALESCE(m.internal_date_ts, m.created_at) END AS preview_ts,
-                CASE WHEN NOT facts.in_trash THEN jsonb_build_object(
+                CASE WHEN NOT facts.in_trash AND (m.is_draft OR NOT facts.in_junk) THEN COALESCE(m.internal_date_ts, m.created_at) END AS preview_ts,
+                CASE WHEN NOT facts.in_trash AND (m.is_draft OR NOT facts.in_junk) THEN jsonb_build_object(
                     'id', m.id, 'subject', m.subject, 'snippet', m.snippet, 'is_draft', m.is_draft,
                     'sender_email', c.email_address, 'sender_name', COALESCE(m.from_name, c.name), 'sender_photo_url', c.sfs_photo_url
                 ) END AS preview
@@ -190,7 +190,7 @@ pub(super) async fn thread_mail_projections_by_ids(
         LEFT JOIN draft_states ds ON ds.thread_id = t.id
         LEFT JOIN LATERAL (
             SELECT m.id, m.subject, m.snippet, m.is_draft, m.from_contact_id, m.from_name
-            FROM email_messages m WHERE m.thread_id = t.id AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash) ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1
+            FROM email_messages m WHERE m.thread_id = t.id AND EXISTS (SELECT 1 FROM email_message_mailbox_facts mf WHERE mf.id = m.id AND mf.is_present AND NOT mf.in_trash AND NOT mf.in_junk) ORDER BY COALESCE(m.internal_date_ts, m.created_at) DESC, m.id DESC LIMIT 1
         ) am ON TRUE
         LEFT JOIN email_contacts ac ON ac.id = am.from_contact_id
         LEFT JOIN LATERAL (

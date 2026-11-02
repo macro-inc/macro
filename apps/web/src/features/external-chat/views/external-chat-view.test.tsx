@@ -217,7 +217,7 @@ it('says while history imports and shows older messages as they land', () => {
   });
   fake.setMessages(messages);
   expect(screen.getByRole('status').textContent).toBe(
-    'Waiting for your phone to import history'
+    'Earlier messages not imported. Open WhatsApp on your phone, then import them.'
   );
   const ids = [...document.querySelectorAll('[data-message-id]')].map((row) =>
     row.getAttribute('data-message-id')
@@ -262,7 +262,7 @@ it('tells a shared viewer whose phone the import waits for', () => {
   });
   mount(fake);
   expect(
-    screen.getAllByText(/Waiting for the owner's phone to import history/)
+    screen.getAllByText(/Earlier messages wait for the owner's phone/)
   ).toHaveLength(2);
   // Not "No messages yet" while history is still coming.
   expect(screen.queryByText(/No messages yet/)).toBeNull();

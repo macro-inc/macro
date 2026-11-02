@@ -72,14 +72,18 @@ it('shows the linked project name and follows reassignment and clearing', () => 
     <ListPropertyValue entityId="task" property={property()} />
   ));
 
-  expect(view.getByRole('button').textContent).toBe('Product launch');
+  expect(
+    view.getByRole('button', { name: 'Project: Product launch' })
+  ).toBeDefined();
   setProperty({
     ...project,
     value: [{ entity_id: 'redesign', entity_type: 'INITIATIVE' }],
   });
-  expect(view.getByRole('button').textContent).toBe('Website redesign');
+  expect(
+    view.getByRole('button', { name: 'Project: Website redesign' })
+  ).toBeDefined();
   setProperty({ ...project, value: null });
-  expect(view.getByRole('button').textContent).toBe('Project');
+  expect(view.getByRole('button', { name: 'Project' })).toBeDefined();
 });
 
 it('keeps a count when multiple projects are linked', () => {
@@ -95,5 +99,5 @@ it('keeps a count when multiple projects are linked', () => {
       }}
     />
   ));
-  expect(view.getByRole('button').textContent).toBe('2 items');
+  expect(view.getByRole('button', { name: 'Project: 2 items' })).toBeDefined();
 });

@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import {
   cleanup,
   fireEvent,
@@ -25,8 +26,12 @@ vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => 'layout',
 }));
 vi.mock('../hooks', () => ({
-  usePropertyEntityDisplay: () => ({
-    name: () => 'Launch',
+  usePropertyEntityDisplay: (
+    _id: () => string,
+    _type: () => string,
+    options?: { loadingName?: () => string | undefined }
+  ) => ({
+    name: () => (mocks.isLoading() && options?.loadingName?.()) || 'Launch',
     nativeProjectId: () => mocks.nativeProjectId(),
     isLoading: () => mocks.isLoading(),
   }),
@@ -170,4 +175,50 @@ it('keeps the caret mounted while a picked project loads', () => {
   expect(screen.getByRole('button', { name: 'Change project' })).toBe(caret);
   fireEvent.click(screen.getByRole('button', { name: 'Open project Launch' }));
   expect(mocks.openProject).toHaveBeenCalledOnce();
+});
+
+it('names a picked project from its picker while its own read loads', () => {
+  mocks.nativeProjectId = () => undefined;
+  mocks.isLoading = () => true;
+  function PickProject() {
+    const ctx = useProperty();
+    const pick = async () => {
+      await ctx.onSave?.(
+        ctx.property(),
+        {
+          valueType: 'ENTITY',
+          refs: [{ entity_id: 'redesign', entity_type: 'INITIATIVE' }],
+        },
+        new Map([['redesign', 'Website redesign']])
+      );
+    };
+    return (
+      <button onClick={() => fireAndForget(pick(), 'project-link-pill-test')}>
+        Pick redesign
+      </button>
+    );
+  }
+  render(() => (
+    <Root
+      property={project}
+      canEdit
+      onSave={() => Promise.withResolvers<void>().promise}
+    >
+      {(shown) => (
+        <>
+          <ProjectLinkPill
+            property={shown()}
+            fallback={<span>Plain pill</span>}
+          />
+          <PickProject />
+        </>
+      )}
+    </Root>
+  ));
+
+  fireEvent.click(screen.getByText('Pick redesign'));
+
+  expect(
+    screen.getByRole('button', { name: 'Open project Website redesign' })
+  ).toBeTruthy();
 });

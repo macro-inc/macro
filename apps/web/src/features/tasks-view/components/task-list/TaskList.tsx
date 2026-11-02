@@ -95,6 +95,7 @@ export function TaskList(props: TaskListProps) {
   const panel = useSplitPanelOrThrow();
   const {
     state,
+    calendar,
     projectsEnabled,
     showTaskProject,
     setState,
@@ -599,6 +600,7 @@ export function TaskList(props: TaskListProps) {
                                   props.referencePropertyIds
                                 }
                                 showProject={showTaskProject()}
+                                calendar={calendar}
                                 rowId={entityRow().id}
                                 entity={entityRow().entity}
                                 highlighted={list.focus.isFocused(

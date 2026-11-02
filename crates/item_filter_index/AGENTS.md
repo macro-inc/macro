@@ -45,9 +45,14 @@ engine) — keep it free of native-only dependencies.
 
 ## Gotchas
 
+- Mail All/Inbox require an All Mail preview; Drafts/Sent use their own preview
+  membership because a message in junk cannot supply All Mail.
+
 - `STATUS_PROPERTY_DEFINITION_ID` hardcodes `SystemPropertyKey::STATUS_UUID`
   to avoid a native dependency on `system_properties` for wasm; a native test
   locks the two values together, so don't drift them independently.
+- Reject date-property ranges and presence filters as unsupported until the
+  projection includes canonical dates; callers must use the server query.
 
 ## Related
 

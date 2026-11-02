@@ -870,10 +870,12 @@ impl<
             return;
         }
         let credited_user = self.notification_sender(event).await.sender_id;
+        let source = event.task_status_source();
         tracing::trace!(
             doc_count = doc_ids.len(),
             status,
             linked_user = credited_user.is_some(),
+            has_source = source.is_some(),
             "updating task statuses"
         );
 
@@ -888,7 +890,7 @@ impl<
             );
 
             self.document_service
-                .update_task_status(entity_access, credited_user.clone(), status)
+                .update_task_status(entity_access, credited_user.clone(), source.clone(), status)
                 .await
                 .inspect_err(|e| {
                     tracing::error!(
