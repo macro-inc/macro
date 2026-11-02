@@ -421,10 +421,11 @@ An `@` inside a word stays literal text. Check hardware-keyboard input too;
 it should open only one menu.
 The same software-keyboard check applies to `:` for emoji and `/` for formatting
 commands: type a search and tap a result without sending the draft.
-Type `/gif` or choose **GIF** from `+`. The rounded picker opens above the
-composer on phones and stays visible after you choose the action, including
-with the iOS keyboard open. Both the `/` formatting menu and the GIF picker
-span the available chat width on phones, using the mentions menu's side gutters.
+Type `/gif` or choose **GIF** from `+`. The rounded picker replaces any active
+formatting or link menu, opens above the composer on phones, and stays visible
+after you choose the action, including with the iOS keyboard open. Both the `/`
+formatting menu and the GIF picker span the available chat width on phones,
+using the mentions menu's side gutters.
 The larger desktop GIF picker stays within the viewport on narrow screens.
 Trending GIFs show first, with the large search field focused on both desktop
 and phones. Search keeps the composer expanded, and tapping anywhere in the

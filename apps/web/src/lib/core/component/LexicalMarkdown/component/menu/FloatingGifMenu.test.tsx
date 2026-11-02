@@ -1,4 +1,5 @@
 /** @vitest-environment jsdom */
+import { computePosition } from '@floating-ui/dom';
 import {
   cleanup,
   fireEvent,
@@ -17,6 +18,11 @@ import {
 import { err, ok, type Result } from 'neverthrow';
 import { createSignal, onCleanup, onMount } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
+import {
+  createMenuOpenSignal,
+  FloatingMenuGroup,
+  MenuPriority,
+} from '../../context/FloatingMenuContext';
 import {
   createLexicalWrapper,
   LexicalWrapperContext,
@@ -75,8 +81,15 @@ vi.mock('../../plugins/gif', async (original) => ({
     },
   ],
 }));
-vi.mock('../../directive/floatWithSelection', () => ({
-  floatWithSelection: vi.fn(),
+vi.mock('@floating-ui/dom', async (original) => ({
+  ...(await original<typeof import('@floating-ui/dom')>()),
+  computePosition: vi.fn(async () => ({
+    x: 100,
+    y: 200,
+    placement: 'top-start',
+    strategy: 'fixed',
+    middlewareData: {},
+  })),
 }));
 vi.mock('@service-connection/websocket', () => ({
   ws: { send() {}, addEventListener() {}, removeEventListener() {} },
@@ -92,6 +105,21 @@ vi.mock('@service-storage/websocket', () => ({
 
 beforeEach(() => {
   uploadGif.mockResolvedValue(ok('static-gif-id'));
+  vi.stubGlobal(
+    'ResizeObserver',
+    class {
+      observe() {}
+      unobserve() {}
+      disconnect() {}
+    }
+  );
+  vi.stubGlobal(
+    'MutationObserver',
+    class {
+      observe() {}
+      disconnect() {}
+    }
+  );
 });
 
 afterEach(() => {
@@ -99,14 +127,26 @@ afterEach(() => {
   insertGif.mockClear();
   uploadGif.mockReset();
   discardUpload.mockClear();
+  vi.mocked(computePosition).mockClear();
+  vi.unstubAllGlobals();
   touchDevice.mockReturnValue(false);
   vi.useRealTimers();
+  vi.restoreAllMocks();
 });
 
-function mountPicker() {
+function mountPicker(companionPriority?: number) {
   const [canEdit, setCanEdit] = createSignal(true);
   const leaveComposer = vi.fn();
   let wrapper: ReturnType<typeof createLexicalWrapper>;
+  let companionOpen = () => false;
+  function CompanionMenu() {
+    [companionOpen] = createMenuOpenSignal(
+      'companion-menu',
+      companionPriority ?? MenuPriority.Normal,
+      companionPriority !== undefined
+    );
+    return null;
+  }
   const view = render(() => {
     wrapper = createLexicalWrapper({
       type: 'markdown',
@@ -116,23 +156,26 @@ function mountPicker() {
     onCleanup(wrapper.cleanup);
     return (
       <LexicalWrapperContext.Provider value={wrapper}>
-        <FocusClickTarget
-          editor={wrapper.editor}
-          onFocusOut={(event) => {
-            const next = event.relatedTarget;
-            if (next instanceof Node && event.currentTarget.contains(next))
-              return;
-            leaveComposer();
-          }}
-        >
-          <div
-            ref={(element) =>
-              onMount(() => wrapper.editor.setRootElement(element))
-            }
-            contentEditable
-          />
-          <FloatingGifMenu canEdit={canEdit} />
-        </FocusClickTarget>
+        <FloatingMenuGroup>
+          <CompanionMenu />
+          <FocusClickTarget
+            editor={wrapper.editor}
+            onFocusOut={(event) => {
+              const next = event.relatedTarget;
+              if (next instanceof Node && event.currentTarget.contains(next))
+                return;
+              leaveComposer();
+            }}
+          >
+            <div
+              ref={(element) =>
+                onMount(() => wrapper.editor.setRootElement(element))
+              }
+              contentEditable
+            />
+            <FloatingGifMenu canEdit={canEdit} />
+          </FocusClickTarget>
+        </FloatingMenuGroup>
       </LexicalWrapperContext.Provider>
     );
   });
@@ -148,7 +191,14 @@ function mountPicker() {
       { discrete: true }
     );
   };
-  return { editor, open, setCanEdit, leaveComposer, unmount: view.unmount };
+  return {
+    editor,
+    open,
+    setCanEdit,
+    leaveComposer,
+    companionOpen,
+    unmount: view.unmount,
+  };
 }
 
 it('opens the picker when the editor has no selection', async () => {
@@ -160,6 +210,47 @@ it('opens the picker when the editor has no selection', async () => {
     { discrete: true }
   );
   expect(await screen.findByRole('searchbox')).toBeTruthy();
+});
+it.each([MenuPriority.Normal, MenuPriority.High])(
+  'opens the GIF picker over an existing menu with priority %s',
+  async (priority) => {
+    const { open, companionOpen } = mountPicker(priority);
+    expect(companionOpen()).toBe(true);
+    open();
+    expect(await screen.findByRole('searchbox')).toBe(document.activeElement);
+    expect(companionOpen()).toBe(false);
+  }
+);
+
+it('keeps the editor anchor when search takes focus', async () => {
+  const { editor } = mountPicker();
+  editor.update(
+    () => {
+      const paragraph = $createParagraphNode().append($createTextNode('hello'));
+      $getRoot().append(paragraph);
+      paragraph.selectEnd();
+    },
+    { discrete: true }
+  );
+  const root = editor.getRootElement()!;
+  root.focus();
+  const range = document.createRange();
+  range.selectNodeContents(root);
+  range.collapse(false);
+  const selection = window.getSelection()!;
+  selection.removeAllRanges();
+  selection.addRange(range);
+  const nativeFocus = HTMLElement.prototype.focus;
+  vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(function (
+    this: HTMLElement
+  ) {
+    nativeFocus.call(this);
+    if (this instanceof HTMLInputElement) selection.removeAllRanges();
+  });
+  editor.dispatchCommand(TRY_INSERT_GIF_COMMAND, undefined);
+  expect(document.activeElement).toBe(screen.getByRole('searchbox'));
+  await waitFor(() => expect(computePosition).toHaveBeenCalled());
+  expect(vi.mocked(computePosition).mock.calls[0][0]).toBe(root);
 });
 
 it.each([false, true])(

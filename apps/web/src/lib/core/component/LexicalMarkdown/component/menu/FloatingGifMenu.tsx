@@ -75,7 +75,7 @@ export function FloatingGifMenu(
 
   const [menuOpen, setMenuOpen] = createMenuOpenSignal(
     'gif-picker-menu',
-    MenuPriority.Low,
+    MenuPriority.High,
     false
   );
 
