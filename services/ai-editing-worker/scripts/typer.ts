@@ -15,8 +15,9 @@ import {
 import { Doc } from "../src/ai-editing/doc/doc";
 import { nextAiPeerId } from "../src/ai-editing/awareness/ai-peer";
 import {
-	AI_NAMES,
+	aiLabel,
 	COLORS,
+	DEFAULT_EDITOR_NAME,
 	realAwarenessSource,
 } from "../src/ai-editing/awareness/awareness-source";
 import { DocumentEditor } from "../src/ai-editing/editor/document-editor";
@@ -74,7 +75,7 @@ const awareness = realAwarenessSource({
 	mirror: manager.mirror!,
 	doc: manager.doc,
 	send: (bytes) => source.pushAwareness(bytes),
-	name: AI_NAMES[0]!,
+	name: aiLabel(DEFAULT_EDITOR_NAME),
 	color: COLORS[0]!,
 });
 
