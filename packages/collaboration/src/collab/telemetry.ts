@@ -37,18 +37,20 @@ function setDocumentSpanAttributes(documentId: string, span: Span): void {
   }
 }
 
-export function telemetrySpan<T>(
-  documentId: string,
-  name: string,
-  operation: SpanOperation<T>,
-  parentSpan?: Span
-): Promise<T>;
+// The span-returning overload comes first: with strictNullChecks off
+// (ai-editing-worker), `undefined` would otherwise match the async one.
 export function telemetrySpan(
   documentId: string,
   name: string,
   operation?: undefined,
   parentSpan?: Span
 ): Span;
+export function telemetrySpan<T>(
+  documentId: string,
+  name: string,
+  operation: SpanOperation<T>,
+  parentSpan?: Span
+): Promise<T>;
 export function telemetrySpan<T>(
   documentId: string,
   name: string,
