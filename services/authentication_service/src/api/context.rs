@@ -56,6 +56,10 @@ use roles_and_permissions::{
 };
 use sqlx::PgPool;
 use tokio_util::task::TaskTracker;
+use user_hotkey_profiles::{
+    domain::service::UserHotkeyProfilesServiceImpl,
+    outbound::pg_user_hotkey_profiles_repo::PgUserHotkeyProfilesRepo,
+};
 use user_language::{
     domain::service::UserLanguageServiceImpl, outbound::pg_user_language_repo::PgUserLanguageRepo,
 };
@@ -137,6 +141,9 @@ pub(crate) type ReferralServiceType = ReferralServiceImpl<
 pub(crate) type GtmInviteServiceType = GtmInviteServiceImpl<PgGtmInviteRepo>;
 
 pub(crate) type UserLanguageServiceType = UserLanguageServiceImpl<PgUserLanguageRepo>;
+
+pub(crate) type UserHotkeyProfilesServiceType =
+    UserHotkeyProfilesServiceImpl<PgUserHotkeyProfilesRepo>;
 
 pub(crate) type GithubLinkServiceType = GithubLinkServiceImpl<
     PgGithubRepo,
@@ -235,6 +242,7 @@ pub(crate) struct ApiContext {
     pub referral_service: Arc<ReferralServiceType>,
     pub gtm_invite_service: Arc<GtmInviteServiceType>,
     pub user_language_service: Arc<UserLanguageServiceType>,
+    pub user_hotkey_profiles_service: Arc<UserHotkeyProfilesServiceType>,
     pub rate_limit_service: RateLimiter,
     /// The stripe price ids for each paid plan's seat
     pub stripe_prices: crate::api::user::stripe::StripePrices,

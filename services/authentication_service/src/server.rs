@@ -78,6 +78,10 @@ use referral::{
     domain::service::ReferralServiceImpl,
     outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
 };
+use user_hotkey_profiles::{
+    domain::service::UserHotkeyProfilesServiceImpl,
+    outbound::pg_user_hotkey_profiles_repo::PgUserHotkeyProfilesRepo,
+};
 use user_language::{
     domain::service::UserLanguageServiceImpl, outbound::pg_user_language_repo::PgUserLanguageRepo,
 };
@@ -509,6 +513,9 @@ pub async fn run() -> anyhow::Result<()> {
     let user_language_service = Arc::new(UserLanguageServiceImpl::new(PgUserLanguageRepo::new(
         db.clone(),
     )));
+    let user_hotkey_profiles_service = Arc::new(UserHotkeyProfilesServiceImpl::new(
+        PgUserHotkeyProfilesRepo::new(db.clone()),
+    ));
 
     let referral_service = ReferralServiceImpl {
         repo: PgReferralRepo::new(db.clone()),
@@ -753,6 +760,7 @@ pub async fn run() -> anyhow::Result<()> {
             entity_access_service: entity_access_service_impl,
             referral_service: Arc::new(referral_service),
             user_language_service,
+            user_hotkey_profiles_service,
             gtm_invite_service,
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::new(

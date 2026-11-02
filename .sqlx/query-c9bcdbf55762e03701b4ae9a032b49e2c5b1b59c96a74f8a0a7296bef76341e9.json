@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO user_hotkey_profiles (user_id, email_profile, tasks_profile)\n            VALUES ($1, $2, $3)\n            ON CONFLICT (user_id) DO UPDATE\n            SET email_profile = EXCLUDED.email_profile,\n                tasks_profile = EXCLUDED.tasks_profile,\n                modified_at = now()\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Text",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c9bcdbf55762e03701b4ae9a032b49e2c5b1b59c96a74f8a0a7296bef76341e9"
+}
