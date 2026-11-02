@@ -307,6 +307,7 @@ where
                 title: String::new(),
                 description: String::new(),
                 questions: vec![],
+                show_when: None,
             }],
         };
         self.store_new_form(
@@ -413,6 +414,7 @@ where
                 title: String::new(),
                 description: String::new(),
                 questions,
+                show_when: None,
             }],
         };
         self.store_new_form(

@@ -136,6 +136,21 @@ pub enum LayoutProblem {
         /// Why.
         reason: String,
     },
+    /// A section's show-when rules test a column no earlier section asks.
+    #[error(
+        "a section can only be shown on answers to questions of earlier sections; column {column} is not one"
+    )]
+    ConditionNamesLaterColumn {
+        /// The column.
+        #[schema(value_type = Uuid)]
+        column: ColumnId,
+    },
+    /// A section's show-when rule does not fit its column.
+    #[error("a show-when rule does not fit its column: {reason}")]
+    ConditionRule {
+        /// Why.
+        reason: String,
+    },
     /// A text is longer than allowed.
     #[error("a text is longer than {max} characters")]
     TextTooLong {

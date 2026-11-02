@@ -82,6 +82,7 @@ fn a_form_detail_reads_as_the_web_client_expects() {
                     required: true,
                     widget: Some(Widget::Choice),
                 }],
+                show_when: None,
             },
             FormSectionDetail::Gate {
                 id: ELIGIBILITY,
@@ -217,6 +218,7 @@ fn a_layout_put_reads_sections_by_kind_and_a_missing_widget_as_default() {
                         required: false,
                         widget: None,
                     }],
+                    show_when: None,
                 },
                 FormSection::Gate {
                     id: ELIGIBILITY,

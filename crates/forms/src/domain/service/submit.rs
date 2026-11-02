@@ -150,7 +150,7 @@ fn unlocked_booking(layout: &FormLayout) -> Option<UnlockedBooking> {
 }
 
 /// Whether a saved row's answers pass the form as it is now: every required
-/// question answered and every gate passed.
+/// question of a shown section answered and every gate passed.
 fn still_passes(
     layout: &FormLayout,
     columns: &HashMap<ColumnId, QuestionColumn>,

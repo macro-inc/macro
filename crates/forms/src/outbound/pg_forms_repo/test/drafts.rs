@@ -35,6 +35,7 @@ async fn a_projection_commits_its_layout_and_revision_together(pool: PgPool) {
                 required: true,
                 widget: None,
             }],
+            show_when: None,
         }],
     };
     repository
@@ -143,6 +144,7 @@ async fn concurrent_projections_commit_exactly_one_revision_and_its_layout(pool:
                     title: title.into(),
                     description: "".into(),
                     questions: vec![],
+                    show_when: None,
                 }],
             };
             barrier.wait().await;

@@ -1,6 +1,6 @@
 //! A submission's answers against a form's layout: shape and required
-//! checks, labels resolved to options, and the gates, walked in section
-//! order. The databases service stays the authority on whether a value fits
+//! checks, labels resolved to options, the sections skipped by their
+//! show-when rules, and the gates, walked in section order. The databases service stays the authority on whether a value fits
 //! its column; this checks only what the form must decide itself.
 
 use std::collections::HashMap;
@@ -17,7 +17,7 @@ use crate::domain::models::{
 #[derive(Debug, Clone, PartialEq)]
 pub(super) enum Evaluation {
     /// Every gate passed: each question of the form in layout order, with
-    /// its answer or `None` when unanswered.
+    /// its answer or `None` when unanswered or its section was skipped.
     Passed(Vec<AnsweredQuestion>),
     /// A gate stopped the respondent.
     Stopped {
@@ -40,9 +40,14 @@ pub(super) struct AnsweredQuestion {
 }
 
 /// Check `answers` against `layout` over the table's `columns` and run the
-/// gates. Required questions are checked section by section up to the first
-/// gate that stops the respondent; sections after it are never reached, so
-/// their questions need no answers.
+/// gates, walking the sections in order. A questions section with show-when
+/// rules is shown only when the answers of earlier shown sections pass
+/// them; otherwise it is skipped: its questions need no answers, and
+/// answers given to them are ignored, neither checked nor written, so they
+/// count as unanswered. Gates and later rules see only shown sections'
+/// answers. Required questions are checked section by section up to the
+/// first gate that stops the respondent; sections after it are never
+/// reached, so their questions need no answers.
 pub(super) fn evaluate(
     layout: &FormLayout,
     columns: &HashMap<ColumnId, QuestionColumn>,
@@ -61,15 +66,14 @@ pub(super) fn evaluate(
                 .map(|column| (question.id, column))
         })
         .collect();
-    let mut given: HashMap<FormQuestionId, Option<CellValue>> = HashMap::new();
+    let mut given: HashMap<FormQuestionId, &CellValue> = HashMap::new();
     for answer in answers {
-        let column = asked
-            .get(&answer.question)
-            .ok_or(FormError::UnknownQuestion {
+        if !asked.contains_key(&answer.question) {
+            return Err(FormError::UnknownQuestion {
                 question: answer.question,
-            })?;
-        let value = normalized(answer.question, column, &answer.value)?;
-        if given.insert(answer.question, value).is_some() {
+            });
+        }
+        if given.insert(answer.question, &answer.value).is_some() {
             return Err(FormError::RepeatedAnswer {
                 question: answer.question,
             });
@@ -81,13 +85,23 @@ pub(super) fn evaluate(
     for section in &layout.sections {
         match section {
             FormSection::Booking { .. } => {}
-            FormSection::Questions { questions, .. } => {
+            FormSection::Questions {
+                questions,
+                show_when,
+                ..
+            } => {
+                let shown = show_when
+                    .as_ref()
+                    .is_none_or(|rules| eval::matches(rules, &cells));
                 for question in questions {
-                    if !asked.contains_key(&question.id) {
+                    let Some(column) = asked.get(&question.id) else {
                         continue;
-                    }
-                    let value = given.remove(&question.id).flatten();
-                    if question.required && value.is_none() {
+                    };
+                    let value = match given.get(&question.id) {
+                        Some(value) if shown => normalized(question.id, column, value)?,
+                        Some(_) | None => None,
+                    };
+                    if shown && question.required && value.is_none() {
                         return Err(FormError::MissingAnswer {
                             question: question.id,
                         });

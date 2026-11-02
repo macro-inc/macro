@@ -37,6 +37,11 @@ service.
 - Add a layout field: `src/domain/authoring/models.rs` → `src/domain/authoring/edit.rs`
   → `src/domain/authoring/validate.rs` → `src/outbound/collaborative_layout.rs`.
 - Add an AI authoring tool: `src/inbound/toolset.rs` → `src/domain/authoring/workflow.rs`.
+- Change section rules (gates, a questions section's `showWhen` branching):
+  `models_forms` → `src/domain/service/layout.rs` (`validate_layout`,
+  `gates_fit_table`) → `src/domain/service/answers.rs` (`evaluate`) →
+  `src/domain/authoring/validate.rs` → `src/outbound/pg_forms_repo/layout.rs`.
+  A skipped section's answers are ignored and count as unanswered.
 - Add a submission rule: `src/domain/service.rs` (`submit`/`answers` modules)
   → `src/outbound/pg_forms_repo.rs`.
 

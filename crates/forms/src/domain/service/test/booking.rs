@@ -140,6 +140,7 @@ async fn an_accepted_response_unlocks_the_booking_step_and_a_stopped_one_never_s
                             widget: Some(Widget::Date),
                         },
                     ],
+                    show_when: None,
                 },
                 FormSection::Gate {
                     id: ELIGIBILITY,
