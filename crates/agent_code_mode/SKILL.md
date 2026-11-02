@@ -24,7 +24,7 @@ macro, session and execution are real SDK handles. You can instead import {Macro
 
 ## One execution per request
 
-Do the whole request in as few ExecuteCode calls as possible, ideally one: each call costs a model turn. Put the decision in the program instead of checking in one execution and acting in the next. Run independent reads together with Promise.all, and return what the answer needs (ids, URLs, failures) so no follow-up call is needed. Split only where the user must decide, or where you must see a result before you can write the next step.
+Do the whole request in as few ExecuteCode calls as possible, ideally one: each call costs a model turn. Put the decision in the program instead of checking in one execution and acting in the next. Run independent reads together with Promise.all, and return what the answer needs (ids, URLs, failures) so no follow-up call is needed. Split only where the user must decide, where you must see a result before you can write the next step, or where one execution would not finish within its deadline.
 
 Checking for a duplicate and creating a task is one program, not two:
 
@@ -41,7 +41,7 @@ export async function main({macro}) {
 }
 ```
 
-When it returns matches, tell the user nothing was created and ask; do not create the task in a second call unless they say to.
+findSimilar returns only matches above a relevance floor. When it returns matches and one is a likely duplicate, tell the user nothing was created and ask; create the task in a later call only when they confirm.
 
 ## Useful workflows
 

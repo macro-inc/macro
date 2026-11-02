@@ -137,8 +137,8 @@ export class Task extends Document {
 
   /**
    * Existing tasks of the caller or their team that look like the same work
-   * as a task with this title and body, most similar first. Only likely
-   * duplicates are returned. Creates and changes nothing; check it in the
+   * as a task with this title and body, most similar first. Only matches above
+   * a relevance floor are returned. Creates and changes nothing; check it in the
    * same program that creates the task.
    */
   static async findSimilar(

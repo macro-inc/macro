@@ -19,7 +19,7 @@ export async function main({ macro }) {
 }
 ```
 
-findSimilar returns only likely duplicates. When it returns any, the task was not created: tell the user and ask instead. Never edit, merge or delete the matches unless the user asks.
+findSimilar returns only tasks above a relevance floor, so an empty result means nothing to ask about. When it returns matches, the task was not created: if any is a likely duplicate, tell the user and ask, and create the task in a later call only when they confirm; if none is, create it. Never edit, merge or delete the matches unless the user asks.
 "##;
 
 static INTENT: &str = "The agent checks macro.tasks.findSimilar and creates the task in one \

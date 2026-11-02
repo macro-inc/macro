@@ -73,10 +73,10 @@ request. The task starts Not started.
 > **findSimilar**(`opts`): `Promise`\<[`SimilarTask`](../../task/interfaces/SimilarTask.md)[]\>
 
 Existing tasks of yours or your team's that look like the same work as a
-task with this title and body, most similar first. Only likely
-duplicates are returned. Call it in the same program as `create`: create
-the task when it returns none, and otherwise return the matches and ask
-the user instead of creating.
+task with this title and body, most similar first. Only matches
+above a relevance floor are returned. Call it in the same program as
+`create`: create the task when it returns none, and otherwise return the
+matches; if one is a likely duplicate, ask the user instead of creating.
 
 #### Parameters
 
