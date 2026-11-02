@@ -1,6 +1,6 @@
 # Streaming search optimization measurements
 
-These measurements use 100,000 synthetic short contact-like titles, a result
+The scan and borrowed-row comparisons use 100,000 synthetic short contact-like titles, a result
 limit of 50, release builds, and one local machine. They are not production
 latency guarantees. Fuzzy subsequence matching and ranking stay unchanged.
 
@@ -66,11 +66,37 @@ with warm broad-search peak additions of 31 KiB / 22 KiB. It did not reintroduce
 corpus-sized search catalogs. These trials do not measure cold-cache rehydration
 or disk-space growth across large real corpora.
 
+## Normalized contact hydration
+
+```sh
+cargo test --release -p cache-turso --test contacts hydrate_and_search_100k_contacts -- --ignored --nocapture
+```
+
+A separate native filesystem trial hydrates 100,000 `GraphqlContact` records
+through the actual `ContactDirectoryBackfill` operation, in 200 pages of 500,
+with a 16-record hot LRU. Each page returns only its cursor projection; the test
+asserts that the encoded viewer stays below 256 bytes without any contact page
+fields. This is not a frontend JS-heap or process/WASM memory measurement.
+
+One local release run took **3.20 seconds** to hydrate. After closing and reopening,
+the query/browse/materialization scenario took **126 milliseconds** in total:
+name matching, a late exact email with a null name, an absent query, and two browse
+pages, projecting at most seven winning records per query. These are aggregate
+single-run timings, not per-query medians. The normal native and real-OPFS suites
+exercise the same contract at 1,500 contacts, including account reset. The browser
+100k benchmark above still uses contact-like document titles, not normalized
+contact hydration. The app still retains legacy contact arrays until its consumers
+are migrated; these cache-engine results do not establish whole-app memory bounds.
+
+Projection 5 adds contact membership and advertises `projectionVersion` on search
+responses. It rebuilds only derived rows, without another storage-schema cutover.
+
 ## What ships
 
 The adapter borrows row fields, validates every row, and reuses one key buffer.
 Core ranking owns only its `limit + 1` winners. The covering browse index includes
-text and source hashes, avoiding base-table lookups. Wire responses are unchanged.
+text and source hashes, avoiding base-table lookups. Contact support separately
+adds the projection revision to search replies.
 Native and real-OPFS parity tests cover Unicode, SQL wildcard escaping, NUL,
 ordering, and late winners; engine tests cover optimistic replacement and settlement.
 
@@ -81,4 +107,5 @@ optimistic layers along with refetchable records. Browser upgrades open a fresh
 versioned file; cleanup still preserves older files with queued mutations, but
 those queues are not replayed by the new engine. Rollback across the native
 schema boundary also uses the existing incompatible-cache reset behavior.
-The schema epoch, record format, and search projection version stay unchanged.
+That index cutover kept the schema epoch, record format, and search projection
+version unchanged; the subsequent contact projection revision is described above.

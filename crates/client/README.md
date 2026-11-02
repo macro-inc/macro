@@ -271,8 +271,8 @@ incompatible cutover, not a migration. Native `open_or_reset` replaces a schema-
 cache, including its records, queued mutations, and optimistic layers. Browsers
 open a fresh `s4.v4.t12` database; existing cleanup still keeps older files with
 pending mutations, but the new engine does not replay those queues. Backfill
-restarts against the new storage generation. The GraphQL schema epoch, record
-format, search projection version, and wire API are unchanged. Native binaries
+restarts against the new storage generation. That index cutover kept the GraphQL
+schema epoch and record format unchanged. Native binaries
 must be rebuilt to gain the new index; an OTA frontend update alone cannot add it.
 
 `cargo test -p cache-turso --test search` checks matching/ranking parity, including
@@ -288,6 +288,20 @@ fixture adds a legacy non-covering index for comparison with the production
 covering index. Statement reuse has not shown a material benefit and is not
 enabled in production. See [search performance](search-performance.md) for
 measured costs, memory boundaries, and the schema-12 reset behavior.
+
+### Contact projection and page retention
+
+Projection version 5 indexes viewer-scoped `GraphqlContact` names/emails into
+`person`, not public profiles. Search responses expose `projectionVersion` so
+contact consumers can detect older native engines. The derived-index rebuild
+preserves normalized data, mutations, and storage generation.
+
+Hydration omits contact page and exact-lookup wrappers from the viewer while
+retaining normalized contacts. Foreground contact variants share Soup's bounded
+64-page / 512 KiB snapshot budget. `cache-turso/tests/contacts.rs` and the OPFS
+suite hydrate the real client operation, reopen, search, materialize bounded
+fragments with target `userId` intact, and reset account identity. The background
+runner and UI migration remain in the [contacts plan](../../docs/design/disk-backed-contacts.md).
 
 ## Browser OPFS writes
 

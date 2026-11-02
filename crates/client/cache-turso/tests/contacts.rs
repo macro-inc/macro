@@ -43,7 +43,7 @@ fn hydrate_and_search_100k_contacts() {
         let start = std::time::Instant::now();
         contacts::assert_contact_search(&mut engine, 100_000).await;
         eprintln!(
-            "100k contacts: four searches + bounded materialization in {:?}",
+            "100k contacts: query/browse/materialization scenario in {:?}",
             start.elapsed()
         );
     });
