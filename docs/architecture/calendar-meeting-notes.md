@@ -94,12 +94,7 @@ the existing read-only event preview otherwise. The note flag gates this query
 before it mounts.
 
 The links response includes `canViewMeeting` and an optional exact `event`
-preview, which References uses without another lookup. During a rolling deploy,
-an older calendar service can omit those fields. Missing projection fields mean
-the reference is unresolved, not that meeting access was denied; the dialog
-offers Retry on the links query. It never substitutes a broader mention lookup
-for the server's source-scoped authorization. An explicit `canViewMeeting: false`
-still means the linked meeting is unavailable to the reader.
+preview, so References never performs a separate, more permissive mention read.
 It also includes an optional `teamEvent` projection, resolved through
 the same source entitlement reader and sanitizer as the team calendar. It never
 borrows canonical details, includes busy-only content, or substitutes a nearby
@@ -112,24 +107,6 @@ team access controls, and inline unlink confirmation. That list does not require
 current meeting access. It uses
 generic labels for inaccessible or indirectly shared meetings, so it cannot reveal
 a richer canonical event title through a restricted provider projection.
-The standard Team access control includes the current team's meeting-derived
-view grant: it shows **View via meeting** when there is no direct team grant.
-**Use meeting access** removes only additional direct team sharing; the meeting
-checkbox still owns its independent grant. A team save does not disable or
-remount the Unlink trigger, and destructive writes remain serialized.
-
-Event notes and document links remain cached per account and target for five
-minutes, with a 30-second freshness window and mutation invalidation. Event
-Create and Link actions do not wait for the notes request. The picker immediately
-uses the app's owned Markdown Quick Access candidates, then adds server title
-matches. Matching previous results remain visible during the debounced request;
-search responses are fresh for a minute and cached for five minutes. Previous
-results never carry across accounts. This supplements the existing owned-note
-endpoint; it does not use the full-text search backend.
-Picker server reads emit `calendar.notes.search` and a server phase with meeting
-ID, query length, configured debounce, local/remote result counts, and outcome.
-Quick Access retains its existing search-page and materialization traces. Search
-text and document names are not recorded.
 
 The calendar service mounts these authenticated routes even when provider sync is
 disabled. Every response is private and non-cacheable:

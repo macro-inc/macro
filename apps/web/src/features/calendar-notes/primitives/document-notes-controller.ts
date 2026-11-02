@@ -5,14 +5,13 @@ import type { DocumentNoteLink } from '../core/types';
 export function createDocumentNotesController(source: DocumentNotesSource) {
   const [selected, setSelected] = createSignal<DocumentNoteLink>();
   const [saving, setSaving] = createSignal(false);
-  const [removing, setRemoving] = createSignal(false);
   const [error, setError] = createSignal<string>();
   let disposed = false;
   onCleanup(() => {
     disposed = true;
   });
   function select(link: DocumentNoteLink | undefined) {
-    if (removing()) return;
+    if (saving()) return;
     setSelected(link);
     setError(undefined);
   }
@@ -20,11 +19,9 @@ export function createDocumentNotesController(source: DocumentNotesSource) {
     const link = selected();
     if (!link || saving()) return;
     setSaving(true);
-    setRemoving(true);
     const result = await source.unlink(link);
     if (disposed) return;
     setSaving(false);
-    setRemoving(false);
     if (result.isErr()) setError(result.error.message);
     else select(undefined);
   }
@@ -37,5 +34,5 @@ export function createDocumentNotesController(source: DocumentNotesSource) {
     setSaving(false);
     if (result.isErr()) setError(result.error.message);
   }
-  return { selected, saving, removing, error, select, remove, setTeam };
+  return { selected, saving, error, select, remove, setTeam };
 }

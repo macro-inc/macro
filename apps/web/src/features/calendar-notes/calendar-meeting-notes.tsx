@@ -1,15 +1,10 @@
 import { Permissions } from '@core/component/SharePermissions';
-import { useQuickAccess } from '@core/context/quickAccess';
+import { ShareModal } from '@core/component/TopBar/ShareButton';
 import { useUserId } from '@core/context/user';
-import { lazy, Show, Suspense } from 'solid-js';
+import { Show, Suspense } from 'solid-js';
 import type { CalendarEvent } from '../calendar/types';
-import { createLocalNoteSearch } from './queries/local-note-search';
 import { createNotesSource } from './queries/notes-source';
 import { MeetingNotesView } from './views/meeting-notes';
-
-const ShareModal = lazy(async () => ({
-  default: (await import('@core/component/TopBar/ShareButton')).ShareModal,
-}));
 
 /** App composition; the view and controller also mount without calendar chrome. */
 export function CalendarMeetingNotes(props: {
@@ -18,15 +13,10 @@ export function CalendarMeetingNotes(props: {
   onDialogChange: (open: boolean) => void;
 }) {
   const userId = useUserId();
-  const localSearch = createLocalNoteSearch(useQuickAccess(), userId);
-  const source = createNotesSource(
-    userId,
-    () => ({
-      eventId: props.event.eventId,
-      occurrenceKey: props.event.occurrenceKey,
-    }),
-    localSearch
-  );
+  const source = createNotesSource(userId, () => ({
+    eventId: props.event.eventId,
+    occurrenceKey: props.event.occurrenceKey,
+  }));
   return (
     <Suspense>
       <Show

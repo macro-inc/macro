@@ -7,7 +7,7 @@ import { DocumentNotesView } from './views/document-notes';
 /** Owner-only meeting grants within the document share panel. */
 export function DocumentMeetingNotes(props: {
   documentId: string;
-  onAccessState?: (state: MeetingAccessState, teamIds: string[]) => void;
+  onAccessState?: (state: MeetingAccessState) => void;
 }) {
   const userId = useUserId();
   const source = createDocumentNotesSource(userId, () => props.documentId);
@@ -20,11 +20,7 @@ export function DocumentMeetingNotes(props: {
           ? 'loading'
           : state.data.length
             ? 'shared'
-            : 'none',
-      state.error
-        ? []
-        : (state.data?.flatMap((link) => (link.team ? [link.team.id] : [])) ??
-            [])
+            : 'none'
     );
   });
   return (

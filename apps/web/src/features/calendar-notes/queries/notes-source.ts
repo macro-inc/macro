@@ -1,5 +1,5 @@
+import { createMarkdownFile } from '@core/util/create';
 import { catchToResult, throwOnErr } from '@core/util/result';
-import { matchesTokenSubsequences } from '@core/util/string';
 import { Telemetry } from '@macro-inc/observability';
 import { queryClient } from '@queries/client';
 import { queryReadyGate } from '@queries/gate';
@@ -9,18 +9,13 @@ import { calendarNotesClient } from '@service-calendar/notes';
 import { createDebouncedMemo } from '@solid-primitives/memo';
 import { useMutation, useQuery } from '@tanstack/solid-query';
 import { err, ok } from 'neverthrow';
-import { type Accessor, createMemo } from 'solid-js';
-import type {
-  DocumentNotesSource,
-  NoteDocumentSearch,
-  NotesSource,
-} from '../context/notes-source';
+import type { Accessor } from 'solid-js';
+import type { DocumentNotesSource, NotesSource } from '../context/notes-source';
 import type {
   DocumentNoteLink,
   MeetingNote,
   NoteCreateFailure,
   NoteFailure,
-  NotePicker,
   NoteTarget,
 } from '../core/types';
 import { notesKeys } from './keys';
@@ -39,8 +34,8 @@ function notesOptions(userId: string | undefined, target: NoteTarget) {
       return notes.map((note) => ({ ...note, team: note.team ?? undefined }));
     },
     enabled: !!userId,
-    staleTime: 30_000,
-    gcTime: 5 * 60_000,
+    staleTime: 0,
+    gcTime: 0,
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
   };
@@ -49,49 +44,15 @@ function notesOptions(userId: string | undefined, target: NoteTarget) {
 function pickerOptions(
   userId: string | undefined,
   query: string,
-  enabled: boolean,
-  eventId: string,
-  localCount: number
+  enabled: boolean
 ) {
   return {
     queryKey: notesKeys.documents(userId, query).queryKey,
     queryFn: ({ signal }: { signal: AbortSignal }) =>
-      Telemetry.span('calendar.notes.search', async (span) => {
-        span.setAttr('event.id', eventId);
-        span.setAttr('search.query_length', query.length);
-        span.setAttr('search.debounce_ms', 180);
-        span.setAttr('search.local_result_count', localCount);
-        const result = await span.span(
-          'calendar.notes.search.server',
-          async (server) => {
-            const result = await calendarNotesClient.documents(query, signal);
-            if (result.isOk()) {
-              server.setAttr(
-                'search.result_count',
-                result.value.documents.length
-              );
-            } else if (!signal.aborted) {
-              server.error('Meeting note search failed');
-            }
-            return result;
-          }
-        );
-        span.setAttr(
-          'search.outcome',
-          signal.aborted ? 'cancelled' : result.isOk() ? 'success' : 'error'
-        );
-        if (result.isErr() && !signal.aborted)
-          span.error('Meeting note search failed');
-        return throwOnErr(async () => result);
-      }),
+      throwOnErr(() => calendarNotesClient.documents(query, signal)),
     enabled: !!userId && enabled,
-    staleTime: 60_000,
-    gcTime: 5 * 60_000,
-    // Keep matching results while typing, but never carry them across accounts.
-    placeholderData: (
-      previous: NotePicker | undefined,
-      previousQuery: { queryKey: readonly unknown[] } | undefined
-    ) => (previousQuery?.queryKey[2] === userId ? previous : undefined),
+    staleTime: 0,
+    gcTime: 0,
   };
 }
 
@@ -136,8 +97,7 @@ function refreshNotes() {
 
 export function createNotesSource(
   userId: Accessor<string | undefined>,
-  target: Accessor<NoteTarget>,
-  localSearch: NoteDocumentSearch
+  target: Accessor<NoteTarget>
 ): NotesSource {
   const notes = useQuery(() => notesOptions(userId(), target()));
   const link = useMutation(() => ({
@@ -204,36 +164,13 @@ export function createNotesSource(
       });
     },
     picker(query, enabled) {
-      const normalized = () => query().trim();
-      const debounced = createDebouncedMemo(normalized, 180);
-      const local = localSearch(normalized, enabled);
+      const debounced = createDebouncedMemo(query, 180);
       const picker = useQuery(() =>
-        pickerOptions(
-          userId(),
-          debounced(),
-          enabled(),
-          target().eventId,
-          local().length
-        )
+        pickerOptions(userId(), debounced(), enabled())
       );
-      const data = createMemo(() => {
-        const remote = queryReadyGate(picker) ? picker.data : undefined;
-        const documents = new Map(
-          local().map((document) => [document.documentId, document])
-        );
-        for (const document of remote?.documents ?? []) {
-          if (matchesTokenSubsequences(document.name, normalized())) {
-            documents.set(document.documentId, document);
-          }
-        }
-        return {
-          documents: [...documents.values()],
-          teams: remote?.teams ?? [],
-        };
-      });
       return () => ({
-        data: data(),
-        pending: picker.isFetching || normalized() !== debounced(),
+        data: queryReadyGate(picker) ? picker.data : undefined,
+        pending: picker.isPending,
         error: picker.isError
           ? 'Couldn’t load your notes. Try again.'
           : undefined,
@@ -265,7 +202,7 @@ export function createNotesSource(
 
 /** Reference previews are adapted at the calendar API boundary. */
 export type DocumentReference = DocumentNoteLink &
-  Partial<Pick<CalendarDocumentLink, 'teamEvent' | 'event' | 'canViewMeeting'>>;
+  Pick<CalendarDocumentLink, 'teamEvent' | 'event' | 'canViewMeeting'>;
 
 export function documentLinksOptions(
   userId: string | undefined,
@@ -280,8 +217,8 @@ export function documentLinksOptions(
       return links.map((link) => ({ ...link, team: link.team ?? undefined }));
     },
     enabled: !!userId,
-    staleTime: 30_000,
-    gcTime: 5 * 60_000,
+    staleTime: 0,
+    gcTime: 0,
     refetchInterval: 30_000,
     refetchOnWindowFocus: true,
   };
@@ -337,5 +274,3 @@ export function createDocumentNotesSource(
     },
   };
 }
-
-import { createMarkdownFile } from '@core/util/create';

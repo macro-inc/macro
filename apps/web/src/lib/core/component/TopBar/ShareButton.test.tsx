@@ -20,13 +20,12 @@ import {
 vi.mock('@app/features/calendar-notes/document-meeting-notes', () => ({
   DocumentMeetingNotes: (props: {
     documentId: string;
-    onAccessState?: (state: 'shared' | 'none', teamIds: string[]) => void;
+    onAccessState?: (state: 'shared' | 'none') => void;
   }) => {
     mocks.mountMeetingNotes(props.documentId);
     onCleanup(mocks.unmountMeetingNotes);
     props.onAccessState?.(
-      props.documentId === 'meeting-note' ? 'shared' : 'none',
-      []
+      props.documentId === 'meeting-note' ? 'shared' : 'none'
     );
     return (
       <section aria-label="Meeting links">
@@ -336,7 +335,7 @@ vi.mock('@queries/call/call', () => ({
 vi.mock('@queries/team/teams', () => ({
   useCurrentTeamQuery: () => ({
     isSuccess: mocks.hasTeam,
-    data: mocks.hasTeam ? { team: { id: 'team-1', name: 'Macro' } } : undefined,
+    data: mocks.hasTeam ? { id: 'team-1' } : undefined,
   }),
 }));
 vi.mock('@solidjs/router', () => ({ useNavigate: () => vi.fn() }));

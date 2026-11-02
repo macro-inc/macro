@@ -85,7 +85,6 @@ function ReferencesSection(props: {
               <MeetingReference
                 documentId={props.documentId}
                 link={link}
-                onRetry={props.onRetry}
                 onOpenCalendar={() => {
                   if (isMobile()) sidePanel?.setIsOpen(false);
                 }}

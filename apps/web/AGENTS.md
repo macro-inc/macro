@@ -114,17 +114,9 @@ sample data; keep notes aligned with those existing surfaces and preserve their
 dialog open guards. Open the existing document Share dialog for note access,
 keep labeled Options controls visible beside truncated titles without redundant
 hover tooltips, and use existing team memberships for optional note sharing.
-Keep meeting-note reads cached across event opens, show cached Quick Access
-matches while note searches refresh, and keep event actions usable while notes
-load. Show meeting-derived team viewing in the document's Team access summary;
-keep it distinct from additional direct sharing and keep Unlink stable while
-team access saves.
 Include linked meetings in Markdown side-panel References, behind the same flag;
 reuse the shared single-line ReferenceRow with the title and date inline, and
 resolve meeting details and opening targets through authorized calendar previews.
-Treat missing reference projection fields during backend rollout as unresolved,
-not denied; offer Retry on the links query without bypassing the server's
-reference authorization.
 Gate event notes and document Share meeting-link controls with
 `enable-calendar-meeting-notes` before mounting their query sources; it defaults
 on in dev and uses PostHog in production.

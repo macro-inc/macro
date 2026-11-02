@@ -430,9 +430,6 @@ interface LinkSharingControlsProps {
 /** Owner-only explicit team sharing, present only for entity types that support it. */
 interface TeamShareControls {
   accessLevel: AccessLevel | null | undefined;
-  /** An independent view grant that is managed under Meeting links. */
-  meetingViewAccess?: boolean;
-  meetingAccess?: MeetingAccessState | 'unknown';
   setAccessLevel: (scope: TeamShareScope) => void;
   /** Noun for the copy, e.g. "document" or "chat". */
   itemNoun: string;
@@ -450,33 +447,13 @@ function teamShareOnOwnCard(
 
 function TeamAccessSection(props: { teamShare: TeamShareControls }) {
   const teamShareScope = () => getTeamShareScope(props.teamShare.accessLevel);
-  const label = () => {
-    const scope = teamShareScope();
-    if (scope !== 'NONE') return getTeamShareScopeCopy(scope);
-    if (props.teamShare.meetingViewAccess) return 'View via meeting';
-    if (props.teamShare.meetingAccess === 'loading') return 'Checking…';
-    if (props.teamShare.meetingAccess === 'error')
-      return 'Check meeting access';
-    if (props.teamShare.meetingAccess === 'unknown') return 'Direct: None';
-    return getTeamShareScopeCopy(scope);
-  };
 
   return (
     <div class="flex flex-wrap items-center justify-between gap-3">
       <div class="flex flex-col gap-1">
         <span class="font-medium">Team access</span>
         <p class="text-sm text-ink-muted">
-          <Show
-            when={props.teamShare.meetingViewAccess}
-            fallback={
-              <>
-                Share this {props.teamShare.itemNoun} directly with the owner's
-                team.
-              </>
-            }
-          >
-            Your team can view through meeting links.
-          </Show>
+          Share this {props.teamShare.itemNoun} directly with the owner's team.
         </p>
       </div>
       <Dropdown>
@@ -485,7 +462,7 @@ function TeamAccessSection(props: { teamShare: TeamShareControls }) {
           aria-label="Team access"
           class="min-w-16.75 py-1 pl-2 pr-1 flex items-center gap-1"
         >
-          {label()}
+          {getTeamShareScopeCopy(teamShareScope())}
           <ChevronDownIcon class="size-4 text-ink-extra-muted" />
         </Dropdown.Trigger>
         <Dropdown.Content portalScope="local">
@@ -499,12 +476,7 @@ function TeamAccessSection(props: { teamShare: TeamShareControls }) {
             <For each={props.teamShare.scopeOptions}>
               {(option) => (
                 <Dropdown.RadioItem value={option.value}>
-                  <span class="flex-1 truncate">
-                    {option.value === 'NONE' &&
-                    props.teamShare.meetingViewAccess
-                      ? 'Use meeting access'
-                      : option.label}
-                  </span>
+                  <span class="flex-1 truncate">{option.label}</span>
                   <Dropdown.ItemIndicator>
                     <CheckIcon class="size-3.5 text-accent" />
                   </Dropdown.ItemIndicator>
@@ -525,20 +497,8 @@ function LinkSharingControls(props: LinkSharingControlsProps) {
     const status = getShareStatus(
       props.linkShare,
       props.hasExplicitShares || props.meetingAccess === 'shared',
-      props.teamShare?.accessLevel ??
-        (props.teamShare?.meetingViewAccess ? 'view' : undefined)
+      props.teamShare?.accessLevel
     );
-    if (
-      status.label === 'Team' &&
-      props.teamShare?.meetingViewAccess &&
-      !props.teamShare.accessLevel &&
-      !props.linkShare
-    ) {
-      return {
-        ...status,
-        tooltip: 'Your team can view through meeting links.',
-      };
-    }
     if (status.label === 'Shared' && props.meetingAccess === 'shared') {
       return {
         ...status,
@@ -707,7 +667,7 @@ function RecipientsSkeleton() {
 interface MobileShareDrawerProps {
   meetingNotesEnabled: boolean;
   meetingAccess?: MeetingAccessState | 'unknown';
-  onMeetingAccessState: (state: MeetingAccessState, teamIds: string[]) => void;
+  onMeetingAccessState: (state: MeetingAccessState) => void;
   requests: SharingSource;
   requestLevels: readonly AccessLevel[];
   editPermissionEnabled?: boolean;
@@ -1131,24 +1091,9 @@ export function ShareModal(props: ShareModalProps) {
     documentId: string;
     userId: string | undefined;
     state: MeetingAccessState;
-    teamIds: string[];
   }>();
-  const setMeetingAccess = (state: MeetingAccessState, teamIds: string[]) =>
-    setMeetingAccessSnapshot({
-      documentId: props.id,
-      userId: userId(),
-      state,
-      teamIds,
-    });
-  const meetingTeamAccess = () => {
-    const snapshot = meetingAccessSnapshot();
-    if (snapshot?.documentId !== props.id || snapshot.userId !== userId())
-      return false;
-    const teamId = currentTeamQuery.isSuccess
-      ? currentTeamQuery.data?.team?.id
-      : undefined;
-    return !!teamId && snapshot.teamIds.includes(teamId);
-  };
+  const setMeetingAccess = (state: MeetingAccessState) =>
+    setMeetingAccessSnapshot({ documentId: props.id, userId: userId(), state });
   const meetingAccess = (): MeetingAccessState => {
     const snapshot = meetingAccessSnapshot();
     return snapshot?.documentId === props.id && snapshot.userId === userId()
@@ -1661,11 +1606,7 @@ export function ShareModal(props: ShareModalProps) {
         setCallRecordTeamShareCache(props.id, shared);
       }
       if (scope === 'NONE') {
-        toast.success(
-          canManageMeetingLinks()
-            ? `Removed direct team access for this ${itemNoun}`
-            : `Removed team access for this ${itemNoun}`
-        );
+        toast.success(`Removed team access for this ${itemNoun}`);
         return;
       }
 
@@ -1700,8 +1641,6 @@ export function ShareModal(props: ShareModalProps) {
     currentTeamQuery.data
       ? {
           accessLevel: teamShareAccessLevel(),
-          meetingViewAccess: canManageMeetingLinks() && meetingTeamAccess(),
-          meetingAccess: meetingAccessForSharing(),
           setAccessLevel: setTeamShareAccessLevel,
           itemNoun:
             props.blockAlias === 'snippet'
