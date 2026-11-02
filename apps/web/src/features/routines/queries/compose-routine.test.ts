@@ -33,8 +33,16 @@ vi.mock('@core/constant/allBlocks', () => ({
 
 const context = { defaultModel: 'claude', decisions: true };
 
+const labelStep = {
+  type: 'code',
+  title: 'Label by topic',
+  summary: 'Asks AI which label fits and adds it.',
+  writes: ['email'],
+  source: 'export async function main() {}',
+};
+
 describe('routine composition', () => {
-  it('turns triage into an event routine with steps', () => {
+  it('turns triage into an event routine with code', () => {
     const draft = draftFromComposition(
       {
         name: 'Inbox triage',
@@ -45,29 +53,7 @@ describe('routine composition', () => {
             condition: null,
           },
         ],
-        steps: [
-          {
-            type: 'choose',
-            question: 'What kind of email is this?',
-            options: [
-              {
-                label: 'Newsletter',
-                steps: [
-                  {
-                    type: 'tool',
-                    tool: 'UpdateThreadLabels',
-                    arguments: {
-                      thread_id: '{{trigger.entity_id}}',
-                      label: 'INBOX',
-                      add: false,
-                    },
-                  },
-                ],
-              },
-              { label: 'Invoice', steps: [] },
-            ],
-          },
-        ],
+        steps: [labelStep],
       },
       context
     );
@@ -76,7 +62,11 @@ describe('routine composition', () => {
     expect(draft.triggers).toMatchObject([
       { kind: 'event', events: ['email.message_received'] },
     ]);
-    expect(draft.steps?.[0]?.kind).toBe('choose');
+    // Named as saving will name it.
+    expect(draft.steps?.[0]).toMatchObject({
+      kind: 'code',
+      output: 'label_by_topic',
+    });
   });
 
   it('keeps a trigger limited to the items it names', () => {
@@ -91,56 +81,13 @@ describe('routine composition', () => {
             ids: [channel],
           },
         ],
-        steps: [
-          {
-            type: 'tool',
-            tool: 'CreateDocument',
-            arguments: {
-              documentName: 'Launch note',
-              fileContent: '',
-              fileExtension: 'md',
-            },
-          },
-        ],
+        steps: [labelStep],
       },
       context
     );
     if (typeof draft === 'string') throw new Error(draft);
     // Saving it watches that one channel, not every channel.
     expect(JSON.stringify(draftToCreateBody(draft))).toContain(channel);
-  });
-
-  it('keeps choices that apply every fitting option', () => {
-    const label = (name: string) => ({
-      label: name,
-      steps: [
-        {
-          type: 'tool',
-          tool: 'UpdateThreadLabels',
-          arguments: {
-            thread_id: '{{trigger.entity_id}}',
-            label: name,
-            add: true,
-          },
-        },
-      ],
-    });
-    const draft = draftFromComposition(
-      {
-        name: 'Label by topic',
-        triggers: [{ type: 'event', events: ['email.message_received'] }],
-        steps: [
-          {
-            type: 'choose',
-            multiple: true,
-            options: [label('Finance'), label('Hiring')],
-          },
-        ],
-      },
-      context
-    );
-    if (typeof draft === 'string') throw new Error(draft);
-    expect(draft.steps?.[0]).toMatchObject({ kind: 'choose', multiple: true });
   });
 
   it('keeps a single agent routine in the simple form', () => {
@@ -172,7 +119,7 @@ describe('routine composition', () => {
         {
           name: 'x',
           triggers: [],
-          steps: [{ type: 'tool', tool: 'DeleteEverything', arguments: {} }],
+          steps: [{ type: 'wait', seconds: 5 }],
         },
         context
       )
@@ -197,24 +144,11 @@ describe('routine composition', () => {
     expect(instructions).toContain('"billing"');
     expect(instructions).toContain('"Receipts"');
     expect(instructions).toContain('macro|ada@example.com');
-    expect(instructions).toContain('Decisions are unavailable');
+    expect(instructions).toContain('Trigger conditions are unavailable');
     expect(instructions).toContain('2026-10-09T12:00:00.000Z');
   });
 
-  it('refuses a draft that needs AI decisions when they are off', () => {
-    const withDecision = {
-      name: 'Inbox triage',
-      triggers: [{ type: 'event', events: ['email.message_received'] }],
-      steps: [
-        {
-          type: 'if',
-          condition: 'Is it a newsletter?',
-          // biome-ignore lint/suspicious/noThenProperty: the scheduler's step format names the yes branch `then`.
-          then: [],
-          else: [],
-        },
-      ],
-    };
+  it('refuses a draft whose trigger needs AI decisions when they are off', () => {
     const withCondition = {
       name: 'Invoices',
       triggers: [
@@ -226,12 +160,12 @@ describe('routine composition', () => {
       ],
       steps: [{ type: 'agent', instructions: 'File it', model: 'claude' }],
     };
-    for (const output of [withDecision, withCondition]) {
-      expect(
-        draftFromComposition(output, { ...context, decisions: false })
-      ).toMatch(/needs AI to decide/);
-      expect(typeof draftFromComposition(output, context)).not.toBe('string');
-    }
+    expect(
+      draftFromComposition(withCondition, { ...context, decisions: false })
+    ).toMatch(/needs AI to decide/);
+    expect(typeof draftFromComposition(withCondition, context)).not.toBe(
+      'string'
+    );
   });
 });
 
@@ -239,6 +173,12 @@ const guidance = {
   steps: 'Code steps: a `code` step runs TypeScript against Macro’s SDK.',
   contract: 'interface StepContext { macro: Macro }',
   reference: 'NotificationNamespace: list(), markDone()',
+  examples: [
+    {
+      request: 'When a new email arrives, label it by topic.',
+      steps: [labelStep],
+    },
+  ],
 };
 
 function notifications(source: string) {
@@ -290,6 +230,9 @@ describe('drafting code steps', () => {
     expect(withCode).toContain(guidance.steps);
     expect(withCode).toContain(guidance.contract);
     expect(withCode).toContain(guidance.reference);
+    // The starters are its worked examples.
+    expect(withCode).toContain(guidance.examples[0]?.request);
+    expect(withCode).toContain('"title":"Label by topic"');
     expect(compositionInstructions(composerContext)).not.toContain(
       '"type":"code"'
     );

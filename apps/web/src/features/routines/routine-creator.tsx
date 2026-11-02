@@ -8,6 +8,7 @@ import {
   enableRoutineConditions,
   enableRoutineStarterTemplates,
 } from '@core/constant/featureFlags';
+import { useStarterSteps } from './queries/starters';
 import { RoutineAiComposer } from './routine-ai-composer';
 import { startRoutineDraft } from './routine-draft-start';
 import { RoutineCreatorView } from './views/routine-creator';
@@ -28,11 +29,13 @@ export function RoutineCreator(
   const decisions = useFeatureFlag(enableRoutineConditions);
   const templates = useFeatureFlag(enableRoutineStarterTemplates);
   const defaultModel = () => defaultModelForPlan(hasPaidAccess());
+  const starters = useStarterSteps();
   return (
     <RoutineCreatorView
       defaultModel={defaultModel()}
       decisionsEnabled={decisions().enabled}
       templatesEnabled={templates().enabled}
+      starters={starters()}
       renderComposer={(apply, current, initialDescription) => (
         <RoutineAiComposer
           apply={apply}

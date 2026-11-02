@@ -946,8 +946,8 @@ describe('new routine', () => {
     inputPrompt('An unsaved prompt');
     startRoutineDraft(
       newRoutineDraft(findTemplateByKey('brief'), {
-        decisions: true,
         defaultModel: 'claude-sonnet-4-6',
+        starters: {},
       })
     );
     await waitFor(() =>

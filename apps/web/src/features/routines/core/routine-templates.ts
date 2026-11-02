@@ -7,14 +7,6 @@ import {
   newScheduleTrigger,
   type RoutineTriggerDraft,
 } from './routine-triggers';
-import {
-  aiPicks,
-  createActionStep,
-  createPickStep,
-  type StepSubject,
-  stepActions,
-  triggerScope,
-} from './step-catalog';
 
 /** A starting point for a new routine, shown before the editor. */
 export type RoutineTemplate = {
@@ -27,7 +19,7 @@ export type RoutineTemplate = {
   when: string;
   /** Its steps let AI decide, so it is highlighted as an AI routine. */
   ai: boolean;
-  /** It only runs right when AI checks its trigger, so it needs decisions. */
+  /** Its trigger has a condition, which needs AI decisions. */
   needsDecisions?: true;
   /** What starts it and what it does, as the list's template cards show. */
   chain: { trigger: string; action: string; actionAi: boolean };
@@ -52,7 +44,7 @@ export const routineTemplates: RoutineTemplate[] = [
     },
     when: 'When: Task created',
     title: 'Triage new tasks',
-    description: 'AI sets priority and an owner',
+    description: 'AI sets each new task’s priority',
     kind: 'task',
     ai: true,
   },
@@ -78,7 +70,7 @@ export const routineTemplates: RoutineTemplate[] = [
     key: 'updates',
     chain: {
       trigger: 'Status changed',
-      action: 'Send message',
+      action: 'Post in a channel',
       actionAi: false,
     },
     when: 'When: Status changed',
@@ -114,11 +106,16 @@ export function featuredTemplates(decisions: boolean): RoutineTemplate[] {
   ].slice(0, FEATURED.length);
 }
 
+/**
+ * The scheduler's code steps for templates that are code (`inbox`, `triage`,
+ * `updates`), by key; a template without them starts with an Ask AI step.
+ */
+export type StarterSteps = Partial<Record<RoutineTemplate['key'], StepDraft[]>>;
+
 export type TemplateContext = {
-  /** Decision steps and trigger conditions are available. */
-  decisions: boolean;
   /** Who runs agent steps. */
   target: RoutineTarget;
+  starters: StarterSteps;
 };
 
 function eventTrigger(
@@ -138,22 +135,6 @@ function weekly(days: string[], time: string): RoutineTriggerDraft {
   return { ...newScheduleTrigger('week'), daysOfWeek: days, time };
 }
 
-function pick(
-  action: (typeof aiPicks)[number]['action'],
-  subject: StepSubject
-) {
-  const preset = aiPicks.find((pick) => pick.action === action);
-  if (!preset) throw new Error(`Unknown AI pick ${action}`);
-  return createPickStep(preset, triggerScope(subject));
-}
-
-function messageStep(content: string): StepDraft {
-  const action = stepActions.find((action) => action.key === 'send_message');
-  if (!action) throw new Error('Send message is missing from the catalog');
-  const step = createActionStep(action, triggerScope('task'));
-  return { ...step, arguments: { ...step.arguments, content } };
-}
-
 /** A new routine started from `template`, ready to review. */
 export function templateDraft(
   template: RoutineTemplate,
@@ -162,27 +143,24 @@ export function templateDraft(
 ): ScheduleDraft {
   const agent = (instructions: string) =>
     agentStep(context.target, instructions);
+  // Each starter's code, or, where code can't be saved, an Ask AI step.
+  const starter = (key: RoutineTemplate['key'], instructions: string) =>
+    context.starters[key] ?? [agent(instructions)];
   const plan = match(template.key)
     .returnType<{ triggers: RoutineTriggerDraft[]; steps: StepDraft[] }>()
     .with('inbox', () => ({
       triggers: [eventTrigger(['email.message_received'])],
-      steps: context.decisions
-        ? [pick('add_label', 'email')]
-        : [
-            agent(
-              'Label this email by topic with one of my existing Gmail labels. Leave it alone if none fits.'
-            ),
-          ],
+      steps: starter(
+        'inbox',
+        'Label this email by topic with one of my existing labels. Leave it alone if none fits.'
+      ),
     }))
     .with('triage', () => ({
       triggers: [eventTrigger(['task.created'])],
-      steps: context.decisions
-        ? [pick('set_priority', 'task'), pick('assign', 'task')]
-        : [
-            agent(
-              'Set this task’s priority to Urgent, High, Medium or Low from what it says, and assign it to whoever owns that area.'
-            ),
-          ],
+      steps: starter(
+        'triage',
+        'Set this task’s priority to Urgent, High, Medium or Low from what it says.'
+      ),
     }))
     .with('brief', () => ({
       triggers: [weekly(['2', '3', '4', '5', '6'], '09:00')],
@@ -207,7 +185,10 @@ export function templateDraft(
           'Was the task just marked completed?'
         ),
       ],
-      steps: [messageStep('Done: {{trigger.item.name}}')],
+      steps: starter(
+        'updates',
+        'Post “Done:” and this task’s name in the updates channel.'
+      ),
     }))
     .exhaustive();
   return withNewDraftSteps(
@@ -227,7 +208,7 @@ export function templateDraft(
  */
 export function newRoutineDraft(
   template: RoutineTemplate | undefined,
-  context: { decisions: boolean; defaultModel: string }
+  context: { defaultModel: string; starters: StarterSteps }
 ): ScheduleDraft {
   const blank: ScheduleDraft = {
     ...createEmptyDraft(context.defaultModel),
@@ -237,8 +218,8 @@ export function newRoutineDraft(
   };
   return template
     ? templateDraft(template, blank, {
-        decisions: context.decisions,
         target: { kind: 'model', model: context.defaultModel },
+        starters: context.starters,
       })
     : blank;
 }

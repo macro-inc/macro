@@ -22,6 +22,7 @@ import type {
   ScheduledActionResponse,
   SetScheduledActionEnabled,
   ShareRoutineTemplate,
+  StarterRoutine,
   UpdateScheduledAction,
 } from './generated/schemas';
 
@@ -111,6 +112,12 @@ export const scheduledActionClient = {
     scheduledActionFetch<CodeGuide>('/scheduled-actions/code/guide', {
       method: 'POST',
       body: JSON.stringify({ task: args.task }),
+    }),
+
+  /** Starter routines whose step is code; empty where code can't be saved. */
+  codeStarters: async () =>
+    scheduledActionFetch<StarterRoutine[]>('/scheduled-actions/code/starters', {
+      method: 'GET',
     }),
 
   /** Check a drafted routine's code steps together, as saving would. */

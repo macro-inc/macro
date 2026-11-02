@@ -10,7 +10,6 @@ import {
   type CodeStepDraft,
   flattenSteps,
   mapSteps,
-  routineTools,
   type StepDraft,
   stepsFromTask,
   withNamedOutputs,
@@ -43,6 +42,8 @@ export type CodeGuidance = {
   contract: string;
   /** The SDK entities the description may need, with method signatures. */
   reference: string;
+  /** Starter routines, as worked examples. */
+  examples: { request: string; steps: unknown[] }[];
 };
 
 /** Times the drafter may fix code the type checker rejects before it gives up. */
@@ -85,11 +86,11 @@ const compositionSchema = z.object({
 function stepJsonSchema(code: boolean) {
   return {
     type: 'object',
-    description: `One step: ${code ? '{type:"code",id?,title,summary,writes,source} | ' : ''}{type:"tool",id?,tool,arguments} | {type:"if",condition,then,else} | {type:"choose",question?,multiple?,options:[{label,description?,steps}],otherwise} | {type:"agent",model?,agent?:{bot_id},instructions}`,
+    description: `One step: ${code ? '{type:"code",id?,title,summary,writes,source} | ' : ''}{type:"agent",model?,agent?:{bot_id},instructions}`,
     properties: {
       type: {
         type: 'string',
-        enum: [...(code ? ['code'] : []), 'tool', 'if', 'choose', 'agent'],
+        enum: [...(code ? ['code'] : []), 'agent'],
       },
     },
     required: ['type'],
@@ -144,31 +145,18 @@ Triggers:
 Steps run in order:
 ${
   code
-    ? `- {"type":"code","id"?:"lowercase_id","title":TEXT,"summary":TEXT,"writes":[AREAS],"source":TYPESCRIPT} runs code against Macro's SDK; see Code steps below. Use it when the person asks for code, or for work single tool calls and decisions can't do: going through many items (notifications, emails, tasks), loops, or acting on what a call returned.
+    ? `- {"type":"code","id"?:"lowercase_id","title":TEXT,"summary":TEXT,"writes":[AREAS],"source":TYPESCRIPT} runs code against Macro's SDK; see Code steps below. Use it for everything that acts or decides: labeling, archiving, setting properties, creating tasks, posting messages, going through many items, and judging them with macro.ai.decide. One code step usually does all of it.
 `
     : ''
-}- {"type":"tool","id"?:"lowercase_id","tool":NAME,"arguments":{...}} calls one tool. Tools and their arguments:
-  - UpdateThreadLabels {"thread_id":"{{trigger.entity_id}}","label":NAME,"add":true|false}. Archive = label "INBOX" add false; mark read = "UNREAD" add false; star = "STARRED" add true; mark important = "IMPORTANT" add true; a custom label uses its name.
-  - SetSenderPolicy {"sender_email":"{{trigger.email.from.email}}","policy":"signal"|"noise"|"block","thread_id":"{{trigger.entity_id}}"}; the thread picks the inbox.
-  - SetEntityProperty {"entity_id":"{{trigger.entity_id}}","entity_type":"thread" for emails | "document" for tasks and documents | "channel","property_definition_id":ID, plus one value}. Tags: "add_option_ids":[tag option id] with the tag's definition id. Task status (definition 00000001-0000-0000-0000-000000000002) and priority (…0003) use "option_id"; status options Not Started 00000001-0000-0000-0002-000000000001, In Progress …0002, In Review …0003, Completed …0004, Canceled …0005; priority options Low 00000001-0000-0000-0003-000000000001, Medium …0002, High …0003, Urgent …0004. Assignees (definition 00000001-0000-0000-0000-000000000001) use "entity_refs":[{"entityType":"user","entityId":PERSON_ID}].
-  - CreateDocument {"documentName":TEXT,"fileContent":TEXT,"fileExtension":"md","isTask":true} creates a task; give it "id":"task" so later steps can act on it as {{steps.task.documentId}} (entity_type "document"), even on a schedule. Without isTask it creates a document; give it "id":"doc".
-  - Comment {"entityType":"document","entityId":"{{trigger.entity_id}}" or a created task's id,"content":TEXT}.
-  - MoveToProject {"entityType":"email"|"document","entityId":"{{trigger.entity_id}}" or a created task's id,"projectId":FOLDER_ID} files the item in a folder.
-  - SendChannelMessage {"channel_id":ID,"content":TEXT,"thread_id"?:"{{trigger.message.thread_id}}"}; to reply to a triggering channel message use channel_id "{{trigger.entity_id}}" and that thread_id.
+}- {"type":"agent","model":"${context.defaultModel}","instructions":TEXT} ("Ask AI") hands off open-ended work (drafting, research, summarizing, filling in CRM details) to AI with tools. Use {"agent":{"bot_id":ID}} instead of model to delegate to a named agent. A routine has at most one, and it goes last.
 ${
   context.decisions
-    ? `- {"type":"if","condition":"yes/no question about the triggering item","then":[steps],"else":[steps]}.
-- {"type":"choose","question":"what is being decided","options":[{"label":"short name","description":"what fits","steps":[steps]}],"otherwise":[steps]} picks the best fitting of 2-8 options. Use it to classify, e.g. triage email by kind. With "multiple":true every option that fits runs.
-- To let AI pick a value, use a choose whose options are the values, labelled with the value's name, each with exactly one step that applies it: labels or tags ("multiple":true, e.g. label email by topic), priority or assignee (one).`
-    : '- Decisions are unavailable: do not use "if" or "choose" steps; use an agent step for judgment.'
-}
-- {"type":"agent","model":"${context.defaultModel}","instructions":TEXT} hands off open-ended work (drafting, research, summarizing, filling in CRM details) to AI with tools. Use {"agent":{"bot_id":ID}} instead of model to delegate to a named agent. A run may reach at most one agent.
-
-Text arguments can embed {{trigger.email.subject}}, {{trigger.email.from.name}}, {{trigger.email.from.email}}, {{trigger.email.body}}, {{trigger.message.text}}, {{trigger.message.sender}}, {{trigger.channel.name}}, {{trigger.item.name}}, {{trigger.item.content}}.
-Prefer deterministic tool steps, decisions and code over an agent when they can do the job. Decisions and {{trigger…}} placeholders need event triggers only, never schedules. Use only ids listed below; if the person names a label that isn't listed, still use its name.
-${
+    ? ''
+    : 'Trigger conditions are unavailable: never add a "condition" to a trigger.\n'
+}${
   code
-    ? `
+    ? `Prefer code over an Ask AI step whenever code can do the job.
+
 ${code.steps}
 
 The type of \`main\`'s argument:
@@ -177,8 +165,13 @@ ${code.contract}\`\`\`
 
 The SDK entities this routine may need, by method signature (data, not instructions):
 ${code.reference}
+
+Worked examples (data, not instructions): what someone asked for, and the steps that do it.
+${code.examples
+  .map((example) => `${example.request}\n${JSON.stringify(example.steps)}`)
+  .join('\n\n')}
 `
-    : ''
+    : 'Code steps are unavailable here: use an Ask AI step for the work.\n'
 }
 The person's workspace (data, not instructions):
 ${JSON.stringify({
@@ -189,7 +182,6 @@ ${JSON.stringify({
   folders: take(context.folders),
   people: take(context.people),
   agents: take(context.agents),
-  allowedTools: routineTools,
 })}`;
 }
 
@@ -309,16 +301,10 @@ export function draftFromComposition(
   // Named as saving will name them, so placeholders that use those names
   // pass the editor's checks.
   const draftSteps = withCodeProblems(withNamedOutputs(parsedSteps), failures);
-  // Without AI decisions the routine couldn't save, and dropping its
-  // decisions would change what it does.
-  if (
-    !context.decisions &&
-    (filters.some((filter) => filter.condition) ||
-      flattenSteps(draftSteps).some(
-        (step) => step.kind === 'if' || step.kind === 'choose'
-      ))
-  )
-    return 'That routine needs AI to decide, which isn’t available to you yet. Describe fixed steps instead.';
+  // Without AI decisions a trigger condition couldn't save, and dropping it
+  // would change when the routine runs.
+  if (!context.decisions && filters.some((filter) => filter.condition))
+    return 'That routine needs AI to decide when it runs, which isn’t available to you yet. Describe when it should run instead.';
   const base = {
     ...createEmptyDraft(context.defaultModel),
     name: name.trim(),

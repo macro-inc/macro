@@ -9,6 +9,7 @@ import {
   availableTemplates,
   newRoutineDraft,
   type RoutineTemplate,
+  type StarterSteps,
 } from '../core/routine-templates';
 
 /**
@@ -22,6 +23,8 @@ export function RoutineCreatorView(props: {
   decisionsEnabled: boolean;
   /** Macro's built-in templates are offered (`enable-routine-starter-templates`). */
   templatesEnabled: boolean;
+  /** The scheduler's code for templates that are code. */
+  starters: StarterSteps;
   /** Drafts the routine from a description; absent where that is unavailable. */
   renderComposer?: (
     apply: (draft: ScheduleDraft, description: string) => void,
@@ -32,8 +35,8 @@ export function RoutineCreatorView(props: {
   onClose(): void;
 }) {
   const context = () => ({
-    decisions: props.decisionsEnabled,
     defaultModel: props.defaultModel,
+    starters: props.starters,
   });
   const blank = () => newRoutineDraft(undefined, context());
   // A drafted routine is described by what was asked for.

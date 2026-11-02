@@ -18,6 +18,7 @@ import {
   type RoutineTemplate,
 } from './core/routine-templates';
 import { createRoutineListSource } from './queries/routine-sources';
+import { useStarterSteps } from './queries/starters';
 import { RoutineDetail } from './routine-detail';
 import { startRoutineDraft } from './routine-draft-start';
 import { routineContent, routineIdFromContent } from './routine-navigation';
@@ -53,6 +54,7 @@ function RoutinesContent() {
   const decisions = useFeatureFlag(enableRoutineConditions);
   const starterTemplates = useFeatureFlag(enableRoutineStarterTemplates);
   const hasPaidAccess = useHasPaidAccess();
+  const starters = useStarterSteps();
   /** New routine: describe it, pick a template, or start fresh. */
   function create() {
     layout.popoverSplit({
@@ -65,8 +67,8 @@ function RoutinesContent() {
   function startFrom(template: RoutineTemplate) {
     startRoutineDraft(
       newRoutineDraft(template, {
-        decisions: decisions().enabled,
         defaultModel: defaultModelForPlan(hasPaidAccess()),
+        starters: starters(),
       })
     );
     open('new');
