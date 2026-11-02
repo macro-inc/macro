@@ -11,6 +11,8 @@ import {
   SplitHeaderRight,
 } from '@components/app/split-layout/components/SplitHeader';
 import { BlockItemSplitLabel } from '@components/app/split-layout/components/SplitLabel';
+import { useSplitLayout } from '@components/app/split-layout/layout';
+import { useItemOperations } from '@core/component/FileList/useItemOperations';
 import { BlockLiveIndicators } from '@core/component/LiveIndicators';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
@@ -86,6 +88,20 @@ export function TopBar(props: {
   const favoriteAction = makeFavoriteAction();
   const copyLinkAction = makeCopyLinkAction();
   const copyEntityIdAction = makeCopyEntityIdAction();
+  const itemOperations = useItemOperations();
+  const { replaceOrInsertSplit } = useSplitLayout();
+  const duplicate = async (detail: DatabaseDetail) => {
+    const copy = await itemOperations.copyItem({
+      itemType: 'database',
+      id: databaseId,
+      name: detail.database.name,
+    });
+    if (copy)
+      replaceOrInsertSplit(
+        { id: copy, type: 'database' },
+        'entity-actions-menu'
+      );
+  };
   const entity = (detail: DatabaseDetail): DatabaseEntity => ({
     type: 'database',
     id: databaseId,
@@ -110,6 +126,7 @@ export function TopBar(props: {
         copyEntityIdAction.executeById(databaseId),
         'database-actions'
       ),
+    onDuplicate: () => fireAndForget(duplicate(detail), 'database-actions'),
   });
   const rename = (next: string) => {
     renameDatabase(getEntityGraphqlClient(), databaseId, next).mapErr(

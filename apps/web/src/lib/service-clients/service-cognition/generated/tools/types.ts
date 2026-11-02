@@ -1180,7 +1180,7 @@ export type DiscoveryResult =
 /**
  * The kind of item to duplicate.
  */
-export type DuplicableEntityType = 'document' | 'chat';
+export type DuplicableEntityType = 'document' | 'database' | 'chat';
 /**
  * Targeted layout operations. Removing placements always retains response columns.
  */
@@ -8957,7 +8957,7 @@ export interface DisplayResultsResponse {
   message: string;
 }
 /**
- * Make a copy of a document (including a task), owned by the user, as the Duplicate action in the app does. Requires view access to the original. Returns the copy's id.
+ * Make a copy of a document (including a task) or a database, owned by the user, as the Duplicate action in the app does. A database copy has every table, column, view and row; its sharing, forms and history stay with the original. Requires view access to the original. Returns the copy's id.
  */
 export interface DuplicateItem {
   entityType: DuplicableEntityType;
@@ -8966,7 +8966,7 @@ export interface DuplicateItem {
    */
   entityId: string;
   /**
-   * Name for the copy of a document. Omit to use "<original name> copy".
+   * Name for the copy. Omit to use "<original name> copy".
    */
   name?: string | null;
 }

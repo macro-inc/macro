@@ -294,18 +294,20 @@ describe('database page actions', () => {
     })) as HTMLInputElement;
     expect(name.value).toBe('Contacts 2');
   });
-  it('offers link, ID and favorite actions to every grant', async () => {
+  it('offers link, ID, favorite and duplicate actions to every grant', async () => {
     const entityActions = {
       favorited: true,
       onToggleFavorite: vi.fn(),
       onCopyLink: vi.fn(),
       onCopyId: vi.fn(),
+      onDuplicate: vi.fn(),
     };
     setup('view', undefined, entityActions);
     for (const [item, handler] of [
       ['Copy Link', entityActions.onCopyLink],
       ['Copy ID', entityActions.onCopyId],
       ['Unfavorite', entityActions.onToggleFavorite],
+      ['Duplicate', entityActions.onDuplicate],
     ] as const) {
       await openMenu();
       selectItem(item);

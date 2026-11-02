@@ -26,6 +26,17 @@ a title does not enter the grid, and a failed rename shows a toast. Reload to ve
 the saved name persists. Viewers cannot enter rename from either entry point and
 see the split header's `viewer` badge instead.
 
+**Database actions → Duplicate** (any grant, viewers included) copies the database
+into a new one named "<name> copy" that you own, and opens it in the same split.
+The copy has every table, column (options and colours, formulas, relations within
+the database), view (filters, sorts, layouts and hand-placed board cards) and
+record, under new ids. A relation into another database stays only if you can see
+that database; otherwise the column and its view references are left out.
+Sharing, forms, webhooks, saved queries and row history stay with the original.
+Drive and list rows offer the same **Duplicate**, and agents use `DuplicateItem`
+with `entityType: "database"`. Verify by editing a record in the copy and
+checking the original is unchanged.
+
 Reopening a loaded table or view shows its cached rows while a background read
 checks for changes. Wait for refreshing to finish before asserting server
 reconciliation; visible rows alone do not mean the network read has completed.
