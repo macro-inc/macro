@@ -13,7 +13,12 @@ import {
 import { createSignal, type JSX, onMount, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import { useViewShell, ViewShell, ViewSidebarToggle } from './ViewShell';
+import {
+  useViewShell,
+  ViewShell,
+  type ViewShellRootProps,
+  ViewSidebarToggle,
+} from './ViewShell';
 import { ViewSidebar } from './ViewSidebar';
 
 const measurement = vi.hoisted(() => ({ width: (): number => 1200 }));
@@ -267,6 +272,7 @@ function Workspace(props: {
   app: string;
   asideRequired?: boolean;
   asidePinned?: boolean;
+  breakpoints?: ViewShellRootProps['breakpoints'];
   mounted?: () => void;
 }) {
   function Content() {
@@ -287,6 +293,7 @@ function Workspace(props: {
         asidePreferenceKey={props.app}
         asideRequired={props.asideRequired}
         asidePinned={props.asidePinned}
+        breakpoints={props.breakpoints}
       >
         <ViewShell.Aside>
           <ViewSidebar.Header>
@@ -973,6 +980,23 @@ describe('automatic docked navigation exit', () => {
     expect(
       view.container.querySelectorAll('[data-view-shell-aside]')
     ).toHaveLength(1);
+  });
+
+  it('keeps the overlay mounted when breakpoint settings change within narrow', () => {
+    measurement.width = () => 600;
+    const [breakpoints, setBreakpoints] = createSignal({ narrow: 720 });
+    const view = render(() => (
+      <Workspace app="tasks" breakpoints={breakpoints()} />
+    ));
+    fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
+    const overlay = view.container.querySelector('[data-view-shell-aside]');
+    setBreakpoints({ narrow: 700 });
+    expect(view.container.querySelector('[data-view-shell-aside]')).toBe(
+      overlay
+    );
+    expect(
+      screen.getByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeTruthy();
   });
 
   it('gives explicit opening and required navigation priority over an unfinished exit', async () => {

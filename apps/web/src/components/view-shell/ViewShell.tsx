@@ -83,8 +83,7 @@ export type ViewShellLayout = {
 type ViewShellInternal = ViewShellLayout & {
   id: string;
   atLayoutBreakpoint: Accessor<boolean>;
-  overlayHost: Accessor<boolean>;
-  dockedExitCollapsed: Accessor<boolean>;
+  asideHost: Accessor<'docked' | 'closing' | 'overlay'>;
 };
 
 const RESIZE_GUTTER = 1;
@@ -255,11 +254,10 @@ function Root(props: ViewShellRootProps) {
     return match ? match() : false;
   };
 
-  // The rendered host is independent of the logical breakpoint during an exit.
-  const [overlayHost, setOverlayHost] = createSignal(
-    untrack(atLayoutBreakpoint)
-  );
-  const [dockedExitCollapsed, setDockedExitCollapsed] = createSignal(false);
+  // Retain the docked panel only while its narrow-layout exit is animating.
+  const [asideHost, setAsideHost] = createSignal<
+    'docked' | 'closing' | 'overlay'
+  >(untrack(atLayoutBreakpoint) ? 'overlay' : 'docked');
   const asideRequired = () => local.asideRequired ?? false;
   // Each narrow layout starts closed, independently of the saved wide layout,
   // unless navigation is required, which opens the overlay until dismissed.
@@ -287,45 +285,48 @@ function Root(props: ViewShellRootProps) {
     animateSidebar(() => {
       if (atLayoutBreakpoint()) {
         // An explicit overlay replaces an unfinished docked exit.
-        if (open) setOverlayHost(true);
+        if (open) setAsideHost('overlay');
         setNarrowAsideOpen(open);
       } else setWideAsideCollapsed(!open);
     });
   };
-  // Run before the slot's reactive host switch so motion measures the docked
-  // panel before publishing the new host state. Pin changes share this request
-  // so they cannot cancel a retained exit without releasing its host.
-  let previousNarrow = untrack(atLayoutBreakpoint);
+  // Measure the old host before the slots react to a breakpoint transition.
   createComputed(
     on(
-      [atLayoutBreakpoint, () => local.asidePinned, asideRequired],
-      ([narrow]) => {
-        const changed = narrow !== previousNarrow;
-        previousNarrow = narrow;
-        if (changed && narrow) {
-          const docked = Array.from(
-            root()?.querySelectorAll<HTMLElement>(
-              ':scope > [data-resize-zone] > [data-resize-panel]'
-            ) ?? []
-          ).find((panel) => panel.querySelector('[data-view-shell-aside]'));
-          const retain =
-            !!docked &&
-            !docked.classList.contains('hidden') &&
-            !asideRequired();
-          animateSidebar(
-            () => {
-              setDockedExitCollapsed(true);
-              if (!retain) setOverlayHost(true);
-            },
-            () => setOverlayHost(true)
-          );
-        } else if (changed || (narrow && asideRequired())) {
-          animateSidebar(() => {
-            setDockedExitCollapsed(false);
-            setOverlayHost(narrow);
-          });
-        } else if (!narrow) {
-          animateSidebar(() => {});
+      atLayoutBreakpoint,
+      (narrow, previous) => {
+        if (narrow === previous) return;
+        const docked = Array.from(
+          root()?.querySelectorAll<HTMLElement>(
+            ':scope > [data-resize-zone] > [data-resize-panel]'
+          ) ?? []
+        ).find((panel) => panel.querySelector('[data-view-shell-aside]'));
+        const retain =
+          narrow &&
+          !asideRequired() &&
+          !!docked &&
+          !docked.classList.contains('hidden');
+        animateSidebar(
+          () => {
+            if (!narrow) setAsideHost('docked');
+            else setAsideHost(retain ? 'closing' : 'overlay');
+          },
+          () => {
+            if (narrow) setAsideHost('overlay');
+          }
+        );
+      },
+      { defer: true }
+    )
+  );
+  // Pin changes animate the current docked host, but cannot interrupt its exit.
+  createComputed(
+    on(
+      [() => local.asidePinned, asideRequired],
+      () => {
+        if (!atLayoutBreakpoint()) animateSidebar(() => {});
+        else if (asideRequired()) {
+          animateSidebar(() => setAsideHost('overlay'));
         }
       },
       { defer: true }
@@ -360,8 +361,7 @@ function Root(props: ViewShellRootProps) {
     width,
     breakpoints,
     atLayoutBreakpoint,
-    overlayHost,
-    dockedExitCollapsed,
+    asideHost,
     aside: {
       layout: asideLayout,
       mode: asideMode,
@@ -522,7 +522,7 @@ function Aside(props: ViewShellAsideProps) {
   // while its exit animation is still retaining the first one.
   return (
     <Show
-      when={ws.overlayHost()}
+      when={ws.asideHost() === 'overlay'}
       fallback={
         <Resize.Panel
           id={`${ws.id}-aside`}
@@ -533,7 +533,7 @@ function Aside(props: ViewShellAsideProps) {
           target={{ kind: 'px', px: preferredWidth() }}
           collapsed={() =>
             ws.atLayoutBreakpoint()
-              ? ws.dockedExitCollapsed()
+              ? ws.asideHost() === 'closing'
               : ws.aside.isCollapsed()
           }
           onSizeChangeEnd={onWidthChangeEnd}

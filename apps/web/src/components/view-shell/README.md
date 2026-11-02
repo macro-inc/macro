@@ -39,4 +39,7 @@ panel mounted while its width closes over 140ms. Main expands alongside the
 sidebar without writing the saved wide preference. An explicit overlay opening
 or required navigation takes priority over the exit, and a quick return to wide
 reuses the docked panel.
+A single host phase (`docked`, `closing`, or `overlay`) controls mounting.
+Breakpoint transitions own host changes; pin changes only animate the active
+host and do not cancel a pending narrow exit.
 Reduced-motion and browsers without WAAPI switch hosts immediately.
