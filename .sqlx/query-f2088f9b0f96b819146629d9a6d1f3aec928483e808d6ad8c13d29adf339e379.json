@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            SELECT c.team_id, ct.company_id, COALESCE(NULLIF(ct.name, ''), ct.email) AS \"name!\"\n            FROM crm_contacts ct\n            JOIN crm_companies c ON c.id = ct.company_id\n            WHERE ct.id = $1\n            ",
+  "query": "\n            SELECT ct.team_id, ct.company_id, COALESCE(NULLIF(ct.name, ''), ct.email, '') AS \"name!\"\n            FROM crm_contacts ct\n            WHERE ct.id = $1\n            ",
   "describe": {
     "columns": [
       {
@@ -26,9 +26,9 @@
     },
     "nullable": [
       false,
-      false,
+      true,
       null
     ]
   },
-  "hash": "5316a12440101cce65f224c1fdb6bbd39428b332471b74451ae7ec2e1aed762a"
+  "hash": "f2088f9b0f96b819146629d9a6d1f3aec928483e808d6ad8c13d29adf339e379"
 }

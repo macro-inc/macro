@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO crm_contacts\n                (company_id, email, name, first_interaction, last_interaction, hidden, manually_created)\n            VALUES ($1, $2, $3, $4, $4, $5, TRUE)\n            ON CONFLICT (company_id, email) DO NOTHING\n            RETURNING id, company_id, email, name, hidden,\n                      first_interaction, last_interaction, created_at, updated_at\n            ",
+  "query": "\n            SELECT\n                ct.id,\n                ct.company_id,\n                ct.email,\n                ct.name,\n                ct.hidden,\n                ct.first_interaction,\n                ct.last_interaction,\n                ct.created_at,\n                ct.updated_at\n            FROM crm_contacts ct\n            LEFT JOIN crm_companies co ON co.id = ct.company_id\n            WHERE ct.id = $1\n              AND ct.team_id = $2\n              AND ($3 OR (ct.hidden = FALSE AND co.hidden IS NOT TRUE))\n            ",
   "describe": {
     "columns": [
       {
@@ -52,16 +52,14 @@
     "parameters": {
       "Left": [
         "Uuid",
-        "Text",
-        "Text",
-        "Timestamptz",
+        "Uuid",
         "Bool"
       ]
     },
     "nullable": [
       false,
-      false,
-      false,
+      true,
+      true,
       true,
       false,
       false,
@@ -70,5 +68,5 @@
       false
     ]
   },
-  "hash": "26398b17eb12140d0e4230aeb5d98b7852f9cc7d698f1dc196d52de587efbaca"
+  "hash": "1937b5d114a158407aac33827d3b4af9c9fc9382fa47c90083235f4d3250d627"
 }
