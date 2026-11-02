@@ -1,6 +1,6 @@
 mod user_cleanup;
 
-use chrono::Utc;
+use chrono::{SubsecRound, Utc};
 use entity_registry::{BotFacts, EntityRegistryResult, OwnerGrantPolicy};
 use entity_registry_db_utils::OwnedEntityRegistrar;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
@@ -936,6 +936,101 @@ async fn exhausted_one_off_clears_firing_and_is_not_dispatched_again(pool: PgPoo
             .unwrap()
             .is_empty()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn once_routine_fires_for_exactly_one_of_concurrent_claims_and_then_is_done(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool);
+    let at = (Utc::now() - chrono::Duration::seconds(1)).trunc_subsecs(0);
+    let mut action = sample_action(user_owner(USER_A), "check back");
+    action.trigger = ActionTrigger::Once { at };
+    action.next_run_at = Some(at);
+    let created = repo.create_action(action).await.unwrap();
+    let id = created.id.unwrap();
+    assert_eq!(
+        repo.get_action(&id).await.unwrap().unwrap().trigger,
+        ActionTrigger::Once { at }
+    );
+    let polled = repo.get_next_unclaimed_actions(10).await.unwrap();
+    assert_eq!(polled.len(), 1);
+    assert_eq!(polled[0].next_run_at, Some(at));
+
+    let (first, second) = tokio::join!(
+        repo.claim_action(&id, created.configuration_revision, created.next_run_at),
+        repo.claim_action(&id, created.configuration_revision, created.next_run_at),
+    );
+    let token = match (first, second) {
+        (Ok(token), Err(_)) | (Err(_), Ok(token)) => token,
+        (first, second) => panic!("exactly one claim must win: {first:?} {second:?}"),
+    };
+    repo.update_next_run_at(&id).await.unwrap();
+    repo.release_action(&id, token).await.unwrap();
+
+    assert!(
+        repo.claim_action(&id, created.configuration_revision, created.next_run_at)
+            .await
+            .is_err(),
+        "a worker holding the polled snapshot must not fire it again"
+    );
+    let done = repo.get_action(&id).await.unwrap().unwrap();
+    assert_eq!(done.next_run_at, None);
+    assert!(done.enabled);
+    assert!(
+        repo.get_next_unclaimed_actions(10)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn once_inside_multiple_is_stored_and_other_shapes_are_rejected(pool: PgPool) {
+    insert_user(&pool, USER_A).await;
+    let repo = test_repo(pool.clone());
+    let at = (Utc::now() + chrono::Duration::seconds(2)).trunc_subsecs(0);
+    let mut action = sample_action(user_owner(USER_A), "mixed");
+    action.trigger = serde_json::from_value(json!({"type": "multiple", "triggers": [
+        {"type": "cron", "schedule": DAILY_9AM, "timezone": "UTC"},
+        {"type": "once", "at": at},
+    ]}))
+    .unwrap();
+    action.next_run_at = Some(at);
+    let created = repo.create_action(action.clone()).await.unwrap();
+    assert_eq!(
+        repo.get_action(&created.id.unwrap())
+            .await
+            .unwrap()
+            .unwrap()
+            .trigger,
+        action.trigger
+    );
+
+    for (kind, config) in [
+        ("once", json!({"type": "once"})),
+        (
+            "once",
+            json!({"type": "multiple", "triggers": [{"type": "once", "at": at}]}),
+        ),
+    ] {
+        let error = sqlx::query!(
+            r#"
+            INSERT INTO scheduled_action (id, owner, name, kind, task, trigger_type, trigger_config, next_run_at, enabled)
+            VALUES ($1, $2, 'invalid', 'Agent', '{}', $3, $4, NULL, false)
+            "#,
+            macro_uuid::generate_uuid_v7(),
+            USER_A,
+            kind,
+            config,
+        )
+        .execute(&pool)
+        .await
+        .expect_err("a once row needs its own configuration");
+        assert_eq!(
+            error.as_database_error().unwrap().code().as_deref(),
+            Some("23514")
+        );
+    }
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

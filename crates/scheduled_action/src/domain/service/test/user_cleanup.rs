@@ -98,7 +98,7 @@ pub(super) fn action(owner: Owner, events: bool) -> ScheduledAction {
         id: Some(macro_uuid::generate_uuid_v7()),
         owner,
         name: config.name,
-        next_run_at: next_run(&config.trigger).unwrap(),
+        next_run_at: next_run(&config.trigger, now, |_| false).unwrap(),
         trigger: config.trigger,
         kind: config.kind,
         created_at: now,

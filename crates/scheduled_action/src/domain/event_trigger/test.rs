@@ -796,3 +796,56 @@ fn github_deliveries_normalize_with_their_payload_and_reject_odd_names() {
         Err(EventRejection::UnsupportedEvent)
     );
 }
+
+#[test]
+fn once_fires_at_its_time_and_never_after() {
+    let trigger: ActionTrigger =
+        serde_json::from_value(json!({"type": "once", "at": "2040-01-01T10:00:02Z"})).unwrap();
+    assert_eq!(
+        serde_json::to_value(&trigger).unwrap(),
+        json!({"type": "once", "at": "2040-01-01T10:00:02Z"})
+    );
+    let at = "2040-01-01T10:00:02Z".parse::<DateTime<Utc>>().unwrap();
+    let before = "2040-01-01T10:00:00Z".parse::<DateTime<Utc>>().unwrap();
+    let after = "2040-01-01T10:00:03Z".parse::<DateTime<Utc>>().unwrap();
+    assert!(trigger.has_schedule());
+    assert_eq!(trigger.next_run_after(before), Some(at));
+    assert_eq!(trigger.next_run_after(at), None);
+    assert_eq!(trigger.next_run_after(after), None);
+    assert_eq!(trigger.first_run_at(before, |_| false), Some(at));
+    // A time that has already passed when saved is due now, unless it ran.
+    assert_eq!(trigger.first_run_at(after, |_| false), Some(at));
+    assert_eq!(trigger.first_run_at(after, |_| true), None);
+    assert!(
+        serde_json::from_value::<ActionTrigger>(json!({"type": "once", "at": "tomorrow"})).is_err()
+    );
+    assert!(serde_json::from_value::<ActionTrigger>(json!({"type": "once"})).is_err());
+}
+
+#[test]
+fn once_inside_multiple_runs_before_later_schedules_and_then_yields_to_them() {
+    let trigger: ActionTrigger = serde_json::from_value(json!({
+        "type": "multiple",
+        "triggers": [
+            {"type": "cron", "schedule": "0 0 17 * * *", "timezone": "UTC"},
+            {"type": "once", "at": "2040-01-01T10:00:02Z"},
+            {"type": "events", "filters": [{"events": ["document.created"]}]}
+        ]
+    }))
+    .unwrap();
+    let before = "2040-01-01T10:00:00Z".parse::<DateTime<Utc>>().unwrap();
+    let after = "2040-01-01T10:00:03Z".parse::<DateTime<Utc>>().unwrap();
+    assert_eq!(
+        trigger.next_run_after(before).unwrap().to_rfc3339(),
+        "2040-01-01T10:00:02+00:00"
+    );
+    assert_eq!(
+        trigger.next_run_after(after).unwrap().to_rfc3339(),
+        "2040-01-01T17:00:00+00:00"
+    );
+    assert_eq!(
+        trigger.first_run_at(after, |_| false).unwrap().to_rfc3339(),
+        "2040-01-01T10:00:02+00:00"
+    );
+    assert!(trigger.event_filters().is_some());
+}
