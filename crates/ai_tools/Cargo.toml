@@ -130,6 +130,7 @@ macro_service_urls = { path = "../macro_service_urls" }
 workspace-hack = { version = "0.1", path = "../workspace-hack" }
 
 [dev-dependencies]
+macro_db_migrator = { path = "../macro_db_migrator" }
 calendar_scheduling = { path = "../calendar_scheduling", features = ["inbound"] }
 macro_authorization = { path = "../macro_authorization", features = ["axum"] }
 model_user = { path = "../model_user" }

@@ -1179,6 +1179,7 @@ dependencies = [
  "macro_authorization",
  "macro_aws_config",
  "macro_db_client",
+ "macro_db_migrator",
  "macro_env",
  "macro_env_var",
  "macro_event_broker",

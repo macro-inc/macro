@@ -81,6 +81,7 @@ use teams::{inbound::toolset::TeamToolContext, outbound::team_repo::TeamReposito
 use tokio_util::task::TaskTracker;
 
 mod activity_metadata;
+mod agent_name;
 mod channel_media;
 #[cfg(any(test, feature = "test-support"))]
 pub use channel_media::build_channel_media_upload_tool_context_test;
@@ -2189,12 +2190,20 @@ impl ToolServiceContext {
     }
 
     /// Run the tools for `caller`, as the public MCP authenticated it: an
-    /// agent writes as itself; an MCP client writes as the Macro bot with its
-    /// name on the post ("via Claude Code"); a pasted API key writes as the
-    /// Macro bot.
-    pub fn for_caller(self, caller: &ai_toolset::ToolCaller) -> Self {
+    /// agent writes as itself, under its own name; an MCP client writes as the
+    /// Macro bot with its name on the post ("via Claude Code"); a pasted API
+    /// key writes as the Macro bot.
+    pub async fn for_caller(self, caller: &ai_toolset::ToolCaller) -> Self {
         match caller {
-            ai_toolset::ToolCaller::Agent(agent) => self.with_actor(*agent),
+            ai_toolset::ToolCaller::Agent(agent) => {
+                let name =
+                    agent_name::agent_name(self.bot_tool_context.service.as_ref(), *agent).await;
+                let context = self.with_actor(*agent);
+                match name {
+                    Some(name) => context.with_actor_name(&name),
+                    None => context,
+                }
+            }
             ai_toolset::ToolCaller::McpClient { name: Some(name) } => self.with_via(name),
             ai_toolset::ToolCaller::McpClient { name: None } | ai_toolset::ToolCaller::ApiKey => {
                 self
