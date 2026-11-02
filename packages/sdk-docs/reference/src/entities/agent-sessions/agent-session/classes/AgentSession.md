@@ -423,7 +423,12 @@ What the caller's new coding sessions are told to do beyond their assignment.
 
 > `static` **createManaged**(`client`, `opts?`): `Promise`\<`AgentSession`\>
 
-Create a managed session, optionally delivering its first prompt.
+Create a managed session as `agent` when one is named, otherwise the
+deployment's default coding persona. List personas with
+AgentNamespace.list and construct one with [Agent.byId](../../../agents/agent/classes/Agent.md#byid).
+Unknown or inaccessible personas fail. `model` and `instructions`
+outrank the persona's. `repoUrl` is honored for Cursor; omit `agent`
+and it starts as Cursor.
 
 #### Parameters
 
