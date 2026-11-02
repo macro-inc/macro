@@ -27,6 +27,10 @@ test('entities with a web page return its url and serialize it', () => {
     [MACRO.projects.byId('p-1'), 'https://web.test/app/project/p-1'],
     [MACRO.initiatives.byId('i-1'), 'https://web.test/app/initiative/i-1'],
     [MACRO.calls.byId('call-1'), 'https://web.test/app/call/call-1'],
+    [
+      MACRO.calendar.event('ev-1'),
+      'https://web.test/app/calendar?eventId=ev-1',
+    ],
     [MACRO.email.byId('e-1'), 'https://web.test/app/email/e-1'],
     [MACRO.crm.companyById('co-1'), 'https://web.test/app/company/co-1'],
     [MACRO.crm.contactById('ct-1'), 'https://web.test/app/contact/ct-1'],

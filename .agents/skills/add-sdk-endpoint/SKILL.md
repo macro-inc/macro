@@ -54,10 +54,12 @@ To skip: add the method name, alphabetically, to `<camelService>Excluded` in
    - cursor lists → `paginate()` → `AsyncGenerator`; search → `entitySearch(...)`
    - camelCase + `undefined` on the SDK side even when the wire is snake_case/nullable
    - TSDoc every public member. No `any`.
-   - an entity with a page in the web app gets a public `webUrl(): string`
-     (`${this.client.webAppUrl}/app/<route>/${this.id}`) and
-     `protected override webLink()` returning it, so serialized handles carry
-     `url`; agents link users with it instead of guessing the route
+   - an entity agents create or return gets a public `webUrl(): string` and
+     `protected override webLink()` returning it, so serialized / MCP output
+     carries `url`. Prefer `${this.client.webAppUrl}/app/<route>/${this.id}`;
+     a working deep link is fine when the entity has no page of its own
+     (calendar events use `/app/calendar?eventId=`). Skip only when there is
+     no user-facing URL. Never fetch inside `webLink()`.
 5. **New service?** Only when the endpoint's service isn't reachable from
    `MacroClient` yet — per *service*, not per entity; a new entity needs none of this.
    Wire the `Sdk` into `src/utils/client.ts`, a host into `src/config.ts`, and an
