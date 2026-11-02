@@ -11,9 +11,12 @@ import { batch, createSignal, Show, Suspense } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const readiness = vi.hoisted(() => ({ painted: vi.fn(), cancelled: vi.fn() }));
-vi.mock('@app/observability/ui-operation', async () => {
+vi.mock('@app/observability/ui-operation', async (importOriginal) => {
   const { NOOP_SPAN } = await import('@macro-inc/observability');
   return {
+    ...(await importOriginal<
+      typeof import('@app/observability/ui-operation')
+    >()),
     startUiOperation: () => ({
       span: NOOP_SPAN,
       afterPaint: readiness.painted,
