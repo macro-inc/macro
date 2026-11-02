@@ -48,9 +48,9 @@ function tracedFetch(
   const path = redactLinkTokens(url.pathname);
   const span = traceOptions?.parentSpan
     ? traceOptions.parentSpan.run(() =>
-        Telemetry.clientSpan(`http ${method} ${path}`)
+        Telemetry.span(`http ${method} ${path}`, { kind: 'client' })
       )
-    : Telemetry.clientSpan(`http ${method} ${path}`);
+    : Telemetry.span(`http ${method} ${path}`, { kind: 'client' });
   const started = performance.now();
   span.setAttr('http.method', method);
   // Path only: query strings can carry tokens.

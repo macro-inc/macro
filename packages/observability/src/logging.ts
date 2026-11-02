@@ -26,7 +26,7 @@ export class Logging {
   readonly #logger: Logger = logs.getLogger(INSTRUMENTATION_SCOPE_NAME);
 
   init(
-    config: TelemetryInitConfig,
+    config: TelemetryInitConfig<string>,
     resource: Resource,
     getUserId: () => string | undefined
   ): void {

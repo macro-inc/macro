@@ -1,4 +1,5 @@
 import { NOOP_SPAN, type Span, Telemetry } from '@macro-inc/observability';
+import type { SamplingClass } from './sampling';
 
 export type UiOperationOutcome =
   | 'success'
@@ -40,6 +41,8 @@ export interface UiOperationOptions {
   startTime?: number;
   /** Add final attributes or child spans before the span ends. */
   onFinish?: (span: Span, outcome: Outcome, end: number) => void;
+  /** The sampling class of the trace it starts. Defaults to `perf`. */
+  sampling?: SamplingClass;
 }
 
 export interface UiOperation {
@@ -309,12 +312,13 @@ export function startUiOperation(
   const started = options.startTime ?? performance.now();
   const input = inputTime(options.event, started);
   const eventType = options.event?.type;
-  const span = Telemetry.perfSpan(
-    name,
-    options.startTime === undefined
-      ? undefined
-      : performance.timeOrigin + options.startTime
-  );
+  const span = Telemetry.span(name, {
+    sampling: options.sampling ?? 'perf',
+    startTime:
+      options.startTime === undefined
+        ? undefined
+        : performance.timeOrigin + options.startTime,
+  });
   const kind = options.kind ?? 'interaction';
   span.setAttr('ui.operation', name);
   span.setAttr('flow.kind', kind);

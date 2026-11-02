@@ -14,7 +14,7 @@ export const agentReviewClient = {
     );
   },
   async decide(session: string, review: string, decision: ReviewDecision) {
-    const span = Telemetry.clientSpan('agent.review.decide');
+    const span = Telemetry.span('agent.review.decide', { kind: 'client' });
     span.setAttr('agent.session.id', session);
     span.setAttr('agent.review.id', review);
     span.setAttr('agent.review.action', decision.action);

@@ -22,11 +22,9 @@ import { startNativeDiagnostics } from './native-diagnostics';
 import { recordNativeWebviewStart } from './native-lifecycle';
 import { osType } from './os-type';
 import { startRuntimeResourceSampling } from './runtime-resources';
+import { samplingKey, samplingRates } from './sampling';
 import { startTypingBurstTelemetry } from './typing-burst';
 import { initializeUiOperationTelemetry } from './ui-operation';
-
-/** Share of production sessions that export perf-class traces. */
-const PROD_PERF_SAMPLE_RATE = 0.05;
 
 async function browserTelemetryEnabled(hasExporter: boolean): Promise<boolean> {
   const override = import.meta.env.VITE_ENABLE_BROWSER_OTEL;
@@ -136,7 +134,8 @@ export async function initializeBrowserObservability(
   const telemetryConfig: TelemetryInitConfig = {
     serviceName: 'web-app',
     environment,
-    perfSampleRate: environment === 'prod' ? PROD_PERF_SAMPLE_RATE : 1,
+    sampling: samplingRates(environment),
+    samplingKey,
     tracesUrl: fallbackTracesUrl,
     logsUrl: fallbackTracesUrl?.replace(/\/v1\/traces\/?$/, '/v1/logs'),
     startup: native ? startup : undefined,
@@ -159,13 +158,8 @@ export async function initializeBrowserObservability(
 
   const initialization = Telemetry.init({
     ...telemetryConfig,
-    tracingProvider: (resource, getUserId, perfSampled) =>
-      createWebTracingProvider(
-        telemetryConfig,
-        resource,
-        getUserId,
-        perfSampled
-      ),
+    tracingProvider: (resource, getUserId, sampling) =>
+      createWebTracingProvider(telemetryConfig, resource, getUserId, sampling),
   });
   // Capture early UI operations locally while the exporter awaits enablement.
   const disposeUiTelemetry = initializeUiOperationTelemetry();

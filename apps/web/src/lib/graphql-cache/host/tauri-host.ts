@@ -167,7 +167,9 @@ export function createTauriCacheHost(options: TauriHostOptions): CacheHost {
     args: Record<string, unknown>,
     timeout = true
   ): Promise<T> {
-    const span = Telemetry.perfSpan('graphql_cache.ipc.request');
+    const span = Telemetry.span('graphql_cache.ipc.request', {
+      sampling: 'perf',
+    });
     span.setAttr('graphql_cache.ipc.command', command);
     const traceparent = span.traceparent();
     const wireArgs = traceparent ? { ...args, traceparent } : args;

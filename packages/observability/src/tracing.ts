@@ -1,40 +1,53 @@
 import {
   type Context,
   context,
-  createContextKey,
+  type Span as OtelSpan,
   ROOT_CONTEXT,
   SpanKind,
-  TraceFlags,
   trace,
 } from '@opentelemetry/api';
 import type { Resource } from '@opentelemetry/resources';
 import type { Attributes, TelemetryInitConfig } from './config';
-import {
-  ATTR_TRACE_CLASS,
-  INSTRUMENTATION_SCOPE_NAME,
-  PERF_TRACE_CLASS,
-} from './constants';
+import { INSTRUMENTATION_SCOPE_NAME } from './constants';
 import { suppressUserId } from './privacy';
 import type { TelemetryTracingProvider } from './provider';
+import type { SamplingClass, TraceSampling } from './sampling';
 import { type Span, SpanImpl, type TraceContext } from './span';
 
-/** Set on a perf span's context so every descendant carries the class. */
-const PERF_TRACE_KEY = createContextKey('@macro-inc/observability/perf-trace');
+export interface SpanOptions {
+  /**
+   * The class whose sampling decision keeps this span when it starts outside
+   * an exported trace. Without one it is always kept.
+   */
+  sampling?: SamplingClass;
+  /** `client` for an outbound request. Defaults to `internal`. */
+  kind?: 'internal' | 'client';
+  /** Start time as Unix time in milliseconds, for a phase that already began. */
+  startTime?: number;
+  attributes?: Attributes;
+}
+
+interface StartOptions extends SpanOptions {
+  /** A phase of its parent: always in its parent's trace, dropped with it. */
+  phase?: boolean;
+}
 
 export class Tracing {
   #provider: TelemetryTracingProvider | undefined;
+  #sampling: TraceSampling | undefined;
   #propagationEnabled = false;
   #enablement: Promise<void> | undefined;
 
   init(
-    config: TelemetryInitConfig,
+    config: TelemetryInitConfig<string>,
     resource: Resource,
     getUserId: () => string | undefined,
-    perfSampled: boolean
+    sampling: TraceSampling
   ): void {
+    this.#sampling = sampling;
     this.#propagationEnabled = false;
-    this.#enablement = this.#enablePropagation(config);
-    this.#provider = config.tracingProvider?.(resource, getUserId, perfSampled);
+    this.#enablement = this.#enablePropagation(config, sampling);
+    this.#provider = config.tracingProvider?.(resource, getUserId, sampling);
   }
 
   captureContext(): TraceContext {
@@ -42,46 +55,30 @@ export class Tracing {
     return { run: (operation) => context.with(parent, operation) };
   }
 
-  span(name: string, startTime?: number): Span {
-    return this.#startSpan(
-      name,
-      this.#activeParent(),
-      undefined,
-      undefined,
-      startTime
-    );
+  span(name: string, options: SpanOptions = {}): Span {
+    return this.#startSpan(name, context.active(), options);
   }
 
   /** Starts a detached root span tree with user enrichment suppressed. */
   anonymousSpan(name: string): Span {
-    return this.#startSpan(name, suppressUserId(ROOT_CONTEXT));
-  }
-
-  clientSpan(name: string): Span {
-    return this.#startSpan(name, this.#activeParent(), SpanKind.CLIENT);
-  }
-
-  /** Starts a span the sampler may drop as a whole performance trace. */
-  perfSpan(name: string, startTime?: number): Span {
-    return this.#startSpan(
-      name,
-      context.active(),
-      undefined,
-      {
-        [ATTR_TRACE_CLASS]: PERF_TRACE_CLASS,
-      },
-      startTime
-    );
+    return this.#startSpan(name, suppressUserId(ROOT_CONTEXT), {});
   }
 
   /** Export a timestamped measurement without retaining a long-lived span. */
-  recordSample(name: string, attributes: Attributes, timestamp: number): void {
-    const span = trace
-      .getTracer(INSTRUMENTATION_SCOPE_NAME)
-      .startSpan(name, { startTime: timestamp, attributes }, ROOT_CONTEXT);
+  recordSample(
+    name: string,
+    attributes: Attributes,
+    timestamp: number,
+    sampling?: SamplingClass
+  ): void {
+    const { otelSpan } = this.#startOtelSpan(name, ROOT_CONTEXT, {
+      sampling,
+      attributes,
+      startTime: timestamp,
+    });
     // Historical samples must win over live onStart enrichment.
-    span.setAttributes(attributes);
-    span.end(timestamp);
+    otelSpan.setAttributes(attributes);
+    otelSpan.end(timestamp);
   }
 
   async flush(): Promise<void> {
@@ -94,65 +91,60 @@ export class Tracing {
     this.#provider = undefined;
   }
 
-  #startSpan(
+  #startOtelSpan(
     name: string,
     parent: Context,
-    kind?: SpanKind,
-    attributes?: Attributes,
-    startTime?: number
-  ): Span {
-    // Descendants of a perf root (phases, HTTP client spans) are tagged too,
-    // so span queries can select a perf trace's spans without trace queries.
-    const perf =
-      attributes?.[ATTR_TRACE_CLASS] === PERF_TRACE_CLASS ||
-      parent.getValue(PERF_TRACE_KEY) === true;
+    options: StartOptions
+  ): { otelSpan: OtelSpan; parent: Context } {
+    const started = this.#sampling?.start(
+      parent,
+      options.phase ?? false,
+      options.sampling
+    );
+    const startParent = started?.context ?? parent;
     const otelSpan = trace.getTracer(INSTRUMENTATION_SCOPE_NAME).startSpan(
       name,
       {
-        kind,
-        attributes: perf
-          ? { ...attributes, [ATTR_TRACE_CLASS]: PERF_TRACE_CLASS }
-          : attributes,
-        startTime,
+        kind: options.kind === 'client' ? SpanKind.CLIENT : undefined,
+        attributes: options.attributes,
+        startTime: options.startTime,
       },
-      parent
+      startParent
     );
-    const provider = this.#provider;
+    if (started)
+      this.#sampling?.started(otelSpan, started.record, otelSpan.spanContext());
+    return { otelSpan, parent: startParent };
+  }
+
+  #startSpan(name: string, parent: Context, options: StartOptions): Span {
+    const { otelSpan, parent: startParent } = this.#startOtelSpan(
+      name,
+      parent,
+      options
+    );
+    const sampling = this.#sampling;
     return new SpanImpl(
       otelSpan,
-      trace.setSpan(
-        perf ? parent.setValue(PERF_TRACE_KEY, true) : parent,
-        otelSpan
-      ),
-      (childName, childParent) => this.#startSpan(childName, childParent),
+      trace.setSpan(startParent, otelSpan),
+      (childName, childParent) =>
+        this.#startSpan(childName, childParent, { phase: true }),
       () => this.#propagationEnabled,
       () =>
         trace.setSpanContext(
-          parent,
-          provider?.resolveSpanContext?.(otelSpan) ?? otelSpan.spanContext()
+          startParent,
+          sampling?.spanContext(otelSpan) ?? otelSpan.spanContext()
         )
     );
   }
-  /**
-   * The active context, unless it is a perf trace this session does not
-   * export: work started there (requests, lifecycle spans) gets its own trace
-   * so perf sampling never drops telemetry that is kept without it. Phases
-   * started with `span.span()` still follow their flow.
-   */
-  #activeParent(): Context {
-    const active = context.active();
-    if (active.getValue(PERF_TRACE_KEY) !== true) return active;
-    const span = trace.getSpan(active);
-    if (!span) return active;
-    const spanContext =
-      this.#provider?.resolveSpanContext?.(span) ?? span.spanContext();
-    if (spanContext.traceFlags & TraceFlags.SAMPLED) return active;
-    return trace.deleteSpan(active).deleteValue(PERF_TRACE_KEY);
-  }
 
-  async #enablePropagation(config: TelemetryInitConfig): Promise<void> {
+  async #enablePropagation(
+    config: TelemetryInitConfig<string>,
+    sampling: TraceSampling
+  ): Promise<void> {
     try {
       const [enabled] = await Promise.all([config.enabled(), config.startup]);
+      // Spans started before enablement propagate once they are placed.
+      await sampling.decided;
       this.#propagationEnabled = enabled;
     } catch {
       this.#propagationEnabled = false;

@@ -20,8 +20,8 @@ if (new URLSearchParams(location.search).has('trace')) {
   initializeUiOperationTelemetry();
   await Telemetry.init({
     ...config,
-    tracingProvider: (resource, getUserId, perfSampled) =>
-      createWebTracingProvider(config, resource, getUserId, perfSampled),
+    tracingProvider: (resource, getUserId, sampling) =>
+      createWebTracingProvider(config, resource, getUserId, sampling),
   });
 }
 
