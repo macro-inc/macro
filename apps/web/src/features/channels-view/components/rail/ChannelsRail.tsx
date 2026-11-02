@@ -32,6 +32,7 @@ import {
 } from '@components/app/split-layout/layoutUtils';
 import { toast } from '@core/component/Toast/Toast';
 import { enableChannelTags } from '@core/constant/featureFlags';
+import { useUserId } from '@core/context/user';
 
 import { createHotkeyGroup, registerHotkey } from '@core/hotkey/hotkeys';
 import { thrownResultErrorHasCode } from '@core/util/result';
@@ -147,9 +148,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
     threadsChannelId,
     setThreadsChannelId,
   } = useChannelsView();
-  // Dispose label dialogs when either rollout switches their owning UI.
+  const userId = useUserId();
+
+  // Dispose label dialogs when the account or rollout switches their owning UI.
   // Memo recomputation runs these cleanups even when the owner identity is unchanged.
   const labelDialogOwner = createMemo(() => {
+    userId();
     sectionsEnabled();
     return channelTagsEnabled() ? getOwner() : undefined;
   });
@@ -1014,6 +1018,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
     deleteLabel,
     setChannelLabel,
     markLabelRead,
+    muteLabel,
+    snoozeLabel,
+    labelNotificationsPending,
     canLabelChannelId,
     labelChannelById,
   } = useChannelLabelActions({
@@ -1226,6 +1233,9 @@ export function ChannelsRail(props: ChannelsRailProps) {
     setChannelLabel,
     activeDropTarget,
     markLabelRead,
+    muteLabel,
+    snoozeLabel,
+    labelNotificationsPending,
     sortBy: (group) => state.sortBy[group],
     setSortBy,
     sectionPreferences: (section) => {

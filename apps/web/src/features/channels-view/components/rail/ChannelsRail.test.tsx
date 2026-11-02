@@ -2,6 +2,7 @@ import type { ListScrollHandle } from '@app/components/list';
 import type { ChannelPreviewSelection } from '@app/features/next-soup/utils';
 import type { ChannelEntity } from '@entity/types/entity';
 import type { WithNotification } from '@entity/types/notification';
+import type { ChannelLabel } from '@service-storage/generated/schemas/channelLabel';
 import {
   cleanup,
   fireEvent,
@@ -9,12 +10,14 @@ import {
   screen,
   waitFor,
 } from '@solidjs/testing-library';
-import { onCleanup } from 'solid-js';
+import { getOwner, onCleanup } from 'solid-js';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { ChannelsSources } from '../../queries';
 import type { ChannelRailRow } from './ChannelsRailContext';
 
-vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
+vi.mock('@core/context/user', () => ({
+  useUserId: () => () => mocks.userId,
+}));
 const mocks = vi.hoisted(() => ({
   fetchChannel: vi.fn<(id: string) => Promise<ChannelEntity>>(),
   favoriteId: undefined as string | undefined,
@@ -31,7 +34,15 @@ const mocks = vi.hoisted(() => ({
   openSplit: vi.fn(async () => {}),
   select: vi.fn((_channel: ChannelPreviewSelection) => true),
   selected: undefined as ChannelPreviewSelection | undefined,
-  source: {},
+  userId: 'viewer',
+  source: {
+    muteEntity:
+      vi.fn<(entity: { type: string; id: string }) => Promise<void>>(),
+    unmuteEntity:
+      vi.fn<(entity: { type: string; id: string }) => Promise<void>>(),
+  },
+  snooze: vi.fn(),
+  success: vi.fn(),
   activate: (_event: MouseEvent) => {},
   row: undefined as ChannelEntity | undefined,
   failure: vi.fn(),
@@ -124,7 +135,7 @@ vi.mock('@components/app/split-layout/layoutUtils', () => ({
   withSplitPanelOwner: (_name: string, run: () => unknown) => run(),
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { failure: mocks.failure },
+  toast: { failure: mocks.failure, success: mocks.success },
 }));
 vi.mock('@core/constant/featureFlags', () => ({ enableChannelTags: {} }));
 vi.mock('@channel/queries/prefetch-channel-target', () => ({
@@ -143,6 +154,9 @@ vi.mock('@entity/utils/notification', () => ({
 }));
 vi.mock('@notifications/notification-helpers', () => ({
   ensureNotificationSourceLoaded: vi.fn(),
+}));
+vi.mock('@notifications/SnoozeNotificationsDialog', () => ({
+  openSnoozeNotifications: mocks.snooze,
 }));
 vi.mock('@queries/channel/notification-selection', () => ({
   hydrateChannelNotificationSelection: mocks.hydrate,
@@ -234,6 +248,7 @@ vi.mock('./next/ExpandedChannelsRail', async () => {
 });
 
 import { ChannelsRail } from './ChannelsRail';
+import { useChannelLabelActions } from './hooks/useChannelLabelActions';
 
 const channel: ChannelEntity = {
   id: 'one',
@@ -282,6 +297,9 @@ const mount = () =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  mocks.userId = 'viewer';
+  mocks.source.muteEntity.mockResolvedValue(undefined);
+  mocks.source.unmuteEntity.mockResolvedValue(undefined);
   mocks.row = channel;
   mocks.favoriteId = undefined;
   mocks.tab = 'browse';
@@ -586,5 +604,173 @@ describe('channel row presses', () => {
     mount();
     press({ pointerType: 'mouse', button: 0 });
     expect(mocks.prefetch).not.toHaveBeenCalled();
+  });
+});
+
+describe('section notification actions', () => {
+  const label: ChannelLabel = {
+    id: 'section',
+    name: 'Section',
+    channelIds: ['one', 'unloaded', 'one'],
+    channelCount: 2,
+    sortOrder: 0,
+    createdAt: '2026-01-01',
+    updatedAt: '2026-01-01',
+  };
+
+  const mountActions = (
+    labels: () => ChannelLabel[] = () => [label],
+    enabled: () => boolean = () => true
+  ) => {
+    let actions!: ReturnType<typeof useChannelLabelActions>;
+
+    render(() => {
+      const owner = getOwner();
+      actions = useChannelLabelActions({
+        sectionsEnabled: enabled,
+        channelTagsEnabled: enabled,
+        labelsAvailable: enabled,
+        labelsUnavailableReason: () => 'Unavailable',
+        sharedLabels: () => true,
+        labels,
+        channelsById: () => new Map([['one', channel]]),
+        searchResults: () => [],
+        labelDialogOwner: () => owner,
+        setGroupOpen: vi.fn(),
+        setLabelOpen: vi.fn(),
+      });
+      return null;
+    });
+
+    return actions;
+  };
+
+  it('uses the complete current membership instead of loaded rows or a stale snapshot', async () => {
+    let current = label;
+    const actions = mountActions(() => [current]);
+
+    await actions.muteLabel(label, true);
+
+    expect(mocks.source.muteEntity.mock.calls).toEqual([
+      [{ type: 'channel', id: 'one' }],
+      [{ type: 'channel', id: 'unloaded' }],
+    ]);
+
+    current = { ...label, channelIds: ['new-member'] };
+    actions.snoozeLabel(label);
+
+    expect(mocks.snooze).toHaveBeenCalledWith(
+      [{ item_type: 'channel', item_id: 'new-member' }],
+      { owner: expect.anything() }
+    );
+  });
+
+  it('keeps successful writes when one member fails and blocks duplicate actions until settled', async () => {
+    let finish!: () => void;
+    mocks.source.muteEntity
+      .mockRejectedValueOnce(new Error('offline'))
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finish = resolve;
+          })
+      );
+    const actions = mountActions();
+
+    const pending = actions.muteLabel(label, true);
+    expect(actions.labelNotificationsPending()).toBe(true);
+
+    await actions.muteLabel(label, false);
+    actions.snoozeLabel(label);
+
+    expect(mocks.source.muteEntity).toHaveBeenCalledTimes(2);
+    expect(mocks.source.unmuteEntity).not.toHaveBeenCalled();
+    expect(mocks.snooze).not.toHaveBeenCalled();
+
+    finish();
+    await pending;
+
+    expect(actions.labelNotificationsPending()).toBe(false);
+    expect(mocks.failure).toHaveBeenCalledExactlyOnceWith(
+      'Muted 1 of 2 items; 1 failed'
+    );
+    expect(mocks.success).not.toHaveBeenCalled();
+  });
+
+  it('unmutes all current members without changing section membership', async () => {
+    const actions = mountActions();
+    await actions.muteLabel(label, false);
+
+    expect(mocks.source.unmuteEntity.mock.calls).toEqual([
+      [{ type: 'channel', id: 'one' }],
+      [{ type: 'channel', id: 'unloaded' }],
+    ]);
+    expect(label.channelIds).toEqual(['one', 'unloaded', 'one']);
+  });
+
+  it('refuses disabled or deleted sections', async () => {
+    let enabled = false;
+    let current = [label];
+    const actions = mountActions(
+      () => current,
+      () => enabled
+    );
+
+    await actions.muteLabel(label, true);
+    actions.snoozeLabel(label);
+
+    enabled = true;
+    current = [];
+
+    await actions.muteLabel(label, true);
+    actions.snoozeLabel(label);
+
+    expect(mocks.source.muteEntity).not.toHaveBeenCalled();
+    expect(mocks.snooze).not.toHaveBeenCalled();
+  });
+
+  it('does not block a new account or clear its pending action when an older batch finishes', async () => {
+    let finishFirst!: () => void;
+    let finishSecond!: () => void;
+    mocks.source.muteEntity
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishFirst = resolve;
+          })
+      )
+      .mockImplementationOnce(
+        () =>
+          new Promise<void>((resolve) => {
+            finishSecond = resolve;
+          })
+      );
+
+    let current = { ...label, channelIds: ['one'] };
+    const actions = mountActions(() => [current]);
+    const first = actions.muteLabel(label, true);
+
+    mocks.userId = 'another-viewer';
+    current = { ...label, channelIds: ['two'] };
+
+    expect(actions.labelNotificationsPending()).toBe(false);
+    const second = actions.muteLabel(label, true);
+    expect(mocks.source.muteEntity.mock.calls).toEqual([
+      [{ type: 'channel', id: 'one' }],
+      [{ type: 'channel', id: 'two' }],
+    ]);
+
+    finishFirst();
+    await first;
+
+    expect(mocks.success).not.toHaveBeenCalled();
+    expect(mocks.failure).not.toHaveBeenCalled();
+    expect(actions.labelNotificationsPending()).toBe(true);
+
+    finishSecond();
+    await second;
+
+    expect(actions.labelNotificationsPending()).toBe(false);
+    expect(mocks.success).toHaveBeenCalledOnce();
   });
 });

@@ -188,6 +188,10 @@ export type ChannelsRailContext = {
   activeDropTarget: Accessor<ChannelLabelDropTarget | undefined>;
   /** Mark every unread notification in the label's visible channels read. */
   markLabelRead: (label: ChannelLabel) => void;
+  /** Update the viewer's notifications for the section's current full membership. */
+  muteLabel: (label: ChannelLabel, muted: boolean) => Promise<void>;
+  snoozeLabel: (label: ChannelLabel) => void;
+  labelNotificationsPending: Accessor<boolean>;
   sortBy: (group: ChannelsSortGroup) => ChannelListSort;
   setSortBy: (group: ChannelsSortGroup, sort: ChannelListSort) => void;
   sectionPreferences: (section: ChannelSectionKey) => ChannelSectionPreferences;

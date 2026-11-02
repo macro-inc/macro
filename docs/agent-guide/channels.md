@@ -1004,9 +1004,9 @@ Each heading has one sliders-icon menu, also available by right-clicking the hea
 **Sort** opens its independent single-select options with a checkmark on the right.
 **Filter** contains **Unread only**. The unread label sits on the left and its
 switch on the right; toggling it keeps the submenu open.
-Custom sections include editing, Mark all as read, and a destructive Delete
-action in the same menu. Click and right-click menus use the same standard
-context-menu rows, spacing, and selection indicators. Use the heading's caret
+Custom sections include editing, Mark all as read, notification actions, and a
+destructive Delete action in the same menu. Click and right-click menus use the
+same standard context-menu rows, spacing, and selection indicators. Use the heading's caret
 to expand/collapse it; this is not repeated
 in the menu. There is no separate all-sections management menu.
 Sorting and unread filters are personal, even for a team-shared section. Date ordering
@@ -1014,6 +1014,16 @@ follows each paginated source; Favorites and custom sections also offer A–Z.
 Filtered-out channels retain their membership and do not reappear ungrouped.
 Shared name and rule edits apply to the team; personal edits affect only the account.
 Deleting a section does not delete its conversations or change channel access.
+
+Custom-section menus also offer **Mute all channels**, **Unmute all channels**,
+and **Snooze all channels…**. These update only your notifications, including
+for shared sections. Each action uses the section's complete current membership,
+including filtered-out and unloaded channels; channels added later do not inherit
+the change. Snooze uses the usual duration/date picker and resumes notifications
+at the chosen time. A partial failure keeps successful updates and reports the
+failures; snooze retries only failed channels. Empty or unavailable sections
+disable these actions. Built-in groups and mobile remain unchanged.
+
 Use a channel's Add to section menu to change the personal or shared assignment.
 Each section uses a checkbox: checking moves the channel into that section,
 and unchecking removes it. Only one section per scope is assigned; the personal
