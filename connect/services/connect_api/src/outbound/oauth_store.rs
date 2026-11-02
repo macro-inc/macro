@@ -110,46 +110,54 @@ struct ClientLock {
     redirect_uri: String,
 }
 
+#[expect(
+    clippy::disallowed_methods,
+    reason = "Connect's own database uses runtime-checked queries per connect/docs/decisions.md"
+)]
+async fn fetch_client<'e>(
+    executor: impl sqlx::PgExecutor<'e>,
+    issuer: &str,
+    redirect_uri: &str,
+) -> Result<Option<OAuthClientRecord>, Error> {
+    let row = sqlx::query_as::<_, ClientRow>("SELECT client_id, secret_ciphertext, secret_nonce, secret_encrypted_data_key, secret_kms_key_id, secret_encryption_version FROM oauth_clients WHERE issuer = $1 AND redirect_uri = $2")
+            .bind(issuer).bind(redirect_uri).fetch_optional(executor).await.map_err(storage)?;
+    row.map(|row| {
+        let secret = match (
+            row.secret_ciphertext,
+            row.secret_nonce,
+            row.secret_encrypted_data_key,
+            row.secret_kms_key_id,
+            row.secret_encryption_version,
+        ) {
+            (
+                Some(ciphertext),
+                Some(nonce),
+                Some(encrypted_data_key),
+                Some(kms_key_id),
+                Some(encryption_version),
+            ) => Some(Envelope {
+                ciphertext,
+                nonce,
+                encrypted_data_key,
+                kms_key_id,
+                encryption_version,
+                access_token_expires_at: None,
+            }),
+            (None, None, None, None, None) => None,
+            _ => return Err(Error::Cipher),
+        };
+        Ok(OAuthClientRecord {
+            id: row.client_id,
+            secret,
+        })
+    })
+    .transpose()
+}
+
 #[async_trait::async_trait]
 impl LockedClient for ClientLock {
-    #[expect(
-        clippy::disallowed_methods,
-        reason = "Connect's own database uses runtime-checked queries per connect/docs/decisions.md"
-    )]
     async fn get(&mut self) -> Result<Option<OAuthClientRecord>, Error> {
-        let row = sqlx::query_as::<_, ClientRow>("SELECT client_id, secret_ciphertext, secret_nonce, secret_encrypted_data_key, secret_kms_key_id, secret_encryption_version FROM oauth_clients WHERE issuer = $1 AND redirect_uri = $2")
-            .bind(&self.issuer).bind(&self.redirect_uri).fetch_optional(&mut *self.transaction).await.map_err(storage)?;
-        row.map(|row| {
-            let secret = match (
-                row.secret_ciphertext,
-                row.secret_nonce,
-                row.secret_encrypted_data_key,
-                row.secret_kms_key_id,
-                row.secret_encryption_version,
-            ) {
-                (
-                    Some(ciphertext),
-                    Some(nonce),
-                    Some(encrypted_data_key),
-                    Some(kms_key_id),
-                    Some(encryption_version),
-                ) => Some(Envelope {
-                    ciphertext,
-                    nonce,
-                    encrypted_data_key,
-                    kms_key_id,
-                    encryption_version,
-                    access_token_expires_at: None,
-                }),
-                (None, None, None, None, None) => None,
-                _ => return Err(Error::Cipher),
-            };
-            Ok(OAuthClientRecord {
-                id: row.client_id,
-                secret,
-            })
-        })
-        .transpose()
+        fetch_client(&mut *self.transaction, &self.issuer, &self.redirect_uri).await
     }
 
     #[expect(
@@ -341,6 +349,14 @@ impl OAuthRepository for PostgresRepository {
             })
         })
         .transpose()
+    }
+
+    async fn get_client(
+        &self,
+        issuer: &str,
+        redirect_uri: &str,
+    ) -> Result<Option<OAuthClientRecord>, Error> {
+        fetch_client(&self.pool, issuer, redirect_uri).await
     }
 
     async fn lock_client(
