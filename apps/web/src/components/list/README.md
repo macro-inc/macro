@@ -60,6 +60,19 @@ instead of eagerly memoizing them in its panel-owned root. This lets mounted
 rendering choose its reactive owner while off-screen navigation reads current
 query and group pages on demand.
 
+Row selection uses keyed subscriptions: changing one selected identity notifies
+only its rows. Use `focus.isFocused(rowKey)` for row highlights so keyboard
+navigation updates only the previous and next focused rows.
+
+### Sticky group headers
+
+`ListViewport.isSticky` opts structural rows into `StickyVirtualizer`, also used
+by the next-soup task list. It keeps the current header and any focused row
+mounted, pins the real header with an opaque backing, and pushes it away at the
+next group. Header selection uses measured offsets rather than fixed row heights.
+The exposed scroll handle keeps keyboard targets below the destination header;
+`stickyInset` reserves persistent chrome separately from `startMargin`.
+
 ### Boundary pagination
 
 `useListInteractions` accepts `navigation.onBeforeMove` for paginated

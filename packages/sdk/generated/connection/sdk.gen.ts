@@ -2,7 +2,7 @@
 
 import type { Client, ClientMeta, Options as Options2, RequestResult, TDataShape } from './client';
 import { client } from './client.gen';
-import type { BatchSendMessageHandlerData, BatchSendMessageHandlerErrors, BatchSendMessageHandlerResponses, GetEntityHandlerData, GetEntityHandlerErrors, GetEntityHandlerResponses, SendMessageHandlerData, SendMessageHandlerErrors, SendMessageHandlerResponses } from './types.gen';
+import type { BatchSendMessageHandlerData, BatchSendMessageHandlerErrors, BatchSendMessageHandlerResponses, BroadcastMessageHandlerData, BroadcastMessageHandlerErrors, BroadcastMessageHandlerResponses, GetEntityHandlerData, GetEntityHandlerErrors, GetEntityHandlerResponses, SendMessageHandlerData, SendMessageHandlerErrors, SendMessageHandlerResponses } from './types.gen';
 
 export type Options<TData extends TDataShape = TDataShape, ThrowOnError extends boolean = boolean, TResponse = unknown> = Options2<TData, ThrowOnError, TResponse> & {
     /**
@@ -61,6 +61,22 @@ export class Sdk extends HeyApiClient {
         return (options.client ?? this.client).post<BatchSendMessageHandlerResponses, BatchSendMessageHandlerErrors, ThrowOnError>({
             security: [{ name: 'x-internal-auth-key', type: 'apiKey' }],
             url: '/batch_send',
+            ...options,
+            headers: {
+                'Content-Type': 'application/json',
+                ...options.headers
+            }
+        });
+    }
+    
+    /**
+     * Sends a message to every open connection on every instance. Delivery is
+     * best-effort and asynchronous, so there are no receipts.
+     */
+    public broadcastMessageHandler<ThrowOnError extends boolean = false>(options: Options<BroadcastMessageHandlerData, ThrowOnError>): RequestResult<BroadcastMessageHandlerResponses, BroadcastMessageHandlerErrors, ThrowOnError> {
+        return (options.client ?? this.client).post<BroadcastMessageHandlerResponses, BroadcastMessageHandlerErrors, ThrowOnError>({
+            security: [{ name: 'x-internal-auth-key', type: 'apiKey' }],
+            url: '/message/broadcast',
             ...options,
             headers: {
                 'Content-Type': 'application/json',

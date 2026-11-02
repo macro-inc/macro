@@ -26,7 +26,9 @@ retain successful siblings. A plan-refused chat duplicate still opens the paywal
 with either transport; it must not create a copy or retry through REST. Restore immediately after trash and confirm the row
 returns without waiting for retained deletion markers to expire, even if the
 trash's background refresh failed. A delete started after the restore request
-must still hide its row. With the flag off, the existing REST paths remain.
+must still hide its row. Deletion and restore overlays distinguish entity type as
+well as ID, so an unrelated conversation with the same ID remains visible.
+With the flag off, the existing REST paths remain.
 Deleting a non-owned item still only removes it from history. Forking a markdown
 history version still uses REST because GraphQL duplication copies current content.
 

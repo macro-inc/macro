@@ -1,0 +1,35 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT c.id, c.team_id, c.channel_type::text as \"channel_type!\"\n           FROM comms_channels c\n           JOIN comms_channel_participants p ON p.channel_id = c.id\n           WHERE c.id = ANY($1) AND p.user_id = $2 AND p.left_at IS NULL\n           ORDER BY c.id FOR SHARE OF c, p",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "team_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "channel_type!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "792c93e5824cd148379afa932e0df053b1c3bd5c1611c097b4cb6ab441b3455b"
+}

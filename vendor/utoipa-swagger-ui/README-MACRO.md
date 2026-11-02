@@ -6,14 +6,12 @@ and `--remap-path-prefix` does not rewrite string literals, so the compiled
 crate differed in every checkout. Every service above it, and their test
 binaries, then had a different kache key on each machine and in CI.
 
-The functional change: the build script writes `$OUT_DIR/…` and rust-embed's
-`interpolate-folder-path` expands it at compile time. Drop this copy once
-upstream emits a relative or interpolated folder.
+The build script writes `$OUT_DIR/…` and rust-embed's
+`interpolate-folder-path` expands it at compile time.
+
+The ZIP build dependency is updated to `9.0.5`, matching the workspace, to
+remove the vulnerable `zip 3` dependency. Keep both patches when refreshing
+this copy; drop it once upstream covers both changes.
 
 `Cargo.toml` also drops the author's email from `authors`, which the
 repository's PII scan rejects.
-
-The build script's `zip` build dependency is raised from 3 to the workspace's
-9, which clears RUSTSEC-2026-0429 from the lockfile. The script reads entries
-one by one and never calls the affected `ZipArchive::extract`; under zip 9
-it tells directories by `is_dir()`, since `name()` now returns a `Result`.
