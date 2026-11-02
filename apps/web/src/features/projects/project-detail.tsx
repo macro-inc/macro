@@ -21,7 +21,6 @@ import {
 import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
-import { registerHotkey } from '@core/hotkey/hotkeys';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
 import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
@@ -213,16 +212,6 @@ function ProjectDetailHost(props: ProjectDetailProps) {
   const commands = context.createCommands();
   const openShare = useProjectShareModal(source.project, commands);
   const panel = useSplitPanelOrThrow();
-  // The project shares its split scope with the view hosting it, and Tasks
-  // binds Tab there to cycle its tabs, which closes the project. As in a
-  // document, this override leaves Tab to native focus order while it's open.
-  registerHotkey({
-    hotkey: ['tab', 'shift+tab'],
-    scopeId: panel.splitHotkeyScope,
-    description: 'Move focus within project',
-    keyDownHandler: () => false,
-    hide: true,
-  });
   const layout = useSplitLayout();
   const navigate = useNavigate();
   const section = (section: ProjectSection) =>

@@ -457,9 +457,6 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   claims decide who shows it. `openWithSplit` activates the source split before
   a replace, so a visit the router yields to the claiming pane leaves that pane
   active (`tests/claimed-replace.test.ts`).
-- A detail pane shares its host's split hotkey scope, where views bind Tab and
-  Shift+Tab to cycle their tabs. Eclipse both keys while it's mounted, as
-  `Notebook` and `ProjectDetailHost` do, or Tab navigates away from the pane.
 - Bound Discussion comment readiness waits to ten seconds; recover from initial layout interruptions until the message is visible, and release the target on user input (including scrollbar pointer-down), timeout, or successful arrival.
 - Keep early DOCX opens loading while exports return processing (409); retry only
   that response, with a bounded wait. See the Word editor walkthrough in
