@@ -81,6 +81,11 @@ environment after registering them in Doppler:
 | Email | `OUTLOOK_CONNECTIONS_ENABLED`, `OUTLOOK_SYNC_ENABLED`, `OUTLOOK_WRITES_ENABLED` |
 | Calendar | `OUTLOOK_SYNC_ENABLED`, `OUTLOOK_WRITES_ENABLED` |
 
+With the authentication switch on, a new connection also needs the user's
+PostHog flag `enable-outlook`, so connections roll out per user without a
+deploy. Reconnecting an existing inbox needs neither, and the email and calendar
+switches stay deployment-wide; they only act on inboxes that already exist.
+
 The calendar service's existing global sync switch must also permit work. Existing
 Microsoft application credentials, redirect URI, public webhook routing, and KMS
 configuration must be available in the test environment. The available Doppler

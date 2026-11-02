@@ -790,6 +790,9 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
   const soupBody = createMemo(() =>
     compileToAst(applyViewFilters(queryFilters.state))
   );
+  // Server-side filters change the result set without touching the client
+  // predicates or sort, so they release held row positions too.
+  soup.positions.scopeTo(soupBody);
 
   const [searchText, setSearchText] = useEntryState<string>('search.text', {
     default: props.initialSearchText ?? '',
@@ -1116,7 +1119,8 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       });
     }
 
-    return transformed;
+    if (search.isSearching()) return transformed;
+    return soup.positions.apply(transformed);
   };
 
   const entities = () => {
@@ -1327,6 +1331,7 @@ export const createSoupViewState = (props: SoupViewContextProviderProps) => {
       for (const entity of all) {
         const ts =
           (bucketOnNotification ? entity.notifiedAt : undefined) ??
+          soup.positions.sortTs(entity.id) ??
           entity.sortTs ??
           entity.updatedAt ??
           entity.createdAt;

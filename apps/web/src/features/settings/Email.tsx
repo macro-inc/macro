@@ -20,6 +20,7 @@ import {
   calendarConsentScopes,
   reconnectScopes,
 } from '@core/email-link/consent';
+import { OutlookBetaBadge } from '@core/email-link/OutlookBetaBadge';
 import type { EmailProvider } from '@core/email-link/ProviderDialog';
 import { fireAndForget } from '@core/util/fireAndForget';
 import GmailIcon from '@icon/gmail-color.svg';
@@ -27,7 +28,10 @@ import OutlookIcon from '@icon/outlook-color.svg';
 import ArrowsClockwiseIcon from '@icon/system/regular/arrows-clockwise.svg?component-solid';
 import CalendarSlashIcon from '@icon/system/regular/calendar-slash.svg?component-solid';
 import { Telemetry } from '@macro-inc/observability';
-import { fetchEmailConnectionProviders } from '@queries/auth/outlook-link';
+import {
+  fetchEmailConnectionProviders,
+  useOutlookAvailable,
+} from '@queries/auth/outlook-link';
 import {
   type BackfillProgress,
   estimateEtaSeconds,
@@ -84,7 +88,7 @@ export function useConnectInbox(): (provider?: EmailProvider) => void {
 
 /**
  * Connected inboxes, one row each, followed by rows to connect another Google
- * Workspace or Outlook account.
+ * Workspace account, or an Outlook account when the server offers Outlook.
  */
 export function EmailCard(props: { class?: string } = {}) {
   const email = useEmail();
@@ -126,6 +130,7 @@ export function EmailCard(props: { class?: string } = {}) {
   });
 
   const onConnectEmail = useConnectInbox();
+  const outlookOffered = useOutlookAvailable();
   const hasInbox = () =>
     Boolean(inboxes().primary) || inboxes().others.length > 0;
   // Further inboxes are behind multi-inbox; the first is always offered.
@@ -278,19 +283,22 @@ export function EmailCard(props: { class?: string } = {}) {
               />
             </IntegrationRow>
           </SettingsSurface>
-          <SettingsSurface>
-            <IntegrationRow
-              icon={<OutlookIcon />}
-              title="Connect an Outlook account"
-              description="Sync an Outlook.com or Microsoft 365 inbox into Macro Email."
-            >
-              <ConnectAction
-                label="Connect"
-                ariaLabel="Connect an Outlook account"
-                onClick={() => onConnectEmail('OUTLOOK')}
-              />
-            </IntegrationRow>
-          </SettingsSurface>
+          <Show when={outlookOffered()}>
+            <SettingsSurface>
+              <IntegrationRow
+                icon={<OutlookIcon />}
+                title="Connect an Outlook account"
+                badge={<OutlookBetaBadge />}
+                description="Sync an Outlook.com or Microsoft 365 inbox into Macro Email."
+              >
+                <ConnectAction
+                  label="Connect"
+                  ariaLabel="Connect an Outlook account"
+                  onClick={() => onConnectEmail('OUTLOOK')}
+                />
+              </IntegrationRow>
+            </SettingsSurface>
+          </Show>
         </Show>
       </div>
 
@@ -345,7 +353,10 @@ export function EmailCard(props: { class?: string } = {}) {
   );
 }
 
-/** Whether new Outlook connections are open; the provider chooser checks the same. */
+/**
+ * Whether new Outlook connections are open at click time, in case they closed
+ * after the row was shown; the provider chooser checks the same.
+ */
 async function outlookAvailable(): Promise<boolean> {
   try {
     return (await fetchEmailConnectionProviders()).outlook;
@@ -486,11 +497,15 @@ function InboxRow(props: {
               <Chip label="Shared" />
             </Show>
           </div>
-          <span class="text-xs text-ink-muted">
-            {props.link.provider === 'OUTLOOK'
-              ? 'Outlook / Microsoft 365'
-              : 'Gmail'}
-          </span>
+          <Show
+            when={props.link.provider === 'OUTLOOK'}
+            fallback={<span class="text-xs text-ink-muted">Gmail</span>}
+          >
+            <span class="flex items-center gap-2 text-xs text-ink-muted">
+              Outlook / Microsoft 365
+              <OutlookBetaBadge />
+            </span>
+          </Show>
           <Show when={ENABLE_INBOX_SYNC_STATUS}>
             <Switch
               fallback={

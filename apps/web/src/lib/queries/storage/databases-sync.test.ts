@@ -158,9 +158,11 @@ it('merges legacy states per user, drops stale relays, itself, other databases, 
     102,
     'other-db'
   );
+  // A server that predates view-only presence stamps no access: an editor.
   expect(remote()).toEqual([
     {
       userId: 'alex',
+      canEdit: true,
       tableId: 'tasks',
       rowId: 'row-1',
       columnId: 'name',
@@ -322,6 +324,37 @@ it('keeps same-user tabs separate, suppresses only this peer, and leaves one pee
   // Peer ids do not replace the authenticated identity or collide across users.
   relay('alex', { peerId: second, tableId: 'tasks', rowId: 'alex' }, 104);
   expect(remote().map((state) => state.userId)).toEqual(['me', 'alex']);
+  dispose();
+});
+
+it('marks a view-only viewer from the access the server stamped', () => {
+  const { remote, dispose } = createRoot((dispose) => ({
+    remote: useDatabaseAwareness(
+      () => 'db',
+      () => ({ tableId: 'tasks' })
+    ).remote,
+    dispose,
+  }));
+  mock.event?.({
+    type: 'database_awareness',
+    data: JSON.stringify({
+      databaseId: 'db',
+      userId: 'pat',
+      canEdit: false,
+      state: { tableId: 'tasks', rowId: 'row-1', columnId: 'name' },
+      relayedAt: 100,
+    }),
+  });
+  expect(remote()).toEqual([
+    {
+      userId: 'pat',
+      canEdit: false,
+      tableId: 'tasks',
+      rowId: 'row-1',
+      columnId: 'name',
+      editing: false,
+    },
+  ]);
   dispose();
 });
 

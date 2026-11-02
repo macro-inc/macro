@@ -1,8 +1,33 @@
 import { UploadProgressIndicator } from '@core/component/UploadProgress/UploadProgressIndicator';
 import { isMobile } from '@core/mobile/isMobile';
 import { Toast } from '@kobalte/core/toast';
-import { createSignal, Show } from 'solid-js';
+import { createElementSize } from '@solid-primitives/resize-observer';
+import { cn } from '@ui/utils/classname';
+import { createSignal, type JSX, Show } from 'solid-js';
 import { Portal } from 'solid-js/web';
+
+/** A column centered above the mobile dock, `lift` higher than its usual spot. */
+function MobileToastStack(props: {
+  ref?: (element: HTMLDivElement) => void;
+  class: string;
+  lift?: string;
+  children: JSX.Element;
+}) {
+  return (
+    <div
+      ref={props.ref}
+      class={cn(
+        'fixed left-1/2 -translate-x-1/2 w-full max-w-[420px] px-(--mobile-chrome-gutter) pointer-events-none flex flex-col gap-5',
+        props.class
+      )}
+      style={{
+        bottom: `calc(var(--mobile-content-inset-bottom, 0px) + 12px + ${props.lift ?? '0px'})`,
+      }}
+    >
+      {props.children}
+    </div>
+  );
+}
 
 export function ToastRegion() {
   const [mobileSwipeDirection, setMobileSwipeDirection] = createSignal<
@@ -12,6 +37,9 @@ export function ToastRegion() {
   const clearSwipe = (event: PointerEvent) => {
     if (swipeStart?.pointerId === event.pointerId) swipeStart = undefined;
   };
+  const [mobileTransientStack, setMobileTransientStack] =
+    createSignal<HTMLDivElement>();
+  const mobileTransientSize = createElementSize(mobileTransientStack);
 
   return (
     <Portal>
@@ -56,14 +84,19 @@ export function ToastRegion() {
       </div>
 
       {/*
-        Mobile-only stack: centered above the mobile dock. At most one
+        Mobile-only stacks: centered above the mobile dock. At most one
         transient toast is visible — Toast.tsx dismisses the previous one as
         soon as a new one is shown. Persistent prompts live in their own
         region above that slot, capped at one visible card with the rest
         queued until it is answered.
+
+        They need separate stacks, each `fixed` and so its own stacking
+        context: prompts go under the modal stack so they never cover a sheet
+        or the picker on it, while transient toasts stay above sheets. The
+        prompt stack measures the transient one to stay above that slot.
       */}
       <div
-        class="fixed left-1/2 -translate-x-1/2 w-full max-w-[420px] px-(--mobile-chrome-gutter) pointer-events-none z-toast-region flex flex-col gap-5"
+        class="contents"
         on:pointerdown={{
           capture: true,
           handleEvent: (event) => {
@@ -83,45 +116,49 @@ export function ToastRegion() {
         }}
         on:pointerup={{ capture: true, handleEvent: clearSwipe }}
         on:pointercancel={{ capture: true, handleEvent: clearSwipe }}
-        style={{
-          bottom: 'calc(var(--mobile-content-inset-bottom, 0px) + 12px)',
-        }}
       >
-        <Toast.Region
-          class="macro-toast-region"
-          regionId="mobile-reminder-region"
-          duration={Infinity}
-          limit={1}
-          pauseOnInteraction={false}
-          swipeDirection={mobileSwipeDirection()}
+        <MobileToastStack
+          class="z-mobile-prompt-region"
+          lift={`${mobileTransientSize.height ?? 0}px + 1.25rem`}
         >
-          <Toast.List class="macro-toast-list" />
-        </Toast.Region>
-        <Toast.Region
-          class="macro-toast-region"
-          regionId="mobile-prompt-region"
-          duration={Infinity}
-          limit={1}
-          pauseOnInteraction={false}
-          swipeDirection={mobileSwipeDirection()}
-        >
-          <Toast.List class="macro-toast-list" />
-        </Toast.Region>
-        <Toast.Region
-          class="macro-toast-region"
-          regionId="mobile-toast-region"
-          limit={1}
-          duration={4500}
-          pauseOnInteraction
-          swipeDirection={mobileSwipeDirection()}
-        >
-          <Toast.List class="macro-toast-list" />
-        </Toast.Region>
-        <Show when={isMobile()}>
-          <div class="flex justify-center">
-            <UploadProgressIndicator />
-          </div>
-        </Show>
+          <Toast.Region
+            class="macro-toast-region"
+            regionId="mobile-reminder-region"
+            duration={Infinity}
+            limit={1}
+            pauseOnInteraction={false}
+            swipeDirection={mobileSwipeDirection()}
+          >
+            <Toast.List class="macro-toast-list" />
+          </Toast.Region>
+          <Toast.Region
+            class="macro-toast-region"
+            regionId="mobile-prompt-region"
+            duration={Infinity}
+            limit={1}
+            pauseOnInteraction={false}
+            swipeDirection={mobileSwipeDirection()}
+          >
+            <Toast.List class="macro-toast-list" />
+          </Toast.Region>
+        </MobileToastStack>
+        <MobileToastStack ref={setMobileTransientStack} class="z-toast-region">
+          <Toast.Region
+            class="macro-toast-region"
+            regionId="mobile-toast-region"
+            limit={1}
+            duration={4500}
+            pauseOnInteraction
+            swipeDirection={mobileSwipeDirection()}
+          >
+            <Toast.List class="macro-toast-list" />
+          </Toast.Region>
+          <Show when={isMobile()}>
+            <div class="flex justify-center">
+              <UploadProgressIndicator />
+            </div>
+          </Show>
+        </MobileToastStack>
       </div>
     </Portal>
   );

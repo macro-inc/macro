@@ -81,9 +81,8 @@ export function CompanyContactsSection(props: {
     );
   });
   const createContact = () => {
-    const domain = props.company?.domains?.[0]?.domain;
-    if (domain && props.company)
-      context.openCreateContact({ companyId: props.company.id, domain });
+    if (props.company)
+      context.openCreateContact({ companyId: props.company.id });
   };
 
   return (
@@ -96,7 +95,7 @@ export function CompanyContactsSection(props: {
       createAction={{
         label: 'Add contact',
         onClick: createContact,
-        disabled: !props.company?.domains?.[0],
+        disabled: !props.company,
       }}
       toolbarCreate
     >
@@ -114,7 +113,7 @@ export function CompanyContactsSection(props: {
                   title="No contacts yet"
                   description="Add a contact to this company to see them here."
                   action={
-                    props.company?.domains?.[0]
+                    props.company
                       ? { label: 'Add contact', onClick: createContact }
                       : undefined
                   }
