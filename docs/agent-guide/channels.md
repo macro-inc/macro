@@ -1187,6 +1187,11 @@ links still open their target. Each accepted click marks top-level notifications
 from the full loaded edge seen; an abbreviated list edge is never sufficient.
 A rejected selection or unavailable split must not mark the conversation read.
 Non-participant rows retain their membership status and do not mark notifications.
+Shift-click and the row menu's `Open in new split` open a loaded row without
+waiting for notifications: hold the single-channel `SoupNotifications` request
+(`UPDATED_AT`, limit 1) and the split must still appear at once. Its full edge
+loads after the open. A failed load leaves the split open and skips that marking;
+messages on screen still mark themselves read as they become visible.
 Shift-click a favorite whose channel is not loaded in the rail: its membership
 and full notification edge load before the split opens with the same top-level
 read policy. Selecting another channel while that request is pending must cancel

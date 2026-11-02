@@ -567,6 +567,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   [dragging rows into a folder](../../docs/agent-guide/navigation.md#dragging-rows-into-a-folder).
 - Keep channel rail and title menus on `CHANNEL_ACTION_VIEW_CONTEXT`, including
   the shared desktop `Open in new split` action and its mobile/capacity guards.
+  Rail splits open at latest before notifications load; only rows that stand
+  for a notification (Home, Inbox) wait for it to choose a target.
 - Gate the Chat redesign with `enable-chat-sidebar-sections`; wait for its result, restore the tabbed rail when off, and keep mobile unchanged.
   Keep the original rail renderer and label dialogs in `components/rail/`; build the redesigned rail and section dialogs in `components/rail/next/`, with shared controller, context, and row primitives outside `next/`.
   With the flag on, keep desktop Chat sections in a scrolling stack with Favorites first and DMs directly below; personal and team-shared section assignments remain independent, including when dragging a row out of its originating section.
