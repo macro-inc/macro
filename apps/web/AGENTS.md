@@ -73,6 +73,10 @@ stacked sheet), which must bring it back on screen. It also keeps a persistent
 prompt under an open sheet and its picker, above a transient notice, and that
 notice on top of the sheet:
 `bunx playwright test --config src/components/app/mobile/browser-test/playwright.config.ts`.
+The same suite covers where a sheet puts focus as it opens: on itself, leaving
+its first row unringed, unless the first tab stop is a text field, the sheet
+focused something itself, or it names its own target; Tab then moves into the
+rows, which do show the ring.
 
 CRM creation has backend-free desktop/phone coverage for name-only companies,
 personal-email contacts and explicit company selection:
