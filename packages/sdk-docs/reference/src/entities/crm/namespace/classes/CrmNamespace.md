@@ -24,6 +24,37 @@
 
 ## Methods
 
+### blockDomain()
+
+> **blockDomain**(`domain`): `Promise`\<`void`\>
+
+Block a domain (like `acme.com`): email sync skips it, and the company
+and contacts already in the CRM for it are hidden. Requires a team admin.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `domain` | `string` |
+
+#### Returns
+
+`Promise`\<`void`\>
+
+***
+
+### blockedDomains()
+
+> **blockedDomains**(): `Promise`\<`string`[]\>
+
+The domains the caller's current team keeps out of email sync.
+
+#### Returns
+
+`Promise`\<`string`[]\>
+
+***
+
 ### companyById()
 
 > **companyById**(`id`): [`Company`](../../company/classes/Company.md)
@@ -93,6 +124,26 @@ Create a CRM company for the caller's current team.
 #### Returns
 
 `Promise`\<[`Company`](../../company/classes/Company.md)\>
+
+***
+
+### createContact()
+
+> **createContact**(`opts`): `Promise`\<[`Contact`](../../contact/classes/Contact.md)\>
+
+Create a contact without a company for the caller's current team. The
+email is optional and may be at any domain. To add someone to a company,
+use [Company.createContact](../../company/classes/Company.md#createcontact).
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `opts` | [`CreateCrmTeamContactRequest`](../../../../../generated/storage/types.gen/type-aliases/CreateCrmTeamContactRequest.md) |
+
+#### Returns
+
+`Promise`\<[`Contact`](../../contact/classes/Contact.md)\>
 
 ***
 
@@ -175,6 +226,25 @@ The caller's current team's CRM settings.
 #### Returns
 
 `Promise`\<[`CrmTeamSettingsResponse`](../../../../../generated/storage/types.gen/type-aliases/CrmTeamSettingsResponse.md)\>
+
+***
+
+### unblockDomain()
+
+> **unblockDomain**(`domain`): `Promise`\<`void`\>
+
+Unblock a domain: email sync resumes and what blocking hid is shown
+again. Requires a team admin.
+
+#### Parameters
+
+| Parameter | Type |
+| ------ | ------ |
+| `domain` | `string` |
+
+#### Returns
+
+`Promise`\<`void`\>
 
 ***
 

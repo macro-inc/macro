@@ -72,9 +72,9 @@ export class Contact extends FavoritableEntity<ContactDetail> {
   /** The contact's email address; absent for a contact added by name alone. */
   readonly email = this.field('email');
 
-  /** The CRM company this contact belongs to. */
+  /** The CRM company this contact belongs to, if it has one. */
   readonly company = this.mappedField('companyId', (id) =>
-    Company.byId(this.client, id),
+    id ? Company.byId(this.client, id) : undefined,
   );
 
   /** Whether the contact is hidden from CRM listings. */

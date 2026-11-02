@@ -175,7 +175,10 @@ export class Company extends PropertiedEntity<CompanyDetail> {
    * (gmail.com etc.) is accepted at any company, and omitting it adds the
    * contact by name alone.
    */
-  async createContact(opts: { email?: string; name: string }): Promise<Contact> {
+  async createContact(opts: {
+    email?: string;
+    name: string;
+  }): Promise<Contact> {
     const contact = await this.mutate((c) =>
       c.storage.createCrmContact({
         path: { company_id: this.id },
