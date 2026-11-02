@@ -122,30 +122,6 @@ agent, retry, open a session) has a backend-free browser regression over a
 scripted runtime:
 `bunx playwright test --config src/features/local-runtime/browser-test/playwright.config.ts`.
 
-Meeting-note creation, linking, optional team access, retry, and unlinking have desktop and
-phone browser coverage in `features/calendar-notes`:
-`bunx playwright test --config src/features/calendar-notes/browser-test/playwright.config.ts`.
-The browser fixture uses the real event details popover and mobile drawer over
-sample data; keep notes aligned with those existing surfaces and preserve their
-dialog open guards. Open the existing document Share dialog for note access,
-keep labeled Options controls visible beside truncated titles without redundant
-hover tooltips, and use existing team memberships for optional note sharing.
-Keep meeting-note reads cached across event opens, show cached Quick Access
-matches while note searches refresh, and keep event actions usable while notes
-load. Show meeting-derived team viewing in the document's Team access summary;
-keep it distinct from additional direct sharing and keep Unlink stable while
-team access saves.
-Include linked meetings in Markdown side-panel References, behind the same flag;
-reuse the shared single-line ReferenceRow with the title and date inline, and
-resolve meeting details and opening targets through authorized calendar previews.
-Treat missing reference projection fields during backend rollout as unresolved,
-not denied; offer Retry on the links query without bypassing the server's
-reference authorization.
-Gate event notes and document Share meeting-link controls with
-`enable-calendar-meeting-notes` before mounting their query sources; it defaults
-on in dev and uses PostHog in production.
-See `docs/agent-guide/calendar.md` at the repo root.
-
 Share message image paste, drop, removal during upload, and
 upload failure have desktop, phone, and tablet browser coverage:
 `bunx playwright test --config src/lib/core/component/ForwardMessageComposer/browser-test/playwright.config.ts`.
@@ -627,6 +603,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Render Tasks due dates in an editable list-property column with a calendar icon for set dates and a slashed calendar for no due date; show only the icon on phones and narrow panes, preserve urgency colors for set dates, keep the current date visible in its dropdown, and limit warning urgency to today and tomorrow.
 - Revalidate Soup queries whose selected sort/group property or date predicate matches an edited definition; compute loaded date-group movement in TypeScript, then refetch authoritative counts and unloaded rows. Keep property sorts and date filters out of the timestamp-only WASM projection.
 - Keep REST grouped Soup item pools and `itemIds` keyed by raw entity IDs, matching Tasks readers and the normalized cache.
+
+- Memory tool results use expandable rows on desktop and mobile; explicit preferences and activity reports remain inspectable after each tool call.
 
 ## Rules
 

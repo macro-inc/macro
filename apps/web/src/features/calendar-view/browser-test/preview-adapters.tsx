@@ -153,8 +153,6 @@ export function createGuestInviteController() {
 }
 export const useCalendarGuestInvitesFlag = () => () => false;
 export const useCalendarInvitationForwardFlag = () => () => false;
-export const useCalendarMeetingNotesFlag = () => () => false;
-export const CalendarMeetingNotes = () => null;
 export const TeamEventDetails = () => null;
 export const OutlookRsvpAction = () => null;
 export const copyCalendarEventMention = () =>
