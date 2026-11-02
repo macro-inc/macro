@@ -118,15 +118,14 @@ def open_bowl(
     cut_bottom,
     n=None,
     n_in=None,
-    chamfer_leg=None,
     side="right",
 ):
     """A squircle ring opened on one side with HORIZONTAL terminal cuts, as in
     c, C and the curves of e, s, G, 2, 3, 5, 6, 9.
 
     cut_top / cut_bottom: heights of the terminal faces (None leaves that
-    half closed). The outer corner of each terminal gets the house 45° chamfer
-    (leg defaults to p.cut). side: which side opens ("right" for c)."""
+    half closed). The terminals end in a clean cut, with no chamfer.
+    side: which side opens ("right" for c)."""
     n = n or p.sq
     n_in = n_in or p.sq_in
     shape = squircle(x0, y0, x1, y1, n) - squircle(
@@ -136,18 +135,7 @@ def open_bowl(
     gap = right_of(cx) if side == "right" else left_of(cx)
     lo = y0 - 10 if cut_bottom is None else cut_bottom
     hi = y1 + 10 if cut_top is None else cut_top
-    shape = shape - (gap & band(lo, hi))
-    leg = p.cut if chamfer_leg is None else chamfer_leg
-    if leg > 0:
-        if cut_top is not None:
-            xt = outer_x(x0, x1, y0, y1, n, cut_top, side)
-            shape = shape - chamfer(xt, cut_top, leg, "se" if side == "right" else "sw")
-        if cut_bottom is not None:
-            xb = outer_x(x0, x1, y0, y1, n, cut_bottom, side)
-            shape = shape - chamfer(
-                xb, cut_bottom, leg, "ne" if side == "right" else "nw"
-            )
-    return shape
+    return shape - (gap & band(lo, hi))
 
 
 __all__ = [

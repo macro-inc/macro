@@ -21,7 +21,6 @@ from .. import params as P
 from ..geom import (
     Shape,
     band,
-    chamfer,
     diag,
     poly,
     rect,
@@ -29,7 +28,7 @@ from ..geom import (
     superness,
 )
 from . import G, glyph, ref
-from .parts import open_bowl, outer_x
+from .parts import open_bowl
 
 PROOF_TEXT = [
     "HBHCHDHGHJHPHQHRHSHUH",
@@ -252,7 +251,6 @@ def C(p):
         cut_bottom=P.CAP * 0.314,
         n=_n(p),
         n_in=_ni(p),
-        chamfer_leg=p.ccut,
     )
     return G(shape, l=p.csbr, r=p.csbr * 0.88)
 
@@ -293,7 +291,6 @@ def G_(p):
     )
     shape = (outer - inner) - (right_of(cx) & band(cy, ct))
     shape = shape + rect(w * 0.55, cy - bar_w, w - 1, cy)
-    shape = shape - chamfer(outer_x(0, w, y0, y1, n, ct, "right"), ct, p.ccut, "se")
     return G(shape, l=p.csbr, r=p.csbr * 1.05)
 
 
@@ -308,7 +305,7 @@ def J(p):
     n, ni = _n(p), _ni(p)
     c = p.ccut
     yc = P.CAP * (0.287 - 0.0002 * max(0.0, p.grow))  # where the hook turns straight
-    yt = yc + c * 1.25  # terminal face, high enough for its chamfer
+    yt = yc + c * 1.25  # terminal face, a little above where the hook turns straight
     y0, y1 = -P.COS, 2 * yc + P.COS
     ws = s * 1.0
     wb = p.chair * 1.04
@@ -319,8 +316,7 @@ def J(p):
             (w, yc),
             _quad(ob, n, "r", "b"),
             _quad(ob, n, "b", "l"),
-            (0, yt - c),
-            (c, yt),
+            (0, yt),
             (ws, yt),
             (ws, yc),
             _quad(ib, ni, "l", "b"),
@@ -431,7 +427,6 @@ def S(p):
             _quad(ui, ni, "t", "r"),
         ],
     )
-    shape = shape - chamfer(xur, ycu, p.ccut, "se") - chamfer(0, ycl, p.ccut, "nw")
     return G(shape, l=p.csbr * 0.93, r=p.csbr * 0.93)
 
 

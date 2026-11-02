@@ -79,16 +79,6 @@ def _ox(box, n, y, side):
     return outer_x(box[0], box[2], box[1], box[3], n, y, side)
 
 
-def _oy(box, n, x, side="top"):
-    """y where the squircle filling box crosses x."""
-    x0, y0, x1, y1 = box
-    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    rx, ry = (x1 - x0) / 2, (y1 - y0) / 2
-    t = min(1.0, abs(x - cx) / rx)
-    dy = ry * (1 - t**n) ** (1 / n)
-    return cy + dy if side == "top" else cy - dy
-
-
 def _path(start, segs):
     """Closed outline from `start` through segments: a point (line) or a
     (c1, c2, end) triple (cubic)."""
@@ -278,7 +268,6 @@ def _two(p):
     # extreme (cy), so the union leaves no sliver segments there.
     up = (squircle(*box, n=n) - squircle(*ibox, n=ni)) & above(cy)
     up = up - (left_of(cx) & below(yt))
-    up = up - chamfer(_ox(box, n, yt, "left"), yt, p.ccut, "sw")
     # Spine: the right side turns into a straight diagonal that lands on the
     # top-left corner of the base.
     td = p.fstem * 0.98
@@ -338,10 +327,8 @@ def _three(p):
     ytl = cyl - 0.5 * (cyl - li[1])
     up = squircle(*ub, n=n) - squircle(*ui, n=ni)
     up = up - (left_of(cxu) & below(ytu))
-    up = up - chamfer(_ox(ub, n, ytu, "left"), ytu, p.ccut, "sw")
     lo = squircle(*lb, n=n) - squircle(*li, n=ni)
     lo = lo - (left_of(cxl) & above(ytl))
-    lo = lo - chamfer(_ox(lb, n, ytl, "left"), ytl, p.ccut, "nw")
     xbar = wl * 0.30
     bar = rect(xbar, ym - hm / 2, max(cxu, cxl), ym + hm / 2)
     return up + lo + bar
@@ -390,7 +377,6 @@ def _five(p):
     ytl = yc - 0.36 * (yc + P.COS)
     lo = (squircle(*lb, n=n) - squircle(*li, n=ni)) & below(yc)
     lo = lo - (left_of(cxl) & above(ytl))
-    lo = lo - chamfer(_ox(lb, n, ytl, "left"), ytl, p.ccut, "nw")
     # The stem stops where the shoulder's counter leaves it, so the bowl
     # opens to the left with no tooth; its free foot gets the sw chamfer.
     # The shoulder is clipped at the stem edge (arch() reaches 1 unit into
@@ -869,11 +855,9 @@ def _s_shape(p, w, y0, y1, ws, wt, wb, cut_t, cut_b):
     # Bowls and spine meet edge to edge at the bowls' vertical extremes.
     up = up & (above(ycu) + (right_of(cxu) & above(ct)))
     up = up - (right_of(cxu) & below(ct))
-    up = up - chamfer(_ox(ub, n, ct, "right"), ct, p.ccut, "se")
     lo = squircle(*lb, n=n) - squircle(*li, n=ni)
     lo = lo & (below(ycl) + (left_of(cxl) & below(cb)))
     lo = lo - (left_of(cxl) & above(cb))
-    lo = lo - chamfer(_ox(lb, n, cb, "left"), cb, p.ccut, "nw")
     th = math.radians(17)
     t = (wt + wb) / 2 * 1.04
     seg = w * 0.16
@@ -952,7 +936,6 @@ def cent(p):
         cut_bottom=box[1] + (box[3] - box[1]) * 0.31,
         n=n,
         n_in=ni,
-        chamfer_leg=p.ccut,
     )
     bt = p.fstem * 0.82
     cx = w * 0.53
@@ -982,7 +965,6 @@ def sterling(p):
     yt = cy - (ytop - cy) * 0.12  # terminal just below the bowl's widest point
     hook = (squircle(*box, n=n) - squircle(*ibox, n=ni)) & above(min(cy, yt) - 1)
     hook = hook - (right_of(cxh) & below(yt))
-    hook = hook - chamfer(_ox(box, n, yt, "right"), yt, p.ccut, "se")
     # Hook and stem meet edge to edge at the hook's vertical extreme (cy).
     hook = hook & (above(cy) + right_of(cxh))
     stem = rect(xs, h - 1, xs + s, cy)
@@ -1040,7 +1022,6 @@ def Euro(p):
         cut_bottom=P.CAP * 0.31,
         n=n,
         n_in=ni,
-        chamfer_leg=p.ccut,
     )
     c_ = c_.move(p.w(92, -0.15), 0)
     bt = h * 0.8
@@ -1083,7 +1064,6 @@ def florin(p):
     ucx, ucy = (ub[0] + ub[2]) / 2, (ub[1] + ub[3]) / 2
     xt = ucx + 0.62 * (ui[2] - ucx)
     upper = (squircle(*ub, n=n) - squircle(*ui, n=ni)) & above(ucy) & left_of(xt)
-    upper = upper - chamfer(xt, _oy(ub, n, xt), p.ccut, "ne")
     # Lower hook: the same turned half a turn.
     lower = upper.rotate180(xs + s / 2, (top + bot) / 2)
     # The stem meets both hooks edge to edge at their cuts. Its ends come
@@ -1158,8 +1138,7 @@ def _chevron(p, cx, cy, half_w, half_h, t=None):
 def _wave(p, cx, cy, half_w, amp, t=None):
     """Tilde: crest on the left, trough on the right, drawn as one outline
     with squircle-like handles. The ends leave the crest and trough at a
-    steep angle and are cut horizontally, with the house chamfer on their
-    outer corner."""
+    steep angle and are cut horizontally."""
     t = _mt(p) if t is None else t
     wy = t * 0.84  # thickness at crest and trough
     we = t * 0.94  # across the ends
@@ -1218,9 +1197,7 @@ def _wave(p, cx, cy, half_w, amp, t=None):
     ):
         h1, h2 = _handles(a, ta, b, tb, k, k)
         segs.append((h1, h2, b))
-    sh = _path(o0, segs)
-    c = p.cut * 0.8
-    return sh - chamfer(o0[0], o0[1], c, "sw") - chamfer(i4[0], i4[1], c, "ne")
+    return _path(o0, segs)
 
 
 def _math(p, sh):
@@ -1485,7 +1462,6 @@ def _small_a(q):
     yt = cy + 0.5 * (ibox[3] - cy)
     hook = (squircle(*box, n=n) - squircle(*ibox, n=ni)) & above(cy)
     hook = hook - (left_of(w / 2) & below(yt))
-    hook = hook - chamfer(_ox(box, n, yt, "left"), yt, q.cut, "sw")
     stem = rect(xs, 0, w, cy)  # edge to edge with the hook's extreme
     # Bowl: outer contour leaves the stem edge at y_o (and mirrored at the
     # top); the counter is a squircle clipped by the stem edge.

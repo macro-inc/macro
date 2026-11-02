@@ -3,8 +3,8 @@ slashes, guillemets, @ & § ¶ © ® ™, daggers, bullets and arrows.
 
 Everything that has a dot uses the period's square (`geom.dot`, side
 `p.dot`); commas and quotes are that square with a wedge tail. Curves are
-squircles, free stroke ends get the house 45° chamfer, and arrow and
-guillemet tips are cut flat across their point.
+squircles cut flat at their terminals, free stem ends get the house 45°
+chamfer, and arrow and guillemet tips are cut flat across their point.
 """
 
 import math
@@ -17,7 +17,6 @@ from ..geom import (
     above,
     band,
     below,
-    chamfer,
     diag,
     dot,
     half_plane,
@@ -31,7 +30,7 @@ from ..geom import (
     stroke,
 )
 from . import G, glyph, ref
-from .parts import open_bowl, outer_x
+from .parts import open_bowl
 
 PROOF_TEXT = [
     "H.H,H:H;H!H?H n.n,n:n;n!n?n",
@@ -55,15 +54,6 @@ def _period(p):
     s = p.dot
     sb = p.psb
     return s, sb, s + 2 * sb
-
-
-def _sq_y(x0, y0, x1, y1, n, x, side="top"):
-    """y where a superellipse filling the box crosses x (top or bottom)."""
-    cx, cy = (x0 + x1) / 2, (y0 + y1) / 2
-    rx, ry = (x1 - x0) / 2, (y1 - y0) / 2
-    t = min(1.0, abs(x - cx) / rx)
-    dy = ry * (1 - t**n) ** (1 / n)
-    return cy + dy if side == "top" else cy - dy
 
 
 def _ring_part(x0, y0, x1, y1, ix0, iy0, ix1, iy1, n, n_in, clip):
@@ -269,7 +259,7 @@ def exclamdown(p):
 
 
 def _question(p):
-    """? : a squircle hook whose left terminal is cut flat and chamfered;
+    """? : a squircle hook whose left terminal is cut flat;
     its right side sweeps down into the stem through two squircle quadrants
     (an S), so the stem grows out of the curve instead of sitting under it."""
     s = p.dot
@@ -289,14 +279,10 @@ def _question(p):
     cy = (ya + top) / 2
     # Upper hook: top half, left side down to the terminal, which is cut
     # just under the hook's widest point (as in Inter) so the aperture above
-    # the neck stays open at heavy weights. Its chamfer always reaches past
-    # the squircle's quadrant join at cy, so the outline is the same at every
-    # weight.
+    # the neck stays open at heavy weights.
     y_cut = cy - 0.45 * p.cut
     hook = ring(0, ya, W, top, ws, wt, n=n, n_in=n_in)
     hook = hook - (left_of(W / 2) & below(y_cut)) - (right_of(W / 2) & below(cy))
-    xt = outer_x(0, W, ya, top, n, y_cut, side="left")
-    hook = hook - chamfer(xt, y_cut, p.cut, "sw")
     # Right side down into the bottom of the S (bottom-right quadrant). The
     # pieces meet exactly where their tangents agree.
     qa = _ring_part(
@@ -553,11 +539,7 @@ def _paren(p, dy=0):
     n, n_in = p.sq, p.sq_in
     sh = ring(0, y0, 2 * rx, y1, ws, wt, n=n, n_in=n_in)
     xc = rx * 0.78
-    sh = sh & left_of(xc)
-    for side, corner in (("top", "ne"), ("bottom", "se")):
-        yo = _sq_y(0, y0, 2 * rx, y1, n, xc, side)
-        sh = sh - chamfer(xc, yo, p.cut, corner)
-    return sh
+    return sh & left_of(xc)
 
 
 def _inner_sb(p):
@@ -777,7 +759,7 @@ def at(p):
     """@ : a single-storey a inside a squircle ring. The ring's right side
     runs straight down and hooks into the foot of the a's stem; below the
     hook the ring is open. The ring's terminal ends travelling sideways, so
-    it is cut vertically with the house chamfer on its outer corner."""
+    it is cut vertically."""
     W = p.w(840, 1.5)
     y0, y1 = -150, 730
     cy = (y0 + y1) / 2
@@ -798,9 +780,6 @@ def at(p):
     # Ring, open at the lower right.
     x_cut = W * 0.73
     ringsh = ring(0, y0, W, y1, ws, wt, n=n, n_in=n_in) - (right_of(x_cut) & below(cy))
-    ringsh = ringsh - chamfer(
-        x_cut, _sq_y(0, y0, W, y1, n, x_cut, "bottom"), p.cut, "se"
-    )
     # The right side continues straight down, then hooks into the stem's foot.
     yh = oy0 + hook_w * 0.62
     side = rect(W - ws, yh, W, cy)
@@ -929,8 +908,6 @@ def section(p):
     upper = ring(0, tb, W, top, ws, wt, n=n, n_in=n_in, wy_bottom=wt - 2 * e)
     y_cut = tb + (top - tb) * 0.66
     upper = upper - (right_of(W / 2) & below(y_cut))
-    xt = outer_x(0, W, tb, top, n, y_cut, "right")
-    upper = upper - chamfer(xt, y_cut, p.cut, "se")
     return G(middle + upper + upper.rotate180(W / 2, mid), l=p.sbr, r=p.sbr)
 
 

@@ -13,11 +13,10 @@ with flat-cut tips and apex; dots are the house square dot (p.dot, capped
 at ExtraBold and hanging from the ascender exactly like the i dot); ring,
 breve and tilde are squircle strokes whose free ends are cut horizontally;
 cedilla and ogonek are small squircle hooks below the baseline with
-chamfered tails.
+square tails.
 Mark strokes are a little lighter than the stems and grow more slowly with
 weight, so the small counters of ring, breve and tilde stay open at
-ExtraBold. Breve, cedilla and ogonek share one pair of strokes (`_curve`)
-and one chamfer rule (`_mark_cut`: 0.36 of the mark's own stroke).
+ExtraBold. Breve, cedilla and ogonek share one pair of strokes (`_curve`).
 
 Stylistic-set forms of the accented letters (`SS_COMPOSITES`: a.ss01 and
 I.ss02 with their marks) are unencoded; features.py adds them to ss01 / ss02
@@ -30,7 +29,7 @@ import sys
 import pathops
 
 from .. import params as P
-from ..geom import Shape, chamfer, diag, dot, rect, ring, superness
+from ..geom import Shape, diag, dot, rect, ring, superness
 from . import REGISTRY, Compose, G, glyph, ref
 
 PROOF_TEXT = [
@@ -107,12 +106,6 @@ def _curve(p, case=False):
     the cups and hooks stay open."""
     ws = 0.8 * _t(p, case)
     return ws, ws * (0.8 - 0.08 * _up(p) / 70)
-
-
-def _mark_cut(ws):
-    """45-degree chamfer leg on a mark's free terminal: 0.36 of the mark's own
-    stroke, the same proportion as p.cut to the stem."""
-    return 0.36 * ws
 
 
 def _mark(shape, p, top=None, bottom=None):
@@ -360,8 +353,7 @@ def _ring_shape(p, case):
 
 
 def _breve_shape(p, case):
-    """A squircle cup; its tips are cut flat with the outer corner chamfered,
-    like any curve terminal."""
+    """A squircle cup; its tips are cut flat, like any curve terminal."""
     b = _bot(case)
     h = (100 if case else 118) + 0.25 * p.grow
     w = p.w(244 if case else 220, 0.9)
@@ -383,8 +375,7 @@ def _breve_shape(p, case):
             (-rxi, top),
         ],
     )
-    c = _mark_cut(ws)  # shorter than the straight part of the tip at every weight
-    return shape - chamfer(-w / 2, top, c, "nw") - chamfer(w / 2, top, c, "ne")
+    return shape
 
 
 # ---------------------------------------------------------------------------
@@ -459,9 +450,9 @@ def _tilde_shape(p, case):
 
 def _cedilla_shape(p):
     """A short stub hanging from the letter into a squircle hook that turns
-    right and back left, ending in a chamfered tail. Its top overlaps the
-    base by 14 units so it joins c, C, s, t... at every weight. Strokes and
-    chamfer come from `_curve` / `_mark_cut`, shared with ogonek and breve.
+    right and back left, ending in a square tail. Its top overlaps the
+    base by 14 units so it joins c, C, s, t... at every weight. Strokes come
+    from `_curve`, shared with ogonek and breve.
     Above Regular its two horizontals thin a little more (8% at ExtraBold),
     so the hook keeps a real counter (about 48 units, as at Regular) in the
     height between the baseline and the descender."""
@@ -475,7 +466,6 @@ def _cedilla_shape(p):
     cy, ry = (yt + yb) / 2, h / 2
     cyi, ryi, rxi = (yt - wt + yb + wb) / 2, (h - wt - wb) / 2, rx - ws
     xt = -rx * 0.5
-    c = _mark_cut(ws)
     q0 = _quadrant(0, cy, rx, ry, p.sq, 0)
     q0 = _split(q0, _solve(q0, 0, st / 2))[0]  # up to the stub's right edge
     return _contour(
@@ -486,8 +476,7 @@ def _cedilla_shape(p):
             _rev(_quadrant(0, cyi, rxi, ryi, p.sq_in, 0)),
             _rev(_quadrant(0, cyi, rxi, ryi, p.sq_in, 3)),
             (xt, yb + wb),
-            (xt, yb + c),
-            (xt + c, yb),
+            (xt, yb),
             (0, yb),
             _quadrant(0, cy, rx, ry, p.sq, 3),
             q0,
@@ -498,8 +487,8 @@ def _cedilla_shape(p):
 
 def _ogonek_shape(p):
     """The left half of a tall squircle ring, its top meeting the letter and
-    its foot running right into a chamfered tail. Same strokes and chamfers
-    as the cedilla; it widens with weight so its inner curve keeps about the
+    its foot running right into a square tail. Same strokes as the
+    cedilla; it widens with weight so its inner curve keeps about the
     same radius (about 28 units) instead of closing into a slot."""
     ws, wh = _curve(p)
     wt, wb = wh, wh
@@ -511,21 +500,19 @@ def _ogonek_shape(p):
     cy, ry = (top + yb) / 2, h / 2
     cyi, ryi, rxi = (top - wt + yb + wb) / 2, (h - wt - wb) / 2, rx - ws
     xt = rx * 0.85
-    c = _mark_cut(ws)
     shape = _contour(
         (0, top),
         [
             _quadrant(0, cy, rx, ry, n, 1),
             _quadrant(0, cy, rx, ry, n, 2),
-            (xt - c, yb),
-            (xt, yb + c),
+            (xt, yb),
             (xt, yb + wb),
             (0, yb + wb),
             _rev(_quadrant(0, cyi, rxi, ryi, n_in, 2)),
             _rev(_quadrant(0, cyi, rxi, ryi, n_in, 1)),
         ],
     )
-    return shape - chamfer(0, top, c, "ne")
+    return shape
 
 
 # ---------------------------------------------------------------------------

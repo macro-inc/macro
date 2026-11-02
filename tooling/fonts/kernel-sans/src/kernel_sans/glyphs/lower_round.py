@@ -19,7 +19,6 @@ from .. import params as P
 from ..geom import (
     above,
     below,
-    chamfer,
     diag,
     left_of,
     rect,
@@ -214,9 +213,6 @@ def g(p):
     y_term = y0_t + wb + 0.45 * (yc_t - y0_t - wb)
     tail = (outer - inner) & (below(yc_t) + left_of(cx_t))
     tail = tail - (left_of(cx_t) & above(y_term))
-    tail = tail - chamfer(
-        _ox(x0_t, y0_t, xr, y1_t, p.sq, y_term, "left"), y_term, p.cut, "nw"
-    )
     return G(shape + tail, l=p.sbr, r=p.sb, anchors={"top": _counter_cx(p, xr)})
 
 
@@ -257,7 +253,6 @@ def _a_shape(p, xr, ae_e=None):
     ct = yb1 + c_up * 0.42  # terminal cut
     hook = (outer - inner) & above(yc_h)
     hook = hook - (left_of(cx_h) & below(ct))
-    hook = hook - chamfer(_ox(*hb, p.sq, ct, "left"), ct, p.cut, "sw")
     # Lower bowl: drawn as a bowl on the right of a stem at -xs, mirrored.
     yi0, yi1 = -P.OS + wb, yb1 - wt
     in_top, in_bot = yi1 - c_lo * 0.30, yi0 + c_lo * 0.30
@@ -336,7 +331,7 @@ def _e_shape(p, x0, w, ws=None):
     eye = inner & above(bar_t)
     low = (inner + (right_of(cx) & above(cb))) & below(bar_b)
     shape = outer - eye - low
-    return shape - chamfer(_ox(x0, y0, x1, y1, p.sq, cb, "right"), cb, p.cut, "ne")
+    return shape
 
 
 @glyph("e", 0x0065)
@@ -355,7 +350,7 @@ def _s_shape(p, w):
     lower one's top stroke are the spine, a little heavier than the other
     horizontals (1.09 x hair) so it holds its own against the sides.
     The upper ring is a touch narrower; the terminals are cut horizontally
-    (top at right, bottom at left) with chamfered outer corners."""
+    (top at right, bottom at left)."""
     s = p.stem
     heavy = _heavy(p)
     # All three horizontals follow p.hair (which thins relative to the stem
@@ -392,13 +387,11 @@ def _s_shape(p, w):
     # at every weight instead of surviving at some as a 1-unit stub.
     ct = max(P.XH * 0.735, (sp1 + P.XH + P.OS - wt) / 2 + 3)
     U = U - (right_of(xt) & below(ct))
-    U = U - chamfer(_ox(*ub, p.sq, ct, "right"), ct, p.cut, "se")
     # Lower ring; its top stroke is the spine.
     lb = (0, -P.OS, w, sp1)
     L = squircle(*lb, p.sq) - squircle(s * 0.94, -P.OS + wt, w - s, sp1 - wsp, n_in)
     cb = P.XH * 0.27
     L = L - (left_of(xb) & above(cb))
-    L = L - chamfer(_ox(*lb, p.sq, cb, "left"), cb, p.cut, "nw")
     return U + L
 
 
@@ -478,7 +471,6 @@ def eth(p):
     ri = (xR0 + ws, 2 * yc - top + wr, w - ws, top - wr)
     R = squircle(*rb, p.sq) - squircle(*ri, p.sq_in)
     R = R & above(yc) & right_of(xt)
-    R = R - chamfer(xt, _oy(*rb, p.sq, xt), p.cut, "nw")
     # Crossing stroke, centred on the ascender's centreline, halfway between
     # the bowl and the ascender's top stroke.
     hb = p.hair * (0.72 - 0.12 * heavy)
@@ -527,11 +519,9 @@ def germandbls(p):
         )
 
     wide = cxl + W * 0.9
-    lb_left = (cxl - wide, -P.OS, cxl + wide, yl1)
     L = (lower_ring(2 * cxl - W, W) & right_of(cxl)) + (
         lower_ring(cxl - wide, cxl + wide) & left_of(cxl) & right_of(x_end)
     )
-    L = L - chamfer(x_end, _oy(*lb_left, p.sq, x_end, "bottom"), p.cut, "sw")
     # Upper bowl: a ring whose left side is the stem; its right side ends
     # inside the waist.
     xu1 = W * 0.82

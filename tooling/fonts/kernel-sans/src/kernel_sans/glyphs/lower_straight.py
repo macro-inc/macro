@@ -4,7 +4,7 @@ i and j, the f_i / f_l ligatures and the tailed l.ss02.
 Shoulders (h m r u) reuse n's arch from `parts.arch` with the same joins.
 Hooks (f t j l.ss02) share one construction,
 `_hook`: a squircle quadrant turning a stem into a horizontal stroke that ends
-in a vertical cut with its outer corner chamfered. Diagonals (k v w x y z) are
+in a clean vertical cut. Diagonals (k v w x y z) are
 built from their edges so the flat vertices and flat-cut ends land exactly
 where they should.
 """
@@ -126,8 +126,8 @@ def _hook(p, x0, y_end, rise, rx, ext, wb):
     The stem (width p.stem, left edge x0) runs straight down to
     yc = y_end + rise, then a squircle quadrant of half-width `rx` carries it
     round to a horizontal stroke of thickness `wb` whose outer side sits at
-    y_end. The stroke ends `ext` past the stem's right edge in a vertical cut
-    whose outer (lower) corner is chamfered. Mirror it for j and flip it for
+    y_end. The stroke ends `ext` past the stem's right edge in a vertical
+    cut. Mirror it for j and flip it for
     f. Returns (shape below yc, yc, x_term)."""
     s = p.stem
     yc = y_end + rise
@@ -143,7 +143,6 @@ def _hook(p, x0, y_end, rise, rx, ext, wb):
     x_term = x0 + s + ext
     shape = (ring & below(yc) & left_of(cut)) + rect(cxo, y_end, x_term, y_end + wb)
     shape = shape & left_of(x_term)
-    shape = shape - chamfer(x_term, y_end, p.cut, "se")
     return shape, yc, x_term
 
 
@@ -310,9 +309,9 @@ def r(p):
     s = p.stem
     a, _xr, _yc, _, obox, ibox = _shoulder(p, s, p.w(250, -0.3))
     # Cut the flag between the arch's crown and the counter's right side:
-    # past the crown by more than the chamfer (so the chamfer never eats the
-    # crown) and short of the counter's side (so the flag never catches the
-    # arch's descending stroke), at every weight.
+    # past the crown by a stem-chamfer leg (so the cut faces down the curve)
+    # and short of the counter's side (so the flag never catches the arch's
+    # descending stroke), at every weight.
     cxo = (obox[0] + obox[2]) / 2
     lo, hi = cxo + p.cut, ibox[2]
     x_term = lo + (hi - lo) * 0.6
@@ -327,7 +326,6 @@ def r(p):
     # Half a unit below the tangent, so the cut meets the curve cleanly.
     spur = half_plane((tx + 400, ty - 0.5 - 400 * slope), (tx, ty - 0.5)) & right_of(tx)
     flag = flag - spur
-    flag = flag - chamfer(x_term, _sq_y(obox, p.sq, x_term), p.cut, "ne")
     shape = rect(0, 0, s, P.XH, nw=p.cut) + flag
     return G(
         shape, l=p.sb, r=p.sbr * 0.45, anchors={"top": x_term * 0.47, "bottom": s / 2}
@@ -425,8 +423,8 @@ def _f_lig_layout(p):
 
 @glyph("f_i", 0xFB01)
 def f_i(p):
-    # The f's hook runs on over the i and its chamfered terminal takes the
-    # place of the dot; the i keeps its own stem top. (A hook joined into the
+    # The f's hook runs on over the i and its terminal takes the place of
+    # the dot; the i keeps its own stem top. (A hook joined into the
     # stem would make fi look like fl.)
     s = p.stem
     lsb, _f_adv, xi = _f_lig_layout(p)
@@ -440,8 +438,7 @@ def f_i(p):
 
 @glyph("f_l", 0xFB02)
 def f_l(p):
-    # The f's hook runs flat into the top of the l; the l keeps its own
-    # chamfered outer corner.
+    # The f's hook runs flat into the top of the l.
     s = p.stem
     lsb, _f_adv, xl = _f_lig_layout(p)
     x0 = _f_dims(p)[0]
