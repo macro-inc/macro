@@ -143,6 +143,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     setSelectedChannel,
     setSortBy,
     setSectionPreferences,
+    setSectionOrder,
     setTab,
     tab,
     threadsEnabled,
@@ -537,6 +538,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
       channelSectionRows(),
       {
         preferences: state.sectionPreferences,
+        order: state.sectionOrder,
         channelById,
         unreadChannelIds: channelActivity.unreadChannelIds(),
         referenceStatuses: referenceStatuses(),
@@ -1023,6 +1025,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     renameLabel,
     deleteLabel,
     setChannelLabel,
+    addChannelsToLabel,
     markLabelRead,
     canLabelChannelId,
     labelChannelById,
@@ -1240,6 +1243,7 @@ export function ChannelsRail(props: ChannelsRailProps) {
     createSmartTag,
     editSmartTag: renameLabel,
     canShareSections: () => sharedLabels(),
+    addChannelsToLabel,
     renameLabel,
     deleteLabel,
     setChannelLabel,
@@ -1250,6 +1254,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
     sectionNotificationsDisabled,
     sortBy: (group) => state.sortBy[group],
     setSortBy,
+    sectionOrder: () => state.sectionOrder,
+    setSectionOrder,
     sectionPreferences: (section) => {
       let sort: ChannelSectionPreferences['sort'];
 

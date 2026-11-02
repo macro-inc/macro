@@ -6,10 +6,11 @@ export default {
   team_channels: 'Team channels',
   namedTeamChannels: '{{name}} channels',
   channels: 'Channels',
+  allChannels: 'All channels',
   direct_messages: 'Direct messages',
   empty: 'No conversations yet',
   emptyFavorites: 'Star conversations to keep them here.',
-  emptySection: 'Drag conversations here to organize them.',
+  emptySection: 'No channels in this section.',
   emptySmartSection: 'No conversations match this rule.',
   noResults: 'No matching conversations',
   loadMore: 'Load more',
@@ -47,6 +48,8 @@ export default {
   collapseSection: 'Collapse section',
   resizeSection: 'Resize {{name}}',
   resizeSectionHint: 'Drag to resize. Double-click to reset.',
+  reorderSection: 'Reorder {{name}}',
+  reorderSectionHint: 'Drag to reorder. Use arrow keys to move up or down.',
   expandAllSections: 'Expand all sections',
   collapseAllSections: 'Collapse all sections',
   loading: 'Loading sections…',
@@ -98,5 +101,37 @@ export default {
   reorderFavoritesFailed: 'Could not reorder favorites. Please try again.',
   unreadOnly: 'Unread only',
   noUnreadConversations: 'No unread conversations',
+  addChannels: 'Add channels',
+  addChannelsTo: 'Add channels to “{{name}}”',
+  searchChannels: 'Search channels',
+  loadingChannels: 'Loading channels…',
+  channelsUnavailable: 'Could not load channels.',
+  noChannelsToAdd: 'No more channels are available to add.',
+  teamChannelsOnly:
+    'Shared sections only include channels from your team that you have joined. Private and public channels belong in personal sections.',
+  personalChannelsHint:
+    'Personal sections can include team, public, and private channels you have joined.',
+  moveFromOtherSection:
+    'Adding a channel moves it from its other manual section in the same scope.',
+  addSelectedChannels: {
+    one: 'Add {{count}} channel',
+    other: 'Add {{count}} channels',
+  },
+  addedChannels: {
+    one: 'Added {{count}} channel',
+    other: 'Added {{count}} channels',
+  },
+  addChannelsFailed: {
+    one: '{{count}} channel could not be added. Retry to add it.',
+    other: '{{count}} channels could not be added. Retry to add them.',
+  },
+  editRule: 'Edit rule',
+  showAllChannels: 'Show all channels',
+  matchCount: {
+    one: '{{count}} matching channel',
+    other: '{{count}} matching channels',
+  },
+  noMatchingTeamChannels:
+    'No joined team channels match this name. Try a different rule or use a personal section.',
   cancel: 'Cancel',
 };

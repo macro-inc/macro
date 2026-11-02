@@ -27,6 +27,8 @@ import {
   useFavoriteReorder,
 } from './next/useFavoriteReorder';
 
+import { useSectionReorder } from './next/useSectionReorder';
+
 const measurements = vi.hoisted(() => ({ contentHeight: (): number => 400 }));
 const rail = vi.hoisted(() => ({
   channelById: (_channelId: string): ChannelEntity | undefined => undefined,
@@ -36,6 +38,8 @@ const rail = vi.hoisted(() => ({
   railId: 'rail',
   sectionPreferences: () => ({ sort: 'manual' }),
   setSectionPreferences: vi.fn(),
+  setSectionOrder: vi.fn(),
+  sectionOrder: (): readonly import('../../types').ChannelSectionKey[] => [],
   labels: (): ChannelLabel[] => [],
   labelsAvailable: () => true,
   sectionsEnabled: () => true,
@@ -43,6 +47,7 @@ const rail = vi.hoisted(() => ({
 }));
 
 const drag = vi.hoisted(() => ({
+  viewer: (): string => 'viewer',
   starts: [] as Array<
     (event: { draggable: { data: Record<string, unknown> } }) => void
   >,
@@ -64,7 +69,7 @@ vi.mock('@queries/favorites/favorites', () => ({
   useFavoritesData: () => () => ({ favorites: drag.favorites }),
   useReorderFavoritesMutation: () => ({ mutateAsync: drag.reorder }),
 }));
-vi.mock('@core/context/user', () => ({ useUserId: () => () => 'viewer' }));
+vi.mock('@core/context/user', () => ({ useUserId: () => () => drag.viewer() }));
 vi.mock('@macro-inc/observability', () => ({
   Telemetry: {
     span: async (
@@ -215,7 +220,9 @@ beforeEach(() => {
   drag.ends.length = 0;
   drag.draggables.clear();
   rail.labels = () => [];
+  rail.sectionOrder = () => [];
   drag.favorites = [];
+  drag.viewer = () => 'viewer';
   const [loaded, update] = createSignal<ChannelEntity | undefined>(undefined);
   [measurements.contentHeight] = createSignal(400);
   setChannel = update;
@@ -225,6 +232,16 @@ beforeEach(() => {
 afterEach(cleanup);
 
 describe('channel section drag sources', () => {
+  it('keeps the drag identity current when a virtual row is reused', () => {
+    const [current, setCurrent] = createSignal(channel);
+    render(() => <ChannelOption channel={current()} draggable />);
+    const data = drag.draggables.get('rail:channel-label:drag:channel:design');
+
+    setCurrent({ ...channel, id: 'updated', name: 'Updated' });
+
+    expect(data?.channelId).toBe('updated');
+    expect(data?.name).toBe('Updated');
+  });
   it('keeps each rendered section as the drag source when a channel belongs to both scopes', () => {
     rail.labels = () => [
       {
@@ -435,6 +452,42 @@ describe('favorite reordering', () => {
   });
 });
 
+describe('section reordering', () => {
+  it('keeps absent sections in their saved positions during keyboard reordering', () => {
+    rail.sectionOrder = () => ['favorites', 'channels', 'label:section'];
+    const { result } = renderHook(() =>
+      useSectionReorder(() => ['favorites', 'label:section'])
+    );
+    result.move('label:section', -1);
+    expect(rail.setSectionOrder).toHaveBeenCalledExactlyOnceWith([
+      'label:section',
+      'channels',
+      'favorites',
+    ]);
+  });
+
+  it('preserves hidden sections and ignores stale drops after account changes', () => {
+    const [viewer, setViewer] = createSignal('viewer');
+    drag.viewer = viewer;
+    const { result } = renderHook(() =>
+      useSectionReorder(() => ['favorites', 'label:collapsed', 'channels'])
+    );
+    const source = { data: { dndScope: result.scope, section: 'channels' } };
+    const target = { data: { dndScope: result.scope, section: 'favorites' } };
+    drag.starts.forEach((start) => start({ draggable: source }));
+    drag.ends.forEach((end) => end({ draggable: source, droppable: target }));
+    expect(rail.setSectionOrder).toHaveBeenCalledExactlyOnceWith([
+      'channels',
+      'favorites',
+      'label:collapsed',
+    ]);
+
+    setViewer('another-viewer');
+    drag.ends.forEach((end) => end({ draggable: source, droppable: target }));
+    expect(rail.setSectionOrder).toHaveBeenCalledTimes(1);
+  });
+});
+
 describe('resizable chat sections', () => {
   it('saves the final zoom-adjusted size and can resize again after collapse cancels a drag', () => {
     const [open, setOpen] = createSignal(true);
@@ -504,6 +557,99 @@ describe('resizable chat sections', () => {
       height: 130,
     });
   });
+
+  it('compensates for sidebar scrolling during a resize drag', () => {
+    let top = 100;
+    render(() => (
+      <ResizableRailSection
+        section="favorites"
+        label="Favorites"
+        open
+        maxHeight={400}
+        itemCount={12}
+        header={<span>Section</span>}
+        rootRef={() => {}}
+        scrollRef={(element) => {
+          Object.defineProperty(element, 'offsetHeight', { value: 136 });
+          vi.spyOn(element, 'getBoundingClientRect').mockImplementation(
+            () => new DOMRect(0, top, 200, 136)
+          );
+        }}
+      >
+        Conversations
+      </ResizableRailSection>
+    ));
+    const handle = screen.getByRole('separator');
+    Object.defineProperty(handle, 'setPointerCapture', { value: vi.fn() });
+    const start = new MouseEvent('pointerdown', {
+      bubbles: true,
+      clientY: 236,
+    });
+    Object.defineProperty(start, 'pointerId', { value: 1 });
+    handle.dispatchEvent(start);
+    top = 50;
+    const end = new MouseEvent('pointerup', { bubbles: true, clientY: 236 });
+    Object.defineProperty(end, 'pointerId', { value: 1 });
+    handle.dispatchEvent(end);
+
+    expect(rail.setSectionPreferences).toHaveBeenLastCalledWith('favorites', {
+      height: 186,
+    });
+  });
+
+  it.each(['pointercancel', 'lostpointercapture'])(
+    'does not save after %s and accepts a later resize',
+    (cancelEvent) => {
+      render(() => (
+        <ResizableRailSection
+          section="favorites"
+          label="Favorites"
+          open
+          maxHeight={400}
+          itemCount={12}
+          header={<span>Section</span>}
+          rootRef={() => {}}
+          scrollRef={(element) => {
+            Object.defineProperty(element, 'offsetHeight', { value: 136 });
+            vi.spyOn(element, 'getBoundingClientRect').mockReturnValue(
+              new DOMRect(0, 0, 200, 136)
+            );
+          }}
+        >
+          Conversations
+        </ResizableRailSection>
+      ));
+      const handle = screen.getByRole('separator');
+      Object.defineProperty(handle, 'setPointerCapture', { value: vi.fn() });
+      for (const type of [
+        'pointerdown',
+        'pointermove',
+        cancelEvent,
+        'pointerup',
+      ]) {
+        const event = new MouseEvent(type, {
+          bubbles: true,
+          clientY: type === 'pointerdown' ? 136 : 200,
+        });
+        Object.defineProperty(event, 'pointerId', { value: 1 });
+        handle.dispatchEvent(event);
+      }
+      expect(rail.setSectionPreferences).not.toHaveBeenCalled();
+
+      for (const type of ['pointerdown', 'pointerup']) {
+        const event = new MouseEvent(type, {
+          bubbles: true,
+          clientY: type === 'pointerdown' ? 136 : 180,
+        });
+        Object.defineProperty(event, 'pointerId', { value: 2 });
+        handle.dispatchEvent(event);
+      }
+      expect(rail.setSectionPreferences).toHaveBeenCalledExactlyOnceWith(
+        'favorites',
+        { height: 180 }
+      );
+    }
+  );
 
   it('clamps keyboard resizing and resets only the section height', () => {
     render(() => (

@@ -8,6 +8,7 @@ import {
 import {
   buildChannelRailRows as buildSectionedRailRows,
   groupChannelRailSections,
+  orderChannelRailSections,
 } from './next/build-channel-rail-rows';
 
 function channel(
@@ -515,4 +516,64 @@ it('keeps overlapping section members and loading rows in their own scroll regio
   expect(
     rows.filter((row) => row.kind === 'conversation').map((row) => row.id)
   ).toEqual(['channel:deals', 'channel:acme:label:first']);
+});
+
+it('keeps section membership and navigation together after reordering with stale or duplicate keys', () => {
+  const rows = buildSectionedRailRows(
+    'browse',
+    {
+      favorites: true,
+      direct_messages: true,
+      team_channels: true,
+      channels: true,
+    },
+    {
+      favorites: [],
+      direct_messages: [],
+      team_channels: [deals],
+      channels: [channel('private', 'Private', 'private')],
+      recents: [],
+      threads: [],
+    },
+    [
+      { kind: 'label', label: label('first', 'First', ['acme']) },
+      { kind: 'conversation', channel: acme, labelId: 'first' },
+    ],
+    {
+      order: ['label:removed', 'label:first', 'team_channels', 'label:first'],
+      preferences: {},
+      channelById: (id) => byId.get(id),
+      unreadChannelIds: new Set(),
+      referenceStatuses: { 'label:first': 'loading' },
+    }
+  );
+  const grouped = groupChannelRailSections(rows);
+
+  expect([...grouped.keys()]).toEqual([
+    'label:first',
+    'team_channels',
+    'favorites',
+    'direct_messages',
+    'channels',
+  ]);
+  expect(grouped.get('label:first')?.rows.map((row) => row.id)).toEqual([
+    'channel:acme:label:first',
+    'reference-status:label:first',
+  ]);
+  expect(grouped.get('channels')?.rows.map((row) => row.id)).toEqual([
+    'channel:private',
+    'status:channels',
+  ]);
+  expect(new Set(rows.map((row) => row.id)).size).toBe(rows.length);
+  expect([
+    ...groupChannelRailSections(
+      orderChannelRailSections(rows, ['favorites', 'channels'])
+    ).keys(),
+  ]).toEqual([
+    'favorites',
+    'label:first',
+    'team_channels',
+    'direct_messages',
+    'channels',
+  ]);
 });
