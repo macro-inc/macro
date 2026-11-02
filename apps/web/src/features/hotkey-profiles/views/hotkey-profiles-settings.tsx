@@ -6,11 +6,48 @@ import {
 import { ShowFeatureFlag } from '@app/lib/analytics/posthog';
 import { t } from '@app/lib/i18n';
 import { enableHotkeyProfiles } from '@core/constant/featureFlags';
-import { ToggleSwitch } from '@ui';
-import { For } from 'solid-js';
+import CaretUpIcon from '@icon/system/regular/caret-up.svg';
+import { Button, ToggleSwitch } from '@ui';
+import { CollapseTransition } from '@ui/components/CollapseTransition';
+import { createSignal, createUniqueId, For, Show } from 'solid-js';
 import { HotkeyProfileKeymap } from '../components/hotkey-profile-keymap';
 import { useHotkeyProfiles } from '../context/hotkey-profiles-context';
-import { HOTKEY_PROFILES } from '../core/profiles';
+import { HOTKEY_PROFILES, type HotkeyProfile } from '../core/profiles';
+
+function ProfileKeymapDisclosure(props: { profile: HotkeyProfile<string> }) {
+  const [open, setOpen] = createSignal(false);
+  const contentId = createUniqueId();
+  return (
+    <div class="px-4 pb-3">
+      <Button
+        type="button"
+        variant="ghost"
+        size="sm"
+        class="-ml-2"
+        aria-expanded={open()}
+        aria-controls={contentId}
+        onClick={() => setOpen((value) => !value)}
+      >
+        {open()
+          ? t('hotkeyProfiles.hideKeymap')
+          : t('hotkeyProfiles.showKeymap')}
+        <CaretUpIcon
+          class="pointer-events-none size-3.5 shrink-0 transition-transform"
+          classList={{ 'rotate-180': open() }}
+        />
+      </Button>
+      <div id={contentId}>
+        <CollapseTransition open={open()}>
+          <Show when={open()}>
+            <div class="pt-3 pb-1">
+              <HotkeyProfileKeymap profile={props.profile} />
+            </div>
+          </Show>
+        </CollapseTransition>
+      </div>
+    </div>
+  );
+}
 
 /** Settings → Keyboard shortcuts: turn another app's keys on in its view. */
 export function HotkeyProfilesSettings() {
@@ -25,7 +62,7 @@ export function HotkeyProfilesSettings() {
         <SettingsCard>
           <For each={HOTKEY_PROFILES}>
             {(profile) => (
-              <div class="flex flex-col gap-2">
+              <div>
                 <SettingsRow
                   label={profile.toggleLabel()}
                   description={profile.toggleDescription()}
@@ -45,14 +82,7 @@ export function HotkeyProfilesSettings() {
                     }
                   />
                 </SettingsRow>
-                <details class="pb-3">
-                  <summary class="text-sm text-ink-muted">
-                    {t('hotkeyProfiles.showKeymap')}
-                  </summary>
-                  <div class="pt-3">
-                    <HotkeyProfileKeymap profile={profile} />
-                  </div>
-                </details>
+                <ProfileKeymapDisclosure profile={profile} />
               </div>
             )}
           </For>

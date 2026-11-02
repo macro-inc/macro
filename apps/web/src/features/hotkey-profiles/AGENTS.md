@@ -29,7 +29,10 @@ back as soon as the profile is off.
 - Add a key: a binding in `core/profiles.ts`, an English string in
   `lib/i18n/locales/en/hotkey-profiles.ts`, and the action in the view's hook
   if it runs no existing token. Set `replaces` when it takes over a Macro key
-  in that view, and check the `?` sheet's "Replaced by" group agrees.
+  in that view, and check the `?` sheet's "Replaced by" group agrees. A vendor
+  key Macro already uses for the same thing goes in `sameKeys` with a label.
+  Every entry names one of the profile's `sections`, which Settings lists in
+  that order.
 - Add a profile: a backend enum variant in `crates/user_hotkey_profiles`, regenerate the
   clients, then a definition here and its `setProfile` branch in
   `queries/hotkey-profiles-source.ts`.

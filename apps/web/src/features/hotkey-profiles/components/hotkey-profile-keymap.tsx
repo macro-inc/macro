@@ -1,112 +1,186 @@
+import { SearchBar } from '@app/components/view-shell';
 import { t } from '@app/lib/i18n';
 import { prettyPrintHotkeyString } from '@core/hotkey/utils';
-import { Hotkey } from '@ui';
-import { For, Index, Show } from 'solid-js';
-import type {
-  HotkeyProfile,
-  ProfileBinding,
-  ProfileKey,
-} from '../core/profiles';
+import { getNormalizedKeyString } from '@ui/components/Hotkey';
+import { createMemo, createSignal, For, Index, Show } from 'solid-js';
+import type { HotkeyProfile, ProfileKey } from '../core/profiles';
 
-function Key(props: { profileKey: ProfileKey }) {
+type KeymapRow = {
+  section: () => string;
+  keys: readonly ProfileKey[];
+  description: string;
+  replaces?: string;
+  /** A numbered run of keys (⌃1–9), shown as one range. */
+  range: boolean;
+};
+
+/** One cap per key, modifiers first: ⌘ ⇧ A. */
+function KeyCaps(props: { hotkey: string }) {
+  return (
+    <For each={props.hotkey.split('+')}>
+      {(part) => (
+        <kbd class="inline-flex h-5 min-w-5 items-center justify-center rounded-[5px] border border-edge-muted bg-ink/4 px-1 font-sans text-[11px] leading-none font-medium text-ink-muted">
+          {getNormalizedKeyString({ shortcut: part })}
+        </kbd>
+      )}
+    </For>
+  );
+}
+
+function SequenceCaps(props: { profileKey: ProfileKey }) {
   const steps = () =>
     typeof props.profileKey === 'string'
       ? [props.profileKey]
       : props.profileKey;
   return (
-    <span class="inline-flex items-center gap-1">
-      <Index each={steps()}>
-        {(step, index) => (
-          <>
-            <Show when={index > 0}>
-              <span class="text-xs text-ink-extra-muted">
-                {t('shortcuts.sheetThen')}
-              </span>
-            </Show>
-            <Hotkey shortcut={prettyPrintHotkeyString(step())} theme="muted" />
-          </>
-        )}
-      </Index>
-    </span>
+    <Index each={steps()}>
+      {(step, index) => (
+        <>
+          <Show when={index > 0}>
+            <span class="px-0.5 text-xs text-ink-extra-muted">
+              {t('shortcuts.sheetThen')}
+            </span>
+          </Show>
+          <KeyCaps hotkey={prettyPrintHotkeyString(step())} />
+        </>
+      )}
+    </Index>
   );
 }
 
-function BindingKeys(props: { binding: ProfileBinding<string> }) {
-  // A numbered range (⌃1–9) reads as its ends.
-  const keys = () =>
-    'indexed' in props.binding.target && props.binding.keys.length > 2
-      ? [props.binding.keys[0], props.binding.keys.at(-1)]
-      : props.binding.keys;
-  const separator = () =>
-    'indexed' in props.binding.target ? '–' : t('shortcuts.sheetOr');
+function RowKeys(props: { row: KeymapRow }) {
+  // ⌃1 … ⌃9 reads as ⌃ 1–9: the first key's modifiers, then the digits.
+  const range = () => {
+    const first = props.row.keys[0];
+    const last = props.row.keys.at(-1);
+    if (typeof first !== 'string' || typeof last !== 'string') return;
+    const parts = first.split('+');
+    parts[parts.length - 1] += `–${last.split('+').at(-1)}`;
+    return parts.join('+');
+  };
   return (
     <span class="flex shrink-0 flex-wrap items-center justify-end gap-1">
-      <Index each={keys()}>
-        {(key, index) => (
-          <>
-            <Show when={index > 0}>
-              <span class="text-xs text-ink-extra-muted">{separator()}</span>
-            </Show>
-            <Show when={key()}>{(k) => <Key profileKey={k()} />}</Show>
-          </>
-        )}
-      </Index>
+      <Show
+        when={props.row.range && range()}
+        fallback={
+          <Index each={props.row.keys}>
+            {(key, index) => (
+              <>
+                <Show when={index > 0}>
+                  <span class="px-0.5 text-xs text-ink-extra-muted">
+                    {t('shortcuts.sheetOr')}
+                  </span>
+                </Show>
+                <SequenceCaps profileKey={key()} />
+              </>
+            )}
+          </Index>
+        }
+      >
+        {(hotkey) => <KeyCaps hotkey={hotkey()} />}
+      </Show>
     </span>
   );
 }
 
 /**
- * A profile's keys grouped by the vendor's sections, each marked with the
- * Macro shortcut it replaces, then the vendor keys Macro already shares.
+ * Every vendor key that works in Macro, grouped like the vendor's own
+ * shortcut list, with the Macro shortcut each one replaces.
  */
 export function HotkeyProfileKeymap(props: { profile: HotkeyProfile<string> }) {
-  const sections = () => [
-    ...new Set(props.profile.bindings.map((binding) => binding.section())),
-  ];
+  const [query, setQuery] = createSignal('');
+
+  const sections = createMemo(() => {
+    const needle = query().trim().toLocaleLowerCase();
+    const rows: KeymapRow[] = [
+      ...props.profile.bindings.map((binding) => ({
+        section: binding.section,
+        keys: binding.keys,
+        description: binding.description(),
+        replaces:
+          binding.replaces &&
+          t('hotkeyProfiles.replaces', { shortcut: binding.replaces() }),
+        range: 'indexed' in binding.target,
+      })),
+      ...props.profile.sameKeys.map((same) => ({
+        section: same.section,
+        keys: same.keys,
+        description: same.description(),
+        range: false,
+      })),
+    ];
+    return props.profile.sections
+      .map((section) => ({
+        title: section(),
+        rows: rows.filter((row) => row.section === section),
+      }))
+      .map((section) => ({
+        ...section,
+        rows: section.title.toLocaleLowerCase().includes(needle)
+          ? section.rows
+          : section.rows.filter((row) =>
+              [row.description, row.replaces ?? ''].some((text) =>
+                text.toLocaleLowerCase().includes(needle)
+              )
+            ),
+      }))
+      .filter((section) => section.rows.length > 0);
+  });
+
   return (
-    <div class="flex flex-col gap-4">
-      <For each={sections()}>
-        {(section) => (
-          <section aria-label={section}>
-            <h3 class="mb-1 text-xs font-medium text-ink-muted">{section}</h3>
-            <ul class="flex flex-col">
-              <For
-                each={props.profile.bindings.filter(
-                  (binding) => binding.section() === section
-                )}
+    <div class="@container flex flex-col gap-4">
+      <SearchBar
+        label={t('hotkeyProfiles.searchKeymap')}
+        placeholder={t('hotkeyProfiles.searchKeymap')}
+        autocomplete="off"
+        size="sm"
+        value={query()}
+        onValueChange={setQuery}
+        onEscape={() => setQuery('')}
+        class="@2xl:max-w-72"
+      />
+      <Show
+        when={sections().length > 0}
+        fallback={
+          <p class="py-6 text-center text-sm text-ink-muted">
+            {t('hotkeyProfiles.noMatchingShortcuts')}
+          </p>
+        }
+      >
+        <div class="gap-x-10 @2xl:columns-2">
+          <For each={sections()}>
+            {(section) => (
+              <section
+                aria-label={section.title}
+                class="break-inside-avoid pb-5"
               >
-                {(binding) => (
-                  <li class="flex min-h-8 items-center justify-between gap-4 text-sm">
-                    <span class="flex min-w-0 flex-col">
-                      <span class="text-ink">{binding.description()}</span>
-                      <Show when={binding.replaces}>
-                        {(replaces) => (
-                          <span class="text-xs text-ink-extra-muted">
-                            {t('hotkeyProfiles.replaces', {
-                              shortcut: replaces()(),
-                            })}
+                <h3 class="pb-1 text-xs font-medium text-ink-muted">
+                  {section.title}
+                </h3>
+                <ul>
+                  <For each={section.rows}>
+                    {(row) => (
+                      <li class="flex items-start justify-between gap-4 py-1.5">
+                        <span class="flex min-w-0 flex-col">
+                          <span class="text-sm text-ink">
+                            {row.description}
                           </span>
-                        )}
-                      </Show>
-                    </span>
-                    <BindingKeys binding={binding} />
-                  </li>
-                )}
-              </For>
-            </ul>
-          </section>
-        )}
-      </For>
-      <section aria-label={t('hotkeyProfiles.sameKeys')}>
-        <h3 class="mb-2 text-xs font-medium text-ink-muted">
-          {t('hotkeyProfiles.sameKeys')}
-        </h3>
-        <div class="flex flex-wrap gap-2">
-          <For each={props.profile.sameKeys}>
-            {(key) => <Key profileKey={key} />}
+                          <Show when={row.replaces}>
+                            <span class="text-xs text-ink-extra-muted">
+                              {row.replaces}
+                            </span>
+                          </Show>
+                        </span>
+                        <RowKeys row={row} />
+                      </li>
+                    )}
+                  </For>
+                </ul>
+              </section>
+            )}
           </For>
         </div>
-      </section>
+      </Show>
     </div>
   );
 }

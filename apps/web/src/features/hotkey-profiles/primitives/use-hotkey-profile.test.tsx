@@ -57,6 +57,7 @@ const PROFILE = {
     },
   ],
   sameKeys: [],
+  sections: [],
 } as const satisfies HotkeyProfile<
   'compose' | 'showReminders' | 'setDependsOn'
 >;
