@@ -56,6 +56,9 @@ function invalidateUnsubscribes() {
 
 const MUTE_ITEM_MUTATION_KEY = ['notification', 'mute-item'] as const;
 const UNMUTE_ITEM_MUTATION_KEY = ['notification', 'unmute-item'] as const;
+// A paused mutation lives only in memory and replays in parallel on reconnect,
+// so an offline mute must fail and roll back instead of waiting.
+const MUTE_NETWORK_MODE = 'always';
 
 /**
  * Edit the cached list in place. Per-item edits (rather than snapshot
@@ -103,6 +106,7 @@ function cancelUnsubscribesFetch() {
 export function useMuteItemMutation() {
   return useMutation(() => ({
     mutationKey: MUTE_ITEM_MUTATION_KEY,
+    networkMode: MUTE_NETWORK_MODE,
     mutationFn: async (item: UserUnsubscribe) => {
       await throwOnErr(() => notificationServiceClient.unsubscribeItem(item));
     },
@@ -130,6 +134,7 @@ export function useMuteItemMutation() {
 export function useUnmuteItemMutation() {
   return useMutation(() => ({
     mutationKey: UNMUTE_ITEM_MUTATION_KEY,
+    networkMode: MUTE_NETWORK_MODE,
     mutationFn: async (item: UserUnsubscribe) => {
       await throwOnErr(() =>
         notificationServiceClient.removeUnsubscribeItem(item)

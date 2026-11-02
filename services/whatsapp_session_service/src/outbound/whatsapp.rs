@@ -13,9 +13,10 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    ChatUpdate, ClaimedSend, InboundEvent, MediaImport, MessageAnchor, OutboundMedia,
+    ChatUpdate, ClaimedSend, InboundEvent, LookupAnswer, MediaImport, MessageAnchor, OutboundMedia,
     OutgoingContent, SessionScope, Target,
 };
+use whatsapp_linked::domain::jid::PhoneNumber;
 use whatsapp_linked::domain::models::{GroupInfo, Identity, Participant};
 use whatsapp_store_pg::kms::WhatsAppKms;
 use whatsapp_store_pg::{PgWhatsAppStore, WhatsAppStoreError};
@@ -25,7 +26,7 @@ use whatsmeow::proto::wa_history_sync::Conversation;
 use whatsmeow::proto::wa_history_sync::history_sync::HistorySyncType;
 use whatsmeow::send::{SendRequestExtra, build_edit};
 use whatsmeow::signal::CurveSignatures;
-use whatsmeow::store::Device;
+use whatsmeow::store::{ContactStore, Device};
 use whatsmeow::types::{Jid, MessageInfo, MessageSource, WebAuthnResponse};
 use whatsmeow::{
     Client, ClientConfig, ClientError, Dialer, Event, EventHandler, QrChannelItem, Signal,
@@ -238,6 +239,32 @@ impl Forwarder {
         let _ = self.events.send(SessionEvent::Chats(chats));
     }
 
+    /// The address book's saved contacts join the chat list, so the owner
+    /// can start a chat with someone never written to. Read on connect and
+    /// after each app-state sync (contacts sync through app state); rows
+    /// that did not change signal nothing.
+    async fn saved_contacts(&self) {
+        let span = tracing::info_span!(
+            "whatsapp.contacts.sync",
+            account_id = %self.account,
+            contacts = tracing::field::Empty,
+        );
+        async {
+            match self.store.get_all_contacts().await {
+                Ok(contacts) => {
+                    let chats = events::contact_chats(&contacts);
+                    tracing::Span::current().record("contacts", chats.len());
+                    self.chats(chats).await;
+                }
+                Err(error) => {
+                    tracing::warn!(error = %error, "Reading the WhatsApp address book failed");
+                }
+            }
+        }
+        .instrument(span)
+        .await;
+    }
+
     /// A history-sync bundle: the chat list (initial, recent, full and
     /// push-name syncs), or an answer to an on-demand request for a chat's
     /// earlier messages.
@@ -408,6 +435,9 @@ impl EventHandler for Forwarder {
             }
             Event::Message(message) => {
                 Box::pin(self.chats(events::message_chat(message).into_iter().collect())).await;
+            }
+            Event::Connected(_) | Event::AppStateSyncComplete(_) => {
+                Box::pin(self.saved_contacts()).await;
             }
             event => {
                 Box::pin(self.chats(events::chat_setting(event).into_iter().collect())).await;
@@ -949,6 +979,15 @@ impl WhatsAppSession for WhatsmeowSession {
             .await
             .map(|_| ())
             .map_err(internal)
+    }
+
+    async fn look_up(&self, phone: &PhoneNumber) -> Result<LookupAnswer, SessionError> {
+        let answers = self
+            .client
+            .is_on_whatsapp(&[phone.as_str()])
+            .await
+            .map_err(internal)?;
+        Ok(events::lookup_answer(self.store.as_ref(), self.store.as_ref(), phone, &answers).await)
     }
 
     async fn logout(&self) {

@@ -631,6 +631,7 @@ export function createThreadNavigation(
       replyToFocusedMessage: () => openHotkeyTarget('reply-all'),
       replyAllToFocusedMessage: () => openHotkeyTarget('reply-all'),
       forwardFocusedMessage: () => openHotkeyTarget('forward'),
+      canActOnSender: context.canActOnSender,
       blockSender: context.blockSender,
       markDone,
       markNotDone: context.markThreadNotDone,

@@ -290,7 +290,12 @@ export class SyncServiceSource implements LiveSyncSource {
     timeoutMs: number,
     cancelOnDisconnect = false
   ): Promise<FromRemote> {
-    const { promise, resolve, reject } = Promise.withResolvers<FromRemote>();
+    let resolve!: (message: FromRemote) => void;
+    let reject!: (error: unknown) => void;
+    const promise = new Promise<FromRemote>((settle, fail) => {
+      resolve = settle;
+      reject = fail;
+    });
     const waiter: MessageWaiter = {
       match,
       cancelOnDisconnect: cancelOnDisconnect

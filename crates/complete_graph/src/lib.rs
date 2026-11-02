@@ -8,6 +8,7 @@
 
 /// Cross-domain fields composed onto Soup entities.
 mod edges;
+mod mail_cache_profile;
 mod realtime;
 mod saved_view;
 /// Complete schema types and construction helpers.
@@ -77,6 +78,7 @@ pub use graphql_work_feed::{
     EntityAccessWorkFeedViewers, WorkFeedGraphqlContext, WorkFeedGraphqlService,
     WorkFeedViewerResolver,
 };
+pub use mail_cache_profile::{MAIL_CACHE_PROFILE_HEADER, MailCacheProfile};
 pub use realtime::{AgentSessionLogSubscriptions, agent_session_log_subscriptions};
 pub use schema::{
     EmailThreadInput, SchemaOnlySoupSchema, SchemaOnlyState, SharedSoupSchema, SoupQueryRoot,

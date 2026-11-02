@@ -13,6 +13,7 @@ axum = [
   "dep:model-error-response",
   "dep:utoipa",
   "github_pull_requests/schema",
+  "upstream_error/axum",
 ]
 default = ["axum", "inbound", "link", "outbound", "ports", "sync"]
 inbound = ["axum", "ports"]
@@ -28,6 +29,7 @@ outbound = [
   "dep:tokio",
   "dep:urlencoding",
   "ports",
+  "upstream_error/reqwest",
 ]
 ports = []
 sync = [
@@ -85,11 +87,13 @@ subtle = { workspace = true }
 thiserror = { workspace = true }
 tracing = { workspace = true }
 urlencoding = { workspace = true, optional = true }
+upstream_error = { path = "../upstream_error", default-features = false }
 url = { workspace = true }
 uuid = { workspace = true }
 
 fusionauth = { path = "../fusionauth", optional = true }
 macro_user_id = { path = "../macro_user_id" }
+models_properties = { path = "../models_properties" }
 macro_uuid = { path = "../macro_uuid" }
 redis = { workspace = true, features = ["aio", "tokio-comp"], optional = true }
 tokio = { workspace = true, features = ["sync"], optional = true }

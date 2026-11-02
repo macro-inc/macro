@@ -18,6 +18,7 @@ use models_properties::api::{
     AddPropertyOptionRequest, CreatePropertyDefinitionRequest, UpdatePropertyOptionRequest,
 };
 use models_properties::service::entity_property_with_definition::EntityPropertyWithDefinition;
+use models_properties::service::property_change_source::PropertyChangeSource;
 use models_properties::service::property_definition::PropertyDefinition;
 use models_properties::service::property_definition_with_options::PropertyDefinitionWithOptions;
 use models_properties::service::property_option::PropertyOption;
@@ -84,6 +85,16 @@ pub trait PropertiesService: Send + Sync + 'static {
         access: &EditReceipt,
         property_definition_id: Uuid,
         value: Option<SetPropertyValue>,
+    ) -> impl Future<Output = Result<EntityPropertyWithDefinition, PropertiesErr>> + Send;
+
+    /// [`Self::set_entity_property`] that records the outside event behind the
+    /// change on the published `entity_property.updated`.
+    fn set_entity_property_with_source(
+        &self,
+        access: &EditReceipt,
+        property_definition_id: Uuid,
+        value: Option<SetPropertyValue>,
+        source: Option<PropertyChangeSource>,
     ) -> impl Future<Output = Result<EntityPropertyWithDefinition, PropertiesErr>> + Send;
 
     /// Append the project's agent assignees to a newly added task, preserving

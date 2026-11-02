@@ -123,6 +123,7 @@ fn open_command() -> OpenSession {
 /// Why the agent was called, as a trigger event carries it.
 fn trigger() -> TriggerContext {
     TriggerContext::Mentioned(DiscussionContext {
+        agent_request: None,
         surface: DiscussionSurface::Channel {
             id: Uuid::from_u128(0xf0),
             name: Some("eng".to_owned()),

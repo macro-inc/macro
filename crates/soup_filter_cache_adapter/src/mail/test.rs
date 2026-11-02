@@ -725,3 +725,58 @@ fn missing_proof_is_not_a_false_fact() {
         ));
     })
 }
+
+#[test]
+fn spam_only_threads_stay_out_of_all_without_hiding_other_tabs() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let mut data = seed();
+        // Canonical All Mail previews exclude junk, even if a sent message or a
+        // provider draft still qualifies for its own tab.
+        for n in [3, 8] {
+            data["user"]["soup"]["items"][n - 1]["mailAllPreview"] = Value::Null;
+        }
+        write(&mut engine, QUERY, &data).await;
+        let all = all_keys(&mut engine, filters(), "ALL").await;
+        assert!(!all.contains(&format!("{TYPE}:{}", id(3))));
+        assert!(!all.contains(&format!("{TYPE}:{}", id(8))));
+        assert!(
+            all_keys(&mut engine, filters(), "DRAFTS")
+                .await
+                .contains(&format!("{TYPE}:{}", id(3)))
+        );
+        assert!(
+            all_keys(&mut engine, filters(), "SENT")
+                .await
+                .contains(&format!("{TYPE}:{}", id(8)))
+        );
+    });
+}
+
+#[test]
+fn legacy_mail_capsule_cannot_restore_spam_membership() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let mut data = seed();
+        let mut legacy = row(1);
+        legacy["cacheProjection"] = json!(
+            "Awxzb3VwLW1haWwtdjI7R3JhcGhxbFNvdXBFbWFpbFRocmVhZDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEFZW1haWwBgIDZ276wlQYAAAE"
+        );
+        data["user"]["soup"]["items"] = json!([legacy]);
+        write(&mut engine, QUERY, &data).await;
+        let key = RecordKey::new(format!("{TYPE}:{}", id(1))).unwrap();
+        assert!(matches!(
+            engine
+                .storage()
+                .load_projection_states(&[key])
+                .await
+                .unwrap()[0],
+            Some(ProjectionState::Incomplete { .. })
+        ));
+        assert!(all_keys(&mut engine, filters(), "ALL").await.is_empty());
+        data["user"]["soup"]["items"][0] = row(1);
+        data["user"]["soup"]["items"][0]["mailAllPreview"] = Value::Null;
+        write(&mut engine, QUERY, &data).await;
+        assert!(all_keys(&mut engine, filters(), "ALL").await.is_empty());
+    });
+}

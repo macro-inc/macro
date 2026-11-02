@@ -13,6 +13,7 @@
 - [CalendarEventSearchResponseItem](type-aliases/CalendarEventSearchResponseItem.md)
 - [CalendarEventSearchResponseItemWithMetadata](type-aliases/CalendarEventSearchResponseItemWithMetadata.md)
 - [CalendarEventSearchResult](type-aliases/CalendarEventSearchResult.md)
+- [CalendarEventSearchRole](type-aliases/CalendarEventSearchRole.md)
 - [CalendarEventSearchScope](type-aliases/CalendarEventSearchScope.md)
 - [CalendarEventSearchTime](type-aliases/CalendarEventSearchTime.md)
 - [CallFilters](type-aliases/CallFilters.md)
