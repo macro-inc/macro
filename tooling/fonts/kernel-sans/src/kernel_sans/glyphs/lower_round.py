@@ -17,6 +17,7 @@ from types import SimpleNamespace
 
 from .. import params as P
 from ..geom import (
+    Shape,
     above,
     below,
     diag,
@@ -28,7 +29,7 @@ from ..geom import (
     stroke,
 )
 from . import G, glyph, ref
-from .parts import outer_x, solve_cx
+from .parts import flush_end, outer_x, solve_cx
 
 PROOF_TEXT = [
     "nanbndnenpnqnsngn",
@@ -72,8 +73,9 @@ def _bowl_on_stem(p, xl, xr, y0, y1, ws, wt, wb, out_top, in_top, out_bot, in_bo
     the side stays smooth.
 
     Returns a namespace: shape (the bowl clipped to x >= xl - 1), out and cnt
-    (its unclipped outer and counter) and out_bot_box (the box of the outer's
-    lower half)."""
+    (its unclipped outer and counter), out_bot_box (the box of the outer's
+    lower half) and flush(y_top, y_bot), the fill that runs a flat stem end
+    on into the bowl (parts.flush_end)."""
     n, n_in = p.sq, p.sq_in
     yc, ry = (y0 + y1) / 2, (y1 - y0) / 2
     yi0, yi1 = y0 + wb, y1 - wt
@@ -93,7 +95,17 @@ def _bowl_on_stem(p, xl, xr, y0, y1, ws, wt, wb, out_top, in_top, out_bot, in_bo
     out = (squircle(*ot, n) & above(yc)) + (squircle(*ob, n) & below(yc))
     cnt = (squircle(*bt, n_in) & above(yci)) + (squircle(*bb, n_in) & below(yci))
     shape = (out - cnt) & right_of(xl - 1)
-    return SimpleNamespace(shape=shape, out=out, cnt=cnt, out_bot_box=ob)
+
+    def flush(y_top=None, y_bot=None):
+        # Run a flat stem end (at y_top or y_bot) on into the bowl.
+        fill = Shape()
+        if y_top is not None:
+            fill = fill + flush_end(xl, y_top, out_top, ot)
+        if y_bot is not None:
+            fill = fill + flush_end(xl, y_bot, out_bot, ob)
+        return fill
+
+    return SimpleNamespace(shape=shape, out=out, cnt=cnt, out_bot_box=ob, flush=flush)
 
 
 def _bowl_joins(p):
@@ -132,7 +144,10 @@ def _b_body(p, stem_y0, stem_y1, nw=0, sw=0):
         out_bot,
         in_bot,
     )
-    return rect(0, stem_y0, s, stem_y1, nw=nw, sw=sw) + bowl.shape, xr
+    # Where the stem ends flat at x-height or the baseline, its end runs on
+    # into the bowl instead of dipping into a notch.
+    fill = bowl.flush(P.XH if stem_y1 == P.XH else None, 0 if stem_y0 == 0 else None)
+    return rect(0, stem_y0, s, stem_y1, nw=nw, sw=sw) + bowl.shape + fill, xr
 
 
 def _mirror(shape_xr):
@@ -273,6 +288,8 @@ def _a_shape(p, xr, ae_e=None):
     bowl = bw.shape
     if ae_e is None:
         stem = rect(xs, 0, xr, yc_h)  # shares y = yc_h with the hook
+        # The stem's foot runs on into the bowl's bottom (no notch).
+        bowl = bowl + bw.flush(y_bot=0)
     else:
         ebox, e_in = ae_e
         # Where the e's bottom drops below the bowl's (mirrored) bottom.

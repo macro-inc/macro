@@ -81,7 +81,11 @@ def n_shape(p, x0, counter, top=None, height=None, cut=True):
     # Share the edge exactly: an overlap at a curve's vertical extreme can
     # make pathops resolve the union differently per weight.
     stem_r = rect(xr - s, 0, xr, yc)
-    return stem_l + a + stem_r, xr
+    join_out = h - p.hair * 0.1
+    cx_o = solve_cx(xr, xl, join_out, yc, top - yc, p.sq)
+    obox = (2 * cx_o - xr, 2 * yc - top, xr, top)
+    fill = flush_end(xl, h, join_out, obox)
+    return stem_l + a + stem_r + fill, xr
 
 
 def bowl(p, x0, x1, y0=None, y1=None, w_side=None, w_top=None, n=None, n_in=None):
@@ -103,6 +107,26 @@ def outer_x(x0, x1, y0, y1, n, y, side="right"):
     t = min(1.0, abs(y - cy) / ry)
     dx = rx * (1 - t**n) ** (1 / n)
     return cx + dx if side == "right" else cx - dx
+
+
+def flush_end(xl, y_end, y_join, box, side="right"):
+    """Ink that runs a stem's flat end (top or bottom at y_end) straight on
+    until it meets a curve leaving the stem edge xl at y_join, just inside
+    that end (an arch or bowl that overshoots the stem). Without it the
+    outline dips down the stem edge and back up the curve, a small V-notch
+    next to the stem end. box: the curve's squircle; side: which side of
+    the stem the curve lies on. Add the result to the glyph.
+
+    The fill runs from inside the stem to the curve's crown (the box's
+    centre line) and reaches 6 units into the ink below the join: the drawn
+    cubic sits a unit or two off the analytic superellipse, so stopping at
+    the exact crossing would leave slivers."""
+    x0, _, x1, _ = box
+    xm = (x0 + x1) / 2
+    lo, hi = sorted((y_end, y_join + (6 if y_join > y_end else -6)))
+    if side == "right":
+        return rect(xl - 1, lo, xm, hi)
+    return rect(xm, lo, xl + 1, hi)
 
 
 def open_bowl(
@@ -145,6 +169,7 @@ __all__ = [
     "below",
     "bowl",
     "chamfer",
+    "flush_end",
     "left_of",
     "n_shape",
     "open_bowl",

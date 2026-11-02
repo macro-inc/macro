@@ -26,7 +26,7 @@ from ..geom import (
     superness,
 )
 from . import G, glyph
-from .parts import arch, solve_cx
+from .parts import arch, flush_end, solve_cx
 
 PROOF_TEXT = [
     "nfnhninjnknlnmnrntnunvnwnxnynzn",
@@ -71,6 +71,12 @@ def _shoulder(p, xl, counter, top=None):
     cx_i = solve_cx(xri, xl, crotch, yc, ry_i, p.sq_in)
     ibox = (2 * cx_i - xri, yc - ry_i, xri, top - p.hair)
     return a, xr, yc, crotch, obox, ibox
+
+
+def _flush(p, xl, obox):
+    """Run the flat x-height top of the stem at xl on into the arch whose
+    outer box is obox (parts.flush_end), so no notch forms where they meet."""
+    return flush_end(xl, P.XH, P.XH - p.hair * 0.1, obox)
 
 
 def _arch_through(p, xl, xr, yc, out_pt, join_in, x_from):
@@ -279,6 +285,7 @@ def m(p):
     shape = (
         rect(0, 0, s, P.XH, nw=p.cut)
         + a1
+        + _flush(p, s, obox1)
         + rect(x1 - s, 0, x1, yc)
         + valley
         + a2
@@ -293,8 +300,11 @@ def u(p):
     # house chamfers (left nw, right ne) and the right stem stands flat on
     # the baseline with its own full-height edge.
     s = p.stem
-    a, xr, yc, _, _, _ = _shoulder(p, s, p.w(300, -1.0))
-    bowl = (a + rect(xr - s, 0, xr, yc)).rotate180(xr / 2, P.XH / 2)
+    a, xr, yc, _, obox, _ = _shoulder(p, s, p.w(300, -1.0))
+    # The fill turns into the foot of the right stem, flat on the baseline.
+    bowl = (a + _flush(p, s, obox) + rect(xr - s, 0, xr, yc)).rotate180(
+        xr / 2, P.XH / 2
+    )
     bowl = bowl - chamfer(0, P.XH, p.cut, "nw")
     shape = bowl + rect(xr - s, 0, xr, P.XH, ne=p.cut)
     # An ogonek hangs from the right stem.
@@ -326,7 +336,7 @@ def r(p):
     # Half a unit below the tangent, so the cut meets the curve cleanly.
     spur = half_plane((tx + 400, ty - 0.5 - 400 * slope), (tx, ty - 0.5)) & right_of(tx)
     flag = flag - spur
-    shape = rect(0, 0, s, P.XH, nw=p.cut) + flag
+    shape = rect(0, 0, s, P.XH, nw=p.cut) + flag + _flush(p, s, obox)
     return G(
         shape, l=p.sb, r=p.sbr * 0.45, anchors={"top": x_term * 0.47, "bottom": s / 2}
     )

@@ -377,16 +377,14 @@ def _five(p):
     ytl = yc - 0.36 * (yc + P.COS)
     lo = (squircle(*lb, n=n) - squircle(*li, n=ni)) & below(yc)
     lo = lo - (left_of(cxl) & above(ytl))
-    # The stem stops where the shoulder's counter leaves it, so the bowl
-    # opens to the left with no tooth; its free foot gets the sw chamfer.
-    # The shoulder is clipped at the stem edge (arch() reaches 1 unit into
-    # it, where its counter has already dropped), and the foot stops a fixed
-    # 3 units below where the drawn counter meets that edge, so the join has
-    # the same corners at every weight.
+    # The stem stops exactly where the shoulder's counter leaves it, cut
+    # square, so the bowl opens to the left with no tooth or step. The
+    # shoulder is clipped at the stem edge (arch() reaches 1 unit into it,
+    # where its counter has already dropped), and the foot height comes from
+    # the drawn counter's own (float32) bounds so the two meet exactly.
     shoulder = shoulder & right_of(xl)
     y_in = (shoulder & left_of(xl + 0.5)).bounds()[1]
-    ysb = y_in - 3
-    stem = rect(xs, ysb, xl, P.CAP, sw=p.ccut)
+    stem = rect(xs, y_in, xl, P.CAP)
     bar = rect(xs, P.CAP - h, w - p.w(28, 0.2), P.CAP)
     return shoulder + lo + stem + bar
 

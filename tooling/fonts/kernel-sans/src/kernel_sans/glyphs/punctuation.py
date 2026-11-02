@@ -30,7 +30,7 @@ from ..geom import (
     stroke,
 )
 from . import G, glyph, ref
-from .parts import open_bowl
+from .parts import flush_end, open_bowl
 
 PROOF_TEXT = [
     "H.H,H:H;H!H?H n.n,n:n;n!n?n",
@@ -808,7 +808,15 @@ def at(p):
         xa0, oy0, ix1 + wsb, oy1, xi0, iy0, ix1, iy1, n, n_in, left_of(xs + 1)
     )
     stem = rect(xs, oy0, xr, oy1, ne=p.cut)
-    sh = ringsh + side + hook + bowl + stem
+    # The bowl's crown and foot run flat into the stem's ends (no notch).
+    box = (xa0, oy0, ix1 + wsb, oy1)
+    cxb, rxb, ryb = (xa0 + ix1 + wsb) / 2, (ix1 + wsb - xa0) / 2, (oy1 - oy0) / 2
+    dy = ryb * (1 - min(1.0, abs(xs - cxb) / rxb) ** n) ** (1 / n)
+    cyb = (oy0 + oy1) / 2
+    fill = flush_end(xs, oy1, cyb + dy, box, side="left") + flush_end(
+        xs, oy0, cyb - dy, box, side="left"
+    )
+    sh = ringsh + side + hook + bowl + stem + fill
     return G(sh, l=p.sbr, r=p.sbr)
 
 
@@ -883,7 +891,29 @@ def ampersand(p):
     lower = lower - (right_of(x_open) & above(lcy))
     tail = rect(lx1 - ws, lcy, lx1, P.CAP * a["ytail"], ne=p.ccut)
     lower = lower + tail
-    return G(lower + upper + leg, l=p.sbr * 0.9, r=p.sbr * 0.3)
+    # The bowl's bottom curves up into the leg a little above the leg's flat
+    # foot, which leaves a V-notch at the baseline. Fill it: from the bowl's
+    # lowest point along the foot line to the leg, then up the leg's side to
+    # where the curve meets it (the curve is convex, so the triangle's top
+    # edge stays inside the ink).
+    cxb, rxb, ryb = lx1 / 2, lx1 / 2, (ly1 + P.COS) / 2
+    cyb = (ly1 - P.COS) / 2
+
+    def leg_x(y):
+        # The leg's left edge, from its foot up to the loop.
+        return foot - hw + (tx - (foot - hw)) * (y - yf) / (ty - yf)
+
+    def gap(y):
+        t = min(1.0, abs(leg_x(y) - cxb) / rxb)
+        return y - (cyb - ryb * (1 - t**n) ** (1 / n))
+
+    lo_y, hi_y = yf, ly1 / 2
+    for _ in range(60):
+        mid = (lo_y + hi_y) / 2
+        lo_y, hi_y = (lo_y, mid) if gap(mid) > 0 else (mid, hi_y)
+    y_meet = hi_y + 2
+    fill = poly([(cxb, yf), (foot - hw, yf), (leg_x(y_meet), y_meet)])
+    return G(lower + upper + leg + fill, l=p.sbr * 0.9, r=p.sbr * 0.3)
 
 
 @glyph("section", 0x00A7)
