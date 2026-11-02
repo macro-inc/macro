@@ -26,6 +26,7 @@ const format = new Intl.NumberFormat(undefined, { maximumFractionDigits: 6 });
 
 /** Shares the grid's column tracks and scroll container so totals stay aligned. */
 export function DatabaseTableSummary(props: {
+  ref?: (element: HTMLDivElement) => void;
   columns: DatabaseViewColumn[];
   rows: DatabaseRow[];
   template: string;
@@ -33,6 +34,7 @@ export function DatabaseTableSummary(props: {
 }) {
   return (
     <div
+      ref={props.ref}
       role="row"
       aria-label="Table summary"
       class="sticky bottom-0 z-2 grid h-10 shrink-0 border-t border-edge-muted bg-panel text-xs"

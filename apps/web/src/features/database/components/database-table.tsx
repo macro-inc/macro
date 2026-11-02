@@ -1,6 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
 import ArrowSquareOutIcon from '@icon/system/regular/arrow-square-out.svg';
 import CopyIcon from '@icon/system/regular/copy.svg';
+import EyeIcon from '@icon/system/regular/eye.svg';
 import PencilIcon from '@icon/system/regular/pencil-simple.svg';
 import TrashIcon from '@icon/system/regular/trash.svg';
 import { ContextMenu } from '@kobalte/core/context-menu';
@@ -17,6 +18,7 @@ import {
   type JSX,
   on,
   onCleanup,
+  onMount,
   Show,
 } from 'solid-js';
 import { createHorizontalReorder } from '../../../components/drag-drop/create-horizontal-reorder';
@@ -73,6 +75,8 @@ export type DatabaseCellPresence = {
   endRowId?: string;
   endColumnId?: string;
   editing: boolean;
+  /** False for a viewer whose access is view-only; absent from older servers. */
+  canEdit?: boolean;
 };
 
 /** Lets the host open a cell's editor or a header's rename; a target not yet mounted opens once it registers. */
@@ -155,6 +159,8 @@ export function DatabaseTable(props: DatabaseTableProps) {
   );
   let scrollContainer!: HTMLDivElement;
   let gridElement!: HTMLDivElement;
+  let headerElement!: HTMLDivElement;
+  let summaryElement: HTMLDivElement | undefined;
   const columnReorder = createHorizontalReorder({
     order: () => columns().map((column) => column.id),
     getViewport: () => scrollContainer,
@@ -547,9 +553,12 @@ export function DatabaseTable(props: DatabaseTableProps) {
           }}
         >
           <div
+            ref={headerElement}
             role="row"
             aria-rowindex={1}
-            class="sticky top-0 z-1 grid min-h-10 border-b border-edge-muted bg-panel"
+            // Above rows carrying presence labels, whose sticky cells are not
+            // contained by their row.
+            class="sticky top-0 z-2 grid min-h-10 border-b border-edge-muted bg-panel"
             style={{ 'grid-template-columns': template() }}
           >
             <div
@@ -648,6 +657,11 @@ export function DatabaseTable(props: DatabaseTableProps) {
                     const row = () => tableRow().original;
                     const highlighted = () =>
                       props.highlightRowId === row().rowId;
+                    // Paint containment would clip the labels above its cells.
+                    const hostsLabels = () =>
+                      remoteRanges().some(
+                        ({ bounds }) => bounds.top === index()
+                      );
                     return (
                       <div
                         ref={(element: HTMLElement) => {
@@ -667,8 +681,12 @@ export function DatabaseTable(props: DatabaseTableProps) {
                         aria-rowindex={index() + 2}
                         // Off-screen rows skip style, layout and paint; they stay
                         // in the DOM, the accessibility tree and find-in-page.
-                        class="group grid min-h-10 border-b border-edge-muted/60 [contain-intrinsic-size:auto_41px] [content-visibility:auto] hover:bg-hover/50"
-                        classList={{ 'bg-accent/15': highlighted() }}
+                        class="group grid min-h-10 border-b border-edge-muted/60 hover:bg-hover/50"
+                        classList={{
+                          'bg-accent/15': highlighted(),
+                          '[content-visibility:auto]': !hostsLabels(),
+                          '[contain-intrinsic-size:auto_41px]': !hostsLabels(),
+                        }}
                         style={{ 'grid-template-columns': template() }}
                       >
                         <div
@@ -716,6 +734,15 @@ export function DatabaseTable(props: DatabaseTableProps) {
                             const column = () => cell().column.columnDef.meta!;
                             const presence = () =>
                               presenceAt(row().rowId, column().id);
+                            // Named at the selection's top-right cell.
+                            const labelled = () =>
+                              presence()
+                                .filter(
+                                  ({ bounds }) =>
+                                    bounds.top === index() &&
+                                    bounds.right === columnIndex()
+                                )
+                                .map(({ user }) => user);
                             return (
                               <div
                                 role="gridcell"
@@ -740,24 +767,6 @@ export function DatabaseTable(props: DatabaseTableProps) {
                                         .join(' ')
                                     : undefined
                                 }
-                                style={presenceOutline(
-                                  presence()[0]?.user,
-                                  presence()[0]
-                                    ? {
-                                        top:
-                                          index() === presence()[0].bounds.top,
-                                        bottom:
-                                          index() ===
-                                          presence()[0].bounds.bottom,
-                                        left:
-                                          columnIndex() ===
-                                          presence()[0].bounds.left,
-                                        right:
-                                          columnIndex() ===
-                                          presence()[0].bounds.right,
-                                      }
-                                    : undefined
-                                )}
                               >
                                 {props.renderCell(row, column, {
                                   onReady: (editor) =>
@@ -775,20 +784,32 @@ export function DatabaseTable(props: DatabaseTableProps) {
                                       direction
                                     ),
                                 })}
-                                <Show when={presence().length}>
-                                  <span class="pointer-events-none absolute top-0 left-0 z-1 flex gap-px">
-                                    <For
-                                      each={presence().filter(
-                                        ({ bounds }) =>
-                                          bounds.top === index() &&
-                                          bounds.left === columnIndex()
-                                      )}
-                                    >
-                                      {({ user }) => (
-                                        <PresenceTag user={user} below />
-                                      )}
-                                    </For>
-                                  </span>
+                                <Show when={presence()[0]}>
+                                  {(first) => (
+                                    <span
+                                      aria-hidden="true"
+                                      data-remote-outline
+                                      class="pointer-events-none absolute inset-0"
+                                      style={presenceOutline(first().user, {
+                                        top: index() === first().bounds.top,
+                                        bottom:
+                                          index() === first().bounds.bottom,
+                                        left:
+                                          columnIndex() === first().bounds.left,
+                                        right:
+                                          columnIndex() ===
+                                          first().bounds.right,
+                                      })}
+                                    />
+                                  )}
+                                </Show>
+                                <Show when={labelled().length}>
+                                  <PresenceLabels
+                                    users={labelled()}
+                                    scrollContainer={scrollContainer}
+                                    header={headerElement}
+                                    footer={summaryElement}
+                                  />
                                 </Show>
                               </div>
                             );
@@ -929,6 +950,9 @@ export function DatabaseTable(props: DatabaseTableProps) {
             </Show>
           </div>
           <DatabaseTableSummary
+            ref={(element) => {
+              summaryElement = element;
+            }}
             columns={columns()}
             rows={summaryRows()}
             template={template()}
@@ -967,11 +991,11 @@ type PresenceEdges = {
   left: boolean;
 };
 
+/** The overlay's borders: absolutely positioned, so they never size the cell. */
 function presenceOutline(
-  user: DatabaseCellPresence | undefined,
-  edges: PresenceEdges = { top: true, right: true, bottom: true, left: true }
-): JSX.CSSProperties | undefined {
-  if (!user) return undefined;
+  user: DatabaseCellPresence,
+  edges: PresenceEdges
+): JSX.CSSProperties {
   const color = presenceColor(user.peerId ?? user.userId);
   const border = `2px ${user.editing ? 'dashed' : 'solid'} ${color}`;
   return {
@@ -995,23 +1019,69 @@ function presenceName(userId: string) {
     : getInitials(firstName, lastName, email);
 }
 
-function PresenceTag(props: { user: DatabaseCellPresence; below?: boolean }) {
+/**
+ * Names above the top-right corner of a remote selection, outside the cell.
+ * They paint over the sticky header and summary while the cell's top edge is
+ * in view, and slide beneath them with the cell otherwise.
+ */
+function PresenceLabels(props: {
+  users: DatabaseCellPresence[];
+  scrollContainer: HTMLElement;
+  header: HTMLElement;
+  footer: HTMLElement | undefined;
+}) {
+  const [inView, setInView] = createSignal(true);
+  let edge!: HTMLSpanElement;
+  onMount(() => {
+    const observer = new IntersectionObserver(
+      ([entry]) => setInView(entry.isIntersecting),
+      {
+        root: props.scrollContainer,
+        rootMargin: `-${props.header.offsetHeight}px 0px -${props.footer?.offsetHeight ?? 0}px 0px`,
+      }
+    );
+    observer.observe(edge);
+    onCleanup(() => observer.disconnect());
+  });
+  return (
+    <>
+      <span
+        ref={edge}
+        aria-hidden="true"
+        class="pointer-events-none absolute inset-x-0 top-0 h-px"
+      />
+      <span
+        class="pointer-events-none absolute right-0 bottom-full flex flex-row-reverse gap-px"
+        classList={{ 'z-3': inView() }}
+      >
+        <For each={props.users}>{(user) => <PresenceTag user={user} />}</For>
+      </span>
+    </>
+  );
+}
+
+function PresenceTag(props: { user: DatabaseCellPresence }) {
+  const viewing = () => props.user.canEdit === false;
   const label = () =>
-    `${presenceName(props.user.userId)} is ${props.user.editing ? 'editing' : 'here'}`;
+    `${presenceName(props.user.userId)} is ${
+      props.user.editing ? 'editing' : viewing() ? 'viewing' : 'here'
+    }`;
   return (
     <span
       role="note"
       aria-label={label()}
       title={label()}
-      class="max-w-40 truncate px-1.5 py-0.5 text-[11px] font-medium leading-4 text-surface shadow-sm"
-      classList={{ 'rounded-t-sm': !props.below, 'rounded-b-sm': props.below }}
+      class="flex max-w-40 items-center gap-0.5 rounded-t-sm px-1.5 py-0.5 text-[11px] font-medium leading-4 text-surface shadow-sm"
       style={{
         'background-color': presenceColor(
           props.user.peerId ?? props.user.userId
         ),
       }}
     >
-      {presenceName(props.user.userId)}
+      <Show when={viewing()}>
+        <EyeIcon aria-hidden="true" class="size-3 shrink-0" />
+      </Show>
+      <span class="truncate">{presenceName(props.user.userId)}</span>
     </span>
   );
 }
