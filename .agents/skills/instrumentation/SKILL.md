@@ -61,46 +61,97 @@ import OpenTelemetry directly.
 
 ## Frontend view loading
 
-Use `@app/observability/flow` for user-visible loading. Router commits start a
-`navigation` interaction and every routed view is already a `view.<route id>`
-`<TraceFlow>` keyed on its params. Flows are `perf`-class traces, sampled per
-user per week.
+Use `@app/observability/flow` for user-visible loading. A flow is a span that
+stays open while anything under it is loading and ends one paint after the last
+hold releases.
 
-- `usePending('channel.messages', () => query.isLoading)` right after creating
-  the query adds a phase that holds the flow while it is true. Read status only:
-  reading pending `query.data` suspends the enclosing shell. Track initial
-  loading, not background refreshes or a disabled query that cannot complete.
-- `<TraceFlow name="doc.editor">` around an independently loaded subtree, placed
-  **inside** its Suspense boundary, adds a nested flow; outside it, the flow can
-  settle while the fallback is visible. Pass `key` to restart it when the
-  subtree shows a different entity in place.
-- `const flow = useFlow()` during component setup; then
+- **Views are roots already.** Router commits start a `navigation` interaction
+  and every routed view is a `view.<route id>` `<TraceFlow>` keyed on its
+  params (`RouteView` in `split-router/solid/outlet.tsx`). Don't add one per
+  route; add phases inside it.
+- **Phases: `usePending(name, accessor)`**, right after creating the query,
+  e.g. `usePending('channel.messages', () => query.isLoading)`. While the
+  accessor is true it holds the flow as a child span; it can start again each
+  time the flow is open. Already false when the flow reaches it (a cache hit or
+  an earlier view's load) records a `<name>.ready` event and
+  `<name>.waited=false` instead of a span; a real wait sets
+  `<name>.waited=true` on the parent. Read status only: reading pending
+  `query.data` suspends the enclosing shell. Track initial loading, not
+  background refreshes or a disabled query that cannot complete.
+- **Nested flows:** `<TraceFlow name="doc.editor">` around an independently
+  loaded subtree, placed **inside** its Suspense boundary (outside it the flow
+  can settle while the fallback shows). A view can hold several. Pass `key` to
+  restart it when the subtree shows a different entity in place; pending
+  phases move to the new run. Unmounting before it settles ends it, and its
+  open phases, as `flow.outcome=cancelled`.
+- **Async phases: `useFlow()`** during component setup, then
   `flow.task('block.data', async (span) => ...)` for imperative loading. It
   holds the flow until the promise settles and runs the synchronous start in
-  the child's context; use `span.span(...)` after an await. `flow.span` passes
-  the flow to lifecycle code and clients. A span alone does not hold the flow
-  open; give that work a `usePending` or `task` too.
-- For in-view actions that mount content without navigation,
-  `beginInteraction('channel.tab')`, update state, then `.end()` in a `finally`.
-  The window is synchronous: don't hold it across an unrelated await. Flows
-  created inside it join it; wrap the newly mounted content in a flow.
-- Use `startUiOperation` directly only for a measured action that mounts no
-  flow (a cell commit, a submit); call `afterPaint()` once the UI updated.
-- urql and TanStack queries created inside a flow already send their requests
-  in its trace. For another request a component starts during the load, start
-  it inside `useFlow().run(...)`, or hand `useFlowTrace()` to a transport that
-  sends later.
-- `flow.kind`, `route.id`, `flow.root`, `flow.outcome`, `<phase>.waited` and
-  the `ui.*` timing fields come from the owners; never set them per call site.
-  The [span model](../../../docs/agent-guide/observability.md#span-model) lists
-  them.
-- Keep names static and attributes to opaque ids, categories and counts. No
-  flow per message, row or cell; measure the containing view.
+  the child's context. A span alone does not hold the flow; give that work a
+  `usePending` or `task`.
+- **Requests in the flow:** urql and TanStack queries created inside a flow
+  already send in its trace. Start any other request inside
+  `flow.run(() => ...)`, or hand `useFlowTrace()` to a transport that sends
+  later.
+- **No Zone across `await`.** The browser's `StackContextManager` keeps context
+  only synchronously. After an await call `span.span(...)`, or wrap later work
+  in `span.run(...)`; capture `Telemetry.captureContext()` at synchronous
+  admission (before auth or queueing) and `.run(...)` the send in it.
+- **User actions: `beginInteraction('channel.tab')`** for an in-view action
+  that mounts content without navigation: update state, then `.end()` in a
+  `finally`. The window is synchronous; flows created inside it join it. Use
+  `startUiOperation` directly only for a measured action that mounts no flow (a
+  cell commit, a submit), calling `afterPaint()` once the UI updated.
+- **Sampling.** Flows, interactions and `startUiOperation` are the `perf`
+  sampling class (`<TraceFlow sampling>`, `beginInteraction(name, { sampling })`
+  and `Telemetry.span(name, { sampling })` choose another). Each class is kept
+  per user, per week (`perf` for 5% of production users, everyone elsewhere;
+  classes in `apps/web/src/observability/sampling.ts`). Phases are dropped with
+  their trace; `Telemetry.span` without a class (requests, lifecycle work)
+  leaves a dropped perf trace and is always kept.
+- `flow.kind`, `route.id`, `flow.root`, `flow.outcome`, `<phase>.waited`,
+  `macro.sampling.*` and the `ui.*` timing fields come from the owners; never
+  set them per call site. Keep names static and attributes to opaque ids,
+  categories and counts. No flow per message, row or cell; measure the
+  containing view.
 
 Flows never schedule application work; preloading and warm-up own their own
-gates. Reading the resulting traces (`.ready` events, overlapping phases,
-`ui.*` fields, sampling) is covered in the
-[observability walkthrough](../../../docs/agent-guide/observability.md#web-performance-traces).
+gates.
+
+### Example: a view with two phases
+
+The database block holds its view with two phases, the table's metadata and
+its first rows (`block-database/component/Block.tsx`, `DatabaseGrid.tsx`):
+
+```tsx
+function DatabaseDetail(props: { databaseId: string }) {
+  const detailQuery = useDatabaseDetailQuery(() => props.databaseId);
+  usePending('database.detail', () => detailQuery.isLoading);
+  return (
+    <Suspense fallback={<GridSkeleton />}>
+      <DatabaseGrid detail={detailQuery.data} />
+    </Suspense>
+  );
+}
+
+function DatabaseGrid(props: { detail: DatabaseDetail | undefined }) {
+  const source = useTableRows(() => props.detail);
+  usePending('database.rows', source.loading);
+  // ...
+}
+```
+
+Opened from a list this exports `navigation → view.<route id> →
+{database.detail, database.rows}`, with the HTTP and server spans under each
+phase. In Datadog, the root is `service:web-app @macro.sampling.class:perf
+resource_name:navigation @route.id:<route id> @ui.outcome:success`; read
+`@ui.elapsed_ms` (input to paint) and split by `@flow.kind` to compare entry
+points. On the view span, `@database.rows.waited:false` marks rows served from
+the cache; phase durations are `resource_name:database.rows
+@flow.outcome:success`, with `@flow.root` naming the root. The
+`perf-investigation` skill has the tested query shapes, and the
+[observability walkthrough](../../../docs/agent-guide/observability.md#web-performance-traces)
+lists every root and attribute.
 
 ## Rust services
 
