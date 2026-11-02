@@ -167,7 +167,7 @@ export function EmojiSelector(props: EmojiPickerProps): JSX.Element {
     <VList
       ref={setVirtualizer}
       data={layout().rows}
-      class="[overflow-anchor:none]"
+      class="overscroll-none [overflow-anchor:none]"
       style={{ width: '100%', height: '100%' }}
       role="listbox"
       aria-label="Emoji Selector"

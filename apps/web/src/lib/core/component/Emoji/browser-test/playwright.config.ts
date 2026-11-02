@@ -14,11 +14,21 @@ export default defineConfig({
   use: {
     baseURL: `http://localhost:${port}`,
     headless: true,
-    viewport: { width: 1280, height: 900 },
     launchOptions: {
       executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH,
     },
   },
+  projects: [
+    { name: 'desktop', use: { viewport: { width: 1280, height: 900 } } },
+    {
+      name: 'phone',
+      use: {
+        viewport: { width: 390, height: 844 },
+        hasTouch: true,
+        isMobile: true,
+      },
+    },
+  ],
   webServer: {
     command: `MACRO_DEV_HTTPS=false bunx vite --port ${port} --strictPort`,
     cwd: webDirectory,
