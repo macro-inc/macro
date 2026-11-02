@@ -1603,6 +1603,10 @@ pub async fn run() -> anyhow::Result<()> {
         ),
         macro_event_broker.clone(),
         collab_surface_service.clone(),
+        static_file_service_client::StaticFileServiceClient::new(
+            config.internal_api_key.to_string(),
+            StaticFileServiceUrl::new()?.to_string(),
+        ),
     ));
 
     // Individual initiative and agent-session reads preserve read-after-write
@@ -2188,6 +2192,18 @@ pub async fn run() -> anyhow::Result<()> {
             primary_entity_soup.clone(),
             Arc::new(email_service.clone()),
             entity_access_service.as_ref().clone(),
+        ),
+        graphql_database_rows_context: graphql_databases::DatabaseRowsGraphqlContext::new(
+            databases_sql::view_rows::DatabaseViewRows::new(
+                databases_service.clone(),
+                databases::outbound::pg_view_rows::PgViewRows::new(db.clone()),
+            ),
+            entity_access_service.clone(),
+            graphql_soup::soup_item_loader(
+                primary_entity_soup.clone(),
+                Arc::new(email_service.clone()),
+                entity_access_service.as_ref().clone(),
+            ),
         ),
         graphql_primary_soup_item_loader: graphql_soup::PrimarySoupItemLoader::new(
             primary_entity_soup,

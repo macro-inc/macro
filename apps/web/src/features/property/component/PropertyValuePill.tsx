@@ -1,3 +1,4 @@
+import { cn } from '@ui';
 import { type ComponentProps, type JSX, Match, Show, Switch } from 'solid-js';
 import { Dynamic } from 'solid-js/web';
 import { Property } from '../property';
@@ -11,6 +12,7 @@ type PropertyValuePillProps = Pick<
   emptyLabel?: JSX.Element;
   showLabel?: boolean;
   class?: string;
+  iconClass?: string;
   variant?: ComponentProps<typeof Property.Pill>['variant'];
   size?: ComponentProps<typeof Property.Pill>['size'];
   hoverActions?: JSX.Element;
@@ -52,23 +54,26 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
               </span>
             </Show>
             <span class="inline-flex min-w-0 items-center gap-1">
-              <Switch
-                fallback={
-                  <Property.Icon
-                    property={property()}
-                    class="size-3 shrink-0"
-                  />
-                }
-              >
-                <Match when={isMultiUserEntity()}>
-                  <Property.UserStack property={property()} maxUsers={2} />
-                </Match>
-                <Match when={isUserEntity()}>
-                  <Property.Icon property={property()} />
-                </Match>
-              </Switch>
+              <Show when={hasValue(property())}>
+                <Switch
+                  fallback={
+                    <Property.Icon
+                      property={property()}
+                      class={cn('shrink-0', props.iconClass)}
+                    />
+                  }
+                >
+                  <Match when={isMultiUserEntity()}>
+                    <Property.UserStack property={property()} maxUsers={2} />
+                  </Match>
+                  <Match when={isUserEntity()}>
+                    <Property.Icon property={property()} />
+                  </Match>
+                </Switch>
+              </Show>
               <Property.Text
                 property={property()}
+                hideIcon={property().specificEntityType === 'INITIATIVE'}
                 resolveSingleEntity={
                   props.showLabel ||
                   property().specificEntityType === 'INITIATIVE'
@@ -76,7 +81,9 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
                 class="min-w-0 max-w-60"
                 fallback={
                   <Property.Empty
+                    propertyDefinitionId={property().propertyDefinitionId}
                     label={props.emptyLabel ?? property().displayName}
+                    iconClass={props.iconClass}
                   />
                 }
               />
@@ -96,6 +103,7 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
                 <ProjectLinkPill
                   property={property()}
                   class={props.class}
+                  iconClass={props.iconClass}
                   fallback={pill()}
                 />
               </Show>

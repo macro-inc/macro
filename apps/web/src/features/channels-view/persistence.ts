@@ -12,6 +12,7 @@ import { z } from 'zod';
 import {
   CHANNELS_DEFAULT_RAIL_WIDTH,
   CHANNELS_DEFAULT_SORT_BY,
+  clampChannelSectionHeight,
   clampChannelsRailWidth,
 } from './constants';
 import type { ChannelsViewState } from './types';
@@ -95,6 +96,24 @@ const channelsPreferencesSchema = z.object({
         .default(CHANNELS_DEFAULT_SORT_BY.threads),
     })
     .default(CHANNELS_DEFAULT_SORT_BY),
+  sectionPreferences: z
+    .record(
+      z.string(),
+      z
+        .object({
+          sort: z
+            .enum(['viewed_at', 'updated_at', 'created_at', 'name', 'manual'])
+            .optional(),
+          unreadOnly: z.boolean().optional(),
+          height: z
+            .number()
+            .finite()
+            .transform(clampChannelSectionHeight)
+            .optional(),
+        })
+        .optional()
+    )
+    .default({}),
 });
 
 type ChannelsPreferences = z.infer<typeof channelsPreferencesSchema>;
@@ -103,6 +122,7 @@ const DEFAULT_CHANNELS_PREFERENCES = {
   version: 1,
   asideWidth: CHANNELS_DEFAULT_RAIL_WIDTH,
   sortBy: CHANNELS_DEFAULT_SORT_BY,
+  sectionPreferences: {},
 } satisfies ChannelsPreferences;
 
 function selectEntryState(state: ChannelsViewState): ChannelsEntryState {
@@ -197,6 +217,7 @@ function createChannelsPreferencesStorage(options: {
       version: 1,
       asideWidth: clampChannelsRailWidth(state.asideWidth),
       sortBy: state.sortBy,
+      sectionPreferences: state.sectionPreferences,
     } satisfies ChannelsPreferences);
 
   return {
@@ -219,12 +240,14 @@ function createChannelsPreferencesStorage(options: {
           ...current,
           asideWidth: restored.asideWidth,
           sortBy: restored.sortBy,
+          sectionPreferences: restored.sectionPreferences,
         };
       } catch {
         return {
           ...current,
           asideWidth: DEFAULT_CHANNELS_PREFERENCES.asideWidth,
           sortBy: DEFAULT_CHANNELS_PREFERENCES.sortBy,
+          sectionPreferences: DEFAULT_CHANNELS_PREFERENCES.sectionPreferences,
         };
       }
     },

@@ -235,8 +235,14 @@ function Option(props: {
     <MobileDrawer.Item
       role={props.selectionMode === 'single' ? 'radio' : 'checkbox'}
       aria-checked={props.checked}
+      // Neighbouring checked boxes join through their own attribute: a sibling
+      // rule keyed on `role` restyles every element with a role inserted
+      // anywhere, such as each row a scrolling database grid mounts.
+      data-checked-checkbox={
+        props.selectionMode !== 'single' && props.checked ? '' : undefined
+      }
       class={cn(
-        '[&[role=checkbox][aria-checked=true]:has(+[role=checkbox][aria-checked=true])]:rounded-b-none [&[role=checkbox][aria-checked=true]+[role=checkbox][aria-checked=true]]:rounded-t-none',
+        '[&[data-checked-checkbox]:has(+[data-checked-checkbox])]:rounded-b-none [&[data-checked-checkbox]+[data-checked-checkbox]]:rounded-t-none',
         props.class
       )}
       onClick={() => props.onChange(!props.checked)}

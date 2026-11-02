@@ -78,6 +78,13 @@ use referral::{
     domain::service::ReferralServiceImpl,
     outbound::{pg_referral_repo::PgReferralRepo, stripe_discount_client::StripeDiscountClient},
 };
+use system_status::{
+    domain::service::SystemStatusServiceImpl,
+    outbound::{
+        connection_gateway_broadcaster::ConnectionGatewayStatusBroadcaster,
+        pg_system_status_repo::PgSystemStatusRepo,
+    },
+};
 use user_language::{
     domain::service::UserLanguageServiceImpl, outbound::pg_user_language_repo::PgUserLanguageRepo,
 };
@@ -477,7 +484,7 @@ pub async fn run() -> anyhow::Result<()> {
                         entity_access_service_impl.clone(),
                     ),
                     messages::outbound::connection_gateway::ConnectionGatewayMessages(
-                        connection_gateway_client,
+                        connection_gateway_client.clone(),
                     ),
                     channels::outbound::pg_agent_creations::PgAgentCreations::new(db.clone()),
                 ),
@@ -537,6 +544,10 @@ pub async fn run() -> anyhow::Result<()> {
         repo: PgGtmInviteRepo::new(db.clone()),
         config: gtm_invite_config,
     };
+    let system_status_service = Arc::new(SystemStatusServiceImpl::new(
+        PgSystemStatusRepo::new(db.clone()),
+        ConnectionGatewayStatusBroadcaster::new(connection_gateway_client.clone()),
+    ));
 
     let codex_connection = if let Some(key_id) = config.codex_oauth_kms_key_id() {
         let cipher = Arc::new(codex_connection::outbound::cipher::EnvelopeCipher::new(
@@ -660,6 +671,23 @@ pub async fn run() -> anyhow::Result<()> {
     .with_open_seat_release((*ai_billing_service).clone())
     .with_owned_entity_cleanup(team_owned_entity_cleanup);
     let teams_service = Arc::new(teams_service_impl);
+    let domain_notice_service =
+        Arc::new(teams::domain::domain_notice::DomainNoticeServiceImpl::new(
+            teams::outbound::colleague_directory::ContactsColleagueDirectory::new(
+                contacts::outbound::repository::DbContactsRepository::new(db.clone()),
+            ),
+            teams::domain::join_announcement::JoinAnnouncementServiceImpl::new(
+                teams::outbound::join_announcement_repo::JoinAnnouncementRepositoryImpl::new(
+                    db.clone(),
+                ),
+                SqsNotificationIngress {
+                    queue: SqsQueue::new(
+                        aws_sdk_sqs::Client::new(&aws_config),
+                        notification_queue.to_string(),
+                    ),
+                },
+            ),
+        ));
     // Reminds people of team invites they have not answered. Replicas claim
     // disjoint invites, so every replica sweeps.
     let invite_reminders_stop = CancellationToken::new();
@@ -762,6 +790,7 @@ pub async fn run() -> anyhow::Result<()> {
             stripe_webhook_secret,
             user_roles_and_permissions_service: Arc::new(user_roles_and_permissions_service),
             teams_service,
+            domain_notice_service,
             channel_service: Arc::new(channel_service),
             channel_messages,
             favorites_service: Arc::new(favorites_service),
@@ -769,6 +798,7 @@ pub async fn run() -> anyhow::Result<()> {
             referral_service: Arc::new(referral_service),
             user_language_service,
             gtm_invite_service,
+            system_status_service,
             native_app_service: Arc::new(NativeAppServiceImpl {
                 bundle_fetcher: DefaultBundleFetcher::new(
                     AppServiceUrl::new_for_environment(config.environment)
