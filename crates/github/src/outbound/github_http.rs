@@ -247,6 +247,7 @@ impl GithubHttp {
     #[tracing::instrument(
         name = "github.request",
         skip_all,
+        err,
         fields(
             method = %request.method,
             path = %request.path,
