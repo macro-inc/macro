@@ -188,19 +188,22 @@ export function readChartEx(
   let point = 0;
   let title: string | undefined;
   let titleSeen = false;
+  // The chart's own title's depth in `stack`, not an axis title's.
+  let titleDepth: number | undefined;
   let legend: SheetChart['legend'];
   let gapWidth: number | undefined;
   let literalData = false;
   let color: PendingColor | undefined;
   let colorDepth: number | undefined;
   const inside = (local: string) => stack.includes(local);
+  const inTitle = () => titleDepth !== undefined;
   parse(bytes, path, (parser) => {
     parser.on('opentag', (node) => {
       const value = attributes(node);
       const parent = stack.at(-1);
       stack.push(node.local);
       if (node.uri === DRAWING) {
-        if (node.local === 't' && inside('title')) text = '';
+        if (node.local === 't' && inTitle()) text = '';
         else if (
           current &&
           colorDepth !== undefined &&
@@ -242,7 +245,9 @@ export function readChartEx(
           text = '';
         })
         .with('title', () => {
-          if (parent === 'chart') titleSeen = true;
+          if (parent !== 'chart') return;
+          titleSeen = true;
+          titleDepth = stack.length;
         })
         .with('legend', () => {
           legend = LEGENDS[value.pos as keyof typeof LEGENDS] ?? 'right';
@@ -303,7 +308,15 @@ export function readChartEx(
         })
         .with('idx', () => {
           const index = Number(value.val);
-          if (current && parent === 'subtotals' && Number.isInteger(index))
+          // Points a sheet can hold, as plots validate them.
+          if (
+            current &&
+            parent === 'subtotals' &&
+            Number.isInteger(index) &&
+            index >= 0 &&
+            index < 100_000 &&
+            current.totals.length < 100_000
+          )
             current.totals.push(index);
         })
         .with('parentLabelLayout', () => {
@@ -348,7 +361,7 @@ export function readChartEx(
         .with('v', () => {
           if (text === undefined) return;
           if (current && inside('tx')) current.name = text.trim();
-          else if (inside('title')) title ??= text;
+          else if (inTitle()) title ??= text;
           text = undefined;
         })
         .with('numDim', 'strDim', () => {
@@ -375,6 +388,10 @@ export function readChartEx(
             dimension.reference = references.length - 1;
           }
           dimension = undefined;
+        })
+        .with('title', () => {
+          if (titleDepth !== undefined && stack.length < titleDepth)
+            titleDepth = undefined;
         })
         .with('spPr', () => {
           if (colorDepth !== undefined && stack.length < colorDepth)

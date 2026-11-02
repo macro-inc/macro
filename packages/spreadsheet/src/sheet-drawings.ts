@@ -531,7 +531,10 @@ const KIND_OPTIONS: Partial<Record<ChartKind, string[]>> = {
 function validPlot(value: unknown, references: number): boolean {
   if (!value || typeof value !== 'object') return false;
   const plot = value as Record<string, unknown>;
-  const options = KIND_OPTIONS[plot.kind as ChartKind] ?? [];
+  const options =
+    (typeof plot.kind === 'string' && Object.hasOwn(KIND_OPTIONS, plot.kind)
+      ? KIND_OPTIONS[plot.kind as ChartKind]
+      : undefined) ?? [];
   return (
     Object.keys(plot).every(
       (key) =>

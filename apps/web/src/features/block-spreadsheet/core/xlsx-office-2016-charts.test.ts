@@ -303,6 +303,23 @@ describe('Excel 2016 charts', () => {
     }
   });
 
+  it('reads only the chart title, and only totals a sheet can hold', () => {
+    const path = 'xl/charts/chartEx1.xml';
+    const part = `<cx:chartSpace xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:cx="http://schemas.microsoft.com/office/drawing/2014/chartex"><cx:chartData><cx:data id="0"><cx:numDim type="val"><cx:f>Data!$B$2:$B$5</cx:f></cx:numDim></cx:data></cx:chartData><cx:chart><cx:title pos="t"/><cx:plotArea><cx:plotAreaRegion><cx:series layoutId="waterfall"><cx:tx><cx:txData><cx:v>Cash</cx:v></cx:txData></cx:tx><cx:dataId val="0"/><cx:layoutPr><cx:subtotals><cx:idx val="-1"/><cx:idx val="3"/><cx:idx val="100000"/></cx:subtotals></cx:layoutPr></cx:series></cx:plotAreaRegion><cx:axis id="0"><cx:catScaling/><cx:title><cx:tx><cx:rich><a:p><a:r><a:t>Months</a:t></a:r></a:p></cx:rich></cx:tx></cx:title></cx:axis><cx:axis id="1"><cx:valScaling/><cx:title><cx:tx><cx:txData><cx:v>Dollars</cx:v></cx:txData></cx:tx></cx:title></cx:axis></cx:plotArea></cx:chart></cx:chartSpace>`;
+    const chart = readChart(
+      {
+        names: [path],
+        read: (name) => (name === path ? strToU8(part) : undefined),
+      },
+      path,
+      [],
+      new Set()
+    );
+    // A chart title without text shows the series name, not an axis title.
+    expect(chart?.title).toBe('Cash');
+    expect(chart?.plots[0].totals).toEqual([3]);
+  });
+
   it('wraps a chartEx frame in compatibility content', () => {
     const drawing: SheetDrawing = {
       id: 'chart',

@@ -48,22 +48,22 @@ export function histogramBins(
   const high = Math.max(...values);
   const start = binning.underflow ?? low;
   const end = Math.max(start, binning.overflow ?? high);
-  const width =
+  const chosen =
     binning.size ??
     (binning.count
       ? (end - start) / binning.count
       : (3.5 * sampleDeviation(values)) / Math.cbrt(values.length));
-  const count =
-    !(width > 0) || end === start
+  const needed =
+    !(chosen > 0) || end === start
       ? 1
-      : Math.min(
-          MAX_BINS,
-          binning.count ?? Math.max(1, Math.ceil(steps(end - start, width)))
-        );
+      : (binning.count ?? Math.max(1, Math.ceil(steps(end - start, chosen))));
+  // Past the cap, wider bins still cover every value.
+  const count = Math.min(MAX_BINS, needed);
+  const width = needed > MAX_BINS ? (end - start) / MAX_BINS : chosen;
   const bins: HistogramBin[] = Array.from({ length: count }, (_, index) => ({
     low: start + index * (width > 0 ? width : 0),
     high:
-      binning.count && index === count - 1
+      (binning.count || needed > MAX_BINS) && index === count - 1
         ? end
         : width > 0
           ? start + (index + 1) * width

@@ -131,6 +131,16 @@ describe('sheet drawings', () => {
       },
     ],
     [
+      'a kind named after an object method',
+      {
+        ...chart,
+        chart: {
+          ...chart.chart,
+          plots: [{ kind: 'constructor', ofPie: { type: 'pie' }, series: [] }],
+        },
+      },
+    ],
+    [
       'bins of no width',
       {
         ...chart,

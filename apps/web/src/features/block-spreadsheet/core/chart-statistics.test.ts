@@ -97,6 +97,13 @@ describe('histogram bins', () => {
     expect(bins.map((bin) => bin.count)).toEqual([6, 2]);
   });
 
+  it('widens bins to cover every value when there would be too many', () => {
+    const bins = histogramBins([0, 500_000, 1_000_000], { size: 1 });
+    expect(bins).toHaveLength(1_000);
+    expect(bins.at(-1)?.high).toBeCloseTo(1_000_000);
+    expect(bins.map((bin) => bin.count).filter(Boolean)).toEqual([1, 1, 1]);
+  });
+
   it('puts equal values in one bin and draws nothing for no values', () => {
     expect(histogramBins([4, 4, 4], {})).toEqual([
       { low: 4, high: 4, count: 3 },
