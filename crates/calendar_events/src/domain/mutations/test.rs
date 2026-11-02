@@ -595,6 +595,13 @@ impl CalendarRepository for FakeRepo {
         Ok(None)
     }
 
+    async fn event_copies(
+        &self,
+        _event_ids: &[Uuid],
+    ) -> Result<Vec<crate::domain::labels::EventCopy>, rootcause::Report> {
+        Ok(Vec::new())
+    }
+
     async fn owned_inboxes(
         &self,
         _requester_id: &str,
@@ -1034,6 +1041,12 @@ impl macro_event_broker::MacroEventBroker for RecordingEventBroker {
 #[derive(Clone, Default)]
 struct RecordingRefreshNotifier {
     notified: Arc<Mutex<Vec<(String, Uuid, bool)>>>,
+    /// `(requester, event)` of every requester told of an answer.
+    answered_requesters: Arc<Mutex<Vec<(String, Uuid)>>>,
+    /// Join requests whose stored status each nudge records in `seen_statuses`.
+    join_requests: Arc<Mutex<Vec<crate::domain::join_requests::CalendarJoinRequest>>>,
+    /// Status of each of `join_requests` as every nudge went out.
+    seen_statuses: Arc<Mutex<Vec<crate::domain::join_requests::CalendarJoinRequestStatus>>>,
 }
 
 impl CalendarRefreshNotifier for RecordingRefreshNotifier {
@@ -1043,6 +1056,18 @@ impl CalendarRefreshNotifier for RecordingRefreshNotifier {
             email_link_id,
             team_ooo_changed,
         ));
+        let statuses = self.join_requests.lock().unwrap();
+        self.seen_statuses
+            .lock()
+            .unwrap()
+            .extend(statuses.iter().map(|request| request.status));
+    }
+
+    async fn join_request_answered(&self, requester_id: &str, event_id: Uuid) {
+        self.answered_requesters
+            .lock()
+            .expect("notifier lock")
+            .push((requester_id.to_string(), event_id));
     }
 }
 

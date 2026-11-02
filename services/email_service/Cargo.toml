@@ -22,6 +22,10 @@ name = "backfill_signal_flags"
 path = "src/bin/backfill_signal_flags/backfill_signal_flags.rs"
 
 [[bin]]
+name = "backfill_outlook_snippets"
+path = "src/bin/backfill_outlook_snippets/backfill_outlook_snippets.rs"
+
+[[bin]]
 name = "backfill_gmail_attachments"
 path = "src/bin/backfill_gmail_attachments/backfill_gmail_attachments.rs"
 

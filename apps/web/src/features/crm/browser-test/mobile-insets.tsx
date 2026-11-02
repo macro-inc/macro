@@ -52,11 +52,11 @@ function Fixture() {
           <SidePanel.Root defaultOpen={false}>
             <ViewBreadcrumbs.Root value="project" onChange={() => {}}>
               <EntityDetailTopBar
-                navigation={
+                navigation={() => (
                   <Button onClick={() => setSection('tasks')}>
                     Project tasks
                   </Button>
-                }
+                )}
               />
             </ViewBreadcrumbs.Root>
           </SidePanel.Root>

@@ -339,6 +339,12 @@ pub(super) fn normalize(
         Some(body) => (Some(body.content), None),
         None => (None, None),
     };
+    let snippet = email_utils::body_replyless::reply_snippet(
+        source.subject.as_deref(),
+        body_html_sanitized.as_deref(),
+        body_text.as_deref(),
+    )
+    .or(source.body_preview);
     let headers =
         serde_json::to_value(source.internet_message_headers).map_err(|_| invalid_response())?;
     let now = Utc::now();
@@ -351,7 +357,7 @@ pub(super) fn normalize(
         global_id: source.internet_message_id,
         link_id,
         subject: source.subject,
-        snippet: source.body_preview,
+        snippet,
         provider_history_id: None,
         internal_date_ts: source.received_date_time.or(source.sent_date_time),
         sent_at: source.sent_date_time,

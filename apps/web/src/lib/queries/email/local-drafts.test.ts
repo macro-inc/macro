@@ -9,7 +9,11 @@ import type { OperationResult } from '@urql/core';
 import { IDBFactory } from 'fake-indexeddb';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const auth = vi.hoisted(() => ({ user: { authenticated: true, id: 'owner' } }));
+const auth = vi.hoisted(() => ({
+  user: { authenticated: true, id: 'owner' },
+  // Whether this document fetched the identity, rather than restoring it.
+  confirmed: true,
+}));
 const native = vi.hoisted(() => ({ active: false }));
 vi.mock('@core/util/platform', () => ({ isTauri: () => native.active }));
 const telemetry = vi.hoisted(() => ({
@@ -21,7 +25,10 @@ const stagedUpload = vi.hoisted(() =>
   vi.fn<() => { previewSrc: string; size: number } | undefined>()
 );
 vi.mock('../client', () => ({
-  queryClient: { getQueryData: () => auth.user },
+  queryClient: {
+    getQueryData: () => auth.user,
+    getQueryState: () => ({ dataUpdatedAt: auth.confirmed ? Date.now() : 0 }),
+  },
 }));
 vi.mock('@core/mobile/nativeStagedUpload', () => ({
   getNativeStagedUpload: stagedUpload,
@@ -67,6 +74,7 @@ beforeEach(async () => {
   localStorage.clear();
   queue.length = 0;
   auth.user = { authenticated: true, id: 'owner' };
+  auth.confirmed = true;
   stagedUpload.mockReset();
   native.active = false;
   telemetry.track.mockClear();
@@ -626,6 +634,147 @@ describe('draft queue recovery', () => {
     expect(await runtime.listLocalDrafts()).toHaveLength(1);
     localStorage.setItem('email-working-copies:epoch', 'new-session');
     await expect(runtime.listLocalDrafts()).rejects.toThrow('no longer active');
+  });
+  it('lets a new document take over storage another account left without signing out', async () => {
+    auth.user = { authenticated: true, id: 'other-owner' };
+    await runtime.saveLocalDraft(input('Other account draft'));
+    await runtime.localDraftStore.close();
+    vi.resetModules();
+    auth.user = { authenticated: true, id: 'owner' };
+    runtime = await import('./local-drafts');
+    expect(await runtime.listLocalDrafts()).toEqual([]);
+    await runtime.saveLocalDraft(input('Owner draft'));
+    expect(await runtime.listLocalDrafts()).toHaveLength(1);
+  });
+  it('does not take over for an identity this document only restored', async () => {
+    const live = runtime;
+    await live.saveLocalDraft(input('Live draft'));
+    vi.resetModules();
+    auth.user = { authenticated: true, id: 'previous-owner' };
+    auth.confirmed = false;
+    const restored = await import('./local-drafts');
+    await expect(restored.listLocalDrafts()).rejects.toThrow(
+      'no longer active'
+    );
+    auth.user = { authenticated: true, id: 'owner' };
+    expect(
+      (await live.listLocalDrafts()).map((draft) => draft.content.subject)
+    ).toEqual(['Live draft']);
+    await restored.localDraftStore.close();
+  });
+  it('fences a write captured before switching accounts away and back', async () => {
+    const prior = await runtime.saveLocalDraft(input('Before switch'));
+    const captured = await runtime.emailStorageSession();
+    for (const id of ['other-owner', 'owner']) {
+      vi.resetModules();
+      auth.user = { authenticated: true, id };
+      const page = await import('./local-drafts');
+      await page.listLocalDrafts();
+      await page.localDraftStore.close();
+    }
+    await expect(
+      runtime.localDraftStore.save(captured, {
+        ...prior,
+        key: 'late',
+        draftId: 'late',
+        expectedRevision: 0,
+      })
+    ).rejects.toThrow('no longer active');
+  });
+  it('discards draft saves the previous account queued before a takeover', async () => {
+    auth.user = { authenticated: true, id: 'other-owner' };
+    await runtime.listLocalDrafts();
+    queue.push({
+      transactionId: 'previous',
+      uuid: 'local',
+      operationName: 'SaveEmailDraft',
+      query: 'mutation SaveEmailDraft { saveEmailDraft { draftId } }',
+      superseded: false,
+      enqueuedAtMs: Date.now() - 1_000,
+      variables: { input: { draftId: 'local', subject: 'Private' } },
+      optimisticData: { saveEmailDraft: { draft: {} } },
+    });
+    await runtime.localDraftStore.close();
+    vi.resetModules();
+    auth.user = { authenticated: true, id: 'owner' };
+    runtime = await import('./local-drafts');
+    const lifecycle = runtime.localDraftQueueLifecycle(host);
+    await lifecycle.prepareMutationQueue!();
+    expect(await runtime.listLocalDrafts()).toEqual([]);
+    expect(
+      await lifecycle.beforeMutationAttempt!({
+        ...claimed(undefined),
+        transactionId: 'previous',
+      })
+    ).toBe(false);
+  });
+  it('tells a document when another tab ends its session', async () => {
+    await runtime.saveLocalDraft(input());
+    const ended = vi.fn();
+    const stop = runtime.watchEmailStorageEnded('owner', ended);
+    localStorage.setItem('email-working-copies:epoch', 'another-tab');
+    window.dispatchEvent(
+      new StorageEvent('storage', { key: 'email-working-copies:epoch' })
+    );
+    stop();
+    expect(ended).toHaveBeenCalledOnce();
+  });
+  it('does not end a document that is signing itself out', async () => {
+    await runtime.saveLocalDraft(input());
+    const ended = vi.fn();
+    const stop = runtime.watchEmailStorageEnded('owner', ended);
+    await runtime.clearLocalDrafts();
+    window.dispatchEvent(
+      new StorageEvent('storage', { key: 'email-working-copies:epoch' })
+    );
+    stop();
+    expect(ended).not.toHaveBeenCalled();
+  });
+  it('tells a document restored from the back/forward cache that its session ended', async () => {
+    await runtime.saveLocalDraft(input());
+    const ended = vi.fn();
+    const stop = runtime.watchEmailStorageEnded('owner', ended);
+    // The storage event fired while the document was cached.
+    localStorage.setItem('email-working-copies:epoch', 'another-tab');
+    window.dispatchEvent(
+      new PageTransitionEvent('pageshow', { persisted: true })
+    );
+    stop();
+    expect(ended).toHaveBeenCalledOnce();
+  });
+  it('tells a document when the signed-in account is no longer its own', async () => {
+    await runtime.saveLocalDraft(input());
+    const ended = vi.fn();
+    runtime.watchEmailStorageEnded('other-owner', ended)();
+    expect(ended).toHaveBeenCalledOnce();
+  });
+  it('does not write a takeover epoch over a sign-out that ran meanwhile', async () => {
+    auth.user = { authenticated: true, id: 'other-owner' };
+    await runtime.listLocalDrafts();
+    await runtime.localDraftStore.close();
+    vi.resetModules();
+    auth.user = { authenticated: true, id: 'owner' };
+    runtime = await import('./local-drafts');
+    let signOut: Promise<void> | undefined;
+    const put = IDBObjectStore.prototype.put;
+    vi.spyOn(IDBObjectStore.prototype, 'put').mockImplementation(function (
+      this: IDBObjectStore,
+      value: unknown,
+      key?: IDBValidKey
+    ) {
+      const request = put.call(this, value, key);
+      // The sign-out starts after the takeover passed its checks.
+      if (key === 'session' && !signOut) signOut = runtime.clearLocalDrafts();
+      return request;
+    });
+    await expect(runtime.emailStorageSession()).rejects.toThrow(
+      'no longer active'
+    );
+    const signedOutEpoch = localStorage.getItem('email-working-copies:epoch');
+    await signOut;
+    expect(localStorage.getItem('email-working-copies:epoch')).toBe(
+      signedOutEpoch
+    );
   });
   it('rejects delayed old-editor work after logout even if authentication changes', async () => {
     const prior = await runtime.saveLocalDraft(input());

@@ -11,6 +11,8 @@ type HoverCardProps = ParentProps<{
   placement?: Placement;
   content: JSX.Element;
   as?: 'div' | 'span';
+  /** Use -1 when the children hold the focusable control themselves. */
+  triggerTabIndex?: number;
   /**
    * When true, force the hover card closed and prevent it from opening on
    * hover. Use to defer to another surface anchored on the same trigger — e.g.
@@ -59,6 +61,7 @@ export function HoverCard(props: HoverCardProps) {
         contentClass="max-w-[calc(100vw-32px)]"
         triggerClass={cn('inline-flex items-center', props.triggerClass)}
         triggerAs={props.as ?? 'div'}
+        triggerTabIndex={props.triggerTabIndex}
         disabled={props.disabled}
         chokeGroup={props.chokeGroup}
       />

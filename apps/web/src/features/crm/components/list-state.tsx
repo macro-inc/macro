@@ -75,15 +75,25 @@ export function CrmListSkeleton(props: { label?: string; count?: number }) {
   return (
     <ListSkeleton.Root
       label={props.label ?? 'Loading CRM list'}
-      class="w-full shrink-0 py-2"
+      class="@container/crm-skeleton w-full shrink-0 overflow-hidden py-1"
     >
       <For each={Array.from({ length: props.count ?? 6 })}>
-        {() => (
-          <ListSkeleton.Row class="gap-3 px-4">
-            <ListSkeleton.Bar class="size-7 shrink-0 rounded-full" />
-            <div class="flex min-w-0 flex-1 flex-col gap-2">
-              <ListSkeleton.Bar class="w-1/2" />
-              <ListSkeleton.Bar class="h-2 w-2/3 opacity-60" />
+        {(_, index) => (
+          <ListSkeleton.Row class="h-10 gap-2 px-3">
+            <div class="size-4 shrink-0" />
+            <ListSkeleton.Bar class="size-4 shrink-0 rounded" />
+            <div class="min-w-0 flex-1">
+              <div
+                style={{ width: `${[10, 8, 12, 9, 11, 7][index() % 6]}rem` }}
+                class="max-w-full"
+              >
+                <ListSkeleton.Bar class="w-full" />
+              </div>
+            </div>
+            <ListSkeleton.Bar class="hidden w-20 shrink-0 @lg/crm-skeleton:block" />
+            <ListSkeleton.Bar class="hidden w-16 shrink-0 @3xl/crm-skeleton:block" />
+            <div class="flex w-12 shrink-0 justify-end @lg/crm-skeleton:w-20">
+              <ListSkeleton.Bar class="h-2 w-10 opacity-60" />
             </div>
           </ListSkeleton.Row>
         )}

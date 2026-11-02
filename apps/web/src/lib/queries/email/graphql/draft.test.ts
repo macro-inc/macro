@@ -135,7 +135,11 @@ it('creates a complete standalone thread with the account classification and sta
     ownerId: 'macro|owner@example.com',
     isSignal: false,
     isRead: true,
-    inboxVisible: true,
+    // A draft with no received mail belongs in Drafts, not the Inbox.
+    inboxVisible: false,
+    hasReceivedMail: false,
+    latestInboundMessageTs: null,
+    latestNonSpamMessageTs: draft.updatedAt,
     mailAllPreview: { id: args.draftId },
     mailDraftPreview: { id: args.draftId },
     mailSentPreview: null,
@@ -276,6 +280,71 @@ it.each([args.senderLinkId, 'other-inbox'])(
       })
     );
     expect(context.linkPatches).toHaveLength(1);
+  }
+);
+
+it.each([true, false])(
+  'a reply draft returns an archived conversation to the inbox only when it has received mail (received=%s)',
+  async (hasReceivedMail) => {
+    const { draft, thread } = await standalone();
+    const archived = {
+      ...thread,
+      hasReceivedMail,
+      messages: [],
+      mailDraftState: {
+        baseline: {
+          ...thread.mailDraftState!.baseline,
+          messageCount: 1,
+          latestNonSpamMessageTs: '2026-02-01T00:00:00Z',
+        },
+        drafts: [],
+      },
+    };
+    const started = updateDraftThread(archived, draft, false);
+    const edited = updateDraftThread(
+      started,
+      { ...draft, updatedAt: '2026-09-23T12:00:00Z' },
+      false
+    );
+    for (const [state, updatedAt] of [
+      [started, draft.updatedAt],
+      [edited, '2026-09-23T12:00:00Z'],
+    ] as const) {
+      expect(state).toMatchObject({
+        inboxVisible: hasReceivedMail,
+        latestInboundMessageTs: hasReceivedMail ? updatedAt : null,
+        latestNonSpamMessageTs: updatedAt,
+      });
+    }
+  }
+);
+
+it.each([true, false])(
+  'editing a draft follows received mail that changed after the draft was saved (received=%s)',
+  async (hasReceivedMail) => {
+    const { draft, thread } = await standalone();
+    const saved = updateDraftThread(
+      {
+        ...thread,
+        hasReceivedMail: !hasReceivedMail,
+        messages: [],
+        mailDraftState: {
+          baseline: { ...thread.mailDraftState!.baseline, messageCount: 1 },
+          drafts: [],
+        },
+      },
+      draft,
+      false
+    );
+    const edited = updateDraftThread(
+      { ...saved, hasReceivedMail },
+      { ...draft, updatedAt: '2026-09-23T12:00:00Z' },
+      false
+    );
+    expect(edited).toMatchObject({
+      inboxVisible: hasReceivedMail,
+      latestInboundMessageTs: hasReceivedMail ? '2026-09-23T12:00:00Z' : null,
+    });
   }
 );
 
@@ -424,3 +493,67 @@ it('marks a conversation read when its only unread draft is edited or discarded'
   expect(updateDraftThread(thread, draft, true).isRead).toBe(true);
   expect(removeDraftFromThread(thread, draft.id)?.isRead).toBe(true);
 });
+
+it('discarding a local draft does not bring a junk provider draft into All Mail', async () => {
+  const { draft, thread } = await standalone();
+  const state = thread.mailDraftState!;
+  const junk = {
+    ...state.drafts[0],
+    id: 'junk-draft',
+    macroDraft: false,
+    facts: {
+      ...state.drafts[0].facts,
+      latestNonSpamMessageTs: null,
+      preview: { ...state.drafts[0].facts.preview!, id: 'junk-draft' },
+    },
+  };
+  state.drafts.push(junk);
+  const result = removeDraftFromThread(thread, draft.id)!;
+  expect(result.mailAllPreview).toBeNull();
+  expect(result.mailDraftPreview?.id).toBe('junk-draft');
+  expect(draftThreadIsEmpty(result)).toBe(false);
+});
+
+it.each([
+  { folder: 'junk', mixed: false },
+  { folder: 'trash', mixed: false },
+  { folder: 'junk', mixed: true },
+  { folder: 'trash', mixed: true },
+])(
+  'editing a synced Macro draft in $folder preserves All Mail eligibility (mixed=$mixed)',
+  async ({ folder, mixed }) => {
+    const { draft, thread } = await standalone();
+    const state = thread.mailDraftState!;
+    const entry = state.drafts[0];
+    const cleanTimestamp = '2026-01-01T00:00:00Z';
+    if (mixed) {
+      state.baseline = {
+        ...state.baseline,
+        messageCount: 1,
+        latestNonSpamMessageTs: cleanTimestamp,
+        previewTs: cleanTimestamp,
+        preview: {
+          ...entry.facts.preview!,
+          id: 'clean-message',
+          isDraft: false,
+        },
+      };
+    }
+    entry.facts.latestNonSpamMessageTs = null;
+    if (folder === 'trash') entry.facts.preview = null;
+    thread.mailAllPreview = state.baseline.preview;
+    thread.latestNonSpamMessageTs = state.baseline.latestNonSpamMessageTs;
+    const edited = updateDraftThread(
+      thread,
+      { ...draft, updatedAt: '2027-01-01T00:00:00Z' },
+      true
+    );
+    expect(edited.latestNonSpamMessageTs).toBe(mixed ? cleanTimestamp : null);
+    expect(edited.mailAllPreview?.id ?? null).toBe(
+      mixed ? 'clean-message' : null
+    );
+    expect(edited.mailDraftPreview?.id ?? null).toBe(
+      folder === 'junk' ? draft.id : null
+    );
+  }
+);

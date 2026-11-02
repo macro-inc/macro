@@ -99,14 +99,14 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService>
                 &link.github_user_id,
             )
             .await
-            .map_err(|e| GithubError::Internal(e.into()))?
+            .map_err(Into::into)?
             .ok_or(GithubError::ReauthenticationRequired)?;
 
         let token_is_expired = self
             .oauth
             .is_access_token_expired(access_token.as_str())
             .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
+            .map_err(Into::into)?;
 
         if token_is_expired {
             return Err(GithubError::ReauthenticationRequired);
@@ -208,7 +208,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
     fn construct_oauth_url(&self, redirect_uri: &str, state: &str) -> Result<String, GithubError> {
         self.oauth
             .construct_oauth_url(&self.config.client_id, redirect_uri, state)
-            .map_err(|e| GithubError::Internal(e.into()))
+            .map_err(Into::into)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -300,7 +300,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
                 merge_method,
             )
             .await
-            .map_err(|error| GithubError::Internal(error.into()))?;
+            .map_err(Into::into)?;
 
         let merge = match outcome {
             GithubMergeOutcome::Merged(merge) => merge,
@@ -338,7 +338,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
                 request.draft,
             )
             .await
-            .map_err(|error| GithubError::Internal(error.into()))?;
+            .map_err(Into::into)?;
 
         let draft = match outcome {
             GithubDraftOutcome::Changed { draft } => draft,
@@ -375,7 +375,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
                 request.state,
             )
             .await
-            .map_err(|error| GithubError::Internal(error.into()))?;
+            .map_err(Into::into)?;
 
         let state = match outcome {
             GithubStateOutcome::Changed { state } => state,
@@ -412,7 +412,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
         self.oauth
             .get_pull_request_mergeability(access_token.as_str(), &pull_requests)
             .await
-            .map_err(|error| GithubError::Internal(error.into()))
+            .map_err(Into::into)
     }
 
     #[tracing::instrument(skip(self), err)]
@@ -464,7 +464,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
             self.auth
                 .delete_user_link(&link, &self.config.idp_id)
                 .await
-                .map_err(|e| GithubError::Internal(e.into()))?;
+                .map_err(Into::into)?;
         }
 
         // Delete from repo
@@ -494,13 +494,13 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
                 code,
             )
             .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
+            .map_err(Into::into)?;
 
         let user_info = self
             .oauth
             .get_user_info(&tokens.access_token)
             .await
-            .map_err(|e| GithubError::Internal(e.into()))?;
+            .map_err(Into::into)?;
 
         tracing::trace!(github_user_id = user_info.id, "got github user identity");
 
@@ -543,7 +543,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
                         &tokens.access_token,
                     )
                     .await
-                    .map_err(|e| GithubError::Internal(e.into()))?;
+                    .map_err(Into::into)?;
                 if result == GithubGrantLinkOutcome::IdentityMissing {
                     // OAuth verified this GitHub account; migrate every sharer
                     // only after storing the grant on the current identity.
@@ -557,7 +557,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
                             &tokens.access_token,
                         )
                         .await
-                        .map_err(|e| GithubError::Internal(e.into()))?;
+                        .map_err(Into::into)?;
                     if result == GithubGrantLinkOutcome::IdentityMissing {
                         return Err(GithubError::ReauthenticationRequired);
                     }
@@ -591,7 +591,7 @@ impl<R: GithubRepo, U: GithubOauth, F: Auth, E: GithubPullRequestService> Github
                         &tokens.access_token,
                     )
                     .await
-                    .map_err(|e| GithubError::Internal(e.into()))?;
+                    .map_err(Into::into)?;
 
                 if result == GithubGrantLinkOutcome::IdentityMissing {
                     return Err(GithubError::ReauthenticationRequired);

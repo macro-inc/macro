@@ -313,6 +313,9 @@ export type EmailEntity = EntityBase & {
   /** Server-computed Signal membership; unavailable on some search results. */
   isSignal?: boolean;
   done: boolean;
+  /** Whether any message was received rather than drafted or sent. Only such
+   * threads can return to the inbox. Unknown on REST Soup rows. */
+  hasReceivedMail?: boolean;
   projectId?: string;
   participants?: EmailThreadParticipants;
   senderEmail?: string;

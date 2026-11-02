@@ -3,7 +3,14 @@ import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { Accordion } from '@kobalte/core/accordion';
 import type { DialogHandle } from '@ui';
-import { createMemo, createSignal, For, getOwner, onCleanup } from 'solid-js';
+import {
+  createMemo,
+  createSignal,
+  For,
+  getOwner,
+  onCleanup,
+  Show,
+} from 'solid-js';
 import { TASK_GROUP_OPTIONS, TASK_SORT_OPTIONS } from '../constants';
 import { useTaskFilters } from '../filters/use-task-filters';
 import { useTasksView } from '../tasks-view-context';
@@ -11,6 +18,7 @@ import {
   TaskSavedViewActions,
   TaskSavedViewCreateBanner,
 } from '../views/task-saved-views';
+import { TaskDueDateRangeDialog } from './task-due-date-range-dialog';
 
 export function TasksFilterDrawer() {
   const { state, setPrimarySort, setState, savedViews, savedViewScope } =
@@ -61,110 +69,131 @@ export function TasksFilterDrawer() {
   };
 
   return (
-    <MobileFilterDrawer
-      open={open()}
-      onOpenChange={setOpen}
-      onContentPresentChange={afterClose}
-      triggerLabel="Open task filters"
-      label="Task list controls"
-      activeCount={filters.activeCount()}
-      onClear={filters.clear}
-      contentOverlay={() => (
-        <TaskSavedViewCreateBanner dialogOwner={owner} onCreate={onCreate} />
-      )}
-      footerEnd={() =>
-        editingSavedView() && (
-          <TaskSavedViewActions dialogOwner={owner} onCreate={onCreate} />
-        )
-      }
-    >
-      <MobileDrawer.Label id="task-sort-label" class="pt-4">
-        Sort
-      </MobileDrawer.Label>
-      <MobileDrawer.Section role="radiogroup" aria-labelledby="task-sort-label">
-        <For each={TASK_SORT_OPTIONS}>
-          {(option) => {
-            const selected = () => primarySort() === option.id;
-
-            return (
-              <MobileFilterDrawer.Option
-                selectionMode="single"
-                checked={selected()}
-                onChange={() => setPrimarySort(option.id)}
-              >
-                {option.label}
-              </MobileFilterDrawer.Option>
-            );
-          }}
-        </For>
-      </MobileDrawer.Section>
-
-      <MobileDrawer.Label id="task-group-label" class="pt-4">
-        Group
-      </MobileDrawer.Label>
-      <MobileDrawer.Section
-        role="radiogroup"
-        aria-labelledby="task-group-label"
+    <>
+      <MobileFilterDrawer
+        open={open()}
+        onOpenChange={setOpen}
+        onContentPresentChange={afterClose}
+        triggerLabel="Open task filters"
+        label="Task list controls"
+        activeCount={filters.activeCount()}
+        onClear={filters.clear}
+        contentOverlay={() => (
+          <TaskSavedViewCreateBanner dialogOwner={owner} onCreate={onCreate} />
+        )}
+        footerEnd={() =>
+          editingSavedView() && (
+            <TaskSavedViewActions dialogOwner={owner} onCreate={onCreate} />
+          )
+        }
       >
-        <For each={TASK_GROUP_OPTIONS}>
-          {(option) => {
-            const selected = () => state.groupBy === option.id;
+        <Show
+          when={!state.search.trim()}
+          fallback={
+            <MobileDrawer.Label class="pt-4">
+              Search ordering
+            </MobileDrawer.Label>
+          }
+        >
+          <MobileDrawer.Label id="task-sort-label" class="pt-4">
+            Sort
+          </MobileDrawer.Label>
+          <MobileDrawer.Section
+            role="radiogroup"
+            aria-labelledby="task-sort-label"
+          >
+            <For each={TASK_SORT_OPTIONS}>
+              {(option) => {
+                const selected = () => primarySort() === option.id;
 
-            return (
-              <MobileFilterDrawer.Option
-                selectionMode="single"
-                checked={selected()}
-                onChange={() => setState('groupBy', option.id)}
-              >
-                {option.label}
-              </MobileFilterDrawer.Option>
-            );
-          }}
-        </For>
-      </MobileDrawer.Section>
+                return (
+                  <MobileFilterDrawer.Option
+                    selectionMode="single"
+                    checked={selected()}
+                    onChange={() => setPrimarySort(option.id)}
+                  >
+                    {option.label}
+                  </MobileFilterDrawer.Option>
+                );
+              }}
+            </For>
+          </MobileDrawer.Section>
+        </Show>
 
-      <MobileDrawer.Label class="pt-4">Filters</MobileDrawer.Label>
-      <Accordion
-        multiple
-        collapsible
-        defaultValue={[filters.groups()[0]?.id ?? 'status']}
-      >
-        <div class="flex flex-col gap-3">
-          <For each={filters.groups()}>
-            {(group) => {
-              const activeCount = createMemo(
-                () =>
-                  group.options.filter((option) =>
-                    filters.isSelected(group.id, option.id)
-                  ).length
-              );
+        <MobileDrawer.Label id="task-group-label" class="pt-4">
+          Group
+        </MobileDrawer.Label>
+        <MobileDrawer.Section
+          role="radiogroup"
+          aria-labelledby="task-group-label"
+        >
+          <For each={TASK_GROUP_OPTIONS}>
+            {(option) => {
+              const selected = () => state.groupBy === option.id;
 
               return (
-                <MobileFilterDrawer.Section
-                  value={group.id}
-                  label={group.label}
-                  activeCount={activeCount()}
+                <MobileFilterDrawer.Option
+                  selectionMode="single"
+                  checked={selected()}
+                  onChange={() => setState('groupBy', option.id)}
                 >
-                  <For each={group.options}>
-                    {(option) => (
-                      <MobileFilterDrawer.Option
-                        selectionMode={group.selectionMode ?? 'multiple'}
-                        checked={filters.isSelected(group.id, option.id)}
-                        onChange={(checked) =>
-                          filters.setSelected(group.id, option.id, checked)
-                        }
-                        icon={option.icon?.()}
-                      >
-                        {option.content?.() ?? option.label}
-                      </MobileFilterDrawer.Option>
-                    )}
-                  </For>
-                </MobileFilterDrawer.Section>
+                  {option.label}
+                </MobileFilterDrawer.Option>
               );
             }}
           </For>
-        </div>
-      </Accordion>
-    </MobileFilterDrawer>
+        </MobileDrawer.Section>
+
+        <MobileDrawer.Label class="pt-4">Filters</MobileDrawer.Label>
+        <Accordion
+          multiple
+          collapsible
+          defaultValue={[filters.groups()[0]?.id ?? 'status']}
+        >
+          <div class="flex flex-col gap-3">
+            <For each={filters.groups()}>
+              {(group) => {
+                const activeCount = createMemo(
+                  () =>
+                    group.options.filter(
+                      (option) =>
+                        option.id !== group.defaultOptionId &&
+                        filters.isSelected(group.id, option.id)
+                    ).length
+                );
+
+                return (
+                  <MobileFilterDrawer.Section
+                    value={group.id}
+                    label={group.label}
+                    activeCount={activeCount()}
+                  >
+                    <For each={group.options}>
+                      {(option) => (
+                        <MobileFilterDrawer.Option
+                          selectionMode={group.selectionMode ?? 'multiple'}
+                          checked={filters.isSelected(group.id, option.id)}
+                          onChange={(checked) =>
+                            filters.setSelected(group.id, option.id, checked)
+                          }
+                          icon={option.icon?.()}
+                        >
+                          {option.content?.() ?? option.label}
+                        </MobileFilterDrawer.Option>
+                      )}
+                    </For>
+                  </MobileFilterDrawer.Section>
+                );
+              }}
+            </For>
+          </div>
+        </Accordion>
+      </MobileFilterDrawer>
+      <TaskDueDateRangeDialog
+        value={filters.customRange()}
+        onChange={filters.setCustomRange}
+        onApply={filters.applyCustomRange}
+      />
+    </>
   );
 }

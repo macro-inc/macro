@@ -15,6 +15,7 @@ export function toEmailThread(thread: ApiThread): EmailThread {
     created_at: thread.created_at,
     updated_at: thread.updated_at,
     inbox_visible: thread.inbox_visible,
+    has_received_mail: thread.has_received_mail,
     is_read: thread.is_read,
     latest_inbound_message_ts: thread.latest_inbound_message_ts,
     link_id: thread.link_id,
@@ -171,7 +172,8 @@ export function createEmailThreadSource(
       return {
         access_level: 'owner' as const,
         db_id: draft.serverThreadId ?? draft.threadId ?? requested,
-        inbox_visible: true,
+        inbox_visible: false,
+        has_received_mail: false,
         is_read: true,
         link_id: draft.inboxId ?? '',
         messages,

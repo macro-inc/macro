@@ -59,7 +59,7 @@ link flow, following the hexagonal architecture pattern.
 ## Gotchas
 
 - Missing FusionAuth identities/grants require reauthentication; infrastructure
-  errors remain errors. After OAuth proves GitHub identity, refresh the grant
+  errors remain errors (outages as `GithubError::Upstream`, below). After OAuth proves GitHub identity, refresh the grant
   before returning an existing link. Reassign every sharer when its grant owner
   is gone, using the old owner as a compare-and-swap condition. Hold the user
   guard then the GitHub account guard through OAuth grant writes and DB changes;
@@ -74,6 +74,14 @@ link flow, following the hexagonal architecture pattern.
 - Webhook signature verification uses `hmac`/`subtle` for constant-time
   comparison — don't swap in a plain `==` when touching
   `github_sync_router.rs`.
+- A GitHub or sign-in outage is `GithubError::Upstream`, answered 502/503 by
+  `inbound.rs`. Outbound adapters classify it (`github_oauth_client.rs`
+  `throttling`/`unexpected_response`, `github_auth_client.rs`
+  `fusionauth_error`); everything else they cannot explain stays `Internal`.
+  Port errors reach the service as `GithubError`, so map them with
+  `.map_err(Into::into)`, never `GithubError::Internal(e.into())`, which turns
+  an outage back into a 500. A GitHub 403 is a refusal only after
+  `throttling` rules out a rate limit.
 - `GithubError::Forbidden`, `SetupUserNotLinked`, and `RepositoryUnavailable`
   all map to the same 403 deliberately — don't let a response distinguish
   "app not installed" from "installed somewhere you have no claim to".

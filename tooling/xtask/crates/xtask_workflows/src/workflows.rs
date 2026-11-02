@@ -16,6 +16,7 @@ mod assign_author;
 mod assign_labels;
 mod build_agent_daemon_on_tag;
 mod build_appimage_on_tag;
+mod build_cef_codecs;
 mod build_desktop_on_tag;
 mod build_dmg_on_tag;
 mod build_web_app;
@@ -42,6 +43,7 @@ mod deploy_web_app;
 mod deploy_website;
 mod ensure_daytona_snapshot;
 mod export_ci_telemetry;
+mod ios_app_store_publish;
 mod ios_app_store_release;
 mod ios_preview;
 mod ios_release_drift;
@@ -284,6 +286,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_patched(deploy_website::deploy_website, deploy_website::patch),
     },
     WorkflowFile {
+        slug: "build_cef_codecs",
+        file_name: "build_cef_codecs.yml",
+        render_yaml: || render_gh_workflow(build_cef_codecs::build_cef_codecs)(),
+    },
+    WorkflowFile {
         slug: "ensure_daytona_snapshot",
         file_name: "ensure_daytona_snapshot.yml",
         render_yaml: || render_gh_workflow(ensure_daytona_snapshot::ensure_daytona_snapshot)(),
@@ -317,6 +324,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "ios_app_store_release",
         file_name: "ios-app-store-release.yml",
         render_yaml: || render_gh_workflow(ios_app_store_release::ios_app_store_release)(),
+    },
+    WorkflowFile {
+        slug: "ios_app_store_publish",
+        file_name: "ios-app-store-publish.yml",
+        render_yaml: || render_gh_workflow(ios_app_store_publish::ios_app_store_publish)(),
     },
     WorkflowFile {
         slug: "native_check_label",
