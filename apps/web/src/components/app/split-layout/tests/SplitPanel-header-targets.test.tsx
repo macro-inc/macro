@@ -139,6 +139,7 @@ it.each([true, false])('keeps header targets (touch=%s)', (touch) => {
     id,
     content,
     referredFrom: null,
+    lastNavigationSource: null,
     lastNavigationCause: 'fresh',
     mount: {
       kind: 'component',
@@ -202,6 +203,7 @@ it.each([true, false])('keeps header targets (touch=%s)', (touch) => {
       split.mount.kind === 'component' ? split.mount.meta : undefined,
     updateMeta: () => {},
     referredFrom: () => null,
+    lastNavigationSource: () => null,
     lastNavigationCause: () => 'fresh',
     registerEntryStateCaptor: () => () => {},
     captureEntryState: () => {},

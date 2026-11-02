@@ -5939,8 +5939,9 @@ function _create_createCrmCompanyBody() {
     .object({
       domain: zod
         .string()
+        .nullish()
         .describe(
-          'The company\'s email domain, e.g. \"acme.com\". Must be a bare\ndomain (no scheme, path, or email) and not a generic email\nprovider domain.'
+          'Optional company domain, e.g. \"acme.com\". Omit for a name-only\ncompany. When supplied, must be a bare\ndomain (no scheme, path, or email) and not a generic email\nprovider domain.'
         ),
       name: zod
         .string()
@@ -6258,7 +6259,6 @@ export function getListCompanyContactsResponseSchema() {
 [`CrmCompanyAccessLevelExtractor`]: the caller must be on the team
 that owns the company (hidden companies are reachable for
 admin/owner only, and the new contact then inherits `hidden`). The
-email's domain must be one of the company's domains (400), the
 company must not already track the email (409), and the team's CRM
 killswitch must be on (403).
  */
@@ -6280,7 +6280,7 @@ function _create_createCrmContactBody() {
       email: zod
         .string()
         .describe(
-          'The contact\'s email address, e.g. \"jane@example.com\". Its domain\nmust be one of the company\'s domains (400 otherwise).'
+          "The contact's email address, including personal email providers.\nIt need not match a company domain."
         ),
       name: zod.string().describe('Display name for the contact.'),
     })
@@ -6532,7 +6532,8 @@ export function getSearchContactsResponseSchema() {
  * @summary Look up a CRM contact by email in the caller's team. Returns a null
 `contact` when no visible contact exists. Any team member may resolve a
 visible contact; admin/owner callers may also resolve hidden contacts and
-contacts under hidden companies.
+contacts under hidden companies. Returns 400 when several visible contacts
+match; callers must choose an explicit contact ID instead.
  */
 function _create_getContactByEmailQueryParams() {
   return zod.object({
@@ -26665,12 +26666,39 @@ export function getListFormsQueryParamsSchema() {
   return (_cached_listFormsQueryParams ??= _create_listFormsQueryParams());
 }
 
+export const listFormsResponseBrandingAccentColorRegExpTwo = new RegExp(
+  '^#[0-9a-fA-F]{6}$'
+);
+
 function _create_listFormsResponseItem() {
   return zod
     .object({
       audience: zod
         .enum(['members', 'public'])
         .describe('Who may respond to a form.'),
+      branding: zod
+        .object({
+          accentColor: zod.union([
+            zod.null(),
+            zod
+              .string()
+              .regex(listFormsResponseBrandingAccentColorRegExpTwo)
+              .describe('A color as `#rrggbb`, kept in lowercase.'),
+          ]),
+          coverFileId: zod
+            .uuid()
+            .nullable()
+            .describe(
+              'The static file shown as a banner across the top of the page.'
+            ),
+          logoFileId: zod
+            .uuid()
+            .nullable()
+            .describe('The static file shown as the logo above the title.'),
+        })
+        .describe(
+          "A form's logo, cover image and accent color, each unset by default."
+        ),
       closesAt: zod.iso
         .datetime({})
         .nullable()
@@ -26793,6 +26821,9 @@ export function getCreateFormBodySchema() {
 level: what Drive and Quick Access list. Public forms reached only by
 their link are not listed.
  */
+export const listAccessibleFormsResponseFormBrandingAccentColorRegExpTwo =
+  new RegExp('^#[0-9a-fA-F]{6}$');
+
 function _create_listAccessibleFormsResponseItem() {
   return zod
     .object({
@@ -26806,6 +26837,31 @@ function _create_listAccessibleFormsResponseItem() {
           audience: zod
             .enum(['members', 'public'])
             .describe('Who may respond to a form.'),
+          branding: zod
+            .object({
+              accentColor: zod.union([
+                zod.null(),
+                zod
+                  .string()
+                  .regex(
+                    listAccessibleFormsResponseFormBrandingAccentColorRegExpTwo
+                  )
+                  .describe('A color as `#rrggbb`, kept in lowercase.'),
+              ]),
+              coverFileId: zod
+                .uuid()
+                .nullable()
+                .describe(
+                  'The static file shown as a banner across the top of the page.'
+                ),
+              logoFileId: zod
+                .uuid()
+                .nullable()
+                .describe('The static file shown as the logo above the title.'),
+            })
+            .describe(
+              "A form's logo, cover image and accent color, each unset by default."
+            ),
           closesAt: zod.iso
             .datetime({})
             .nullable()
@@ -26901,6 +26957,10 @@ export function getGetFormParamsSchema() {
   return (_cached_getFormParams ??= _create_getFormParams());
 }
 
+export const getFormResponseFormBrandingAccentColorRegExpTwo = new RegExp(
+  '^#[0-9a-fA-F]{6}$'
+);
+
 function _create_getFormResponse() {
   return zod
     .object({
@@ -26914,6 +26974,29 @@ function _create_getFormResponse() {
           audience: zod
             .enum(['members', 'public'])
             .describe('Who may respond to a form.'),
+          branding: zod
+            .object({
+              accentColor: zod.union([
+                zod.null(),
+                zod
+                  .string()
+                  .regex(getFormResponseFormBrandingAccentColorRegExpTwo)
+                  .describe('A color as `#rrggbb`, kept in lowercase.'),
+              ]),
+              coverFileId: zod
+                .uuid()
+                .nullable()
+                .describe(
+                  'The static file shown as a banner across the top of the page.'
+                ),
+              logoFileId: zod
+                .uuid()
+                .nullable()
+                .describe('The static file shown as the logo above the title.'),
+            })
+            .describe(
+              "A form's logo, cover image and accent color, each unset by default."
+            ),
           closesAt: zod.iso
             .datetime({})
             .nullable()
@@ -27415,9 +27498,16 @@ export function getUpdateFormParamsSchema() {
   return (_cached_updateFormParams ??= _create_updateFormParams());
 }
 
+export const updateFormBodyAccentColorRegExp = new RegExp('^#[0-9a-fA-F]{6}$');
+
 function _create_updateFormBody() {
   return zod
     .object({
+      accentColor: zod
+        .string()
+        .regex(updateFormBodyAccentColorRegExp)
+        .nullish()
+        .describe('A new accent color, or `null` for the default.'),
       audience: zod
         .enum(['members', 'public'])
         .optional()
@@ -27430,7 +27520,15 @@ function _create_updateFormBody() {
         .string()
         .optional()
         .describe('Its new confirmation message.'),
+      coverFileId: zod
+        .uuid()
+        .nullish()
+        .describe('A new cover image, or `null` to remove it.'),
       description: zod.string().optional().describe('Its new description.'),
+      logoFileId: zod
+        .uuid()
+        .nullish()
+        .describe('A new logo, or `null` to remove it.'),
       status: zod
         .enum(['open', 'closed'])
         .optional()
@@ -27443,7 +27541,7 @@ function _create_updateFormBody() {
         .describe('Whether respondents may read option tallies.'),
     })
     .describe(
-      "A change to a form's facts; what is left out stays. The description and\nconfirmation message take edit, the rest owner. A form is renamed\nthrough the entity mutation router."
+      "A change to a form's facts; what is left out stays. The description,\nconfirmation message and branding take edit, the rest owner. A form is renamed\nthrough the entity mutation router."
     );
 }
 let _cached_updateFormBody:
@@ -27453,12 +27551,39 @@ export function getUpdateFormBodySchema() {
   return (_cached_updateFormBody ??= _create_updateFormBody());
 }
 
+export const updateFormResponseBrandingAccentColorRegExpTwo = new RegExp(
+  '^#[0-9a-fA-F]{6}$'
+);
+
 function _create_updateFormResponse() {
   return zod
     .object({
       audience: zod
         .enum(['members', 'public'])
         .describe('Who may respond to a form.'),
+      branding: zod
+        .object({
+          accentColor: zod.union([
+            zod.null(),
+            zod
+              .string()
+              .regex(updateFormResponseBrandingAccentColorRegExpTwo)
+              .describe('A color as `#rrggbb`, kept in lowercase.'),
+          ]),
+          coverFileId: zod
+            .uuid()
+            .nullable()
+            .describe(
+              'The static file shown as a banner across the top of the page.'
+            ),
+          logoFileId: zod
+            .uuid()
+            .nullable()
+            .describe('The static file shown as the logo above the title.'),
+        })
+        .describe(
+          "A form's logo, cover image and accent color, each unset by default."
+        ),
       closesAt: zod.iso
         .datetime({})
         .nullable()
@@ -27537,6 +27662,8 @@ export function getCollaborateFormParamsSchema() {
   return (_cached_collaborateFormParams ??= _create_collaborateFormParams());
 }
 
+export const collaborateFormResponseDetailFormBrandingAccentColorRegExpTwo =
+  new RegExp('^#[0-9a-fA-F]{6}$');
 export const collaborateFormResponsePublicationErrorProblemMaxMin = 0;
 
 function _create_collaborateFormResponse() {
@@ -27554,6 +27681,33 @@ function _create_collaborateFormResponse() {
               audience: zod
                 .enum(['members', 'public'])
                 .describe('Who may respond to a form.'),
+              branding: zod
+                .object({
+                  accentColor: zod.union([
+                    zod.null(),
+                    zod
+                      .string()
+                      .regex(
+                        collaborateFormResponseDetailFormBrandingAccentColorRegExpTwo
+                      )
+                      .describe('A color as `#rrggbb`, kept in lowercase.'),
+                  ]),
+                  coverFileId: zod
+                    .uuid()
+                    .nullable()
+                    .describe(
+                      'The static file shown as a banner across the top of the page.'
+                    ),
+                  logoFileId: zod
+                    .uuid()
+                    .nullable()
+                    .describe(
+                      'The static file shown as the logo above the title.'
+                    ),
+                })
+                .describe(
+                  "A form's logo, cover image and accent color, each unset by default."
+                ),
               closesAt: zod.iso
                 .datetime({})
                 .nullable()
@@ -28493,6 +28647,8 @@ export function getPutFormLayoutBodySchema() {
   return (_cached_putFormLayoutBody ??= _create_putFormLayoutBody());
 }
 
+export const putFormLayoutResponseDetailFormBrandingAccentColorRegExpTwo =
+  new RegExp('^#[0-9a-fA-F]{6}$');
 export const putFormLayoutResponsePublicationErrorProblemMaxMin = 0;
 
 function _create_putFormLayoutResponse() {
@@ -28510,6 +28666,33 @@ function _create_putFormLayoutResponse() {
               audience: zod
                 .enum(['members', 'public'])
                 .describe('Who may respond to a form.'),
+              branding: zod
+                .object({
+                  accentColor: zod.union([
+                    zod.null(),
+                    zod
+                      .string()
+                      .regex(
+                        putFormLayoutResponseDetailFormBrandingAccentColorRegExpTwo
+                      )
+                      .describe('A color as `#rrggbb`, kept in lowercase.'),
+                  ]),
+                  coverFileId: zod
+                    .uuid()
+                    .nullable()
+                    .describe(
+                      'The static file shown as a banner across the top of the page.'
+                    ),
+                  logoFileId: zod
+                    .uuid()
+                    .nullable()
+                    .describe(
+                      'The static file shown as the logo above the title.'
+                    ),
+                })
+                .describe(
+                  "A form's logo, cover image and accent color, each unset by default."
+                ),
               closesAt: zod.iso
                 .datetime({})
                 .nullable()

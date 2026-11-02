@@ -805,11 +805,11 @@
 		overflow: hidden;
 	}
 
-	:where(.agents-view, .agents-view-portal) .scard > * + * {
+	:where(.agents-view, .agents-view-portal) .scard > :not(:first-child) {
 		border-top: var(--hair) solid var(--edge-muted);
 	}
 
-	:where(.agents-view, .agents-view-portal) .runtimes > #runtimeList > * + * {
+	:where(.agents-view, .agents-view-portal) .runtimes > #runtimeList > :not(:first-child) {
 		border-top: var(--hair) solid var(--edge-muted);
 	}
 
@@ -1361,8 +1361,8 @@
 		background: var(--surface-1);
 	}
 
-	:where(.agents-view, .agents-view-portal) .picker .results > * + *,
-	:where(.agents-view, .agents-view-portal) .picker .picked > * + * {
+	:where(.agents-view, .agents-view-portal) .picker .results > :not(:first-child),
+	:where(.agents-view, .agents-view-portal) .picker .picked > :not(:first-child) {
 		border-top: var(--hair) solid var(--edge-muted);
 	}
 
@@ -1753,7 +1753,7 @@
 		scrollbar-color: var(--surface-4) transparent;
 	}
 
-	:where(.agents-view, .agents-view-portal) .plist > * + * {
+	:where(.agents-view, .agents-view-portal) .plist > :not(:first-child) {
 		border-top: var(--hair) solid var(--edge-muted);
 	}
 

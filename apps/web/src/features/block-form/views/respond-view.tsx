@@ -31,12 +31,14 @@ import {
   StopScreen,
 } from '../components/respond/respond-screens';
 import { useFormContext } from '../context/form-context';
+import { brandingStyle } from '../core/branding';
 import { questionNumbers } from '../core/form-layout';
 import type { FormCellValue, FormDetail } from '../core/form-model';
 import { formAvailability, shortDate } from '../core/form-status';
 import { resolvedWidget } from '../core/question-types';
 import { createRespond } from '../primitives/create-respond';
 import { BookingStepView } from './booking-step-view';
+import '../components/respond/branding.css';
 
 /**
  * The respond page (RFC 02 §4), shared by the app split, the public route
@@ -89,6 +91,12 @@ export function RespondView(props: {
   });
 
   const form = () => props.detail.form;
+  // An inline card stays in Macro's look; the page wears the owner's.
+  const branding = () => (props.compact ? undefined : form().branding);
+  const brandingImage = (
+    fileId: string | null | undefined,
+    size: 'small' | 'medium'
+  ) => (fileId ? context.branding.imageUrl(fileId, size) : undefined);
   const isPublic = () => form().audience === 'public';
   const numbers = createMemo(() => questionNumbers(props.detail.layout));
 
@@ -210,15 +218,27 @@ export function RespondView(props: {
         ref={root}
         class={cn(
           'mx-auto flex w-full flex-col',
-          props.compact ? 'gap-3' : 'max-w-3xl gap-6 pt-12 pb-24'
+          props.compact ? 'gap-3' : 'max-w-3xl gap-6 pt-12 pb-24',
+          branding()?.accentColor && 'form-branded'
         )}
+        style={brandingStyle(branding()?.accentColor ?? null)}
         data-form-respond={form().id}
       >
         <Show when={props.header}>{props.header}</Show>
+        <Show when={brandingImage(branding()?.coverFileId, 'medium')}>
+          {(cover) => (
+            <img
+              src={cover()}
+              alt=""
+              class="aspect-[4/1] w-full rounded-xl object-cover"
+            />
+          )}
+        </Show>
         <Show when={!props.compact}>
           <RespondTitleCard
             name={form().name}
             description={form().description}
+            logoUrl={brandingImage(branding()?.logoFileId, 'small')}
             compact={false}
           />
         </Show>

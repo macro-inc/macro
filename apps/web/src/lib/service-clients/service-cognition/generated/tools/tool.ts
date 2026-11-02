@@ -264,6 +264,10 @@ type ToolParserMap = {
     response: types.IssueBotCredentialResponse;
   };
   ListAgents: { call: types.ListAgents; response: types.ListAgentsResponse };
+  ListAgentUpdates: {
+    call: types.ListAgentUpdates;
+    response: types.AgentUpdates;
+  };
   ListBookingLinks: {
     call: types.ListBookingLinks;
     response: types.ListBookingLinksResult;
@@ -866,6 +870,10 @@ const toolParserMap = {
   ListAgents: {
     call: schemas.getListAgentsSchema,
     response: schemas.getListAgentsResponseSchema,
+  },
+  ListAgentUpdates: {
+    call: schemas.getListAgentUpdatesSchema,
+    response: schemas.getAgentUpdatesSchema,
   },
   ListBookingLinks: {
     call: schemas.getListBookingLinksSchema,
@@ -1517,6 +1525,10 @@ type ToolDataMap = {
     response: types.IssueBotCredentialResponse;
   };
   ListAgents: { call: types.ListAgents; response: types.ListAgentsResponse };
+  ListAgentUpdates: {
+    call: types.ListAgentUpdates;
+    response: types.AgentUpdates;
+  };
   ListBookingLinks: {
     call: types.ListBookingLinks;
     response: types.ListBookingLinksResult;
