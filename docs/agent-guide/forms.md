@@ -209,10 +209,10 @@ choice; removing a choice focuses its replacement. Duplicate choice names
 (ignore case and surrounding spaces) show an inline error and disable Post
 until corrected. Poll cards omit permission badges and display the question
 once, in the card header. Newly posted poll cards
-store their option count in Lexical preview metadata to reserve their height
-before loading. Choices have fixed-height rows; large polls and expanded
-results scroll inside the card. Older cards without that metadata keep their
-content-sized layout.
+store their option count in Lexical preview metadata to reserve a minimum
+height before loading, which matches a one-line poll. The card then grows to
+its content (wrapped text, many options, expanded results); nothing scrolls or
+clips inside it. Older cards without that metadata size to their content.
 
 ## Reading responses as an agent
 
