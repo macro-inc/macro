@@ -55,6 +55,8 @@ shared entity appearance. Users with edit access click the header icon or choose
 **Change icon** in an entity menu. Row icons still navigate; sidebar category
 icons do not change. Drive folders, tasks, skills, and internal descriptions do
 not have appearance editing.
+Home and Drive document headers keep icon editing separate from title navigation,
+including when the header is rendered as a breadcrumb.
 
 Desktop uses a compact popover; phones use the shared dialog sheet. Search
 Macro icons or emoji. Colors use a fixed theme-aware palette on the Icons tab;
