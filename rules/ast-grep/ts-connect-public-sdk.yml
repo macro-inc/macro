@@ -9,6 +9,7 @@ note: |-
 files:
   - apps/**
   - packages/**
+  - services/**
 rule:
   kind: string
   all:

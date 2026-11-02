@@ -1,8 +1,9 @@
 # Status
 
-Last updated 2026-10-30 by Claude (planning session). Slice 1: Connect as an
-independent backend with integration tests. Target: Macro's own
-users off Pipedream for catalog apps by 2026-11-06 ([plan](docs/plan.md#week-one)).
+Last updated 2026-10-31 by Claude. Slice 1 is deployed and proven end to end
+on dev: `https://connect-dev.macro.com`, demo at
+`https://connect-dev.macro.com/demo`. Target: Macro's own users off Pipedream
+for catalog apps by 2026-11-06 ([plan](docs/plan.md#week-one)).
 
 ## Human queue
 
@@ -10,14 +11,8 @@ Eric. Each item is ready for one sitting; agents prepare the rest.
 
 - [ ] **Review PR #9231** (Connect as an independent backend; touches none of
       Macro's deployed services).
-- [ ] **First dev deploy** (after T016 and your review): Connect's own Pulumi
-      project in `connect/infra`, stack `dev`. You provide Pulumi access
-      (`PULUMI_ACCESS_TOKEN`) and approve `pulumi up` after seeing the preview.
-      It creates Connect-only AWS resources plus one DNS record,
-      `connect-dev.macro.com`.
-- [ ] **Test workspaces** for the first slice (Linear, Notion, PostHog,
-      Sentry): accounts an agent may sign in to, or the `connect@macro.com`
-      browser sign-in below so agents create free ones.
+- [ ] **Review the demo PR** (stacked on #9231): the demo app, its optional
+      infra, and the CDP driver.
 - [ ] **Company facts every vendor form asks for** (unblocks Zoom, Xero,
       Figma, Vercel, Box, Discord): legal company name; contact name, title,
       and email; Connect's production host and OAuth callback (proposed:
@@ -34,10 +29,9 @@ Eric. Each item is ready for one sitting; agents prepare the rest.
 - [ ] Rotate the `connect@macro.com` password (it was shared in a chat
       transcript on 2026-10-30), then update `CONNECT_ACCOUNT_PASSWORD` in
       Doppler `connect/prd`.
-- [ ] Sign in once in Macro Connect's browser: `ssh -L 6081:localhost:6081
-      big-pickle`, open http://localhost:6081/vnc.html; the Google sign-in page
-      for `connect@macro.com` is open. While signed in, enroll an
-      authenticator-app (TOTP) second factor and save its setup key as
+- [ ] Enroll an authenticator-app (TOTP) second factor on `connect@macro.com`
+      (the browser is signed in; view it with `ssh -L 6081:localhost:6081
+      big-pickle` and http://localhost:6081/vnc.html) and save its setup key as
       `CONNECT_ACCOUNT_TOTP_SECRET` in Doppler `connect/prd`, so agents can
       sign in again without you. ([how it works](docs/submissions.md#browser))
 - [ ] Give the submission agents read access to the `connect@macro.com` inbox
@@ -54,16 +48,24 @@ Eric. Each item is ready for one sitting; agents prepare the rest.
 
 ## In flight
 
-Nothing: waiting on your review of PR #9231 and the first dev deploy.
+Nothing.
 
 ## Next
 
-After the deploy: `connect/tooling/integration.sh dev`, then a real consent per
-live app with test accounts and the browser (T018). Later slices: [T010](tasks/T010-macro-adapter.md) Macro integration,
-then reconnect prompts (T011). Submissions wait on the company
-facts above.
+Token refresh against a live vendor (when a Linear or Sentry access token
+expires, the gateway must refresh it; unit-tested, not yet seen live). Then
+[T010](tasks/T010-macro-adapter.md) Macro integration and reconnect prompts
+(T011). Submissions wait on the company facts above.
 
 ## Done
+
+- 2026-10-31: Dev deployed (`pulumi up`, stack `macro-inc/macro-connect/dev`).
+  `integration.sh dev` passes 11/11, including each vendor accepting Connect's
+  client. Real consents completed for Linear, Notion, PostHog, and Sentry in
+  [test workspaces](docs/test-accounts.md); through the gateway each listed
+  its tools (70, 68, 1, 12) and answered a read tool call.
+  [T019](tasks/T019-demo-app.md) demo deployed at `/demo`: connect, list
+  tools, and call a tool from the browser. `cdp.ts` drives the browser.
 
 - 2026-10-30: [T014](tasks/T014-deny-wrappers.md), [T015](tasks/T015-test-databases.md)
   CI fixes; [T016](tasks/T016-independent-hosting.md) Connect hosted

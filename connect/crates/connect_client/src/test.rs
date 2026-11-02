@@ -22,6 +22,13 @@ async fn calls_every_customer_route_with_the_shared_wire_contract() {
         .await;
     assert_eq!(client.catalog().await.unwrap()[0].id, "notion");
 
+    Mock::given(method("GET"))
+        .and(path("/connect/v1/catalog/notion/icon.svg"))
+        .respond_with(ResponseTemplate::new(200).set_body_raw("<svg/>", "image/svg+xml"))
+        .mount(&server)
+        .await;
+    assert_eq!(client.catalog_icon("notion").await.unwrap(), b"<svg/>");
+
     Mock::given(method("POST"))
         .and(path("/connect/v1/connect-sessions"))
         .and(body_json(serde_json::json!({
@@ -91,7 +98,7 @@ async fn calls_every_customer_route_with_the_shared_wire_contract() {
     );
     assert_eq!(upstream.bearer_token, "ck_test_secret");
     assert!(!format!("{client:?} {upstream:?}").contains("ck_test_secret"));
-    assert_eq!(server.received_requests().await.unwrap().len(), 5);
+    assert_eq!(server.received_requests().await.unwrap().len(), 6);
 }
 
 #[tokio::test]
