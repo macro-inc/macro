@@ -384,7 +384,8 @@ fields can create a new option. Choosing **Add company “…”** creates the c
 with the row: a searched domain fills the domain and the name. **Add contact “…”**
 works the same way. A new company may omit its domain. A new contact accepts a
 full email address and an explicit company choice, including a name-only company.
-An email-domain match suggests a company; the picker can select a different one.
+An email-domain match offers **Use suggested company**; accept it or select a
+different company before submitting. Editing the email keeps that explicit choice.
 **Add deal** stays disabled until a record is chosen, and Command-Enter submits.
 The form makes one row with every value set. A board lane's **New record** opens
 the same dialog with the lane's stage filled in. The table's blank row at the

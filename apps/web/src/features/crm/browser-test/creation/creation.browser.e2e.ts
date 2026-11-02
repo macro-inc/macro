@@ -26,7 +26,7 @@ for (const company of ['Acme', 'Community group']) {
     await page.getByRole('textbox', { name: 'Contact name' }).fill('Jane');
     await page
       .getByRole('textbox', { name: 'Email', exact: true })
-      .fill('Jane@example.com');
+      .fill('Jane@other.example.com');
     await page
       .getByRole('button', { name: 'Choose a company', exact: true })
       .click();
@@ -39,7 +39,7 @@ for (const company of ['Acme', 'Community group']) {
       JSON.stringify({
         companyId: company === 'Acme' ? 'acme' : 'name-only',
         name: 'Jane',
-        email: 'jane@example.com',
+        email: 'jane@other.example.com',
       })
     );
   });
@@ -72,8 +72,42 @@ test('selects a different company for a pipeline contact', async ({ page }) => {
     .getByRole('button', { name: 'Choose a company', exact: true })
     .click();
   await page.getByRole('option', { name: /Community group/ }).click();
+  await page
+    .getByRole('textbox', { name: 'Email', exact: true })
+    .fill('jane@other.example.com');
   await page.getByRole('button', { name: /^Add contact/ }).click();
   await expect(page.getByTestId('created')).toHaveText(
-    '{"companyId":"name-only","name":"Jane","email":"jane@example.com"}'
+    '{"companyId":"name-only","name":"Jane","email":"jane@other.example.com"}'
+  );
+});
+
+test('requires accepting a suggested company before creating a pipeline contact', async ({
+  page,
+}) => {
+  await page.goto('/');
+  await page
+    .getByRole('button', { name: 'New pipeline contact', exact: true })
+    .click();
+  await page
+    .getByRole('combobox', { name: 'Find or add a contact' })
+    .fill('jane@example.com');
+  await page
+    .getByRole('option', { name: 'Add contact “jane@example.com”' })
+    .click();
+  await page.getByRole('textbox', { name: 'Contact name' }).fill('Jane');
+  await page.getByRole('button', { name: /^Add contact/ }).click();
+  await expect(page.getByRole('alert')).toHaveText(
+    'Choose a company for this contact'
+  );
+  await expect(page.getByTestId('created')).toBeEmpty();
+  await page
+    .getByRole('button', { name: 'Use suggested company: Acme', exact: true })
+    .click();
+  await page
+    .getByRole('textbox', { name: 'Email', exact: true })
+    .fill('jane@other.example.com');
+  await page.getByRole('button', { name: /^Add contact/ }).click();
+  await expect(page.getByTestId('created')).toHaveText(
+    '{"companyId":"acme","name":"Jane","email":"jane@other.example.com"}'
   );
 });

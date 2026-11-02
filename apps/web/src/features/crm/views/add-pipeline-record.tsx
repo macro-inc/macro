@@ -135,6 +135,10 @@ export function AddPipelineRecordDialog(
     const current = choice();
     return current?.kind === 'new-contact' ? current : undefined;
   };
+  const suggestedCompany = () => {
+    const match = contactCompany(newContact()?.email ?? '', domainCompanies());
+    return companyOptions().find((company) => company.id === match?.id);
+  };
   const changeChoice = (next: RecordChoice | undefined) => {
     setChoice(next);
     setError(undefined);
@@ -164,7 +168,7 @@ export function AddPipelineRecordDialog(
       ? companies
           .companies()
           .find((company) => company.id === current.companyId)
-      : contactCompany(email, domainCompanies());
+      : undefined;
     if (!joins) throw new Error('A new contact needs a company.');
     const { id } = await createContact.mutateAsync({
       companyId: joins.id,
@@ -326,10 +330,7 @@ export function AddPipelineRecordDialog(
             <CompanySelect
               companies={companyOptions()}
               value={companyOptions().find(
-                (company) =>
-                  company.id ===
-                  (draft().companyId ??
-                    contactCompany(draft().email, domainCompanies())?.id)
+                (company) => company.id === draft().companyId
               )}
               onChange={(company) =>
                 changeChoice({ ...draft(), companyId: company.id })
@@ -338,6 +339,24 @@ export function AddPipelineRecordDialog(
               disabled={pending()}
               mount={dialog()}
             />
+            <Show when={!draft().companyId && suggestedCompany()}>
+              {(suggestion) => (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  class="max-w-full self-start"
+                  disabled={pending()}
+                  onClick={() =>
+                    changeChoice({ ...draft(), companyId: suggestion().id })
+                  }
+                >
+                  <span class="truncate">
+                    Use suggested company: {suggestion().name}
+                  </span>
+                </Button>
+              )}
+            </Show>
           </>
         )}
       </Match>

@@ -20,7 +20,7 @@ export const useCreateContactMutation = () => ({
 });
 export const useQuickAccessCrmCompaniesQuery = () => ({
   companies: () => [
-    { id: 'acme', name: 'Acme', domains: [{ domain: 'acme.com' }] },
+    { id: 'acme', name: 'Acme', domains: [{ domain: 'example.com' }] },
     { id: 'name-only', name: 'Community group', domains: [] },
   ],
   query: { isLoading: false },
