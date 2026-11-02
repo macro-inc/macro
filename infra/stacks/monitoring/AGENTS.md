@@ -7,6 +7,8 @@ manual and has only a prod stack, even for monitors covering both environments.
 Prod threshold and anomaly monitors are in `monitors/{macrodb,redis,queues,regressions}.ts`
 (`prodMonitor()` in `prod-monitor.ts`), each file with a dashboard graphing its
 monitors that their messages link to; every monitor notifies through `notify.ts`.
+`dashboards/web-performance.ts` holds the web app performance dashboard with the
+APM retention filter and span-based metrics it reads; it has no monitors.
 
 ## Checks
 
@@ -45,6 +47,11 @@ From `infra/`:
 - Do not use native committed-offset lag for the independent notification
   consumers. Their per-instance log measurements preserve broadcast semantics.
 - `notificationRetentionDashboardUrl` is a stack output, not an app route.
+- `dashboards/web-performance.ts` reads span attributes set by
+  `apps/web/src/observability` (the span model in
+  `docs/agent-guide/observability.md`). Renaming one there silently empties
+  its widgets. Span-based metric names and computes cannot be changed after
+  creation; add a new metric instead.
 - `monitors/whatsapp-session.ts` reads log events by `telemetry_event`; its
   header is the field contract with `services/whatsapp_session_service`.
   Renaming a field there silently turns its monitor into missing data.
