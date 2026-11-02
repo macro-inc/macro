@@ -199,6 +199,19 @@ title and navigation goes through the hamburger overlay. Location, search,
 filters, expanded folders, list focus, and scroll position are restored when
 returning from an opened file.
 
+## Zooming opened images
+
+On a touch device, open an image file (an SVG, PNG, or JPEG) in Drive or as its
+own split. It rests at the size it always had: no larger than its own pixels,
+and an SVG with only a viewBox fills the pane. Pinch anywhere in the pane, on
+the image or beside it: the image grows until it fills the pane, then crops and
+pans with one finger, with a glide on release. A zoomed SVG stays sharp, because
+the image is laid out at its zoomed size rather than scaled up. One finger on an
+unzoomed image does nothing, so taps and the left-edge swipe back still work.
+Desktop keeps the plain image. The backend-free phone and tablet regression is
+`bunx playwright test --config src/features/block-image/browser-test/playwright.config.ts`
+from `apps/web`.
+
 ## Downloading files
 
 Open a video, image, code file, canvas, or other uploaded file in Drive. Its
