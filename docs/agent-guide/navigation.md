@@ -10,7 +10,9 @@ split's history. Each arrow is
 disabled when its direction has no entry. Sidebar controls remain inside each
 workspace. The top-right split icon opens another Home split, even
 when Home is already open, and is disabled when there is no room for a new split.
-Its tooltip is “New Split” and displays the registered new-split shortcut (`\`).
+Its tooltip is “New split” and displays the registered new-split shortcut (`\`).
+The icon before it, “New split below” (`|`), opens Home stacked below the
+active split and is disabled when that split has no room to divide.
 
 ## Desktop tabs (macOS, `enable-desktop-tabs` flag)
 
@@ -292,9 +294,22 @@ Command and create-menu headers have 20px horizontal and 12px vertical padding.
 
 Splits: the app is a tiling window manager. Active light-theme panes are white;
 inactive desktop panes are slightly darker than the active pane across themes,
-while retaining the theme hue. Public variable-length routes use
+while retaining the theme hue. Any split can be divided beside or stacked:
+the split menu (right-click a split's header) offers **New split left**,
+**right**, **above**, and **below**, each splitting that split and disabled
+when it lacks room (400px wide, 240px tall per split). `\` adds a full-height
+split at the end; `|` (Shift+\, or Shift+Cmd+\ while typing) stacks Home below
+the active split. Option+Shift-click (Alt+Shift elsewhere) on anything that
+Shift-clicks into a new split opens it below the split it came from. Closing a
+stacked split gives its space to its neighbours; **Swap split left/right**
+trades places with the previous or next split in reading order, and the tiles
+keep their sizes. Public variable-length routes use
 `~` as the boundary between panes
-(`/app/drive/folder/<uuid>/~/mail`). Legacy fixed `type/id`
+(`/app/drive/folder/<uuid>/~/mail`). Panes are listed top to bottom, left to
+right, and a `layout` key records stacking when there is any:
+`/app/home/~/drive/~/mail?layout=r2pc2pp` is Home beside Drive over Mail
+(`p` a pane, `r<n>` side by side, `c<n>` stacked). Without the key the panes
+sit side by side; sizes are not in the URL. Legacy fixed `type/id`
 pane routes remain accepted. Known app-view URLs under `/app/component/` redirect
 to their canonical paths above; legacy composers keep their existing paths. Split-specific view state uses positionally
 namespaced query parameters such as `s0.drive.sort=created_at`. Route identity
@@ -430,8 +445,9 @@ the main title when hidden, with separate preferences per block type.
 
 Desktop splits, including a single split in the browser or native app, appear as
 individually bordered panels with 8px corners and 6px top, right, and bottom
-insets and 6px resizable gaps. The leftmost panel sits flush against the app rail,
-which has no right divider. Touch layouts keep their existing presentation.
+insets and 6px resizable gaps between them, side by side and stacked. The
+leftmost panels sit flush against the app rail, which has no right divider.
+Touch layouts keep their existing presentation.
 
 Split focus mode (`Shift+Esc`) floats the active split in a rounded, bordered
 panel over the same glass scrim as dialogs. Click the scrim or use the shortcut
