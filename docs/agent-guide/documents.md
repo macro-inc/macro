@@ -2515,10 +2515,10 @@ their relative depths and order.
 ## CRM company and contact mentions
 
 With CRM enabled, type `@` followed by a company name or domain in an editor or
-composer. Companies and contacts appear together under **CRM**; **People** holds
-Macro users and groups only. Selecting a CRM contact inserts its record link,
-including when its email matches a Macro user. User-only pickers exclude CRM
-records. On mobile, the single list includes both CRM record types, while only
+composer. Companies and contacts appear together under **Contacts & Companies**;
+**People** holds Macro users and groups only. Selecting a CRM contact inserts
+its record link, including when its email matches a Macro user. User-only pickers
+exclude CRM records. On mobile, the single list includes both CRM record types, while only
 Macro people and groups are pinned. With
 `ENABLE_GRAPHQL_SOUP` enabled, results include cached companies even if they are
 absent from the first 500 companies in the REST Quick Access feed; the REST feed
@@ -2586,10 +2586,11 @@ With CRM enabled, any task, document or call can point at CRM records through th
 `Add property`. Both pickers list Quick Access records: the team's companies and
 its most recently interacted contacts, filtered by name, domain or email. CRM
 contacts have their own Quick Access bucket, apart from people. They appear
-under **CRM** in `@` mentions and under **People** in the command menu. Values show the
-record's name and open the company or contact. An entity can carry the property
-without listing it (set at creation or through the API); adding that property
-pins the existing value rather than clearing it. Calls are linked automatically
+under **Contacts & Companies** in `@` mentions and under **People** in the
+command menu. Values show the record's name and open the company or contact.
+An entity can carry the property without listing it (set at creation or through
+the API); adding that property pins the existing value rather than clearing it.
+Calls are linked automatically
 when they end, from their participants and the invitees of the calendar event
 carrying the meeting link; verify on a finished call's `Properties`.
 

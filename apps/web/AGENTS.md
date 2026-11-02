@@ -167,8 +167,9 @@ menus rank loaded entity sources together with `MENTION_RANKING_CONFIG` in
 `MentionsMenu/utils/mention-ranking.ts`: name relevance, viewed recency,
 brevity, and type boosts. Task projects use the `initiative` bucket; `project`
 means a Drive folder. Preserve broader cache/server matches and the existing
-People preview/pinning. Group company and contact records under CRM, separate
-from People; keep contact selection as a CRM link even for a matching Macro user.
+People preview/pinning. Group company and contact records under
+Contacts & Companies, separate from People; keep contact selection as a CRM link
+even for a matching Macro user.
 Only Macro users and groups participate in mobile People pinning.
 The channel browser suite below also checks project
 ranking and insertion on desktop and phone.

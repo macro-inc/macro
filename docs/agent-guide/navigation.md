@@ -1327,10 +1327,11 @@ its requested cache buckets, so a document-only category must not read the email
 catalog. Switching categories still discovers previously unopened buckets;
 renames, subtype moves, DM priority, and stable tie ordering remain unchanged.
 
-With CRM enabled, normal `@` menus include companies and contacts under **CRM**
-in documents, channels, discussions, and composers. **People** contains only
-Macro users and groups. Contact search loads paged GraphQL results from all
-accessible CRM-enabled teams, excludes hidden contacts and companies, and
+With CRM enabled, normal `@` menus include companies and contacts under
+**Contacts & Companies** in documents, channels, discussions, and composers.
+**People** contains only Macro users and groups. Contact search loads paged
+GraphQL results from all accessible CRM-enabled teams, excludes hidden contacts
+and companies, and
 collapses duplicate full email addresses case-insensitively. The most recently
 active visible team record represents each email. Picking a CRM contact inserts
 a link to that original CRM record, even if a Macro user shares its email; it

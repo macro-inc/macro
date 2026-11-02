@@ -522,7 +522,7 @@ function MentionsMenuInner(props: MentionsMenuProps) {
       },
       {
         id: 'crm',
-        label: t('mobile.crm'),
+        label: t('common.contactsAndCompanies'),
         getData: crmMention.entities,
         getFullCount: crmMention.totalCount,
         hasMore: crmMention.hasMore,

@@ -94,13 +94,15 @@ for (const mobile of [false, true]) {
       });
       // Expanding CRM must page contacts and exclude user mentions.
       await menu
-        .getByText('CRM', { exact: true })
+        .getByText('Contacts & Companies', { exact: true })
         .locator('..')
         .getByRole('button', { name: /View all/ })
         .click();
       await expect(menu.getByTitle('Acme contact 2')).toBeVisible();
       await expect(menu.getByTitle('Acme member')).toHaveCount(0);
-      await expect(menu.getByText('CRM (3)', { exact: true })).toBeVisible();
+      await expect(
+        menu.getByText('Contacts & Companies (3)', { exact: true })
+      ).toBeVisible();
     } else {
       await expect(menu.locator('.group').first()).toContainText('Acme member');
       await expect(menu.getByTitle('Acme contact 2')).toBeVisible();
