@@ -575,9 +575,11 @@ describe('composeAgentContextPrompt with a trigger', () => {
     });
 
     expect(hiddenContext(markdown)).toContain(
-      ['  <triggers>', '    <once at="2026-10-08T09:00:02Z"/>', '  </triggers>'].join(
-        '\n'
-      )
+      [
+        '  <triggers>',
+        '    <once at="2026-10-08T09:00:02Z"/>',
+        '  </triggers>',
+      ].join('\n')
     );
   });
 
