@@ -27,7 +27,8 @@ pub(super) struct World {
     pub(super) published: Vec<(TableId, TableVersion)>,
     pub(super) metadata_changes: Vec<DatabaseId>,
     /// Every awareness relay the service asked for.
-    pub(super) awareness: Vec<(DatabaseId, String, Awareness)>,
+    /// Each as (database, user, whether they can edit, state).
+    pub(super) awareness: Vec<(DatabaseId, String, bool, Awareness)>,
     /// Simulate the gateway refusing an awareness relay.
     pub(super) awareness_relay_fails: bool,
     pub(super) share_updates: Vec<Vec<models_permissions::share_permission::channel_share_permission::UpdateChannelSharePermission>>,
@@ -668,15 +669,19 @@ impl TableEventPublisher for FakeEvents {
         &self,
         database_id: DatabaseId,
         user_id: &MacroUserIdStr<'_>,
+        can_edit: bool,
         state: &Awareness,
     ) -> Result<(), FakeError> {
         let mut world = self.0.lock().unwrap();
         if world.awareness_relay_fails {
             return Err(FakeError);
         }
-        world
-            .awareness
-            .push((database_id, user_id.as_ref().to_string(), state.clone()));
+        world.awareness.push((
+            database_id,
+            user_id.as_ref().to_string(),
+            can_edit,
+            state.clone(),
+        ));
         Ok(())
     }
 }
