@@ -1,5 +1,10 @@
 import { isServer } from 'solid-js/web';
 import { createDeferredPosthog } from './utilDeferredPosthog';
+import {
+  mobileCaptureDevice,
+  mobileCaptureSetOnce,
+  normalizeAnalyticsEmail,
+} from './utilMobileCaptureIdentity';
 
 declare const gtag: (
   command: 'config' | 'event' | 'js',
@@ -227,20 +232,29 @@ const createAnalytics = () => {
   };
 
   /**
-   * Attaches a known email to the current visitor across providers, so a lead
-   * captured on the site is the same person downstream marketing automation
-   * and the app's post-signup events see. Also feeds Meta's advanced matching
-   * (`em`), which materially improves ad attribution for the lead.
+   * Attaches the captured email to the current visitor before the submit
+   * event. PostHog's distinct id is the normalized email, so the event is
+   * captured on an identified person. Also feeds Meta's advanced matching
+   * (`em`) before the confirmation page fires Lead.
    */
-  const identifyEmail = (email: string) => {
+  const identifyMobileCapture = (email: string) => {
     if (disabled) {
       return;
     }
+    const distinctId = normalizeAnalyticsEmail(email);
+    if (!distinctId) return;
     tryCatch(() => {
-      gtag('config', GA_ID, { user_id: email, email });
-      fbq('init', META_PIXEL_ID, { em: email });
+      gtag('config', GA_ID, { user_id: distinctId, email: distinctId });
+      fbq('init', META_PIXEL_ID, { em: distinctId });
     }, '[Analytics] Failed to identify visitor:');
-    posthog?.identify(email);
+    posthog?.identify(
+      distinctId,
+      mobileCaptureSetOnce({
+        capturedAt: new Date().toISOString(),
+        device: mobileCaptureDevice(navigator.userAgent),
+        search: window.location.search,
+      })
+    );
   };
 
   const trackPosthog = (event: string, data?: Record<string, unknown>) => {
@@ -253,7 +267,7 @@ const createAnalytics = () => {
     trackPosthog,
     trackMeta,
     trackGoogleConversion,
-    identifyEmail,
+    identifyMobileCapture,
   };
 };
 

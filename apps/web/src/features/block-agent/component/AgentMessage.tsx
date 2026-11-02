@@ -87,6 +87,7 @@ function AgentMessagePart(props: {
             }
             inFlight={props.inFlight}
             hideIncompleteXml={props.message.author.kind === 'agent'}
+            accentMentions={props.message.author.kind === 'agent'}
             observeRender={
               props.message.author.kind === 'agent'
                 ? (element) =>
