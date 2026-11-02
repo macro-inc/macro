@@ -405,6 +405,14 @@ describe('command menu search ranking', () => {
       expect(ids(items, 'blair chen')).toEqual(['note', 'pair']);
     });
 
+    it('does not let one term name every participant whose name starts with it', () => {
+      const items = [
+        channel('namesakes', 'Avery Morgan, Avery Chen'),
+        project('project', 'Avery', NOW - 20 * DAY),
+      ];
+      expect(ids(items, 'avery')).toEqual(['project', 'namesakes']);
+    });
+
     it('finds a one-to-one DM by its name reversed', () => {
       const dm = channel('dm', 'Avery Morgan', NOW, 'dm');
       expect(ids([dm], 'morgan avery', false)).toEqual(['dm']);

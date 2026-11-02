@@ -145,7 +145,8 @@ export function normalizeFuzzyScore(
 
 /** Whether a query names everyone in a comma-separated channel name, in any
  * order: each term starts a word of some participant and none goes unnamed, so
- * a group with more people than the query names does not qualify. */
+ * a group with more people than the query names does not qualify. One term
+ * cannot name two people, even when both names start with it. */
 function namesEveryParticipant(normalizedName: string, term: string): boolean {
   const participants = normalizedName
     .split(',')
@@ -153,6 +154,8 @@ function namesEveryParticipant(normalizedName: string, term: string): boolean {
   if (participants.length < 2) return false;
 
   const terms = term.split(/[\s,]+/).filter(Boolean);
+  if (terms.length < participants.length) return false;
+
   const startsWordOf = (queryTerm: string, words: string[]) =>
     words.some((word) => word.startsWith(queryTerm));
 
