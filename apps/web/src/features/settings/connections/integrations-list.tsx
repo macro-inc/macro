@@ -176,7 +176,13 @@ export function IntegrationListRow(props: {
           {props.icon}
         </span>
         <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-          <div class="flex min-w-0 items-center gap-2">
+          {/* With a badge, narrow rows wrap instead of truncating the name away. */}
+          <div
+            class={cn(
+              'flex min-w-0 items-center gap-2',
+              props.badge && 'flex-wrap gap-y-1'
+            )}
+          >
             <span
               class={cn(
                 'min-w-0 truncate font-medium',

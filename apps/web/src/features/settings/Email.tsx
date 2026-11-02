@@ -288,7 +288,7 @@ export function EmailCard(props: { class?: string } = {}) {
               <IntegrationRow
                 icon={<OutlookIcon />}
                 title="Connect an Outlook account"
-                status={<OutlookBetaBadge />}
+                badge={<OutlookBetaBadge />}
                 description="Sync an Outlook.com or Microsoft 365 inbox into Macro Email."
               >
                 <ConnectAction
