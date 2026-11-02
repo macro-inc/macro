@@ -7,6 +7,8 @@ import { issueSessionAction } from '../queries/issue-session-action';
 /** Unanswered this long, the log is read directly in case the live feed missed it. */
 const REFRESH_AFTER_MS = 10_000;
 const GIVE_UP_AFTER_MS = 60_000;
+/** A final reread still out after this is abandoned so giving up cannot hang. */
+const FINAL_REREAD_MAX_MS = 10_000;
 
 /**
  * HTTP acceptance only queues a control. Wait for its correlated ACP outcome.
@@ -97,9 +99,16 @@ async function awaitConfirmation(
       settledBy = 'feed';
     };
     const giveUp = async () => {
+      let bound: ReturnType<typeof setTimeout> | undefined;
       try {
-        await reread();
+        await Promise.race([
+          reread(),
+          new Promise<void>((resolve) => {
+            bound = setTimeout(resolve, FINAL_REREAD_MAX_MS);
+          }),
+        ]);
       } finally {
+        clearTimeout(bound);
         if (!finished) {
           session.retract(actionId);
           span.setAttr('agent.control.outcome', 'retracted');

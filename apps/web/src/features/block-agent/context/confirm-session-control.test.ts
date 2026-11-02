@@ -98,6 +98,16 @@ describe('confirmed session controls', () => {
     expect(test.retract).toHaveBeenCalledExactlyOnceWith('action');
     expect(test.unsubscribe).toHaveBeenCalledOnce();
   });
+  it('gives up on time even when the final log read never answers', async () => {
+    vi.useFakeTimers();
+    const test = session();
+    test.refresh.mockImplementation(() => new Promise(() => {}));
+    const result = confirmSessionControl(test.value, action);
+    const assertion = expect(result).rejects.toThrow('did not confirm');
+    await vi.advanceTimersByTimeAsync(70_000);
+    await assertion;
+    expect(test.retract).toHaveBeenCalledExactlyOnceWith('action');
+  });
   it('confirms from the refetched log when the live feed missed the answer', async () => {
     vi.useFakeTimers();
     const test = session();
