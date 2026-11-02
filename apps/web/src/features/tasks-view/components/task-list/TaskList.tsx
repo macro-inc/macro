@@ -21,6 +21,7 @@ import { SwipableRowProvider } from '@components/app/mobile/SwipableRow';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { HotkeyTags } from '@core/hotkey/constants';
 import { registerHotkey } from '@core/hotkey/hotkeys';
+import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { createScrollTopFade } from '@core/util/createScrollTopFade';
 import {
@@ -342,6 +343,7 @@ export function TaskList(props: TaskListProps) {
 
   registerHotkey({
     scopeId: panel.splitHotkeyScope,
+    hotkeyToken: TOKENS.entity.action.addToProject,
     description: 'Add to project…',
     tags: [HotkeyTags.SelectionModification],
     condition: () =>
