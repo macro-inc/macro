@@ -78,7 +78,7 @@ function ListPropertyCell(props: {
         <Layer depth={2}>
           <Property.Pill
             class={cn(
-              'list-property-cell inline-flex h-auto w-full max-w-full min-w-0 shrink items-center gap-1 overflow-hidden rounded-full border-0 px-2 py-1.5 text-left font-normal leading-tight touch:min-h-0 touch:min-w-0 @max-[840px]/u-list:px-1',
+              'list-property-cell inline-flex h-auto w-full max-w-full min-w-0 shrink items-center gap-1 overflow-hidden rounded-full border-0 px-2 py-1.5 text-left font-normal leading-tight touch:min-h-0 touch:min-w-0 @max-[840px]/u-list:p-1',
               isUserEntity() && '@max-[840px]/u-list:justify-start'
             )}
           >

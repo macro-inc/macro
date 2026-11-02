@@ -85,10 +85,10 @@ function ListPropertyPill(props: { property: Accessor<PropertyT> }) {
         <Layer depth={2}>
           <Property.Pill
             class={cn(
-              'list-property-cell w-full min-w-0 overflow-hidden',
+              'list-property-cell w-full min-w-0 overflow-hidden @max-[840px]/u-list:p-1',
               isUserEntity()
-                ? '@max-[840px]/u-list:justify-start @max-[840px]/u-list:px-1'
-                : '@max-[840px]/u-list:justify-center @max-[840px]/u-list:w-6 @max-[840px]/u-list:p-0'
+                ? '@max-[840px]/u-list:justify-start'
+                : '@max-[840px]/u-list:justify-center @max-[840px]/u-list:w-6'
             )}
           >
             <Show
