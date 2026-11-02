@@ -242,10 +242,16 @@ export function ChannelsRail(props: ChannelsRailProps) {
       reportActivationError(new Error('Missing channel id'));
       return;
     }
+    // A split opens at latest, so nothing it needs depends on notifications.
+    // The open hydrates them afterwards to mark the conversation read.
+    if (openInNewSplit) {
+      fireAndForget(selectChannel(channel, channelId, true), 'channels-view');
+      return;
+    }
     // A different channel owns its loading UI and notification hydration.
     // Select it before fetching so the rail and destination respond to the
     // click immediately. Re-clicks still refresh and re-aim the open channel.
-    if (!openInNewSplit && selectedChannel()?.id !== channelId) {
+    if (selectedChannel()?.id !== channelId) {
       setSelectedChannel(
         channelPreviewSelection(channelId, {
           target: channel.target
@@ -263,12 +269,12 @@ export function ChannelsRail(props: ChannelsRailProps) {
     // instances of that constructor. Detect the pending edge structurally.
     if ('then' in selection) {
       fireAndForget(
-        selectHydratedChannel(selection, request, channelId, openInNewSplit),
+        selectHydratedChannel(selection, request, channelId, false),
         'channels-view'
       );
     } else {
       fireAndForget(
-        selectChannel(selection, channelId, openInNewSplit),
+        selectChannel(selection, channelId, false),
         'channels-view'
       );
     }

@@ -451,73 +451,59 @@ describe('explicit channel activation read marking', () => {
     expect(mocks.markRead).not.toHaveBeenCalled();
   });
 
-  it.each([false, true])(
-    'ignores superseded hydration (shift-click: %s)',
-    async (shiftKey) => {
-      let resolve!: (channel: WithNotification<ChannelEntity>) => void;
-      mocks.hydrate.mockReturnValueOnce(
-        new Promise((value) => {
-          resolve = value;
-        })
-      );
-      mount();
-      fireEvent.click(screen.getByRole('button'), { shiftKey });
-      expect(mocks.select).not.toHaveBeenCalled();
-      expect(mocks.openSplit).not.toHaveBeenCalled();
-      fireEvent.click(screen.getByRole('button'));
-      await waitFor(() => expect(mocks.select).toHaveBeenCalledOnce());
-      resolve(hydrated);
-      await Promise.resolve();
-      expect(mocks.select).toHaveBeenCalledOnce();
-      expect(mocks.openSplit).not.toHaveBeenCalled();
-      expect(mocks.markRead).toHaveBeenCalledExactlyOnceWith(
-        hydrated,
-        mocks.source,
-        { channelReadScope: 'top-level' }
-      );
-    }
-  );
-
-  it('hydrates shift-clicks and opens at latest with top-level read marking', async () => {
+  it('ignores superseded hydration', async () => {
     let resolve!: (channel: WithNotification<ChannelEntity>) => void;
     mocks.hydrate.mockReturnValueOnce(
-      new Promise((done) => {
-        resolve = done;
+      new Promise((value) => {
+        resolve = value;
       })
     );
     mount();
-    fireEvent.click(screen.getByRole('button'), { shiftKey: true });
+    fireEvent.click(screen.getByRole('button'));
+    expect(mocks.select).not.toHaveBeenCalled();
     expect(mocks.openSplit).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button'));
+    await waitFor(() => expect(mocks.select).toHaveBeenCalledOnce());
     resolve(hydrated);
-    await waitFor(() =>
-      expect(mocks.openSplit).toHaveBeenCalledExactlyOnceWith(hydrated, {
-        openInNewSplit: true,
-        referredFrom: 'channels',
-        notificationSource: mocks.source,
-        channelNavigation: 'latest',
-        channelReadScope: 'top-level',
-      })
+    await Promise.resolve();
+    expect(mocks.select).toHaveBeenCalledOnce();
+    expect(mocks.openSplit).not.toHaveBeenCalled();
+    expect(mocks.markRead).toHaveBeenCalledExactlyOnceWith(
+      hydrated,
+      mocks.source,
+      { channelReadScope: 'top-level' }
     );
+  });
+
+  it('opens a shift-click at latest without waiting for notifications', () => {
+    mocks.hydrate.mockReturnValue(new Promise(() => {}));
+    mount();
+    fireEvent.click(screen.getByRole('button'), { shiftKey: true });
+    expect(mocks.openSplit).toHaveBeenCalledExactlyOnceWith(channel, {
+      openInNewSplit: true,
+      referredFrom: 'channels',
+      notificationSource: mocks.source,
+      channelNavigation: 'latest',
+      channelReadScope: 'top-level',
+    });
+    expect(mocks.hydrate).not.toHaveBeenCalled();
     expect(mocks.select).not.toHaveBeenCalled();
   });
 
-  it.each([false, true])(
-    'reports hydration failures without opening a partial edge (shift-click: %s)',
-    async (shiftKey) => {
-      const log = vi.spyOn(console, 'error').mockImplementation(() => {});
-      mocks.hydrate.mockRejectedValueOnce(new Error('failed'));
-      try {
-        mount();
-        fireEvent.click(screen.getByRole('button'), { shiftKey });
-        await waitFor(() => expect(mocks.failure).toHaveBeenCalledOnce());
-        expect(mocks.markRead).not.toHaveBeenCalled();
-        expect(mocks.select).not.toHaveBeenCalled();
-        expect(mocks.openSplit).not.toHaveBeenCalled();
-      } finally {
-        log.mockRestore();
-      }
+  it('reports hydration failures without marking a re-click read', async () => {
+    const log = vi.spyOn(console, 'error').mockImplementation(() => {});
+    mocks.hydrate.mockRejectedValueOnce(new Error('failed'));
+    try {
+      mount();
+      fireEvent.click(screen.getByRole('button'));
+      await waitFor(() => expect(mocks.failure).toHaveBeenCalledOnce());
+      expect(mocks.markRead).not.toHaveBeenCalled();
+      expect(mocks.select).not.toHaveBeenCalled();
+      expect(mocks.openSplit).not.toHaveBeenCalled();
+    } finally {
+      log.mockRestore();
     }
-  );
+  });
 });
 
 describe('channel row presses', () => {
