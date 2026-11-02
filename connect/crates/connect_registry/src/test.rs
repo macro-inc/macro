@@ -23,7 +23,6 @@ fn only_conformant_candidates_are_live() {
             "apollo",
             "attio",
             "calendly",
-            "canva",
             "clickup",
             "cloudflare",
             "confluence",
@@ -45,7 +44,6 @@ fn only_conformant_candidates_are_live() {
             "stripe",
             "supabase",
             "todoist",
-            "trello",
             "typeform",
             "webflow",
         ])
