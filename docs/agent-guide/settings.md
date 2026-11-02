@@ -498,7 +498,8 @@ upgrades to Max is charged today; the card says `Charged today. The Pro trial en
 A paid Pro upgrade stays prorated for the rest of the period. Prices read `/ month` for solo users and
 `per seat / month` for team accounts. Each card puts its button beside the price when wide enough and below
 the price when narrow. Free lists 2 connected email accounts; Pro and Max list
-unlimited connected email accounts. Pro users see a Max card (`Upgrade to Max`); Max
+unlimited connected email accounts. Each card lists its active routine limit:
+10 on Free, 1,000 on Pro, and 10,000 on Max. Pro users see a Max card (`Upgrade to Max`); Max
 users keep their current plan. Cards appear only for users who can
 manage their subscription. Team-paid members see no plan options, including
 on Free seats. Member options stay hidden until the billing summary confirms
