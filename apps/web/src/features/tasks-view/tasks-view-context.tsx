@@ -58,10 +58,12 @@ import {
 } from 'solid-js/store';
 import { TASK_DEFAULT_GROUP_BY } from './constants';
 import { toTaskBoardGrouping } from './core/task-board';
+import type { DateBucketBoundaries } from './core/task-due-date';
 import { isProjectTab } from './core/task-navigation';
 import type { TaskFacetContext } from './filters/task-facets';
 import { DEFAULT_TASK_FACET_SELECTION } from './filters/task-facets';
 import { createTasksViewPersistence } from './persistence';
+import { createDateBucketBoundariesSignal } from './primitives/create-date-bucket-boundaries';
 import {
   createTaskSavedViewDraft,
   type TaskSavedViewDraft,
@@ -123,6 +125,7 @@ type TasksListController = ListController<
 export type TasksViewContext = {
   scopeKey?: string;
   state: Store<TasksViewState>;
+  calendar: Accessor<DateBucketBoundaries>;
   savedViews?: TaskSavedViewDraft;
   savedViewsList?: SavedViewsSource;
   savedViewSource?: SavedViewSource;
@@ -197,6 +200,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
   const showTaskProject = () => projectsEnabled() && !props.hideTaskProject;
   const ganttFlag = useFeatureFlag(enableGantt);
   const ganttEnabled = () => ganttFlag().enabled;
+  const calendar = createDateBucketBoundariesSignal();
 
   const initial = props.initialState ?? {};
   const initialTab = initial.tab ?? 'my-tasks';
@@ -216,6 +220,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         facets: normalizeFacetSelection(
           initial.facets ?? DEFAULT_TASK_FACET_SELECTION
         ),
+        dueDate: initial.dueDate,
         collapsedGroupIds: [...(initial.collapsedGroupIds ?? [])],
         collapsedSidebarSectionIds: [
           ...(initial.collapsedSidebarSectionIds ?? []),
@@ -300,6 +305,10 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         : undefined,
       // Layout and rollout fallbacks must not overwrite the selected grouping.
       groupBy: persistedState.groupBy,
+      dueDate: state.dueDate?.type ?? 'any',
+      dueStart:
+        state.dueDate?.type === 'range' ? state.dueDate.start : undefined,
+      dueEnd: state.dueDate?.type === 'range' ? state.dueDate.end : undefined,
     });
   const isGroupExpanded = (groupId: string) =>
     !state.collapsedGroupIds.includes(groupId);
@@ -333,6 +342,15 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         groupBy: persistedState.groupBy,
         sort: persistedState.sort[0]?.id,
         sortReversed: persistedState.sort[0]?.reversed ? 'true' : 'false',
+        dueDate: persistedState.dueDate?.type ?? 'any',
+        dueStart:
+          persistedState.dueDate?.type === 'range'
+            ? persistedState.dueDate.start
+            : undefined,
+        dueEnd:
+          persistedState.dueDate?.type === 'range'
+            ? persistedState.dueDate.end
+            : undefined,
       },
       { history: 'replace' }
     );
@@ -353,6 +371,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
     batch(() => {
       setNewSavedView(true);
       applyTaskFacets('team-tasks', DEFAULT_TASK_FACET_SELECTION);
+      setState('dueDate', undefined);
       setState('search', '');
       navigateSavedView(undefined);
     });
@@ -361,6 +380,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       savedViews?.reset();
       setNewSavedView(false);
       applyTaskFacets('my-tasks', DEFAULT_TASK_FACET_SELECTION);
+      setState('dueDate', undefined);
       navigateSavedView(undefined);
     });
   if (savedView) {
@@ -371,9 +391,10 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       creating: () => Boolean(newSavedView()),
       state: persistedState,
       facetContext,
-      apply: ({ facets, layout, groupBy, sort }) =>
+      apply: ({ facets, layout, groupBy, sort, dueDate }) =>
         batch(() => {
           applyTaskFacets('team-tasks', facets);
+          setState('dueDate', dueDate);
           setState('layout', layout);
           setState('groupBy', groupBy);
           setState(
@@ -386,6 +407,9 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
               groupBy,
               sort: sort[0]?.id,
               sortReversed: sort[0]?.reversed ? 'true' : 'false',
+              dueDate: dueDate?.type ?? 'any',
+              dueStart: dueDate?.type === 'range' ? dueDate.start : undefined,
+              dueEnd: dueDate?.type === 'range' ? dueDate.end : undefined,
             },
             { history: 'replace' }
           );
@@ -429,6 +453,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
             accountChanged ? 'my-tasks' : state.tab,
             DEFAULT_TASK_FACET_SELECTION
           );
+          setState('dueDate', undefined);
         }
       }
     )
@@ -457,6 +482,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         return kind !== 'loading' && kind !== 'unavailable';
       },
       board: () => state.layout === 'board',
+      calendar,
     })
   );
   type ActivationHandler = (
@@ -602,6 +628,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
         draft.tab = tab;
         draft.groupBy = TASK_DEFAULT_GROUP_BY[tab];
         draft.facets = normalizeFacetSelection(DEFAULT_TASK_FACET_SELECTION);
+        draft.dueDate = undefined;
         draft.collapsedGroupIds = [];
       })
     );
@@ -648,6 +675,7 @@ export const [TasksViewProvider, useTasksView] = createAssertedContextProvider<
       return props.onCreateTask;
     },
     state,
+    calendar,
     projectsEnabled,
     showTaskProject,
     ganttEnabled,
