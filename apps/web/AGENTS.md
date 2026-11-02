@@ -54,6 +54,12 @@ It uses the real records view with a local source and picker to exercise opening
 replacement, cancellation, keyboard editing, and read-only references. Navigation
 adapter tests separately check file types, access failures, and split selection.
 
+Pinch zoom on opened image files (Drive details and image splits) has a
+backend-free phone and tablet regression:
+`bunx playwright test --config src/features/block-image/browser-test/playwright.config.ts`.
+Keep the zoomed image laid out at its zoomed size, translating only: WebKit
+rasterizes an `<img>` at its layout size, so a `scale()` transform blurs it.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
@@ -444,7 +450,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Desktop tabs (`components/app/tab-layout`, macOS + `enable-desktop-tabs`) hold one split layout per tab over the router's `layoutSnapshot`/`restoreLayout`; only the active tab is live, and the strip renders in the title bar's center slot. Cmd+click becomes a background tab through `openInNewTabMiddleware`, so tab operations must disarm the intent tracker before navigating. Tabs are not draggable. See the tabs section of `docs/agent-guide/navigation.md` at the repository root.
 - Show only the Recent conversation feed in mobile Channels, without view tabs or a persisted mobile tab selection; render its rows with Home's touch row (`ChannelCardLayout` and `InboxDivider`) and pin at most six channel favorites above it.
 - Mount the mobile search input before focusing it inside the dock tap; keep navigation in that handler so focus does not trigger a second navigation or lose iOS keyboard activation.
-- Preserve focused chrome editors during deferred split insertion/removal autofocus; explicit return-focus commands may still focus the pane.
+- Preserve focused chrome editors during deferred split insertion/removal/content-change autofocus; explicit return-focus commands may still focus the pane. On desktop, content changes claim focus only for Cmd+K navigation or create-menu arrivals, and only if the destination has not already focused a child. Back/forward and ordinary clicks do not autofocus content.
 - Reconcile global focus when focused DOM subtrees are removed; iOS can omit blur events, otherwise floating creation actions stay hidden after search or editor teardown.
 - Mount the floating mobile AI composer only on the Agents view; other views keep their New action or their own reply/comment composer.
 - Keep desktop New actions on `ViewCreateButton`: full width below the inner

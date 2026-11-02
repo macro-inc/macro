@@ -67,6 +67,61 @@ test('resizes from the rendered width and saves once on release', async ({
     .toBe(Math.round(before.width + 70));
 });
 
+test('reveals virtualized editors between the sticky header and summary', async ({
+  page,
+}) => {
+  await page
+    .getByRole('button', { name: 'Load 1000 records', exact: true })
+    .click();
+  await page
+    .getByRole('button', { name: 'Edit last record', exact: true })
+    .click();
+  const input = page.getByRole('textbox', { name: 'Edit Name', exact: true });
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('Record 999');
+  await expect
+    .poll(() =>
+      input.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const summary = document
+          .querySelector('[data-grid-summary]')!
+          .getBoundingClientRect();
+        return (
+          rect.bottom <= summary.top &&
+          document.elementFromPoint(
+            rect.x + rect.width / 2,
+            rect.y + rect.height / 2
+          ) === element
+        );
+      })
+    )
+    .toBe(true);
+  await input.press('Escape');
+  await page
+    .getByRole('button', { name: 'Edit first record', exact: true })
+    .click();
+  await expect(input).toBeFocused();
+  await expect(input).toHaveValue('Record 0');
+  await expect
+    .poll(() =>
+      input.evaluate((element) => {
+        const rect = element.getBoundingClientRect();
+        const header = document
+          .querySelector('[role="columnheader"]')!
+          .getBoundingClientRect();
+        return (
+          rect.top >= header.bottom &&
+          document.elementFromPoint(
+            rect.x + rect.width / 2,
+            rect.y + rect.height / 2
+          ) === element
+        );
+      })
+    )
+    .toBe(true);
+  expect(await page.locator('[data-grid-row-id]').count()).toBeLessThan(80);
+});
+
 test('keeps an unsafe integer draft instead of saving a rounded value', async ({
   page,
 }) => {

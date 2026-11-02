@@ -3936,6 +3936,11 @@ function _create_MutationResult() {
               .union([z.string().datetime({ offset: true }), z.null()])
               .optional(),
             confirmationMessage: z.string(),
+            branding: z.object({
+              logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+              coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+              accentColor: z.union([z.string(), z.null()]).optional(),
+            }),
             createdAt: z.string().datetime({ offset: true }),
             updatedAt: z.string().datetime({ offset: true }),
             isHiddenInDrive: z.boolean(),
@@ -11189,6 +11194,39 @@ export function getIssueBotCredentialResponseSchema() {
     _create_IssueBotCredentialResponse());
 }
 
+function _create_ListAgentUpdates() {
+  return z.record(z.never());
+}
+let _cached_ListAgentUpdates:
+  | ReturnType<typeof _create_ListAgentUpdates>
+  | undefined;
+export function getListAgentUpdatesSchema() {
+  return (_cached_ListAgentUpdates ??= _create_ListAgentUpdates());
+}
+
+function _create_AgentUpdates() {
+  return z.object({
+    items: z.array(
+      z.object({
+        sessionId: z.string().uuid(),
+        sessionName: z.string(),
+        harness: z.string(),
+        pullRequestUrl: z.union([z.string(), z.null()]).optional(),
+        kind: z.enum(['permission', 'elicitation', 'tool_approval', 'stalled']),
+        summary: z.string(),
+        since: z.string().datetime({ offset: true }),
+        options: z.array(z.string()),
+      })
+    ),
+    truncated: z.boolean(),
+    truncationNotice: z.union([z.string(), z.null()]).optional(),
+  });
+}
+let _cached_AgentUpdates: ReturnType<typeof _create_AgentUpdates> | undefined;
+export function getAgentUpdatesSchema() {
+  return (_cached_AgentUpdates ??= _create_AgentUpdates());
+}
+
 function _create_ListAgents() {
   return z.record(z.any());
 }
@@ -12413,6 +12451,11 @@ function _create_ListResult() {
             .union([z.string().datetime({ offset: true }), z.null()])
             .optional(),
           confirmationMessage: z.string(),
+          branding: z.object({
+            logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+            accentColor: z.union([z.string(), z.null()]).optional(),
+          }),
           createdAt: z.string().datetime({ offset: true }),
           updatedAt: z.string().datetime({ offset: true }),
           isHiddenInDrive: z.boolean(),
@@ -15735,6 +15778,11 @@ function _create_ReadResult() {
               .union([z.string().datetime({ offset: true }), z.null()])
               .optional(),
             confirmationMessage: z.string(),
+            branding: z.object({
+              logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+              coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+              accentColor: z.union([z.string(), z.null()]).optional(),
+            }),
             createdAt: z.string().datetime({ offset: true }),
             updatedAt: z.string().datetime({ offset: true }),
             isHiddenInDrive: z.boolean(),
@@ -16381,6 +16429,11 @@ function _create_ReadResult() {
               .union([z.string().datetime({ offset: true }), z.null()])
               .optional(),
             confirmationMessage: z.string(),
+            branding: z.object({
+              logoFileId: z.union([z.string().uuid(), z.null()]).optional(),
+              coverFileId: z.union([z.string().uuid(), z.null()]).optional(),
+              accentColor: z.union([z.string(), z.null()]).optional(),
+            }),
             createdAt: z.string().datetime({ offset: true }),
             updatedAt: z.string().datetime({ offset: true }),
             isHiddenInDrive: z.boolean(),

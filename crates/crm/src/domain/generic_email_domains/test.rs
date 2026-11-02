@@ -209,6 +209,16 @@ fn matches_bulk_mail_senders() {
 }
 
 #[test]
+fn ramp_is_a_company_domain() {
+    for domain in ["ramp.com", "RAMP.COM", "  ramp.com  ", "www.ramp.com"] {
+        assert!(
+            !is_generic_email_domain(domain),
+            "expected {domain} to be allowed as a company domain"
+        );
+    }
+}
+
+#[test]
 fn legitimate_company_domains_pass_through() {
     for domain in [
         "macro.com",

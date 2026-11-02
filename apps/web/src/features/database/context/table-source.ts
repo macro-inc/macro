@@ -25,8 +25,16 @@ export type DatabaseWriteResult = {
   version: number | undefined;
 };
 
+export type DatabaseRowsPagination = {
+  hasMore: Accessor<boolean>;
+  loading: Accessor<boolean>;
+  version: Accessor<number | undefined>;
+  loadMore(): ResultAsync<unknown, DatabaseReadFailure>;
+};
+
 /** Rows are undefined before the first successful read; background errors may coexist with them. */
 export type DatabaseRowsSource = {
+  pagination?: DatabaseRowsPagination;
   columns: Accessor<DatabaseViewColumn[]>;
   snapshot: Accessor<DatabaseRowsSnapshot | undefined>;
   /** The view's last read as the engine answered it. */
