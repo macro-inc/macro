@@ -125,6 +125,7 @@ function renderCustomers(url: string) {
       ),
     canGo: (delta: number) => router!.canGo(pane(), delta),
     go: (delta: number) => router!.navigatePane(pane(), delta),
+    navigate: (path: string) => router!.navigatePane(pane(), path),
   };
 }
 
@@ -433,6 +434,78 @@ it('keeps document metadata in Files and Notes URLs', async () => {
   await vi.waitFor(() => expect(route.item()?.name).toBe('Note'));
   expect(url()).toBe('/companies/company/acme/document/note-1/md');
 });
+
+it('skips consecutive items when restoring the captured record section', async () => {
+  const { url, shows, canGo, go } = renderCustomers(
+    '/companies/pipeline/sales'
+  );
+  route.open([acme, maya]);
+  await shows(
+    'tab:pipeline:sales section:- records:company:acme:Acme,contact:maya:Maya'
+  );
+  route.setSection('files');
+  await shows(
+    'tab:pipeline:sales section:files records:company:acme:Acme,contact:maya:Maya'
+  );
+  route.openItem({
+    type: 'document',
+    id: 'file-1',
+    name: 'File',
+    fileType: 'pdf',
+  });
+  await vi.waitFor(() => expect(route.item()?.itemId).toBe('file-1'));
+  route.openItem({
+    type: 'document',
+    id: 'note-1',
+    name: 'Note',
+    fileType: 'md',
+  });
+  await vi.waitFor(() => expect(route.item()?.itemId).toBe('note-1'));
+
+  route.closeItem();
+  await vi.waitFor(() => expect(route.item()).toBeUndefined());
+  expect(url()).toBe('/companies/pipeline/sales/contact/maya/files');
+  expect(route.records()).toEqual([acme, maya]);
+  expect(canGo(1)).toBe(true);
+  await go(1);
+  expect(route.item()).toMatchObject({ itemId: 'file-1', itemFileType: 'pdf' });
+  await go(1);
+  expect(route.item()).toMatchObject({ itemId: 'note-1', itemFileType: 'md' });
+});
+
+it.each([
+  [
+    '/companies/contact/maya/tasks',
+    '/companies/contact/maya/emails/thread-1',
+    '/companies/contact/maya/emails',
+  ],
+  [
+    '/companies/company/acme/emails',
+    '/companies/contact/maya/emails/thread-1',
+    '/companies/contact/maya/emails',
+  ],
+  [
+    '/companies/pipeline/first/contact/maya/emails',
+    '/companies/pipeline/second/contact/maya/emails/thread-1',
+    '/companies/pipeline/second/contact/maya/emails',
+  ],
+  [
+    '/companies?s0.crm.tab=notes',
+    '/companies/email/thread-1?s0.crm.tab=email',
+    '/companies?s0.crm.tab=email',
+  ],
+])(
+  'does not restore an unrelated source entry at %s',
+  async (source, item, parent) => {
+    const { url, canGo, navigate } = renderCustomers(source);
+    await navigate(item);
+    await vi.waitFor(() => expect(route.item()?.itemId).toBe('thread-1'));
+    route.closeItem();
+    await vi.waitFor(() => expect(route.item()).toBeUndefined());
+    expect(url()).toBe(parent);
+    expect(canGo(1)).toBe(false);
+  }
+);
 
 it('closes a directly loaded item to its record section without a prior entry', async () => {
   const { url, shows, canGo } = renderCustomers(

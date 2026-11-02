@@ -122,7 +122,9 @@ retains `<item-type>/<item-id>` and document metadata; record Files and overview
 notes use document-metadata routes restricted to those sections. The route stores
 the item name and record trail in entry state. Route params retain the record and
 section; pane search retains the workspace tab. `route-adapter.ts` owns item
-navigation and close/history restoration;
+navigation and close/history restoration. Keep workspace/pipeline item variants
+in its shared route-family table and identify history entries through merged route
+params instead of enumerating item route IDs.
 `views/item-detail.tsx` renders authorized details in the existing CRM shell
 with source, record trail and item breadcrumbs, omitting section labels such as
 Tasks and Files. The current record breadcrumb returns to the captured section

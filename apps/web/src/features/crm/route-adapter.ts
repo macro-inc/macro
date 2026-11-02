@@ -1,6 +1,7 @@
 import {
   createSearchParams,
   type Entry,
+  routeParams,
   useNavigate,
   usePaneHistory,
   useParams,
@@ -44,6 +45,18 @@ type CrmBranchParams = Partial<CrmRecordParams & CrmItemParams> & {
   pipelineId?: string;
 };
 
+const CRM_ITEM_ROUTES = {
+  activity: { workspace: crmItemRoute, pipeline: crmPipelineItemRoute },
+  section: {
+    workspace: crmRecordItemRoute,
+    pipeline: crmPipelineRecordItemRoute,
+  },
+  files: {
+    workspace: crmRecordFileItemRoute,
+    pipeline: crmPipelineRecordFileItemRoute,
+  },
+};
+
 /** The list tab an entry shows, or undefined for a record. */
 function listTab(entry: Entry): string | undefined {
   const leaf = entry.location.route.matches.at(-1);
@@ -56,14 +69,27 @@ function listTab(entry: Entry): string | undefined {
     .value.tab;
 }
 
-function recordItemRoute(
-  section: CrmRecordSection | undefined,
-  pipelineId: string | undefined
-) {
-  if (!section || section === 'overview' || section === 'files') {
-    return pipelineId ? crmPipelineRecordFileItemRoute : crmRecordFileItemRoute;
+function itemDestination(source: CrmBranchParams, item: CrmItemParams) {
+  let kind: keyof typeof CRM_ITEM_ROUTES = 'activity';
+  if (source.recordType && source.recordId) {
+    kind =
+      !source.section ||
+      source.section === 'overview' ||
+      source.section === 'files'
+        ? 'files'
+        : 'section';
   }
-  return pipelineId ? crmPipelineRecordItemRoute : crmRecordItemRoute;
+  const routes = CRM_ITEM_ROUTES[kind];
+  return {
+    route: source.pipelineId ? routes.pipeline : routes.workspace,
+    params: {
+      pipelineId: source.pipelineId,
+      recordType: source.recordType,
+      recordId: source.recordId,
+      section: source.section,
+      ...item,
+    },
+  };
 }
 
 /** The Customers location held by the pane's route. */
@@ -72,21 +98,11 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
   const [recordSearch] = createSearchParams(crmRecordSearch);
   const params = useParams<CrmBranchParams>();
   const routeTrail = useRouteState(companiesRoute);
-  const listItemState = useRouteState(crmItemRoute);
-  const recordItemState = useRouteState(crmRecordItemRoute);
-  const pipelineItemState = useRouteState(crmPipelineItemRoute);
-  const pipelineRecordItemState = useRouteState(crmPipelineRecordItemRoute);
-  const recordFileItemState = useRouteState(crmRecordFileItemRoute);
-  const pipelineRecordFileItemState = useRouteState(
-    crmPipelineRecordFileItemRoute
-  );
-  const itemState = () =>
-    listItemState() ??
-    recordItemState() ??
-    pipelineItemState() ??
-    pipelineRecordItemState() ??
-    recordFileItemState() ??
-    pipelineRecordFileItemState();
+  const itemStates = Object.values(CRM_ITEM_ROUTES).flatMap((routes) => [
+    useRouteState(routes.workspace),
+    useRouteState(routes.pipeline),
+  ]);
+  const itemState = () => itemStates.find((state) => state())?.();
   const navigate = useNavigate();
   const history = usePaneHistory();
 
@@ -207,87 +223,51 @@ export function createCrmRoute(captureEntryState?: () => void): CrmRoute {
     };
     captureEntryState?.();
     const trail = records();
-    const pipelineId = params.pipelineId;
-    const itemRoute = pipelineId ? crmPipelineItemRoute : crmItemRoute;
-    const target = trail.length
-      ? recordItemRoute(params.section, pipelineId)
-      : itemRoute;
+    const destination = itemDestination(params, itemParams);
     fireAndForget(
       Telemetry.span('crm.item.open', async (span) => {
         span.setAttr('entity.id', entity.id);
         span.setAttr('entity.type', entity.type);
-        await navigate(
-          {
-            route: target,
-            params: {
-              ...itemParams,
-              ...(pipelineId ? { pipelineId } : {}),
-              ...(trail.length
-                ? {
-                    recordType: trail[trail.length - 1]!.type,
-                    recordId: trail[trail.length - 1]!.id,
-                    section: params.section,
-                  }
-                : {}),
-            },
+        await navigate(destination, {
+          state: {
+            trail: trail.length ? [...trail] : undefined,
+            name: entity.name,
           },
-          {
-            state: {
-              trail: trail.length ? [...trail] : undefined,
-              name: entity.name,
-            },
-          }
-        );
+        });
       }),
       'crm'
     );
     return true;
   };
 
-  const closeItem = () => {
-    if (!item()) return;
+  const restoreItemSource = () => {
     const snapshot = history();
-    if (snapshot) {
-      for (let index = snapshot.index - 1; index >= 0; index--) {
-        const previous = snapshot.entries[index];
-        const matches = previous.location.route.matches;
-        if (!matches.some((match) => match.id === companiesRoute.id)) break;
-        if (
-          matches.some(
-            (match) =>
-              match.id === crmItemRoute.id ||
-              match.id === crmRecordItemRoute.id ||
-              match.id === crmPipelineItemRoute.id ||
-              match.id === crmPipelineRecordItemRoute.id ||
-              match.id === crmRecordFileItemRoute.id ||
-              match.id === crmPipelineRecordFileItemRoute.id
-          )
-        )
-          continue;
-        const previousRecord = matches.find(
-          (match) =>
-            match.id === crmRecordRoute.id ||
-            match.id === crmPipelineRecordRoute.id
-        );
-        const currentRecord = shown();
-        if (currentRecord) {
-          if (
-            previousRecord?.params.recordId !== currentRecord.id ||
-            previousRecord.params.recordType !== currentRecord.type ||
-            previousRecord.params.section !== params.section ||
-            (params.pipelineId &&
-              !matches.some(
-                (match) =>
-                  match.id === crmPipelineRoute.id &&
-                  match.params.pipelineId === params.pipelineId
-              ))
-          )
-            break;
-        } else if (listTab(previous) !== tab()) break;
-        fireAndForget(navigate(index - snapshot.index), 'crm');
-        return;
-      }
+    if (!snapshot) return false;
+    const currentRecord = shown();
+    for (let index = snapshot.index - 1; index >= 0; index--) {
+      const previous = snapshot.entries[index];
+      const matches = previous.location.route.matches;
+      if (!matches.some((match) => match.id === companiesRoute.id)) break;
+      const previousParams = routeParams<CrmBranchParams>(
+        previous.location.route
+      );
+      if (previousParams.itemId) continue;
+      const sameSource = currentRecord
+        ? previousParams.recordId === currentRecord.id &&
+          previousParams.recordType === currentRecord.type &&
+          previousParams.section === params.section &&
+          (!params.pipelineId ||
+            previousParams.pipelineId === params.pipelineId)
+        : listTab(previous) === tab();
+      if (!sameSource) break;
+      fireAndForget(navigate(index - snapshot.index), 'crm');
+      return true;
     }
+    return false;
+  };
+
+  const closeItem = () => {
+    if (!item() || restoreItemSource()) return;
     const trail = records();
     if (trail.length) showRecord(trail, params.section);
     else showList(tab());
