@@ -136,8 +136,10 @@ opened event is reflected in the pane-owned `sN.calendar.eventId` search paramet
 
 Opening a calendar row in Home clears its loaded reminder dots immediately;
 failed read writes restore them. Opening event details directly from the grid
-also marks the event's notifications read. Verify both on desktop and mobile,
-including a delayed read response and a failed write followed by another click.
+or by a link to the event also marks the event's notifications read, a join
+request's included: seen is not answered, so the row stays listed until the
+request is settled. Verify these on desktop and mobile, including a delayed read
+response and a failed write followed by another click.
 
 Period selection updates its label and route immediately. The active grid redraws
 on a deferred task; hidden neighboring periods follow on separate tasks. Calendar
@@ -468,7 +470,13 @@ icon button. Desktop `New` keeps its label.
 Touch devices keep the month selector and header controls without separate
 create or call buttons in the right island. Mobile header islands omit Search.
 The desktop sidebar's Search icon sits left of collapse and reveals event search
-above New. Its mini calendar remains navigable by date and month.
+above New. Its mini calendar browses months independently of the main grid:
+month arrows, the month picker, and keyboard focus changes do not move the main
+calendar. Selecting a day navigates the main calendar without closing the narrow
+layout's navigation overlay. Main calendar navigation updates the mini calendar's
+selected day and week highlight without resetting the month being browsed.
+When browsing from a month's last day to a shorter month, keyboard focus stays
+on the shorter month's last day so Tab and arrow-key navigation remain usable.
 
 Active Quick Calls you created, participated in, or were invited to appear above your
 next five events (including ones in progress), whether or not they have call links.
@@ -874,18 +882,30 @@ says `You've asked to join this event` and refreshes to `Requested` or `Invited`
 notification (Settings → Notifications → Calendar → Requests to join), which Home lists as
 `<requester> asked to join <event>` with a person-plus glyph, like a comment row. It opens the event,
 whose details list each request with `Add as guest` and `Decline` on desktop and in the phone
-drawer. Adding writes the guest through the same invite path as `Add guests`, so Google or
+drawer. A new request appears in details already open, for the owner and delegates of the sharer's
+inbox, without a reload; a repeated or refused ask changes nothing there. Adding writes the guest through the same invite path as `Add guests`, so Google or
 Outlook sends the invitation and the mention then opens the viewer's own copy. Declining sends
 the requester nothing, but their card then reads `Declined` and `The person who shared this event
 declined your request to join.` with no `Ask to join`, and offers `Add to calendar` again. A
 declined request stands: the server refuses another ask with 409 `request_declined`, so the
-sharer is asked only once. A classic `@Macro` reply that
+sharer is asked only once. An answer given anywhere else (a delegate, the API, another window)
+drops the request from an open list and updates the requester's open card, without a reload. A
+press on a row that had not caught up changes nothing and says so: `Already answered: <address> was
+invited` or `Already answered: this request was declined`. The notification goes when the request is answered, by whoever answers
+it and however they do, leaving the notifications of other requests on the event, when the
+requester's account is deleted, and when the event goes (deleted in Macro, deleted or cancelled in
+Google or Outlook, its calendar or inbox removed); deleting one occurrence of a series leaves it,
+since the sharer can still add the guest.
+A classic `@Macro` reply that
 mentions an event does not share
 it by posting the chip. It asks whether to share with the channel, and a yes in that thread
 writes the same channel grant. Private and confidential events are never shared this way.
 Every calendar mention's hover card shows the schedule, location, organizer and attendee
 count, plus the first lines of the event description (its links open), and no last-updated
-byline. A mention of a meeting that was deleted or cancelled reads `Deleted`; clicking it (a tap
+byline. A Macro call's generated `Join Macro call` line and a location that is only its link are
+left out, as in event details, and a viewer holding the meeting gets one `Join Macro call` button
+below the schedule, which closes the phone sheet as it joins. A read-only channel share gets no
+join button, since a share never carries the join link. A mention of a meeting that was deleted or cancelled reads `Deleted`; clicking it (a tap
 on a phone, which opens a sheet) shows `This event was deleted or cancelled.`, like a shared
 event's card, instead of doing nothing. When the mention names someone else's copy of a meeting the viewer also holds (a shared
 event they added or were invited to, or a meeting someone else mentioned), the card says how:

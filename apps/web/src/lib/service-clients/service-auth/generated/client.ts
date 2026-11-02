@@ -107,6 +107,7 @@ import type {
   TrialEligibility,
   UpdateAutoReloadRequest,
   UpdateOverageRequest,
+  UpstreamErrorResponse,
   UsageSnapshot,
   UserLanguage,
   UserLinkResponse,
@@ -1457,6 +1458,16 @@ export type setGithubPullRequestDraftResponse500 = {
   status: 500;
 };
 
+export type setGithubPullRequestDraftResponse502 = {
+  data: UpstreamErrorResponse;
+  status: 502;
+};
+
+export type setGithubPullRequestDraftResponse503 = {
+  data: UpstreamErrorResponse;
+  status: 503;
+};
+
 export type setGithubPullRequestDraftResponseSuccess =
   setGithubPullRequestDraftResponse200 & {
     headers: Headers;
@@ -1468,6 +1479,8 @@ export type setGithubPullRequestDraftResponseError = (
   | setGithubPullRequestDraftResponse422
   | setGithubPullRequestDraftResponse428
   | setGithubPullRequestDraftResponse500
+  | setGithubPullRequestDraftResponse502
+  | setGithubPullRequestDraftResponse503
 ) & {
   headers: Headers;
 };
@@ -1531,6 +1544,16 @@ export type enrichGithubPullRequestsResponse500 = {
   status: 500;
 };
 
+export type enrichGithubPullRequestsResponse502 = {
+  data: UpstreamErrorResponse;
+  status: 502;
+};
+
+export type enrichGithubPullRequestsResponse503 = {
+  data: UpstreamErrorResponse;
+  status: 503;
+};
+
 export type enrichGithubPullRequestsResponseSuccess =
   enrichGithubPullRequestsResponse200 & {
     headers: Headers;
@@ -1540,6 +1563,8 @@ export type enrichGithubPullRequestsResponseError = (
   | enrichGithubPullRequestsResponse404
   | enrichGithubPullRequestsResponse428
   | enrichGithubPullRequestsResponse500
+  | enrichGithubPullRequestsResponse502
+  | enrichGithubPullRequestsResponse503
 ) & {
   headers: Headers;
 };
@@ -1620,6 +1645,16 @@ export type mergeGithubPullRequestResponse500 = {
   status: 500;
 };
 
+export type mergeGithubPullRequestResponse502 = {
+  data: UpstreamErrorResponse;
+  status: 502;
+};
+
+export type mergeGithubPullRequestResponse503 = {
+  data: UpstreamErrorResponse;
+  status: 503;
+};
+
 export type mergeGithubPullRequestResponseSuccess =
   mergeGithubPullRequestResponse200 & {
     headers: Headers;
@@ -1632,6 +1667,8 @@ export type mergeGithubPullRequestResponseError = (
   | mergeGithubPullRequestResponse422
   | mergeGithubPullRequestResponse428
   | mergeGithubPullRequestResponse500
+  | mergeGithubPullRequestResponse502
+  | mergeGithubPullRequestResponse503
 ) & {
   headers: Headers;
 };
@@ -1702,6 +1739,16 @@ export type getGithubPullRequestMergeabilityResponse500 = {
   status: 500;
 };
 
+export type getGithubPullRequestMergeabilityResponse502 = {
+  data: UpstreamErrorResponse;
+  status: 502;
+};
+
+export type getGithubPullRequestMergeabilityResponse503 = {
+  data: UpstreamErrorResponse;
+  status: 503;
+};
+
 export type getGithubPullRequestMergeabilityResponseSuccess =
   getGithubPullRequestMergeabilityResponse200 & {
     headers: Headers;
@@ -1712,6 +1759,8 @@ export type getGithubPullRequestMergeabilityResponseError = (
   | getGithubPullRequestMergeabilityResponse422
   | getGithubPullRequestMergeabilityResponse428
   | getGithubPullRequestMergeabilityResponse500
+  | getGithubPullRequestMergeabilityResponse502
+  | getGithubPullRequestMergeabilityResponse503
 ) & {
   headers: Headers;
 };
@@ -1786,6 +1835,16 @@ export type setGithubPullRequestStateResponse500 = {
   status: 500;
 };
 
+export type setGithubPullRequestStateResponse502 = {
+  data: UpstreamErrorResponse;
+  status: 502;
+};
+
+export type setGithubPullRequestStateResponse503 = {
+  data: UpstreamErrorResponse;
+  status: 503;
+};
+
 export type setGithubPullRequestStateResponseSuccess =
   setGithubPullRequestStateResponse200 & {
     headers: Headers;
@@ -1797,6 +1856,8 @@ export type setGithubPullRequestStateResponseError = (
   | setGithubPullRequestStateResponse422
   | setGithubPullRequestStateResponse428
   | setGithubPullRequestStateResponse500
+  | setGithubPullRequestStateResponse502
+  | setGithubPullRequestStateResponse503
 ) & {
   headers: Headers;
 };
@@ -2597,6 +2658,16 @@ export type initGithubLinkResponse500 = {
   status: 500;
 };
 
+export type initGithubLinkResponse502 = {
+  data: UpstreamErrorResponse;
+  status: 502;
+};
+
+export type initGithubLinkResponse503 = {
+  data: UpstreamErrorResponse;
+  status: 503;
+};
+
 export type initGithubLinkResponseSuccess = initGithubLinkResponse200 & {
   headers: Headers;
 };
@@ -2605,6 +2676,8 @@ export type initGithubLinkResponseError = (
   | initGithubLinkResponse401
   | initGithubLinkResponse429
   | initGithubLinkResponse500
+  | initGithubLinkResponse502
+  | initGithubLinkResponse503
 ) & {
   headers: Headers;
 };
@@ -2671,6 +2744,16 @@ export type deleteGithubLinkResponse500 = {
   status: 500;
 };
 
+export type deleteGithubLinkResponse502 = {
+  data: UpstreamErrorResponse;
+  status: 502;
+};
+
+export type deleteGithubLinkResponse503 = {
+  data: UpstreamErrorResponse;
+  status: 503;
+};
+
 export type deleteGithubLinkResponseSuccess = deleteGithubLinkResponse200 & {
   headers: Headers;
 };
@@ -2678,6 +2761,8 @@ export type deleteGithubLinkResponseError = (
   | deleteGithubLinkResponse400
   | deleteGithubLinkResponse401
   | deleteGithubLinkResponse500
+  | deleteGithubLinkResponse502
+  | deleteGithubLinkResponse503
 ) & {
   headers: Headers;
 };
@@ -2736,6 +2821,16 @@ export type checkGithubLinkStatusResponse500 = {
   status: 500;
 };
 
+export type checkGithubLinkStatusResponse502 = {
+  data: UpstreamErrorResponse;
+  status: 502;
+};
+
+export type checkGithubLinkStatusResponse503 = {
+  data: UpstreamErrorResponse;
+  status: 503;
+};
+
 export type checkGithubLinkStatusResponseSuccess =
   checkGithubLinkStatusResponse200 & {
     headers: Headers;
@@ -2745,6 +2840,8 @@ export type checkGithubLinkStatusResponseError = (
   | checkGithubLinkStatusResponse404
   | checkGithubLinkStatusResponse428
   | checkGithubLinkStatusResponse500
+  | checkGithubLinkStatusResponse502
+  | checkGithubLinkStatusResponse503
 ) & {
   headers: Headers;
 };

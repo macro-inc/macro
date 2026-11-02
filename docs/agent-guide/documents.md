@@ -14,15 +14,17 @@ The document header has separate Share, Copy Share Link, and Side Panel buttons.
 They are borderless with a soft rounded background on hover. Share opens the
 sharing dialog; copying a link is a separate action.
 
-In the Share dialog's **Optional message**, paste an image with Cmd/Ctrl+V,
-use **Attach files**, or drop a file into the composer. Images show a removable
-preview and are sent inline beside the shared item to each selected person or
-channel. Share (including Cmd/Ctrl+Enter and the phone drawer's Share button)
-waits for uploads; Enter still inserts a newline. Removing an uploading image
+In the Share dialog's **Optional message**, paste an image with Cmd/Ctrl+V
+or drop a file into the composer. Share composers have no paperclip button on
+desktop or mobile. Images show a removable preview and are sent inline beside
+the shared item to each selected person or channel. Share (including
+Cmd/Ctrl+Enter and the phone drawer's Share button) waits for uploads; Enter still inserts a newline. Removing an uploading image
 keeps it removed, and closing the dialog discards its attachment draft.
-Verify paste, file selection, drop, removal during upload, upload failure, and
+Verify paste, drop, removal during upload, upload failure, and
 sending to both a person and a channel. On touch, attachment previews scroll
-horizontally and removal remains available without hover.
+horizontally and removal remains available without hover. Composer fixture
+screenshots: [desktop](media/share-images/desktop.png) and
+[phone](media/share-images/mobile.png).
 
 With `enable-calendar-meeting-notes` enabled, owned markdown documents' Share
 panel also lists **Meeting links** (under the **Link** tab on mobile).
@@ -82,7 +84,10 @@ reloads when it receives the grant update. Signed-out visitors are prompted to
 sign in first; ordinary load failures retain **Try again**.
 An already-open document reloads after a permission upgrade on desktop and touch
 devices. Removing its last grant closes the editor and returns to Request access;
-a failed background refresh must not restore the revoked document.
+a failed background refresh must not restore the revoked document. The denied
+view shows **Loading access requests…** until its own request-state read lands,
+never a request row or **Could not load access requests** left over from before
+the change, and a document deleted while it is open shows the not-found view.
 
 In **People with access**, a non-owner can use **Request access** beneath the
 owner to request a supported upgrade (**Comment** or **Edit**). PDFs offer
@@ -150,9 +155,9 @@ Long keys wrap without displacing the Unpin button.
 **Delete from item** stays below, where removal is allowed (removes the
 assignment without deleting the shared property definition). Task builtins cannot
 be deleted from these pills. Pins are saved with the document, including an
-explicitly empty pin list. Tasks initially show Status, Priority, Assignees, and
-Project when enabled; changing pins keeps the other defaults unless they are
-explicitly unpinned.
+explicitly empty pin list. Tasks initially show Status, Priority, Assignees, Due Date,
+and Project when enabled. Defaults apply only without a saved pin list; customized
+pins stay unchanged. Changing pins keeps the other defaults unless explicitly unpinned.
 
 Markdown code blocks have a **Copy Code** button in both editable and read-only
 views. Successful copies briefly animate the icon to a solid green check-circle;

@@ -1,4 +1,5 @@
 import { useViewTabHotkeys, ViewShell } from '@app/components/view-shell';
+import { FolderDropZone } from '@app/features/next-soup/actions';
 import { SplitRouter } from '@app/lib/split-router';
 import { useSplitPanelOrThrow } from '@components/app/split-layout/layoutUtils';
 import { SplitPanel } from '@components/app/split-panel';
@@ -74,9 +75,11 @@ export function DriveWorkspace(props: { tour?: JSX.Element }) {
                     {props.tour}
                     <ViewShell.Content>
                       <Suspense fallback={<DriveLoading />}>
-                        <DriveFileDropzone onDrop={actions.dropFiles}>
-                          <DriveList />
-                        </DriveFileDropzone>
+                        <FolderDropZone folderId={state.projectId()}>
+                          <DriveFileDropzone onDrop={actions.dropFiles}>
+                            <DriveList />
+                          </DriveFileDropzone>
+                        </FolderDropZone>
                       </Suspense>
                     </ViewShell.Content>
                   </>

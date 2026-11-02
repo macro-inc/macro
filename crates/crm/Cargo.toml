@@ -54,7 +54,7 @@ outbound = [
   "dep:unfurl",
   "ports",
 ]
-ports = ["dep:bot_id", "dep:csv", "dep:databases", "dep:futures", "dep:models_databases", "dep:models_permissions", "dep:models_properties", "dep:macro_user_id", "dep:macro_uuid", "dep:rootcause", "dep:utoipa", "entity_access/ports"]
+ports = ["dep:bot_id", "dep:csv", "dep:databases", "dep:futures", "dep:models_databases", "dep:models_permissions", "dep:models_properties", "dep:macro_user_id", "dep:macro_uuid", "dep:rootcause", "dep:utoipa", "dep:properties", "entity_access/ports"]
 # Read-only CRM search (name/domain). Pulls only sqlx + ports — no
 # reqwest/unfurl/axum — so search consumers stay lightweight.
 search = ["dep:sqlx", "ports"]
@@ -77,6 +77,7 @@ thiserror = { workspace = true }
 tracing = { workspace = true }
 uuid = { workspace = true }
 
+models_pagination = { path = "../models_pagination" }
 call = { path = "../call", default-features = false, features = ["ports"], optional = true }
 entity_access = { path = "../entity_access", default-features = false }
 kafka_util = { path = "../kafka_util", optional = true }

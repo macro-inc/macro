@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use models_email::email::service::message::Message;
 use models_email::email::service::thread::ThreadSummary;
+use models_email::service::contact::Contact;
 use serde::{Deserialize, Serialize};
 
 use super::SyncCursor;
@@ -54,6 +55,18 @@ impl ProviderSubscription {
 pub struct ThreadListPage {
     /// Threads returned in this page.
     pub threads: Vec<ThreadSummary>,
+    /// Opaque token for the next page, or `None` when this is the last page.
+    pub next_page_token: Option<String>,
+}
+
+/// One provider page of contacts.
+#[derive(Debug, Clone)]
+pub struct ContactPage {
+    /// Contacts returned in this page.
+    pub contacts: Vec<Contact>,
+    /// Token for the next incremental synchronization, which the provider
+    /// returns with the last page.
+    pub next_sync_token: Option<String>,
     /// Opaque token for the next page, or `None` when this is the last page.
     pub next_page_token: Option<String>,
 }
