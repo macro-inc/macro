@@ -7,6 +7,8 @@ export type CollapsibleRegistration = {
   id: string;
   /** Lower numbers collapse first. */
   priority: number;
+  /** Reclaim lower-priority items when lifting a last-resort width cap. */
+  reclaimSpaceOnExpand?: boolean;
   collapsed: Accessor<boolean>;
   /** `silent` suppresses callbacks during pre-paint trial measurements. */
   setCollapsed: (value: boolean, options?: { silent?: boolean }) => void;
@@ -119,9 +121,10 @@ export function createPriorityCollapser(
     // never visible; silent keeps onCollapsedChange from firing for it.
     for (const item of byExpandOrder) {
       item.setCollapsed(false, { silent: true });
-      // New registrations can need space that an existing cap conceals.
-      // Give lower-priority items up before rejecting this expansion.
-      if (overflows()) collapseUntilFits(item.priority);
+      // A width cap can conceal space needed by newly registered items.
+      if (item.reclaimSpaceOnExpand && overflows()) {
+        collapseUntilFits(item.priority);
+      }
       if (overflows()) {
         item.setCollapsed(true, { silent: true });
         const collapsedMeasurement = probe.measure();
