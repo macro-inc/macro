@@ -3,7 +3,7 @@
 use ai_tools::{ToolServiceContext, build_tool_service_context_from_env};
 use tokio_util::task::TaskTracker;
 
-use crate::config::Config;
+use memory::config::Config;
 
 /// Build memory's tools at startup with the same quota policy as other hosts.
 /// The memory domain binds its exempt `Memory` feature when it starts an operation;

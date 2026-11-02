@@ -1,12 +1,12 @@
 #![recursion_limit = "256"]
 
-use ai_tools::{AiHost, tools_for};
 use anyhow::Context;
 use macro_user_id::user_id::MacroUserIdStr;
 use memory::config::Config;
-use memory::context::build_tool_service_context;
-use memory::domain::{MemoryService, service::MemoryServiceImpl};
-use memory::outbound::pg_memory_repo::PgMemoryRepo;
+#[path = "memory/context.rs"]
+mod context;
+use context::build_tool_service_context;
+
 use sqlx::postgres::PgPoolOptions;
 use std::time::Duration;
 use tokio_util::task::TaskTracker;
@@ -36,12 +36,15 @@ async fn main() -> anyhow::Result<()> {
         import_jobs.clone(),
     )
     .await?;
-    let tools = tools_for(AiHost::Chat);
-    let memory_repo = PgMemoryRepo::new(pool);
-    let memory_service = MemoryServiceImpl::new(memory_repo, tool_context, tools);
+    let memory_service = ai_tools::memory::build_memory_service(pool, tool_context);
 
-    tracing::info!("Generating memory for {user}...");
-    let memory_result = memory_service.get_or_generate_memory(user).await;
+    tracing::info!("generating composed memory");
+    let memory_result = memory_service
+        .refresh_through(
+            user,
+            chrono::Utc::now().date_naive() - chrono::Duration::days(1),
+        )
+        .await;
 
     import_jobs.hand_over().await;
 
@@ -56,10 +59,7 @@ async fn main() -> anyhow::Result<()> {
         ),
     }
 
-    match memory_result? {
-        Some(memory) => println!("{memory}"),
-        None => println!("No memory yet, generation triggered in background"),
-    }
+    memory_result?;
 
     Ok(())
 }

@@ -48,6 +48,8 @@ A form for a channel is a poll (one required select question, tally visible),
 posted once as `<m-document-card>` with `blockName: "form"`; the card's message
 reference grants the channel View, so no second message or link is needed.
 
+- `src/privacy.rs` supplies generation/judge privacy policy; `compose` joins runtime memory sections without static lifetimes.
+
 ## Checks
 
 - `cargo test -p prompt` (`SQLX_OFFLINE` unset).
