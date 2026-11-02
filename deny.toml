@@ -225,13 +225,16 @@ deny = [
     "agent_harness",             # Warm-claim and handshake span tests
     "agent_inmem",               # GenAI trace propagation tests
     "agent_session",             # GenAI span tests
+    "ai_billing",                # Background usage span propagation tests only
     "ai_toolset",                # GenAI span tests
     "channels",                  # Dev logging only
     "coding_agent_worker",       # Standalone daemon logging setup
     "cursor_cloud_agents",       # Standalone ACP binary logging; stdout is the protocol, so macro_entrypoint cannot own it
     "dictation",                 # Metadata tracing and content-redaction tests only
+    "document_storage_service",  # GraphQL telemetry span and log tests only (dev-dependency)
     "documents",                 # Dev logging only
     "email",                     # Dev logging only
+    "email_db_client",           # Purge phase span tests only
     "genai_telemetry",           # GenAI span tests
     "graphql_email",             # Unavailable-thread warning field and span tests only
     "graphql_entity_mutation",   # Batch failure span field tests only
@@ -241,6 +244,7 @@ deny = [
     "macro_authorization",      # Credential-redaction span tests only
     "macro_tower_layers",        # OpenTelemetry layer tests
     "native_app_server",         # Dev tooling only
+    "notification",              # Call-push trace propagation and baggage-redaction tests only
     "notification_sandbox",      # This is not production code its just tooling
     "opentelemetry-appender-tracing", # OpenTelemetry tracing-to-OTLP log bridge requires tracing-subscriber
     "projects",                  # Dev logging only

@@ -4,15 +4,15 @@
 //! messages of history pages.
 
 use chrono::{DateTime, Utc};
+use external_chat::domain::rich::{
+    Call, CallOutcome, ContactCard, Contacts, Event, Location, Poll, PollOption, PollVote,
+    RichContent, SystemAction, SystemLine, created_subject, web_link,
+};
 use nom::Parser;
 use nom::bytes::complete::{take_till, take_while1};
 use nom::character::complete::char;
 use nom::combinator::opt;
 use nom::sequence::terminated;
-use whatsapp_linked::domain::rich::{
-    Call, CallOutcome, ContactCard, Contacts, Event, Location, Poll, PollOption, PollVote,
-    RichContent, SystemAction, SystemLine, web_link,
-};
 use whatsmeow::msgsecret::hash_poll_options;
 use whatsmeow::proto::wa_e2e;
 use whatsmeow::proto::wa_e2e::call_log_message;
@@ -382,7 +382,10 @@ pub(super) fn stub_line(web: &WebMessageInfo) -> Option<SystemLine> {
     };
     Some(match stub {
         StubType::GroupCreate => SystemLine {
-            value: first(),
+            value: parameters
+                .first()
+                .map(String::as_str)
+                .and_then(created_subject),
             ..line(SystemAction::GroupCreated)
         },
         StubType::GroupChangeSubject => SystemLine {

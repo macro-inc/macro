@@ -1,6 +1,7 @@
 import { LIST_VIEW_ID } from '@app/constants/list-views';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { splitBackInterceptor } from '@components/app/split-layout/back-interceptor';
+import { DesktopTabStrip } from '@components/app/tab-layout/DesktopTabStrip';
 import { TOKENS } from '@core/hotkey/tokens';
 import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
@@ -18,10 +19,10 @@ export function DesktopTitleBar() {
     >
       <div class="flex items-center gap-1">
         <Button
+          aria-label="Go Back"
+          tooltip={{ content: 'Go Back', hotkey: TOKENS.split.go.back }}
           variant="ghost"
           size="icon-sm"
-          label="Go Back"
-          hotkey={TOKENS.split.go.back}
           disabled={!activeSplit()?.canGoBack()}
           onClick={() => {
             if (splitBackInterceptor()?.()) return;
@@ -31,23 +32,32 @@ export function DesktopTitleBar() {
           <CaretLeftIcon class="size-4" />
         </Button>
         <Button
+          aria-label="Go Forward"
+          tooltip={{ content: 'Go Forward', hotkey: TOKENS.split.go.forward }}
           variant="ghost"
           size="icon-sm"
-          label="Go Forward"
-          hotkey={TOKENS.split.go.forward}
           disabled={!activeSplit()?.canGoForward()}
           onClick={() => activeSplit()?.goForward()}
         >
           <CaretRightIcon class="size-4" />
         </Button>
       </div>
+      <div
+        data-tauri-drag-region
+        class="flex h-full min-w-0 flex-1 items-center"
+      >
+        <DesktopTabStrip />
+      </div>
       <Show when={globalSplitManager()}>
         {(manager) => (
           <Button
+            aria-label="New Split"
+            tooltip={{
+              content: 'New Split',
+              hotkey: TOKENS.global.createNewSplit,
+            }}
             variant="ghost"
             size="icon-sm"
-            label="New Split"
-            hotkey={TOKENS.global.createNewSplit}
             disabled={!manager().canAppendSplit()}
             onClick={() =>
               manager().openWithSplit(

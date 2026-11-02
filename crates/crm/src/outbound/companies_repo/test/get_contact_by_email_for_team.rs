@@ -10,7 +10,7 @@ use uuid::Uuid;
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn email_lookup_requires_an_unambiguous_visible_contact(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
-    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    seed_team(&pool, team_id, "macro|owner@example.com").await?;
     enable_crm_for_team(&pool, team_id).await?;
     let first_company = insert_company(&pool, team_id, true, &["acme.com"]).await?;
     let second_company = insert_company(&pool, team_id, true, &["other.com"]).await?;
@@ -19,7 +19,7 @@ async fn email_lookup_requires_an_unambiguous_visible_contact(pool: PgPool) -> a
         .create_contact_for_company(
             &team_id,
             &first_company,
-            Some("jane@gmail.com"),
+            Some("jane@example.com"),
             "Jane",
             Utc::now(),
             false,
@@ -29,7 +29,7 @@ async fn email_lookup_requires_an_unambiguous_visible_contact(pool: PgPool) -> a
         .create_contact_for_company(
             &team_id,
             &second_company,
-            Some("jane@gmail.com"),
+            Some("jane@example.com"),
             "Jane",
             Utc::now(),
             false,
@@ -37,20 +37,20 @@ async fn email_lookup_requires_an_unambiguous_visible_contact(pool: PgPool) -> a
         .await?;
 
     assert!(matches!(
-        repo.get_contact_by_email_for_team(&team_id, "Jane@Gmail.com", false).await,
+        repo.get_contact_by_email_for_team(&team_id, "Jane@Example.com", false).await,
         Err(CrmError::InvalidRequest(message)) if message.contains("Select a contact by ID")
     ));
 
     repo.set_contact_hidden(&team_id, &second.id, true).await?;
     assert_eq!(
-        repo.get_contact_by_email_for_team(&team_id, "jane@gmail.com", false)
+        repo.get_contact_by_email_for_team(&team_id, "jane@example.com", false)
             .await?
             .unwrap()
             .id,
         first.id
     );
     assert!(matches!(
-        repo.get_contact_by_email_for_team(&team_id, "jane@gmail.com", true)
+        repo.get_contact_by_email_for_team(&team_id, "jane@example.com", true)
             .await,
         Err(CrmError::InvalidRequest(_))
     ));
@@ -58,7 +58,7 @@ async fn email_lookup_requires_an_unambiguous_visible_contact(pool: PgPool) -> a
     repo.set_company_hidden(&team_id, &second_company, true)
         .await?;
     assert_eq!(
-        repo.get_contact_by_email_for_team(&team_id, "jane@gmail.com", false)
+        repo.get_contact_by_email_for_team(&team_id, "jane@example.com", false)
             .await?
             .unwrap()
             .id,

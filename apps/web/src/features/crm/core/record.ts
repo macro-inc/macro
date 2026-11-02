@@ -47,6 +47,7 @@ export const COMPANY_SECTIONS = [
   'files',
   'tasks',
   'calls',
+  'databases',
 ] as const;
 export const CONTACT_SECTIONS = [
   'overview',
@@ -54,17 +55,9 @@ export const CONTACT_SECTIONS = [
   'files',
   'tasks',
   'calls',
+  'databases',
 ] as const;
 
 export type CompanySection = (typeof COMPANY_SECTIONS)[number];
 export type ContactSection = (typeof CONTACT_SECTIONS)[number];
 export type CrmRecordSection = CompanySection | ContactSection;
-
-export const CRM_RECORD_SECTION_LABELS: Record<CrmRecordSection, string> = {
-  overview: 'Overview',
-  team: 'Team',
-  emails: 'Emails',
-  files: 'Files',
-  tasks: 'Tasks',
-  calls: 'Calls',
-};

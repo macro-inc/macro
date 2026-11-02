@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import { MobileDrawer } from '@components/app/mobile/MobileDrawer';
 import { PillButton } from '@components/app/mobile/PillTabs';
 import CaretDownIcon from '@phosphor/caret-down.svg';
@@ -60,7 +61,7 @@ export function SavedViewPicker(props: {
         <MobileDrawer.Content>
           <MobileDrawer.Handle />
           <MobileDrawer.Title class="px-6 pb-3 text-base font-medium">
-            Saved views
+            {t('viewMenus.savedViews')}
           </MobileDrawer.Title>
           <MobileDrawer.ScrollBody class="px-3">
             {props.children((action) => {

@@ -55,25 +55,43 @@ export function AddToCalendarButton(props: {
       when={targetCalendars().length > 1}
       fallback={
         <Button
-          variant="outline"
+          variant="secondary"
           size={props.size}
           disabled={props.pending || targetCalendars().length === 0}
           onClick={() => props.onAdd(targetCalendars()[0]?.id)}
         >
-          <CalendarPlusIcon />
+          <CalendarPlusIcon
+            class={
+              props.size === 'xs'
+                ? 'size-3 shrink-0 touch:size-6'
+                : 'size-4 shrink-0 touch:size-6'
+            }
+          />
           Add to calendar
         </Button>
       }
     >
       <Dropdown onOpenChange={(open) => props.onMenuOpenChange?.(open)}>
         <Dropdown.Trigger
-          variant="outline"
+          variant="secondary"
           size={props.size}
           disabled={props.pending}
         >
-          <CalendarPlusIcon />
+          <CalendarPlusIcon
+            class={
+              props.size === 'xs'
+                ? 'size-3 shrink-0 touch:size-6'
+                : 'size-4 shrink-0 touch:size-6'
+            }
+          />
           Add to calendar
-          <CaretDownIcon />
+          <CaretDownIcon
+            class={
+              props.size === 'xs'
+                ? 'size-3 shrink-0 touch:size-6'
+                : 'size-4 shrink-0 touch:size-6'
+            }
+          />
         </Dropdown.Trigger>
         <Dropdown.Content blockingBackdrop class="z-nested-action-menu">
           <Dropdown.Group>

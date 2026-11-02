@@ -10,7 +10,7 @@ import { initializeLexical } from '@core/component/LexicalMarkdown/init';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { getPlatform, isTauri } from '@core/util/platform';
 import { platformFetch } from '@core/util/platformFetch';
-import { promptReloadForFailedLoad } from '@core/util/reloadForNewerBuild';
+import { recoverFromFailedLoad } from '@core/util/reloadForNewerBuild';
 import { Telemetry } from '@macro-inc/observability';
 import { initMonochromeIcons } from '@ui/utils/monochromeIcons';
 import { ErrorBoundary, render } from 'solid-js/web';
@@ -22,6 +22,10 @@ import { Root } from './routes/Root';
 
 perfMark('boot.entry-evaluated');
 
+// Third-party APIs that allow any origin and require requests from the user's
+// browser. The native HTTP client's scope doesn't list them and rejects them.
+const WEBVIEW_FETCH_HOSTS = new Set(['api.klipy.com']);
+
 // Override global fetch with platformFetch for Tauri compatibility
 // Skip localhost requests (dev server) to avoid breaking HMR
 if (isTauri()) {
@@ -30,16 +34,19 @@ if (isTauri()) {
     apply: (target, thisArg, args) => {
       const url = args[0];
       // Resolve bundled asset paths before checking the existing localhost bypass.
-      let urlString: string;
+      let resolvedUrl: URL;
       try {
-        urlString = new URL(
+        resolvedUrl = new URL(
           url instanceof Request ? url.url : String(url),
           document.baseURI
-        ).href;
+        );
       } catch (error) {
         return Promise.reject(error);
       }
-      if (urlString.includes('localhost')) {
+      if (
+        resolvedUrl.href.includes('localhost') ||
+        WEBVIEW_FETCH_HOSTS.has(resolvedUrl.hostname)
+      ) {
         return target.apply(thisArg, args as Parameters<typeof fetch>);
       }
       return platformFetch.apply(thisArg, args as Parameters<typeof fetch>);
@@ -128,11 +135,12 @@ async function main() {
 
   // during `vite dev` (but not dev builds), don't inject analytics/observability
   if (!import.meta.hot) {
-    // this event is emitted when dynamically loading a module fails
-    // for example when you're using the app and a new version is deployed
-    // The rail's update button offers the reload (a toast on touch layouts).
+    // this event is emitted when dynamically loading a module or its CSS
+    // fails, for example when you're using the app and a new version is
+    // deployed. Reloads once, or offers the reload on the rail's update button
+    // (a toast on touch layouts).
     window.addEventListener('vite:preloadError', () => {
-      promptReloadForFailedLoad();
+      recoverFromFailedLoad();
     });
   }
 

@@ -1,21 +1,28 @@
 use super::*;
 use crate::domain::{
-    models::{ChannelInfo, ChannelParticipant, ChannelType, ParticipantRole},
+    models::{
+        ChannelInfo, ChannelParticipant, ChannelType, ParticipantRole, ReferencedShareItemType,
+    },
     ports::MockChannelRepo,
 };
 use chrono::Utc;
 use macro_user_id::user_id::MacroUserIdStr;
 use messages::domain::models::{MessageAttachment, SimpleMention};
+use std::time::Duration;
 use std::{
     collections::HashSet,
     sync::{Arc, Mutex},
 };
 
+/// Who shared which item ids.
+type Share = (String, Vec<String>);
+
 #[derive(Clone, Default)]
 struct Log {
     events: Arc<Mutex<Vec<ChannelEvent>>>,
     live: Arc<Mutex<Vec<(String, HashSet<String>)>>>,
-    shares: Arc<Mutex<usize>>,
+    shares: Arc<Mutex<Vec<Share>>>,
+    shared: Arc<tokio::sync::Notify>,
     fail_live: bool,
 }
 
@@ -50,18 +57,68 @@ impl ChannelReferenceSharePermissions for Log {
     type Err = anyhow::Error;
     async fn update_channel_share_permissions_for_referenced_items(
         &self,
-        _: MacroUserIdStr<'static>,
+        actor: MacroUserIdStr<'static>,
         _: Uuid,
-        _: Vec<ReferencedShareItem>,
+        items: Vec<ReferencedShareItem>,
     ) -> Result<Vec<crate::domain::models::ReferenceShareResult>, Self::Err> {
-        *self.shares.lock().unwrap() += 1;
+        self.shares.lock().unwrap().push((
+            actor.to_string(),
+            items
+                .iter()
+                .map(|item| item.entity_id().to_owned())
+                .collect(),
+        ));
+        self.shared.notify_one();
         anyhow::bail!("sharing temporarily unavailable")
+    }
+}
+
+/// What bots created for MEMBER, who asked in the thread when `asked` is set.
+#[derive(Clone, Default)]
+struct Creations {
+    asked: bool,
+    created: Arc<Mutex<Vec<(BotId, ReferencedShareItem)>>>,
+    lookups: Arc<Mutex<usize>>,
+}
+
+impl AgentCreations for Creations {
+    type Err = anyhow::Error;
+    async fn request_sent_at(
+        &self,
+        thread_root: Uuid,
+        person: &MacroUserIdStr<'static>,
+        _: DateTime<Utc>,
+    ) -> Result<Option<DateTime<Utc>>, Self::Err> {
+        assert_eq!(
+            thread_root,
+            Uuid::from_u128(1),
+            "the root message is the thread"
+        );
+        assert_eq!(person.as_ref(), MEMBER);
+        Ok(self.asked.then(Utc::now))
+    }
+    async fn created_since(
+        &self,
+        bot: BotId,
+        _: &MacroUserIdStr<'static>,
+        _: DateTime<Utc>,
+        items: Vec<ReferencedShareItem>,
+    ) -> Result<Vec<ReferencedShareItem>, Self::Err> {
+        *self.lookups.lock().unwrap() += 1;
+        let created = self.created.lock().unwrap();
+        Ok(items
+            .into_iter()
+            .filter(|item| created.contains(&(bot, item.clone())))
+            .collect())
     }
 }
 
 const CHANNEL: Uuid = Uuid::from_u128(2);
 const MEMBER: &str = "macro|member@example.com";
 const SENDER: &str = "macro|sender@example.com";
+const BOT: &str = "bot|00000000-0000-0000-0000-00000000b07a";
+const DOCUMENT: Uuid = Uuid::from_u128(3);
+const EXISTING_DOCUMENT: Uuid = Uuid::from_u128(8);
 
 fn repo() -> MockChannelRepo {
     let mut repo = MockChannelRepo::new();
@@ -111,6 +168,7 @@ fn message() -> Message {
         parent: MessageParent::Channel(CHANNEL),
         thread_id: None,
         sender_id: SENDER.to_owned().try_into().unwrap(),
+        triggered_via: None,
         triggered_by: None,
         bot_profile: None,
         mentions: vec![],
@@ -156,7 +214,13 @@ fn live_users() -> HashSet<String> {
 #[tokio::test]
 async fn a_post_emits_the_channel_notification_event_and_the_common_payload() {
     let log = Log::default();
-    let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
+    let delivery = ChannelMessageDelivery::new(
+        repo(),
+        log.clone(),
+        log.clone(),
+        log.clone(),
+        Creations::default(),
+    );
     assert!(
         delivery
             .publish(event(MessageChange::Posted {
@@ -168,7 +232,14 @@ async fn a_post_emits_the_channel_notification_event_and_the_common_payload() {
             .is_err(),
         "the sharing failure is reported after every other effect ran"
     );
-    assert_eq!(*log.shares.lock().unwrap(), 1);
+    assert_eq!(
+        *log.shares.lock().unwrap(),
+        [(
+            SENDER.to_owned(),
+            vec![DOCUMENT.to_string(), DOCUMENT.to_string()]
+        )],
+        "a person shares everything they link"
+    );
     let events = log.events.lock().unwrap();
     let [
         ChannelEvent::MessagePosted {
@@ -196,7 +267,13 @@ async fn a_post_emits_the_channel_notification_event_and_the_common_payload() {
 #[tokio::test]
 async fn an_edit_that_notifies_as_a_post_emits_the_posted_event() {
     let log = Log::default();
-    let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
+    let delivery = ChannelMessageDelivery::new(
+        repo(),
+        log.clone(),
+        log.clone(),
+        log.clone(),
+        Creations::default(),
+    );
     let previous = MessageAttachment {
         id: Uuid::from_u128(5),
         entity_type: "document".into(),
@@ -234,7 +311,13 @@ async fn an_edit_that_notifies_as_a_post_emits_the_posted_event() {
 #[tokio::test]
 async fn plain_edits_deletions_reactions_and_typing_only_send_the_common_payload() {
     let log = Log::default();
-    let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
+    let delivery = ChannelMessageDelivery::new(
+        repo(),
+        log.clone(),
+        log.clone(),
+        log.clone(),
+        Creations::default(),
+    );
     for change in [
         MessageChange::Edited {
             notification_policy: PatchMessageNotificationPolicy::Default,
@@ -272,7 +355,13 @@ async fn plain_edits_deletions_reactions_and_typing_only_send_the_common_payload
 #[tokio::test]
 async fn added_reaction_carries_author_notification_context() {
     let log = Log::default();
-    let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
+    let delivery = ChannelMessageDelivery::new(
+        repo(),
+        log.clone(),
+        log.clone(),
+        log.clone(),
+        Creations::default(),
+    );
     let mut reaction = event(MessageChange::ReactionChanged {
         message: message(),
         emoji: "👍".to_string(),
@@ -294,7 +383,13 @@ async fn added_reaction_carries_author_notification_context() {
 #[tokio::test]
 async fn removed_reaction_sends_no_author_notification() {
     let log = Log::default();
-    let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
+    let delivery = ChannelMessageDelivery::new(
+        repo(),
+        log.clone(),
+        log.clone(),
+        log.clone(),
+        Creations::default(),
+    );
     let mut reaction = event(MessageChange::ReactionChanged {
         message: message(),
         emoji: "👍".to_string(),
@@ -310,7 +405,13 @@ async fn removed_reaction_sends_no_author_notification() {
 #[tokio::test]
 async fn thread_updates_stay_off_the_channel_side_effect_path() {
     let log = Log::default();
-    let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
+    let delivery = ChannelMessageDelivery::new(
+        repo(),
+        log.clone(),
+        log.clone(),
+        log.clone(),
+        Creations::default(),
+    );
     delivery
         .publish(event(MessageChange::ThreadUpdated {
             state: messages::domain::models::ThreadState {
@@ -335,7 +436,13 @@ async fn realtime_failure_is_reported() {
         fail_live: true,
         ..Default::default()
     };
-    let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
+    let delivery = ChannelMessageDelivery::new(
+        repo(),
+        log.clone(),
+        log.clone(),
+        log.clone(),
+        Creations::default(),
+    );
     assert!(
         delivery
             .publish(event(MessageChange::MessageDeleted { message: message() }))
@@ -347,9 +454,160 @@ async fn realtime_failure_is_reported() {
 #[tokio::test]
 async fn document_events_are_rejected() {
     let log = Log::default();
-    let delivery = ChannelMessageDelivery::new(repo(), log.clone(), log.clone(), log.clone());
+    let delivery = ChannelMessageDelivery::new(
+        repo(),
+        log.clone(),
+        log.clone(),
+        log.clone(),
+        Creations::default(),
+    );
     let mut event = event(MessageChange::MessageDeleted { message: message() });
     event.parent = MessageParent::parse("document", "doc").unwrap();
     assert!(delivery.publish(event).await.is_err());
     assert!(log.events.lock().unwrap().is_empty());
+}
+
+fn document(id: Uuid) -> ReferencedShareItem {
+    ReferencedShareItem::new(id.to_string(), ReferencedShareItemType::Document)
+}
+
+/// The agent's post for MEMBER linking the attached DOCUMENT and EXISTING_DOCUMENT.
+fn agent_post(triggered_by: Option<&str>) -> MessageEvent {
+    let mut posted = event(MessageChange::Posted {
+        notification_policy: Default::default(),
+        message: Message {
+            sender_id: BOT.to_owned().try_into().unwrap(),
+            triggered_by: triggered_by.map(str::to_owned),
+            ..message()
+        },
+        mentions: vec![SimpleMention {
+            entity_type: "document".into(),
+            entity_id: EXISTING_DOCUMENT.to_string(),
+        }],
+    });
+    posted.actor = BOT.to_owned();
+    posted
+}
+
+/// MEMBER asked in the thread, and `bot` created `items` for them since.
+fn asked_and(bot: BotId, items: Vec<ReferencedShareItem>) -> Creations {
+    Creations {
+        asked: true,
+        created: Arc::new(Mutex::new(
+            items.into_iter().map(|item| (bot, item)).collect(),
+        )),
+        ..Default::default()
+    }
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_agent_shares_what_it_created_for_the_request_and_not_what_already_existed() {
+    let log = Log::default();
+    let creations = asked_and(BotId::TEST_A, vec![document(DOCUMENT)]);
+    let delivery = ChannelMessageDelivery::new(
+        repo(),
+        log.clone(),
+        log.clone(),
+        log.clone(),
+        creations.clone(),
+    );
+
+    let _ = delivery.publish(agent_post(Some(MEMBER))).await;
+    // Let every background re-check for the existing document run out.
+    tokio::time::sleep(Duration::from_secs(60)).await;
+
+    assert_eq!(
+        *log.shares.lock().unwrap(),
+        [(MEMBER.to_owned(), vec![DOCUMENT.to_string()])]
+    );
+    assert_eq!(
+        *creations.lookups.lock().unwrap(),
+        3,
+        "one lookup and two re-checks"
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_creation_recorded_after_delivery_is_shared_by_the_re_check() {
+    let log = Log::default();
+    let creations = asked_and(BotId::TEST_A, vec![]);
+    let delivery = ChannelMessageDelivery::new(
+        repo(),
+        log.clone(),
+        log.clone(),
+        log.clone(),
+        creations.clone(),
+    );
+
+    delivery.publish(agent_post(Some(MEMBER))).await.unwrap();
+    assert!(log.shares.lock().unwrap().is_empty());
+    creations
+        .created
+        .lock()
+        .unwrap()
+        .push((BotId::TEST_A, document(DOCUMENT)));
+    log.shared.notified().await;
+
+    assert_eq!(
+        *log.shares.lock().unwrap(),
+        [(MEMBER.to_owned(), vec![DOCUMENT.to_string()])]
+    );
+}
+
+#[tokio::test(start_paused = true)]
+async fn what_another_bot_created_is_not_shared() {
+    let log = Log::default();
+    let creations = asked_and(BotId::TEST_B, vec![document(DOCUMENT)]);
+    let delivery = ChannelMessageDelivery::new(
+        repo(),
+        log.clone(),
+        log.clone(),
+        log.clone(),
+        creations.clone(),
+    );
+
+    delivery.publish(agent_post(Some(MEMBER))).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(60)).await;
+
+    assert!(log.shares.lock().unwrap().is_empty());
+}
+
+#[tokio::test(start_paused = true)]
+async fn a_reply_to_no_request_from_the_person_shares_nothing() {
+    let log = Log::default();
+    let creations = Creations {
+        asked: false,
+        ..asked_and(BotId::TEST_A, vec![document(DOCUMENT)])
+    };
+    let delivery = ChannelMessageDelivery::new(
+        repo(),
+        log.clone(),
+        log.clone(),
+        log.clone(),
+        creations.clone(),
+    );
+
+    delivery.publish(agent_post(Some(MEMBER))).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(60)).await;
+
+    assert!(log.shares.lock().unwrap().is_empty());
+    assert_eq!(*creations.lookups.lock().unwrap(), 0);
+}
+
+#[tokio::test(start_paused = true)]
+async fn an_agent_post_for_nobody_shares_nothing() {
+    let log = Log::default();
+    let creations = asked_and(BotId::TEST_A, vec![document(DOCUMENT)]);
+    let delivery = ChannelMessageDelivery::new(
+        repo(),
+        log.clone(),
+        log.clone(),
+        log.clone(),
+        creations.clone(),
+    );
+
+    delivery.publish(agent_post(None)).await.unwrap();
+    tokio::time::sleep(Duration::from_secs(60)).await;
+
+    assert!(log.shares.lock().unwrap().is_empty());
 }

@@ -11,6 +11,16 @@ note: |-
   with fake clients and controllers with fake capabilities; neither imports
   rendering code, including block-agent’s `ui/` and `component/` layers.
 files:
+  - apps/web/src/features/command/queries/**
+  - apps/web/src/features/document-composer/queries/**
+  - apps/web/src/features/task-composer/queries/**
+  - apps/web/src/features/command/primitives/**
+  - apps/web/src/features/document-composer/primitives/**
+  - apps/web/src/features/task-composer/primitives/**
+  - apps/web/src/features/universal-input/core/**
+  - apps/web/src/features/universal-input/queries/**
+  - apps/web/src/features/universal-input/primitives/**
+  - apps/web/src/features/universal-input/context/**
   - apps/web/src/features/saved-views/queries/**
   - apps/web/src/features/saved-views/primitives/**
   - apps/web/src/features/calendar-notes/queries/**
@@ -20,9 +30,11 @@ files:
   - apps/web/src/features/agent-activity/queries/**
   - apps/web/src/features/agent-dms/queries/**
   - apps/web/src/features/agent-conversations/queries/**
+  - apps/web/src/features/local-runtime/queries/**
   - apps/web/src/features/agent-activity/primitives/**
   - apps/web/src/features/agent-dms/primitives/**
   - apps/web/src/features/agent-conversations/primitives/**
+  - apps/web/src/features/local-runtime/primitives/**
   - apps/web/src/features/agent-interactions/queries/**
   - apps/web/src/features/agent-interactions/primitives/**
   - apps/web/src/features/billing-lab/queries/**

@@ -135,6 +135,10 @@ export function AddPipelineRecordDialog(
     const current = choice();
     return current?.kind === 'new-contact' ? current : undefined;
   };
+  const suggestedCompany = () => {
+    const match = contactCompany(newContact()?.email ?? '', domainCompanies());
+    return companyOptions().find((company) => company.id === match?.id);
+  };
   const changeChoice = (next: RecordChoice | undefined) => {
     setChoice(next);
     setError(undefined);
@@ -164,7 +168,7 @@ export function AddPipelineRecordDialog(
       ? companies
           .companies()
           .find((company) => company.id === current.companyId)
-      : contactCompany(email, domainCompanies());
+      : undefined;
     if (!joins) throw new Error('A new contact needs a company.');
     const { id } = await createContact.mutateAsync({
       companyId: joins.id,
@@ -307,7 +311,7 @@ export function AddPipelineRecordDialog(
               />
               <input
                 aria-label="Email"
-                placeholder="Email, like jane@acme.com"
+                placeholder="Email, like jane@example.com"
                 type="email"
                 autocomplete="off"
                 spellcheck={false}
@@ -326,10 +330,7 @@ export function AddPipelineRecordDialog(
             <CompanySelect
               companies={companyOptions()}
               value={companyOptions().find(
-                (company) =>
-                  company.id ===
-                  (draft().companyId ??
-                    contactCompany(draft().email, domainCompanies())?.id)
+                (company) => company.id === draft().companyId
               )}
               onChange={(company) =>
                 changeChoice({ ...draft(), companyId: company.id })
@@ -338,6 +339,25 @@ export function AddPipelineRecordDialog(
               disabled={pending()}
               mount={dialog()}
             />
+            <Show when={!draft().companyId && suggestedCompany()}>
+              {(suggestion) => (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  class="max-w-full self-start"
+                  tooltip={suggestion().name}
+                  disabled={pending()}
+                  onClick={() =>
+                    changeChoice({ ...draft(), companyId: suggestion().id })
+                  }
+                >
+                  <span class="truncate">
+                    Use suggested company: {suggestion().name}
+                  </span>
+                </Button>
+              )}
+            </Show>
           </>
         )}
       </Match>
@@ -405,10 +425,10 @@ export function AddPipelineRecordDialog(
                 <Dialog.CloseButton
                   tabIndex={-1}
                   aria-label="Close"
-                  class={buttonClasses({ size: 'icon-composer' })}
+                  class={buttonClasses({ size: 'icon-md' })}
                   disabled={pending()}
                 >
-                  <XIcon />
+                  <XIcon class="size-4 shrink-0 touch:size-6" />
                 </Dialog.CloseButton>
               </EntityComposer.Header>
               <EntityComposer.Main class="gap-5 overflow-y-auto px-5 py-5">
@@ -438,7 +458,7 @@ export function AddPipelineRecordDialog(
               </EntityComposer.Main>
               <EntityComposer.Footer class="items-center justify-end border-t border-edge-muted/60 px-5 py-3">
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   class="gap-3 not-touch:h-[33.75px] not-touch:px-[15px]"
                   disabled={pending()}
                   onClick={close}

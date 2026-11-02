@@ -133,10 +133,10 @@ where
             .fetch_one(executor)
             .await?
         }
-        "whatsapp_group" => {
+        "external_chat" => {
             let item_id = macro_uuid::string_to_uuid(item_id)?;
             sqlx::query_scalar!(
-                "SELECT share_permission_id FROM whatsapp_group WHERE id = $1",
+                "SELECT share_permission_id FROM external_chat WHERE id = $1",
                 item_id
             )
             .fetch_one(executor)

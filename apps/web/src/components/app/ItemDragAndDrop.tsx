@@ -1,3 +1,4 @@
+import { t } from '@app/lib/i18n';
 import {
   EntityIcon,
   type EntityIconSelector,
@@ -34,8 +35,13 @@ export type ItemDragOverlayData = {
 
 const DragOperationContext = createContext<DragOperationContextValue>();
 
+/** Optional for composed entity rows rendered outside the draggable workspace. */
+export function useOptionalDragOperation() {
+  return useContext(DragOperationContext);
+}
+
 export function useDragOperation() {
-  const context = useContext(DragOperationContext);
+  const context = useOptionalDragOperation();
   if (!context) {
     throw new Error('useDragOperation must be used within ItemDndProvider');
   }
@@ -62,13 +68,20 @@ function ItemDragOverlay() {
     return getEntityIconType(data as EntityDragData);
   });
 
-  const centeredOnPointerStyle = createMemo(() => {
+  const additionalCount = () => {
+    const data = activeDraggable()?.data as EntityDragData | undefined;
+    return (data?.selection?.entities().length ?? 1) - 1;
+  };
+
+  // Beside the pointer, not under it: a narrow target like a sidebar folder
+  // has to stay visible while it is being aimed at.
+  const besidePointerStyle = createMemo(() => {
     const overlay = state?.active.overlay;
     const sensor = state?.active.sensor;
     if (!overlay || !sensor) return;
 
     return {
-      transform: `translate(${sensor.coordinates.origin.x - overlay.layout.left}px, ${sensor.coordinates.origin.y - overlay.layout.top}px) translate(-50%, -50%)`,
+      transform: `translate(${sensor.coordinates.origin.x - overlay.layout.left + 12}px, ${sensor.coordinates.origin.y - overlay.layout.top + 12}px)`,
     };
   });
 
@@ -76,7 +89,7 @@ function ItemDragOverlay() {
     <Layer depth={2}>
       <div
         class="w-auto max-w-75 flex flex-col gap-2 bg-surface p-2 rounded-lg z-drag shadow-md shadow-drop-shadow pointer-events-none"
-        style={centeredOnPointerStyle()}
+        style={besidePointerStyle()}
       >
         <div class="flex flex-row items-center gap-2">
           <Show
@@ -89,12 +102,11 @@ function ItemDragOverlay() {
             {activeDraggable()?.data.name}
           </TruncatedText>
         </div>
-        {/* TODO: when multiselect exists */}
-        {/* <Show when={activeDraggable()?.data.selectedItems.length > 1}>
-        <div class={`${TEXT_SIZE_CLASSES[size ?? 'sm']} text-ink-muted pl-2`}>
-          + {activeDraggable()?.data.selectedItems.length - 1} items
-        </div>
-      </Show> */}
+        <Show when={additionalCount() > 0}>
+          <div class="pl-6 text-xs text-ink-muted">
+            {t('entityActions.dragMoreItems', { count: additionalCount() })}
+          </div>
+        </Show>
       </div>
     </Layer>
   );

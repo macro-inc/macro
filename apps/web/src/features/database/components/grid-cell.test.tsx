@@ -675,6 +675,48 @@ describe('grid cell', () => {
     expect(onWrite).not.toHaveBeenCalled();
   });
 
+  it.each([true, false])(
+    'right-click changes an openable reference only when editable (%s)',
+    async (canEdit) => {
+      const onOpenMention = vi.fn();
+      const onMention = vi.fn(async () => true);
+      render(() => (
+        <GridCell
+          column={{
+            ...column,
+            name: 'File',
+            dataType: 'ENTITY',
+            specificEntityType: 'DOCUMENT',
+          }}
+          value="project-plan"
+          canEdit={canEdit}
+          onWrite={vi.fn(async () => true)}
+          onAddOption={vi.fn(async () => true)}
+          onOpenMention={onOpenMention}
+          onMention={onMention}
+          renderMentionValue={() => <span>Project plan</span>}
+          renderMentionPicker={(props) => <MentionPicker {...props} />}
+        />
+      ));
+      const button = screen.getByRole('button', { name: 'File: Project plan' });
+      fireEvent.contextMenu(button);
+      expect(onOpenMention).not.toHaveBeenCalled();
+      if (canEdit) {
+        await screen.findByRole('textbox', { name: 'Find an item' });
+        await userEvent.keyboard('{Escape}');
+        await waitFor(() => expect(document.activeElement).toBe(button));
+        expect(onMention).not.toHaveBeenCalled();
+      } else {
+        expect(screen.queryByRole('dialog')).toBeNull();
+        fireEvent.click(button);
+        expect(onOpenMention).toHaveBeenCalledExactlyOnceWith(
+          'project-plan',
+          'DOCUMENT'
+        );
+      }
+    }
+  );
+
   it('keeps the selected label through a delayed write and hands it to the entity renderer when the schema arrives', async () => {
     const [value, setValue] = createSignal<DatabaseCellValue>(null);
     const [schema, setSchema] = createSignal<DatabaseViewColumn>({

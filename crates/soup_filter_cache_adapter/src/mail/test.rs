@@ -11,7 +11,10 @@ use soup_filter_projection::{
 
 mod drafts;
 mod optimistic;
+mod reconciliation;
 mod reminders;
+mod retention;
+mod through;
 
 const VIEWER: &str = "macro|mail@example.com";
 const QUERY: &str = r#"query MailSeed { user { id emailLinks { id } soup(input: {initial:{limit:100,emailView:ALL}}) { items { __typename id cacheProjection ... on GraphqlSoupEmailThread { linkId ownerId inboxVisible isRead isSignal latestInboundMessageTs reminderReturnedAt mailAllPreview { id } mailDraftPreview { id } mailSentPreview { id } updatedAt } } } } }"#;
@@ -114,6 +117,7 @@ async fn read<S: PredicateIndexStorage>(
         PageRequest {
             view: view.into(),
             cursor,
+            through: None,
         },
     )
     .await
@@ -273,7 +277,8 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
             10,
             PageRequest {
                 view: "INBOX".into(),
-                cursor: Some(cursor.clone())
+                cursor: Some(cursor.clone()),
+                through: None,
             }
         )
         .await
@@ -340,10 +345,17 @@ async fn lifecycle<S: PredicateIndexStorage>(storage: S) {
         .await
         .unwrap()
         .0;
-    assert!(matches!(
-        read(&mut engine, filters(), "INBOX", Some(cursor)).await,
-        PageResult::StaleCursor { .. }
-    ));
+    let PageResult::MailPage { keys, .. } =
+        read(&mut engine, filters(), "INBOX", Some(cursor)).await
+    else {
+        panic!("a write keeps the cursor's position")
+    };
+    assert_eq!(
+        keys,
+        all_keys(&mut engine, filters(), "INBOX").await[10..10 + keys.len()],
+        "the page after a write continues after the same row"
+    );
+    assert!(!keys.is_empty());
     let mut f = filters();
     f["emailFilter"] = json!({"tree":{"literal":{"read":true}}});
     let PageResult::MailPage { keys, .. } = read(&mut engine, f.clone(), "ALL", None).await else {
@@ -536,6 +548,7 @@ fn page_limit_bounds_match_the_index_limit() {
                 PageRequest {
                     view: "ALL".into(),
                     cursor: None,
+                    through: None,
                 },
             )
             .await;
@@ -711,4 +724,59 @@ fn missing_proof_is_not_a_false_fact() {
             Some(ProjectionState::Incomplete { .. })
         ));
     })
+}
+
+#[test]
+fn spam_only_threads_stay_out_of_all_without_hiding_other_tabs() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let mut data = seed();
+        // Canonical All Mail previews exclude junk, even if a sent message or a
+        // provider draft still qualifies for its own tab.
+        for n in [3, 8] {
+            data["user"]["soup"]["items"][n - 1]["mailAllPreview"] = Value::Null;
+        }
+        write(&mut engine, QUERY, &data).await;
+        let all = all_keys(&mut engine, filters(), "ALL").await;
+        assert!(!all.contains(&format!("{TYPE}:{}", id(3))));
+        assert!(!all.contains(&format!("{TYPE}:{}", id(8))));
+        assert!(
+            all_keys(&mut engine, filters(), "DRAFTS")
+                .await
+                .contains(&format!("{TYPE}:{}", id(3)))
+        );
+        assert!(
+            all_keys(&mut engine, filters(), "SENT")
+                .await
+                .contains(&format!("{TYPE}:{}", id(8)))
+        );
+    });
+}
+
+#[test]
+fn legacy_mail_capsule_cannot_restore_spam_membership() {
+    pollster::block_on(async {
+        let mut engine = Engine::new(InMemoryStorage::new());
+        let mut data = seed();
+        let mut legacy = row(1);
+        legacy["cacheProjection"] = json!(
+            "Awxzb3VwLW1haWwtdjI7R3JhcGhxbFNvdXBFbWFpbFRocmVhZDowMDAwMDAwMC0wMDAwLTAwMDAtMDAwMC0wMDAwMDAwMDAwMDEFZW1haWwBgIDZ276wlQYAAAE"
+        );
+        data["user"]["soup"]["items"] = json!([legacy]);
+        write(&mut engine, QUERY, &data).await;
+        let key = RecordKey::new(format!("{TYPE}:{}", id(1))).unwrap();
+        assert!(matches!(
+            engine
+                .storage()
+                .load_projection_states(&[key])
+                .await
+                .unwrap()[0],
+            Some(ProjectionState::Incomplete { .. })
+        ));
+        assert!(all_keys(&mut engine, filters(), "ALL").await.is_empty());
+        data["user"]["soup"]["items"][0] = row(1);
+        data["user"]["soup"]["items"][0]["mailAllPreview"] = Value::Null;
+        write(&mut engine, QUERY, &data).await;
+        assert!(all_keys(&mut engine, filters(), "ALL").await.is_empty());
+    });
 }

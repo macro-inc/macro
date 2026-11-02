@@ -1,3 +1,4 @@
+import GithubIcon from '@icon/mcp-github.svg';
 import ArrowLeftIcon from '@icon/system/regular/arrow-left.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
@@ -26,6 +27,7 @@ import {
 import {
   type EventTriggerDraft,
   eventScopeKind,
+  eventTriggerDescription,
   eventTriggerLabel,
   isGlobalEvent,
   newScheduleTrigger,
@@ -48,10 +50,20 @@ type EventSlots = {
     trigger: Accessor<EventTriggerDraft>,
     change: (ids: string[] | undefined) => void
   ) => JSX.Element;
+  /** Settings particular to some events, such as GitHub's selector. */
+  renderEventSettings?: (
+    trigger: Accessor<EventTriggerDraft>,
+    change: (patch: Partial<EventTriggerDraft>) => void
+  ) => JSX.Element;
   /** Absent where conditions are unavailable. */
   renderEventCondition?: (
     trigger: Accessor<EventTriggerDraft>,
     change: (condition: string | undefined) => void
+  ) => JSX.Element;
+  /** Wraps a group's options, e.g. to ask for an account they need first. */
+  renderEventGroup?: (
+    group: RoutineEventGroup,
+    options: () => JSX.Element
   ) => JSX.Element;
 };
 
@@ -86,6 +98,9 @@ function EventIcon(props: { group: RoutineEventGroup; class: string }) {
       <Match when={props.group === 'Calls'}>
         <PhoneIcon class={props.class} />
       </Match>
+      <Match when={props.group === 'GitHub'}>
+        <GithubIcon class={props.class} />
+      </Match>
     </Switch>
   );
 }
@@ -98,6 +113,7 @@ function TriggerIcon(props: { trigger?: RoutineTriggerDraft }) {
     if (kind === 'THREAD') return 'Email';
     if (kind === 'DOCUMENT') return 'Documents';
     if (kind === 'CALL_RECORD') return 'Calls';
+    if (kind === 'GITHUB') return 'GitHub';
     return 'Channels';
   };
   return (
@@ -112,6 +128,7 @@ function TriggerIcon(props: { trigger?: RoutineTriggerDraft }) {
 
 function TriggerChoices(props: {
   onSelect: (trigger: RoutineTriggerDraft) => void;
+  renderEventGroup?: EventSlots['renderEventGroup'];
 }) {
   let inputRef: HTMLInputElement | undefined;
   onMount(() => inputRef?.focus());
@@ -209,31 +226,37 @@ function TriggerChoices(props: {
           {(group) => (
             <Show when={events().some((event) => event.group === group)}>
               <p class="px-2 pb-1 pt-3 text-xs text-ink-extra-muted">{group}</p>
-              <For each={events().filter((event) => event.group === group)}>
-                {(event) => (
-                  <button
-                    type="button"
-                    data-trigger-option
-                    title={event.description}
-                    class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-hover focus-visible:bg-hover outline-none"
-                    onClick={() =>
-                      props.onSelect({
-                        id: crypto.randomUUID(),
-                        kind: 'event',
-                        events: [event.value],
-                        ids: isGlobalEvent([event.value]) ? undefined : [],
-                      })
-                    }
-                  >
-                    <EventIcon
-                      group={group}
-                      class="size-4 shrink-0 text-ink-muted"
-                    />
-                    {event.label}
-                    <CaretRightIcon class="ml-auto size-3 text-ink-muted" />
-                  </button>
-                )}
-              </For>
+              {(props.renderEventGroup ?? ((_, options) => options()))(
+                group,
+                () => (
+                  <For each={events().filter((event) => event.group === group)}>
+                    {(event) => (
+                      <button
+                        type="button"
+                        data-trigger-option
+                        title={event.description}
+                        class="flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm hover:bg-hover focus-visible:bg-hover outline-none"
+                        onClick={() =>
+                          props.onSelect({
+                            id: crypto.randomUUID(),
+                            kind: 'event',
+                            events: [event.value],
+                            ids: isGlobalEvent([event.value]) ? undefined : [],
+                            ...structuredClone(event.preset),
+                          })
+                        }
+                      >
+                        <EventIcon
+                          group={group}
+                          class="size-4 shrink-0 text-ink-muted"
+                        />
+                        {event.label}
+                        <CaretRightIcon class="ml-auto size-3 text-ink-muted" />
+                      </button>
+                    )}
+                  </For>
+                )
+              )}
             </Show>
           )}
         </For>
@@ -358,7 +381,15 @@ function TriggerChip(
           <Popover.Title class="sr-only">
             {props.trigger ? 'Edit trigger' : 'Add trigger'}
           </Popover.Title>
-          <Show when={pending()} fallback={<TriggerChoices onSelect={edit} />}>
+          <Show
+            when={pending()}
+            fallback={
+              <TriggerChoices
+                onSelect={edit}
+                renderEventGroup={props.renderEventGroup}
+              />
+            }
+          >
             <div class="flex shrink-0 items-center gap-2 border-b border-edge-muted px-3 py-2">
               <Show when={!props.trigger}>
                 <Button
@@ -391,14 +422,11 @@ function TriggerChip(
                 {(value) => (
                   <>
                     <p class="mb-3 text-xs text-ink-muted">
-                      {value()
-                        .events.map(
-                          (name) =>
-                            routineEvents.find((item) => item.value === name)
-                              ?.description
-                        )
-                        .join(' ')}
+                      {eventTriggerDescription(value())}
                     </p>
+                    {props.renderEventSettings?.(value, (patch) =>
+                      edit({ ...value(), ...patch })
+                    )}
                     {props.renderEventScope(value, (ids) =>
                       edit({ ...value(), ids })
                     )}
@@ -433,7 +461,7 @@ function TriggerChip(
               <Button variant="ghost" size="sm" onClick={() => setOpen(false)}>
                 Cancel
               </Button>
-              <Button variant="strong" size="sm" onClick={save}>
+              <Button variant="secondary" size="sm" onClick={save}>
                 {props.trigger ? 'Done' : 'Add trigger'}
               </Button>
             </div>
@@ -458,7 +486,9 @@ export function RoutineTriggers(
             trigger={props.triggers.find((trigger) => trigger.id === id)}
             renderEventLabel={props.renderEventLabel}
             renderEventScope={props.renderEventScope}
+            renderEventSettings={props.renderEventSettings}
             renderEventCondition={props.renderEventCondition}
+            renderEventGroup={props.renderEventGroup}
             onSave={(value) =>
               props.onChange(
                 props.triggers.map((trigger) =>
@@ -477,7 +507,9 @@ export function RoutineTriggers(
       <TriggerChip
         renderEventLabel={props.renderEventLabel}
         renderEventScope={props.renderEventScope}
+        renderEventSettings={props.renderEventSettings}
         renderEventCondition={props.renderEventCondition}
+        renderEventGroup={props.renderEventGroup}
         onSave={(trigger) => props.onChange([...props.triggers, trigger])}
       />
     </>

@@ -2,6 +2,7 @@ import {
   useViewControlHotkeys,
   ViewBreadcrumbs,
   ViewShell,
+  ViewSwitchTrigger,
 } from '@app/components/view-shell';
 import {
   ListHeader,
@@ -41,19 +42,32 @@ export function TaskViewBreadcrumbItem() {
       metadata={{ type: 'tasks' }}
       order={0}
     >
-      {(item) => (
-        <ViewBreadcrumbs.ReturnButton
-          isActive={item.isActive()}
-          onClick={item.onSelect}
-          tooltip={tabTitle()}
-          class="gap-2"
-        >
-          <Show when={state.savedViewActive}>
-            <BookmarkIcon class="size-4 shrink-0" aria-hidden="true" />
+      {(item) => {
+        const label = () => (
+          <>
+            <Show when={state.savedViewActive}>
+              <BookmarkIcon class="size-4 shrink-0" aria-hidden="true" />
+            </Show>
+            <span class="truncate">{tabTitle()}</span>
+          </>
+        );
+        const button = () => (
+          <ViewBreadcrumbs.ReturnButton
+            isActive={item.isActive()}
+            onClick={item.onSelect}
+            tooltip={tabTitle()}
+            class="gap-2"
+          >
+            {label()}
+          </ViewBreadcrumbs.ReturnButton>
+        );
+        // At the list itself the name switches views; deeper, it returns here.
+        return (
+          <Show when={item.isActive()} fallback={button()}>
+            <ViewSwitchTrigger fallback={button()}>{label()}</ViewSwitchTrigger>
           </Show>
-          <span class="truncate">{tabTitle()}</span>
-        </ViewBreadcrumbs.ReturnButton>
-      )}
+        );
+      }}
     </ViewBreadcrumbs.Item>
   );
 }

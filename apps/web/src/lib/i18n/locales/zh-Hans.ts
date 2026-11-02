@@ -697,7 +697,6 @@ export default {
     groupAdmin: '管理',
     tabTeamGeneral: '通用',
     tabTeamMembers: '成员',
-    tabTeamConnections: '连接',
     tabEmail: '邮件',
     tabCalendar: '日历',
     tabAgents: '智能体',

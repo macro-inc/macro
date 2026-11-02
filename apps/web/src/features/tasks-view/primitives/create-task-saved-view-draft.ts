@@ -53,10 +53,16 @@ export function createTaskSavedViewDraft(options: {
   selectedId: Accessor<string | undefined>;
   viewerId: Accessor<string | undefined>;
   creating: Accessor<boolean>;
-  state: Pick<TasksViewState, 'tab' | 'facets' | 'layout' | 'groupBy' | 'sort'>;
+  state: Pick<
+    TasksViewState,
+    'tab' | 'facets' | 'layout' | 'groupBy' | 'sort' | 'dueDate'
+  >;
   facetContext: Accessor<TaskFacetContext>;
   apply: (
-    settings: Pick<TasksViewState, 'facets' | 'layout' | 'groupBy' | 'sort'>
+    settings: Pick<
+      TasksViewState,
+      'facets' | 'layout' | 'groupBy' | 'sort' | 'dueDate'
+    >
   ) => void;
 }) {
   const [confirmed, setConfirmed] = createSignal<ConfirmedTaskSavedView>();
@@ -86,6 +92,7 @@ export function createTaskSavedViewDraft(options: {
       layout: options.state.layout,
       groupBy: options.state.groupBy,
       sort: options.state.sort,
+      dueDate: options.state.dueDate,
       context: options.facetContext(),
     });
   const current = createMemo(() => {
@@ -174,6 +181,7 @@ export function createTaskSavedViewDraft(options: {
         tab: options.state.tab,
         facets: DEFAULT_TASK_FACET_SELECTION,
         groupBy: TASK_DEFAULT_GROUP_BY[options.state.tab],
+        dueDate: undefined,
         context: options.facetContext(),
       });
       const definition = current();
@@ -219,6 +227,7 @@ export function createTaskSavedViewDraft(options: {
         layout: 'list',
         groupBy: TASK_DEFAULT_GROUP_BY['team-tasks'],
         sort: [{ id: 'updated_at' }],
+        dueDate: undefined,
       });
       return;
     }

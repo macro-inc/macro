@@ -62,7 +62,8 @@ historical backfill, or CI alert notifications. Validate a successful and failed
 workflow, a rerun, and a multi-job trace after rollout before relying on the dashboard.
 
 This stack starts Grafana alongside Datadog on one private EC2 instance. It
-runs Grafana, Loki, Tempo, Prometheus, Alloy and nginx as native systemd services
+runs Grafana, Loki, Tempo, Prometheus, Alloy, nginx and the GoAlert on-call
+pager (with its own Postgres) as native systemd services
 on a prebuilt NixOS image. There is no Docker or Compose dependency. Nix owns
 packages, configuration, service users, resource limits and startup dependencies:
 
@@ -73,6 +74,11 @@ packages, configuration, service users, resource limits and startup dependencies
 - `nixos/host-telemetry.nix` and `nixos/host.alloy`: host metrics and journal logs.
 - `nixos/cloudwatch.nix`: independent disk and memory health metrics.
 - `nixos/proxy.nix`: native nginx virtual hosts and query-only backend gateway.
+- `nixos/goalert.nix` and `nixos/goalert/`: GoAlert, its Postgres, backups and
+  the Macro Alerts relay (see [On-call paging](#on-call-paging-goalert)).
+- `nixos/alerting.nix`: Grafana alert rules, contact points and routing.
+- `nixos/prod-alerts.nix`: prod alert queries and thresholds, shared by the
+  rules and `nixos/prod-alerts-dashboard.nix`.
 - `nixos/host.nix`: boot dependencies, retained storage and stable service identities.
 
 NixOS modules generate application configuration from Nix attributes. Alloy's
@@ -90,6 +96,7 @@ OTEL exporter -- HTTPS + bearer token --> ALB --> nginx --> Alloy
                                                         --> Loki --> S3 logs
                                                         --> Tempo --> S3 traces
                                                         --> Prometheus --> EBS
+Datadog, on-call browsers -- HTTPS --> ALB --> nginx --> GoAlert --> Postgres --> EBS
 ```
 
 - One `m7i.xlarge` (4 vCPU / 16 GiB) in a new VPC's private `us-east-2a`
@@ -111,7 +118,8 @@ OTEL exporter -- HTTPS + bearer token --> ALB --> nginx --> Alloy
   an application-consistent or cross-region backup. Snapshot recovery can lose
   up to a day of local state. S3 does not protect telemetry still buffered locally.
 - No RDS, shared filesystem, Kafka or cluster. Grafana's SQLite stores users,
-  dashboards and settings, not log/trace/metric history.
+  dashboards and settings, not log/trace/metric history. GoAlert's schedules,
+  users and alerts live in a local Postgres 17 on the same volume.
 - All service and OS versions are pinned by this stack's `flake.lock` on NixOS
   26.05. Grafana plugin auto-install/update is disabled. Reviewed lock updates
   and replacement AMIs deliver upgrades; there is no installation or build at boot.
@@ -230,10 +238,13 @@ DNS-validated regional ACM certificate. Region validation rejects `us-east-1`.
    and secrets per environment. Confirm Workspace MFA enforcement.
 2. Through the approved secret-management process, create a Secrets Manager JSON
    secret in **us-east-2** containing `google_client_id`, `google_client_secret`,
-   `grafana_secret_key`, and `otlp_token`. Generate independent cryptographically
-   random values of at least 32 characters for the last two. Preserve
-   `grafana_secret_key` through recovery; changing it can make stored credentials
-   unreadable. Never paste secret values into shell commands, this file or PRs.
+   `grafana_secret_key`, and `otlp_token`, plus the GoAlert fields listed under
+   [On-call paging](#on-call-paging-goalert). Generate independent cryptographically
+   random values of at least 32 characters for `grafana_secret_key`, `otlp_token`
+   and `goalert_encryption_key`. Preserve `grafana_secret_key` and
+   `goalert_encryption_key` through recovery; changing them makes stored
+   credentials unreadable. Never paste secret values into shell commands, this
+   file or PRs.
 3. Select an existing **us-east-2** SNS topic
    with a confirmed, monitored subscription for infrastructure alarms. Its
    delivery destination must remain accessible during a production outage.
@@ -426,8 +437,36 @@ models. Grafana uses the EC2 role for regional metric reads and publishing to th
 configured alarm SNS topic. Other unprivileged HTTP/ingest services still cannot
 access instance metadata.
 
-`nixos/alerting.nix` starts with the three dev monitors declared in the monitoring
-stack: DSS errors (1013923), channel-invite spam (4876245), and document text
+`nixos/prod-alerts.nix` lists the prod CloudWatch alerts: macrodb memory, swap,
+load, CPU, connections, replica lag, read latency and storage; Redis memory and
+evictions; SQS queue age. Each entry holds its query, thresholds, window and
+text once. `nixos/alerting.nix` turns each into a warning and a critical rule in
+the `Prod` group, reading CloudWatch in Virginia directly, and
+`nixos/prod-alerts-dashboard.nix` draws it as one panel with both thresholds on
+the `Prod alerts` dashboard (`/d/prod-alerts`, rows macrodb, Redis and Queues).
+Each rule carries its panel as `__dashboardUid__`/`__panelId__`, so the rule
+view links to the graph of the metric that fired, and as a `panel_url`
+annotation built from Grafana's `externalURL`, because GoAlert's alert details
+list annotations but not Grafana's panel link. Each
+has a Datadog copy in `infra/stacks/monitoring/monitors/`; keep thresholds and
+windows in sync by hand. Forecasts, anomalies, Database Monitoring, APM and log
+rules are Datadog-only.
+
+Every prod alert goes to GoAlert over loopback, and GoAlert alone posts to the
+Macro Alerts channel. Critical alerts of rules with `pages = true` go to the
+`GoAlert` contact point (the paging `Grafana critical` service); every other prod
+alert, warnings and non-paging criticals, goes to `GoAlert notify` (the `Notify`
+service), which is also the default receiver. Grafana repeats critical alerts
+hourly and others every four hours; GoAlert dedups them by fingerprint, opens,
+acknowledges and closes the alert, and its escalation posts each change to the
+channel (see [Escalation](#escalation)). The details GoAlert posts carry each
+alert's labels and annotations (summary, description, runbook, panel) and its
+Grafana source link. Paging rules' Datadog copies only notify, so an incident
+pages once.
+
+The dev rules below keep their own route to `Macro team email`.
+
+The three dev monitors declared in the monitoring stack: DSS errors (1013923), channel-invite spam (4876245), and document text
 extractor failure ratio (1291772). Warning and critical rules are separate and
 mutually exclusive. Their windows and thresholds come from those definitions;
 the Lambda ratio sums four hours ending fifteen minutes ago. No-data is OK for
@@ -447,8 +486,104 @@ without SMTP credentials. The configured topic already has wolf@macro.com and
 teo@macro.com subscriptions; each recipient must confirm their SNS subscription.
 Test the contact point and verify receipt before relying on notifications.
 
-This release adds `alarmTopicArn` to user-data schema 5. Deploy it together with
-the new reviewed AMI; a schema-4 image cannot boot schema-5 user data.
+User-data schema 6 adds `oncallHost`. Deploy it together with the new reviewed
+AMI; a schema-5 image cannot boot schema-6 user data.
+
+## On-call paging (GoAlert)
+
+GoAlert is the source of truth for open alerts and the only sender to the Macro
+Alerts channel: Grafana sends it every prod alert, and on-call engineers acknowledge or close them in its UI at
+`https://oncall.macro-internal.com`, signing in with Google. It runs on this host
+so paging keeps working while production, its database or Macro itself is down.
+Today it pages by posting to the Macro Alerts channel; phone paging (Twilio) and
+a rotation are follow-ups. Coding agents reach it through the `goalert` MCP
+server; see [MCP servers](../../../docs/development/mcp-servers.md#goalert).
+
+- `nixos/goalert/package.nix` builds GoAlert from source with `buildGoModule`,
+  embedding its web UI. Bump `version` and the hashes together.
+- `nixos/goalert.nix` runs Postgres 17 on a Unix socket only (data in
+  `/srv/observability/postgres`), and GoAlert on `127.0.0.1:3030`. Its
+  application config is a Nix attrset. GoAlert stores that config only in its
+  database, so `apply-config.py` migrates the schema, runs `goalert set-config`
+  and creates the `admin` login before every start. Edits in GoAlert's admin
+  config page are overwritten on the next restart. `set-config` stores invalid
+  values without failing; GoAlert logs `validate config` errors when it loads
+  them, so check the journal after changing config.
+- A nightly timer dumps the database to `s3://<logs bucket>/goalert/`, one object
+  per weekday. The dump goes to a file first, so a failed dump never replaces a
+  good backup.
+- GoAlert's escalation steps post to `services/bots/goalert-bot`, a Cloudflare
+  Worker that posts each alert to Macro Alerts and threads acknowledgements,
+  closes and reminders under it. GoAlert's webhook allow-list
+  (`goalert.nix`) permits its URL; the secret path segment lives only in the
+  escalation step. The loopback relay below stays allowed as a fallback target.
+- `macro-alerts-relay` on `127.0.0.1:8090` turns GoAlert webhooks into Macro
+  channel posts and adds the channel's bot token; GoAlert webhooks cannot set
+  headers. Each post starts with `---`, then the page or notify marker and the
+  title without Datadog's bracketed tags, the state, a one-sentence description,
+  and `Acknowledge · Graph · Runbook` links. Status changes are one line.
+  `goalert/test_macro_alerts_relay.py` pins the format.
+- nginx serves `oncall.macro-internal.com` from a runtime server block. Only
+  `/health`, `/api/v2/generic/incoming` and `/api/v2/heartbeat/` are reachable
+  without a session (GoAlert checks the integration key); other inbound
+  integrations return 404. The rest is GoAlert's UI behind its login.
+- Login is Google OIDC with Grafana's OAuth client, whose redirect URIs include
+  `https://oncall.macro-internal.com/api/v2/identity/providers/oidc/callback`.
+  GoAlert cannot restrict OIDC to a domain, so that client must keep the
+  Internal audience. The basic-auth `admin` login is the break-glass account.
+- Every `@macro.com` account is a GoAlert admin from its first sign-in:
+  `goalert/workspace-admins.sql` installs a trigger on GoAlert's `users` table
+  on every start. Other accounts stay plain users.
+- The ALB sends the on-call host to its own target group, health-checked at
+  `/goalert-healthz`. Alarm `observability-goalert` publishes to `alarmTopicArn`
+  when it fails, so a GoAlert outage is reported without GoAlert.
+
+### Secrets
+
+Doppler `observability/prd` is the source of truth; copy the values into the
+us-east-2 Secrets Manager secret the host reads, under the lowercase names:
+`goalert_encryption_key` (≥32 random characters), `goalert_admin_password`
+(≥32 random characters, the `admin` login), `macro_alerts_webhook_url` (HTTPS)
+and `macro_alerts_bot_token` (the Alerts channel's webhook and bot token).
+`goalert_grafana_integration_key` (the `Grafana critical` Grafana key) and
+`goalert_grafana_notify_integration_key` (the `Notify` Grafana key) are optional
+until GoAlert has created them; without one, GoAlert rejects that contact
+point's alerts with 401 and Grafana shows it as failing.
+
+### First deployment
+
+1. Add the secrets above, then build, publish and deploy the AMI as usual. The
+   certificate gains the on-call name, so Pulumi replaces the ACM certificate and
+   updates the listener.
+2. Sign in as `admin`. Create the escalation policies and services below, and a
+   Grafana integration key on `Grafana critical` and on `Notify`. Put the keys in
+   Doppler and the secret as `goalert_grafana_integration_key` and
+   `goalert_grafana_notify_integration_key` and restart `observability-secrets`.
+3. Send a test alert through the service and check that it reaches the channel
+   and can be acknowledged and closed.
+
+### Escalation
+
+Both policies have one step, webhook `http://127.0.0.1:8090/goalert`. The
+channel sees every new alert, acknowledgement and close. `Macro prod` repeats
+its step 5 times every 60 minutes, so an unacknowledged page is posted again
+hourly; `Macro notify` posts once, so warnings stay quiet after their first
+post.
+
+- Escalation policy `Macro prod` pages: services `Grafana critical` (Grafana's
+  paging criticals) and `Datadog critical`.
+- Escalation policy `Macro notify` only posts to the channel: service `Notify`
+  (Grafana warnings and non-paging criticals).
+- Acknowledge an alert to stop its escalation, close it when handled; Grafana
+  closes it on recovery. To silence a whole service for a while, use its
+  maintenance mode.
+
+### Recovery
+
+GoAlert's state is on the retained volume, so a replacement instance resumes it.
+For a lost volume, restore the latest dump with
+`pg_restore --clean -d goalert` before starting `goalert`, using the same
+`goalert_encryption_key`.
 
 ## Dev dual export
 

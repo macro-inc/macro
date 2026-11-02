@@ -246,3 +246,35 @@ pub async fn fetch_label_by_id(
 
     Ok(service_label)
 }
+
+/// Messages among `message_ids` that gain `provider_label_id` when `add` is
+/// true, or lose it when false.
+#[tracing::instrument(skip(executor, message_ids), err)]
+pub async fn messages_changing_label<'e, E>(
+    executor: E,
+    link_id: Uuid,
+    message_ids: &[Uuid],
+    provider_label_id: &str,
+    add: bool,
+) -> Result<Vec<Uuid>, sqlx::Error>
+where
+    E: sqlx::Executor<'e, Database = sqlx::Postgres>,
+{
+    sqlx::query_scalar!(
+        r#"
+        SELECT m.id AS "id!"
+        FROM unnest($1::uuid[]) AS m(id)
+        WHERE EXISTS (
+            SELECT 1 FROM email_effective_message_labels ml
+            JOIN email_labels l ON l.id = ml.label_id
+            WHERE ml.message_id = m.id AND l.link_id = $2 AND l.provider_label_id = $3
+        ) <> $4
+        "#,
+        message_ids,
+        link_id,
+        provider_label_id,
+        add,
+    )
+    .fetch_all(executor)
+    .await
+}

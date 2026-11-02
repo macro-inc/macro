@@ -1,6 +1,8 @@
 import type { GanttCreation } from '@app/components/gantt/create-gantt-creation';
 import { Gantt } from '@app/components/gantt/gantt';
 import { deriveGanttRange } from '@app/components/gantt/gantt-date';
+import type { SoupLoadMoreRow } from '@app/features/soup';
+import { useInfiniteScrollSentinel } from '@app/lib/primitives/infinite-scroll-sentinel';
 import { UserIcon } from '@core/component/UserIcon';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
@@ -11,14 +13,15 @@ import {
 import CalendarIcon from '@icon/system/regular/calendar-blank.svg';
 import CaretRightIcon from '@icon/system/regular/caret-right.svg';
 import CircleDashedIcon from '@icon/system/regular/circle-dashed.svg';
-import FolderIcon from '@icon/system/regular/folder-simple.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
+import ProjectIcon from '@icon/system/regular/stack.svg';
 import { PropertyValueIcon } from '@property/component/propertyValue';
 import { Button, cn, Layer } from '@ui';
 import type { ComponentProps } from 'solid-js';
 import {
   type Accessor,
   createMemo,
+  createSignal,
   type JSX,
   Match,
   Show,
@@ -26,13 +29,10 @@ import {
 } from 'solid-js';
 import { STATUS_GROUP_HEADER_TINTS } from '../components/task-list/TaskGroupHeader';
 import { taskGanttDates } from '../queries/task-gantt';
-import type {
-  TasksDataSource,
-  TasksDataSourceItem,
-} from '../queries/use-tasks-query';
+import type { TasksDataSource } from '../queries/use-tasks-query';
 import type { TaskGroupBy } from '../types';
 
-function AssigneeLabel(props: {
+function EntityGroupLabel(props: {
   id: string;
   createName: (id: Accessor<string>) => Accessor<string>;
 }) {
@@ -40,8 +40,49 @@ function AssigneeLabel(props: {
   return <>{name()}</>;
 }
 
+/** Requests the next page while near the visible rows; a failure waits for Retry. */
+function GanttContinuation(props: {
+  isLoading: boolean;
+  failed: boolean;
+  onLoad: () => void;
+}) {
+  const [sentinel, setSentinel] = createSignal<HTMLDivElement>();
+  useInfiniteScrollSentinel({
+    sentinel,
+    hasNextPage: () => !props.failed,
+    isFetchingNextPage: () => props.isLoading,
+    fetchNextPage: () => props.onLoad(),
+  });
+  const status = () => (
+    <Show
+      when={props.failed}
+      fallback={
+        <span class="flex items-center gap-1.5 px-2 text-ink-muted">
+          <SpinnerIcon class="size-3 animate-spin" />
+          Loading tasks…
+        </span>
+      }
+    >
+      <Button size="sm" variant="ghost" onClick={() => props.onLoad()}>
+        Retry loading tasks
+      </Button>
+    </Show>
+  );
+
+  return (
+    <>
+      {/* The label drawer can be hidden; this wrapper always spans the row. */}
+      <div ref={setSentinel} class="absolute inset-0">
+        <Gantt.Label>{status()}</Gantt.Label>
+      </div>
+      <Gantt.Pagination>{status()}</Gantt.Pagination>
+    </>
+  );
+}
+
 export function TaskGanttView(props: {
   createAssigneeName: (id: Accessor<string>) => Accessor<string>;
+  createProjectName: (id: Accessor<string>) => Accessor<string>;
   source: TasksDataSource;
   groupBy: TaskGroupBy;
   groupMoves: Omit<ComponentProps<typeof Gantt.GroupDrag>, 'children'>;
@@ -66,9 +107,7 @@ export function TaskGanttView(props: {
     props.source
       .items()
       .some((row) => row.kind === 'load-more' && row.groupId === undefined);
-  const loadMore = (row: TasksDataSourceItem) => {
-    if (row.kind !== 'load-more') return;
-
+  const loadMore = (row: SoupLoadMoreRow) => {
     if (row.groupId !== undefined) {
       fireAndForget(props.source.loadMoreGroup(row.groupId), 'tasks-view');
       return;
@@ -76,6 +115,12 @@ export function TaskGanttView(props: {
 
     fireAndForget(props.source.loadMore?.(), 'tasks-view');
   };
+  const loadMoreFailed = (row: SoupLoadMoreRow) =>
+    Boolean(
+      row.groupId === undefined
+        ? error()
+        : props.source.groupError?.(row.groupId)
+    );
 
   return (
     <div ref={props.ref} class="flex size-full min-h-0 min-w-0 flex-col">
@@ -96,6 +141,7 @@ export function TaskGanttView(props: {
           >
             Tasks couldn’t be loaded.
             <Button
+              variant="ghost"
               onClick={() =>
                 fireAndForget(props.source.refresh?.(), 'tasks-view')
               }
@@ -265,7 +311,7 @@ export function TaskGanttView(props: {
                                     />
                                   </Match>
                                   <Match when={props.groupBy === 'project'}>
-                                    <FolderIcon class="size-3.5 shrink-0" />
+                                    <ProjectIcon class="size-3.5 shrink-0" />
                                   </Match>
                                   <Match when={props.groupBy === 'date'}>
                                     <CalendarIcon class="size-3.5 shrink-0" />
@@ -274,7 +320,9 @@ export function TaskGanttView(props: {
                                 <span class="truncate">
                                   <Show
                                     when={
-                                      props.groupBy === 'assignee' &&
+                                      (props.groupBy === 'assignee' ||
+                                        (props.groupBy === 'project' &&
+                                          group().label === group().groupId)) &&
                                       group().groupId
                                     }
                                     fallback={
@@ -286,9 +334,13 @@ export function TaskGanttView(props: {
                                         : group().label
                                     }
                                   >
-                                    <AssigneeLabel
+                                    <EntityGroupLabel
                                       id={group().groupId}
-                                      createName={props.createAssigneeName}
+                                      createName={
+                                        props.groupBy === 'project'
+                                          ? props.createProjectName
+                                          : props.createAssigneeName
+                                      }
                                     />
                                   </Show>
                                 </span>
@@ -305,40 +357,11 @@ export function TaskGanttView(props: {
                           when={row.kind === 'load-more' ? row : undefined}
                         >
                           {(more) => (
-                            <>
-                              <div class="absolute inset-0">
-                                <Gantt.Label>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    disabled={more().isLoading}
-                                    onClick={() => loadMore(more())}
-                                  >
-                                    <Show when={more().isLoading}>
-                                      <SpinnerIcon class="size-3 animate-spin" />
-                                    </Show>
-                                    {more().isLoading
-                                      ? 'Loading tasks…'
-                                      : 'Load more tasks'}
-                                  </Button>
-                                </Gantt.Label>
-                              </div>
-                              <Gantt.Pagination>
-                                <Button
-                                  size="sm"
-                                  variant="ghost"
-                                  disabled={more().isLoading}
-                                  onClick={() => loadMore(more())}
-                                >
-                                  <Show when={more().isLoading}>
-                                    <SpinnerIcon class="size-3 animate-spin" />
-                                  </Show>
-                                  {more().isLoading
-                                    ? 'Loading tasks…'
-                                    : 'Load more tasks'}
-                                </Button>
-                              </Gantt.Pagination>
-                            </>
+                            <GanttContinuation
+                              isLoading={more().isLoading ?? false}
+                              failed={loadMoreFailed(more())}
+                              onLoad={() => loadMore(more())}
+                            />
                           )}
                         </Match>
                         <Match
@@ -356,45 +379,13 @@ export function TaskGanttView(props: {
                   when={props.source.hasMore?.() && !hasGlobalLoadMoreRow()}
                 >
                   <Gantt.Row>
-                    <div class="absolute inset-0">
-                      <Gantt.Label>
-                        <Button
-                          size="sm"
-                          variant="ghost"
-                          disabled={props.source.isLoadingMore?.()}
-                          onClick={() =>
-                            fireAndForget(
-                              props.source.loadMore?.(),
-                              'tasks-view'
-                            )
-                          }
-                        >
-                          <Show when={props.source.isLoadingMore?.()}>
-                            <SpinnerIcon class="size-3 animate-spin" />
-                          </Show>
-                          {props.source.isLoadingMore?.()
-                            ? 'Loading tasks…'
-                            : 'Load more tasks'}
-                        </Button>
-                      </Gantt.Label>
-                    </div>
-                    <Gantt.Pagination>
-                      <Button
-                        size="sm"
-                        variant="ghost"
-                        disabled={props.source.isLoadingMore?.()}
-                        onClick={() =>
-                          fireAndForget(props.source.loadMore?.(), 'tasks-view')
-                        }
-                      >
-                        <Show when={props.source.isLoadingMore?.()}>
-                          <SpinnerIcon class="size-3 animate-spin" />
-                        </Show>
-                        {props.source.isLoadingMore?.()
-                          ? 'Loading tasks…'
-                          : 'Load more tasks'}
-                      </Button>
-                    </Gantt.Pagination>
+                    <GanttContinuation
+                      isLoading={props.source.isLoadingMore?.() ?? false}
+                      failed={Boolean(error())}
+                      onLoad={() =>
+                        fireAndForget(props.source.loadMore?.(), 'tasks-view')
+                      }
+                    />
                   </Gantt.Row>
                 </Show>
                 <Gantt.TodayMarker />

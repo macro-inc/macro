@@ -190,11 +190,20 @@ async fn shared_definitions_keep_the_callers_context_and_check_each_sessions_gat
 #[test]
 fn instructions_are_a_delimited_section_after_the_standing_prompt() {
     let session = AgentSessionId::new();
-    let prompt = system_prompt(&TOOLS, session, None, Some("be terse"), None).to_string();
+    let prompt = system_prompt(
+        &TOOLS,
+        "",
+        session,
+        ReplyDelivery::Streamed,
+        None,
+        Some("be terse"),
+        None,
+    )
+    .to_string();
 
     assert!(
         prompt.starts_with(&prompt::agent_session::PROMPT.to_string()),
-        "the session preamble comes first when the agent is unnamed"
+        "the session preamble comes first"
     );
     assert!(
         prompt.contains(&format!(
@@ -211,25 +220,32 @@ fn instructions_are_a_delimited_section_after_the_standing_prompt() {
     )));
 }
 
-/// A named agent is told who it is before anything else, even when it has
-/// no session instructions — otherwise "who are you" has nothing to go on.
+/// A named agent is told who it is before its instructions, even when it
+/// has no session instructions — otherwise "who are you" has nothing to go on.
 #[test]
-fn identity_precedes_the_standing_prompt_and_does_not_need_instructions() {
+fn identity_opens_the_session_part_and_does_not_need_instructions() {
     let session = AgentSessionId::new();
     let identity = AgentIdentity {
         bot: bot_id::BotId::TEST_A,
         name: "Grunk".to_owned(),
         handle: "grunk".to_owned(),
     };
-    let prompt = system_prompt(&TOOLS, session, Some(&identity), None, None).to_string();
+    let prompt = system_prompt(
+        &TOOLS,
+        "",
+        session,
+        ReplyDelivery::Streamed,
+        Some(&identity),
+        None,
+        None,
+    );
     let identity_section = prompt::agent_identity::render("Grunk", "grunk");
 
     assert!(
-        prompt.starts_with(&identity_section),
-        "identity is the first thing the model reads"
+        prompt.rest().starts_with(&format!("\n{identity_section}")),
+        "identity is the first thing the session's part says"
     );
-    assert!(prompt.contains(&prompt::agent_session::PROMPT.to_string()));
-    assert!(!prompt.contains("session_instructions"));
+    assert!(!prompt.to_string().contains("session_instructions"));
 }
 
 /// The order is the contract, not an accident: instructions qualify the
@@ -240,7 +256,9 @@ fn memory_follows_instructions_rather_than_preceding_them() {
     let session = AgentSessionId::new();
     let prompt = system_prompt(
         &TOOLS,
+        "",
         session,
+        ReplyDelivery::Streamed,
         None,
         Some("be terse"),
         Some("prefers Rust"),
@@ -256,10 +274,11 @@ fn memory_follows_instructions_rather_than_preceding_them() {
     assert!(instructions < memory);
 }
 
-/// Two sessions of one agent differ only after the static Macro prompt, so
-/// the part before it is cached once for all of them.
+/// Sessions of every agent differ only after the static Macro prompt, so
+/// the part before it is cached once for all of them, and the turn's SDK
+/// documentation comes after everything the session repeats.
 #[test]
-fn sessions_of_an_agent_share_everything_before_their_instructions() {
+fn sessions_share_everything_before_their_identity() {
     let session = AgentSessionId::new();
     let identity = AgentIdentity {
         bot: bot_id::BotId::TEST_A,
@@ -268,19 +287,24 @@ fn sessions_of_an_agent_share_everything_before_their_instructions() {
     };
     let first = system_prompt(
         &TOOLS,
+        "<macro_sdk>documents</macro_sdk>",
         session,
+        ReplyDelivery::Streamed,
         Some(&identity),
         Some("task A"),
         Some("prefers Rust"),
     );
-    let second = system_prompt(&TOOLS, session, Some(&identity), Some("task B"), None);
-
-    let shared = format!(
-        "{}\n{}\n{}\n{TOOLS}",
-        prompt::agent_identity::render("Grunk", "grunk"),
-        prompt::agent_session::PROMPT,
-        opener::ALREADY_OPENED,
+    let second = system_prompt(
+        &TOOLS,
+        "",
+        session,
+        ReplyDelivery::Streamed,
+        None,
+        Some("task B"),
+        None,
     );
+
+    let shared = format!("{}{TOOLS}", prompt::agent_session::PROMPT);
     assert_eq!(first.shared(), Some(shared.as_str()));
     assert_eq!(second.shared(), Some(shared.as_str()));
     let agent_session = format!(
@@ -292,7 +316,8 @@ fn sessions_of_an_agent_share_everything_before_their_instructions() {
     assert_eq!(
         first.rest(),
         format!(
-            "\n<session_instructions>\ntask A\n</session_instructions>{agent_session}\n<user_memory>\nprefers Rust\n</user_memory>"
+            "\n{}\n<session_instructions>\ntask A\n</session_instructions>{agent_session}\n<user_memory>\nprefers Rust\n</user_memory><macro_sdk>documents</macro_sdk>",
+            prompt::agent_identity::render("Grunk", "grunk"),
         )
     );
     assert_eq!(
@@ -306,7 +331,16 @@ fn sessions_of_an_agent_share_everything_before_their_instructions() {
 #[test]
 fn no_instructions_means_no_section() {
     let session = AgentSessionId::new();
-    let prompt = system_prompt(&TOOLS, session, None, None, Some("prefers Rust")).to_string();
+    let prompt = system_prompt(
+        &TOOLS,
+        "",
+        session,
+        ReplyDelivery::Streamed,
+        None,
+        None,
+        Some("prefers Rust"),
+    )
+    .to_string();
 
     assert!(!prompt.contains("session_instructions"));
     assert!(prompt.contains("<user_memory>\nprefers Rust\n</user_memory>"));
@@ -317,9 +351,39 @@ fn no_instructions_means_no_section() {
 #[test]
 fn empty_instructions_add_no_section() {
     let session = AgentSessionId::new();
-    let prompt = system_prompt(&TOOLS, session, None, Some(""), None).to_string();
+    let prompt = system_prompt(
+        &TOOLS,
+        "",
+        session,
+        ReplyDelivery::Streamed,
+        None,
+        Some(""),
+        None,
+    )
+    .to_string();
 
     assert!(!prompt.contains("session_instructions"));
+}
+
+/// A reply read only once finished gets no opening line, so its session part
+/// says so; the cached block every session shares stays the same.
+#[test]
+fn a_whole_reply_is_told_no_opening_line_was_shown_without_splitting_the_cache() {
+    let session = AgentSessionId::new();
+    let streamed = system_prompt(
+        &TOOLS,
+        "",
+        session,
+        ReplyDelivery::Streamed,
+        None,
+        None,
+        None,
+    );
+    let whole = system_prompt(&TOOLS, "", session, ReplyDelivery::Whole, None, None, None);
+
+    assert_eq!(streamed.shared(), whole.shared());
+    assert!(!streamed.to_string().contains(opener::NOT_OPENED));
+    assert!(whole.to_string().contains(opener::NOT_OPENED));
 }
 
 #[tokio::test]

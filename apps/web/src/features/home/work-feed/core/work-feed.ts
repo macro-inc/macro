@@ -8,8 +8,10 @@ export type WorkFeedMode = 'work' | 'attention';
 /** Item kinds a work feed can be narrowed to. */
 export type WorkFeedItemType =
   | 'document'
+  | 'task'
   | 'chat'
   | 'project'
+  | 'initiative'
   | 'email'
   | 'channel'
   | 'channel_thread'
@@ -26,6 +28,12 @@ export type WorkFeedScope = {
 };
 
 export type WorkFeedItemState = 'unseen' | 'seen' | 'done';
+
+/**
+ * The state a feed's pages are narrowed to. Live changes still place items
+ * in every state, so a row that turns seen while shown stays.
+ */
+export type WorkFeedPageState = Exclude<WorkFeedItemState, 'done'>;
 
 /** One item placed in a feed, decoded into the app's entity vocabulary. */
 export type WorkFeedEntry = {

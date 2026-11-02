@@ -6,6 +6,7 @@
 //! loads tools from both servers and then calls one tool from each.
 
 use super::util;
+use crate::AgentError;
 use crate::stream::ToolResponse;
 use ai_toolset::{
     AsyncTool, AsyncToolCollection, RequestContext, RequestSchema, SearchableTool, ServiceContext,
@@ -13,6 +14,8 @@ use ai_toolset::{
 };
 use ai_toolset::{ToolAnnotated, ToolAnnotations};
 use async_trait::async_trait;
+use rig_agent::agent::StreamingError;
+use rig_agent::completion::PromptError;
 use rig_core::test_utils::{MockCompletionModel, MockStreamEvent};
 use schemars::{JsonSchema, Schema};
 use serde::Deserialize;
@@ -102,7 +105,11 @@ impl FakeCombined {
                     .add_tool::<SearchToolsTest, ()>()
                     .add_tool::<LoadToolsTest, ()>(),
             ),
-            mcp_tools: vec!["mcp__a__t1".to_owned(), "mcp__b__t2".to_owned()],
+            mcp_tools: vec![
+                "mcp__a__t1".to_owned(),
+                "mcp__b__t2".to_owned(),
+                "mcp__a__t3".to_owned(),
+            ],
         }
     }
 }
@@ -299,6 +306,92 @@ async fn hallucinated_tool_name_gets_feedback_and_the_turn_recovers() {
     );
     assert!(result.tool_responses().is_empty());
     assert!(result.content().contains("recovered without the tool"));
+}
+
+/// Auto-loads are recoveries, not mistakes, so they don't spend the
+/// invalid-call budget: a turn that calls three unloaded catalog tools one
+/// after another still finishes.
+#[tokio::test]
+async fn three_unloaded_searchable_tools_in_one_turn_all_self_heal() {
+    let model = MockCompletionModel::from_stream_turns([
+        vec![
+            MockStreamEvent::tool_call("call-a", "mcp__a__t1", serde_json::json!({})),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+        vec![
+            MockStreamEvent::tool_call("call-a-retry", "mcp__a__t1", serde_json::json!({})),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+        vec![
+            MockStreamEvent::tool_call("call-b", "mcp__b__t2", serde_json::json!({})),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+        vec![
+            MockStreamEvent::tool_call("call-b-retry", "mcp__b__t2", serde_json::json!({})),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+        vec![
+            MockStreamEvent::tool_call("call-c", "mcp__a__t3", serde_json::json!({})),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+        vec![
+            MockStreamEvent::tool_call("call-c-retry", "mcp__a__t3", serde_json::json!({})),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+        vec![MockStreamEvent::final_response_with_default_usage()],
+    ]);
+
+    let toolset: Arc<dyn AiToolSet<()> + Send + Sync> = Arc::new(FakeCombined::new());
+    let mut session = util::session(toolset, Arc::new(()), model).await;
+    let result = util::drive(&mut session, "use three integration tools without loading").await;
+
+    assert!(
+        result.error.is_none(),
+        "stream ended with error: {:?}",
+        result.error
+    );
+    expect_json_ok(&result, "mcp__a__t1");
+    expect_json_ok(&result, "mcp__b__t2");
+    expect_json_ok(&result, "mcp__a__t3");
+}
+
+/// A model that keeps calling a name that exists nowhere still fails the turn
+/// with `UnknownToolCall` once the invalid-call budget is spent.
+#[tokio::test]
+async fn repeated_hallucinated_tool_name_fails_after_the_budget() {
+    let model = MockCompletionModel::from_stream_turns([
+        vec![
+            MockStreamEvent::tool_call("call-bad-1", "mcp__zz__nope", serde_json::json!({})),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+        vec![
+            MockStreamEvent::tool_call("call-bad-2", "mcp__zz__nope", serde_json::json!({})),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+        vec![
+            MockStreamEvent::tool_call("call-bad-3", "mcp__zz__nope", serde_json::json!({})),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+        vec![
+            MockStreamEvent::text("should never be reached"),
+            MockStreamEvent::final_response_with_default_usage(),
+        ],
+    ]);
+
+    let toolset: Arc<dyn AiToolSet<()> + Send + Sync> = Arc::new(FakeCombined::new());
+    let mut session = util::session(toolset, Arc::new(()), model).await;
+    let result = util::drive(&mut session, "keep calling a tool that does not exist").await;
+
+    match &result.error {
+        Some(AgentError::Streaming(StreamingError::Prompt(error))) => match error.as_ref() {
+            PromptError::UnknownToolCall { tool_name, .. } => {
+                assert_eq!(tool_name, "mcp__zz__nope");
+            }
+            other => panic!("expected UnknownToolCall, got {other:?}"),
+        },
+        other => panic!("expected UnknownToolCall, got {other:?}"),
+    }
+    assert!(!result.content().contains("should never be reached"));
 }
 
 /// Load + call server a, then load + call server b, all in one execution.

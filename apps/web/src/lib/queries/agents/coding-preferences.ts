@@ -4,18 +4,20 @@ import {
   agentHarnessServiceClient,
   type CodingPreferencesBody,
 } from '@service-agent-harness/client';
-import { useMutation, useQuery } from '@tanstack/solid-query';
+import { queryOptions, useMutation, useQuery } from '@tanstack/solid-query';
 import { agentKeys } from './keys';
+
+const codingPreferencesQueryOptions = queryOptions({
+  queryKey: agentKeys.codingPreferences.queryKey,
+  queryFn: async () =>
+    throwOnErr(
+      async () => await agentHarnessServiceClient.getCodingPreferences()
+    ),
+});
 
 /** What the user's new coding sessions are told to do beyond their assignment. */
 export function useCodingPreferencesQuery() {
-  return useQuery(() => ({
-    queryKey: agentKeys.codingPreferences.queryKey,
-    queryFn: async () =>
-      throwOnErr(
-        async () => await agentHarnessServiceClient.getCodingPreferences()
-      ),
-  }));
+  return useQuery(() => codingPreferencesQueryOptions);
 }
 
 /** Replaces the preferences optimistically and rolls back if the save fails. */

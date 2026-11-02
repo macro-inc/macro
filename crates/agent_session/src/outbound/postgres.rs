@@ -984,6 +984,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             )
             UPDATE agent_session
             SET name = $2,
+                name_is_generated = false,
                 modified_at = CASE
                     WHEN name IS DISTINCT FROM $2 THEN NOW()
                     ELSE modified_at
@@ -1072,6 +1073,7 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             r#"
             UPDATE agent_session
             SET name = $2,
+                name_is_generated = true,
                 modified_at = NOW()
             WHERE id = $1
               AND name = $3
@@ -1090,6 +1092,59 @@ impl<B: BotFacts + 'static> AgentSessionRepo for PgAgentSessionRepo<B> {
             .commit()
             .await
             .context("commit agent session set_name_if_default")?;
+        Ok(modified_at.is_some())
+    }
+
+    async fn generated_name(&self, id: AgentSessionId) -> Result<Option<String>> {
+        Ok(sqlx::query_scalar!(
+            r#"
+            SELECT name
+            FROM agent_session
+            WHERE id = $1
+              AND name_is_generated
+              AND NOT is_archived
+            "#,
+            id.as_uuid(),
+        )
+        .fetch_optional(&self.pool)
+        .await
+        .context("failed to read generated agent session name")?)
+    }
+
+    async fn replace_generated_name(
+        &self,
+        id: AgentSessionId,
+        current: &str,
+        name: &str,
+    ) -> Result<bool> {
+        let mut transaction = self
+            .pool
+            .begin()
+            .await
+            .context("begin agent session replace_generated_name")?;
+        let modified_at = sqlx::query_scalar!(
+            r#"
+            UPDATE agent_session
+            SET name = $3,
+                modified_at = NOW()
+            WHERE id = $1
+              AND name = $2
+              AND name_is_generated
+              AND NOT is_archived
+            RETURNING modified_at
+            "#,
+            id.as_uuid(),
+            current,
+            name,
+        )
+        .fetch_optional(&mut *transaction)
+        .await
+        .context("failed to persist retitled agent session name")?;
+        touch_entity_updated(&mut transaction, id, modified_at).await?;
+        transaction
+            .commit()
+            .await
+            .context("commit agent session replace_generated_name")?;
         Ok(modified_at.is_some())
     }
 

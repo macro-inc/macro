@@ -1,0 +1,22 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id FROM email_links WHERE provider = 'OUTLOOK' AND ($1::uuid[] IS NULL OR id = ANY($1)) ORDER BY id",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false
+    ]
+  },
+  "hash": "e2611e3ade00553fd9cb2dcac5681c43e1c26d39d98addbb636392024a7c5dec"
+}

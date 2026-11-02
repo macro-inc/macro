@@ -716,7 +716,6 @@ export default {
     groupAdmin: '관리',
     tabTeamGeneral: '일반',
     tabTeamMembers: '구성원',
-    tabTeamConnections: '연결',
     tabEmail: '이메일',
     tabCalendar: '캘린더',
     tabAgents: '에이전트',

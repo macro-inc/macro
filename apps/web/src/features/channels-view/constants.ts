@@ -6,6 +6,7 @@ export const CHANNELS_MIN_RAIL_WIDTH = DEFAULT_ASIDE_LAYOUT.min;
 export const CHANNELS_MAX_RAIL_WIDTH = DEFAULT_ASIDE_LAYOUT.max;
 
 export const CHANNELS_DEFAULT_SORT_BY = {
+  team_channels: 'updated_at',
   channels: 'updated_at',
   direct_messages: 'updated_at',
   threads: 'updated_at',

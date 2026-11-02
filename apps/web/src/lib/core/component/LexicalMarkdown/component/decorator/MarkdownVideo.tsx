@@ -391,7 +391,7 @@ export function MarkdownVideo(props: VideoDecoratorProps) {
             <div class="absolute bg-surface top-2 right-2 flex flex-row z-10">
               <Dialog.CloseButton>
                 <Button variant="ghost" size="icon-md">
-                  <XIcon />
+                  <XIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
                 </Button>
               </Dialog.CloseButton>
             </div>

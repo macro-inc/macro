@@ -123,3 +123,5 @@ deprecation (`Remove after YYYY-MM-DD`, at least 30 days out).
 it; see [step 8 of the field guide](../../docs/guides/add-graphql-field.md#8-compatibility-and-rollout).
 
 Saved-view definitions live under authenticated `GraphqlUser`; mutations use the authenticated request user and a domain service from request data. Run `cargo test -p complete_graph --lib saved_view_contract` after changing the saved-view contract.
+
+- Mail capsule negotiation lives in `mail_cache_profile`: absent/unknown capabilities receive v2; explicit `soup-mail-v5` receives current capsules. Never infer client support from the server version.

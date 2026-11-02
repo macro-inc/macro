@@ -4,6 +4,8 @@ import {
   makeCopyEntityIdAction,
   makeCopyLinkAction,
 } from '@app/features/next-soup/actions';
+import type { ComposeTaskProps } from '@app/features/task-composer/core/types';
+import { t } from '@app/lib/i18n';
 import { useNavigate } from '@app/lib/split-router';
 import {
   projectDetailRoute,
@@ -11,20 +13,21 @@ import {
   tasksSplitRoute,
 } from '@app/routes/routes';
 import { globalSplitManager } from '@app/signal/splitLayout';
-import type { ComposeTaskProps } from '@block-md/component/ComposeTask';
 import { useSplitLayout } from '@components/app/split-layout/layout';
 import {
   useSplitDisplayName,
   useSplitPanelOrThrow,
 } from '@components/app/split-layout/layoutUtils';
+import { getIconConfig } from '@core/component/EntityIcon';
 import { toast } from '@core/component/Toast/Toast';
 import { ShareTrigger } from '@core/component/TopBar/ShareButton';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import SquaresFourIcon from '@icon/system/regular/squares-four.svg';
 import StackIcon from '@icon/system/regular/stack.svg';
 import { SYSTEM_PROPERTY_IDS } from '@property/identifiers';
 import type { Property } from '@property/types';
-import { Button, Tabs } from '@ui';
+import { Tabs } from '@ui';
 import { createSignal, Match, Show, Suspense, Switch } from 'solid-js';
 import type { TaskCreateOptions } from '../tasks-view/types';
 import { DeleteProjectsDialog } from './components/delete-projects-dialog';
@@ -42,11 +45,12 @@ import {
   type ProjectDetail as ProjectDetailData,
   type ProjectSection,
 } from './core/project';
-import { type ProjectRoute, projectRouteId } from './core/route';
+import type { ProjectRoute } from './core/route';
 import { openProject } from './open-project';
 import { ProjectDiscussion } from './project-collaboration';
 import { ProjectDescription } from './project-description';
 import { useProjectShareModal } from './project-share';
+import { ProjectUnavailable } from './project-unavailable';
 import { Projects } from './projects';
 import { ProjectWorkspace } from './views/project-workspace';
 
@@ -168,10 +172,7 @@ function ProjectTitleMenu(props: {
         }
         onCopyLink={(row) =>
           fireAndForget(
-            copyLink.executeByBlock(
-              projectRouteId({ id: row.project.id, section: 'overview' }),
-              'component'
-            ),
+            copyLink.executeByBlock(row.project.id, 'initiative'),
             'projects'
           )
         }
@@ -257,19 +258,28 @@ function ProjectDetailHost(props: ProjectDetailProps) {
             )}
           </Show>
         }
-        navigation={
+        navigation={(compact) => (
           <Tabs
-            aria-label="Project sections"
+            aria-label={t('tabs.projectSections')}
             touch="inset"
             class="shrink-0"
             options={[
-              { value: 'overview', label: 'Overview' },
-              { value: 'tasks', label: 'Tasks' },
+              {
+                value: 'overview',
+                label: t('tabs.project-overview'),
+                icon: compact() ? SquaresFourIcon : undefined,
+              },
+              {
+                value: 'tasks',
+                label: t('tabs.project-tasks'),
+                icon: compact() ? getIconConfig('task').icon : undefined,
+              },
             ]}
+            iconOnly={compact()}
             value={props.route.section}
             onChange={section}
           />
-        }
+        )}
       >
         <Show when={source.project()}>
           {(project) => (
@@ -345,17 +355,11 @@ function ProjectDetailHost(props: ProjectDetailProps) {
               )}
             </Match>
             <Match when={true}>
-              <div role="alert" class="p-6">
-                <p>
-                  Project unavailable. It may have been deleted, or you may no
-                  longer have access.
-                </p>
-                <Button
-                  onClick={() => fireAndForget(source.refresh(), 'projects')}
-                >
-                  Try again
-                </Button>
-              </div>
+              <ProjectUnavailable
+                projectId={props.route.id}
+                section={props.route.section}
+                onRetry={source.refresh}
+              />
             </Match>
           </Switch>
         </Suspense>

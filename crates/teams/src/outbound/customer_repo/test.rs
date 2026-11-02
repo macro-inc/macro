@@ -530,7 +530,7 @@ async fn personal_upgrade_replaces_the_existing_item_and_invoices_proration(pool
     .await;
     mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 1).await;
     repo(&server, pool)
-        .upgrade_personal_plan(&sub.id, SeatPlan::Max)
+        .upgrade_personal_plan(&sub.id, SeatPlan::Max, false)
         .await
         .unwrap();
     let requests = server.received_requests().await.unwrap();
@@ -543,6 +543,8 @@ async fn personal_upgrade_replaces_the_existing_item_and_invoices_proration(pool
     assert_eq!(update["items[0][id]"], "si_personal");
     assert_eq!(update["items[0][price]"], "price_max");
     assert_eq!(update["proration_behavior"], "always_invoice");
+    assert!(update.get("trial_end").is_none());
+    assert!(update.get("billing_cycle_anchor").is_none());
     let release = requests
         .iter()
         .position(|request| request.url.path().ends_with("/release"))
@@ -557,6 +559,170 @@ async fn personal_upgrade_replaces_the_existing_item_and_invoices_proration(pool
     assert!(
         chrono::DateTime::parse_from_rfc3339(&update["metadata[macro_plan_change_at]"]).is_ok()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn pro_trial_upgrade_to_max_ends_the_trial_and_bills_now(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let mut sub = subscription();
+    sub.status = stripe::SubscriptionStatus::Trialing;
+    sub.items.data = vec![item("si_personal", "price_pro", 1)];
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 1).await;
+    repo(&server, pool)
+        .upgrade_personal_plan(&sub.id, SeatPlan::Max, true)
+        .await
+        .unwrap();
+    let requests = server.received_requests().await.unwrap();
+    let update = form(
+        requests
+            .iter()
+            .find(|r| r.method.as_str() == "POST" && r.url.path() == "/v1/subscriptions/sub_team")
+            .unwrap(),
+    );
+    assert_eq!(update["items[0][price]"], "price_max");
+    assert_eq!(update["trial_end"], "now");
+    assert_eq!(update["billing_cycle_anchor"], "now");
+    assert_eq!(update["proration_behavior"], "always_invoice");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn moving_a_trial_seat_to_max_ends_the_trial(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let mut sub = subscription();
+    sub.status = stripe::SubscriptionStatus::Trialing;
+    sub.items.data = vec![item("si_pro", "price_pro", 1)];
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 1).await;
+    repo(&server, pool)
+        .move_seat(&sub.id, SeatPlan::Premium, SeatPlan::Max)
+        .await
+        .unwrap();
+    let requests = server.received_requests().await.unwrap();
+    let update = form(
+        requests
+            .iter()
+            .find(|r| r.method.as_str() == "POST" && r.url.path() == "/v1/subscriptions/sub_team")
+            .unwrap(),
+    );
+    assert_eq!(update["trial_end"], "now");
+    assert_eq!(update["billing_cycle_anchor"], "now");
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn adding_a_pro_seat_during_a_trial_keeps_the_trial(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let mut sub = subscription();
+    sub.status = stripe::SubscriptionStatus::Trialing;
+    sub.items.data = vec![item("si_pro", "price_pro", 1)];
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 1).await;
+    repo(&server, pool)
+        .increment_seat_count(&sub.id, SeatPlan::Premium, 1)
+        .await
+        .unwrap();
+    let requests = server.received_requests().await.unwrap();
+    let update = form(
+        requests
+            .iter()
+            .find(|r| r.method.as_str() == "POST" && r.url.path() == "/v1/subscriptions/sub_team")
+            .unwrap(),
+    );
+    assert!(update.get("trial_end").is_none());
+    assert!(update.get("billing_cycle_anchor").is_none());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn seat_changes_on_a_max_trial_keep_the_trial(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let mut sub = subscription();
+    sub.status = stripe::SubscriptionStatus::Trialing;
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    mount(&server, "POST", "/v1/subscriptions/sub_team", &sub, 1).await;
+    let repo = repo(&server, pool);
+    repo.increment_seat_count(&sub.id, SeatPlan::Premium, 1)
+        .await
+        .unwrap();
+    repo.decrement_seat_count(&sub.id, SeatPlan::Premium, 1)
+        .await
+        .unwrap();
+    repo.increment_seat_count(&sub.id, SeatPlan::Max, 1)
+        .await
+        .unwrap();
+    repo.move_seat(&sub.id, SeatPlan::Premium, SeatPlan::Max)
+        .await
+        .unwrap();
+    let updates = server
+        .received_requests()
+        .await
+        .unwrap()
+        .iter()
+        .filter(|r| r.method.as_str() == "POST" && r.url.path() == "/v1/subscriptions/sub_team")
+        .map(form)
+        .collect::<Vec<_>>();
+    assert_eq!(updates.len(), 4);
+    for update in updates {
+        assert!(update.get("trial_end").is_none());
+        assert!(update.get("billing_cycle_anchor").is_none());
+    }
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_max_trial_seat_change_keeps_scheduled_downgrades(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    let mut sub = subscription();
+    sub.status = stripe::SubscriptionStatus::Trialing;
+    let mut sched = schedule();
+    let id = macro_uuid::generate_uuid_v7();
+    let at = chrono::DateTime::from_timestamp(sub.current_period_end, 0).unwrap();
+    let members = json!({"macro|one@example.com": "premium"});
+    sqlx::query!("INSERT INTO subscription_plan_schedule (id, subscription_id, effective_at, member_plans) VALUES ($1, 'sub_team', $2, $3)", id, at, members).execute(&pool).await.unwrap();
+    sched
+        .metadata
+        .as_mut()
+        .unwrap()
+        .insert(PENDING_KEY.into(), id.to_string());
+    sub.schedule = Some(stripe::Expandable::Id(sched.id.clone()));
+    mount(&server, "GET", "/v1/subscriptions/sub_team", &sub, 1).await;
+    mount(
+        &server,
+        "GET",
+        "/v1/subscription_schedules/sub_sched_test",
+        &sched,
+        1,
+    )
+    .await;
+    mount(
+        &server,
+        "POST",
+        "/v1/subscription_schedules/sub_sched_test",
+        &sched,
+        1,
+    )
+    .await;
+    repo(&server, pool)
+        .increment_seat_count(&sub.id, SeatPlan::Max, 1)
+        .await
+        .unwrap();
+    let requests = server.received_requests().await.unwrap();
+    assert!(!requests.iter().any(|r| r.url.path().ends_with("/release")));
+    assert!(
+        !requests
+            .iter()
+            .any(|r| r.method.as_str() == "POST" && r.url.path() == "/v1/subscriptions/sub_team")
+    );
+    let update = form(
+        requests
+            .iter()
+            .find(|r| {
+                r.method.as_str() == "POST"
+                    && r.url.path() == "/v1/subscription_schedules/sub_sched_test"
+            })
+            .unwrap(),
+    );
+    assert_eq!(update["phases[0][items][0][quantity]"], "3");
+    assert_eq!(update["phases[1][items][0][quantity]"], "2");
+    assert_eq!(update["phases[1][items][1][quantity]"], "3");
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -711,7 +877,7 @@ async fn cancelling_a_guard_holder_releases_the_subscription_for_another_instanc
 async fn subscription_for_customer(
     pool: sqlx::PgPool,
     statuses: &[(&str, stripe::SubscriptionStatus)],
-) -> Result<stripe::SubscriptionId, CustomerError> {
+) -> Result<Option<stripe::SubscriptionId>, CustomerError> {
     let server = MockServer::start().await;
     let list = stripe::List {
         data: statuses
@@ -757,7 +923,7 @@ async fn a_trialing_subscription_is_linked_when_none_is_active(pool: sqlx::PgPoo
     )
     .await
     .unwrap();
-    assert_eq!(found.as_str(), "sub_trial");
+    assert_eq!(found.as_ref().map(|id| id.as_str()), Some("sub_trial"));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -771,7 +937,7 @@ async fn an_active_subscription_wins_over_a_trial(pool: sqlx::PgPool) {
     )
     .await
     .unwrap();
-    assert_eq!(found.as_str(), "sub_active");
+    assert_eq!(found.as_ref().map(|id| id.as_str()), Some("sub_active"));
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -784,5 +950,23 @@ async fn unpaid_or_incomplete_subscriptions_are_not_linked(pool: sqlx::PgPool) {
         ],
     )
     .await;
-    assert!(matches!(found, Err(CustomerError::SubscriptionNotActive)));
+    assert!(matches!(found, Ok(None)));
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_failed_subscription_listing_is_an_error_not_a_free_customer(pool: sqlx::PgPool) {
+    let server = MockServer::start().await;
+    Mock::given(method("GET"))
+        .and(path("/v1/subscriptions"))
+        .respond_with(ResponseTemplate::new(500).set_body_json(json!({
+            "error": { "type": "api_error", "message": "stripe is down" }
+        })))
+        .mount(&server)
+        .await;
+
+    let found = repo(&server, pool)
+        .get_subscription_id_for_customer(&"cus_test".parse().unwrap())
+        .await;
+
+    assert!(matches!(found, Err(CustomerError::StorageLayerError(_))));
 }

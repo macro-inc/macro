@@ -339,6 +339,28 @@ await channel.send(msg`Hey ${user}, take a look at ${doc}. cc ${here}`);
 
 These will render as @mentions in the Macro UI.
 
+### Generating images
+
+`macro.images.generate()` makes an image with Google's Nano Banana model, charged
+to the acting user's AI allowance, and stores it as a static file. Attach it to a
+message with `images`; its width and height let the message reserve space before
+the image loads. Pass up to three image documents or earlier images as
+`referenceImages` to edit or combine them. `examples/generate-image.ts` runs this
+end to end.
+
+```ts
+const image = await macro.images.generate({
+  prompt: 'A watercolor lighthouse at dusk',
+  aspectRatio: 'widescreen',
+});
+await channel.send('Fresh off the press', { images: [image] });
+
+const night = await macro.images.generate({
+  prompt: 'The lighthouse in image 1, at night under stars',
+  referenceImages: [image],
+});
+```
+
 ### Posting to a channel webhook
 
 The web UI can hand you a webhook URL and token for a channel. That token is a
@@ -375,6 +397,37 @@ Event triggers use `{ type: 'events', filters: [{ events, entities, condition }]
 `entities` takes typed references such as `{ type: 'document', entity: doc }`.
 Use `{ type: 'multiple', triggers: [...] }` to combine schedules and events.
 `routine.update(options)` replaces task and trigger settings; `delete()` removes it.
+Routines run as their owner, so share one as a template instead:
+`routine.shareAsTemplate({ description, variables })` publishes a snapshot,
+`routine.template()` reads it (undefined when not shared), and
+`routine.activateTemplate(options)` creates the caller's own routine from it.
+`routine.sourceTemplate()` returns the routine a template came from.
+Publishing, reading, and activating templates require the caller's
+`enable-routine-sharing` PostHog flag. Disabled or unavailable evaluations return
+404 (`template()` returns `undefined`). `stopSharingTemplate()` stays available
+to owners, and previously activated routines continue working.
+
+A GitHub trigger takes a filter of its own, with optional exact payload tests in
+`match`. It needs the owner to have connected GitHub:
+
+```ts
+await routine.update({
+  ...options,
+  trigger: {
+    type: 'events',
+    filters: [
+      {
+        events: ['github'],
+        github: { events: ['workflow_run'], actions: ['completed'], repositories: ['macro-inc/macro'] },
+        match: [
+          { path: ['workflow_run', 'name'], equals: 'CI' },
+          { path: ['workflow_run', 'conclusion'], in: ['failure', 'timed_out'] },
+        ],
+      },
+    ],
+  },
+});
+```
 
 ### Agents, conversations and hosts
 
@@ -791,28 +844,33 @@ conflict, refresh and inspect the review; never automatically retry a send whose
 outcome is unknown. These SDK methods have the same user authorization as the
 ordinary API: review cards offer a user workflow, not a separate security grant.
 
-### WhatsApp chats
+### External chats and WhatsApp
 
 Pair your personal account in Macro's External view first. Your WhatsApp chat
 list (`whatsapp.chats()`) holds groups and direct chats; adding one makes an
-independent `WhatsAppGroup` entity (a group or a direct chat) with its own
-history and ordinary sharing, and its earlier messages are imported from your
-phone. Shared viewers can read without WhatsApp. Sending and media uploads
-require your own connected account in the chat, using your personal session or
-own API credential; only the owner sends in a direct chat, and bots never send.
-Adding and detaching require a personal bearer session. Each user is limited to
-one send request per second across all chats.
+independent `ExternalChat` entity (a group or a direct chat, with `provider`
+`whatsapp`) with its own history and ordinary sharing, and its earlier messages
+are imported from your phone. `externalChats.list()` returns every added chat
+you can view; shared viewers can read without WhatsApp. Sending and media
+uploads require your own connected account in the chat, using your personal
+session or own API credential; only the owner sends in a direct chat, and bots
+never send. Adding and removing require a personal bearer session. Each user is
+limited to one send request per second across all chats.
 
 ```ts
 const personal = new Macro({
   auth: { type: 'user', token: () => session.accessToken() },
 });
-const chats = await personal.whatsapp.chats();
-const addable = chats.find((chat) => chat.canAdd());
-const group = addable ? await addable.adopt() : undefined;
-if (group && (await group.canSend())) {
-  const [someone] = await group.participants();
-  const send = await group.reply(
+let chat;
+for (const entry of await personal.whatsapp.chats()) {
+  if (await entry.canAdd()) {
+    chat = await entry.add();
+    break;
+  }
+}
+if (chat && (await chat.canSend())) {
+  const [someone] = await chat.participants();
+  const send = await chat.send(
     {
       type: 'text',
       text: someone ? `Hello @${someone.mentionToken}` : 'Hello',
@@ -823,7 +881,7 @@ if (group && (await group.canSend())) {
   await send.refresh();
   console.log(await send.state());
 }
-for (const shared of await personal.whatsapp.groups()) {
+for (const shared of await personal.externalChats.list()) {
   for await (const message of shared.messages()) console.log(await message.body());
 }
 ```

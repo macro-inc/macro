@@ -2,39 +2,30 @@ import { unwrap } from '../../utils';
 import type { MacroClient } from '../../utils/client';
 import { WhatsAppAccount } from './account';
 import { WhatsAppChat } from './chat';
-import { WhatsAppGroup } from './group';
 
-/** Operate on an account already paired through the Macro app. */
+/**
+ * The current user's WhatsApp account, paired through the Macro app, and its
+ * chat list. Added chats are external chats: read and send in them through
+ * `macro.externalChats`.
+ */
 export class WhatsAppNamespace {
   /** Bind existing-account operations to this authenticated client. */
   constructor(private readonly client: MacroClient) {}
 
   /** Current owner's account, or undefined when no account has been connected. */
   async account(): Promise<WhatsAppAccount | undefined> {
-    const { account } = unwrap(await this.client.storage.linkedAccount());
+    const { account } = unwrap(await this.client.storage.whatsappAccount());
     return account ? WhatsAppAccount.from(this.client, account) : undefined;
-  }
-
-  /** Adopted groups shared with the caller, including without WhatsApp. */
-  async groups(): Promise<WhatsAppGroup[]> {
-    return unwrap(await this.client.storage.whatsappGroups()).map((record) =>
-      WhatsAppGroup.byId(this.client, record.id),
-    );
   }
 
   /**
    * The caller's WhatsApp chat list (groups and direct chats), newest
    * activity first: each chat says whether it is added, shared with the caller
-   * or addable, and `chat.adopt()` adds it.
+   * or addable, and `chat.add()` adds it.
    */
   async chats(): Promise<WhatsAppChat[]> {
-    return unwrap(await this.client.storage.linkedChats()).chats.map((record) =>
-      WhatsAppChat.from(this.client, record),
+    return unwrap(await this.client.storage.whatsappChats()).chats.map(
+      (record) => WhatsAppChat.from(this.client, record),
     );
-  }
-
-  /** Reference an adopted entity without fetching it. */
-  byId(id: string): WhatsAppGroup {
-    return WhatsAppGroup.byId(this.client, id);
   }
 }

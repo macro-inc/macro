@@ -30,4 +30,7 @@ export default {
   closeConfirmation: 'Close confirmation',
   cancel: 'Cancel',
   confirm: 'Confirm',
+
+  // Picker sheet
+  done: 'Done',
 };

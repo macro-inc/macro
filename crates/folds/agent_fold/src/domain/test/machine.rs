@@ -9,7 +9,8 @@ use super::util::{TURN, parse_log};
 use crate::domain::fold::{FoldMachineImpl, fold};
 use crate::domain::log::AgentSessionLog;
 use crate::domain::model::{
-    Author, AuthorKind, FoldEvent, FoldedMessage, MessageId, MessagePart, StopReason, TurnId,
+    Author, AuthorKind, Control, ControlOutcome, FoldEvent, FoldedMessage, MessageId, MessagePart,
+    StopReason, ToolStatus, TurnId,
 };
 use crate::domain::ports::FoldMachine;
 
@@ -348,4 +349,51 @@ fn a_speculated_prompt_has_no_time() {
 
     assert!(machine.messages()[0].pending);
     assert_eq!(machine.messages()[0].posted_at, None);
+}
+
+/// A summary can land while a tool runs. The divider sits where it landed:
+/// after the running call, before everything the turn does next - whether
+/// the transcript watched it happen or folded it on reload.
+#[test]
+fn a_compaction_during_a_running_tool_divides_the_turn_where_it_landed() {
+    let log = concat!(
+        r#"{"direction":"to_runtime","content":{"type":"acp","jsonrpc":"2.0","id":"p0","method":"session/prompt","params":{"sessionId":"s","prompt":[{"type":"text","text":"build it"}]}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"t1","title":"Bash","kind":"execute","status":"in_progress","rawInput":{"command":"cargo build"},"content":[],"locations":[]}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"_macro/context_summary","params":{"sessionId":"s","text":"The user asked for a build.","through":"p0","replaces":2}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call_update","toolCallId":"t1","status":"completed"}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"tool_call","toolCallId":"t2","title":"Bash","kind":"execute","status":"in_progress","rawInput":{"command":"cargo test"},"content":[],"locations":[]}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","method":"session/update","params":{"sessionId":"s","update":{"sessionUpdate":"agent_message_chunk","content":{"type":"text","text":"Built and tested."}}}}}"#,
+        "\n",
+        r#"{"direction":"to_server","content":{"type":"acp","jsonrpc":"2.0","id":"p0","result":{"stopReason":"end_turn"}}}"#,
+    );
+
+    let live = Consumer::drive(parse_log(log));
+    let reloaded = fold(parse_log(log));
+
+    assert_eq!(live.messages, reloaded, "live and reload agree");
+    assert_eq!(reloaded.len(), 2, "the prompt and one reply");
+    let reply = &reloaded[1];
+    assert_eq!(reply.id, TurnId(0));
+    assert_eq!(reply.stop, Some(StopReason::EndTurn));
+    assert!(
+        matches!(
+            reply.parts.as_slice(),
+            [
+                MessagePart::ToolUse { id: first, status: ToolStatus::Completed, .. },
+                MessagePart::Control {
+                    control: Control::Compact,
+                    outcome: ControlOutcome::Accepted,
+                },
+                MessagePart::ToolUse { id: second, status: ToolStatus::Running, .. },
+                MessagePart::Text { text },
+            ] if first.0 == "t1" && second.0 == "t2" && text == "Built and tested."
+        ),
+        "the divider sits between the call it interrupted and the next: {:?}",
+        reply.parts
+    );
 }

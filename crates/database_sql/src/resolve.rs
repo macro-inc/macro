@@ -266,8 +266,9 @@ pub struct Order {
 pub enum OrderKey {
     /// A column key, selected or not.
     Column(Uuid),
-    /// A 0-based index into the select list; positional keys and aggregates
-    /// both resolve to this.
+    /// A 0-based index into the select list of a grouped or aggregate query;
+    /// its positional, alias, and aggregate keys resolve to this. A row
+    /// query's positions and aliases resolve to the column they select.
     Item(usize),
 }
 

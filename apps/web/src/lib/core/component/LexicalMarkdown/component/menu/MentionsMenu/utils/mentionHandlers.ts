@@ -1,7 +1,9 @@
+import { toast } from '@core/component/Toast/Toast';
 import type { EntityItem } from '@core/context/quickAccess';
 import { trackMention } from '@core/signal/mention';
 import type { DateOption } from '@core/util/dateSearch/useDateSearch';
 import type { ChannelEntity, CrmCompanyEntity, EmailEntity } from '@entity';
+import { Telemetry } from '@macro-inc/observability';
 import { match } from 'ts-pattern';
 import { REMOVE_INLINE_SEARCH_COMMAND } from '../../../../plugins';
 import {
@@ -219,14 +221,53 @@ async function handleCalendarEventMention(
  * Insert a WhatsApp group chip. Posting it in a channel shares the group with
  * the channel's members; nothing else tracks or attaches it.
  */
-async function handleWhatsAppGroupMention(
+async function handleExternalChatMention(
   group: { id: string; name: string },
   dependencies: HandlerDependencies
 ): Promise<void> {
   dependencies.editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
     documentId: group.id,
     documentName: group.name,
-    blockName: 'whatsapp_group',
+    blockName: 'external_chat',
+  });
+}
+
+/**
+ * Mentioning your routine shares it as a template: everyone who can read the
+ * message can activate their own copy from its card. The chip goes in only
+ * once the template reflects the routine's current setup.
+ */
+async function handleRoutineMention(
+  routine: { id: string; name: string },
+  dependencies: HandlerDependencies
+): Promise<void> {
+  const shared = await Telemetry.span(
+    'routine.template.share',
+    async (span) => {
+      span.setAttr('routine.id', routine.id);
+      span.setAttr('routine.template.source', 'mention');
+      try {
+        const { publishRoutineTemplate } = await import(
+          '@app/features/routines/queries/templates'
+        );
+        await publishRoutineTemplate(routine.id);
+        return true;
+      } catch {
+        span.error('Sharing the routine failed');
+        return false;
+      }
+    }
+  );
+  if (!shared) {
+    toast.failure('Could not share this routine', {
+      subtext: 'Please try again',
+    });
+    return;
+  }
+  dependencies.editor.dispatchCommand(INSERT_DOCUMENT_MENTION_COMMAND, {
+    documentId: routine.id,
+    documentName: routine.name,
+    blockName: 'routine',
   });
 }
 
@@ -258,8 +299,10 @@ export function createItemHandler(dependencies: HandlerDependencies) {
         return await handleCalendarEventMention(item, dependencies);
       case 'entity':
         return await handleEntityMention(item, dependencies);
-      case 'whatsappGroup':
-        return await handleWhatsAppGroupMention(item.data, dependencies);
+      case 'externalChat':
+        return await handleExternalChatMention(item.data, dependencies);
+      case 'routine':
+        return await handleRoutineMention(item.data, dependencies);
     }
   };
 }

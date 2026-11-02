@@ -5,11 +5,17 @@ import type {
 } from '@queries/soup/items';
 import { createRoot, createSignal } from 'solid-js';
 import { describe, expect, it, vi } from 'vitest';
-import type { CrmActivityTab } from '../core/navigation';
+import { EMPTY_TAG_FACET_CONTEXT } from '../../soup';
+import type { CrmActivityViewState } from '../core/activity-view';
+import type { CrmSoupActivityTab } from '../core/navigation';
 import { useCrmActivityQuery } from './activity';
 import { crmActivityBody } from './activity-filter';
+import {
+  buildCrmActivityQuery,
+  crmActivityItemMatches,
+} from './activity-options';
 
-const tabs: CrmActivityTab[] = ['tasks', 'notes', 'calls', 'email'];
+const tabs: CrmSoupActivityTab[] = ['tasks', 'notes', 'calls', 'email'];
 
 describe('CRM activity queries', () => {
   it.each(tabs)(
@@ -52,7 +58,7 @@ describe('CRM activity queries', () => {
   it('starts with the authenticated viewer and delegates errors, retries, and paging to Soup', () => {
     createRoot((dispose) => {
       const [userId, setUserId] = createSignal<string>();
-      const [tab, setTab] = createSignal<CrmActivityTab>('tasks');
+      const [tab, setTab] = createSignal<CrmSoupActivityTab>('tasks');
       const query: SoupAstItemsQuery = {
         data: undefined,
         error: new Error('Request failed'),
@@ -85,5 +91,91 @@ describe('CRM activity queries', () => {
       expect(source.fetchNextPage).toBe(query.fetchNextPage);
       dispose();
     });
+  });
+  it('conjoins email filters without widening CRM scope or mailbox visibility', () => {
+    const query = buildCrmActivityQuery('email', {
+      search: '',
+      facets: { read: ['unread'], done: ['not-done'] },
+      sort: 'created_at',
+      direction: 'asc',
+      groupBy: 'none',
+    });
+    expect(query.body).toMatchObject({ crma: 'activity', emailView: 'all' });
+    expect(query.body?.ef).toEqual({
+      '&': [{ l: { Read: false } }, { l: { InboxVisible: true } }],
+    });
+    expect(query.body?.df).toEqual(crmActivityBody('email').df);
+    expect(query.body).not.toHaveProperty('ecd');
+    expect(query.body).not.toHaveProperty('eca');
+    expect(query.params).toMatchObject({
+      sort_method: 'created_at',
+      sort_direction: 'asc',
+    });
+    const cleared = buildCrmActivityQuery('email', {
+      search: '',
+      facets: {},
+      sort: 'updated_at',
+      direction: 'desc',
+      groupBy: 'date',
+    });
+    expect(cleared.body).toEqual(crmActivityBody('email'));
+  });
+
+  it('keeps the Notes subtype restriction when filtering by creator and tags', () => {
+    const query = buildCrmActivityQuery(
+      'notes',
+      {
+        search: '',
+        facets: { 'created-by': ['macro|viewer@example.com'], tags: ['tag'] },
+        sort: 'updated_at',
+        direction: 'desc',
+        groupBy: 'date',
+      },
+      { tagPropertyDefinitionByOptionId: new Map([['tag', 'definition']]) }
+    );
+    expect(query.body).toMatchObject({ crma: 'activity' });
+    expect(query.body?.df).toEqual({
+      '&': [
+        crmActivityBody('notes').df,
+        { l: { o: 'macro|viewer@example.com' } },
+      ],
+    });
+    expect(query.body?.propf).toEqual({
+      l: { pd: 'definition', v: { so: 'tag' } },
+    });
+  });
+
+  it('applies attachment filters locally without changing the server scope', () => {
+    const options: CrmActivityViewState = {
+      search: '',
+      facets: { attachments: ['attachment-pdf'] },
+      sort: 'updated_at',
+      direction: 'desc',
+      groupBy: 'date',
+    };
+    expect(
+      crmActivityItemMatches(
+        {
+          id: 'email',
+          type: 'email',
+          name: 'Message',
+          ownerId: '',
+          createdAt: '2026-01-01',
+          updatedAt: '2026-01-01',
+          isRead: false,
+          isDraft: false,
+          isImportant: false,
+          done: false,
+          senderEmail: 'person@example.com',
+          participants: [],
+        },
+        'email',
+        options,
+        EMPTY_TAG_FACET_CONTEXT
+      )
+    ).toBe(false);
+    expect(buildCrmActivityQuery('email', options).body).toEqual(
+      crmActivityBody('email')
+    );
   });
 });

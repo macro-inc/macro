@@ -125,7 +125,7 @@ export function BookingReceiptView(props: {
               >
                 <div class="mt-6 flex flex-wrap gap-2 border-t border-edge-muted pt-6">
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     disabled={busy()}
                     onClick={() => {
                       setConfirm(false);
@@ -135,7 +135,7 @@ export function BookingReceiptView(props: {
                     Reschedule
                   </Button>
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     disabled={busy()}
                     onClick={() => {
                       setRescheduling(false);
@@ -146,7 +146,7 @@ export function BookingReceiptView(props: {
                   </Button>
                   <Show when={confirm()}>
                     <Button
-                      variant="strong"
+                      variant="secondary"
                       disabled={busy()}
                       onClick={() => fireAndForget(cancel(), 'scheduling')}
                     >

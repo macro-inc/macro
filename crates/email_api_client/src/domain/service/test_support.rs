@@ -1,11 +1,11 @@
 use std::sync::{Arc, Mutex};
 
 use models_email::email::service::label::Label;
-use models_email::service::contact::{Contact, ContactList};
+use models_email::service::contact::Contact;
 use uuid::Uuid;
 
 use super::super::models::{
-    AccessToken, ApiOperationKind, ChangeBatch, EmailApiError, ProviderSubscription,
+    AccessToken, ApiOperationKind, ChangePage, ContactPage, EmailApiError, ProviderSubscription,
     RateLimitRefusal, RequestPermit, SendRequest, SentIds, SyncCursor, ThreadListPage, TokenError,
     TokenFreshness,
 };
@@ -157,12 +157,13 @@ impl MailboxSyncClient for FakeRepository {
         self.unavailable("get_thread_count")
     }
 
-    async fn list_changes(
+    async fn list_changes_page(
         &self,
         _: &AccessToken,
         _: &SyncCursor,
-    ) -> Result<ChangeBatch, EmailApiError> {
-        self.unavailable("list_changes")
+        _: Option<&str>,
+    ) -> Result<ChangePage, EmailApiError> {
+        self.unavailable("list_changes_page")
     }
 }
 
@@ -297,22 +298,24 @@ impl MailboxContactsClient for FakeRepository {
         self.unavailable("get_self_contact")
     }
 
-    async fn list_contacts(
+    async fn list_contacts_page(
         &self,
         _: &AccessToken,
         _: Uuid,
         _: Option<&str>,
-    ) -> Result<ContactList, EmailApiError> {
-        self.unavailable("list_contacts")
+        _: Option<&str>,
+    ) -> Result<ContactPage, EmailApiError> {
+        self.unavailable("list_contacts_page")
     }
 
-    async fn list_other_contacts(
+    async fn list_other_contacts_page(
         &self,
         _: &AccessToken,
         _: Uuid,
         _: Option<&str>,
-    ) -> Result<ContactList, EmailApiError> {
-        self.unavailable("list_other_contacts")
+        _: Option<&str>,
+    ) -> Result<ContactPage, EmailApiError> {
+        self.unavailable("list_other_contacts_page")
     }
 }
 

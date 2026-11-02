@@ -2,15 +2,22 @@
 //! Only group traffic becomes [`InboundEvent`]s; the account runner then drops
 //! everything outside adopted groups.
 
+use std::collections::HashMap;
+
 use chrono::{DateTime, Utc};
+use external_chat::domain::rich::SystemLine;
+use external_chat::domain::{
+    models::{ExternalChatKind, MediaPresentation},
+    rich::RichContent,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 use whatsapp_linked::domain::events::{
-    ChatUpdate, HistoryPage, InboundEvent, InboundKind, Media, Message, MessageAnchor, MessageKind,
-    Receipt, ReceiptState, RichContent, Target,
+    ChatUpdate, HistoryPage, InboundEvent, InboundKind, LookupAnswer, Media, Message,
+    MessageAnchor, MessageKind, Receipt, ReceiptState, Target,
 };
-use whatsapp_linked::domain::models::{ChatKind, Identity, MediaPresentation};
-use whatsapp_linked::domain::rich::SystemLine;
+use whatsapp_linked::domain::jid::PhoneNumber;
+use whatsapp_linked::domain::models::Identity;
 use whatsmeow::Event;
 use whatsmeow::download::{DownloadableMessage, MediaType};
 use whatsmeow::proto::wa_common::MessageKey;
@@ -21,7 +28,10 @@ use whatsmeow::proto::wa_history_sync::{Conversation, HistorySync, Pushname};
 use whatsmeow::proto::wa_web::WebMessageInfo;
 use whatsmeow::store::{ContactStore, LidStore, StoreError};
 use whatsmeow::types::events::GroupInfo;
-use whatsmeow::types::{DEFAULT_USER_SERVER, GROUP_SERVER, HIDDEN_USER_SERVER, Jid, MessageSource};
+use whatsmeow::types::{
+    ContactInfo, DEFAULT_USER_SERVER, GROUP_SERVER, HIDDEN_USER_SERVER, IsOnWhatsAppResponse, Jid,
+    MessageSource,
+};
 
 use crate::domain::ports::SessionEvent;
 
@@ -1014,8 +1024,8 @@ fn map_receipt(
 fn chat_of(source: &MessageSource) -> Option<(String, Option<String>)> {
     let chat = source.chat.to_non_ad();
     match chat_kind(&chat)? {
-        ChatKind::Group => Some((chat.to_string(), None)),
-        ChatKind::Direct => {
+        ExternalChatKind::Group => Some((chat.to_string(), None)),
+        ExternalChatKind::Direct => {
             let alternate = if source.is_from_me {
                 &source.recipient_alt
             } else {
@@ -1023,7 +1033,7 @@ fn chat_of(source: &MessageSource) -> Option<(String, Option<String>)> {
             };
             let other = (!alternate.is_empty() && alternate.server != chat.server)
                 .then(|| alternate.to_non_ad())
-                .filter(|other| chat_kind(other) == Some(ChatKind::Direct));
+                .filter(|other| chat_kind(other) == Some(ExternalChatKind::Direct));
             Some(match other {
                 Some(phone) if phone.server == DEFAULT_USER_SERVER => {
                     (phone.to_string(), Some(chat.to_string()))
@@ -1036,10 +1046,12 @@ fn chat_of(source: &MessageSource) -> Option<(String, Option<String>)> {
 
 /// A chat in the account's list: groups, and direct chats with people.
 /// Status updates, broadcasts and channels are not chats.
-fn chat_kind(jid: &Jid) -> Option<ChatKind> {
+fn chat_kind(jid: &Jid) -> Option<ExternalChatKind> {
     match jid.server.as_str() {
-        GROUP_SERVER => Some(ChatKind::Group),
-        DEFAULT_USER_SERVER | HIDDEN_USER_SERVER if !jid.user.is_empty() => Some(ChatKind::Direct),
+        GROUP_SERVER => Some(ExternalChatKind::Group),
+        DEFAULT_USER_SERVER | HIDDEN_USER_SERVER if !jid.user.is_empty() => {
+            Some(ExternalChatKind::Direct)
+        }
         _ => None,
     }
 }
@@ -1085,7 +1097,7 @@ pub fn message_chat(event: &whatsmeow::types::events::Message) -> Option<ChatUpd
         jid: chat.to_string(),
         kind,
         // A direct chat is named after the other person, never after us.
-        name: (kind == ChatKind::Direct && !info.is_from_me && !info.push_name.is_empty())
+        name: (kind == ExternalChatKind::Direct && !info.is_from_me && !info.push_name.is_empty())
             .then(|| info.push_name.clone()),
         last_activity_at: Some(at),
         archived: None,
@@ -1117,7 +1129,7 @@ pub fn web_message_anchor(message: &WebMessageInfo) -> Option<MessageAnchor> {
 
 /// The chat of a history-sync conversation, by phone number when WhatsApp
 /// gave one for a LID chat.
-fn conversation_chat(conversation: &Conversation) -> Option<(Jid, ChatKind)> {
+fn conversation_chat(conversation: &Conversation) -> Option<(Jid, ExternalChatKind)> {
     let id: Jid = conversation.id.parse().ok()?;
     let id = match (id.server.as_str(), conversation.pn_jid.as_deref()) {
         (HIDDEN_USER_SERVER, Some(pn)) => pn.parse().unwrap_or(id),
@@ -1178,9 +1190,9 @@ pub fn history_chats(history: &HistorySync) -> Vec<ChatUpdate> {
 fn push_name_chat(push_name: &Pushname) -> Option<ChatUpdate> {
     let jid: Jid = push_name.id.as_deref()?.parse().ok()?;
     let name = push_name.pushname.as_deref()?.trim();
-    (chat_kind(&jid) == Some(ChatKind::Direct) && !name.is_empty()).then(|| ChatUpdate {
+    (chat_kind(&jid) == Some(ExternalChatKind::Direct) && !name.is_empty()).then(|| ChatUpdate {
         jid: jid.to_non_ad().to_string(),
-        kind: ChatKind::Direct,
+        kind: ExternalChatKind::Direct,
         name: Some(name.to_owned()),
         last_activity_at: None,
         archived: None,
@@ -1220,8 +1232,10 @@ pub fn chat_setting(event: &Event) -> Option<ChatUpdate> {
             setting_chat(&push_name.jid, |chat| {
                 chat.name = Some(push_name.new_push_name.clone());
             })
-            .filter(|chat| chat.kind == ChatKind::Direct)
+            .filter(|chat| chat.kind == ExternalChatKind::Direct)
         }
+        // A saved contact is someone to start a chat with, so it is listed
+        // even before anyone wrote.
         Event::Contact(contact) => {
             let action = contact.action.as_ref()?;
             let name = action
@@ -1229,10 +1243,68 @@ pub fn chat_setting(event: &Event) -> Option<ChatUpdate> {
                 .as_deref()
                 .or(action.first_name.as_deref())
                 .filter(|name| !name.trim().is_empty())?;
-            setting_chat(&contact.jid, |chat| chat.name = Some(name.to_owned()))
-                .filter(|chat| chat.kind == ChatKind::Direct)
+            setting_chat(&contact.jid, |chat| {
+                chat.name = Some(name.to_owned());
+                chat.create = true;
+            })
+            .filter(|chat| chat.kind == ExternalChatKind::Direct)
         }
         _ => None,
+    }
+}
+
+/// The address book's saved contacts as direct chats with no activity, so
+/// the chat list offers people never written to. People only seen with a
+/// WhatsApp or business name (in groups, say) are not saved contacts.
+pub fn contact_chats(contacts: &HashMap<Jid, ContactInfo>) -> Vec<ChatUpdate> {
+    contacts
+        .iter()
+        .filter_map(|(jid, contact)| {
+            let name = [&contact.full_name, &contact.first_name]
+                .into_iter()
+                .find(|name| !name.trim().is_empty())?;
+            setting_chat(jid, |chat| {
+                chat.name = Some(name.clone());
+                chat.create = true;
+            })
+            .filter(|chat| chat.kind == ExternalChatKind::Direct)
+        })
+        .collect()
+}
+
+/// WhatsApp's answer to `IsOnWhatsApp` for one number: registered numbers
+/// are found as their phone-number chat, named like any chat (address book,
+/// else the verified business or WhatsApp name).
+pub async fn lookup_answer(
+    lids: &dyn LidStore,
+    contacts: &dyn ContactStore,
+    phone: &PhoneNumber,
+    answers: &[IsOnWhatsAppResponse],
+) -> LookupAnswer {
+    let Some(answer) = answers.iter().find(|answer| answer.is_in) else {
+        return LookupAnswer::NotOnWhatsApp;
+    };
+    let business = answer
+        .verified_name
+        .as_ref()
+        .and_then(|verified| verified.details.as_ref())
+        .and_then(|details| details.verified_name.clone())
+        .filter(|name| !name.trim().is_empty());
+    let mut chats = [ChatUpdate {
+        jid: phone.jid(),
+        kind: ExternalChatKind::Direct,
+        name: business,
+        last_activity_at: None,
+        archived: None,
+        pinned: None,
+        anchor: None,
+        create: true,
+    }];
+    complete_chats(lids, contacts, &mut chats).await;
+    let [chat] = chats;
+    LookupAnswer::Found {
+        jid: chat.jid,
+        name: chat.name,
     }
 }
 
@@ -1245,7 +1317,7 @@ pub async fn complete_chats(
 ) {
     for chat in chats
         .iter_mut()
-        .filter(|chat| chat.kind == ChatKind::Direct)
+        .filter(|chat| chat.kind == ExternalChatKind::Direct)
     {
         let Ok(mut jid) = chat.jid.parse::<Jid>() else {
             continue;

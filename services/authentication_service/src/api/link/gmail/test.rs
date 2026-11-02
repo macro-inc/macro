@@ -12,7 +12,7 @@ fn has_calendar(scopes: &str) -> bool {
 
 fn has_mailbox(scopes: &str) -> bool {
     GMAIL_SCOPES
-        .split_ascii_whitespace()
+        .iter()
         .all(|scope| contains_scope(scopes, scope))
 }
 

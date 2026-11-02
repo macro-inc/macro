@@ -80,8 +80,8 @@ describe('call controls', () => {
     expect(
       screen
         .getByRole('button', { name: 'Unmute microphone' })
-        .getAttribute('aria-pressed')
-    ).toBe('false');
+        .hasAttribute('aria-pressed')
+    ).toBe(false);
   });
 
   it('opens audio settings from the caret and switches the microphone', async () => {

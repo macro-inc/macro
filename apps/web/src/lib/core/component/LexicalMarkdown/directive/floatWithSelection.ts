@@ -10,8 +10,10 @@ import {
   hide,
   offset,
   type Placement,
+  type ReferenceElement,
   shift,
   size,
+  type VirtualElement,
 } from '@floating-ui/dom';
 import { Telemetry } from '@macro-inc/observability';
 import type { Accessor, JSX } from 'solid-js';
@@ -47,7 +49,49 @@ type FloatWithSelectionOptions = {
    * stay below the caret and shrink.
    */
   fullHeight?: number;
+  /**
+   * Anchor to the part of a range selection that is not clipped by a
+   * scrolling ancestor. A selection that runs past the bottom of a
+   * height-capped editor would otherwise place the menu below its hidden end.
+   */
+  clipToVisible?: boolean;
 };
+
+function intersectRects(a: DOMRect, b: DOMRect): DOMRect | null {
+  const left = Math.max(a.left, b.left);
+  const top = Math.max(a.top, b.top);
+  const right = Math.min(a.right, b.right);
+  const bottom = Math.min(a.bottom, b.bottom);
+  if (right < left || bottom < top) return null;
+  return new DOMRect(left, top, right - left, bottom - top);
+}
+
+function visibleRangeReference(range: Range): VirtualElement {
+  const container = range.commonAncestorContainer;
+  const contextElement =
+    container instanceof Element ? container : container.parentElement;
+  return {
+    contextElement: contextElement ?? undefined,
+    getBoundingClientRect() {
+      const rect = range.getBoundingClientRect();
+      let visible: DOMRect | null = rect;
+      for (let el = contextElement; el && visible; el = el.parentElement) {
+        const { overflowX, overflowY } = getComputedStyle(el);
+        if (overflowX !== 'visible' || overflowY !== 'visible') {
+          visible = intersectRects(visible, el.getBoundingClientRect());
+        }
+      }
+      if (visible) {
+        visible = intersectRects(
+          visible,
+          new DOMRect(0, 0, window.innerWidth, window.innerHeight)
+        );
+      }
+      // Fully clipped: keep the real rect so hide() can hide the menu.
+      return visible ?? rect;
+    },
+  };
+}
 
 export function floatWithSelection(
   floatingEl: HTMLElement,
@@ -67,13 +111,19 @@ export function floatWithSelection(
   );
   let decidedPlacement: Placement | null = null;
 
+  function toReference(anchor: Range | Element): ReferenceElement {
+    return accessor()?.clipToVisible && anchor instanceof Range
+      ? visibleRangeReference(anchor)
+      : anchor;
+  }
+
   async function roomOn(
     anchor: Range | Element,
     placement: Placement,
     spacing: number
   ) {
     let room = 0;
-    await computePosition(anchor, floatingEl, {
+    await computePosition(toReference(anchor), floatingEl, {
       placement,
       middleware: [
         offset(spacing),
@@ -133,25 +183,29 @@ export function floatWithSelection(
       }
       const floatingOptions = accessor()?.floatingOptions ?? {};
       const preferredPlacement = floatingOptions.placement ?? 'bottom-start';
-      const { placement } = await computePosition(anchor, floatingEl, {
-        placement: preferredPlacement,
-        middleware: [
-          flip({
-            // Default menus sit below the caret and flip above. A caller that
-            // asked for another side (e.g. `placement: 'top'`) should flip to
-            // the opposite side instead of being stuck on `top-start`.
-            ...(preferredPlacement === 'bottom-start'
-              ? { fallbackPlacements: ['top-start'] as const }
-              : {}),
-            boundary,
-            padding: iosSafePadding(spacing),
-          }),
-          offset(spacing),
-          shift({ padding: spacing, boundary }),
-          hide(),
-        ],
-        ...floatingOptions,
-      });
+      const { placement } = await computePosition(
+        toReference(anchor),
+        floatingEl,
+        {
+          placement: preferredPlacement,
+          middleware: [
+            flip({
+              // Default menus sit below the caret and flip above. A caller that
+              // asked for another side (e.g. `placement: 'top'`) should flip to
+              // the opposite side instead of being stuck on `top-start`.
+              ...(preferredPlacement === 'bottom-start'
+                ? { fallbackPlacements: ['top-start'] as const }
+                : {}),
+              boundary,
+              padding: iosSafePadding(spacing),
+            }),
+            offset(spacing),
+            shift({ padding: spacing, boundary }),
+            hide(),
+          ],
+          ...floatingOptions,
+        }
+      );
 
       decidedPlacement = placement;
       await updatePosition();
@@ -165,7 +219,7 @@ export function floatWithSelection(
     const spacing = accessor()?.spacing ?? DEFAULT_SPACING;
     const onAvailableHeight = accessor()?.onAvailableHeight;
     const { x, y, middlewareData } = await computePosition(
-      current,
+      toReference(current),
       floatingEl,
       {
         placement: decidedPlacement,
@@ -251,11 +305,16 @@ export function floatWithSelection(
       console.log('No reference for autoUpdate');
       return;
     }
-    cleanupAutoUpdate = autoUpdate(reference, floatingEl, updatePosition, {
-      elementResize: true,
-      ancestorScroll: true,
-      ancestorResize: true,
-    });
+    cleanupAutoUpdate = autoUpdate(
+      toReference(reference),
+      floatingEl,
+      updatePosition,
+      {
+        elementResize: true,
+        ancestorScroll: true,
+        ancestorResize: true,
+      }
+    );
   });
 
   onCleanup(() => {

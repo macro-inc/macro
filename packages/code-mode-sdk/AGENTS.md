@@ -12,13 +12,13 @@ HTML worker belong to `packages/sdk-docs`.
 - `scripts/typedoc.ts`: index each entity and split linked Markdown into
   per-symbol references (classes, methods, types).
 - `scripts/catalog.ts`: compact entity descriptions; agent and harness docs share
-  a topic, as do native channels and standalone WhatsApp groups, so discovery stays
+  a topic, as do native channels, external chats and WhatsApp, so discovery stays
   within its 32-question classifier limit.
 - `src/index.ts`: public SDK exports used by programs.
 
 ## Tool contracts
 
-- WhatsApp sends/uploads use only the credential owner's connection and accept their session or own API token (including signed agent attribution); bots never send. Pairing and account/access controls require the person's session.
+- External chat sends/uploads use only the credential owner's connection and accept their session or own API token (including signed agent attribution); bots never send. Pairing and account/access controls require the person's session.
 - Agent documentation excludes the legacy chats/workspace namespaces and their Macro properties; public SDK APIs remain compatible for existing callers.
 
 ## Checks

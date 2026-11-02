@@ -49,7 +49,7 @@ function FormRespondContent(props: { formId: string }) {
   return (
     <FormProvider value={context}>
       <Layer depth={1}>
-        <main class="h-full min-h-0 overflow-y-auto bg-canvas-base text-ink">
+        <main class="h-full min-h-0 overflow-y-auto bg-canvas-base text-ink touch:pt-(--safe-top) touch:pb-(--mobile-content-inset-bottom)">
           <Show
             when={source.detail()}
             fallback={
@@ -110,7 +110,7 @@ function FormRespondContent(props: { formId: string }) {
                           Preview · responses won’t be saved
                         </span>
                         <Button
-                          variant="outline"
+                          variant="secondary"
                           onClick={() =>
                             navigate(
                               `/form/${encodeURIComponent(props.formId)}`

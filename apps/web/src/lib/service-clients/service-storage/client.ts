@@ -693,6 +693,8 @@ export const storageServiceClient = {
       group_by: PostGroupedSoupAstInitialRequest['group_by'];
       per_group_limit?: number | null;
       sort_method?: GroupedSoupSort;
+      sort_property_definition_id?: string | null;
+      sort_direction?: PostGroupedSoupAstInitialRequest['sort_direction'];
     };
     body: PostSoupAstRequest;
     signal?: AbortSignal;
@@ -703,6 +705,8 @@ export const storageServiceClient = {
       mode: 'initial',
       group_by: args.params.group_by,
       sort_method: args.params.sort_method,
+      sort_property_definition_id: args.params.sort_property_definition_id,
+      sort_direction: args.params.sort_direction,
       ...(args.params.per_group_limit != null && {
         per_group_limit: args.params.per_group_limit,
       }),
@@ -722,6 +726,8 @@ export const storageServiceClient = {
       group_key: string;
       limit?: number | null;
       sort_method?: GroupedSoupSort;
+      sort_property_definition_id?: string | null;
+      sort_direction?: PostGroupedSoupAstGroupPageRequest['sort_direction'];
     };
     body: PostSoupAstRequest;
   }) {
@@ -735,6 +741,8 @@ export const storageServiceClient = {
       mode: 'group_page',
       group_by: args.params.group_by,
       sort_method: args.params.sort_method,
+      sort_property_definition_id: args.params.sort_property_definition_id,
+      sort_direction: args.params.sort_direction,
       group_key: args.params.group_key,
       ...(args.params.limit != null && { limit: args.params.limit }),
     } satisfies PostGroupedSoupAstRequest;

@@ -155,6 +155,8 @@ impl WorkExecutor for Dispatcher {
                     // the runtime, and it delivers the mention itself through
                     // the control endpoint. Sending one here is refused.
                     prompt: None,
+                    prompt_action_id: None,
+                    prompt_attachments: Vec::new(),
                     repo_url: self.workspace.repo_url.clone(),
                     repo_branch: None,
                     owner: Some(sender.as_ref().to_owned()),
@@ -248,6 +250,8 @@ impl WorkExecutor for Dispatcher {
                     bot_id: Some(bot.as_uuid()),
                     workspace: Some(workspace),
                     prompt: None,
+                    prompt_action_id: None,
+                    prompt_attachments: Vec::new(),
                     repo_url: repo_url.or_else(|| self.workspace.repo_url.clone()),
                     repo_branch: None,
                     owner: Some(sender.as_ref().to_owned()),

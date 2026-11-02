@@ -243,7 +243,7 @@ async fn name_only_company_accepts_personal_email_without_inference(
     use entity_access::domain::models::MemberTeamRole;
 
     let team_id = Uuid::now_v7();
-    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    seed_team(&pool, team_id, "macro|owner@example.com").await?;
     enable_crm_for_team(&pool, team_id).await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
@@ -257,7 +257,7 @@ async fn name_only_company_accepts_personal_email_without_inference(
         .create_contact_for_company(
             &team_id,
             &company.company.id,
-            Some("jane@gmail.com"),
+            Some("jane@example.com"),
             "Jane",
             Utc::now(),
             false,
@@ -291,7 +291,7 @@ async fn name_only_company_accepts_personal_email_without_inference(
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn name_only_company_requires_crm_enabled(pool: PgPool) -> anyhow::Result<()> {
     let team_id = Uuid::now_v7();
-    seed_team(&pool, team_id, "macro|owner@test.com").await?;
+    seed_team(&pool, team_id, "macro|owner@example.com").await?;
     let repo = CompaniesRepositoryImpl::new(pool.clone());
     let error = repo
         .create_company_for_team(&team_id, None, "Acme", Utc::now())

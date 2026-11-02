@@ -1,0 +1,60 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, message_id, origin, deleted_at, revision_content, content_revision, revised_at\n        FROM external_chat_message WHERE chat_id = $1 AND person_id = $2 AND source_id = $3",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "message_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "origin",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "deleted_at",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "revision_content",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 5,
+        "name": "content_revision",
+        "type_info": "Int8"
+      },
+      {
+        "ordinal": 6,
+        "name": "revised_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": [
+      false,
+      true,
+      false,
+      true,
+      true,
+      false,
+      true
+    ]
+  },
+  "hash": "74272eaf743de7a7eedec61e3ea0bb061ab9c23f32ec86eb7b15aed28ad6ce2b"
+}

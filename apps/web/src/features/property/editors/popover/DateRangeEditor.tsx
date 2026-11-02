@@ -30,7 +30,6 @@ function DateRangeEditorBody(props: { property: DateRangeProperty }) {
         valueType: 'DATE_RANGE',
         value: range,
       });
-      ctx.onRefresh?.();
     } catch {
       // mutation onError owns toast
     }

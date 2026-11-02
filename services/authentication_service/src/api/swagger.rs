@@ -3,9 +3,10 @@ use github::domain::models::{
     EnrichedGithubPullRequest, GithubMergeMethod, GithubPullRequestCheckRun,
     GithubPullRequestComment, GithubPullRequestMergeability, GithubPullRequestMergeabilityEntry,
     GithubPullRequestMergeabilityRequest, GithubPullRequestMergeabilityResponse,
-    GithubPullRequestNumber, GithubPullRequestRef, GithubPullRequestStatus,
+    GithubPullRequestNumber, GithubPullRequestRef, GithubPullRequestState, GithubPullRequestStatus,
     MergeGithubPullRequestRequest, MergeGithubPullRequestResponse,
     SetGithubPullRequestDraftRequest, SetGithubPullRequestDraftResponse,
+    SetGithubPullRequestStateRequest, SetGithubPullRequestStateResponse,
 };
 use gtm_invite::inbound::axum_router::dto::{
     CreateGtmInviteLinkRequest, GtmInviteLink, GtmInviteLinkList, GtmInviteLinkStatus,
@@ -125,6 +126,7 @@ use model::user::{
                 github_pull_requests::handler,
                 github_pull_requests::merge_handler,
                 github_pull_requests::draft_handler,
+                github_pull_requests::state_handler,
                 github_pull_requests::mergeability_handler,
 
                 /// /oauth
@@ -299,6 +301,9 @@ use model::user::{
                         MergeGithubPullRequestResponse,
                         SetGithubPullRequestDraftRequest,
                         SetGithubPullRequestDraftResponse,
+                        GithubPullRequestState,
+                        SetGithubPullRequestStateRequest,
+                        SetGithubPullRequestStateResponse,
                         GithubPullRequestNumber,
                         GithubPullRequestMergeability,
                         GithubPullRequestMergeabilityEntry,
@@ -440,6 +445,26 @@ mod tests {
         assert_eq!(
             openapi["components"]["schemas"]["GithubPullRequestMergeability"]["enum"],
             serde_json::json!(["mergeable", "conflicting", "unknown"])
+        );
+    }
+
+    #[test]
+    fn github_pull_requests_openapi_includes_state_path() {
+        let openapi = serde_json::to_value(ApiDoc::openapi()).unwrap();
+        let operation = &openapi["paths"]["/github_pull_requests/state"]["post"];
+
+        assert_eq!(operation["operationId"], "set_github_pull_request_state");
+        assert_eq!(
+            operation["requestBody"]["content"]["application/json"]["schema"]["$ref"].as_str(),
+            Some("#/components/schemas/SetGithubPullRequestStateRequest")
+        );
+        assert_eq!(
+            operation["responses"]["200"]["content"]["application/json"]["schema"]["$ref"].as_str(),
+            Some("#/components/schemas/SetGithubPullRequestStateResponse")
+        );
+        assert_eq!(
+            openapi["components"]["schemas"]["GithubPullRequestState"]["enum"],
+            serde_json::json!(["open", "closed"])
         );
     }
 

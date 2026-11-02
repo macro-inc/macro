@@ -40,7 +40,7 @@ export function ReviewTab() {
           <>
             <RibbonGroup label="Proofing">
               <RibbonTextButton
-                label="Spelling"
+                aria-label="Spelling"
                 tooltip="Spelling (F7)"
                 disabled={ro()}
                 data-testid="pptx-review-spelling"
@@ -52,7 +52,7 @@ export function ReviewTab() {
             </RibbonGroup>
             <RibbonGroup label="Comments">
               <RibbonTextButton
-                label="New Comment"
+                aria-label="New Comment"
                 tooltip="New Comment (Ctrl+Alt+M)"
                 disabled={ro()}
                 data-testid="pptx-review-new-comment"
@@ -103,7 +103,7 @@ export function ReviewTab() {
                 )}
               </RibbonPopover>
               <RibbonTextButton
-                label="Previous"
+                aria-label="Previous"
                 tooltip="Previous comment"
                 disabled={c().count() === 0}
                 data-testid="pptx-review-previous"
@@ -113,7 +113,7 @@ export function ReviewTab() {
                 Previous
               </RibbonTextButton>
               <RibbonTextButton
-                label="Next"
+                aria-label="Next"
                 tooltip="Next comment"
                 disabled={c().count() === 0}
                 data-testid="pptx-review-next"
@@ -123,7 +123,7 @@ export function ReviewTab() {
                 Next
               </RibbonTextButton>
               <RibbonTextButton
-                label="Show Comments"
+                aria-label="Show Comments"
                 tooltip="Show the Comments pane"
                 aria-pressed={c().paneOpen()}
                 data-testid="pptx-review-show-comments"

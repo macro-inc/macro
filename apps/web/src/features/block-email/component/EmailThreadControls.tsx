@@ -4,11 +4,12 @@ import CheckBoldIcon from '@icon/system/bold/check-bold.svg?component-solid';
 import CheckIcon from '@icon/system/regular/check.svg';
 import EnvelopeSimpleIcon from '@icon/system/regular/envelope-simple.svg';
 import EnvelopeSimpleOpenIcon from '@icon/system/regular/envelope-simple-open.svg';
-import { Button } from '@ui';
+import { Button, ButtonGroup } from '@ui';
 import { type JSX, Show } from 'solid-js';
 
 export function EmailThreadControls(props: {
   reminder?: JSX.Element;
+  grouped?: boolean;
   isOwnThread: boolean;
   isDone: boolean;
   isUnread: boolean;
@@ -16,6 +17,7 @@ export function EmailThreadControls(props: {
   onToggleDone: () => void;
   onToggleUnread: () => void;
 }) {
+  const Control = props.grouped ? ButtonGroup.Button : Button;
   return (
     <>
       {props.reminder}
@@ -24,14 +26,16 @@ export function EmailThreadControls(props: {
               starts as Mark as unread; marking unread flips it to a bold
               accent closed envelope that re-marks the thread read. */}
         <Show when={props.isOwnThread}>
-          <Button
-            size="icon-md"
-            label={props.isUnread ? 'Mark as read' : 'Mark as unread'}
-            hotkey={
-              props.isUnread
+          <Control
+            variant="ghost"
+            aria-label={props.isUnread ? 'Mark as read' : 'Mark as unread'}
+            tooltip={{
+              content: props.isUnread ? 'Mark as read' : 'Mark as unread',
+              hotkey: props.isUnread
                 ? TOKENS.entity.action.markRead
-                : TOKENS.entity.action.markUnread
-            }
+                : TOKENS.entity.action.markUnread,
+            }}
+            size="icon-md"
             onClick={props.onToggleUnread}
             // Keep focus (and the hotkey scope cmd-K reads) in the thread
             // content: focusing the header would hide its commands.
@@ -43,17 +47,19 @@ export function EmailThreadControls(props: {
             >
               <EnvelopeSimpleIcon class="size-4 text-accent" />
             </Show>
-          </Button>
+          </Control>
         </Show>
         <Show when={props.isOwnThread && props.canToggleDone}>
-          <Button
-            size="icon-md"
-            label={props.isDone ? 'Mark as not done' : 'Mark done'}
-            hotkey={
-              props.isDone
+          <Control
+            variant="ghost"
+            aria-label={props.isDone ? 'Mark as not done' : 'Mark done'}
+            tooltip={{
+              content: props.isDone ? 'Mark as not done' : 'Mark done',
+              hotkey: props.isDone
                 ? TOKENS.entity.action.markNotDone
-                : TOKENS.entity.action.markDone
-            }
+                : TOKENS.entity.action.markDone,
+            }}
+            size="icon-md"
             onClick={props.onToggleDone}
             // Same focus-preservation as the read-state toggle above.
             onMouseDown={(e) => e.preventDefault()}
@@ -61,7 +67,7 @@ export function EmailThreadControls(props: {
             <Show when={props.isDone} fallback={<CheckIcon class="size-4" />}>
               <CheckBoldIcon class="size-4 text-accent" />
             </Show>
-          </Button>
+          </Control>
         </Show>
       </Show>
     </>

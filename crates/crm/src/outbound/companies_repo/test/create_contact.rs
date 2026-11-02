@@ -396,7 +396,7 @@ async fn manual_rows_survive_link_teardown(pool: PgPool) -> anyhow::Result<()> {
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn shared_email_preserves_every_company_opt_out(pool: PgPool) -> anyhow::Result<()> {
     let team = Uuid::now_v7();
-    seed_team(&pool, team, "macro|owner@test.com").await?;
+    seed_team(&pool, team, "macro|owner@example.com").await?;
     enable_crm_for_team(&pool, team).await?;
     let enabled = insert_company(&pool, team, true, &["acme.com"]).await?;
     let disabled = insert_company(&pool, team, false, &["other.com"]).await?;
@@ -405,7 +405,7 @@ async fn shared_email_preserves_every_company_opt_out(pool: PgPool) -> anyhow::R
         repo.create_contact_for_company(
             &team,
             &company,
-            Some("jane@gmail.com"),
+            Some("jane@example.com"),
             "Jane",
             Utc::now(),
             false,
@@ -413,9 +413,9 @@ async fn shared_email_preserves_every_company_opt_out(pool: PgPool) -> anyhow::R
         .await?;
     }
     let inputs = vec![
-        "jane@gmail.com".to_string(),
-        "missing@gmail.com".to_string(),
-        "jane@gmail.com".to_string(),
+        "jane@example.com".to_string(),
+        "missing@example.com".to_string(),
+        "jane@example.com".to_string(),
     ];
     let before = repo.crm_scope_precheck(&team, &[], &inputs).await?;
     assert_eq!(before.addresses.len(), inputs.len());

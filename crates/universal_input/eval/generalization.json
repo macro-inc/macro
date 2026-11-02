@@ -1,0 +1,70 @@
+{
+  "reference_time": "2026-10-27T12:00:00Z",
+  "time_zone": "UTC",
+  "people": [
+    { "email": "avery@example.com", "aliases": ["avery"] },
+    { "email": "morgan@example.com", "aliases": ["morgan"] }
+  ],
+  "channels": ["Release Updates", "Design Feedback"],
+  "search_types": {
+    "Channels": ["channel", "channels", "message", "messages"],
+    "Tasks": ["task", "tasks"],
+    "Documents": ["document-or-file", "documents"]
+  },
+  "property_definitions": [
+    { "name": "Priority", "options": ["Urgent", "High", "Medium", "Low"] },
+    { "name": "Status", "options": ["Not Started", "In Progress", "In Review", "Completed", "Canceled"] }
+  ],
+  "groups": [
+    {
+      "id": "retrieve-tasks",
+      "expect": { "intent": "search", "search_type": "Tasks", "query": "offline mode" },
+      "inputs": ["tasks about offline mode", "show me tasks concerning offline mode", "look for tasks mentioning offline mode", "tasks related to offline mode"]
+    },
+    {
+      "id": "create-task",
+      "expect": { "intent": "task" },
+      "inputs": ["task: investigate offline mode", "create a task to review search ranking", "remind me to email Avery", "file uploads fail on slow connections. high priority."]
+    },
+    {
+      "id": "answer-question",
+      "expect": { "intent": "ai" },
+      "inputs": ["why do leaves change color?", "how does our retry policy work?", "who approved the latest release?", "what caused yesterday's outage?"]
+    },
+    {
+      "id": "retrieve-records",
+      "expect": { "intent": "search" },
+      "inputs": ["search messages about why leaves change color", "find the latest release notes", "documents about retry policy", "show me emails mentioning yesterday's outage"]
+    },
+    {
+      "id": "address-channel",
+      "expect": { "intent": "message" },
+      "inputs": ["message Release Updates, the retry policy needs work", "post to Design Feedback: search results look wrong", "DM Avery: why did the upload fail?", "tell Morgan\nPlease schedule the review for Friday"]
+    },
+    {
+      "id": "address-email",
+      "expect": { "intent": "email" },
+      "inputs": ["email Avery\nCan you explain the retry policy?", "send an email to Morgan about the broken search page", "email avery@example.com, cc morgan@example.com\nPlease schedule the review.", "email Avery: task priorities need updating"]
+    },
+    {
+      "id": "schedule-activity",
+      "expect": { "intent": "calendar", "start": "2026-10-30T15:00" },
+      "inputs": ["3pm friday design review", "fri 3pm design review", "design review friday at 3pm", "schedule a design review friday at 3pm"]
+    },
+    {
+      "id": "save-prose",
+      "expect": { "intent": "note" },
+      "inputs": ["note: search results could use clearer grouping", "take a note: email followups work best with a clear subject", "save a note: ask more questions during design reviews", "note: Friday at 3pm is usually quiet in the office"]
+    },
+    {
+      "id": "sender-without-keywords",
+      "expect": { "intent": "search", "search_type": "Channels", "search_from": ["avery@example.com"], "query": "" },
+      "inputs": ["find messages sent by Avery", "search channels from Avery"]
+    },
+    {
+      "id": "unsupported-sender",
+      "expect": { "intent": "search", "search_type": "Documents", "query": "from Morgan" },
+      "inputs": ["find documents from Morgan"]
+    }
+  ]
+}

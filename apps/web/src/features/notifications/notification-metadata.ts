@@ -1,3 +1,4 @@
+import { providerIdentity } from '@app/features/external-chat/providers/identity';
 import { format } from 'date-fns';
 import { match, P } from 'ts-pattern';
 import { isEntityDiscussionEvent } from './entity-discussion';
@@ -56,9 +57,12 @@ export function getNotificationAction(n: UnifiedNotification): string {
       .with('call_started', () => 'started a call')
       .with('channel_invite', () => 'invited you to')
       .with('new_email', () => 'sent a new email')
-      .with('whatsapp_group_message', () =>
-        n.sender_id ? 'sent a message in' : 'New WhatsApp message in'
-      )
+      .with('external_chat_message', () => {
+        const meta = n.notification_metadata;
+        if (n.sender_id || meta.tag !== 'external_chat_message')
+          return 'sent a message in';
+        return `New ${providerIdentity(meta.content.provider).label} message in`;
+      })
       .with('invite_to_team', () => 'invited you to')
       .with('task_assigned', () => 'assigned you a task')
       // Self-set, so there is no actor — the sentence reads "Reminder about X"
@@ -121,14 +125,21 @@ export function getNotificationTargetName(
         { tag: P.union(...GITHUB_EVENT_TYPES) },
         (m) => `${m.content.owner}/${m.content.repo}#${m.content.number}`
       )
-      .with({ tag: 'channel_mention' }, () => undefined)
-      .with({ tag: 'channel_message_send' }, () => undefined)
-      .with({ tag: 'channel_message_reaction' }, () => undefined)
+      .with(
+        {
+          tag: P.union(
+            'channel_mention',
+            'channel_message_send',
+            'channel_message_reaction',
+            'channel_message_reply'
+          ),
+        },
+        (m) => m.content.channelName || undefined
+      )
       .with({ tag: 'ai_response' }, () => undefined)
-      .with({ tag: 'channel_message_reply' }, () => undefined)
       .with({ tag: 'call_started' }, (m) => m.content.channel_name ?? undefined)
       .with({ tag: 'new_email' }, () => undefined)
-      .with({ tag: 'whatsapp_group_message' }, (m) => m.content.groupName)
+      .with({ tag: 'external_chat_message' }, (m) => m.content.chatName)
       // The reminder's entity name is resolved from the notification's entity,
       // not carried in the metadata.
       .with({ tag: 'reminder' }, () => undefined)
@@ -185,7 +196,10 @@ export function getNotificationContent(
       .with({ tag: 'commented_on_document' }, (m) => m.content.text)
       .with({ tag: 'crm_discussion' }, (m) => m.content.text)
       .with({ tag: 'new_email' }, (m) => m.content.subject)
-      .with({ tag: 'whatsapp_group_message' }, () => 'New WhatsApp message')
+      .with(
+        { tag: 'external_chat_message' },
+        (m) => `New ${providerIdentity(m.content.provider).label} message`
+      )
       .with({ tag: 'task_assigned' }, (m) => m.content.taskName ?? undefined)
       .with(
         { tag: P.union('github_pr_status_changed', 'github_review_requested') },
@@ -272,7 +286,7 @@ export function shouldShowNotificationTarget(n: UnifiedNotification): boolean {
       .with({ tag: 'ai_response' }, () => false)
       .with({ tag: 'call_started' }, () => true)
       .with({ tag: 'new_email' }, () => false)
-      .with({ tag: 'whatsapp_group_message' }, () => true)
+      .with({ tag: 'external_chat_message' }, () => true)
       .with({ tag: 'task_assigned' }, () => true)
       .with({ tag: P.union(...GITHUB_EVENT_TYPES) }, () => true)
       .with({ tag: 'document_mention' }, () => true)

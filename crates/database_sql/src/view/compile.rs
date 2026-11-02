@@ -9,7 +9,7 @@ use models_databases::views::{
     TextOperator, ViewProblem,
 };
 
-use crate::catalog::{Catalog, Table};
+use crate::catalog::{Catalog, Column, Table};
 use crate::resolve::{
     Binding, ComparisonOperator, Direction, Filter, Order, OrderKey, Relation, SelectItem,
     SelectQuery, Value, row_position_key,
@@ -23,11 +23,14 @@ const LIKE_ESCAPE: char = '\\';
 /// The `SELECT * … WHERE … ORDER BY …, row_position` a view shows, exactly as
 /// [`resolve`](crate::resolve::resolve) would bind it.
 pub fn compile_view(view: &DatabaseView, catalog: &Catalog) -> Result<SelectQuery, ViewProblem> {
-    Ok(compile_checked(view, checked_table(view, catalog)?))
+    compile_checked(view, checked_table(view, catalog)?)
 }
 
 /// [`compile_view`] once the view has checked out against `table`.
-pub(super) fn compile_checked(view: &DatabaseView, table: &Table) -> SelectQuery {
+pub(super) fn compile_checked(
+    view: &DatabaseView,
+    table: &Table,
+) -> Result<SelectQuery, ViewProblem> {
     let position = row_position_key(table.id);
     let mut bindings: Vec<Binding> = table
         .columns
@@ -47,19 +50,25 @@ pub(super) fn compile_checked(view: &DatabaseView, table: &Table) -> SelectQuery
         .query
         .sort
         .iter()
-        .map(|key| Order {
-            key: OrderKey::Column(placed(table, key.column).id),
-            direction: match key.direction {
-                SortDirection::Ascending => Direction::Ascending,
-                SortDirection::Descending => Direction::Descending,
-            },
+        .map(|key| {
+            Ok(Order {
+                key: OrderKey::Column(placed(table, key.column)?.id),
+                direction: match key.direction {
+                    SortDirection::Ascending => Direction::Ascending,
+                    SortDirection::Descending => Direction::Descending,
+                },
+            })
         })
-        .chain(std::iter::once(Order {
+        .chain(std::iter::once(Ok(Order {
             key: OrderKey::Column(position),
             direction: Direction::Ascending,
-        }))
-        .collect();
-    SelectQuery {
+        })))
+        .collect::<Result<_, ViewProblem>>()?;
+    let where_ = match &view.query.filter {
+        Some(group) => group_filter(table, group)?,
+        None => None,
+    };
+    Ok(SelectQuery {
         distinct: false,
         relations: vec![Relation {
             table: table.id,
@@ -73,34 +82,30 @@ pub(super) fn compile_checked(view: &DatabaseView, table: &Table) -> SelectQuery
             .map(|column| SelectItem::Column(column.id))
             .collect(),
         labels: vec![],
-        where_: view
-            .query
-            .filter
-            .as_ref()
-            .and_then(|group| group_filter(table, group)),
+        where_,
         group_by: None,
         order_by,
         limit: None,
         offset: None,
         bindings,
-    }
+    })
 }
 
 /// A group's filter; `None` when it keeps every row.
-fn group_filter(table: &Table, group: &FilterGroup) -> Option<Filter> {
+fn group_filter(table: &Table, group: &FilterGroup) -> Result<Option<Filter>, ViewProblem> {
     let mut parts = Vec::new();
     for node in &group.conditions {
         let part = match node {
-            FilterNode::Condition(condition) => Some(condition_filter(table, condition)),
-            FilterNode::Group(group) => group_filter(table, group),
+            FilterNode::Condition(condition) => Some(condition_filter(table, condition)?),
+            FilterNode::Group(group) => group_filter(table, group)?,
         };
         match (part, group.conjunction) {
             (Some(part), _) => parts.push(part),
             (None, Conjunction::And) => {}
-            (None, Conjunction::Or) => return None,
+            (None, Conjunction::Or) => return Ok(None),
         }
     }
-    joined(group.conjunction, parts)
+    Ok(joined(group.conjunction, parts))
 }
 
 /// The parts under one conjunction: one part stands alone, none keeps every
@@ -114,8 +119,9 @@ fn joined(conjunction: Conjunction, mut parts: Vec<Filter>) -> Option<Filter> {
     }
 }
 
-fn condition_filter(table: &Table, condition: &FilterCondition) -> Filter {
-    let column = placed(table, condition.column).id;
+fn condition_filter(table: &Table, condition: &FilterCondition) -> Result<Filter, ViewProblem> {
+    let placed = placed(table, condition.column)?;
+    let column = placed.id;
     let compare = |operator, value| Filter::Comparison {
         column,
         operator,
@@ -136,7 +142,7 @@ fn condition_filter(table: &Table, condition: &FilterCondition) -> Filter {
         escape: Some(LIKE_ESCAPE),
         negated,
     };
-    match &condition.test {
+    let filter = match &condition.test {
         FilterTest::Presence { operator } => Filter::IsNull {
             column,
             negated: *operator == PresenceOperator::IsNotEmpty,
@@ -208,27 +214,33 @@ fn condition_filter(table: &Table, condition: &FilterCondition) -> Filter {
             or_empty(compare(ComparisonOperator::Equal, Value::Bool(false)))
         }
         FilterTest::Options { operator, options } => set_filter(
-            column,
+            placed,
             *operator,
             options
                 .iter()
                 .map(|option| Value::Option(*option))
                 .collect(),
-        ),
+        )?,
         FilterTest::Entities { operator, entities } => set_filter(
-            column,
+            placed,
             *operator,
             entities
                 .iter()
                 .map(|entity| Value::Entity(entity.clone()))
                 .collect(),
-        ),
-    }
+        )?,
+    };
+    Ok(filter)
 }
 
 /// A set test. An absent multi-valued cell has no member, so `NOT HAS`
 /// already keeps it; only `NOT IN` needs the empty cell named.
-fn set_filter(column: uuid::Uuid, operator: SetOperator, values: Vec<Value>) -> Filter {
+fn set_filter(
+    placed: &Column,
+    operator: SetOperator,
+    values: Vec<Value>,
+) -> Result<Filter, ViewProblem> {
+    let column = placed.id;
     let has = |negated| {
         values
             .iter()
@@ -241,14 +253,14 @@ fn set_filter(column: uuid::Uuid, operator: SetOperator, values: Vec<Value>) -> 
     };
     let members = match operator {
         SetOperator::IsAnyOf => {
-            return Filter::In {
+            return Ok(Filter::In {
                 column,
                 values,
                 negated: false,
-            };
+            });
         }
         SetOperator::IsNoneOf => {
-            return Filter::Or(vec![
+            return Ok(Filter::Or(vec![
                 Filter::In {
                     column,
                     values,
@@ -258,13 +270,15 @@ fn set_filter(column: uuid::Uuid, operator: SetOperator, values: Vec<Value>) -> 
                     column,
                     negated: false,
                 },
-            ]);
+            ]));
         }
         SetOperator::HasAny => joined(Conjunction::Or, has(false)),
         SetOperator::HasAll => joined(Conjunction::And, has(false)),
         SetOperator::HasNone => joined(Conjunction::And, has(true)),
     };
-    members.expect("the view check refuses a set test naming nothing")
+    members.ok_or_else(|| ViewProblem::NothingToMatch {
+        column: placed.name.clone(),
+    })
 }
 
 /// Text matched literally inside a `LIKE` pattern.

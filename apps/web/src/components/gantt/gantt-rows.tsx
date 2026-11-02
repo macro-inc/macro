@@ -3,6 +3,7 @@ import {
   createVirtualizer,
   defaultRangeExtractor,
   type Range,
+  type VirtualItem,
 } from '@tanstack/solid-virtual';
 import { cn } from '@ui';
 import {
@@ -13,6 +14,7 @@ import {
   For,
   type JSX,
   on,
+  onCleanup,
   Show,
   splitProps,
 } from 'solid-js';
@@ -65,6 +67,40 @@ function VirtualRows<T>(props: RowsProps<T>) {
   });
   createEffect(
     on(gantt.rowHeight, () => virtualizer.measure(), { defer: true })
+  );
+  // Rows inserted above the viewport, such as a group's page that arrives
+  // after the reader scrolled past it, keep the first visible row in place.
+  let anchor: { key: VirtualItem['key']; offset: number } | undefined;
+  const recordAnchor = () => {
+    const offset = virtualizer.scrollOffset ?? 0;
+    const item =
+      offset > 0 ? virtualizer.getVirtualItemForOffset(offset) : undefined;
+    anchor = item && { key: item.key, offset: offset - item.start };
+  };
+  createEffect(
+    on(gantt.viewport, (viewport) => {
+      if (!viewport) return;
+      viewport.addEventListener('scroll', recordAnchor, { passive: true });
+      onCleanup(() => viewport.removeEventListener('scroll', recordAnchor));
+    })
+  );
+  createEffect(
+    on(
+      () => props.items,
+      (items) => {
+        const current = anchor;
+        if (!current) return;
+        const index = items.findIndex(
+          (item) => props.getKey(item) === current.key
+        );
+        const start = virtualizer.measurementsCache[index]?.start;
+        if (start === undefined) return;
+        const offset = start + current.offset;
+        if (Math.abs(offset - (virtualizer.scrollOffset ?? 0)) >= 1)
+          virtualizer.scrollToOffset(offset);
+      },
+      { defer: true }
+    )
   );
   return (
     <div

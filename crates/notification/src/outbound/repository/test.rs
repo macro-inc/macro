@@ -31,6 +31,13 @@ impl Notification for TestMessageNotification {
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
+struct TestCalendarJoinRequest;
+
+impl Notification for TestCalendarJoinRequest {
+    const TYPE_NAME: &'static str = "calendar_event_join_request";
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(rename_all = "camelCase")]
 struct TestTaskNotification {
     sub_type: String,
@@ -216,6 +223,25 @@ async fn test_create_notification(pool: Pool<Postgres>) {
     .await
     .unwrap();
     assert_eq!(user_row.user_id, recipient.to_string());
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_join_request_for_an_event_that_has_gone_is_nothing_to_deliver(pool: Pool<Postgres>) {
+    let request = SendNotificationRequestBuilder {
+        notification_entity: EntityType::CalendarEvent
+            .with_entity_string(Uuid::now_v7().to_string()),
+        secondary_notification_entity: None,
+        notification: TaggedContent::new(TestCalendarJoinRequest),
+        sender_id: None,
+        recipient_ids: std::collections::HashSet::from([test_user("sharer@example.com")]),
+    };
+
+    assert!(
+        pool.create_notification(request, Uuid::now_v7(), "test_service", None)
+            .await
+            .unwrap()
+            .is_none()
+    );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]

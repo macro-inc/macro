@@ -57,6 +57,7 @@ export function NotesSection(props: {
               variant="ghost"
               size="xs"
               aria-label={createLabel()}
+              tooltip={createLabel()}
               disabled={props.creating}
               onClick={props.onCreate}
             >
@@ -67,8 +68,8 @@ export function NotesSection(props: {
             <Button
               variant="ghost"
               size="xs"
-              depth={3}
               aria-label="Link existing"
+              tooltip="Link existing"
               disabled={props.creating}
               onClick={props.onLink}
             >
@@ -82,7 +83,7 @@ export function NotesSection(props: {
             class="flex items-center justify-between gap-2 py-2 text-xs text-ink-muted"
           >
             <span>{props.state.error}</span>
-            <Button size="sm" variant="outline" onClick={props.onRetry}>
+            <Button size="sm" variant="secondary" onClick={props.onRetry}>
               Retry
             </Button>
           </div>
@@ -97,9 +98,9 @@ export function NotesSection(props: {
                     <Button
                       variant="ghost"
                       size="sm"
-                      depth={3}
                       class="min-w-0 justify-start"
                       aria-label={`Open ${note.name}`}
+                      tooltip={`Open ${note.name}`}
                       onClick={() => props.onOpen(note)}
                     >
                       <span class="min-w-0 flex-1 truncate text-left">
@@ -115,13 +116,14 @@ export function NotesSection(props: {
                         }
                       >
                         <Dropdown.Trigger
-                          variant="outline"
+                          variant="secondary"
                           size="xs"
                           aria-label={`Options for ${note.name}`}
+                          tooltip={`Options for ${note.name}`}
                           disabled={props.creating}
                         >
                           Options
-                          <CaretDownIcon />
+                          <CaretDownIcon class="size-3 shrink-0 touch:size-6" />
                         </Dropdown.Trigger>
                         <Dropdown.Content
                           portalScope="local"

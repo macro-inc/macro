@@ -1,5 +1,4 @@
 import { cleanup, fireEvent, render, screen } from '@solidjs/testing-library';
-import type { ParentProps } from 'solid-js';
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { ProjectAssignment } from './project-assignment';
 
@@ -14,9 +13,7 @@ vi.mock('@ui', async () => ({
   ...(await import('@app/components/ui/utils/classname')),
   Hotkey: () => null,
 }));
-vi.mock('@app/components/ui/components/Tooltip', () => ({
-  Tooltip: (props: ParentProps) => props.children,
-}));
+
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
 vi.mock('../context/projects-context', () => ({
   useProjectsContext: () => ({

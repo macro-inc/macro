@@ -45,6 +45,7 @@ fn inputs(
         register_loaded: register,
         tool_loads: ToolLoads::default(),
         user_tool_finisher,
+        stream_tool_calls: false,
         result_limit: None,
     }
 }
@@ -394,4 +395,183 @@ async fn results_other_than_pending_never_reach_the_finisher() {
         rx.try_recv().unwrap(),
         Ok(StreamPart::ToolResponse(ToolResponse::Err { .. }))
     ));
+}
+
+/// A bare bridge that streams tool calls.
+fn streaming_bridge() -> (
+    StreamBridge,
+    tokio::sync::mpsc::UnboundedReceiver<Result<StreamPart, crate::AgentError>>,
+) {
+    let (register, _registered) = recording_register();
+    StreamBridge::channel(
+        BridgeInputs {
+            stream_tool_calls: true,
+            ..inputs(Arc::new(Mutex::new(Vec::new())), register, None)
+        },
+        Arc::new(vec![]),
+        CancellationToken::new(),
+    )
+}
+
+fn drain(
+    rx: &mut tokio::sync::mpsc::UnboundedReceiver<Result<StreamPart, crate::AgentError>>,
+) -> Vec<StreamPart> {
+    std::iter::from_fn(|| rx.try_recv().ok())
+        .map(|part| part.expect("no error parts"))
+        .collect()
+}
+
+/// Two calls written at once - parallel tool calls stream interleaved - each
+/// keep the id they opened under through their finished call and result,
+/// even when the provider names the finished call by a `call_id` of its own.
+#[tokio::test]
+async fn interleaved_streamed_calls_keep_their_announced_ids() {
+    let (bridge, mut rx) = streaming_bridge();
+
+    bridge.handle_tool_call_delta("", "internal-a", Some("Search"), "");
+    bridge.handle_tool_call_delta("", "internal-b", Some("Read"), "");
+    bridge.handle_tool_call_delta("", "internal-b", None, "{\"id\":");
+    bridge.handle_tool_call_delta("", "internal-a", None, "{\"query\":\"cats\"}");
+    bridge.handle_tool_call_delta("", "internal-b", None, "\"doc\"}");
+    bridge.handle_tool_call("Read", Some("call_b"), "internal-b", "{\"id\":\"doc\"}");
+    bridge.handle_tool_call(
+        "Search",
+        Some("call_a"),
+        "internal-a",
+        "{\"query\":\"cats\"}",
+    );
+    bridge
+        .handle_tool_result(
+            "Read",
+            Some("call_b"),
+            "internal-b",
+            "{}",
+            &ToolOutput::json(serde_json::json!({"text": "hi"})),
+            true,
+        )
+        .await;
+
+    let parts = drain(&mut rx);
+    let summary: Vec<String> = parts
+        .iter()
+        .map(|part| match part {
+            StreamPart::ToolCallStarted(start) => format!("start {} {}", start.id, start.name),
+            StreamPart::ToolCallArgs { id, delta } => format!("args {id} {delta}"),
+            StreamPart::ToolCall(call) => format!("call {} {}", call.id, call.json),
+            StreamPart::ToolResponse(ToolResponse::Json { id, .. }) => format!("result {id}"),
+            other => format!("{other:?}"),
+        })
+        .collect();
+    assert_eq!(
+        summary,
+        vec![
+            "start internal-a Search",
+            "start internal-b Read",
+            "args internal-b {\"id\":",
+            "args internal-a {\"query\":\"cats\"}",
+            "args internal-b \"doc\"}",
+            "call internal-b {\"id\":\"doc\"}",
+            "call internal-a {\"query\":\"cats\"}",
+            "result internal-b",
+        ]
+    );
+}
+
+/// A finished call with a different correlation id can still match its
+/// announcement by the provider id, without guessing from its tool name.
+#[tokio::test]
+async fn a_finished_call_without_its_delta_id_claims_the_open_announcement() {
+    let (bridge, mut rx) = streaming_bridge();
+
+    bridge.handle_tool_call_delta("provider-id", "delta-id", Some("Search"), "{}");
+    bridge.handle_tool_call("Search", Some("provider-id"), "final-id", "{}");
+    bridge
+        .handle_tool_result(
+            "Search",
+            Some("provider-id"),
+            "final-id",
+            "{}",
+            &ToolOutput::json(serde_json::json!({})),
+            true,
+        )
+        .await;
+
+    let ids: Vec<String> = drain(&mut rx)
+        .into_iter()
+        .filter_map(|part| match part {
+            StreamPart::ToolCall(call) => Some(call.id),
+            StreamPart::ToolResponse(ToolResponse::Json { id, .. }) => Some(id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(ids, vec!["provider-id", "provider-id"]);
+}
+
+/// Without streaming the deltas emit no progress parts and ids are the provider's.
+#[tokio::test]
+async fn a_bridge_without_streaming_ignores_deltas() {
+    let (bridge, mut rx) = bare_bridge();
+
+    bridge.handle_tool_call_delta("", "internal-a", Some("Search"), "{}");
+    bridge.handle_tool_call("Search", Some("call_a"), "internal-a", "{}");
+
+    let parts = drain(&mut rx);
+    assert_eq!(parts.len(), 1);
+    assert!(matches!(&parts[0], StreamPart::ToolCall(call) if call.id == "call_a"));
+}
+
+#[tokio::test]
+async fn parallel_calls_of_the_same_tool_keep_provider_ids_when_finishing_out_of_order() {
+    let (bridge, mut rx) = streaming_bridge();
+    bridge.handle_tool_call_delta("provider-a", "internal-a", Some("Search"), "{}");
+    bridge.handle_tool_call_delta("provider-b", "internal-b", Some("Search"), "{}");
+    bridge.handle_tool_call("Search", Some("provider-b"), "final-b", "{}");
+    bridge.handle_tool_call("Search", Some("provider-a"), "final-a", "{}");
+    for (provider, internal) in [("provider-b", "final-b"), ("provider-a", "final-a")] {
+        bridge
+            .handle_tool_result(
+                "Search",
+                Some(provider),
+                internal,
+                "{}",
+                &ToolOutput::json(serde_json::json!({})),
+                true,
+            )
+            .await;
+    }
+    let ids: Vec<String> = drain(&mut rx)
+        .into_iter()
+        .filter_map(|part| match part {
+            StreamPart::ToolCall(call) => Some(call.id),
+            StreamPart::ToolResponse(ToolResponse::Json { id, .. }) => Some(id),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(
+        ids,
+        ["provider-b", "provider-a", "provider-b", "provider-a"]
+    );
+}
+
+#[tokio::test]
+async fn a_bridge_without_streaming_still_preserves_anthropic_provider_ids() {
+    let (bridge, mut rx) = bare_bridge();
+    bridge.handle_tool_call_delta("toolu_call", "internal", Some("Search"), "{}");
+    bridge.handle_tool_call("Search", None, "internal", "{}");
+    bridge
+        .handle_tool_result(
+            "Search",
+            None,
+            "internal",
+            "{}",
+            &ToolOutput::json(serde_json::json!({})),
+            true,
+        )
+        .await;
+    let parts = drain(&mut rx);
+    assert!(matches!(&parts[0], StreamPart::ToolCall(call) if call.id == "toolu_call"));
+    assert!(
+        matches!(&parts[1], StreamPart::ToolResponse(ToolResponse::Json { id, .. }) if id == "toolu_call")
+    );
+    assert_eq!(parts.len(), 2);
 }

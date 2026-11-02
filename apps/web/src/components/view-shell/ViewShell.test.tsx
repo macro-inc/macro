@@ -33,11 +33,9 @@ vi.mock('@solid-primitives/resize-observer', () => ({
 vi.mock('@ui', async () => ({
   ...(await import('../ui/utils/classname')),
   ...(await import('../ui/utils/press')),
-  Button: (
-    props: JSX.ButtonHTMLAttributes<HTMLButtonElement> & { label?: string }
-  ) => (
+  Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
     <button
-      aria-label={props.label}
+      aria-label={props['aria-label']}
       aria-expanded={props['aria-expanded']}
       onClick={props.onClick}
       onMouseDown={props.onMouseDown}
@@ -547,6 +545,22 @@ describe('pinned navigation', () => {
     expect(
       screen.queryByRole('button', { name: 'Hide navigation' })
     ).toBeNull();
+  });
+
+  it('keeps an open narrow overlay open when the pin changes', () => {
+    measurement.width = () => 600;
+    const [pinned, setPinned] = createSignal(true);
+    render(() => <Workspace app="channels" asidePinned={pinned()} />);
+    fireEvent.click(screen.getByRole('button', { name: 'Show navigation' }));
+
+    setPinned(false);
+    expect(
+      screen.getByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeTruthy();
+    setPinned(true);
+    expect(
+      screen.getByRole('button', { name: 'Close navigation backdrop' })
+    ).toBeTruthy();
   });
 });
 

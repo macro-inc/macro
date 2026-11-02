@@ -178,7 +178,6 @@ export function AssistantMessage(props: {
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  noTouchResize
                   class="p-1 text-ink-extra-muted hover:text-ink-muted"
                   tooltip={
                     isLoading()
@@ -197,15 +196,16 @@ export function AssistantMessage(props: {
                 >
                   <Show
                     when={!isLoading()}
-                    fallback={<LoadingIcon class="animate-spin" />}
+                    fallback={
+                      <LoadingIcon class="animate-spin size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+                    }
                   >
-                    <WideFileMd />
+                    <WideFileMd class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                   </Show>
                 </Button>
                 <Button
                   variant="ghost"
                   size="icon-sm"
-                  noTouchResize
                   class="p-1 text-ink-extra-muted hover:text-ink-muted"
                   tooltip={
                     copied()
@@ -214,8 +214,13 @@ export function AssistantMessage(props: {
                   }
                   onClick={handleCopy}
                 >
-                  <Show when={!copied()} fallback={<CheckIcon />}>
-                    <ClipboardIcon />
+                  <Show
+                    when={!copied()}
+                    fallback={
+                      <CheckIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
+                    }
+                  >
+                    <ClipboardIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                   </Show>
                 </Button>
                 <Show when={props.ttft && ENABLE_TTFT}>

@@ -41,7 +41,7 @@ function NoteEditor(props: {
       />
       <div class="flex items-center gap-1.5">
         <Button
-          variant="cta"
+          variant="primary"
           size="xs"
           class="h-6.5 px-2.5"
           disabled={props.draft.text.trim() === ''}
@@ -104,7 +104,7 @@ export function NoteAnnotation(props: {
                 tooltip="Remove note"
                 onClick={() => props.onRemove(note.id)}
               >
-                <XIcon />
+                <XIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
               </Button>
             </Show>
           </div>

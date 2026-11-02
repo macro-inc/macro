@@ -78,7 +78,7 @@ describe('recordChoiceProblem', () => {
     ).toBeUndefined();
   });
 
-  it('asks a new contact for a name and an email at a known company', () => {
+  it('requires an explicit company choice even when the email domain matches', () => {
     expect(
       recordChoiceProblem(
         { kind: 'new-contact', name: '', email: 'jane@acme.com' },
@@ -102,7 +102,7 @@ describe('recordChoiceProblem', () => {
         { kind: 'new-contact', name: 'Jane', email: 'jane@acme.com' },
         companies
       )
-    ).toBeUndefined();
+    ).toBe('Choose a company for this contact');
   });
 });
 
@@ -133,7 +133,7 @@ it('accepts name-only companies and explicit cross-domain contact links', () => 
       {
         kind: 'new-contact',
         name: 'Jane',
-        email: 'jane@gmail.com',
+        email: 'jane@example.com',
         companyId: 'acme',
       },
       [{ id: 'acme' }]
@@ -144,7 +144,7 @@ it('accepts name-only companies and explicit cross-domain contact links', () => 
       {
         kind: 'new-contact',
         name: 'Jane',
-        email: 'jane@gmail.com',
+        email: 'jane@example.com',
         companyId: 'missing',
       },
       [{ id: 'acme' }]

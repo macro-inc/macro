@@ -441,16 +441,20 @@ pub(crate) async fn delete_draft_message(
 
     let operation = sqlx::query!("SELECT state,error_code,checkpoint->>'stage' AS stage,lease_until FROM email_mailbox_drafts WHERE message_id=$1 FOR UPDATE",message_id)
         .fetch_optional(&mut *tx).await?;
-    if operation.as_ref().is_some_and(|operation| {
+    // The Outlook draft worker holds a lease while it writes a save to Outlook.
+    let syncing = operation.as_ref().is_some_and(|operation| {
         operation
             .lease_until
             .is_some_and(|until| until > chrono::Utc::now())
-            || matches!(
+    });
+    if (syncing && outlook.is_none())
+        || operation.as_ref().is_some_and(|operation| {
+            matches!(
                 operation.stage.as_deref(),
                 Some("submitting" | "confirming")
-            )
-            || operation.error_code.as_deref() == Some("send_unknown")
-    }) {
+            ) || operation.error_code.as_deref() == Some("send_unknown")
+        })
+    {
         return Ok(None);
     }
     sqlx::query!(r#"
@@ -462,7 +466,18 @@ pub(crate) async fn delete_draft_message(
     "#,message_id,thread_db_id,link_ids).execute(&mut *tx).await?;
 
     if let Some(link) = outlook {
-        let queued = sqlx::query!(r#"
+        let queued = if syncing {
+            // Leave the worker its lease and checkpoint, so the provider call
+            // it is making is still recorded. It reads the request when that
+            // step ends (`settle_draft` or `fail_draft`) and deletes next.
+            sqlx::query_scalar!(r#"
+                UPDATE email_mailbox_drafts d SET delete_requested = true,actor_id = $3,updated_at = now()
+                FROM email_messages m WHERE d.message_id = $1 AND m.id = d.message_id AND m.link_id = $2 AND m.is_draft AND NOT m.is_sent
+                    AND NOT EXISTS (SELECT 1 FROM email_scheduled_messages WHERE message_id = m.id)
+                RETURNING d.message_id
+            "#,message_id,link.id,actor).fetch_optional(&mut *tx).await?
+        } else {
+            sqlx::query_scalar!(r#"
             INSERT INTO email_mailbox_drafts (message_id,link_id,generation,actor_id,desired_content,base_version,provider_id,delete_requested)
             SELECT m.id,m.link_id,$3,$4,
                 jsonb_build_object('db_id',m.id,'thread_db_id',m.thread_id,'subject',COALESCE(m.subject,''),'to','[]'::jsonb,'cc','[]'::jsonb,'bcc','[]'::jsonb),
@@ -475,7 +490,8 @@ pub(crate) async fn delete_draft_message(
                 error_code = NULL,lease_id=NULL,lease_until=NULL,
                 available_at = now(),updated_at = now()
             RETURNING message_id
-        "#,message_id,link.id,link.sync_generation,actor).fetch_optional(&mut *tx).await?;
+        "#,message_id,link.id,link.sync_generation,actor).fetch_optional(&mut *tx).await?
+        };
         if queued.is_none() {
             return Ok(None);
         }
@@ -674,9 +690,9 @@ pub(super) async fn insert_draft_attachment(
     let result = sqlx::query!(
         r#"
         INSERT INTO email_attachments_drafts (
-            id, draft_id, file_name, content_type, sha, size, s3_key
+            id, draft_id, file_name, content_type, sha, size, s3_key, content_id, is_inline
         )
-        SELECT $1, $2, $3, $4, $5, $6, $7
+        SELECT $1, $2, $3, $4, $5, $6, $7, $9, $10
         FROM email_messages m
         WHERE m.id = $2 AND m.link_id = $8
         "#,
@@ -688,6 +704,8 @@ pub(super) async fn insert_draft_attachment(
         attachment.size,
         attachment.s3_key,
         link_id,
+        attachment.content_id,
+        attachment.is_inline,
     )
     .execute(&mut *tx)
     .await?;

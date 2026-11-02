@@ -4,6 +4,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   graphql: true,
+  cache: true,
   archive: vi.fn(),
   archiveBatch: vi.fn(),
   mutation: vi.fn(),
@@ -24,13 +25,14 @@ vi.mock('@service-email/client', () => ({
 vi.mock('@service-storage/client', () => ({ storageServiceClient: {} }));
 vi.mock('@service-storage/graphql-soup', () => ({
   getGraphqlSoupClient: () => ({ mutation: mocks.mutation }),
+  graphqlCacheEnabled: () => mocks.cache,
 }));
 vi.mock('../reminders/email-collection', () => ({
   invalidateEmailReminderCollection: mocks.reminders,
 }));
 vi.mock('../soup/graphql/active-queries', () => ({
   refreshActiveGraphqlSoupQueries: mocks.refresh,
-  getActiveGraphqlSoupRevalidations: mocks.revalidations,
+  getUnmaintainedGraphqlSoupRevalidations: mocks.revalidations,
 }));
 
 import { predictOptimisticMutation } from '@graphql-cache/exchange/optimistic-resolvers';
@@ -45,6 +47,7 @@ import { archiveEmailThread, archiveEmailThreads } from './integration';
 beforeEach(() => {
   vi.resetAllMocks();
   mocks.graphql = true;
+  mocks.cache = true;
   mocks.refresh.mockResolvedValue(undefined);
   mocks.revalidations.mockReturnValue([]);
 });
@@ -96,11 +99,27 @@ describe('GraphQL email archive writes', () => {
       finish();
       await expect(result).resolves.toBe('committed');
       expect(mocks.reminders).toHaveBeenCalledOnce();
-      expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
-        target: { kind: 'email-archive', threadId: 'thread' },
-      });
+      // The cached record carries the change to every list the cache
+      // maintains; only the others are read again, by the exchange.
+      expect(mocks.refresh).not.toHaveBeenCalled();
+      expect(mocks.revalidations).toHaveBeenCalledOnce();
     }
   );
+
+  it('refreshes lists after the write only without the normalized cache', async () => {
+    mocks.cache = false;
+    mocks.mutation.mockReturnValue({
+      toPromise: async () => ({
+        data: { setEmailThreadArchived: { id: 'thread' } },
+      }),
+    });
+    await expect(
+      archiveEmailThread({ id: 'thread', value: true })
+    ).resolves.toBe('committed');
+    expect(mocks.refresh).toHaveBeenCalledExactlyOnceWith({
+      target: { kind: 'email-archive', threadId: 'thread' },
+    });
+  });
 
   it('gives Done, Undo and Redo distinct ordered mutation intents', async () => {
     mocks.mutation.mockReturnValue({
@@ -126,14 +145,11 @@ describe('GraphQL email archive writes', () => {
     ).toBe(true);
   });
 
-  it('preserves replay revalidations, including continuation pages, without refetching queued writes', async () => {
-    const variables = [
-      { input: { initial: { limit: 100 } } },
-      { input: { continuation: { cursor: 'next' } } },
+  it('queues an offline write that reads only unmaintained lists on replay', async () => {
+    const unmaintained = [
+      { document: SoupDocument, variables: { input: { initial: {} } } },
     ];
-    mocks.revalidations.mockReturnValue(
-      variables.map((variables) => ({ document: SoupDocument, variables }))
-    );
+    mocks.revalidations.mockReturnValue(unmaintained);
     mocks.mutation.mockReturnValue({
       toPromise: async () => ({
         extensions: {
@@ -147,14 +163,12 @@ describe('GraphQL email archive writes', () => {
     await expect(
       archiveEmailThread({ id: 'thread', value: true })
     ).resolves.toBe('queued');
+    // Replay commits the record; only lists the cache does not maintain are
+    // read again, even after a reload.
+    expect(mocks.revalidations).toHaveBeenCalled();
     expect(
       mocks.mutation.mock.calls[0][2].optimisticMutation.revalidations
-    ).toEqual(
-      variables.map((variables) => ({
-        document: SoupDocument,
-        variables,
-      }))
-    );
+    ).toEqual(unmaintained);
     expect(mocks.refresh).not.toHaveBeenCalled();
     expect(mocks.reminders).not.toHaveBeenCalled();
   });
@@ -268,12 +282,27 @@ describe('bulk email archive writes', () => {
     expect(results[0]).toEqual({ status: 'fulfilled', value: 'committed' });
     expect(results[1].status).toBe('rejected');
     expect(results[2]).toEqual({ status: 'fulfilled', value: 'committed' });
-    expect(mocks.refresh.mock.calls).toEqual([
-      [{ target: { kind: 'email-archive', threadId: 'archived' } }],
-      [{ target: { kind: 'email-archive', threadId: 'unreloaded' } }],
-    ]);
+    expect(mocks.refresh).not.toHaveBeenCalled();
     expect(mocks.reminders).toHaveBeenCalledOnce();
     expect(mocks.archive).not.toHaveBeenCalled();
+  });
+
+  it('refreshes lists for each changed thread only without the normalized cache', async () => {
+    mocks.cache = false;
+    mocks.mutation.mockReturnValue({
+      toPromise: async () => ({
+        data: {
+          setEmailThreadsArchived: {
+            threads: [],
+            failedThreadIds: ['skipped'],
+          },
+        },
+      }),
+    });
+    await archiveEmailThreads(['archived', 'skipped'], true);
+    expect(mocks.refresh.mock.calls).toEqual([
+      [{ target: { kind: 'email-archive', threadId: 'archived' } }],
+    ]);
   });
 
   it('settles every thread as queued when the GraphQL write is queued', async () => {

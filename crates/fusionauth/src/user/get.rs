@@ -1,9 +1,6 @@
 use std::borrow::Cow;
 
-use crate::{
-    AuthedClient, Result,
-    error::{FusionAuthClientError, GenericErrorResponse},
-};
+use crate::{AuthedClient, Result, error::FusionAuthClientError};
 
 #[derive(serde::Serialize, serde::Deserialize, Debug)]
 #[serde(rename_all = "camelCase")]
@@ -37,37 +34,20 @@ pub(crate) async fn get_user_active(
         .get(format!("{base_url}/api/user/{user_id}"))
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     let status_code = res.status();
     match status_code {
         reqwest::StatusCode::OK => {
-            let body = res.json::<GetUserResponse>().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let body = res
+                .json::<GetUserResponse>()
+                .await
+                .map_err(FusionAuthClientError::transport)?;
 
             Ok(body.user.active.unwrap_or(true))
         }
         reqwest::StatusCode::NOT_FOUND => Err(FusionAuthClientError::UserDoesNotExist),
-        _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
-
-            tracing::error!(body=%body, status=%status_code, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
-        }
+        _ => Err(FusionAuthClientError::unexpected_response(res).await),
     }
 }
 
@@ -85,40 +65,32 @@ pub(crate) async fn get_user_id_by_email(
         .get(format!("{base_url}/api/user?email={url_email}"))
         .send()
         .await
-        .map_err(|e| {
-            FusionAuthClientError::Generic(GenericErrorResponse {
-                message: e.to_string(),
-            })
-        })?;
+        .map_err(FusionAuthClientError::transport)?;
 
     let status_code = res.status();
     match status_code {
         reqwest::StatusCode::OK => {
             tracing::trace!("user found");
-            let body = res.json::<GetUserResponse>().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let body = res
+                .json::<GetUserResponse>()
+                .await
+                .map_err(FusionAuthClientError::transport)?;
 
             Ok(body.user.id.into())
         }
         _ => {
-            let body = res.text().await.map_err(|e| {
-                FusionAuthClientError::Generic(GenericErrorResponse {
-                    message: e.to_string(),
-                })
-            })?;
+            let headers = res.headers().clone();
+            let body = res.text().await.map_err(FusionAuthClientError::transport)?;
 
             if status_code == reqwest::StatusCode::NOT_FOUND {
                 return Err(FusionAuthClientError::UserDoesNotExist);
             }
 
-            tracing::error!(body=%body, status=%status_code, "unexpected response from fusionauth");
-
-            Err(FusionAuthClientError::Generic(GenericErrorResponse {
-                message: body,
-            }))
+            Err(FusionAuthClientError::unexpected(
+                status_code,
+                &headers,
+                body,
+            ))
         }
     }
 }

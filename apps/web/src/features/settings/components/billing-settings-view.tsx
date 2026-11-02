@@ -140,8 +140,7 @@ export function BillingSettingsView(props: {
                 <Button
                   class="ml-auto bg-active"
                   size="sm"
-                  depth={2}
-                  variant="outline"
+                  variant="secondary"
                   onClick={props.onManage}
                 >
                   Manage
@@ -196,9 +195,8 @@ export function BillingSettingsView(props: {
                   }
                 >
                   <Button
-                    variant="outline"
+                    variant="secondary"
                     size="sm"
-                    depth={2}
                     disabled={props.state.pending}
                     onClick={() => {
                       const tier = props.state.tier;

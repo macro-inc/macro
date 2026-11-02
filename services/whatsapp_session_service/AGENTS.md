@@ -5,7 +5,7 @@
 WhatsApp linked devices: runs one whatsmeow client per linked personal
 WhatsApp account, on whichever replica holds the account's Postgres advisory
 lock. It pairs devices (QR codes into `whatsapp_pairing`), keeps group rosters
-current, ingests standalone `whatsapp_group` traffic through `whatsapp_linked`'s
+current, ingests the traffic of added chats (`external_chat`) through `whatsapp_linked`'s
 `SessionService`, and dispatches the sends DSS records. No HTTP API besides
 `GET /health`; DSS talks to it only through rows and `NOTIFY`.
 
@@ -16,8 +16,8 @@ current, ingests standalone `whatsapp_group` traffic through `whatsapp_linked`'s
   server's dialer, `test_signal()`, a fake KMS and short `Timings`).
 - `domain/supervisor.rs`: which accounts this replica runs. Takes free accounts
   (`pg_try_advisory_lock(hashtextextended('whatsapp-account:' || id, 0))`) on rescan and
-  on `NOTIFY`, up to `WHATSAPP_SESSION_MAX_ACCOUNTS`; on SIGTERM releases them
-  in batches of `WHATSAPP_SESSION_DRAIN_BATCH` (finish sends, disconnect,
+  on `NOTIFY`, up to `MAX_ACCOUNTS` (500, `main.rs`); on SIGTERM releases them
+  in batches of `DRAIN_BATCH` (20) (finish sends, disconnect,
   unlock, `NOTIFY whatsapp_account_released`), all within 100 s.
 - `domain/account.rs`: one account. `begin_lease` bumps `lease_epoch`; every
   domain and store write is fenced by it, and `Fenced` stops the account.
@@ -43,8 +43,9 @@ current, ingests standalone `whatsapp_group` traffic through `whatsapp_linked`'s
   non-zero so ECS replaces it), release announcements, and discovery through
   `SessionService` (`discoverable_accounts`, `fleet_health`).
 - `outbound/signals.rs`: `LISTEN` for `whatsapp_{account_released,
-  pairing_requested, send_requested, groups_requested, account_changed}`.
-  Payloads are `whatsapp_linked::signals::Signal` JSON; each
+  pairing_requested, send_requested, roster_requested, lookup_requested,
+  account_changed}`.
+  Payloads are `external_chat::signals::Signal` JSON; each
   one's `traceparent` parents a `whatsapp.signal.receive` span that travels
   with the signal (`ports::Traced`): the supervisor's work and the runner's
   `whatsapp.account.signal` span run inside it, and a runner started by it
@@ -52,11 +53,11 @@ current, ingests standalone `whatsapp_group` traffic through `whatsapp_linked`'s
   send JSON: `SELECT pg_notify('whatsapp_pairing_requested',
   '{"id":"<pairing id>"}')`.
 - Group rosters: the whole list is read on connect, on resync, and on
-  `whatsapp_groups_requested` (pages opening; at most once per
+  `whatsapp_roster_requested` (pages opening; at most once per
   `groups_refresh_interval`, 30 s, per account). Live `JoinedGroup` /
   `GroupInfo` events update that one group (`update_group`), reading its
   metadata when the event lacks it; a not-in-group answer is `group_left`.
-  No periodic refresh. The domain signals `whatsapp_changed` only when a roster
+  No periodic refresh. The domain signals `external_chat_changed` only when a roster
   write changed something.
 - `outbound/whatsapp.rs` (+ `events.rs`): `whatsapp_store_pg` device store,
   whatsmeow `Client` (`whatsmeow_signal::libsignal()`), event mapping. Group
@@ -87,15 +88,26 @@ current, ingests standalone `whatsapp_group` traffic through `whatsapp_linked`'s
   sync bundles, live messages (any chat) and contact/archive/pin events into
   `ChatUpdate`s (`events.rs`: `history_chats`, `message_chat`,
   `chat_setting`; direct chats by phone number) that the runner stores with
-  `update_chats`. On-demand history answers are parsed with
+  `update_chats`. The device store's saved contacts (`events::contact_chats`:
+  address-book names only, not people merely seen in groups) are listed on
+  `Connected` and every `AppStateSyncComplete`, and a `Contact` event lists
+  its contact, so the owner can start a chat with them.
+- Phone-number lookups (`domain/account/lookups.rs`): on
+  `whatsapp_lookup_requested`, on connect and on every tick, the runner
+  answers pending lookups with one `IsOnWhatsApp` usync each
+  (`WhatsAppSession::look_up`; whatsmeow stores the number's LID pairing, so a
+  later message by LID lands in the same chat) and records the answer
+  (`events::lookup_answer` names it like any chat). Only explicit owner
+  lookups, rate-limited in DSS: WhatsApp bans bulk usync. On-demand history answers are parsed with
   `Client::parse_web_message`, ingested as history events through the inbound
-  gate, then reported as a `HistoryPage`. The runner's `backfill` asks the
-  phone for pages of added groups (`request_history`, plus `request_message`
-  for an anchor that predates adoption), marks a group with no anchor
-  `waiting_for_message` (an `update_chats` that gives it one returns true and
-  the runner imports at once), marks unanswered requests
-  `waiting_for_phone` after `backfill_timeout` and retries after
-  `backfill_retry` or on reconnect.
+  gate, then reported as a `HistoryPage`. The runner's `backfill`
+  (`domain/account/backfill.rs`) only continues imports the owner started
+  (`pending`, on `whatsapp_history_requested`, connect and tick): it asks the
+  phone for pages (`request_history`, plus `request_message` for an anchor
+  that predates adoption), the next one as each answer lands, and marks a
+  request unanswered after `backfill_timeout` `waiting_for_phone`. It never
+  asks the phone on its own: each request wakes WhatsApp on the phone (on
+  iOS, a "syncing stopped" notification when it can't finish).
 - QR pairing: whatsmeow rotates codes (60 s, then 20 s each) and then
   times out; that timeout ends the pairing as `expired`
   (`SessionEvent::PairExpired`), not `failed`, so the web starts a new one.
@@ -107,16 +119,16 @@ current, ingests standalone `whatsapp_group` traffic through `whatsapp_linked`'s
 
 ## Config (Doppler `whatsapp-session-service`, `dev` and `prd`)
 
-- `DATABASE_URL`: pooled MacroDB URL.
-- `WHATSAPP_SESSION_LOCK_DATABASE_URL`: the RDS **instance** endpoint
-  (`macro-db-<stack>`, the macrodb stack's `endpoint` output), never
+- `DATABASE_URL` (`${global_databases.<config>.DATABASE_URL}`), the only
+  key. The pool and the dedicated advisory-lock connection both open from it,
+  so it must be the RDS **instance** endpoint (`macro-db-<stack>`), never
   `macrodb-proxy-<stack>`: RDS Proxy multiplexes and reaps idle connections,
-  which drops advisory locks and `LISTEN`. Never open a transaction on it:
-  MacroDB kills sessions idle in transaction after 5 minutes.
-- `WHATSAPP_SESSION_KMS_KEY_ID`: `alias/whatsapp-session-service-<stack>`
-  (GenerateDataKey + Decrypt).
-- `WHATSAPP_SESSION_MAX_ACCOUNTS` (local 500), `WHATSAPP_SESSION_DRAIN_BATCH`
-  (local 20).
+  which drops advisory locks and `LISTEN`. Never open a transaction on the
+  lock connection: MacroDB kills sessions idle in transaction after 5 minutes.
+- KMS key: `SessionKmsKey` (`src/config.rs`) picks
+  `alias/whatsapp-session-service-<environment>` from `ENVIRONMENT`
+  (GenerateDataKey + Decrypt); `xtask_local` creates the `-local` alias in
+  LocalStack.
 - Tests only, process env: `OVERRIDE_WHATSAPP_WEBSOCKET_URL` (fake server)
   and `OVERRIDE_WHATSAPP_MEDIA_HOST` (`scheme://host[:port]` of its media
   host).
@@ -126,7 +138,8 @@ current, ingests standalone `whatsapp_group` traffic through `whatsapp_linked`'s
 Spans: `whatsapp.account.{lease,release,rescan,connect}`,
 `whatsapp.inbound.ingest`, `whatsapp.media.import`, `whatsapp.send.dispatch`
 (parented on the trace of the request that recorded the send),
-`whatsapp.groups.{refresh,event}`, `whatsapp.signal.receive`,
+`whatsapp.groups.{refresh,event}`, `whatsapp.contacts.sync`, `whatsapp.lookup`
+(outcome `found`/`not_on_whatsapp`/`failed`), `whatsapp.signal.receive`,
 `whatsapp.account.signal`, `whatsapp.drain`,
 `whatsapp.history.{sync,page}`, `whatsapp.backfill.request`
 (`whatsapp.inbound.ingest` records the message `kind`; `whatsapp.history.page`
@@ -138,6 +151,12 @@ JIDs, phone numbers, QR codes or message text.
 
 ## Runbook
 
+- **Stop all WhatsApp traffic**: scale the ECS service to 0 tasks. Accounts
+  stay `connected` and are picked up again when it scales back; sends recorded
+  meanwhile expire unsent after ten minutes. A deploy restores the task
+  count in `infra/stacks/whatsapp-session-service/service.ts` (2 in prod, 1 in
+  dev). The web flag
+  `enable-whatsapp-linked` only hides the UI; the API keeps answering.
 - **Stuck lease** (an account no replica runs, `accounts_unowned` > 0): find
   the holder with `SELECT pid FROM pg_locks WHERE locktype = 'advisory' AND
   objsubid = 1 AND ((classid::bigint << 32) | objid::bigint) =
@@ -145,7 +164,7 @@ JIDs, phone numbers, QR codes or message text.
   `pg_terminate_backend(pid)` frees it and the next rescan (30 s) takes it.
 - **All accounts offline**: check the lock URL points at the instance endpoint,
   replicas are not crash-looping on a lost lock connection, and capacity
-  (`accounts_running` vs `WHATSAPP_SESSION_MAX_ACCOUNTS` × replicas).
+  (`accounts_running` vs `MAX_ACCOUNTS` × replicas).
 - **KMS failure**: an outage (throttled, unreachable) makes accounts exit
   `Failed` at open (`whatsapp.account.connect` outcome `failed`); nothing is
   lost and the next rescan retries. A refusal (key deleted or disabled, no

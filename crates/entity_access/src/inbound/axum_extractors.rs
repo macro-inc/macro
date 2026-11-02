@@ -142,5 +142,5 @@ impl IntoResponse for ExtractorError {
     }
 }
 
-mod whatsapp_group;
-pub use whatsapp_group::WhatsAppGroupAccessLevelExtractor;
+mod external_chat;
+pub use external_chat::ExternalChatAccessLevelExtractor;

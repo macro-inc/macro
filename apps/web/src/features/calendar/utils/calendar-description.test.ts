@@ -189,7 +189,7 @@ describe('exportCalendarDescription', () => {
         ` about <span data-document-mention="true" data-document-id="${DOCUMENT_ID}" data-document-name="August Cycle Planning" data-block-name="md">August Cycle Planning</span></p>`
     );
     expect(exportCalendarDescription(editor)).toBe(
-      `<p>ping Teo Nys about <a href="${window.location.origin}/app/md/${DOCUMENT_ID}">August Cycle Planning</a></p>`
+      `<p>ping @Teo Nys about <a href="${window.location.origin}/app/md/${DOCUMENT_ID}">August Cycle Planning</a></p>`
     );
   });
 

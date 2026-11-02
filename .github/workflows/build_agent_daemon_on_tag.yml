@@ -164,6 +164,7 @@ jobs:
       shell: bash
       env:
         TARGET: x86_64-unknown-linux-musl
+        MACROD_RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
     - name: Package daemon
       run: |
         set -euo pipefail
@@ -236,6 +237,18 @@ jobs:
           echo "skipping smoke run: $TARGET does not execute on this runner"
         fi
 
+        # A release binary carries its tag: the self-updater compares it with the
+        # latest release, so a binary built without it (or served a stale tag from a
+        # compiler cache) would never update, or would update forever.
+        case "$RELEASE_TAG" in
+          v*)
+            if ! grep -aqF "$RELEASE_TAG" "$binary"; then
+              echo "$binary does not carry its release tag $RELEASE_TAG" >&2
+              exit 1
+            fi
+            ;;
+        esac
+
         mkdir -p artifacts
         stage=$(mktemp -d)
         install -m 755 "$binary" "$stage/$executable"
@@ -273,6 +286,7 @@ jobs:
         TARGET: x86_64-unknown-linux-musl
         SLUG: linux-x86_64
         SAFE_TAG: ${{ steps.metadata.outputs.safe_tag }}
+        RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
         SMOKE_RUN: '1'
     - name: Upload macrod-linux-x86_64-${{ steps.metadata.outputs.safe_tag }} artifact
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -379,6 +393,7 @@ jobs:
       shell: bash
       env:
         TARGET: aarch64-unknown-linux-musl
+        MACROD_RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
     - name: Package daemon
       run: |
         set -euo pipefail
@@ -451,6 +466,18 @@ jobs:
           echo "skipping smoke run: $TARGET does not execute on this runner"
         fi
 
+        # A release binary carries its tag: the self-updater compares it with the
+        # latest release, so a binary built without it (or served a stale tag from a
+        # compiler cache) would never update, or would update forever.
+        case "$RELEASE_TAG" in
+          v*)
+            if ! grep -aqF "$RELEASE_TAG" "$binary"; then
+              echo "$binary does not carry its release tag $RELEASE_TAG" >&2
+              exit 1
+            fi
+            ;;
+        esac
+
         mkdir -p artifacts
         stage=$(mktemp -d)
         install -m 755 "$binary" "$stage/$executable"
@@ -488,6 +515,7 @@ jobs:
         TARGET: aarch64-unknown-linux-musl
         SLUG: linux-aarch64
         SAFE_TAG: ${{ steps.metadata.outputs.safe_tag }}
+        RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
         SMOKE_RUN: '0'
     - name: Upload macrod-linux-aarch64-${{ steps.metadata.outputs.safe_tag }} artifact
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -554,6 +582,7 @@ jobs:
       shell: bash
       env:
         TARGET: aarch64-apple-darwin
+        MACROD_RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
     - name: Package daemon
       run: |
         set -euo pipefail
@@ -626,6 +655,18 @@ jobs:
           echo "skipping smoke run: $TARGET does not execute on this runner"
         fi
 
+        # A release binary carries its tag: the self-updater compares it with the
+        # latest release, so a binary built without it (or served a stale tag from a
+        # compiler cache) would never update, or would update forever.
+        case "$RELEASE_TAG" in
+          v*)
+            if ! grep -aqF "$RELEASE_TAG" "$binary"; then
+              echo "$binary does not carry its release tag $RELEASE_TAG" >&2
+              exit 1
+            fi
+            ;;
+        esac
+
         mkdir -p artifacts
         stage=$(mktemp -d)
         install -m 755 "$binary" "$stage/$executable"
@@ -663,6 +704,7 @@ jobs:
         TARGET: aarch64-apple-darwin
         SLUG: macos-aarch64
         SAFE_TAG: ${{ steps.metadata.outputs.safe_tag }}
+        RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
         SMOKE_RUN: '1'
     - name: Upload macrod-macos-aarch64-${{ steps.metadata.outputs.safe_tag }} artifact
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -726,6 +768,7 @@ jobs:
       shell: bash
       env:
         TARGET: x86_64-apple-darwin
+        MACROD_RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
     - name: Package daemon
       run: |
         set -euo pipefail
@@ -798,6 +841,18 @@ jobs:
           echo "skipping smoke run: $TARGET does not execute on this runner"
         fi
 
+        # A release binary carries its tag: the self-updater compares it with the
+        # latest release, so a binary built without it (or served a stale tag from a
+        # compiler cache) would never update, or would update forever.
+        case "$RELEASE_TAG" in
+          v*)
+            if ! grep -aqF "$RELEASE_TAG" "$binary"; then
+              echo "$binary does not carry its release tag $RELEASE_TAG" >&2
+              exit 1
+            fi
+            ;;
+        esac
+
         mkdir -p artifacts
         stage=$(mktemp -d)
         install -m 755 "$binary" "$stage/$executable"
@@ -835,6 +890,7 @@ jobs:
         TARGET: x86_64-apple-darwin
         SLUG: macos-x86_64
         SAFE_TAG: ${{ steps.metadata.outputs.safe_tag }}
+        RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
         SMOKE_RUN: '0'
     - name: Upload macrod-macos-x86_64-${{ steps.metadata.outputs.safe_tag }} artifact
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
@@ -904,6 +960,7 @@ jobs:
       shell: bash
       env:
         TARGET: x86_64-pc-windows-msvc
+        MACROD_RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
     - name: Package daemon
       run: |
         set -euo pipefail
@@ -976,6 +1033,18 @@ jobs:
           echo "skipping smoke run: $TARGET does not execute on this runner"
         fi
 
+        # A release binary carries its tag: the self-updater compares it with the
+        # latest release, so a binary built without it (or served a stale tag from a
+        # compiler cache) would never update, or would update forever.
+        case "$RELEASE_TAG" in
+          v*)
+            if ! grep -aqF "$RELEASE_TAG" "$binary"; then
+              echo "$binary does not carry its release tag $RELEASE_TAG" >&2
+              exit 1
+            fi
+            ;;
+        esac
+
         mkdir -p artifacts
         stage=$(mktemp -d)
         install -m 755 "$binary" "$stage/$executable"
@@ -1013,6 +1082,7 @@ jobs:
         TARGET: x86_64-pc-windows-msvc
         SLUG: windows-x86_64
         SAFE_TAG: ${{ steps.metadata.outputs.safe_tag }}
+        RELEASE_TAG: ${{ steps.metadata.outputs.tag }}
         SMOKE_RUN: '1'
     - name: Upload macrod-windows-x86_64-${{ steps.metadata.outputs.safe_tag }} artifact
       uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

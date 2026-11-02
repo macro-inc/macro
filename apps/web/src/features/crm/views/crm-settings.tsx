@@ -75,7 +75,7 @@ function DisableCrmDialog(props: {
       <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
         <Panel.Header class="px-2 gap-1">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-            <XIcon />
+            <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
             Disable CRM
@@ -108,7 +108,7 @@ function DisableCrmDialog(props: {
               Cancel
             </Button>
             <Button
-              variant="strong"
+              variant="secondary"
               disabled={
                 props.pending || props.confirmation !== DISABLE_CRM_PHRASE
               }
@@ -203,7 +203,7 @@ function CrmEnablementSection() {
         <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
           <Panel.Header class="px-2 gap-1">
             <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-              <XIcon />
+              <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Dialog.CloseButton>
             <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
               Enable CRM
@@ -223,7 +223,7 @@ function CrmEnablementSection() {
                 Cancel
               </Button>
               <Button
-                variant="outline"
+                variant="secondary"
                 disabled={patchCrmMutation.isPending}
                 onClick={() => handleEnable(false)}
               >
@@ -237,7 +237,7 @@ function CrmEnablementSection() {
                 </Show>
               </Button>
               <Button
-                variant="strong"
+                variant="secondary"
                 disabled={patchCrmMutation.isPending}
                 onClick={() => handleEnable(true)}
               >
@@ -437,7 +437,7 @@ function StageEditorRow(props: {
           <Tooltip label="Save">
             <Button
               aria-label="Save stage name"
-              variant="accent"
+              variant="primary"
               size="icon-sm"
               disabled={props.pending || !hasChanged()}
               onClick={commit}
@@ -581,7 +581,7 @@ function StagesSection() {
             when={dealStages.isCustomized()}
             fallback={
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 disabled={pending()}
                 onClick={handleCustomize}
@@ -593,7 +593,7 @@ function StagesSection() {
             }
           >
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               disabled={blocked()}
               onClick={() => setShowResetModal(true)}
@@ -647,7 +647,7 @@ function StagesSection() {
                 }}
               />
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 class="shrink-0"
                 disabled={newStageName().trim() === '' || pending()}

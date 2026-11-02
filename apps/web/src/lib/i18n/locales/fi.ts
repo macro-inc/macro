@@ -748,7 +748,6 @@ export default {
     groupAdmin: 'Ylläpito',
     tabTeamGeneral: 'Yleiset',
     tabTeamMembers: 'Jäsenet',
-    tabTeamConnections: 'Yhteydet',
     tabEmail: 'Sähköposti',
     tabCalendar: 'Kalenteri',
     tabAgents: 'Agentit',

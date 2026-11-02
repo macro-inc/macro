@@ -51,13 +51,20 @@ event contract (schema, sanitization, delivery semantics).
 - Repair missed teammate DMs: `just crates/teams/backfill_teammate_dms_local`
   (see README's "Delivery semantics" for when this is needed).
 
+## Gotchas
+
+- A trialing subscription that gains its first Max seat ends the trial and
+  starts a new billing cycle immediately. Every other seat change keeps the
+  trial, including on a subscription already trialing on Max, so its scheduled
+  downgrades still apply at the trial's end.
+
 ## Checks
 
 - `cargo test -p teams` (`SQLX_OFFLINE` unset).
 - After query changes: `nix develop --command just prepare_db` from the repo root
   inside Nix.
 
-- Registered WhatsApp groups are human-owned; owned-entity cleanup treats their dependency order like other conversations.
+- Registered external chats are human-owned; owned-entity cleanup treats their dependency order like other conversations.
 
 ## Related
 

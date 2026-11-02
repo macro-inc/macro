@@ -1,3 +1,4 @@
+use super::join_requests::{insert_join_request_notification, recipient_holds};
 use super::*;
 use crate::domain::models::{
     AutomaticDeclinePolicy, OutOfOfficeAutoDeclineMode, OutOfOfficeProperties,
@@ -448,6 +449,31 @@ async fn publication_ack_preserves_a_concurrent_projection_revision(pool: PgPool
             .unwrap()
             .is_none()
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn projection_claims_take_due_changes_in_order_and_skip_backed_off_ones(pool: PgPool) {
+    let (repo, link, owner) = mailbox(&pool).await;
+    let [later, second, first] = [Uuid::now_v7(), Uuid::now_v7(), Uuid::now_v7()];
+    sqlx::query!(
+        "INSERT INTO calendar_projection_outbox(event_id,owner_id,link_id,change_kind,next_run_at) VALUES
+            ($1,$4,$5,'created',now() + interval '1 hour'),
+            ($2,$4,$5,'updated',now() - interval '1 minute'),
+            ($3,$4,$5,'deleted',now() - interval '2 minutes')",
+        later,
+        second,
+        first,
+        owner,
+        link
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let mut claimed = Vec::new();
+    while let Some(lease) = repo.claim_projection(Uuid::now_v7()).await.unwrap() {
+        claimed.push(lease.event_id);
+    }
+    assert_eq!(claimed, [first, second]);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -1371,4 +1397,65 @@ async fn the_organizer_repair_stores_outlook_organizers_as_holding_their_meeting
         before + 1,
         "a rerun finds nothing left to fix"
     );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn an_outlook_cancellation_or_removal_retires_join_request_notifications(pool: PgPool) {
+    let (repo, _, owner) = mailbox(&pool).await;
+    let member = "macro|outlook-member@example.com";
+    insert_user(&pool, member).await;
+    let lease = calendar(&repo).await;
+    repo.checkpoint_outlook_calendar(
+        &lease,
+        OutlookCalendarProgress::Page(OutlookCalendarPage {
+            members: vec![("provider-removed".into(), "provider-removed".into())],
+            removed: vec![],
+            next: None,
+            delta: Some("baseline".into()),
+        }),
+    )
+    .await
+    .unwrap();
+    let event = claim(&repo).await.unwrap();
+    let cancelled_id = store(&repo, &event, "cancelled").await;
+    let removed_id = store(&repo, &event, "removed").await;
+    let (request, _) = repo
+        .open_join_request(cancelled_id, member, "member@work.example.com")
+        .await
+        .unwrap();
+    let (removed_request, _) = repo
+        .open_join_request(removed_id, member, "member@work.example.com")
+        .await
+        .unwrap();
+    let on_cancelled = insert_join_request_notification(&pool, &request, &[&owner]).await;
+    let on_removed = insert_join_request_notification(&pool, &removed_request, &[&owner]).await;
+
+    // Outlook can keep a cancelled meeting: the row stays, with its request.
+    let mut cancelled = upsert(&event, "cancelled");
+    cancelled.event.status = EventStatus::Cancelled;
+    cancelled.event.sequence = 1;
+    cancelled.event.updated_at += Duration::minutes(1);
+    repo.upsert_event(CalendarEventWrite::OutlookSync {
+        lease: Box::new(event.clone()),
+        upsert: cancelled,
+    })
+    .await
+    .unwrap();
+    assert!(!recipient_holds(&pool, on_cancelled).await);
+    assert_eq!(
+        repo.get_join_request(request.id).await.unwrap(),
+        Some(request)
+    );
+    assert!(recipient_holds(&pool, on_removed).await);
+
+    repo.checkpoint_outlook_calendar(
+        &event,
+        OutlookCalendarProgress::Event {
+            id: "provider-removed".into(),
+            exists: false,
+        },
+    )
+    .await
+    .unwrap();
+    assert!(!recipient_holds(&pool, on_removed).await);
 }

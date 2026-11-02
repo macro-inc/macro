@@ -16,7 +16,7 @@ export const recordDetail = (record: RecordOption) =>
     ? ''
     : record.detail;
 
-/** A company a new contact can join, by the domain of its email. */
+/** A company a new contact can select; its domain is only a suggestion signal. */
 export type DomainCompany = { id: string; domain?: string };
 
 /** Whom a new pipeline row is about: a record that exists, or one created with the row. */
@@ -77,6 +77,6 @@ export function recordChoiceProblem(
   if (!domain) return 'Enter an email like jane@acme.com';
   const company = choice.companyId
     ? companies.find((company) => company.id === choice.companyId)
-    : contactCompany(email, companies);
+    : undefined;
   return company ? undefined : 'Choose a company for this contact';
 }
