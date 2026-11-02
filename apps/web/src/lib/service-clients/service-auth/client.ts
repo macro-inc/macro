@@ -80,6 +80,7 @@ import type { TeamInvitesResponse } from './generated/schemas/teamInvitesRespons
 import type { TeamWithMembers } from './generated/schemas/teamWithMembers';
 import type { ToggleAutoJoinDomainResponse } from './generated/schemas/toggleAutoJoinDomainResponse';
 import type { ToggleNonAdminInvitesResponse } from './generated/schemas/toggleNonAdminInvitesResponse';
+import type { UserHotkeyProfiles } from './generated/schemas/userHotkeyProfiles';
 import type { UserLanguage } from './generated/schemas/userLanguage';
 import type { UserLinkResponse } from './generated/schemas/userLinkResponse';
 import type { UserName } from './generated/schemas/userName';
@@ -496,6 +497,27 @@ export const authServiceClient = {
         method: 'PUT',
         body: JSON.stringify(args),
       })
+    ).map((result) => result);
+  },
+  async getUserHotkeyProfiles() {
+    return (
+      await fetchWithAuth<UserHotkeyProfiles>(
+        `${authHost}/user/hotkey-profiles`,
+        {
+          method: 'GET',
+        }
+      )
+    ).map((result) => result);
+  },
+  async putUserHotkeyProfiles(args: UserHotkeyProfiles) {
+    return (
+      await fetchWithAuth<UserHotkeyProfiles>(
+        `${authHost}/user/hotkey-profiles`,
+        {
+          method: 'PUT',
+          body: JSON.stringify(args),
+        }
+      )
     ).map((result) => result);
   },
   async getUserNames(args: PostGetNamesRequestBody) {

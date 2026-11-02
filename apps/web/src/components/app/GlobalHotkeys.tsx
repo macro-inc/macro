@@ -9,6 +9,7 @@ import {
   setCreateMenuOpen,
   useCreateCommands,
 } from '@app/features/command/Launcher';
+import { openCommandMenuCategory } from '@app/features/command/open-command-menu-category';
 import { openMacroMcpSetupModal } from '@app/features/integrations/mcp-setup/MacroMcpSetupModal';
 import { useAnalytics } from '@app/lib/analytics/analytics-context';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
@@ -25,7 +26,7 @@ import {
 } from '@core/constant/SettingsState';
 import { getShortcutSheet, type ShortcutSheet } from '@core/hotkey/getCommands';
 import { registerHotkey } from '@core/hotkey/hotkeys';
-import { activeScope, setActiveScope } from '@core/hotkey/state';
+import { activeScope } from '@core/hotkey/state';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { ValidHotkey } from '@core/hotkey/types';
 import { fireAndForget } from '@core/util/fireAndForget';
@@ -137,12 +138,15 @@ function useHotkeyAnalytics(): void {
   const track = (
     description: string,
     token: string | undefined,
-    key: string
+    key: string,
+    profile: string | undefined
   ) => {
     analytics.track('hotkey_use', {
       action: description,
       token,
       key,
+      // The shortcut profile whose key this was, if one ran it.
+      hotkey_profile: profile,
     });
   };
 
@@ -172,7 +176,12 @@ function useHotkeyAnalytics(): void {
       debouncedTrack.clear();
     }
 
-    trackFn(description, command.hotkeyToken, pressedKeysString);
+    trackFn(
+      description,
+      command.hotkeyToken,
+      pressedKeysString,
+      command.profile?.id
+    );
 
     lastFired = pressedKeysString;
   });
@@ -342,11 +351,7 @@ export default function GlobalShortcuts() {
       description: () =>
         t('commands.openCategoryNamed', { category: item.label }),
       keyDownHandler: () => {
-        setActiveScope('global');
-        CommandState.setCategoryFilter(item.category);
-        CommandState.setQuery('');
-        CommandState.setSelectedIndex(0);
-        CommandState.open();
+        openCommandMenuCategory(item.category);
         return true;
       },
       keywords: ['command menu', 'palette', 'category', item.keyword],

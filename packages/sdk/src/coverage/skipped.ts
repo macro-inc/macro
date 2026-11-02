@@ -84,6 +84,8 @@ export const authExcluded = [
   'getTeamInvites',
   // Introductory offers belong to the app's subscription checkout flow.
   'getTrialEligibility',
+  // Keyboard shortcut layouts are an app setting, not SDK surface.
+  'getUserHotkeyProfiles',
   'getUserInvites',
   // The interface language is an app setting, not SDK surface.
   'getUserLanguage',
@@ -122,6 +124,7 @@ export const authExcluded = [
   'putCursorApiKey',
   'putCursorDefaultModel',
   'putProfilePicture',
+  'putUserHotkeyProfiles',
   'putUserLanguage',
   'putUserName',
   'redeemGtmInviteLink',

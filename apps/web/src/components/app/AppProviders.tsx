@@ -1,4 +1,5 @@
 import { useAccessRequestInvalidations } from '@app/features/access-requests/use-access-request-invalidations';
+import { AppHotkeyProfilesProvider } from '@app/features/hotkey-profiles/hotkey-profiles';
 import { IncomingMeetingInvitationsProvider } from '@app/features/meetings/incoming-meeting-invitations';
 import {
   notificationSoundFor,
@@ -122,11 +123,13 @@ export function AppProviders(props: ParentProps) {
       <ConfiguredGlobalAppStateProvider>
         <MutationUndoProvider>
           <SearchProvider>
-            <IncomingMeetingInvitationsProvider>
-              {/* Ownerless dialogs inherit app state, not a transient menu owner. */}
-              <ImperativeDialogHost />
-              {props.children}
-            </IncomingMeetingInvitationsProvider>
+            <AppHotkeyProfilesProvider>
+              <IncomingMeetingInvitationsProvider>
+                {/* Ownerless dialogs inherit app state, not a transient menu owner. */}
+                <ImperativeDialogHost />
+                {props.children}
+              </IncomingMeetingInvitationsProvider>
+            </AppHotkeyProfilesProvider>
           </SearchProvider>
         </MutationUndoProvider>
       </ConfiguredGlobalAppStateProvider>
