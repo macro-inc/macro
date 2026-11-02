@@ -531,6 +531,8 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
   through restarts and remove them on explicit logout. See the Tasks walkthrough.
 - Shared server-state queries and mutations live in `src/lib/queries`; keep
   feature-specific query orchestration with its owning feature.
+- Keep CRM contacts explicitly included in the auxiliary GraphQL backfill;
+  bump its checkpoint version when changing the hydration input contract.
 - Refresh the channel list's bounded unread edge when opening a conversation,
   including an empty unread result after a read on another device.
 - Decide channel detail access from completed server results; bound confirmations of contradictory cache membership, preserve known unavailable state during retries, and keep unavailable routes registered for notification/reconnect refresh.
