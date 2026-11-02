@@ -13,8 +13,8 @@ vi.mock('@macro-inc/observability', () => {
   return {
     NOOP_SPAN: span,
     Telemetry: {
-      config: { perfSampled: true },
-      perfSpan: vi.fn(() => ({ ...span, setAttr: vi.fn(), end: vi.fn() })),
+      config: { sampled: vi.fn(() => true) },
+      span: vi.fn(() => ({ ...span, setAttr: vi.fn(), end: vi.fn() })),
     },
   };
 });
@@ -56,7 +56,7 @@ beforeEach(() => {
       disconnect() {}
     }
   );
-  vi.spyOn(Telemetry.config, 'perfSampled', 'get').mockReturnValue(true);
+  vi.mocked(Telemetry.config.sampled).mockReturnValue(true);
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
   input = document.createElement('textarea');
   input.dataset.inputSurface = 'command-search';
@@ -89,13 +89,13 @@ function edit(target = input) {
 }
 
 it('installs no listeners or timers in unsampled sessions', () => {
-  vi.spyOn(Telemetry.config, 'perfSampled', 'get').mockReturnValue(false);
+  vi.mocked(Telemetry.config.sampled).mockReturnValue(false);
   const listen = vi.spyOn(document, 'addEventListener');
   dispose = startTypingBurstTelemetry();
   expect(listen).not.toHaveBeenCalled();
   expect(vi.getTimerCount()).toBe(0);
   edit();
-  expect(Telemetry.perfSpan).not.toHaveBeenCalled();
+  expect(Telemetry.span).not.toHaveBeenCalled();
 });
 function timing(
   start: number,
@@ -118,7 +118,7 @@ function timing(
   records.push(entry);
 }
 function spanAttributes() {
-  const span = vi.mocked(Telemetry.perfSpan).mock.results.at(-1)!.value;
+  const span = vi.mocked(Telemetry.span).mock.results.at(-1)!.value;
   return Object.fromEntries(vi.mocked(span.setAttr).mock.calls);
 }
 
@@ -129,8 +129,8 @@ it('reads one content-free cursor window per burst without frame sampling', () =
     vi.advanceTimersByTime(20);
     timing(edit(), i + 1, 16 + i, 'keydown', i % 5, i % 7);
   }
-  expect(Telemetry.perfSpan).toHaveBeenCalledTimes(1);
-  const span = vi.mocked(Telemetry.perfSpan).mock.results[0].value;
+  expect(Telemetry.span).toHaveBeenCalledTimes(1);
+  const span = vi.mocked(Telemetry.span).mock.results[0].value;
   expect(span.end).not.toHaveBeenCalled();
   vi.advanceTimersByTime(750);
   expect(span.end).toHaveBeenCalledOnce();
@@ -155,7 +155,7 @@ it('reads one content-free cursor window per burst without frame sampling', () =
   expect(observerCount).toBe(3);
   expect(vi.getTimerCount()).toBe(0);
   edit();
-  expect(Telemetry.perfSpan).toHaveBeenCalledTimes(2);
+  expect(Telemetry.span).toHaveBeenCalledTimes(2);
 });
 
 it('reports retained interactions and dropped timings when the shared buffer overflows', () => {
@@ -202,7 +202,7 @@ it('reads the cursor and cancels the quiet boundary at the shared continuous-bur
     timing(edit(), i + 1);
     vi.advanceTimersByTime(600);
   }
-  expect(Telemetry.perfSpan).toHaveBeenCalledTimes(1);
+  expect(Telemetry.span).toHaveBeenCalledTimes(1);
   expect(spanAttributes()).toMatchObject({
     'ui.outcome': 'timeout',
     'typing.input_count': 50,
@@ -210,7 +210,7 @@ it('reads the cursor and cancels the quiet boundary at the shared continuous-bur
     'typing.event_timing_dropped_timings': 0,
   });
   expect(
-    vi.mocked(Telemetry.perfSpan).mock.results[0].value.end
+    vi.mocked(Telemetry.span).mock.results[0].value.end
   ).toHaveBeenCalledOnce();
   expect(vi.getTimerCount()).toBe(0);
 });
@@ -286,20 +286,20 @@ it('ends on hide and disposal and ignores unmarked or read-only fields', () => {
   input.dataset.inputSurface = 'command-search';
   input.readOnly = true;
   edit();
-  expect(Telemetry.perfSpan).not.toHaveBeenCalled();
+  expect(Telemetry.span).not.toHaveBeenCalled();
   input.readOnly = false;
   edit();
-  const span = vi.mocked(Telemetry.perfSpan).mock.results[0].value;
+  const span = vi.mocked(Telemetry.span).mock.results[0].value;
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('hidden');
   document.dispatchEvent(new Event('visibilitychange'));
   expect(span.setAttr).toHaveBeenCalledWith('ui.outcome', 'hidden');
   expect(span.end).toHaveBeenCalledOnce();
   expect(vi.getTimerCount()).toBe(0);
   edit();
-  expect(Telemetry.perfSpan).toHaveBeenCalledTimes(1);
+  expect(Telemetry.span).toHaveBeenCalledTimes(1);
   vi.spyOn(document, 'visibilityState', 'get').mockReturnValue('visible');
   edit();
-  const second = vi.mocked(Telemetry.perfSpan).mock.results[1].value;
+  const second = vi.mocked(Telemetry.span).mock.results[1].value;
   dispose();
   expect(second.end).toHaveBeenCalledOnce();
   expect(vi.getTimerCount()).toBe(0);
@@ -312,9 +312,9 @@ it('finishes the previous field before starting another owner', () => {
   other.dataset.inputSurface = 'grid-cell';
   document.body.append(other);
   edit(other);
-  expect(Telemetry.perfSpan).toHaveBeenCalledTimes(2);
-  const first = vi.mocked(Telemetry.perfSpan).mock.results[0].value;
-  const second = vi.mocked(Telemetry.perfSpan).mock.results[1].value;
+  expect(Telemetry.span).toHaveBeenCalledTimes(2);
+  const first = vi.mocked(Telemetry.span).mock.results[0].value;
+  const second = vi.mocked(Telemetry.span).mock.results[1].value;
   expect(first.end).toHaveBeenCalledOnce();
   expect(second.end).not.toHaveBeenCalled();
 });
@@ -333,6 +333,6 @@ it('drops an unmatched key when its field blurs before the next edit', () => {
   });
   Object.defineProperty(paste, 'timeStamp', { value: performance.now() });
   input.dispatchEvent(paste);
-  const span = vi.mocked(Telemetry.perfSpan).mock.results[0].value;
+  const span = vi.mocked(Telemetry.span).mock.results[0].value;
   expect(span.setAttr).toHaveBeenCalledWith('ui.input_type', 'beforeinput');
 });

@@ -18,7 +18,7 @@ const { spans } = vi.hoisted(() => ({
 vi.mock('@macro-inc/observability', () => ({
   NOOP_SPAN: {},
   Telemetry: {
-    perfSpan: (name: string) => {
+    span: (name: string) => {
       const record = {
         name,
         attrs: {} as Record<string, unknown>,

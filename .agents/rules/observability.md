@@ -23,7 +23,7 @@ through them and the per-runtime APIs.
   frame, worker call) needs inject on send and extract on receive. If a hop
   can't carry context, record the upstream trace id as a span field.
 - Web and Cloudflare Workers use the `@macro-inc/observability` `Telemetry`
-  facade (`Telemetry.span`, `Telemetry.clientSpan`); don't import OpenTelemetry
+  facade (`Telemetry.span`); don't import OpenTelemetry
   directly and don't add a second telemetry path (ast-grep
   `ts/tsx-observability-facade`).
 - Browser context does not survive an `await`: retain the parent span (or a

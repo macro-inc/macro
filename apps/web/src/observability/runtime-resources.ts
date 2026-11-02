@@ -6,7 +6,7 @@ import { blockingWorkBetween } from './ui-operation';
 // rather than navigation history entries or serialized restoration snapshots.
 const routeViews = new Set<object>();
 export function trackRouteView(): () => void {
-  if (!Telemetry.config.perfSampled) return () => {};
+  if (!Telemetry.config.sampled('perf')) return () => {};
   const view = {};
   routeViews.add(view);
   return () => routeViews.delete(view);
@@ -52,7 +52,7 @@ export async function browserMemoryAttributes(): Promise<Attributes> {
 export function startRuntimeResourceSampling(
   readNativeMemory?: () => Attributes | Promise<Attributes>
 ): () => void {
-  if (!Telemetry.config.perfSampled) return () => {};
+  if (!Telemetry.config.sampled('perf')) return () => {};
   let disposed = false;
   let pending = false;
   let generation = 0;
@@ -74,7 +74,6 @@ export function startRuntimeResourceSampling(
     const windowGeneration = generation;
     const end = performance.now();
     const attributes: Attributes = {
-      'macro.trace.class': 'perf',
       'runtime.window_ms': end - start,
       'runtime.session_age_ms': end,
       'runtime.route_views.count': routeViews.size,
@@ -112,7 +111,8 @@ export function startRuntimeResourceSampling(
       Telemetry.recordSample(
         'app.runtime.sample',
         { ...attributes, ...memory, ...native },
-        timestamp
+        timestamp,
+        'perf'
       );
     } finally {
       pending = false;

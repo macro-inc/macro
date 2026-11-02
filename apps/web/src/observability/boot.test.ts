@@ -22,7 +22,7 @@ it('starts at navigation time, lets the first view close its window, and aggrega
     end: vi.fn(),
   };
   const phase = { ...NOOP_SPAN, setAttr: vi.fn(), end: vi.fn() };
-  vi.spyOn(Telemetry, 'spanAt').mockReturnValue(phase);
+  vi.spyOn(Telemetry, 'span').mockReturnValue(phase);
   vi.stubGlobal('performance', {
     timeOrigin: 1700000000000,
     now: () => 200,
@@ -96,15 +96,13 @@ it('starts at navigation time, lets the first view close its window, and aggrega
   expect(options).toMatchObject({ startTime: 0, closeOnJoin: true });
   options?.onFinish?.(root, 'success', 200);
   expect(root.setAttr).toHaveBeenCalledWith('boot.outcome', 'success');
-  expect(Telemetry.spanAt).toHaveBeenCalledWith(
-    'boot.auth.refresh',
-    1700000000010
-  );
+  expect(Telemetry.span).toHaveBeenCalledWith('boot.auth.refresh', {
+    startTime: 1700000000010,
+  });
   expect(phase.end).toHaveBeenCalledWith(1700000000020);
-  expect(Telemetry.spanAt).toHaveBeenCalledWith(
-    'boot.auth.refresh',
-    1700000000012
-  );
+  expect(Telemetry.span).toHaveBeenCalledWith('boot.auth.refresh', {
+    startTime: 1700000000012,
+  });
   expect(phase.end).toHaveBeenCalledWith(1700000000024);
   expect(root.event).toHaveBeenCalledWith(
     'macro.boot.render-start',
@@ -124,9 +122,9 @@ it('starts at navigation time, lets the first view close its window, and aggrega
     'boot.resource.wasm.duration_ms',
     50
   );
-  expect(Telemetry.spanAt).toHaveBeenCalledTimes(8);
+  expect(Telemetry.span).toHaveBeenCalledTimes(8);
   expect(
-    vi.mocked(Telemetry.spanAt).mock.calls.map(([name]) => name)
+    vi.mocked(Telemetry.span).mock.calls.map(([name]) => name)
   ).not.toContain('boot.resource.wasm');
   expect(JSON.stringify(phase.setAttr.mock.calls)).not.toContain('secret');
   expect(JSON.stringify(root.setAttr.mock.calls)).not.toContain('private');
