@@ -53,7 +53,6 @@ export default {
     projectBadge: '專案',
     newProject: '新增專案',
     contentAlreadyOpen: '內容已開啟',
-    unableToOpenConversation: '無法開啟對話，請再試一次。',
     mobileSearchPlaceholder: '搜尋…',
     closeSearch: '關閉搜尋',
     searchFullTextFor: '全文搜尋「{{query}}」',

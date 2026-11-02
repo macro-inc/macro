@@ -53,7 +53,6 @@ export default {
     projectBadge: 'โปรเจ็กต์',
     newProject: 'โปรเจ็กต์ใหม่',
     contentAlreadyOpen: 'เปิดเนื้อหานี้อยู่แล้ว',
-    unableToOpenConversation: 'เปิดการสนทนาไม่ได้ โปรดลองอีกครั้ง',
     mobileSearchPlaceholder: 'ค้นหา…',
     closeSearch: 'ปิดการค้นหา',
     searchFullTextFor: 'ค้นหาข้อความทั้งหมดสำหรับ “{{query}}”',

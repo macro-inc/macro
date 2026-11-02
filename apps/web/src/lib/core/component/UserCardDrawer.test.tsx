@@ -4,6 +4,7 @@
 
 import { render, screen, waitFor } from '@solidjs/testing-library';
 import userEvent from '@testing-library/user-event';
+import { okAsync } from 'neverthrow';
 import { type ComponentProps, type JSX, Show } from 'solid-js';
 import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { openUserCard, UserCardDrawer } from './UserCardDrawer';
@@ -12,7 +13,7 @@ const mocks = vi.hoisted(() => ({
   crmFlagEnabled: false,
   openWithSplit: vi.fn(),
   popoverSplit: vi.fn(),
-  getOrCreateDm: vi.fn(),
+  existingDm: vi.fn(),
   toastSuccess: vi.fn(),
   toastFailure: vi.fn(),
 }));
@@ -44,9 +45,7 @@ vi.mock('@core/user', () => ({
 }));
 
 vi.mock('@queries/channel/get-or-create-dm', () => ({
-  useGetOrCreateDirectMessageMutation: () => ({
-    mutateAsync: mocks.getOrCreateDm,
-  }),
+  existingDirectMessage: mocks.existingDm,
 }));
 
 vi.mock('@app/features/crm/record-adapter', () => ({
@@ -89,7 +88,7 @@ beforeEach(() => {
   mocks.crmFlagEnabled = false;
   mocks.openWithSplit.mockReset();
   mocks.popoverSplit.mockReset();
-  mocks.getOrCreateDm.mockReset().mockResolvedValue({ channel_id: 'chan-1' });
+  mocks.existingDm.mockReset().mockReturnValue(okAsync(undefined));
   mocks.toastSuccess.mockReset();
   mocks.toastFailure.mockReset();
 });
@@ -121,17 +120,41 @@ describe('UserCardDrawer', () => {
     expect(screen.getByRole('button', { name: 'Assign task' })).toBeTruthy();
   });
 
-  it('opens a direct message and closes the sheet', async () => {
+  it('opens a draft to a person without a DM and closes the sheet', async () => {
     const user = userEvent.setup({ skipHover: true });
     render(() => <UserCardDrawer />);
     openJane();
 
     await user.click(screen.getByRole('button', { name: 'DM' }));
 
-    expect(mocks.getOrCreateDm).toHaveBeenCalledWith({
-      recipient_id: 'macro|jane.doe@example.com',
-    });
+    expect(mocks.existingDm).toHaveBeenCalledWith(
+      'macro|current@example.com',
+      'macro|jane.doe@example.com'
+    );
+    expect(mocks.openWithSplit).toHaveBeenCalledWith(
+      {
+        type: 'component',
+        id: 'channel-compose',
+        params: { initialRecipientIds: ['macro|jane.doe@example.com'] },
+        preserveParams: true,
+      },
+      { preferNewSplit: false, allowDuplicate: true }
+    );
     expect(screen.queryByRole('button', { name: 'DM' })).toBeNull();
+  });
+
+  it('opens the existing DM with a person', async () => {
+    mocks.existingDm.mockReturnValue(okAsync('chan-1'));
+    const user = userEvent.setup({ skipHover: true });
+    render(() => <UserCardDrawer />);
+    openJane();
+
+    await user.click(screen.getByRole('button', { name: 'DM' }));
+
+    expect(mocks.openWithSplit).toHaveBeenCalledWith(
+      { type: 'channel', id: 'chan-1' },
+      { preferNewSplit: false, reopen: 'latest' }
+    );
   });
 
   it('copies the email and closes the sheet, which a toast confirms', async () => {

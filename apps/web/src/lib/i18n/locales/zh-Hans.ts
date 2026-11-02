@@ -53,7 +53,6 @@ export default {
     projectBadge: '项目',
     newProject: '新建项目',
     contentAlreadyOpen: '内容已打开',
-    unableToOpenConversation: '无法打开对话，请重试。',
     mobileSearchPlaceholder: '搜索…',
     closeSearch: '关闭搜索',
     searchFullTextFor: '全文搜索“{{query}}”',

@@ -30,6 +30,7 @@ import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { useCombinedRecipients } from '@core/signal/useCombinedRecipient';
 import {
   getDisplayName,
+  idToEmail,
   tryMacroId,
   type WithCustomUserInput,
 } from '@core/user';
@@ -49,20 +50,39 @@ import { useGetOrCreateDirectMessageMutation } from '@queries/channel/get-or-cre
 import { ComposerSurface } from '@ui';
 import { createEffect, createMemo, createSignal, on, Show } from 'solid-js';
 
-export function ChannelCompose() {
+type ComposeRecipient = WithCustomUserInput<'user' | 'contact' | 'agent'>;
+
+/** A person the draft starts addressed to, as their contact when loaded. */
+function initialRecipient(
+  id: string,
+  contacts: ComposeRecipient[]
+): ComposeRecipient {
+  const contact = contacts.find(
+    (option) => option.kind === 'user' && option.id === id
+  );
+  if (contact) return contact;
+  const email = idToEmail(id);
+  const name = getDisplayName(tryMacroId(id)) || email;
+  return { kind: 'user', id, data: { id, email, name } };
+}
+
+export function ChannelCompose(props: {
+  /** People the draft starts addressed to, e.g. from an opened profile. */
+  initialRecipientIds?: string[];
+}) {
   const [layout, setLayout] = createSignal<HTMLDivElement>();
   const [channelName, setChannelName] = createSignal<string>('');
 
   const { users: humanOptions } = useCombinedRecipients();
   const agentOptions = ENABLE_AGENT_DMS ? useAgentDmRecipients() : () => [];
   const destinationOptions = () => [...humanOptions(), ...agentOptions()];
+  const initialRecipientIds = props.initialRecipientIds ?? [];
+  const isAddressed = initialRecipientIds.length > 0;
   const [selectedRecipients, setSelectedRecipients] = createSignal<
-    WithCustomUserInput<'user' | 'contact' | 'agent'>[]
-  >([]);
+    ComposeRecipient[]
+  >(initialRecipientIds.map((id) => initialRecipient(id, humanOptions())));
 
-  const selectRecipients = (
-    next: WithCustomUserInput<'user' | 'contact' | 'agent'>[]
-  ) => {
+  const selectRecipients = (next: ComposeRecipient[]) => {
     setSelectedRecipients(selectConversationRecipients(next));
   };
 
@@ -310,7 +330,7 @@ export function ChannelCompose() {
                   : 'To: Macro users or email addresses'
               }
               triedToSubmit={triedToSubmit}
-              focusOnMount
+              focusOnMount={!isAddressed}
               hideMenuOnEscape
             />
             <div class="mt-6 p-3 flex flex-row items-center border border-edge-muted text-ink-placeholder rounded-md">
@@ -374,7 +394,7 @@ export function ChannelCompose() {
                             <ComposerEditor
                               config={markdownEditor}
                               placeholder={placeholder()}
-                              autofocus={false}
+                              autofocus={isAddressed && !isTouchDevice()}
                               class="text-base"
                             />
                           </Input.Editor>

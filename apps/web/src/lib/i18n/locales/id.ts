@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Proyek',
     newProject: 'Proyek baru',
     contentAlreadyOpen: 'Konten sudah terbuka',
-    unableToOpenConversation: 'Tidak dapat membuka percakapan. Coba lagi.',
     mobileSearchPlaceholder: 'Cari…',
     closeSearch: 'Tutup penelusuran',
     searchFullTextFor: 'Cari teks lengkap untuk “{{query}}”',

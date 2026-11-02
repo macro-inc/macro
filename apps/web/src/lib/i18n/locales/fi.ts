@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Projekti',
     newProject: 'Uusi projekti',
     contentAlreadyOpen: 'Sisältö on jo auki',
-    unableToOpenConversation: 'Keskustelua ei voitu avata. Yritä uudelleen.',
     mobileSearchPlaceholder: 'Hae…',
     closeSearch: 'Sulje haku',
     searchFullTextFor: 'Hae koko tekstistä ”{{query}}”',

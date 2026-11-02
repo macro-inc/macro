@@ -53,7 +53,6 @@ export default {
     projectBadge: 'Prosjekt',
     newProject: 'Nytt prosjekt',
     contentAlreadyOpen: 'Innholdet er allerede åpent',
-    unableToOpenConversation: 'Kan ikke åpne samtalen. Prøv igjen.',
     mobileSearchPlaceholder: 'Søk…',
     closeSearch: 'Lukk søk',
     searchFullTextFor: 'Søk i fulltekst etter «{{query}}»',
