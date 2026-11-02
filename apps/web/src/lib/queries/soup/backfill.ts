@@ -28,9 +28,8 @@ import { useMailAccountsQuery } from '../email/mail-accounts';
 
 // Bump when a default backfill input or completion guarantee changes so
 // persisted cursors cannot retain an older hydration contract.
-// Rehydrate raw file-type projections after retiring enum-normalized facts.
-// Old cursors must not skip records when the cache compatibility epoch changes.
-const BACKFILL_VERSION = 17;
+// Restart old cursors whose filters did not include CRM contacts.
+const BACKFILL_VERSION = 18;
 const PAGE_LIMIT = 100;
 // Five threads × twenty messages reaches the backend's 100-message cap.
 const EMAIL_CONTENT_PAGE_LIMIT = 5;
@@ -213,7 +212,7 @@ export const SHARED_EMAIL_FILTER_BACKFILL_LANE: SoupBackfillParams = {
   },
 };
 
-/** Backfills CRM companies and foreign entities. */
+/** Backfills CRM companies, contacts, and foreign entities. */
 export const AUXILIARY_SOUP_BACKFILL_LANE: SoupBackfillParams = {
   checkpointId: 'auxiliary-entities',
   input: {
@@ -230,6 +229,7 @@ export const AUXILIARY_SOUP_BACKFILL_LANE: SoupBackfillParams = {
       channelFilter: { literal: { channelId: EXCLUDED_ENTITY_ID } },
       channelThreadFilter: { literal: { threadId: EXCLUDED_ENTITY_ID } },
       callFilter: { literal: { callId: EXCLUDED_ENTITY_ID } },
+      crmContactFilter: { literal: { include: true } },
     },
   },
 };

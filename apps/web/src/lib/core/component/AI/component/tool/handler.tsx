@@ -141,6 +141,11 @@ import { listLabelsHandler } from './ListLabels';
 import { listTagsHandler } from './ListTags';
 import { listTeamMembersHandler } from './ListTeamMembers';
 import { loadToolsHandler } from './LoadTools';
+import {
+  getUserActivityHandler,
+  readMemoryHandler,
+  updateMemoryHandler,
+} from './Memory';
 import { moveToProjectHandler } from './MoveToProject';
 import {
   listNotificationsHandler,
@@ -353,6 +358,9 @@ const toolHandlers: ToolHandlerMap<RenderContext> = {
   SearchSkills: searchSkillsHandler,
   SearchTools: searchToolsHandler,
   SelfKnowledge: selfKnowledgeHandler,
+  ReadMemory: readMemoryHandler,
+  UpdateMemory: updateMemoryHandler,
+  GetUserActivity: getUserActivityHandler,
   SendChannelMessage: sendChannelMessageHandler,
   ShareWithChannel: shareWithChannelHandler,
   SendConfirmedEmail: sendConfirmedEmailHandler,

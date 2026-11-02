@@ -4,7 +4,7 @@ use super::models;
 
 /// Slack MCP server URL.
 const SLACK_SERVER_URL: &str = "https://mcp.slack.com/mcp";
-const GITHUB_SERVER_URL: &str = "https://api.githubcopilot.com/mcp";
+use super::models::GITHUB_MCP_SERVER_URL as GITHUB_SERVER_URL;
 const LINEAR_SERVER_URL: &str = "https://mcp.linear.app/mcp";
 
 macro_env_var::env_var! {
