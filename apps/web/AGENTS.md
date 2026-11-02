@@ -597,7 +597,7 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 - Gate routine template actions, pages, dialogs, and message cards on `enable-routine-sharing`; keep ordinary routines usable while it is off.
 - When adding or changing a view's feature tour, follow the `add-tour` skill.
 - Keep Tasks date ranges on view-owned date-bucket boundaries in `features/tasks-view/core/task-due-date.ts`; send `sort_method=property` with the selected definition and direction, use keyed `date_ranges` grouping, and restart pages when midnight/timezone/resume changes the query key; preserve text-search ordering.
-- Render Tasks due dates in an editable list-property column with a calendar icon only when a date is set; show only the urgency-colored icon on phones and narrow panes, keep the current date visible in its dropdown, and limit warning urgency to today and tomorrow.
+- Render Tasks due dates in an editable list-property column with a calendar icon for set dates and a slashed calendar for no due date; show only the icon on phones and narrow panes, preserve urgency colors for set dates, keep the current date visible in its dropdown, and limit warning urgency to today and tomorrow.
 - Revalidate Soup queries whose selected sort/group property or date predicate matches an edited definition; compute loaded date-group movement in TypeScript, then refetch authoritative counts and unloaded rows. Keep property sorts and date filters out of the timestamp-only WASM projection.
 - Keep REST grouped Soup item pools and `itemIds` keyed by raw entity IDs, matching Tasks readers and the normalized cache.
 
@@ -904,7 +904,7 @@ phone, and tablet:
 See the [download walkthrough](../../docs/agent-guide/files.md#downloading-files).
 
 ## Interface icons
-- Task rows, document mention pills, and @mention menu rows use `TaskStatusIcon` with the current status property; use the task subtype completion flag only when a recognized status is unavailable. Mention pills show status only in that leading icon, not again among the trailing task badges. Keep generic navigation and creation icons independent of task state.
+- Task rows, property values, document mention pills, and @mention menu rows use `TaskStatusIcon` with the current status property; use the task subtype completion flag only when a recognized status is unavailable. Task lists edit status and priority through leading `TaskPropertyControl` icons before the title, not duplicate columns or trailing pills. Mention pills show status only in that leading icon, not again among the trailing task badges. Keep generic navigation and creation on the custom checked-square task icon, independent of task state.
 - Read [the icon system rules](src/components/icon/system/README.md) before adding or changing interface icons or icon motion. Reuse the original Macro SVG family via individual `@icon/system/...` imports; do not introduce another icon set.
 - If a glyph is missing, author original SVG geometry on the 24-unit grid with round caps/joins, restrained detail, `currentColor`, and the documented theme-aware weight. Never trace or import proprietary symbol paths. Match active/bold variants and review 14/16/20/24 px in light and dark mode.
 - Interactive glyphs use the shared `installIconMotion` behavior; do not add per-button bounce/spin effects. Keep state indicators static, preserve accessible control names, and honor reduced motion. See the icon README for wrapper and opt-out attributes.

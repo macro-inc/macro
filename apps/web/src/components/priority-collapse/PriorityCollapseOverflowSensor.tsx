@@ -11,7 +11,7 @@ import {
   createPriorityCollapser,
   type OverflowProbe,
   type PriorityCollapser,
-} from '../utils/createPriorityCollapser';
+} from './createPriorityCollapser';
 
 /** Collapses only after every real collapse item has already given up its
  * space. */

@@ -4,7 +4,7 @@ import {
   type CollapsibleRegistration,
   createPriorityCollapser,
   type OverflowProbe,
-} from '../utils/createPriorityCollapser';
+} from './createPriorityCollapser';
 
 type TestItem = {
   id: string;
