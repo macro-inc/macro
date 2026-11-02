@@ -1,0 +1,10 @@
+id = "calendly"
+name = "Calendly"
+description = "See event types and availability, and manage bookings."
+access = ["mcp"]
+mcp_url = "https://mcp.calendly.com"
+client_registration = "dcr"
+scopes = []
+pipedream_app_slugs = ["calendly_v2"]
+status = "pending"
+probed = 2026-10-30

@@ -495,6 +495,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         ai_tools::FormsToolConfig {
             app_origin: "https://macro.test".into(),
             editing_worker_url: "http://localhost:8933".into(),
+            static_files: static_file_service_client::StaticFileServiceClient::new(
+                "test-internal-api-key".to_string(),
+                "http://localhost:0".to_string(),
+            ),
         },
     );
 
@@ -595,8 +599,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
     let (import_service, onboarding_service, mcp_selector) = {
         let mcp_key =
             mcp_client::domain::models::AesKey::try_from(vec![0u8; 32]).expect("valid test key");
-        let mcp_repo =
-            mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key);
+        let mcp_repo = mcp_client::outbound::NativeServerStore::new(
+            mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key),
+            None,
+        );
         let creator = ai_tools::ToolEntityCreator {
             document_creator: document_tool_context.creator.clone(),
             entity_access_service: entity_access_service.clone(),
@@ -821,8 +827,10 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                 Arc::new(redis::Client::open("redis://127.0.0.1:6379/").expect("valid redis url"));
             let mcp_key = mcp_client::domain::models::AesKey::try_from(vec![0u8; 32])
                 .expect("valid test key");
-            let mcp_repo =
-                mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key);
+            let mcp_repo = mcp_client::outbound::NativeServerStore::new(
+                mcp_client::outbound::pg_server_repo::PgServerRepo::new(pool.clone(), mcp_key),
+                None,
+            );
             let mcp_state_store =
                 mcp_client::outbound::redis_state_store::RedisOAuthStateStore::new(redis_client);
             let client_metadata = mcp_client::domain::models::OAuthClientMetadata::new(

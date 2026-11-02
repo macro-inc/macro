@@ -164,7 +164,12 @@ test('a label hides under the header once its cell scrolls beneath it', async ({
         const row = grid.querySelector<HTMLElement>(
           `[data-grid-row-id="${id}"]`
         )!;
-        scroller.scrollTop = row.offsetTop - header.offsetHeight + by;
+        // Virtual rows are placed by transform, so offsetTop is always 0.
+        const rowTop =
+          row.getBoundingClientRect().top -
+          scroller.getBoundingClientRect().top +
+          scroller.scrollTop;
+        scroller.scrollTop = rowTop - header.offsetHeight + by;
       },
       [rowId, offset] as const
     );

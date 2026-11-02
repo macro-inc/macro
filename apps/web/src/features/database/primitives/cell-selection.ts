@@ -1,3 +1,4 @@
+import { arrayEquals } from '@core/util/compareUtils';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { createMemo, createSignal, onCleanup } from 'solid-js';
 import { match } from 'ts-pattern';
@@ -91,11 +92,13 @@ export function createCellSelection(options: {
   onClear?: (rows: string[], columns: string[]) => Promise<boolean>;
 }) {
   const [range, setRange] = createSignal<CellRange>();
+  const rowIds = createMemo(options.rows, [], { equals: arrayEquals });
+  const columnIds = createMemo(options.columns, [], { equals: arrayEquals });
   const rowIndex = createMemo(
-    () => new Map(options.rows().map((id, index) => [id, index]))
+    () => new Map(rowIds().map((id, index) => [id, index]))
   );
   const columnIndex = createMemo(
-    () => new Map(options.columns().map((id, index) => [id, index]))
+    () => new Map(columnIds().map((id, index) => [id, index]))
   );
   const selectableRows = createMemo(() =>
     options.rows().filter(options.canSelectRow)

@@ -1,7 +1,7 @@
 import { expect, type Page, test } from '@playwright/test';
 
-async function open(page: Page) {
-  await page.goto('/src/features/database/browser-test/grid.html');
+async function open(page: Page, rows = 30) {
+  await page.goto(`/src/features/database/browser-test/grid.html?rows=${rows}`);
   await expect(page.getByRole('grid', { name: 'Tasks' })).toBeVisible();
   await page.evaluate(() => document.fonts.ready);
 }
@@ -61,6 +61,38 @@ test('Shift+Arrow grows and shrinks a range and keeps its moving corner in view'
   // A plain arrow collapses it.
   await page.keyboard.press('ArrowUp');
   expect(await selected(page)).toEqual([]);
+});
+
+test('Shift+Cmd/Ctrl+Arrow reaches and scrolls to a row the virtualizer had not mounted', async ({
+  page,
+}) => {
+  await page.setViewportSize({ width: 1280, height: 800 });
+  await open(page, 300);
+  await expect(cell(page, 'row-299', 1)).toHaveCount(0);
+  await cell(page, 'row-0', 1).focus();
+
+  await page.keyboard.press('Shift+ControlOrMeta+ArrowDown');
+
+  await expect.poll(() => inView(page, 'row-299', 1)).toBe(true);
+  await expect(cell(page, 'row-299', 1)).toHaveAttribute(
+    'aria-selected',
+    'true'
+  );
+  await expect
+    .poll(() =>
+      page.evaluate(
+        () =>
+          !!document.activeElement?.closest(
+            '[data-grid-row-id="row-299"] [data-grid-column="1"]'
+          )
+      )
+    )
+    .toBe(true);
+  await page.keyboard.press('Shift+ArrowUp');
+  await expect(cell(page, 'row-299', 1)).toHaveAttribute(
+    'aria-selected',
+    'false'
+  );
 });
 
 test('a collaborator’s range is drawn with the presence ring', async ({

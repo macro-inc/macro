@@ -48,3 +48,15 @@ unquoted paragraphs retain normal paste behavior.
 
 Screenshots: [desktop](proof/quotes-desktop.png), [phone](proof/quotes-mobile.png),
 and [multi-paragraph paste](proof/quote-paste.png).
+
+## Images in lists
+
+`list-images.browser.e2e.ts` mounts the production Markdown editor with media
+and file drop over a numbered list. It inserts an image from an item, from the
+empty item Enter leaves (the image joins the item above, and a second Enter
+leaves the list), presses Enter after an item with an image, and drops a file on
+an item. It checks that the list stays one list with continuous numbering, that
+images align with their item's text, and that the saved Markdown indents each
+image under its item and renders back as one list, on desktop, tablet touch, and
+phone touch. Run just this case by adding `list-images.browser.e2e.ts` to the
+command above.

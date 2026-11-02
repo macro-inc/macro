@@ -1,7 +1,9 @@
 pub mod contacts_enqueuer;
 pub mod crm_enqueuer;
 pub mod customer_repo;
+pub mod domain_notice;
 pub mod events;
+pub mod invite_rewards;
 #[cfg(feature = "ports")]
 pub mod join_announcement;
 pub mod model;

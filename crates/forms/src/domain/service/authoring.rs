@@ -4,10 +4,10 @@ use crate::domain::authoring::ports::AuthoringCore;
 use crate::domain::authoring::{Column, Snapshot};
 use crate::domain::collaboration;
 use crate::domain::drafts::FormDraftError;
-use crate::domain::ports::CreateSource;
+use crate::domain::ports::{CreateSource, FormImageFiles};
 
-impl<Repository, Databases, Access, Events, Now, Broker, Drafts> AuthoringCore
-    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts>
+impl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images> AuthoringCore
+    for FormsServiceImpl<Repository, Databases, Access, Events, Now, Broker, Drafts, Images>
 where
     Repository: FormsRepo + FormDraftRepository + crate::domain::sharing::FormSharingRepo,
     Databases: DatabasesService + DatabaseRowReads + DatabaseMetadataReads,
@@ -16,6 +16,7 @@ where
     Now: Clock,
     Broker: MacroEventBroker,
     Drafts: FormDraftStore,
+    Images: FormImageFiles,
 {
     async fn authoring_source(
         &self,
