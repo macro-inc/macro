@@ -312,6 +312,11 @@ describe('mobile email signup attribution', () => {
         $initial_utm_campaign: 'spring',
       }
     );
+
+    // A second identify must not re-apply the same campaign values.
+    mocks.setPersonProperties.mockClear();
+    analytics.identify('user-id', {});
+    expect(mocks.setPersonProperties).not.toHaveBeenCalled();
   });
 });
 

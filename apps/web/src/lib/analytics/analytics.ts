@@ -22,7 +22,10 @@ import { type CaptureOptions, PostHog } from 'posthog-js';
 import { match } from 'ts-pattern';
 import { isIgnorableException, rewriteNativeFrameUrls } from './exceptionList';
 import { getPlanAnalyticsProperties } from './planProperties';
-import { mobileEmailPersonProperties } from './signupAttribution';
+import {
+  clearMobileEmailAttribution,
+  mobileEmailPersonProperties,
+} from './signupAttribution';
 
 /**
  * Resolves the user's device context for analytics enrichment.
@@ -354,6 +357,9 @@ const createAnalytics = () => {
       const attribution = mobileEmailPersonProperties();
       if (attribution) {
         posthog.setPersonProperties(attribution.set, attribution.once);
+        // Only after the properties land: a failed set must leave the cookie
+        // so a later identify can still attach the campaign.
+        clearMobileEmailAttribution();
       }
     } catch (e) {
       console.error('[Analytics] Failed to identify user:', e);

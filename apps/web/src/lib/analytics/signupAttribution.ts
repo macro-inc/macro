@@ -113,6 +113,16 @@ export const rememberMobileEmailAttribution = (): void => {
 };
 
 /**
+ * Drops the cookie once the desktop link's parameters have been applied to a
+ * person. Without this, a later identify in the same browser (another account,
+ * or a login that is not this signup) would reuse the campaign values.
+ */
+export const clearMobileEmailAttribution = (): void => {
+  if (typeof document === 'undefined') return;
+  document.cookie = `${MOBILE_EMAIL_ATTRIBUTION_COOKIE}=; expires=Thu, 01 Jan 1970 00:00:00 GMT; path=/`;
+};
+
+/**
  * Ad parameters for a capture that is still on the phone: the current URL,
  * filled in from the utm cookies root preload already stores.
  */

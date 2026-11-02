@@ -2,6 +2,7 @@ import { setCookie } from '@core/util/cookies';
 import { afterEach, describe, expect, it } from 'vitest';
 import {
   adAttributionForCapture,
+  clearMobileEmailAttribution,
   mobileEmailPersonProperties,
   rememberMobileEmailAttribution,
 } from './signupAttribution';
@@ -79,5 +80,19 @@ describe('mobile email attribution', () => {
       utm_source: 'facebook',
       utm_medium: 'email',
     });
+  });
+
+  it('forgets the stored link after the person properties are applied', () => {
+    window.history.replaceState(
+      {},
+      '',
+      '/app/signup?signup_flow=mobile_email&utm_source=facebook'
+    );
+    rememberMobileEmailAttribution();
+    window.history.replaceState({}, '', '/app/onboarding');
+    expect(mobileEmailPersonProperties()).not.toBeNull();
+
+    clearMobileEmailAttribution();
+    expect(mobileEmailPersonProperties()).toBeNull();
   });
 });
