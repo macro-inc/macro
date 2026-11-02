@@ -28,7 +28,7 @@ import {
   CURSOR_KEY_PREFIX,
   isCursorApiKey,
 } from './core/cursor-api-key';
-import { ConnectAction, HarnessIcon } from './integration-ui';
+import { HarnessIcon } from './integration-ui';
 import { SettingsCard, SettingsPage } from './primitives';
 import { RuntimePairingPage } from './RuntimePairingPage';
 

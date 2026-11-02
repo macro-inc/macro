@@ -1,5 +1,6 @@
 import { useSettingsState } from '@core/constant/SettingsState';
 import { useUserId } from '@core/context/user';
+import { fireAndForget } from '@core/util/fireAndForget';
 import { isDesktopPlatform } from '@core/util/platform';
 import { createUserScopedStorage } from '@core/util/userScopedStorage';
 import {
@@ -68,30 +69,33 @@ export function LocalRuntimePrompt() {
       try {
         const support = await macrodSupport();
         if (!support.supported || disposed) return;
-        void refresh();
-        void (async () => {
-          try {
-            const stop = await onMacrodStatus((status) => {
-              if (status.phase === 'running') {
-                runningObserved = true;
-                setAvailable(false);
+        fireAndForget(refresh(), 'local-runtime-prompt.refresh');
+        fireAndForget(
+          (async () => {
+            try {
+              const stop = await onMacrodStatus((status) => {
+                if (status.phase === 'running') {
+                  runningObserved = true;
+                  setAvailable(false);
+                }
+              });
+              if (disposed) {
+                stop();
+                return;
               }
-            });
-            if (disposed) {
-              stop();
-              return;
+              unlisten = stop;
+              await refresh();
+            } catch (error) {
+              console.error('could not watch the local agent runtime', error);
             }
-            unlisten = stop;
-            await refresh();
-          } catch (error) {
-            console.error('could not watch the local agent runtime', error);
-          }
-        })();
+          })(),
+          'local-runtime-prompt.watch'
+        );
       } catch (error) {
         console.error('could not check local agent support', error);
       }
     };
-    void inspect();
+    fireAndForget(inspect(), 'local-runtime-prompt.inspect');
 
     onCleanup(() => {
       disposed = true;
