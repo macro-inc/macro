@@ -116,7 +116,9 @@ describe('Telemetry', () => {
     await Promise.resolve();
     const other = Telemetry.span('other.action');
     other.run(() => {
-      parent.run(() => Telemetry.clientSpan('queued.request').end());
+      parent.run(() =>
+        Telemetry.span('queued.request', { kind: 'client' }).end()
+      );
       Telemetry.span('other.child').end();
     });
     root.end();

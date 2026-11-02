@@ -11,6 +11,12 @@ export type {
   TelemetryTracingProvider,
   TelemetryTracingProviderFactory,
 } from './provider';
+export type {
+  SamplingClass,
+  TelemetryRegister,
+  TraceSampling,
+} from './sampling';
 export type { Span, TraceContext } from './span';
 export { NOOP_SPAN } from './span-noop';
 export { Telemetry } from './telemetry';
+export type { SpanOptions } from './tracing';

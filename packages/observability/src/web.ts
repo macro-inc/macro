@@ -2,7 +2,6 @@ import { W3CTraceContextPropagator } from '@opentelemetry/core';
 import { OTLPTraceExporter } from '@opentelemetry/exporter-trace-otlp-http';
 import type { Resource } from '@opentelemetry/resources';
 import {
-  AlwaysOnSampler,
   BatchSpanProcessor,
   NoopSpanProcessor,
   type SpanProcessor,
@@ -13,22 +12,19 @@ import { ATTR_USER_ID } from './constants';
 import { DeferredSpanProcessor } from './deferred-span-processor';
 import { userIdSuppressed } from './privacy';
 import type { TelemetryTracingProvider } from './provider';
-import { createPerfSampler } from './sampler';
-import { StartupSampler } from './startup-sampler';
+import type { TraceSampling } from './sampling';
 
 /** Creates the browser OpenTelemetry provider used by the web application. */
 export function createWebTracingProvider(
-  config: TelemetryInitConfig,
+  config: TelemetryInitConfig<string>,
   resource: Resource,
   getUserId: () => string | undefined,
-  perfSampled: boolean
+  sampling: TraceSampling
 ): TelemetryTracingProvider {
-  const sampling = config.startup
-    ? new StartupSampler(perfSampled, config.startup)
-    : undefined;
   const createExporter = async (): Promise<SpanProcessor> => {
     const settings = config.startup ? await config.startup : config;
-    await sampling?.ready;
+    // Buffered spans are placed by the classes decided at enablement.
+    await sampling.decided;
     if (!settings.tracesUrl) return new NoopSpanProcessor();
     const processor = new BatchSpanProcessor(
       new OTLPTraceExporter({
@@ -38,11 +34,11 @@ export function createWebTracingProvider(
       // Native recordings can replay up to 3600 samples after a pause.
       settings.recording ? { maxQueueSize: 8192 } : undefined
     );
-    if (!sampling) return processor;
     return {
       onStart: (span, parent) => processor.onStart(span, parent),
       onEnd: (span) => {
-        if (sampling.exports(span)) processor.onEnd(span);
+        const exported = sampling.exported(span);
+        if (exported) processor.onEnd(exported);
       },
       forceFlush: () => processor.forceFlush(),
       shutdown: () => processor.shutdown(),
@@ -50,15 +46,10 @@ export function createWebTracingProvider(
   };
   const provider = new WebTracerProvider({
     resource,
-    sampler:
-      sampling ??
-      (config.recording
-        ? new AlwaysOnSampler()
-        : createPerfSampler(perfSampled)),
+    sampler: sampling,
     spanProcessors: [
       {
         onStart: (span, parentContext) => {
-          sampling?.remember(span, parentContext);
           span.setAttributes(config.spanAttributes?.() ?? {});
           if (userIdSuppressed(parentContext)) return;
           const userId = getUserId();
@@ -87,9 +78,6 @@ export function createWebTracingProvider(
     getTracer: (...args) => provider.getTracer(...args),
     forceFlush: () => provider.forceFlush(),
     shutdown: () => provider.shutdown(),
-    ...(sampling && {
-      resolveSpanContext: (span) => sampling.spanContext(span),
-    }),
   };
 }
 

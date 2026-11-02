@@ -10,7 +10,7 @@ description: >-
 
 # Perf investigation
 
-The web app (`service:web-app`, browser and Tauri desktop) exports perf-class
+The web app (`service:web-app`, browser and Tauri desktop) exports `perf`-class
 traces: one root per boot, navigation, view or interaction, a child per phase,
 and HTTP spans that join backend services. Span names and required attributes
 are the [span model](../../../docs/agent-guide/observability.md#span-model);
@@ -48,8 +48,9 @@ Verified against production web-app spans:
 
 ## Pitfalls
 
-- Production exports perf traces for 5% of sessions, and only where the
-  `enable-browser-otel` PostHog flag is on. Small routes have few samples:
+- Production exports perf traces for 5% of users (a cohort that rotates
+  weekly), and only where the `enable-browser-otel` PostHog flag is on. Weight
+  counts by `1 / @macro.sampling.rate` to estimate all users. Small routes have few samples:
   report counts with every percentile.
 - Perf spans exist only from the release that shipped them; check `@version`
   before concluding a flow is fast or missing.
@@ -80,7 +81,7 @@ const agg = (filter, compute, groupBy = []) =>
 
 ```javascript
 return agg(
-  { query: "service:web-app env:prod @macro.trace.class:perf @flow.kind:* @ui.outcome:success" },
+  { query: "service:web-app env:prod @macro.sampling.class:perf @flow.kind:* @ui.outcome:success" },
   [ { aggregation: "count", type: "total" },
     { aggregation: "pc75", metric: "@ui.elapsed_ms", type: "total" },
     { aggregation: "pc95", metric: "@ui.elapsed_ms", type: "total" } ],
@@ -130,7 +131,7 @@ spans under them (`only_service_entry_spans: true` to summarise). Compare the
 client span with its server child: a large gap is network, queueing or auth
 refresh (`boot.auth.refresh`, `http POST /auth/jwt/refresh`), not the
 handler. To rank the endpoints perf traces wait on, aggregate
-`service:web-app @macro.trace.class:perf operation_name:http.client.request`
+`service:web-app @macro.sampling.class:perf operation_name:http.client.request`
 by `@http.url` over `@http.response_headers_ms`.
 
 **5. Main thread and resources.** On roots, compare `@ui.work_to_ready_ms`

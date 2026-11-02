@@ -1,6 +1,6 @@
 // Web app performance: which flows are slow, for whom, and where the time goes.
 //
-// The web app exports perf-class traces for 5% of production sessions (see
+// The web app exports perf-class traces for 5% of production users (see
 // docs/agent-guide/observability.md#span-model). Datadog indexes only a sample
 // of ingested spans, so this file adds a retention filter for those traces and
 // span-based metrics computed from every ingested perf span; the dashboard
@@ -12,10 +12,10 @@
 import * as datadog from '@pulumi/datadog';
 import { graphGroup } from '../prod-monitor';
 
-const WEB = 'service:web-app @macro.trace.class:perf';
+const WEB = 'service:web-app @macro.sampling.class:perf';
 
 // Keeps every exported perf trace searchable, with the backend spans that
-// joined it. Perf traces are already sampled to 5% of production sessions.
+// joined it. Perf traces are already sampled to 5% of production users.
 new datadog.ApmRetentionFilter('web-app-perf-traces', {
   name: 'web-app perf traces',
   enabled: true,
@@ -128,7 +128,7 @@ export const webPerformanceDashboard = new datadog.Dashboard(
   {
     title: 'Web app performance',
     description:
-      'Perf-class traces from the web and desktop app (5% of production sessions). Declared in infra/stacks/monitoring/dashboards/web-performance.ts; span names and attributes are in docs/agent-guide/observability.md#span-model, and the perf-investigation skill drills into a slow flow.',
+      'Perf-class traces from the web and desktop app (5% of production users, rotating weekly). Declared in infra/stacks/monitoring/dashboards/web-performance.ts; span names and attributes are in docs/agent-guide/observability.md#span-model, and the perf-investigation skill drills into a slow flow.',
     layoutType: 'ordered',
     templateVariables: [
       { name: 'env', prefix: 'env', default: 'prod' },
