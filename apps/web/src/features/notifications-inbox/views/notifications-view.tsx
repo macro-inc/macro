@@ -30,10 +30,10 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import EmptyStateInboxTrayGraphic from '@design/empty-state-inbox-tray.svg';
 import type { EntityData } from '@entity';
 import { formatTimestamp } from '@entity/utils/timestamp';
 import ArrowCounterClockwise from '@icon/system/regular/arrow-counter-clockwise.svg';
-import BellIcon from '@icon/system/regular/bell.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import GearSixIcon from '@icon/system/regular/gear-six.svg';
 import { useMutationUndoContext } from '@queries/undo';
@@ -425,7 +425,8 @@ export function NotificationsView(props: NotificationsViewProps) {
       <Match when={view().t === 'empty'}>
         <div class="min-h-0 flex-1 overflow-y-auto touch:pt-(--mobile-content-inset-top)">
           <EmptyStatePanel
-            graphic={BellIcon}
+            centered
+            graphic={EmptyStateInboxTrayGraphic}
             title={t('notificationsInbox.caughtUpTitle')}
             description={t('notificationsInbox.caughtUpDescription')}
           />
@@ -567,7 +568,8 @@ export function NotificationsView(props: NotificationsViewProps) {
           <div class="size-full min-h-0 bg-panel">
             <ViewShell.Root
               asidePreferenceKey="notifications"
-              aside={{ preserveDuringResize: false }}
+              // Rows read as sentences, so the list starts wider than a nav rail.
+              aside={{ width: 360, max: 480, preserveDuringResize: false }}
               main={{ preferredWidth: 640 }}
               resizable
             >
@@ -609,7 +611,8 @@ export function NotificationsView(props: NotificationsViewProps) {
                   when={previewTarget()}
                   fallback={
                     <EmptyStatePanel
-                      graphic={BellIcon}
+                      centered
+                      graphic={EmptyStateInboxTrayGraphic}
                       title={t('notificationsInbox.noneSelectedTitle')}
                       description={t(
                         'notificationsInbox.noneSelectedDescription'

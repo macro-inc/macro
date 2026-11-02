@@ -68,7 +68,7 @@ export function NotificationRow(props: NotificationRowProps) {
             <Show when={props.unseen}>
               <span
                 aria-label={t('notificationsInbox.unread')}
-                class="size-1.5 shrink-0 rounded-full bg-accent"
+                class="size-1.5 shrink-0 rounded-full bg-accent not-touch:group-hover/notification:hidden"
               />
             </Show>
           </div>
