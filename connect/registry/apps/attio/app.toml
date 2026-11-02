@@ -1,0 +1,10 @@
+id = "attio"
+name = "Attio"
+description = "Search and update CRM records, lists, and notes."
+access = ["mcp"]
+mcp_url = "https://mcp.attio.com/mcp"
+client_registration = "dcr"
+scopes = []
+pipedream_app_slugs = ["attio"]
+status = "pending"
+probed = 2026-10-30
