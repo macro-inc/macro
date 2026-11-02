@@ -57,7 +57,7 @@ describe('recordChoiceProblem', () => {
     ).toBeUndefined();
   });
 
-  it('asks a new company for a name and a valid domain', () => {
+  it('requires a company name and validates a supplied domain', () => {
     expect(
       recordChoiceProblem(
         { kind: 'new-company', name: ' ', domain: 'acme.com' },
@@ -78,7 +78,7 @@ describe('recordChoiceProblem', () => {
     ).toBeUndefined();
   });
 
-  it('asks a new contact for a name and an email at a known company', () => {
+  it('requires an explicit company choice even when the email domain matches', () => {
     expect(
       recordChoiceProblem(
         { kind: 'new-contact', name: '', email: 'jane@acme.com' },
@@ -96,13 +96,13 @@ describe('recordChoiceProblem', () => {
         { kind: 'new-contact', name: 'Jane', email: 'jane@Other.com' },
         companies
       )
-    ).toBe('No company uses other.com. Add the company first.');
+    ).toBe('Choose a company for this contact');
     expect(
       recordChoiceProblem(
         { kind: 'new-contact', name: 'Jane', email: 'jane@acme.com' },
         companies
       )
-    ).toBeUndefined();
+    ).toBe('Choose a company for this contact');
   });
 });
 
@@ -122,4 +122,32 @@ describe('recordDetail', () => {
       recordDetail({ id: 'g', name: 'Globex', detail: 'globex.com' })
     ).toBe('globex.com');
   });
+});
+
+it('accepts name-only companies and explicit cross-domain contact links', () => {
+  expect(
+    recordChoiceProblem({ kind: 'new-company', name: 'Acme', domain: '' }, [])
+  ).toBeUndefined();
+  expect(
+    recordChoiceProblem(
+      {
+        kind: 'new-contact',
+        name: 'Jane',
+        email: 'jane@example.com',
+        companyId: 'acme',
+      },
+      [{ id: 'acme' }]
+    )
+  ).toBeUndefined();
+  expect(
+    recordChoiceProblem(
+      {
+        kind: 'new-contact',
+        name: 'Jane',
+        email: 'jane@example.com',
+        companyId: 'missing',
+      },
+      [{ id: 'acme' }]
+    )
+  ).toBe('Choose a company for this contact');
 });

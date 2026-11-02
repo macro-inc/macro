@@ -5,7 +5,7 @@ import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckCircleIcon from '@icon/system/regular/check-circle.svg';
 import SpinnerIcon from '@icon/system/regular/spinner-gap.svg';
 import type { MacrodStatus } from '@macro/tauri/macrod';
-import { Button, cn } from '@ui';
+import { Button, cn, ToggleSwitch } from '@ui';
 import { createSignal, Match, onMount, Show, Switch } from 'solid-js';
 import { match } from 'ts-pattern';
 import {
@@ -342,27 +342,29 @@ function SetupOptions(props: {
               {t('localRuntime.workspaceHint')}
             </p>
           </div>
-          <label class="flex w-full items-start gap-3 rounded-lg border border-edge-muted p-4 text-sm text-ink">
-            <input
-              type="checkbox"
-              class="mt-0.5 size-5 shrink-0 accent-accent"
+          <div class="w-full rounded-lg border border-edge-muted p-4">
+            <ToggleSwitch
+              size="md"
+              class="w-full items-start"
+              controlClass="mt-0.5 shrink-0"
+              labelClass="text-sm text-ink"
               checked={props.fullAccess}
-              onChange={(event) =>
-                props.onFullAccess(event.currentTarget.checked)
+              onChange={props.onFullAccess}
+              label={
+                <span>
+                  <span class="flex flex-wrap items-center gap-2 font-semibold">
+                    {t('localRuntime.fullAccess')}
+                    <span class="rounded-full bg-ink/6 px-2 py-0.5 text-xs font-medium text-ink-muted">
+                      {t('localRuntime.suggested')}
+                    </span>
+                  </span>
+                  <span class="mt-1 block text-sm text-ink-muted">
+                    {t('localRuntime.fullAccessHint')}
+                  </span>
+                </span>
               }
             />
-            <span>
-              <span class="flex flex-wrap items-center gap-2 font-semibold">
-                {t('localRuntime.fullAccess')}
-                <span class="rounded-full bg-ink/6 px-2 py-0.5 text-xs font-medium text-ink-muted">
-                  {t('localRuntime.suggested')}
-                </span>
-              </span>
-              <span class="mt-1 block text-sm text-ink-muted">
-                {t('localRuntime.fullAccessHint')}
-              </span>
-            </span>
-          </label>
+          </div>
           <Show when={props.needsInstall}>
             <p class="text-xs text-ink-extra-muted">
               {t('localRuntime.connectorHint')}

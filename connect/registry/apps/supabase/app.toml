@@ -1,0 +1,10 @@
+id = "supabase"
+name = "Supabase"
+description = "Manage projects, query databases, and read logs."
+access = ["mcp"]
+mcp_url = "https://mcp.supabase.com/mcp"
+client_registration = "dcr"
+scopes = []
+pipedream_app_slugs = ["supabase"]
+status = "pending"
+probed = 2026-10-30

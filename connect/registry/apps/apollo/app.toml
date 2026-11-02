@@ -1,0 +1,10 @@
+id = "apollo"
+name = "Apollo"
+description = "Search people and companies and manage sequences."
+access = ["mcp"]
+mcp_url = "https://mcp.apollo.io/mcp"
+client_registration = "cimd"
+scopes = []
+pipedream_app_slugs = ["apollo_io_oauth"]
+status = "pending"
+probed = 2026-10-30
