@@ -22,7 +22,8 @@ key issuance, and account merge/link flows.
 ## Scope
 
 - Owns: FusionAuth-backed login/session issuance, JWT minting, signup
-  allowlisting, OAuth/OAuth2 account linking, GTM invite links, shared-mailbox
+  allowlisting, OAuth/OAuth2 account linking, GTM invite links, the platform
+  status banner API (`crates/system_status`), shared-mailbox
   relocation signup, Cursor/Codex API key endpoints, introductory trial
   eligibility and subscription checkout.
 - Not here: authorization/permission decisions on other entities →
