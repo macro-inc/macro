@@ -573,10 +573,7 @@ export function Gutter(props: GutterProps) {
 
   return (
     <div
-      class={cn(
-        'group',
-        props.resizable ? 'pointer-events-auto' : 'pointer-events-none'
-      )}
+      class="group"
       role="separator"
       aria-orientation={horizontal() ? 'vertical' : 'horizontal'}
       aria-hidden={!props.resizable}
@@ -584,6 +581,8 @@ export function Gutter(props: GutterProps) {
       aria-label={props.resizable ? `resize at ${props.index}` : undefined}
       style={{
         position: 'absolute',
+        // Inline, so a gutter inside a pass-through box still takes the drag.
+        'pointer-events': props.resizable ? 'auto' : 'none',
         cursor: props.resizable
           ? horizontal()
             ? 'col-resize'

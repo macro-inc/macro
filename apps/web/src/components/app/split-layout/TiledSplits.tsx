@@ -95,7 +95,11 @@ export function TiledSplits(props: TiledSplitsProps) {
   };
 
   return (
-    <div ref={setRoot} class="relative size-full" data-resize-zone>
+    <div
+      ref={setRoot}
+      style={{ position: 'relative', width: '100%', height: '100%' }}
+      data-resize-zone
+    >
       <For each={props.panes()}>
         {(pane, index) => {
           const style = (): JSX.CSSProperties => {
@@ -120,8 +124,10 @@ export function TiledSplits(props: TiledSplitsProps) {
           return (
             <div
               ref={setBox}
-              class="pointer-events-none"
-              style={rectStyle(gutter().split.rect)}
+              style={{
+                ...rectStyle(gutter().split.rect),
+                'pointer-events': 'none',
+              }}
             >
               <Gutter
                 direction={horizontal() ? 'horizontal' : 'vertical'}
