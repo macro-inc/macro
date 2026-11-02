@@ -222,36 +222,60 @@ it.each([MenuPriority.Normal, MenuPriority.High])(
   }
 );
 
-it('keeps the editor anchor when search takes focus', async () => {
-  const { editor } = mountPicker();
-  editor.update(
-    () => {
-      const paragraph = $createParagraphNode().append($createTextNode('hello'));
-      $getRoot().append(paragraph);
-      paragraph.selectEnd();
-    },
-    { discrete: true }
-  );
-  const root = editor.getRootElement()!;
-  root.focus();
-  const range = document.createRange();
-  range.selectNodeContents(root);
-  range.collapse(false);
-  const selection = window.getSelection()!;
-  selection.removeAllRanges();
-  selection.addRange(range);
-  const nativeFocus = HTMLElement.prototype.focus;
-  vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(function (
-    this: HTMLElement
-  ) {
-    nativeFocus.call(this);
-    if (this instanceof HTMLInputElement) selection.removeAllRanges();
-  });
-  editor.dispatchCommand(TRY_INSERT_GIF_COMMAND, undefined);
-  expect(document.activeElement).toBe(screen.getByRole('searchbox'));
-  await waitFor(() => expect(computePosition).toHaveBeenCalled());
-  expect(vi.mocked(computePosition).mock.calls[0][0]).toBe(root);
-});
+it.each(['element', 'text'])(
+  'keeps the editor %s anchor when search takes focus',
+  async (anchorType) => {
+    const { editor } = mountPicker();
+    editor.update(
+      () => {
+        const paragraph = $createParagraphNode().append(
+          $createTextNode('hello')
+        );
+        $getRoot().append(paragraph);
+        paragraph.selectEnd();
+      },
+      { discrete: true }
+    );
+    const root = editor.getRootElement()!;
+    root.focus();
+    const anchor =
+      anchorType === 'text'
+        ? document.createTreeWalker(root, NodeFilter.SHOW_TEXT).nextNode()!
+        : root;
+    const range = document.createRange();
+    range.selectNodeContents(anchor);
+    range.collapse(false);
+    const selection = window.getSelection()!;
+    selection.removeAllRanges();
+    selection.addRange(range);
+    const nativeFocus = HTMLElement.prototype.focus;
+    vi.spyOn(HTMLElement.prototype, 'focus').mockImplementation(function (
+      this: HTMLElement
+    ) {
+      nativeFocus.call(this);
+      if (this instanceof HTMLInputElement) selection.removeAllRanges();
+    });
+    editor.dispatchCommand(TRY_INSERT_GIF_COMMAND, undefined);
+    const input = screen.getByRole('searchbox');
+    expect(document.activeElement).toBe(input);
+    const panel = input.closest('[data-holds-prompts]')!;
+    await waitFor(() => expect(panel).toHaveProperty('style.top', '200px'));
+    expect(panel).toHaveProperty('style.visibility', 'visible');
+    const reference = vi.mocked(computePosition).mock.lastCall?.[0];
+    if (anchorType === 'text') {
+      expect(reference).toBeInstanceOf(Range);
+      expect(reference).toMatchObject({
+        startContainer: anchor,
+        endContainer: anchor,
+        startOffset: 5,
+        endOffset: 5,
+        collapsed: true,
+      });
+    } else {
+      expect(reference).toBe(root);
+    }
+  }
+);
 
 it.each([false, true])(
   'focuses search during opening and keeps composer clicks out on touch=%s',
