@@ -271,6 +271,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
             ownerId={props.entity.ownerId}
             viewerLabel="Me"
             iconOnly
+            iconClass="@max-[840px]/u-list:size-5"
           />
         </Entity.Slot>
       </Entity.Layout>

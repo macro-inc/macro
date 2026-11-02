@@ -124,8 +124,9 @@ timestamps. At 600px, Updated fades and collapses over
 160ms to leave more room for the title. Hidden Updated and Created by
 columns reserve no width or spacing; visible cells own their 8px leading inset.
 Reduced-motion preferences disable the transition. Visible timestamps stay on one line, and
-Updated remains sortable. Created by is the final column, with a 16px avatar and a 16px gap after Updated. Its header shows a matching-size user-plus
-icon with a “Created by” tooltip on hover or focus. Owner names and the column label
+Updated remains sortable. Created by is the final column, with a 16px avatar above
+840px and a 20px avatar at compact widths, plus a 16px gap after Updated. Its header
+keeps a 16px user-plus icon with a “Created by” tooltip on hover or focus. Owner names and the column label
 stay accessible; names remain available on hover. The creator header and avatar
 stay visible above 600px and hide alongside Updated at 600px. Shared tasks show the
 shared badge next to the title only while the creator column is hidden.

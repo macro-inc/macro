@@ -7,7 +7,7 @@ import { firstPartyBotName } from '@queries/bots/first-party-bot-name';
 import { useBotProfile } from '@queries/bots/profiles';
 import { queryReadyGate } from '@queries/gate';
 import { useUserTeamsQuery } from '@queries/team/teams';
-import { Avatar } from '@ui';
+import { Avatar, cn } from '@ui';
 import { type JSX, Match, type ParentProps, Show, Switch } from 'solid-js';
 import { botOwnerName, type Owner, parseOwner } from './owner';
 
@@ -38,6 +38,7 @@ function TeamBadge(props: {
   name: string;
   textOnly?: boolean;
   iconOnly?: boolean;
+  iconClass?: string;
 }): JSX.Element {
   return (
     <IconAndName
@@ -46,7 +47,7 @@ function TeamBadge(props: {
       textOnly={props.textOnly}
       iconOnly={props.iconOnly}
     >
-      <UsersThreeIcon class="size-4 shrink-0" />
+      <UsersThreeIcon class={cn('size-4 shrink-0', props.iconClass)} />
     </IconAndName>
   );
 }
@@ -68,6 +69,7 @@ function UserOwner(props: {
   userAvatarOnly?: boolean;
   textOnly?: boolean;
   iconOnly?: boolean;
+  iconClass?: string;
 }): JSX.Element {
   const userId = useUserId();
   const name = () => {
@@ -83,6 +85,7 @@ function UserOwner(props: {
       <UserIcon
         id={props.id}
         size="sm"
+        class={props.iconClass}
         suppressClick={props.suppressClick}
         showTooltip={props.showTooltip}
       />
@@ -96,6 +99,7 @@ function BotFace(props: {
   avatarUrl?: string;
   textOnly?: boolean;
   iconOnly?: boolean;
+  iconClass?: string;
 }): JSX.Element {
   return (
     <IconAndName
@@ -103,7 +107,12 @@ function BotFace(props: {
       textOnly={props.textOnly}
       iconOnly={props.iconOnly}
     >
-      <UserIcon id={props.principal} photoUrl={props.avatarUrl} size="sm" />
+      <UserIcon
+        id={props.principal}
+        photoUrl={props.avatarUrl}
+        size="sm"
+        class={props.iconClass}
+      />
     </IconAndName>
   );
 }
@@ -112,6 +121,7 @@ function ProfileBot(props: {
   botId: string;
   textOnly?: boolean;
   iconOnly?: boolean;
+  iconClass?: string;
 }): JSX.Element {
   const profile = useBotProfile(() => props.botId);
   const settled = () => (queryReadyGate(profile) ? profile.data : undefined);
@@ -127,6 +137,7 @@ function ProfileBot(props: {
       avatarUrl={settled()?.avatarUrl}
       textOnly={props.textOnly}
       iconOnly={props.iconOnly}
+      iconClass={props.iconClass}
     />
   );
 }
@@ -135,6 +146,7 @@ function BotOwner(props: {
   botId: string;
   textOnly?: boolean;
   iconOnly?: boolean;
+  iconClass?: string;
 }): JSX.Element {
   const firstParty = () => firstPartyBotName(props.botId);
   return (
@@ -145,6 +157,7 @@ function BotOwner(props: {
           botId={props.botId}
           textOnly={props.textOnly}
           iconOnly={props.iconOnly}
+          iconClass={props.iconClass}
         />
       }
     >
@@ -154,6 +167,7 @@ function BotOwner(props: {
           name={name()}
           textOnly={props.textOnly}
           iconOnly={props.iconOnly}
+          iconClass={props.iconClass}
         />
       )}
     </Show>
@@ -164,6 +178,7 @@ function TeamOwner(props: {
   teamId: string;
   textOnly?: boolean;
   iconOnly?: boolean;
+  iconClass?: string;
 }): JSX.Element {
   const teams = useUserTeamsQuery();
   const name = () => {
@@ -179,6 +194,7 @@ function TeamOwner(props: {
       name={name()}
       textOnly={props.textOnly}
       iconOnly={props.iconOnly}
+      iconClass={props.iconClass}
     />
   );
 }
@@ -186,6 +202,7 @@ function TeamOwner(props: {
 function UnknownOwner(props: {
   textOnly?: boolean;
   iconOnly?: boolean;
+  iconClass?: string;
 }): JSX.Element {
   return (
     <IconAndName
@@ -193,7 +210,7 @@ function UnknownOwner(props: {
       textOnly={props.textOnly}
       iconOnly={props.iconOnly}
     >
-      <Avatar size="sm">
+      <Avatar size="sm" class={props.iconClass}>
         <Avatar.Fallback>?</Avatar.Fallback>
       </Avatar>
     </IconAndName>
@@ -216,6 +233,8 @@ export function OwnerLabel(props: {
   textOnly?: boolean;
   /** Show only the owner icon, retaining the name for assistive technology. */
   iconOnly?: boolean;
+  /** Size or style the rendered icon without changing the label layout. */
+  iconClass?: string;
 }): JSX.Element {
   const owner = () => parseOwner(props.ownerId);
   return (
@@ -230,6 +249,7 @@ export function OwnerLabel(props: {
             userAvatarOnly={props.userAvatarOnly}
             textOnly={props.textOnly}
             iconOnly={props.iconOnly}
+            iconClass={props.iconClass}
           />
         )}
       </Match>
@@ -239,6 +259,7 @@ export function OwnerLabel(props: {
             botId={bot().botId}
             textOnly={props.textOnly}
             iconOnly={props.iconOnly}
+            iconClass={props.iconClass}
           />
         )}
       </Match>
@@ -248,11 +269,16 @@ export function OwnerLabel(props: {
             teamId={team().teamId}
             textOnly={props.textOnly}
             iconOnly={props.iconOnly}
+            iconClass={props.iconClass}
           />
         )}
       </Match>
       <Match when={asKind(owner(), 'unknown')}>
-        <UnknownOwner textOnly={props.textOnly} iconOnly={props.iconOnly} />
+        <UnknownOwner
+          textOnly={props.textOnly}
+          iconOnly={props.iconOnly}
+          iconClass={props.iconClass}
+        />
       </Match>
     </Switch>
   );

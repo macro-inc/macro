@@ -41,3 +41,5 @@ labels before tags or title truncation.
 
 `OwnerLabel.iconOnly` retains owner names as accessible text and hover titles for
 users, bots, teams, and unknown owners; ordinary owner labels remain unchanged.
+Pass `OwnerLabel.iconClass` to size the owner glyph at the call site; the override
+applies consistently to user, bot, team, and unknown owners.
