@@ -252,6 +252,12 @@ it.each(['element', 'text'])(
     const range = document.createRange();
     range.selectNodeContents(anchor);
     range.collapse(false);
+    const cloneRange = range.cloneRange.bind(range);
+    vi.spyOn(range, 'cloneRange').mockImplementation(() => {
+      const snapshot = cloneRange();
+      snapshot.getBoundingClientRect = () => new DOMRect(100, 200, 0, 20);
+      return snapshot;
+    });
     const selection = window.getSelection()!;
     selection.removeAllRanges();
     selection.addRange(range);
@@ -280,6 +286,95 @@ it.each(['element', 'text'])(
       });
     } else {
       expect(reference).toBe(root);
+    }
+  }
+);
+
+it.each(['empty text', 'empty element', 'clipped element'])(
+  'uses the correct reference for a %s caret',
+  async (anchorType) => {
+    const floating =
+      await vi.importActual<typeof import('@floating-ui/dom')>(
+        '@floating-ui/dom'
+      );
+    const defaultPosition = vi.mocked(computePosition).getMockImplementation();
+    vi.mocked(computePosition).mockImplementation(floating.computePosition);
+    try {
+      vi.spyOn(document.documentElement, 'clientWidth', 'get').mockReturnValue(
+        1024
+      );
+      vi.spyOn(document.documentElement, 'clientHeight', 'get').mockReturnValue(
+        768
+      );
+      vi.spyOn(HTMLElement.prototype, 'offsetWidth', 'get').mockImplementation(
+        function (this: HTMLElement) {
+          return this.getBoundingClientRect().width;
+        }
+      );
+      vi.spyOn(HTMLElement.prototype, 'offsetHeight', 'get').mockImplementation(
+        function (this: HTMLElement) {
+          return this.getBoundingClientRect().height;
+        }
+      );
+      vi.spyOn(
+        HTMLElement.prototype,
+        'getBoundingClientRect'
+      ).mockImplementation(function (this: HTMLElement) {
+        if (this.hasAttribute('contenteditable'))
+          return new DOMRect(100, 600, 400, 40);
+        if (this.hasAttribute('data-holds-prompts'))
+          return new DOMRect(0, 0, 448, 460);
+        if (this.hasAttribute('data-lexical-text')) {
+          if (anchorType === 'clipped element')
+            return new DOMRect(100, -50, 100, 20);
+          return new DOMRect();
+        }
+        return new DOMRect(0, 0, 1024, 768);
+      });
+      const { editor } = mountPicker();
+      editor.update(
+        () => {
+          $getRoot().append(
+            $createParagraphNode().append($createTextNode('hello'))
+          );
+        },
+        { discrete: true }
+      );
+      const text = document
+        .createTreeWalker(editor.getRootElement()!, NodeFilter.SHOW_TEXT)
+        .nextNode()!;
+      const range = document.createRange();
+      if (anchorType === 'empty text') range.setStart(text, 5);
+      else range.setStart(text.parentElement!, 0);
+      range.collapse(true);
+      const selection = window.getSelection()!;
+      selection.removeAllRanges();
+      selection.addRange(range);
+      const nativeClone = Range.prototype.cloneRange;
+      vi.spyOn(Range.prototype, 'cloneRange').mockImplementation(function (
+        this: Range
+      ) {
+        const snapshot = nativeClone.call(this);
+        snapshot.getBoundingClientRect = () => new DOMRect();
+        return snapshot;
+      });
+
+      editor.dispatchCommand(TRY_INSERT_GIF_COMMAND, undefined);
+      const input = await screen.findByRole('searchbox', { hidden: true });
+      const panel = input.closest<HTMLElement>('[data-holds-prompts]')!;
+      if (anchorType === 'clipped element') {
+        await waitFor(() =>
+          expect(panel).toHaveProperty('style.visibility', 'hidden')
+        );
+        return;
+      }
+      await waitFor(() =>
+        expect(panel).toHaveProperty('style.visibility', 'visible')
+      );
+      expect(Number.parseFloat(panel.style.top)).toBeGreaterThan(0);
+      expect(Number.parseFloat(panel.style.top)).toBeLessThan(600);
+    } finally {
+      vi.mocked(computePosition).mockImplementation(defaultPosition!);
     }
   }
 );

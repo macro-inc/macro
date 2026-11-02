@@ -36,7 +36,7 @@ function style(el: HTMLElement, styles: Partial<JSX.CSSProperties>) {
 
 type FloatWithSelectionOptions = {
   selection: Selection | undefined | null;
-  /** Use this anchor only when the browser has no selection to position from. */
+  /** Use this anchor when the browser selection is missing or has no geometry. */
   fallbackElement?: Element | null;
   reactiveOnContainer?: HTMLElement | null;
   useBlockBoundary?: boolean;
@@ -114,6 +114,12 @@ export function floatWithSelection(
   let decidedPlacement: Placement | null = null;
 
   function toReference(anchor: Range | Element): ReferenceElement {
+    const fallback = accessor()?.fallbackElement;
+    if (fallback) {
+      const rect = anchor.getBoundingClientRect();
+      // Removing an inline command can leave a caret with no geometry.
+      if (rect.width === 0 && rect.height === 0) return fallback;
+    }
     return accessor()?.clipToVisible && anchor instanceof Range
       ? visibleRangeReference(anchor)
       : anchor;

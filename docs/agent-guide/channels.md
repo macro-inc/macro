@@ -426,7 +426,8 @@ formatting or link menu, opens above the composer on phones, and stays visible
 after you choose the action, including with the iOS keyboard open. Both the `/`
 formatting menu and the GIF picker span the available chat width on phones,
 using the mentions menu's side gutters.
-If the browser has no caret selection, the GIF picker anchors to its editor.
+If the browser has no caret selection or its range has no rendered geometry,
+the GIF picker anchors to its editor rather than staying hidden.
 The larger desktop GIF picker stays within the viewport on narrow screens.
 Trending GIFs show first, with the large search field focused on both desktop
 and phones. Search keeps the composer expanded, and tapping anywhere in the
