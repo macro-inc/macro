@@ -4,10 +4,10 @@
 
 Behind `enable-unified-notifications` (with GraphQL Soup), the bell below Home
 on the outer rail (`g i`) opens one list of everything that needs you, newest
-first. The flag is off everywhere by default, dev included, because no PostHog
-flag exists yet; run the frontend with `VITE_ENABLE_UNIFIED_NOTIFICATIONS=true`
-to see it locally. With the flag off the route redirects to Home once flags
-load, and `g i` stays on Home; with it on, Home keeps `g h`.
+first. The flag is on in dev and comes from PostHog elsewhere;
+`VITE_ENABLE_UNIFIED_NOTIFICATIONS` overrides it locally. With the flag off the
+route redirects to Home once flags load, and `g i` stays on Home; with it on,
+Home keeps `g h`.
 
 Each row is one row of the server's notification inbox
 (`user.notificationInbox`): an email thread, a channel's top-level messages, one thread, one
