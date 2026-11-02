@@ -62,6 +62,7 @@ Hidden tags keep the existing overflow picker and hover actions. Keep the visibl
 chip count stable while a picker or its nested editor is active so resizing
 cannot discard the editing session. Key visible chips by option ID so refreshed
 tag objects do not remount a picker or leave overflow collapsing paused.
+Release active-picker state when a live update removes its chip or overflow trigger.
 When editing ends, immediately re-evaluate new tags against the title's full
 width, even if the title is already truncated.
 Hosts without a controller retain their explicit or default chip limit.
