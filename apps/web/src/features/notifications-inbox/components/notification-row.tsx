@@ -58,7 +58,8 @@ export function NotificationRow(props: NotificationRowProps) {
           <InboxRowIcon type={props.type} class="size-4" />
         </span>
         <div class="flex min-w-0 flex-1 flex-col gap-0.5">
-          <div class="flex min-w-0 items-center gap-2">
+          {/* Leaves room for Mark done, which replaces the time on hover. */}
+          <div class="flex min-w-0 items-center gap-2 not-touch:group-hover/notification:pr-6">
             <span class="min-w-0 flex-1 truncate text-sm text-ink-muted">
               {props.action}
             </span>
