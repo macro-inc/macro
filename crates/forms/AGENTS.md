@@ -44,6 +44,12 @@ service.
 
 - `cargo test -p forms --all-features` (`SQLX_OFFLINE` unset).
 
+## Gotchas
+
+- `POST /forms` attributes the creation to the SDK token's `agent_id` (code
+  mode), like the native tool, so channel delivery shares a poll an agent
+  posts; access checks still run as the plain user.
+
 ## Related
 
 - Skills: `collab-surface-core`, `database-core` · Rules: `.agents/rules/rust/architecture.md`

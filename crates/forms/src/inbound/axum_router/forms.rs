@@ -3,6 +3,7 @@
 use axum::Json;
 use axum::extract::{Query, State};
 use axum::http::StatusCode;
+use databases::domain::models::Viewer;
 use databases::domain::receipt::database_receipt;
 use entity_access::domain::models::{EditAccessLevel, OwnerAccessLevel, ViewAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
@@ -49,6 +50,13 @@ where
     Authorization: MacroAuthorizationService,
 {
     let creator = viewer_of(&user);
+    // An agent's SDK token (code mode) creates as its user, attributed to the
+    // agent like the native tool's creations, so channel delivery can share
+    // what it made for the request.
+    let attributed_creator = Viewer {
+        acting_bot: user.user.authorization.user.agent_id,
+        ..creator.clone()
+    };
     let source = match request.source {
         FormSource::New { is_hidden_in_drive } => CreateSource::NewDatabase { is_hidden_in_drive },
         FormSource::Table {
@@ -67,7 +75,7 @@ where
     let detail = state
         .service
         .create_form(
-            creator,
+            attributed_creator,
             CreateFormCommand {
                 name: request.name,
                 source,

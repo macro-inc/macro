@@ -212,7 +212,9 @@ once, in the card header. Newly posted poll cards
 store their option count in Lexical preview metadata to reserve their height
 before loading. Choices have fixed-height rows; large polls and expanded
 results scroll inside the card. Older cards without that metadata keep their
-content-sized layout.
+content-sized layout. A viewer without access to the card's item sees "You
+don’t have access to this poll" (or form/item), and a deleted item reads "This
+poll was deleted", never an empty card.
 
 ## Reading responses as an agent
 
