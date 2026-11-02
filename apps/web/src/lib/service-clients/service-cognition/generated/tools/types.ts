@@ -3633,6 +3633,10 @@ export type AvailabilityUnknownReason =
   | 'invalid_interval'
   | 'conflicting_copies';
 /**
+ * Fixed calendar granularity, always in UTC, with Monday-start weeks.
+ */
+export type Granularity = 'day' | 'week' | 'month' | 'summary';
+/**
  * What the tool is asked to do.
  */
 export type NotionImportAction = 'plan' | 'status' | 'cancel';
@@ -4824,6 +4828,25 @@ export type ProjectShareAccess = 'off' | 'view' | 'comment' | 'edit';
  * Scope admitted by a project's share link.
  */
 export type ProjectLinkScope = 'off' | 'public' | 'team';
+/**
+ * An edit to one one-based line. A revision is required to prevent replay
+ * or concurrent edits from inserting twice or deleting a different line.
+ */
+export type MemoryEdit =
+  | {
+      line: number;
+      content: string;
+      action: 'insert';
+    }
+  | {
+      line: number;
+      content: string;
+      action: 'replace';
+    }
+  | {
+      line: number;
+      action: 'delete';
+    };
 /**
  * Exactly one update intention avoids partially-applied configuration/activation changes.
  */
@@ -10825,6 +10848,35 @@ export interface ToolContact {
   name?: string | null;
 }
 /**
+ * Read privacy-reviewed professional activity for yourself or a current teammate. Reports use UTC calendar days, Monday-start weeks, and calendar months. Empty results mean no stored activity, not no work. At most 366 days per request.
+ */
+export interface GetUserActivity {
+  /**
+   * A macro| user id, or omit for yourself.
+   */
+  userId?: string | null;
+  /**
+   * Inclusive first UTC date (YYYY-MM-DD).
+   */
+  start: string;
+  /**
+   * Inclusive last UTC date (YYYY-MM-DD).
+   */
+  end: string;
+}
+export interface ActivityReports {
+  reports: Activity[];
+}
+/**
+ * A privacy-reviewed activity report; period_end is inclusive.
+ */
+export interface Activity {
+  granularity: Granularity;
+  periodStart: string;
+  periodEnd: string;
+  content: string;
+}
+/**
  * Import companies into the team CRM from a CSV, such as a Macro companies export or a list from another CRM. Each row needs a domain (a Domain, Domains or Website column) and may name the company (Company or Name); a row takes its first valid domain, and companies the team already has are left as they are. Stage, Owner and Revenue live on pipeline entries rather than companies: when the CSV has them, they go on entries of pipelineId, or of a new pipeline (private unless shareNewPipeline) named after the file. Give the CSV as text in csv, or as documentId for a CSV file in Macro. Returns counts and the rows that could not be imported. To add rows to a pipeline without this, use ImportPipelineCsv.
  */
 export interface ImportCompaniesCsv {
@@ -14520,6 +14572,17 @@ export interface InitiativeActivityRecord {
   occurredAt: string;
 }
 /**
+ * Read your private explicit memory and revision before a remember/forget edit. Content is one-based lines; use the returned revision for UpdateMemory. Generated activity and profiles are separate.
+ */
+export type ReadMemory = {};
+/**
+ * A private explicit memory document and its optimistic concurrency token.
+ */
+export interface ExplicitMemory {
+  content: string;
+  revision: number;
+}
+/**
  * Retrieve a documents metadata
  */
 export interface ReadMetadata {
@@ -15949,6 +16012,16 @@ export interface ProjectChannelSharing {
    */
   channelId: string;
   access: ProjectShareAccess;
+}
+/**
+ * Change your private explicit memory only when you explicitly ask to remember, correct, or forget something. ReadMemory first. Never save inferred preferences automatically. Private/sensitive information is rejected. A stale revision makes no change: reread and reconcile before another edit.
+ */
+export interface UpdateMemory {
+  /**
+   * The exact revision returned by ReadMemory or the last successful edit.
+   */
+  revision: number;
+  edit: MemoryEdit;
 }
 /**
  * Move deals to another stage or change their fields in a CRM pipeline: "move Acme to Negotiation", "set the revenue on the Globex deal", "assign these deals to Sam". Address each entry by entryId (from FindPipelineEntries) or by the company or contact id it tracks, and set fields by name with text values: stages and other options by label, people as "me", an email or a macro| user id, numbers, true/false, or dates. Several entries change in one call, all or nothing. Returns each field before and after. This changes the entry in the pipeline, not the company's own properties.

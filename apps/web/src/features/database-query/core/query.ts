@@ -238,6 +238,10 @@ export function queryErrorMessage(
       showSql ? message : engineErrorMessage(error)
     )
     .with({ kind: 'crash' }, () => `${UNCOMPUTED}. Try asking again.`)
+    .with(
+      { kind: 'cancelled' },
+      () => 'This request was cancelled. Try asking again.'
+    )
     .with({ kind: 'fetch' }, () => OFFLINE)
     .with({ kind: 'read-only' }, () =>
       showSql

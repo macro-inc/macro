@@ -33,3 +33,15 @@ fragment DatabaseRowFields on GraphqlSoupEntity {
 		}
 	}
 }
+
+# Global view membership and ordering are evaluated before this page is selected.
+query DatabaseViewRows($databaseId: ID!, $input: DatabaseViewRowsInput!) {
+	user {
+		id
+		databaseViewRows(databaseId: $databaseId, input: $input) {
+			items { ...DatabaseRowFields }
+			nextCursor
+			version
+		}
+	}
+}
