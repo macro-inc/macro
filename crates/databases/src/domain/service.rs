@@ -42,7 +42,7 @@ use crate::domain::models::{
     Database, DatabaseDetail, DatabaseError, DatabaseId, FirstTable, InferColumnType,
     InferColumnTypeOutcome, ListedDatabase, OpBatch, OptionId, PropertyDefinitionId,
     QueryDefinition, QueryId, RowId, RowRef, SavedQuery, SavedQueryError, SchemaError,
-    SharingError, Table, TableDetail, TableId, TableVersion, ViewId, Viewer,
+    SharingError, Table, TableDetail, TableId, TableVersion, ViewId, Viewer, grant_writes,
 };
 use crate::domain::ports::{
     AccessDirectory, CellStore, ColumnDefinitionStore, DatabasesRepo, DatabasesService,
@@ -852,8 +852,13 @@ where
         state: Awareness,
     ) -> Result<(), DatabaseError> {
         let database_id = receipt_database_id(&receipt)?;
+        let can_edit = grant_writes(receipt_grant(&receipt, AccessLevel::View));
+        let state = Awareness {
+            editing: state.editing && can_edit,
+            ..state
+        };
         self.events
-            .awareness(database_id, &viewer.user_id, &state)
+            .awareness(database_id, &viewer.user_id, can_edit, &state)
             .await
             .map_err(repository_error)
     }

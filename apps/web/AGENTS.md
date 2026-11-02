@@ -221,6 +221,14 @@ new MutationObserver(() => {
 
 Then trigger the interaction and read `window.__inst.log`. `'1,2,3' → '' → '1,2,3'` (the same ids coming back) is a `<Suspense>` detach and re-attach. Fresh ids are a true remount. Nothing at all means the subtree never moved and the cause is elsewhere. Re-running the same interaction a second time is the cheapest way to prove a cold-cache cause: a once-per-session query settles after the first attempt, so the second attempt stays clean.
 
+Remote database selections have a backend-free desktop/phone regression that
+measures every row and cell while collaborators move, share a cell, or select a
+range, and checks their name labels above the header and under it once
+scrolled: `just test-database-browser`. Keep the outline an overlay, never a
+border on the cell. Virtual rows are transformed, so each is its own stacking
+context: a row carrying labels rises above the header only while its top edge
+is in view.
+
 Column renames have a backend-free desktop/phone regression using the real
 schema query and mutation adapter with delayed service responses:
 `bunx playwright test --config src/features/block-database/browser-test/playwright.config.ts rename.browser.e2e.ts`.
