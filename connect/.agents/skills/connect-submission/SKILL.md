@@ -34,9 +34,10 @@ One vendor per run. The record format, states, and human gates are in
    messages. Answer the same day; log each exchange in the record. A request
    that changes scope or wording beyond `answers.md` goes to the human first.
 7. **Update the record**: `state`, `last_contact`, `next_action`,
-   `next_action_owner`, `due`. On approval, set the catalog app's `status` to
-   `live` (run `connect-add-app` to re-check it) and log where the secrets
-   live.
+   `next_action_owner`, `due`. On approval, log where the secrets live and
+   run conformance (`connect-add-app` re-checks the app). Set the catalog
+   app's `status` to `live` only after conformance passes: a real connect,
+   refresh, and tool call.
 
 Done when the record's state moved forward or its blocker is in the human
 queue, and `next_action`, owner, and `due` say exactly what happens next.
