@@ -918,9 +918,11 @@ team channels. Favorites, regular rows, and headers share the same channel/DM
 icon renderer, including participant avatars, self-DMs, and bot personas. Channel favorites open
 in the shared channel detail. Shift-clicking a favorite, channel, or DM opens that
 conversation in a new split instead. Shift-click and the row menu's
-`Open in new split` open at latest without waiting for notifications; hold the
-single-channel `SoupNotifications` request (`UPDATED_AT`, limit 1) and the split
-must still appear at once. Split opens then load the full notification edge and
+`Open in new split` open a loaded row at latest, or at an explicit search target,
+without waiting for notifications; hold the single-channel `SoupNotifications`
+request (`UPDATED_AT`, limit 1) and the split must still appear at once. A
+favorite whose channel isn't loaded waits for its lookup first, as described in
+the read-state checks below. Split opens then load the full notification edge and
 mark top-level notifications seen, including mentions and reactions, only after
 the split is opened or reused. A failed load leaves the split open and skips that
 marking; messages on screen still mark themselves read as they become visible.

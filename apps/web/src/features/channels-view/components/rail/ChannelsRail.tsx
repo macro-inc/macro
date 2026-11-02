@@ -242,8 +242,8 @@ export function ChannelsRail(props: ChannelsRailProps) {
       reportActivationError(new Error('Missing channel id'));
       return;
     }
-    // A split opens at latest, so nothing it needs depends on notifications.
-    // The open hydrates them afterwards to mark the conversation read.
+    // A split opens at the row's target or at latest, so nothing it needs
+    // depends on notifications. The open hydrates them to mark the read.
     if (openInNewSplit) {
       fireAndForget(selectChannel(channel, channelId, true), 'channels-view');
       return;
