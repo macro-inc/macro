@@ -132,16 +132,14 @@ export function TaskBoardProperty(props: {
                       <ProjectIcon class="size-3.5 shrink-0" />
                     </Show>
                   </Match>
-                  <Match when={isDate()}>
-                    <Show when={shown().value != null}>
-                      <CalendarIcon
-                        class="size-3.5 shrink-0"
-                        classList={{
-                          'text-failure': props.dueDateUrgency === 'danger',
-                          'text-warning': props.dueDateUrgency === 'warning',
-                        }}
-                      />
-                    </Show>
+                  <Match when={isDate() && hasValue(shown())}>
+                    <CalendarIcon
+                      class="size-3.5 shrink-0"
+                      classList={{
+                        'text-failure': props.dueDateUrgency === 'danger',
+                        'text-warning': props.dueDateUrgency === 'warning',
+                      }}
+                    />
                   </Match>
                   <Match when={hasSelectIcon()}>
                     <Property.Icon

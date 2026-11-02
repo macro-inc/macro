@@ -22,6 +22,7 @@ export const EMPTY_GROUP_PROPERTY_IDS: Partial<Record<TaskGroupBy, string>> = {
   priority: SYSTEM_PROPERTY_IDS.PRIORITY,
   project: SYSTEM_PROPERTY_IDS.PROJECT,
   assignee: SYSTEM_PROPERTY_IDS.ASSIGNEES,
+  date: SYSTEM_PROPERTY_IDS.DUE_DATE,
 };
 
 export const STATUS_GROUP_HEADER_TINTS: Record<string, string> = {
@@ -146,7 +147,13 @@ export function TaskGroupHeader(props: {
                   )}
                 >
                   <Switch>
-                    <Match when={!props.row.groupId}>
+                    <Match
+                      when={
+                        !props.row.groupId ||
+                        (props.groupBy === 'date' &&
+                          props.row.groupId === 'no_due_date')
+                      }
+                    >
                       <PropertyEmptyIcon
                         propertyDefinitionId={
                           EMPTY_GROUP_PROPERTY_IDS[props.groupBy]

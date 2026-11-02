@@ -291,7 +291,13 @@ export function TaskGanttView(props: {
                                   </span>
                                 </Layer>
                                 <Switch>
-                                  <Match when={!group().groupId}>
+                                  <Match
+                                    when={
+                                      !group().groupId ||
+                                      (props.groupBy === 'date' &&
+                                        group().groupId === 'no_due_date')
+                                    }
+                                  >
                                     <PropertyEmptyIcon
                                       propertyDefinitionId={
                                         EMPTY_GROUP_PROPERTY_IDS[props.groupBy]

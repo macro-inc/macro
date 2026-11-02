@@ -80,6 +80,9 @@ a dashed stack. Use the same dashed cube for empty Project values in title pills
 list cells, side-panel values, and group headers.
 Draw the cube's dash gaps as explicit segments; `pathLength`-normalized dashes
 become solid when SVG optimization merges the individual edges.
+Empty Due date values use `calendar-slash` in list cells, title pills, side-panel
+values, board cards, and no-due-date group headers; populated dates keep their
+existing calendar icon. Keep both icons at their surface's existing size.
 Task statuses use independent `task-status-not-started`, `task-status-in-progress`,
 `task-status-in-review`, `task-status-completed`, and `task-status-canceled` theme
 tokens for icons and group-header tints. Their defaults are muted gray, blended

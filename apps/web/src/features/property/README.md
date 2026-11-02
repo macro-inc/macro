@@ -23,9 +23,10 @@ side-panel collections own their refresh (below).
 
 `extractors/PropertyEmpty.tsx` shares empty-value glyphs across task list rows,
 board cards, group and column headers, and pickers: the wide ascending priority
-bars at 30% opacity for no priority, a corner-dashed cube for no project, and a
-filled person in a dashed circular frame for no assignees. No priority uses the
-same color and display box as Low/Medium/High, without additional icon dimming.
+bars at 30% opacity for no priority, a corner-dashed cube for no project, a
+filled person in a dashed circular frame for no assignees, and `calendar-slash`
+for no due date. No priority uses the same color and display box as Low/Medium/High,
+without additional icon dimming.
 In task and project lists, request `PropertyEmptyIcon.muted` for 50%-opacity
 empty glyphs; intrinsically muted No priority artwork is not dimmed again.
 `Property.Empty` uses the same treatment and 50%-opacity labels. Populated values

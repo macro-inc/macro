@@ -111,7 +111,9 @@ phone rows retain the single tag or collapsed multi-tag chip instead of dropping
 Tag pills keep their compact height on touch.
 Task rows order trailing properties as Due date, Project, then Assignees on
 desktop and phones. List Due date icons use 12px on wide rows and the shared
-16px icon size in compact columns. Compact rows show both avatars for exactly
+16px icon size in compact columns. No due date uses a slashed calendar in rows,
+property pills, the Properties panel, board cards, and group headers; populated
+dates keep their calendar icon. Compact rows show both avatars for exactly
 two assignees; larger groups show the first avatar
 and the remaining count. Compact assignee slots reserve their width and keep the
 first avatar anchored left, so a second avatar or count grows only to the right

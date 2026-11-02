@@ -54,21 +54,23 @@ export function PropertyValuePill(props: PropertyValuePillProps) {
               </span>
             </Show>
             <span class="inline-flex min-w-0 items-center gap-1">
-              <Switch
-                fallback={
-                  <Property.Icon
-                    property={property()}
-                    class={cn('shrink-0', props.iconClass)}
-                  />
-                }
-              >
-                <Match when={isMultiUserEntity()}>
-                  <Property.UserStack property={property()} maxUsers={2} />
-                </Match>
-                <Match when={isUserEntity()}>
-                  <Property.Icon property={property()} />
-                </Match>
-              </Switch>
+              <Show when={hasValue(property())}>
+                <Switch
+                  fallback={
+                    <Property.Icon
+                      property={property()}
+                      class={cn('shrink-0', props.iconClass)}
+                    />
+                  }
+                >
+                  <Match when={isMultiUserEntity()}>
+                    <Property.UserStack property={property()} maxUsers={2} />
+                  </Match>
+                  <Match when={isUserEntity()}>
+                    <Property.Icon property={property()} />
+                  </Match>
+                </Switch>
+              </Show>
               <Property.Text
                 property={property()}
                 hideIcon={property().specificEntityType === 'INITIATIVE'}

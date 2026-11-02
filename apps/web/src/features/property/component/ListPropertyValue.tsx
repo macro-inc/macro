@@ -106,7 +106,13 @@ function ListPropertyCell(props: {
               when={!isEmpty()}
               fallback={
                 <>
-                  <Show when={props.property().valueType !== 'DATE'}>
+                  <Show
+                    when={
+                      props.property().valueType !== 'DATE' ||
+                      props.property().propertyDefinitionId ===
+                        SYSTEM_PROPERTY_IDS.DUE_DATE
+                    }
+                  >
                     <PropertyEmptyIcon
                       muted
                       propertyDefinitionId={
@@ -114,7 +120,9 @@ function ListPropertyCell(props: {
                       }
                       class={
                         props.property().propertyDefinitionId ===
-                        SYSTEM_PROPERTY_IDS.PRIORITY
+                          SYSTEM_PROPERTY_IDS.PRIORITY ||
+                        props.property().propertyDefinitionId ===
+                          SYSTEM_PROPERTY_IDS.DUE_DATE
                           ? 'text-ink-extra-muted @max-[840px]/u-list:size-4'
                           : 'size-3.5 text-ink-extra-muted @max-[840px]/u-list:size-4'
                       }

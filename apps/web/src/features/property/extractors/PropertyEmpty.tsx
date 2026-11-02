@@ -1,3 +1,4 @@
+import NoDueDateIcon from '@icon/system/regular/calendar-slash.svg';
 import CircleDashedEmpty from '@icon/system/regular/circle-dashed.svg';
 import ProjectIcon from '@icon/system/regular/cube-dashed.svg';
 import PersonIcon from '@icon/system/regular/user-circle-dashed.svg';
@@ -25,6 +26,11 @@ export function PropertyEmptyIcon(props: {
           />
         }
       >
+        <Match
+          when={props.propertyDefinitionId === SYSTEM_PROPERTY_IDS.DUE_DATE}
+        >
+          <NoDueDateIcon class={cn('size-full', props.muted && 'opacity-50')} />
+        </Match>
         <Match
           when={props.propertyDefinitionId === SYSTEM_PROPERTY_IDS.PRIORITY}
         >
