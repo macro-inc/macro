@@ -113,6 +113,7 @@ export function floatWithSelection(
     null
   );
   let decidedPlacement: Placement | null = null;
+  let positionVersion = 0;
 
   function toReference(anchor: Range | Element): ReferenceElement {
     const fallback = accessor()?.fallbackElement;
@@ -224,11 +225,14 @@ export function floatWithSelection(
   async function updatePosition() {
     let current = currentAnchor();
     if (!current) return;
+    const version = ++positionVersion;
 
     const spacing = accessor()?.spacing ?? DEFAULT_SPACING;
     const fullHeight = accessor()?.fullHeight;
     if (fullHeight !== undefined) {
-      decidedPlacement = await sideWithRoomFor(current, fullHeight, spacing);
+      const placement = await sideWithRoomFor(current, fullHeight, spacing);
+      if (version !== positionVersion) return;
+      decidedPlacement = placement;
     }
     if (!decidedPlacement) return;
     const onAvailableHeight = accessor()?.onAvailableHeight;
@@ -248,6 +252,7 @@ export function floatWithSelection(
         ],
       }
     );
+    if (version !== positionVersion) return;
 
     style(floatingEl, {
       left: `${x}px`,
@@ -336,6 +341,7 @@ export function floatWithSelection(
   });
 
   onCleanup(() => {
+    positionVersion++;
     document.removeEventListener('selectionchange', selectionChangeHandler);
     scrollParent?.removeEventListener('scroll', scrollHandler);
     resizeObserver.disconnect();

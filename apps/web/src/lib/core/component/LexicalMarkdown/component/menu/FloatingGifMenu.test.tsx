@@ -424,6 +424,40 @@ it.each([
   }
 );
 
+it('ignores an older placement after the keyboard changes again', async () => {
+  vi.useFakeTimers();
+  const { open } = mountPicker();
+  open();
+  await vi.runAllTimersAsync();
+  const panel = screen
+    .getByRole('searchbox')
+    .closest<HTMLElement>('[data-holds-prompts]')!;
+  const position = vi.mocked(computePosition);
+  const original = position.getMockImplementation()!;
+  const older =
+    Promise.withResolvers<Awaited<ReturnType<typeof computePosition>>>();
+  try {
+    position.mockImplementationOnce(() => older.promise);
+    setVirtualKeyboardHeight(350);
+    setVirtualKeyboardHeight(0);
+    await vi.runAllTimersAsync();
+    expect(panel.style.left).toBe('100px');
+
+    const stalePosition = {
+      x: 900,
+      y: 900,
+      placement: 'bottom-start' as const,
+      strategy: 'fixed' as const,
+      middlewareData: {},
+    };
+    position.mockResolvedValue(stalePosition);
+    older.resolve(stalePosition);
+    await vi.runAllTimersAsync();
+    expect(panel.style.left).toBe('100px');
+  } finally {
+    position.mockImplementation(original);
+  }
+});
 it.each([false, true])(
   'focuses search during opening and keeps composer clicks out on touch=%s',
   async (touch) => {
