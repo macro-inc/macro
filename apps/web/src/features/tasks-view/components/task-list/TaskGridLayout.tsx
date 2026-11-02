@@ -265,7 +265,7 @@ export function TaskGridLayout(props: TaskGridLayoutProps) {
 
         <Entity.Slot
           placement="createdBy"
-          class="task-creator-cell ms-2 flex items-center justify-end min-w-0 overflow-hidden text-xs text-ink-muted ph-no-capture"
+          class="task-creator-cell ms-2 flex items-center justify-end min-w-0 text-xs text-ink-muted ph-no-capture"
         >
           <OwnerLabel
             ownerId={props.entity.ownerId}
