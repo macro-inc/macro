@@ -136,9 +136,12 @@ fn push_filter(sql: &mut QueryBuilder<'_, Postgres>, filter: &Expr<CrmContactLit
             });
             push_filter(sql, b);
         }
+        // Email and company are nullable, so a literal can be NULL; treat
+        // that as no match so "is not" keeps contacts without one.
         Expr::Not(inner) => {
-            sql.push("NOT ");
+            sql.push("NOT COALESCE(");
             push_filter(sql, inner);
+            sql.push(", FALSE)");
         }
         Expr::Literal(literal) => match literal {
             CrmContactLiteral::Include => {

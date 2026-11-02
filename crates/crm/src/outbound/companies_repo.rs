@@ -688,8 +688,11 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), fields(filed = tracing::field::Empty), err)]
-    #[allow(clippy::too_many_arguments)]
+    #[tracing::instrument(
+        skip_all,
+        fields(%team_id, %link_id, filed = tracing::field::Empty),
+        err
+    )]
     async fn populate_unfiled_contact(
         &self,
         team_id: &uuid::Uuid,
@@ -800,7 +803,7 @@ impl CompaniesRepository for CompaniesRepositoryImpl {
         Ok(())
     }
 
-    #[tracing::instrument(skip(self), err)]
+    #[tracing::instrument(skip_all, fields(%team_id), err)]
     async fn create_contact_for_team(
         &self,
         team_id: &uuid::Uuid,

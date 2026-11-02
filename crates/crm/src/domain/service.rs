@@ -722,7 +722,10 @@ where
         // populate path; the link's email is treated as the source of
         // truth elsewhere, so we don't want a bad value here to error
         // out an otherwise valid contact populate.
-        if let Some((user_local_part, user_domain)) = user_email.trim().split_once('@')
+        // A personal provider shared with the user is not their company,
+        // so it never marks a contact as a colleague.
+        if !is_personal_email_domain(domain)
+            && let Some((user_local_part, user_domain)) = user_email.trim().split_once('@')
             && !user_local_part.is_empty()
             && !user_domain.is_empty()
             && !user_domain.contains('@')
@@ -1127,7 +1130,7 @@ where
             .await
     }
 
-    #[tracing::instrument(skip(self, access), err)]
+    #[tracing::instrument(skip_all, fields(team_id = %access.team_id()), err)]
     async fn create_team_contact(
         &self,
         access: &CrmTeamReceipt<MemberTeamRole>,

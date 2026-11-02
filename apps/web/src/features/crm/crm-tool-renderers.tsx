@@ -115,8 +115,10 @@ const createCompanyHandler = createToolRenderer({
           when={ctx.response?.data.companyId}
           fallback={
             <>
-              Add CRM company <span class="text-ink">{ctx.tool.data.name}</span>{' '}
-              ({ctx.tool.data.domain})
+              Add CRM company <span class="text-ink">{ctx.tool.data.name}</span>
+              <Show when={ctx.tool.data.domain}>
+                {(domain) => <> ({domain()})</>}
+              </Show>
             </>
           }
         >

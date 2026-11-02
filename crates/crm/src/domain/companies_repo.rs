@@ -175,7 +175,10 @@ pub trait CompaniesRepository: Clone + Send + Sync + 'static {
     /// 3. Records the `crm_contact_sources` row for `link_id`.
     ///
     /// [`populate_contact`]: CompaniesRepository::populate_contact
-    #[allow(clippy::too_many_arguments)]
+    #[expect(
+        clippy::too_many_arguments,
+        reason = "mirrors populate_contact's inputs"
+    )]
     fn populate_unfiled_contact(
         &self,
         team_id: &uuid::Uuid,

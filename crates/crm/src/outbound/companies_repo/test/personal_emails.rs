@@ -222,3 +222,35 @@ async fn create_contact_for_team_without_company(pool: PgPool) -> anyhow::Result
     );
     Ok(())
 }
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn a_shared_personal_provider_is_not_the_users_company(pool: PgPool) -> anyhow::Result<()> {
+    let team_id = Uuid::now_v7();
+    seed_team(&pool, team_id, OWNER).await?;
+    enable_crm_for_team(&pool, team_id).await?;
+    let mailbox = personal("me");
+    let link_id = insert_email_link(&pool, OWNER, &mailbox).await?;
+    let repo = CompaniesRepositoryImpl::new(pool.clone());
+    let service = CrmServiceImpl::new(repo.clone(), NoOpCompanyMetadataResolver);
+    let_personal_emails_in(&repo, team_id).await;
+
+    let now = Utc::now();
+    service
+        .populate_contact(
+            &team_id,
+            &link_id,
+            &mailbox,
+            &personal("jane"),
+            Some("Jane"),
+            now - Duration::days(1),
+            now,
+            true,
+        )
+        .await?;
+
+    assert_eq!(
+        unfiled_contacts(&pool, team_id).await?,
+        [(personal("jane"), 1)]
+    );
+    Ok(())
+}
