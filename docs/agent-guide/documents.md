@@ -2426,7 +2426,8 @@ nodes — use the snapshot itself to verify content. For formatting checks, run
 `evaluate_script` over `[contenteditable] strong` etc.
 
 Body placeholder advertises: `/` for block commands, `@` to reference files, `;` for snippets.
-Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote).
+Markdown auto-format works while typing (`#` heading, `[]` checklist, `>` quote,
+`6.` or `6. ` for an ordered list that starts at 6).
 Pasting multiple paragraphs inside a quote keeps those paragraphs quoted;
 see [block formatting](channels.md#block-formatting) for verification.
 Imported Markdown recognizes bare URLs with the same shared matcher as messages;
@@ -2625,8 +2626,8 @@ appear below the header. Long titles wrap in place without a full-name tooltip.
 
 A reference to something deleted reads `Deleted`, and one the viewer can't open
 reads `No Access`. Clicking either keeps its card open instead of doing nothing,
-and on a touch device a tap opens the same card as a bottom sheet. The card names
-the item: `This document was deleted or doesn't exist.`, `This channel was deleted
+and on a touch device a tap opens the same card as an opaque bottom sheet. The
+card names the item: `This document was deleted or doesn't exist.`, `This channel was deleted
 or doesn't exist.`, `You don't have access to this event`, and so on (a calendar
 event's reads `This event was deleted or cancelled.`). Skill, task and snippet
 references name their kind rather than "document". Database, form and routine
