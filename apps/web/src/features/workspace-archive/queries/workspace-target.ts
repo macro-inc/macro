@@ -65,7 +65,13 @@ export const workspaceTarget: WorkspaceTarget = {
     const result = await uploadFile(
       new File([new Uint8Array(bytes)], fileName),
       'dss',
-      { projectId, hideProgressIndicator: true, skipAnalytics: true }
+      {
+        projectId,
+        hideProgressIndicator: true,
+        skipAnalytics: true,
+        // Processing finishes on the server; the import needn't wait for it.
+        skipWaitForDocxProcessing: true,
+      }
     );
     if (result.failed) throw result.error;
   },
