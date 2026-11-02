@@ -9,7 +9,7 @@ import { blockingWorkBetween } from './ui-operation';
 
 vi.mock('@macro-inc/observability', () => ({
   Telemetry: {
-    config: { perfSampled: true },
+    config: { sampled: vi.fn(() => true) },
     recordSample: vi.fn(),
     error: vi.fn(),
   },
@@ -33,7 +33,7 @@ beforeEach(() => {
   vi.useFakeTimers({ toFake: ['setTimeout', 'clearTimeout', 'performance'] });
   vi.mocked(Telemetry.recordSample).mockClear();
   vi.mocked(blockingWorkBetween).mockClear();
-  vi.spyOn(Telemetry.config, 'perfSampled', 'get').mockReturnValue(true);
+  vi.mocked(Telemetry.config.sampled).mockReturnValue(true);
   vi.stubGlobal('PerformanceObserver', {
     supportedEntryTypes: ['longtask', 'long-animation-frame'],
   });
@@ -51,7 +51,7 @@ afterEach(() => {
 });
 
 it('installs no work at all in unsampled sessions', async () => {
-  vi.spyOn(Telemetry.config, 'perfSampled', 'get').mockReturnValue(false);
+  vi.mocked(Telemetry.config.sampled).mockReturnValue(false);
   const listener = vi.spyOn(document, 'addEventListener');
   const read = vi.fn();
   dispose = startRuntimeResourceSampling(read);
@@ -81,7 +81,8 @@ it('reports visible windows, live route owners, session age and existing native 
       'runtime.long_animation_frame.blocking_ms': 40,
       'macro.memory.web_content.footprint_bytes': 1024,
     }),
-    performance.timeOrigin + 60_000
+    performance.timeOrigin + 60_000,
+    'perf'
   );
   releases[0]();
   await vi.advanceTimersByTimeAsync(60_000);
@@ -91,7 +92,8 @@ it('reports visible windows, live route owners, session age and existing native 
       'runtime.route_views.count': 1,
       'runtime.session_age_ms': 120_000,
     }),
-    expect.any(Number)
+    expect.any(Number),
+    'perf'
   );
   expect(read).toHaveBeenCalledTimes(2);
 });

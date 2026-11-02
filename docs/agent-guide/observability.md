@@ -238,8 +238,8 @@ find and read them.
 
 ### Finding them
 
-Boot, navigation, view loading and in-view interactions are perf-class traces.
-Search `{ resource.service.name = "web-app" && span.macro.trace.class = "perf" }`,
+Boot, navigation, view loading and in-view interactions are `perf`-class traces.
+Search `{ resource.service.name = "web-app" && span.macro.sampling.class = "perf" }`,
 or by root name: `app.boot`, `navigation`, `view.<route id>` (with `route.id`),
 `list.open`, `channel.tab`, `form.tab`, `email.tab`, `quick_access.open`,
 `quick_access.input`, `calendar.event.open`, `message.send`, `email.send`,
@@ -260,12 +260,20 @@ or by root name: `app.boot`, `navigation`, `view.<route id>` (with `route.id`),
 - `calendar.event.open` times opening an event's details (`calendar.event.origin`
   is `grid` or `agenda`).
 
-The perf sampling decision is made once per session
-(`Telemetry.config.perfSampled`): 5% of production sessions, 100% in dev and
-local builds and during explicit native recordings. Phases follow their root's
-decision. Unsampled sessions drop perf traces and install no runtime-resource
-or typing listeners; requests and other spans started inside an unsampled perf
-trace (`Telemetry.span`, `Telemetry.clientSpan`) start their own trace instead,
+Traces belong to a sampling class (`apps/web/src/observability/sampling.ts`):
+`perf` is kept for 5% of production users and every user in dev, local builds
+and explicit native recordings; `always` is kept for everyone. Each class is
+decided once per user per class at enablement, from a hash of the signed-in
+user id (the document's `frontend_instance_id` before sign-in) salted with the
+week, so the cohort rotates weekly; `Telemetry.config.sampled('perf')` reads
+it. Spans started before enablement are buffered and placed at export.
+
+A span joins its parent's trace when that trace is exported. Otherwise a phase
+(`span.span`) is dropped with it, and any other span starts its own trace when
+its own class is kept and is dropped when it is not; a span that asks for no
+class is always kept. Unsampled users drop perf traces and install no
+runtime-resource or typing listeners, while requests and other spans started
+inside a dropped perf trace (`Telemetry.span`) start their own trace instead,
 so backend traces are never lost to perf sampling.
 
 ### Span model
@@ -295,7 +303,7 @@ Attributes every perf trace carries, set by the owners (`ui-operation.ts`,
 
 | On | Attributes |
 | --- | --- |
-| Every span in a perf trace, including HTTP client spans started in it | `macro.trace.class=perf` |
+| Every span in a classed trace, including HTTP client spans started in it | `macro.sampling.class` (the class it asked for, else its parent's) and `macro.sampling.rate` (that class's rate; weight by its inverse) |
 | Roots | `flow.kind`, `route.id` (when known), `ui.operation`, `ui.outcome` (`success`, `cancelled`, `hidden`, `timeout`), `ui.elapsed_ms`, `ui.work_to_ready_ms` (success only), `ui.long_task_count`, `ui.long_task_overlap_ms`, `ui.long_animation_frame_count`, `ui.long_animation_frame_overlap_ms`, `ui.long_animation_frame_blocking_ms`, `ui.visibility`; with an input event, `ui.input_to_ready_ms`, `ui.input_to_paint_opportunity_ms` and `ui.event_*` |
 | Flow roots | `flow.phase_count` (child spans opened), `flow.ready_phase_count` (`usePending` phases already loaded when reached) |
 | Phases | `flow.root` (the root's name), `route.id` (the nearest view's), `flow.outcome` (`success` or `cancelled`) |
@@ -447,7 +455,7 @@ Phases you will see:
 ## Runtime CPU and memory samples
 
 `app.runtime.sample` is a perf-class point sample per ~60 s of visible-tab time
-in perf-sampled sessions. Hiding pauses it, returning starts a fresh window, and
+for perf-sampled users. Hiding pauses it, returning starts a fresh window, and
 late memory reads from an old window are dropped; back/forward-cache restores
 restart it. Group by `app.platform`, `app.runtime`, `os.type` and app version,
 and plot against `runtime.session_age_ms` (age of this document, reset on

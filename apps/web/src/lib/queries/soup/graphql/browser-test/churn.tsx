@@ -19,11 +19,19 @@ let reads = 0;
 let projections = 0;
 let mounts = 0;
 let perfSpans = 0;
-const startPerfSpan = Telemetry.perfSpan.bind(Telemetry);
-Telemetry.perfSpan = (name, startTime) => {
-  perfSpans++;
-  return startPerfSpan(name, startTime);
-};
+Telemetry.span = new Proxy(Telemetry.span, {
+  apply(start, telemetry, args) {
+    const options: unknown = args[1];
+    if (
+      typeof options === 'object' &&
+      options !== null &&
+      'sampling' in options &&
+      options.sampling === 'perf'
+    )
+      perfSpans++;
+    return Reflect.apply(start, telemetry, args);
+  },
+});
 const host: CacheHost = {
   ...createNoopCacheHost(),
   onCacheChanged(listener) {
@@ -95,15 +103,16 @@ if (trace) {
   const config = {
     serviceName: 'web-app',
     environment: 'dev',
-    perfSampleRate: 1,
+    sampling: { always: 1, perf: 1 },
+    samplingKey: () => 'churn',
     tracesUrl: `${location.origin}/__churn_traces`,
     enabled: async () => true,
   };
   initializeUiOperationTelemetry();
   await Telemetry.init({
     ...config,
-    tracingProvider: (resource, getUserId, perfSampled) =>
-      createWebTracingProvider(config, resource, getUserId, perfSampled),
+    tracingProvider: (resource, getUserId, sampling) =>
+      createWebTracingProvider(config, resource, getUserId, sampling),
   });
 }
 const dispose = render(

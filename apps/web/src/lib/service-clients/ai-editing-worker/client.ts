@@ -116,8 +116,10 @@ export async function requestAiEdit(args: {
   editControllers.set(args.documentId, controller);
   syncActiveEditDocs();
   const span = args.parentSpan
-    ? args.parentSpan.run(() => Telemetry.clientSpan('http POST /edit'))
-    : Telemetry.clientSpan('http POST /edit');
+    ? args.parentSpan.run(() =>
+        Telemetry.span('http POST /edit', { kind: 'client' })
+      )
+    : Telemetry.span('http POST /edit', { kind: 'client' });
   span.setAttr('http.method', 'POST');
   span.setAttr('http.url', `${AI_EDITING_WORKER_HOST}/edit`);
   span.setAttr('document.id', args.documentId);
