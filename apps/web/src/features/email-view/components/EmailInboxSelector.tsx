@@ -6,12 +6,20 @@ import { enableMultiInbox } from '@core/constant/featureFlags';
 import { useAddInboxFlow } from '@core/email-link';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import { fireAndForget } from '@core/util/fireAndForget';
+import AtIcon from '@icon/system/regular/at.svg';
 import CaretDownIcon from '@icon/system/regular/caret-down.svg';
 import CheckIcon from '@icon/system/regular/check.svg';
 import PlusIcon from '@icon/system/regular/plus.svg';
 import TrayIcon from '@icon/system/regular/tray.svg';
 import { useMailAccountsQuery } from '@queries/email/mail-accounts';
-import { AvatarGroup, Button, cn, Dropdown, pressHandlers } from '@ui';
+import {
+  AvatarGroup,
+  Button,
+  ButtonGroup,
+  cn,
+  Dropdown,
+  pressHandlers,
+} from '@ui';
 import { createMemo, For, type JSX, Show } from 'solid-js';
 import { fromInboxOptions } from '../../email-compose/core/email-sender';
 import { useEmailView } from '../email-view-context';
@@ -24,12 +32,16 @@ type InboxOption = {
   photoUrl?: string;
   inboxId?: string;
   aliasAddress?: string;
+  /** The address of the inbox a send-as alias belongs to. */
+  aliasOf?: string;
 };
 
 /**
  * Single-select over the user's linked inboxes: one inbox, or all of them.
  * `undefined` in view state means all; a chosen inbox is stored as `[id]`.
  * Legacy multi-id selections are normalized to their first inbox on restore.
+ * Send-as aliases (which Gmail can add on its own, e.g. for a Gmailify
+ * account) filter their inbox by address; they are never counted as inboxes.
  */
 function useInboxSelection() {
   const { state, setInboxIds, setAliasFilter } = useEmailView();
@@ -37,41 +49,50 @@ function useInboxSelection() {
   const multiInboxFlag = useFeatureFlag(enableMultiInbox);
   const addInbox = useAddInboxFlow();
 
-  const options = createMemo((): InboxOption[] =>
-    fromInboxOptions(
-      linksQuery.isSuccess ? (linksQuery.data?.links ?? []) : []
-    ).map((option) => ({
+  const options = createMemo((): InboxOption[] => {
+    const links = linksQuery.isSuccess ? (linksQuery.data?.links ?? []) : [];
+    return fromInboxOptions(links).map((option) => ({
       id: option.id,
       inboxId: option.inboxId,
       label: option.email_address,
       photoUrl: option.photo_url ?? undefined,
       aliasAddress: option.isAlias ? option.email_address : undefined,
-    }))
-  );
+      aliasOf: option.isAlias
+        ? links.find((link) => link.id === option.inboxId)?.email_address
+        : undefined,
+    }));
+  });
+  const inboxes = () => options().filter((option) => !option.aliasAddress);
+  const soleInbox = () => (inboxes().length === 1 ? inboxes()[0] : undefined);
 
   const isAll = () => state.inboxIds === undefined && !state.aliasFilter;
   // A persisted alias still needs a clear/switch control if it disappears.
-  const hasMultipleInboxes = () => options().length > 1 || !!state.aliasFilter;
+  const hasMultipleInboxes = () => inboxes().length > 1 || !!state.aliasFilter;
   const isSelected = (id: string) =>
-    (options().length === 1 && !state.aliasFilter) || selectedId() === id;
+    (!state.aliasFilter && soleInbox()?.id === id) || selectedId() === id;
   const selectedId = () => {
     if (state.aliasFilter)
       return `${state.aliasFilter.inboxId}:${state.aliasFilter.emailAddress.toLowerCase()}`;
     const ids = state.inboxIds;
     return ids?.length === 1 ? ids[0] : undefined;
   };
-  const selectedOption = () => {
+  const selectedOption = (): InboxOption | undefined => {
     const id = selectedId();
-    return id === undefined
-      ? undefined
-      : (options().find((option) => option.id === id) ??
-          (state.aliasFilter
-            ? { id, label: state.aliasFilter.emailAddress }
-            : undefined));
+    if (id === undefined) return undefined;
+    const option = options().find((option) => option.id === id);
+    const alias = state.aliasFilter;
+    if (option || !alias) return option;
+    return {
+      id,
+      label: alias.emailAddress,
+      aliasAddress: alias.emailAddress,
+      aliasOf: inboxes().find((inbox) => inbox.id === alias.inboxId)?.label,
+    };
   };
 
   return {
     options,
+    soleInbox,
     /** Keep the connected account visible even when there is no choice to make. */
     visible: () => multiInboxFlag().enabled || options().length > 0,
     hasMultipleInboxes,
@@ -102,20 +123,51 @@ function useInboxSelection() {
   };
 }
 
+/** An alias is another address of an inbox, so it never gets an account avatar. */
 function InboxAvatar(props: {
   option: InboxOption;
   size: UserIconSize;
   class?: string;
 }) {
   return (
-    <UserIcon
-      {...inboxIconProps(props.option.label)}
-      photoUrl={props.option.photoUrl}
-      size={props.size}
-      class={props.class}
-      suppressClick
-      showTooltip={false}
-    />
+    <Show
+      when={!props.option.aliasAddress}
+      fallback={
+        <AtIcon
+          aria-hidden="true"
+          class={cn('size-4 shrink-0 text-ink-muted', props.class)}
+        />
+      }
+    >
+      <UserIcon
+        {...inboxIconProps(props.option.label)}
+        photoUrl={props.option.photoUrl}
+        size={props.size}
+        class={props.class}
+        suppressClick
+        showTooltip={false}
+      />
+    </Show>
+  );
+}
+
+function InboxOptionLabel(props: { option: InboxOption }) {
+  const title = () =>
+    props.option.aliasOf
+      ? `${props.option.label}, alias of ${props.option.aliasOf}`
+      : props.option.label;
+  return (
+    <span class="flex min-w-0 flex-1 items-baseline gap-1.5" title={title()}>
+      <span class="truncate">{props.option.label}</span>
+      <Show when={props.option.aliasAddress}>
+        <span class="shrink-0 text-xs text-ink-muted">
+          Alias
+          <Show when={props.option.aliasOf}>
+            {(inbox) => <span class="sr-only"> of {inbox()}</span>}
+          </Show>
+        </span>
+      </Show>
+    </span>
   );
 }
 
@@ -144,9 +196,7 @@ function InboxAccountGroup(props: {
   const selection = props.selection;
   const selectedOption = () =>
     selection.selectedOption() ??
-    (selection.options().length === 1 && selection.isAll()
-      ? selection.options()[0]
-      : undefined);
+    (selection.isAll() ? selection.soleInbox() : undefined);
   const label = () =>
     selectedOption()?.label ??
     (selection.options().length ? selection.label() : 'No inboxes connected');
@@ -208,7 +258,7 @@ function InboxAccountGroup(props: {
                     value={option.id}
                     icon={<InboxAvatar option={option} size="sm" />}
                   >
-                    {option.label}
+                    <InboxOptionLabel option={option} />
                   </InboxRadioItem>
                 )}
               </For>
@@ -282,12 +332,7 @@ function InboxAccountList(props: {
                   <CheckIcon class="size-4 text-accent" />
                 </Show>
               </ViewSidebar.Icon>
-              <span
-                class={cn('truncate', option.aliasAddress && 'pl-2')}
-                title={option.label}
-              >
-                {option.label}
-              </span>
+              <InboxOptionLabel option={option} />
             </ViewSidebar.Item>
           )}
         </For>
@@ -367,7 +412,7 @@ export function EmailInboxFilter(props: { class?: string }) {
                         value={option.id}
                         icon={<InboxAvatar option={option} size="sm" />}
                       >
-                        {option.label}
+                        <InboxOptionLabel option={option} />
                       </InboxRadioItem>
                     )}
                   </For>
@@ -385,7 +430,7 @@ export function EmailInboxFilter(props: { class?: string }) {
  * Icon-only trigger the narrow header falls back to while the sidebar is
  * collapsed; opens the same single-select list as a menu.
  */
-export function EmailInboxMenu(props: { class?: string }) {
+export function EmailInboxMenu(props: { class?: string; grouped?: boolean }) {
   const selection = useInboxSelection();
 
   const radioValue = () => {
@@ -402,19 +447,24 @@ export function EmailInboxMenu(props: { class?: string }) {
     <Show when={selection.hasMultipleInboxes()}>
       <Dropdown placement="bottom-end">
         <Dropdown.Trigger
+          as={props.grouped ? ButtonGroup.Button : Button}
           variant="ghost"
           size="icon-md"
-          depth={2}
           aria-label={`Inbox: ${selection.label()}`}
           tooltip={selection.label()}
           class={cn('shrink-0', props.class)}
         >
-          <Show
-            when={selection.selectedOption()}
-            fallback={<AllInboxesAvatar options={selection.options()} />}
+          <span
+            aria-hidden="true"
+            class="inline-flex size-4 shrink-0 items-center justify-center"
           >
-            {(option) => <InboxAvatar option={option()} size="sm" />}
-          </Show>
+            <Show
+              when={selection.selectedOption()}
+              fallback={<AllInboxesAvatar options={selection.options()} />}
+            >
+              {(option) => <InboxAvatar option={option()} size="sm" />}
+            </Show>
+          </span>
         </Dropdown.Trigger>
         <Dropdown.Content class="min-w-56">
           <Dropdown.Group>
@@ -431,7 +481,7 @@ export function EmailInboxMenu(props: { class?: string }) {
                     value={option.id}
                     icon={<InboxAvatar option={option} size="sm" />}
                   >
-                    {option.label}
+                    <InboxOptionLabel option={option} />
                   </InboxRadioItem>
                 )}
               </For>
@@ -508,7 +558,7 @@ export function EmailInboxDrawerSection(props: { value: string }) {
                 onChange={() => selection.select(option.id)}
                 icon={<InboxAvatar option={option} size="sm" />}
               >
-                {option.label}
+                <InboxOptionLabel option={option} />
               </MobileFilterDrawer.Option>
             )}
           </For>

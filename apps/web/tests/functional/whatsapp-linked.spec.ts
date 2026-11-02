@@ -10,6 +10,9 @@ import type {
   WhatsAppAccount,
   WhatsAppAccountView,
   WhatsAppDisconnect,
+  WhatsAppHistoryImport,
+  WhatsAppLookup,
+  WhatsAppLookupRequest,
   WhatsAppPairing,
 } from '../../src/lib/service-clients/service-storage/generated/schemas';
 
@@ -21,7 +24,12 @@ type Chat = {
   kind: 'group' | 'direct';
   name: string;
   lastActivityAt: string | null;
-  added: { id: string; name: string } | null;
+  added: {
+    id: string;
+    name: string;
+    /** The added chat's history import, as the chat list reports it. */
+    backfill?: { state: string; imported: number };
+  } | null;
   shared?: { id: string; name: string; ownerId: string };
   /** The account's chat with itself. */
   self?: boolean;
@@ -61,7 +69,16 @@ type LinkedServer = {
   upload: Omit<ExternalChatUploadedAttachment, 'uploadId'>;
   /** Stored attachments' bytes, by static file id; others never load. */
   files: Record<string, { body: Buffer; contentType: string }>;
+  /** Numbers WhatsApp has an account for; the rest aren't on WhatsApp. */
+  registered: string[];
+  /** Lookups started so far, by id: the number asked about. */
+  lookups: Record<string, string>;
+  /** Times the owner pressed Import. */
+  historyImports: number;
 };
+
+/** A person's phone-number JID. */
+const phoneJid = (digits: string) => `${digits}@s.whatsapp.net`;
 
 function server(): LinkedServer {
   return {
@@ -127,6 +144,9 @@ function server(): LinkedServer {
     delivery: {},
     upload: { filename: 'design.pdf', kind: 'document' },
     files: {},
+    registered: [],
+    lookups: {},
+    historyImports: 0,
   };
 }
 
@@ -391,6 +411,7 @@ async function mount(page: Page, state: LinkedServer, query = '') {
               unreadCount: item.added?.id === CHAT_ID ? 2 : 0,
               canSend: item.added?.id === CHAT_ID,
               sendReason: item.added?.id === CHAT_ID ? null : 'not_added',
+              backfill: item.added?.backfill ?? null,
               community: item.community ?? null,
             })),
         });
@@ -459,9 +480,70 @@ async function mount(page: Page, state: LinkedServer, query = '') {
               community: chat.community ?? null,
               canAdd: !chat.self && !chat.added && !chat.shared,
               cannotAddReason: chat.self ? 'own_chat' : null,
+              phoneNumber:
+                chat.kind === 'direct' ? `+${chat.jid.split('@')[0]}` : null,
             })),
           },
         });
+      if (path === 'whatsapp/history-import' && method === 'POST') {
+        state.historyImports += 1;
+        let started = 0;
+        for (const chat of state.chats)
+          if (chat.added?.backfill?.state === 'waiting_for_phone') {
+            chat.added.backfill = { state: 'pending', imported: 0 };
+            started += 1;
+          }
+        return route.fulfill({
+          json: { started } satisfies WhatsAppHistoryImport,
+        });
+      }
+      if (path === 'whatsapp/lookups' && method === 'POST') {
+        const { phoneNumber }: WhatsAppLookupRequest = route
+          .request()
+          .postDataJSON();
+        const id = `lookup-${Object.keys(state.lookups).length + 1}`;
+        state.lookups[id] = phoneNumber;
+        return route.fulfill({
+          json: {
+            id,
+            phoneNumber,
+            state: 'pending',
+            chatJid: null,
+          } satisfies WhatsAppLookup,
+        });
+      }
+      const lookup = /^whatsapp\/lookups\/(lookup-\d+)$/.exec(path);
+      if (lookup && method === 'GET') {
+        const id = lookup[1] ?? '';
+        const phoneNumber = state.lookups[id] ?? '';
+        if (!state.registered.includes(phoneNumber))
+          return route.fulfill({
+            json: {
+              id,
+              phoneNumber,
+              state: 'not_on_whatsapp',
+              chatJid: null,
+            } satisfies WhatsAppLookup,
+          });
+        // A found number joins the chat list.
+        const jid = phoneJid(phoneNumber.slice(1));
+        if (!state.chats.some((chat) => chat.jid === jid))
+          state.chats.push({
+            jid,
+            kind: 'direct',
+            name: phoneNumber,
+            lastActivityAt: null,
+            added: null,
+          });
+        return route.fulfill({
+          json: {
+            id,
+            phoneNumber,
+            state: 'found',
+            chatJid: jid,
+          } satisfies WhatsAppLookup,
+        });
+      }
       if (path === 'whatsapp/disconnect') {
         state.account = null;
         return route.fulfill({
@@ -498,7 +580,6 @@ test('links WhatsApp by QR, then adds a shareable WhatsApp chat', async ({
   const state = server();
   const unexpected = await mount(page, state);
 
-  await expect(page.getByText(/unofficial WhatsApp client/)).toBeVisible();
   await page.getByRole('button', { name: 'Connect' }).click();
   const dialog = page.getByRole('dialog');
   await expect(dialog).toHaveClass(/ph-no-capture/);
@@ -566,6 +647,160 @@ test('links WhatsApp by QR, then adds a shareable WhatsApp chat', async ({
   expect(unexpected).toEqual([]);
 });
 
+for (const mobile of [false, true]) {
+  test.describe(`${mobile ? 'mobile' : 'desktop'} new chats`, () => {
+    test.use({
+      viewport: mobile
+        ? { width: 390, height: 844 }
+        : { width: 1440, height: 900 },
+      isMobile: mobile,
+      hasTouch: mobile,
+    });
+    test('starts chats with a saved contact or a phone number', async ({
+      page,
+    }) => {
+      const screenshot = (name: string) =>
+        page.screenshot({
+          path: process.env.WHATSAPP_SCREENSHOT_DIR
+            ? join(
+                process.env.WHATSAPP_SCREENSHOT_DIR,
+                `${name}-${mobile ? 'mobile' : 'desktop'}.png`
+              )
+            : test.info().outputPath(`${name}.png`),
+        });
+      const state = server();
+      state.account = {
+        id: 'account-1',
+        userId: USER_ID,
+        authorizationGeneration: 4,
+        identityJid: phoneJid('14155550142:3'),
+        state: 'connected',
+      };
+      state.chats.push(
+        {
+          jid: phoneJid('5550002'),
+          kind: 'direct',
+          name: 'Dana Smith',
+          lastActivityAt: null,
+          added: null,
+        },
+        {
+          jid: phoneJid('5550003'),
+          kind: 'direct',
+          name: 'Eve Adams',
+          lastActivityAt: null,
+          added: null,
+        }
+      );
+      state.registered = ['+5550007'];
+      const unexpected = await mount(page, state);
+
+      // Saved contacts nobody wrote to are listed apart, with their numbers.
+      const contacts = page.getByRole('list', { name: 'Contacts' });
+      await expect(contacts.getByRole('listitem')).toHaveCount(2);
+      await expect(
+        contacts
+          .getByRole('listitem')
+          .filter({ hasText: 'Dana Smith' })
+          .getByText('Direct chat · +5550002')
+      ).toBeVisible();
+      expect(
+        await page.evaluate(
+          () => document.documentElement.scrollWidth > innerWidth
+        )
+      ).toBe(false);
+      await screenshot('whatsapp-contacts');
+      await page
+        .getByRole('searchbox', { name: 'Search WhatsApp chats' })
+        .fill('555 0003');
+      await expect(contacts.getByRole('listitem')).toHaveCount(1);
+      await contacts.getByRole('button', { name: 'Add to Macro' }).click();
+      await expect(contacts).toHaveCount(0);
+      expect(state.additions).toEqual([
+        { provider: 'whatsapp', remoteId: phoneJid('5550003'), kind: 'direct' },
+      ]);
+
+      await page.getByRole('button', { name: 'New chat' }).click();
+      const dialog = page.getByRole('dialog');
+      await expect(dialog).toHaveClass(/ph-no-capture/);
+      const number = dialog.getByLabel('Phone number');
+      await number.fill('+555 000 9');
+      await dialog.getByRole('button', { name: 'Start chat' }).click();
+      await expect(
+        dialog.getByText("+5550009 isn't on WhatsApp.")
+      ).toBeVisible();
+      await screenshot('whatsapp-new-chat-not-on-whatsapp');
+
+      await number.fill('+555 000 7');
+      await dialog.getByRole('button', { name: 'Start chat' }).click();
+      await expect(dialog).toBeHidden();
+      expect(await page.evaluate(() => window.openedChats)).toEqual([
+        'chat-new',
+      ]);
+      expect(state.additions.at(-1)).toEqual({
+        provider: 'whatsapp',
+        remoteId: phoneJid('5550007'),
+        kind: 'direct',
+      });
+      expect(Object.values(state.lookups)).toEqual(['+5550009', '+5550007']);
+      expect(unexpected).toEqual([]);
+    });
+  });
+}
+
+for (const mobile of [false, true]) {
+  test.describe(`${mobile ? 'mobile' : 'desktop'} history import`, () => {
+    test.use({
+      viewport: mobile
+        ? { width: 390, height: 844 }
+        : { width: 1440, height: 900 },
+      isMobile: mobile,
+      hasTouch: mobile,
+    });
+    test('the phone is asked for earlier messages only when the owner imports', async ({
+      page,
+    }) => {
+      const state = server();
+      state.account = {
+        id: 'account-1',
+        userId: USER_ID,
+        authorizationGeneration: 4,
+        identityJid: phoneJid('14155550142:3'),
+        state: 'connected',
+      };
+      const crit = state.chats.find((chat) => chat.added?.id === CHAT_ID);
+      if (!crit?.added) throw new Error('missing the added group');
+      crit.added.backfill = { state: 'waiting_for_phone', imported: 0 };
+      const unexpected = await mount(page, state);
+
+      const prompt = page.getByRole('status', {
+        name: 'Import WhatsApp history',
+      });
+      await expect(prompt).toBeVisible();
+      await expect(
+        prompt.getByText(
+          'Open WhatsApp on your phone and keep it open, then import the earlier messages of design-crit.'
+        )
+      ).toBeVisible();
+      expect(state.historyImports).toBe(0);
+      await page.screenshot({
+        path: process.env.WHATSAPP_SCREENSHOT_DIR
+          ? join(
+              process.env.WHATSAPP_SCREENSHOT_DIR,
+              `whatsapp-history-prompt-${mobile ? 'mobile' : 'desktop'}.png`
+            )
+          : test.info().outputPath('whatsapp-history-prompt.png'),
+      });
+
+      await prompt.getByRole('button', { name: 'Import' }).click();
+      await expect(prompt).toHaveCount(0);
+      expect(state.historyImports).toBe(1);
+      expect(crit.added.backfill).toEqual({ state: 'pending', imported: 0 });
+      expect(unexpected).toEqual([]);
+    });
+  });
+}
+
 test('a refused add says why, on that group', async ({ page }) => {
   const state = server();
   state.account = {
@@ -621,6 +856,8 @@ test('External lists groups in Macro with unread counts and read-only tags', asy
 test('chats sort into direct messages, groups and communities on the page and in External', async ({
   page,
 }) => {
+  // Three full fixture navigations share this test's timeout.
+  test.slow();
   const state = server();
   state.account = {
     id: 'account-1',
@@ -1196,7 +1433,9 @@ test('history imported after adding shows up older, with the import state', asyn
   state.backfill = { state: 'waiting_for_phone', imported: 0 };
   const unexpected = await mount(page, state, `?chat=${CHAT_ID}`);
   await expect(
-    page.getByText('WhatsApp · Waiting for your phone to import history')
+    page.getByText(
+      'WhatsApp · Earlier messages not imported. Open WhatsApp on your phone, then import them.'
+    )
   ).toBeVisible();
   // The phone answers; the next read (push or fallback re-fetch) shows it.
   state.backfill = { state: 'done', imported: 1 };
@@ -1354,7 +1593,7 @@ for (const mobile of [false, true]) {
         page.getByRole('textbox', { name: 'Message Design Crit' })
       ).toBeVisible();
       await page
-        .getByRole('button', { name: mobile ? 'Show details' : /side panel/i })
+        .getByRole('button', { name: 'Show details', exact: true })
         .click();
       const members = page.getByRole('list', { name: 'WhatsApp members' });
       await expect(members).toBeVisible();

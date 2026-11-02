@@ -15,7 +15,6 @@ const [savedConnection, setSavedConnection] = createSignal<Leftover>({
   kind: 'pipedream',
   id: 'pd-slack',
   title: 'Slack workspace',
-  subtitle: 'Slack',
   appSlug: 'slack_v2',
   enabled: false,
 });
@@ -108,9 +107,10 @@ afterEach(() => {
   else delete (HTMLElement.prototype as Partial<HTMLElement>).scrollTo;
   vi.unstubAllGlobals();
 });
-function setup() {
+function setup(imageUnsupportedReason?: string) {
   const actions = {
     openFiles: vi.fn(),
+    openImages: vi.fn(),
     openLibrary: vi.fn(),
     openSkills: vi.fn(),
   };
@@ -119,7 +119,11 @@ function setup() {
       <style>
         {'[role="menu"] {animation-name:none;transition-duration:0s}'}
       </style>
-      <AgentComposerAddMenu {...actions} getEditor={() => null} />
+      <AgentComposerAddMenu
+        {...actions}
+        imageUnsupportedReason={imageUnsupportedReason}
+        getEditor={() => null}
+      />
     </>
   ));
   const trigger = screen.getByRole('button', { name: /^Add$/ });
@@ -130,10 +134,9 @@ function setup() {
 
 it('keeps uploads available through the richer menu', () => {
   const actions = setup();
-  fireEvent.keyDown(
-    screen.getByRole('menuitem', { name: /Add photos & files/ }),
-    { key: 'Enter' }
-  );
+  fireEvent.keyDown(screen.getByRole('menuitem', { name: /Add files/ }), {
+    key: 'Enter',
+  });
   expect(actions.openFiles).toHaveBeenCalledOnce();
 });
 it.each([
@@ -207,4 +210,41 @@ it('hands the mobile sheet off to connection settings', async () => {
   setup();
   fireEvent.click(await screen.findByRole('button', { name: /GitHub/ }));
   expect(await screen.findByText('Settings for github')).toBeTruthy();
+});
+
+it('refuses photos on a text-only model while keeping the file action usable', () => {
+  const actions = setup("GPT OSS 120B doesn't support images");
+  const photos = screen.getByRole('menuitem', { name: /Add photos/ });
+  expect(photos.getAttribute('aria-disabled')).toBe('true');
+  const reason = document.getElementById(
+    photos.getAttribute('aria-describedby') ?? ''
+  );
+  expect(reason?.textContent).toBe("GPT OSS 120B doesn't support images");
+  fireEvent.keyDown(photos, { key: 'Enter' });
+  expect(actions.openImages).not.toHaveBeenCalled();
+  expect(screen.getByRole('menu')).toBeTruthy();
+  fireEvent.keyDown(screen.getByRole('menuitem', { name: /Add files/ }), {
+    key: 'Enter',
+  });
+  expect(actions.openFiles).toHaveBeenCalledOnce();
+});
+
+it('opens the photo picker for an image-capable model', () => {
+  const actions = setup();
+  fireEvent.keyDown(screen.getByRole('menuitem', { name: /Add photos/ }), {
+    key: 'Enter',
+  });
+  expect(actions.openImages).toHaveBeenCalledOnce();
+});
+
+it('keeps file uploads available in the mobile sheet for a text-only model', async () => {
+  state.mobile = true;
+  const actions = setup("GPT OSS 120B doesn't support images");
+  const photos = await screen.findByRole('button', { name: /Add photos/ });
+  expect(photos.hasAttribute('disabled')).toBe(true);
+  expect(photos.textContent).toContain("GPT OSS 120B doesn't support images");
+  fireEvent.click(photos);
+  expect(actions.openImages).not.toHaveBeenCalled();
+  fireEvent.click(screen.getByRole('button', { name: /Add files/ }));
+  expect(actions.openFiles).toHaveBeenCalledOnce();
 });

@@ -196,6 +196,11 @@ describe('canExecuteMarkDoneOnView', () => {
   it('allows mark done on the archived tab', () => {
     expect(canExecuteMarkDoneOnView('mail', 'archived')).toBe(true);
   });
+
+  it('allows mark done in Search but not in task lists', () => {
+    expect(canExecuteMarkDoneOnView('search', 'all')).toBe(true);
+    expect(canExecuteMarkDoneOnView('tasks', 'my-tasks')).toBe(false);
+  });
 });
 
 describe('makeMarkDoneAction', () => {

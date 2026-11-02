@@ -10,7 +10,7 @@ use uuid::Uuid;
 
 use super::{DiscussionParentType, MessageToolContext, comment_error, parse_target};
 use crate::domain::{
-    models::{MessageAttribution, PostMessage, PostMessageNotificationPolicy},
+    models::{PostMessage, PostMessageNotificationPolicy},
     ports::MessageError,
 };
 
@@ -95,7 +95,7 @@ impl<ESvc: EntityAccessService> AsyncTool<MessageToolContext<ESvc>> for Comment 
                 access,
                 PostMessage {
                     id: None,
-                    attribution: MessageAttribution::ActingUser,
+                    attribution: ctx.attribution(),
                     notification_policy: PostMessageNotificationPolicy::Default,
                     content: self.content.clone(),
                     thread_id: self.thread_id,

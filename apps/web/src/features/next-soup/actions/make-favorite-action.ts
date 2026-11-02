@@ -23,10 +23,10 @@ export const makeFavoriteAction = () => {
   const addMutation = useAddFavoriteMutation();
   const removeMutation = useRemoveFavoriteMutation();
 
+  // Foreign entities (pull requests included) are not offered; favorites
+  // already saved for them stay removable from the sidebar.
   const canExecute = (entity: EntityData): boolean =>
-    (entity.type !== 'foreign' ||
-      entity.foreignSource === 'github_pull_request') &&
-    favoriteEntityType(entity.type) !== undefined;
+    entity.type !== 'foreign' && favoriteEntityType(entity.type) !== undefined;
 
   const isFavorited = (entity: EntityData): boolean => {
     const type = favoriteEntityType(entity.type);
@@ -67,22 +67,27 @@ export const makeFavoriteAction = () => {
     // Each mutation rolls its own optimistic change back on failure, so report
     // what actually happened rather than an all-or-nothing result.
     const failed = results.filter((r) => r.status === 'rejected').length;
+    const queued = results.filter(
+      (r) => r.status === 'fulfilled' && r.value.kind === 'queued'
+    ).length;
     const succeeded = results.length - failed;
-    if (failed === 0) {
-      toast.success(
-        succeeded > 1
-          ? t(
-              shouldRemove
-                ? 'entityActions.toastRemovedCountFromFavorites'
-                : 'entityActions.toastAddedCountToFavorites',
-              { count: succeeded }
-            )
-          : t(
-              shouldRemove
-                ? 'entityActions.toastRemovedFromFavorites'
-                : 'entityActions.toastAddedToFavorites'
-            )
-      );
+    const summary =
+      succeeded > 1
+        ? t(
+            shouldRemove
+              ? 'entityActions.toastRemovedCountFromFavorites'
+              : 'entityActions.toastAddedCountToFavorites',
+            { count: succeeded }
+          )
+        : t(
+            shouldRemove
+              ? 'entityActions.toastRemovedFromFavorites'
+              : 'entityActions.toastAddedToFavorites'
+          );
+    if (failed === 0 && queued === 0) {
+      toast.success(summary);
+    } else if (failed === 0) {
+      toast.alert(t('entityActions.toastWaitingToSync', { message: summary }));
     } else if (succeeded === 0) {
       toast.failure(t('entityActions.toastFavoritesUpdateFailed'));
     } else {

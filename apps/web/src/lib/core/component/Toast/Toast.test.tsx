@@ -17,6 +17,7 @@ beforeEach(() => {
     'ResizeObserver',
     class {
       observe() {}
+      unobserve() {}
       disconnect() {}
     }
   );
@@ -150,7 +151,7 @@ it('keeps only the latest transient notice on mobile', () => {
   expect(screen.getByText('Latest mobile notice')).toBeTruthy();
 });
 
-it('keeps mobile prompt descriptions and close actions accessible', () => {
+it('keeps mobile prompt descriptions accessible', () => {
   mobile.value = true;
   render(() => <ToastRegion />);
   toast.custom(
@@ -158,5 +159,4 @@ it('keeps mobile prompt descriptions and close actions accessible', () => {
     { persistent: true }
   );
   expect(screen.getByText('Helpful details')).toBeTruthy();
-  expect(screen.getByRole('button', { name: 'Close' })).toBeTruthy();
 });

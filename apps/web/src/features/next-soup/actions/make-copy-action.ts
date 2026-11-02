@@ -1,4 +1,5 @@
 import { t } from '@app/lib/i18n';
+import { canDuplicateItemType } from '@core/component/FileList/itemOperations';
 import { toast } from '@core/component/Toast/Toast';
 import type { EntityData } from '@entity';
 import { createBulkCopyDssEntityMutation } from '@entity';
@@ -7,25 +8,28 @@ import type { EntityActionListState } from './entity-action-context';
 export const makeCopyAction = () => {
   const bulkCopyMutation = createBulkCopyDssEntityMutation();
 
-  const canExecute = (entity: EntityData): boolean => {
-    return (
-      entity.type !== 'database' &&
-      entity.type !== 'form' &&
-      entity.type !== 'agent_session' &&
-      entity.type !== 'channel' &&
-      entity.type !== 'email' &&
-      entity.type !== 'channel_message' &&
-      entity.type !== 'channel_thread' &&
-      entity.type !== 'foreign' &&
-      entity.type !== 'routine'
-    );
-  };
+  // The types the copy mutation duplicates; it rejects any other.
+  const canExecute = (entity: EntityData): boolean =>
+    (entity.type === 'document' ||
+      entity.type === 'chat' ||
+      entity.type === 'project') &&
+    canDuplicateItemType(entity.type);
 
   const execute = async (entities: EntityData[]) => {
-    await bulkCopyMutation.mutateAsync({
-      entities,
-      name: (name) => name,
-    });
+    try {
+      await bulkCopyMutation.mutateAsync({
+        entities,
+        name: (name) => name,
+      });
+    } catch {
+      toast.failure(
+        t('entityActions.toastCopyFailed', { count: entities.length }),
+        entities.some((entity) => entity.type === 'project')
+          ? { subtext: t('entityActions.folderDuplicateLimitHint') }
+          : undefined
+      );
+      return;
+    }
     toast.success(
       entities.length > 1
         ? t('entityActions.toastCopiedCount', { count: entities.length })

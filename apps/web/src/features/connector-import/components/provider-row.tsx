@@ -46,7 +46,7 @@ export function ProviderRow(props: {
         when={props.state === 'connected'}
         fallback={
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
             disabled={
               props.disabled ||
@@ -61,13 +61,16 @@ export function ProviderRow(props: {
         }
       >
         <Button
-          variant="strong"
+          variant="primary"
           size="sm"
           disabled={props.disabled}
           aria-label={`Import from ${props.provider.name}`}
           onClick={() => props.onImport()}
         >
-          <SparkleIcon aria-hidden="true" />
+          <SparkleIcon
+            class="size-3 touch:size-6 shrink-0 pointer-events-none"
+            aria-hidden="true"
+          />
           Import
         </Button>
       </Show>

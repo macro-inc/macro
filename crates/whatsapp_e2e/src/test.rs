@@ -9,17 +9,21 @@ use entity_access::domain::models::{
     AccessLevel, Entity, EntityAccessAuth, EntityAccessReceipt, EntityPermission, EntityType,
     ViewAccessLevel,
 };
+use external_chat::domain::models::{
+    AddChat, ChatRef, ExternalChatKind, ExternalChatProvider, ReplyContent, SendAuthority,
+    SendReply,
+};
+use external_chat::domain::ports::ExternalChatResult;
+use external_chat::domain::service::ExternalChatService;
+use external_chat::outbound::pg::PgExternalChatRepository;
 use macro_db_migrator::MACRO_DB_MIGRATIONS;
 use sqlx::{Connection, PgConnection, PgPool};
 use uuid::Uuid;
 use whatsapp_fake_server::{FakePhone, FakeWhatsApp};
-use whatsapp_linked::domain::models::{
-    AccountState, AddChat, Binding, ExternalChatKind, ExternalChatProvider, ReplyContent,
-    SendAuthority, SendReply,
-};
-use whatsapp_linked::domain::ports::LinkedResult;
-use whatsapp_linked::domain::service::LinkedService;
-use whatsapp_linked::outbound::pg::PgLinkedRepository;
+use whatsapp_linked::domain::models::AccountState;
+use whatsapp_linked::domain::provider::WhatsAppProvider;
+use whatsapp_linked::domain::service::WhatsAppService;
+use whatsapp_linked::outbound::pg::PgWhatsAppRepository;
 use whatsmeow::types::Jid;
 
 use super::*;
@@ -27,6 +31,7 @@ use super::*;
 mod direct_chats;
 mod group_kinds;
 mod message_types;
+mod new_chats;
 
 const TIMEOUT: Duration = Duration::from_secs(60);
 /// A test user's id, typed.
@@ -63,7 +68,8 @@ struct World {
     /// Holds the fleet lock until the scenario ends (see [`take_fleet_slot`]).
     _fleet_slot: PgConnection,
     pool: PgPool,
-    linked: LinkedService,
+    linked: WhatsAppService,
+    external: ExternalChatService<WhatsAppProvider>,
     whatsapp: FakeWhatsApp,
     kms: SharedKms,
     alice: FakePhone,
@@ -79,8 +85,11 @@ impl World {
         for id in [ALICE, BOB] {
             user(&pool, id).await;
         }
-        let linked = LinkedService::new(
-            Arc::new(PgLinkedRepository::new(pool.clone())),
+        let repository = Arc::new(PgWhatsAppRepository::new(pool.clone()));
+        let linked = WhatsAppService::new(repository.clone());
+        let external = ExternalChatService::new(
+            Arc::new(WhatsAppProvider::new(repository)),
+            Arc::new(PgExternalChatRepository::new(pool.clone())),
             Arc::new(Allow),
         );
         let whatsapp = FakeWhatsApp::start().await.unwrap();
@@ -92,6 +101,7 @@ impl World {
             _fleet_slot: fleet_slot,
             pool,
             linked,
+            external,
             whatsapp,
             kms: SharedKms::new(),
             alice,
@@ -151,8 +161,17 @@ impl World {
         device
     }
 
+    /// The owner's Import: their chats waiting for the phone start importing.
+    async fn import_history(&self, user: &str) -> u32 {
+        self.linked
+            .import_history(&person(user), SendAuthority::Human)
+            .await
+            .unwrap()
+            .started
+    }
+
     /// Adopts the group for `user` once the replica has listed it.
-    async fn adopt(&self, user: &str, users: &[&str]) -> Binding {
+    async fn adopt(&self, user: &str, users: &[&str]) -> ChatRef {
         let group = self.group.to_string();
         wait_for_rows(&self.pool, TIMEOUT, || async {
             let chats = self.linked.chats(&person(user)).await.ok()?.chats;
@@ -164,8 +183,8 @@ impl World {
         .await
         .expect("the replica lists the group");
         let binding = self
-            .linked
-            .adopt(
+            .external
+            .add(
                 &person(user),
                 &AddChat {
                     provider: ExternalChatProvider::WhatsApp,
@@ -195,7 +214,7 @@ impl World {
 
     /// A viewer opens the WhatsApp page; their account's refreshed roster
     /// makes it an observer of a group shared with them.
-    async fn observe(&self, user: &str, binding: &Binding) {
+    async fn observe(&self, user: &str, binding: &ChatRef) {
         self.linked.chats(&person(user)).await.unwrap();
         let observing = wait_for_rows(&self.pool, TIMEOUT, || async {
             sqlx::query_scalar!(
@@ -215,7 +234,7 @@ impl World {
     }
 
     /// Alice paired and observing the adopted group.
-    async fn alice_adopted(&self) -> (Jid, Binding) {
+    async fn alice_adopted(&self) -> (Jid, ChatRef) {
         let device = self.pair(ALICE, &self.alice).await;
         let binding = self.adopt(ALICE, &[]).await;
         (device, binding)
@@ -223,7 +242,7 @@ impl World {
 
     /// Waits until the WhatsApp message `source_id` is a standalone group message and
     /// returns every stored copy of it (there must be one).
-    async fn timeline(&self, binding: &Binding, source_id: &str) -> Vec<String> {
+    async fn timeline(&self, binding: &ChatRef, source_id: &str) -> Vec<String> {
         let copies = wait_for_rows(&self.pool, TIMEOUT, || async {
             let copies = group_messages(&self.pool, binding.id, source_id).await;
             (!copies.is_empty()).then_some(copies)
@@ -326,8 +345,8 @@ impl World {
         dump
     }
 
-    async fn send(&self, user: &str, binding: &Binding, text: &str) -> Uuid {
-        self.linked
+    async fn send(&self, user: &str, binding: &ChatRef, text: &str) -> Uuid {
+        self.external
             .send_reply(
                 &receipt::<ViewAccessLevel>(user, binding.id),
                 &SendReply {
@@ -751,7 +770,7 @@ async fn a_macro_attachment_reaches_the_group_intact(pool: PgPool) {
 
     let photo = b"a photo attached in Macro".repeat(40);
     let uploaded = world
-        .linked
+        .external
         .upload_attachment(
             &receipt::<ViewAccessLevel>(ALICE, binding.id),
             "label.jpg",
@@ -762,7 +781,7 @@ async fn a_macro_attachment_reaches_the_group_intact(pool: PgPool) {
         .await
         .unwrap();
     let send = world
-        .linked
+        .external
         .send_reply(
             &receipt::<ViewAccessLevel>(ALICE, binding.id),
             &SendReply {
@@ -851,8 +870,11 @@ async fn a_message_queued_before_a_crash_is_ingested_once(pool: PgPool) {
 }
 
 #[async_trait]
-impl whatsapp_linked::domain::ports::SendRateLimiter for Allow {
-    async fn check(&self, _: &macro_user_id::user_id::MacroUserIdStr<'_>) -> LinkedResult<()> {
+impl external_chat::domain::ports::SendRateLimiter for Allow {
+    async fn check(
+        &self,
+        _: &macro_user_id::user_id::MacroUserIdStr<'_>,
+    ) -> ExternalChatResult<()> {
         Ok(())
     }
 }
@@ -918,8 +940,8 @@ async fn group_renames_and_removals_in_whatsapp_reach_macro_live(pool: PgPool) {
         .expect(left, "removal drops the group from Alice's list")
         .await;
     let detail = world
-        .linked
-        .adopted_groups(&person(ALICE))
+        .external
+        .list(&person(ALICE))
         .await
         .unwrap()
         .into_iter()
@@ -1000,7 +1022,7 @@ async fn senders_named_only_by_lid_land_as_the_people_they_are(pool: PgPool) {
 }
 
 /// The group's backfill state and count once it is one of `states`.
-async fn backfill_state(world: &World, binding: &Binding, states: &[&str]) -> (String, i32) {
+async fn backfill_state(world: &World, binding: &ChatRef, states: &[&str]) -> (String, i32) {
     let state = wait_for_rows(&world.pool, TIMEOUT, || async {
         let row = sqlx::query!(
             "SELECT backfill_state, backfill_imported FROM external_chat WHERE id = $1",
@@ -1062,6 +1084,13 @@ async fn adding_a_group_imports_its_earlier_messages_once_without_notifying(pool
 
     let binding = world.adopt(ALICE, &[]).await;
     assert_eq!(
+        backfill_state(&world, &binding, &["waiting_for_phone"]).await,
+        ("waiting_for_phone".to_owned(), 0),
+        "adding never asks the phone; the owner imports"
+    );
+    assert_eq!(world.alice.history_requests(), 0);
+    assert_eq!(world.import_history(ALICE).await, 1);
+    assert_eq!(
         backfill_state(&world, &binding, &["done", "partial"]).await,
         ("done".to_owned(), 2)
     );
@@ -1081,8 +1110,8 @@ async fn adding_a_group_imports_its_earlier_messages_once_without_notifying(pool
         ]
     );
     let summary = world
-        .linked
-        .adopted_groups(&person(ALICE))
+        .external
+        .list(&person(ALICE))
         .await
         .unwrap()
         .into_iter()
@@ -1112,6 +1141,9 @@ async fn backfill_waits_for_an_offline_phone_and_never_duplicates_live_messages(
         .unwrap();
     world.alice.answer_history_requests(false);
     let binding = world.adopt(ALICE, &[]).await;
+    backfill_state(&world, &binding, &["waiting_for_phone"]).await;
+    world.import_history(ALICE).await;
+    backfill_state(&world, &binding, &["running"]).await;
 
     // Live while the import waits: kept live, once.
     let live = world
@@ -1124,16 +1156,23 @@ async fn backfill_waits_for_an_offline_phone_and_never_duplicates_live_messages(
         ["live during import"]
     );
     backfill_state(&world, &binding, &["waiting_for_phone"]).await;
+    let asked = world.alice.history_requests();
     let newest = world
         .customer
         .send_text(&world.group, "newest")
         .await
         .unwrap();
     world.timeline(&binding, &newest).await;
+    assert_eq!(
+        world.alice.history_requests(),
+        asked,
+        "an unanswered import is never retried behind the owner's back"
+    );
 
-    // The phone comes back: the import resumes and the page that contains
-    // the live message adds only what was missing.
+    // The phone comes back and the owner imports again: the page that
+    // contains the live message adds only what was missing.
     world.alice.answer_history_requests(true);
+    assert_eq!(world.import_history(ALICE).await, 1);
     backfill_state(&world, &binding, &["done"]).await;
     let stored = wait_for_rows(&world.pool, TIMEOUT, || async {
         let stored = origins(&world.pool, binding.id).await;
@@ -1175,11 +1214,19 @@ async fn a_quiet_group_waits_for_its_first_message_then_imports(pool: PgPool) {
         .unwrap();
     world.timeline(&binding, &first).await;
     assert_eq!(
+        backfill_state(&world, &binding, &["waiting_for_phone"])
+            .await
+            .0,
+        "waiting_for_phone",
+        "the first message makes the chat importable"
+    );
+    world.import_history(ALICE).await;
+    assert_eq!(
         backfill_state(&world, &binding, &["done", "partial"])
             .await
             .0,
         "done",
-        "the first message starts the import, which finds nothing earlier"
+        "the import finds nothing earlier"
     );
     assert_eq!(
         origins(&world.pool, binding.id).await,

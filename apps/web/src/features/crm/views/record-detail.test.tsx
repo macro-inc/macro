@@ -16,15 +16,22 @@ import {
 import { afterEach, beforeEach, expect, it, vi } from 'vitest';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmCommentTarget } from '../context/workspace-context';
+import type { CrmCompany } from '../core/company';
 import type { CrmContact } from '../core/contact';
 import type {
+  CompanySection,
   CrmRecordRef,
+  CrmRecordScope,
   CrmRecordSection,
   CrmTaskRecord,
 } from '../core/record';
+import type { RowLinkTarget } from '../core/row-links';
 import { CrmRecordDetail } from './record-detail';
 
 const taskContext = vi.hoisted(() => ({
+  company: (): CrmCompany | undefined => undefined,
+  linkedTarget: undefined as (() => RowLinkTarget) | undefined,
+  databaseScope: undefined as (() => CrmRecordScope | undefined) | undefined,
   records: [] as (() => CrmTaskRecord)[],
   get record() {
     return this.records.at(-1);
@@ -34,7 +41,13 @@ const taskContext = vi.hoisted(() => ({
 }));
 vi.mock('../context/crm-context', () => ({
   useCrmContext: () => ({
-    LinkedRows: () => null,
+    LinkedRows: (props: { target: RowLinkTarget }) => {
+      taskContext.linkedTarget = () => props.target;
+      onCleanup(() => {
+        taskContext.linkedTarget = undefined;
+      });
+      return null;
+    },
     listsEnabled: () => () => false,
     pipelinesEnabled: () => () => false,
     isTeamAdmin: () => () => false,
@@ -80,7 +93,7 @@ vi.mock('./use-crm', () => ({
         return taskContext.recordError();
       },
     },
-    company: () => undefined,
+    company: () => taskContext.company(),
     contacts: () => [],
   }),
   useContactQuery: () => ({
@@ -193,6 +206,13 @@ vi.mock('./contact-sharing-section', () => ({
   ContactSharingSection: () => null,
 }));
 vi.mock('./record-associations', () => ({
+  RecordDatabasesSection: (props: { scope?: CrmRecordScope }) => {
+    taskContext.databaseScope = () => props.scope;
+    onCleanup(() => {
+      taskContext.databaseScope = undefined;
+    });
+    return null;
+  },
   RecordCallsSection: () => null,
   RecordFilesSection: () => null,
   RecordReferencesSection: () => null,
@@ -211,6 +231,9 @@ beforeEach(() => {
 afterEach(() => {
   cleanup();
   vi.unstubAllGlobals();
+  taskContext.company = () => undefined;
+  taskContext.linkedTarget = undefined;
+  taskContext.databaseScope = undefined;
   taskContext.records.length = 0;
   taskContext.contactCompanyId = undefined;
   taskContext.recordError = () => false;
@@ -314,6 +337,45 @@ it('registers the actual company detail while mounted and clears it on unmount',
   expect(taskContext.record?.()).toEqual({ type: 'company', id: 'company-1' });
   result.unmount();
   expect(taskContext.record).toBeUndefined();
+});
+
+it('keeps company row links and database associations scoped across section changes', async () => {
+  const { Company } =
+    await vi.importActual<typeof import('./company-detail')>(
+      './company-detail'
+    );
+  const [id, setId] = createSignal('company-1');
+  const [section, setSection] = createSignal<CompanySection>('overview');
+  taskContext.company = () => ({
+    type: 'crm_company',
+    id: id(),
+    name: 'Example',
+    ownerId: 'owner',
+    teamId: 'team',
+    hidden: false,
+    domains: [{ id: 'domain', companyId: id(), domain: 'example.test' }],
+  });
+  render(() => <Company companyId={id()} section={section()} />);
+  expect(taskContext.linkedTarget?.()).toEqual({
+    type: 'company',
+    companyId: 'company-1',
+  });
+  expect(taskContext.databaseScope).toBeUndefined();
+  setSection('databases');
+  expect(taskContext.linkedTarget).toBeUndefined();
+  expect(taskContext.databaseScope?.()).toEqual({
+    type: 'company',
+    id: 'company-1',
+    domains: ['example.test'],
+  });
+  setId('company-2');
+  expect(taskContext.databaseScope?.()?.id).toBe('company-2');
+  setSection('overview');
+  expect(taskContext.databaseScope).toBeUndefined();
+  expect(taskContext.linkedTarget?.()).toEqual({
+    type: 'company',
+    companyId: 'company-2',
+  });
 });
 
 it('registers the actual contact detail with its loaded company', async () => {

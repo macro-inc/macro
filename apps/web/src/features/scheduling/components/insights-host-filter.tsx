@@ -178,7 +178,7 @@ export function InsightsHostFilter(props: {
       <Combobox.Control>
         <Combobox.Trigger
           as={Button}
-          variant="outline"
+          variant="secondary"
           ref={trigger}
           aria-label="Filter hosts"
           tabIndex={0}

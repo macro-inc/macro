@@ -45,9 +45,8 @@ function HomeSectionError(props: HomeSectionErrorProps) {
 
           <div class="mt-2 flex gap-2">
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
-              depth={2}
               class="w-fit bg-surface"
               onClick={props.reset}
             >

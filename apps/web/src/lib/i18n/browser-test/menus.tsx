@@ -11,7 +11,7 @@ import { render } from 'solid-js/web';
 import { SettingsSidebar } from '../../../features/settings/components/settings-sidebar';
 import { LanguageSettings } from '../../../features/settings/LanguageSettings';
 import { macroLightTheme } from '../../../features/theme/themes/macro-light';
-import { themeCssVars } from '../../../features/theme/utils/themeColorTokens';
+import { themeCssVars } from '../../../features/theme/utils/themeCssVars';
 import { authKeys } from '../../queries/auth/keys';
 import { teamKeys } from '../../queries/team/keys';
 import type { TranslationKey } from '../dictionary';

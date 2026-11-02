@@ -574,6 +574,38 @@ async fn folder_grants_propagate_without_overwriting_direct_child_access(pool: P
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS", fixtures("document"))]
+async fn recorded_owner_reports_owner_access_over_its_grant_row(pool: PgPool) {
+    sqlx::query!(
+        "UPDATE entity_access SET access_level = 'edit' WHERE source_id = 'macro|owner@requests.test'"
+    )
+    .execute(&pool)
+    .await
+    .unwrap();
+    let (s, _) = setup(pool.clone());
+    let owner = s.state(user("owner"), entity(), 0).await.unwrap();
+    assert_eq!(owner.access_level, Some(AccessLevel::Owner));
+    assert!(owner.can_review);
+    sqlx::query!("DELETE FROM entity_access WHERE source_id = 'macro|owner@requests.test'")
+        .execute(&pool)
+        .await
+        .unwrap();
+    assert_eq!(
+        s.state(user("owner"), entity(), 0)
+            .await
+            .unwrap()
+            .access_level,
+        Some(AccessLevel::Owner)
+    );
+    assert_eq!(
+        s.state(user("reader"), entity(), 0)
+            .await
+            .unwrap()
+            .access_level,
+        Some(AccessLevel::View)
+    );
+}
+
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS", fixtures("document"))]
 async fn bot_sponsor_can_review_without_a_separate_user_grant(pool: PgPool) {
     sqlx::query!("INSERT INTO bots (id, kind, owner_user_id, name, handle) VALUES ('00000000-0000-0000-0000-000000000020', 'owned', 'macro|owner@requests.test', 'Owner bot', 'request-owner')")
         .execute(&pool).await.unwrap();

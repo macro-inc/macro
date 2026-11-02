@@ -134,7 +134,7 @@ function ThreadCard(props: {
           <div class="flex items-center gap-2 text-xs text-ink-muted">
             <span>Couldn’t load this thread.</span>
             <Button
-              variant="outline"
+              variant="secondary"
               size="xs"
               onClick={() => fireAndForget(query.refetch(), 'channels-view')}
             >
@@ -163,12 +163,13 @@ function ThreadCard(props: {
           on hover or keyboard focus, and always on touch, which cannot hover. */}
       <div class="absolute top-2 right-2 opacity-0 transition-opacity group-hover/thread-card:opacity-100 group-focus-within/thread-card:opacity-100 touch:opacity-100 motion-reduce:transition-none">
         <Button
+          aria-label="View in channel"
+          tooltip="View in channel"
           variant="ghost"
           size="icon-md"
-          label="View in channel"
           onClick={() => props.onOpen()}
         >
-          <ArrowSquareOutIcon />
+          <ArrowSquareOutIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
         </Button>
       </div>
     </article>
@@ -224,7 +225,7 @@ function ThreadList(props: {
             <div class="flex min-h-40 flex-col items-center justify-center gap-2 text-sm text-ink-muted">
               <span>Couldn’t load threads.</span>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="xs"
                 onClick={() =>
                   fireAndForget(props.query.refresh(), 'channels-view')
@@ -282,7 +283,7 @@ function ThreadList(props: {
               <div class="flex items-center justify-center gap-2 py-3 text-xs text-ink-muted">
                 <span>Couldn’t load more threads.</span>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="xs"
                   onClick={() =>
                     fireAndForget(props.query.refresh(), 'channels-view')

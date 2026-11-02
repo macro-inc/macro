@@ -82,6 +82,88 @@ test('delivers a query admitted while parked across replacement without API fall
   expect(after.queue?.map((item) => item.uuid)).toEqual([before.seedUuid]);
 });
 
+test('coalesces parked catch-up commits into one visible-cache refresh', async ({
+  page,
+}, info) => {
+  await page.clock.install();
+  await page.goto(
+    `${path(info.project.name)}?scope=cache-parking-${crypto.randomUUID()}`
+  );
+  await page.evaluate(() => window.cacheParkingHarness.start());
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'hidden',
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.evaluate(() => window.cacheParkingHarness.parked());
+  await page.evaluate(() => window.cacheParkingHarness.queueCatchup());
+  expect(
+    await page.evaluate(() => window.cacheParkingHarness.catchupSnapshot())
+  ).toMatchObject({ revisions: [], refreshes: 0 });
+
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'visible',
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.evaluate(() => window.cacheParkingHarness.catchupDone());
+  // Any dirty trailing refresh would run here; no wall-clock sleep is needed.
+  await page.clock.runFor(1_000);
+  const caughtUp = await page.evaluate(() =>
+    window.cacheParkingHarness.catchupSnapshot()
+  );
+  expect(caughtUp.revisions).toHaveLength(1);
+  expect(caughtUp.batches).toEqual([5]);
+  expect(caughtUp.refreshes).toBe(1);
+  expect(caughtUp.read).toMatchObject({
+    kind: 'hit',
+    data: { user: { id: 'catchup-3' } },
+  });
+  await page.evaluate(() => window.cacheParkingHarness.dispose());
+});
+
+test('delivers a background notification before cache persistence without replaying it on resume', async ({
+  page,
+}, info) => {
+  await page.goto(
+    `${path(info.project.name)}?scope=cache-parking-${crypto.randomUUID()}`
+  );
+  await page.evaluate(() => window.cacheParkingHarness.start());
+  await page.evaluate(() => window.cacheParkingHarness.startNotifications());
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'hidden',
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.evaluate(() => window.cacheParkingHarness.parked());
+  await page.evaluate(() => window.cacheParkingHarness.emitNotification());
+  expect(
+    await page.evaluate(() => window.cacheParkingHarness.notifications())
+  ).toEqual({ received: ['synthetic-notification'], persisted: [] });
+
+  await page.evaluate(() => {
+    Object.defineProperty(document, 'visibilityState', {
+      configurable: true,
+      get: () => 'visible',
+    });
+    document.dispatchEvent(new Event('visibilitychange'));
+  });
+  await page.evaluate(() => window.cacheParkingHarness.notificationPersisted());
+  expect(
+    await page.evaluate(() => window.cacheParkingHarness.notifications())
+  ).toEqual({
+    received: ['synthetic-notification'],
+    persisted: ['synthetic-notification'],
+  });
+  await page.evaluate(() => window.cacheParkingHarness.dispose());
+});
+
 test('settles a response received while parked before a competing expired-lease claim', async ({
   context,
   page,

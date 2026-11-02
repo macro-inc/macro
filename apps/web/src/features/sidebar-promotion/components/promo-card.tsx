@@ -58,7 +58,7 @@ export function PromoCard(props: {
       <p class="mt-1 text-[11px] leading-4 text-ink-muted">{props.pitch}</p>
       <div class="mt-3 flex gap-2">
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           class="min-w-0 flex-1"
           onClick={(event) => props.action.onClick(event.currentTarget)}
@@ -68,7 +68,7 @@ export function PromoCard(props: {
         <Show when={props.secondaryAction}>
           {(secondary) => (
             <Button
-              variant="outline"
+              variant="secondary"
               size="sm"
               class="min-w-0 flex-1"
               onClick={(event) => secondary().onClick(event.currentTarget)}

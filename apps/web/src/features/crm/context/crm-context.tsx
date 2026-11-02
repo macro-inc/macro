@@ -22,7 +22,7 @@ import type {
   CrmDisplayOptions,
   CrmListColumnId,
 } from '../core/display-options';
-import type { CrmActivityTab } from '../core/navigation';
+import type { CrmSoupActivityTab } from '../core/navigation';
 import type { Pipeline } from '../core/pipeline';
 import type { CrmRecordScope, CrmTaskRecord } from '../core/record';
 import type {
@@ -98,17 +98,21 @@ export type CrmContext = {
   ): ItemListSource;
   /** Paged CRM-wide activity, limited to associated records. */
   createActivity(
-    tab: Accessor<CrmActivityTab>,
+    tab: Accessor<CrmSoupActivityTab>,
     options?: Accessor<CrmActivityViewState>
   ): ItemListSource;
+  /** Databases containing CRM-linked rows; undefined selects the workspace scope. */
+  createDatabases(scope: Accessor<CrmRecordScope | undefined>): ItemListSource;
+  openCreateItem(kind: 'notes' | 'calls' | 'databases'): void;
+  openEmailComposer(recipient?: string): void;
   createActivityState(
-    tab: CrmActivityTab
+    tab: CrmSoupActivityTab
   ): readonly [
     Store<CrmActivityViewState>,
     SetStoreFunction<CrmActivityViewState>,
   ];
   createActivityFilters(
-    tab: CrmActivityTab,
+    tab: CrmSoupActivityTab,
     state: Store<CrmActivityViewState>,
     setState: SetStoreFunction<CrmActivityViewState>
   ): ActivityFilters;
@@ -164,7 +168,7 @@ export type CrmContext = {
   };
   openCreateCompany(): void;
   /** Without a company, the dialog asks which company the contact joins. */
-  openCreateContact(company?: { companyId: string; domain: string }): void;
+  openCreateContact(company?: { companyId: string }): void;
   userId: Accessor<string | undefined>;
   isTeamAdmin: () => Accessor<boolean>;
   createCompanySource(id: Accessor<string>): CompanySource;
@@ -177,7 +181,7 @@ export type CrmContext = {
   createTeamViews(): TeamViewsSource;
   createLists(teamId: Accessor<string | undefined>): ListsSource;
   createCompany(): CrmMutation<
-    { name: string; domain: string },
+    { name: string; domain?: string },
     { id: string }
   >;
   createCompanyImporter(): CompanyImporter;

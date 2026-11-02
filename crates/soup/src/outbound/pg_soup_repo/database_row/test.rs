@@ -64,7 +64,7 @@ async fn page(
         ExpandedDynamicCursorArgs {
             user_id,
             limit: 20,
-            cursor: Query::Sort(SimpleSortMethod::CreatedAt, filter),
+            cursor: Query::Sort(SimpleSortMethod::CreatedAt.into(), filter),
             exclude_frecency: false,
         },
     )
@@ -80,7 +80,7 @@ async fn a_viewer_reads_the_won_deals_of_one_table(pool: PgPool) {
             user_id: MacroUserIdStr::parse_from_str("macro|viewer@databases.test").unwrap(),
             limit: 20,
             cursor: Query::Sort(
-                SimpleSortMethod::CreatedAt,
+                SimpleSortMethod::CreatedAt.into(),
                 EntityFilterAst {
                     database_row_filter: Some(Arc::new(Expr::val(DatabaseRowLiteral::TableId(
                         DEALS,
@@ -163,12 +163,62 @@ async fn rows_stay_out_of_queries_that_name_no_table(pool: PgPool) {
         page(
             &pool,
             viewer(),
+            rows_of(Some(Expr::is_not(Expr::val(DatabaseRowLiteral::Include))))
+        )
+        .await
+        .is_empty()
+    );
+    assert!(
+        page(
+            &pool,
+            viewer(),
             rows_of(Some(Expr::is_not(Expr::val(DatabaseRowLiteral::TableId(
                 CONTACTS
             ))))),
         )
         .await
         .is_empty()
+    );
+}
+
+#[sqlx::test(fixtures("test/database_rows.sql"), migrator = "MACRO_DB_MIGRATIONS")]
+async fn include_reads_all_accessible_tables_but_not_private_rows(pool: PgPool) {
+    let include = Some(Expr::val(DatabaseRowLiteral::Include));
+    assert_eq!(
+        page(&pool, viewer(), rows_of(include.clone()))
+            .await
+            .iter()
+            .map(Identify::id)
+            .collect::<Vec<_>>(),
+        vec![
+            Uuid::from_u128(0x70000000_0000_0000_0000_000000000004),
+            DEAL_3,
+            DEAL_2,
+            DEAL_1,
+        ]
+    );
+    assert_eq!(
+        page(&pool, stranger(), rows_of(include))
+            .await
+            .iter()
+            .map(Identify::id)
+            .collect::<Vec<_>>(),
+        vec![NOTE]
+    );
+    assert_eq!(
+        page(
+            &pool,
+            viewer(),
+            rows_of(Some(Expr::and(
+                Expr::val(DatabaseRowLiteral::Include),
+                Expr::is_not(Expr::val(DatabaseRowLiteral::TableId(CONTACTS))),
+            ))),
+        )
+        .await
+        .iter()
+        .map(Identify::id)
+        .collect::<Vec<_>>(),
+        vec![DEAL_3, DEAL_2, DEAL_1]
     );
 }
 
@@ -205,7 +255,7 @@ async fn deals_grouped_by_stage_count_each_option(pool: PgPool) {
             user_id: viewer(),
             limit: 20,
             cursor: Query::Sort(
-                SimpleSortMethod::CreatedAt,
+                SimpleSortMethod::CreatedAt.into(),
                 rows_of(Some(Expr::val(DatabaseRowLiteral::TableId(DEALS)))),
             ),
             exclude_frecency: false,
@@ -213,6 +263,7 @@ async fn deals_grouped_by_stage_count_each_option(pool: PgPool) {
                 field: GroupByField::Property {
                     property_definition_id: STAGE,
                     entity_type: Some("DATABASE_ROW".into()),
+                    bucketing: None,
                 },
                 group_key: None,
                 per_group_limit: None,

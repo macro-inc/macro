@@ -11,11 +11,16 @@ between the sandbox and the rest of the product.
 
 - `src/domain/service.rs` + `src/domain/ports.rs`: the harness service and
   the ports every runtime/container provider implements.
+- `src/domain/model/coding_preferences/`: workflows injected into coding
+  sessions (create-tasks, open-pull-requests). Task mentions use the lexical
+  `<m-document-mention>` chip.
 - `src/domain/codex.rs`: per-runtime session setup.
 - `src/outbound/sidecar.rs` + `sidecar_pump.rs`: the container sidecar
   transport that speaks `agent_runtime_protocol`.
 - `src/outbound/containers.rs` / `managed_containers.rs`: container
   provisioning.
+- `src/outbound/cursor/manager.rs`: compose Cursor sessions, including public
+  prompt-image fetching through the `cursor_cloud_agents` image-fetcher port.
 - `src/domain/trigger_router.rs`: routes an incoming trigger to a session.
 - `src/inbound/kafka.rs`: trigger ingestion.
 - `src/domain/mode_choice.rs` + `src/inbound/mode_choice.rs`: the agent
@@ -46,6 +51,9 @@ between the sandbox and the rest of the product.
 
 External runtimes receive the session's configured MCP selection when binding,
 including enabled owner connections and custom servers under `OwnerConnections`.
+Under `Selected`, an overlaid app (`pipedream_mcp` `mcp_overlays`) the owner
+authorized natively is advertised as that custom server instead of its slug;
+an app connected that way also satisfies the `app.connected` resume check.
 Use `external_mcp_servers` to preserve the host-reachable egress URL override.
 
 External chat replies use `domain/service/external_replies.rs` and the
@@ -77,7 +85,18 @@ wakes; interrupted quiet batches return to the next real prompt.
 
 ## Checks
 
-- `cargo test -p agent_harness` (`SQLX_OFFLINE` unset).
+- `cargo nextest run -p agent_harness --lib --test-threads=2` (`SQLX_OFFLINE`
+  unset). Use CI's process isolation for the full database-backed suite so each
+  test has its own process and runtime.
+
+## Gotchas
+
+- A session's first prompt carries static files from the mentioning message
+  and the rest of its thread (mention first, then root and replies), capped
+  at 8 and deduped by file id; follow-ups carry only their own files.
+  Background channel messages are not attached. `trigger_router` fills each
+  context attachment's `url` from `StaticFileLinks`, and `<m-agent-context>`
+  lists them per message; ACP `resource_link`s are what vision models fetch.
 
 ## Related
 

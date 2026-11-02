@@ -6,7 +6,6 @@ import {
 } from '@app/lib/urql-solid';
 import { optimisticMutationDispositionOf } from '@graphql-cache/exchange/optimistic';
 import type { TypedDocumentNode } from '@graphql-typed-document-node/core';
-import type { Favorite } from '@service-storage/generated/schemas/favorite';
 import type { FavoritesList } from '@service-storage/generated/schemas/favoritesList';
 import type { ListFavoritesParams } from '@service-storage/generated/schemas/listFavoritesParams';
 import {
@@ -20,10 +19,10 @@ import {
   executeGraphqlReorderFavoritesMutation,
   executeGraphqlSetFavoriteMutation,
   type FavoritesCacheTarget,
+  type FavoriteWriteResult,
   graphqlReorderFavoritesResult,
   graphqlSetFavoriteResult,
   mapGraphqlFavorite,
-  type ReorderFavoritesResult,
   type SetFavoriteArgs,
   toGraphqlFavoriteEntityType,
   UNFILTERED_FAVORITES_VARIABLES,
@@ -218,10 +217,10 @@ function createFavoriteMutation<
   };
 }
 
-/** Add a favorite, returning its persisted or queued optimistic payload. */
+/** Add a favorite, reporting whether it committed or queued offline. */
 export function createGraphqlAddFavoriteMutation<Context = void>(
   callbacks: FavoriteMutationCallbacks<
-    Favorite | undefined,
+    FavoriteWriteResult,
     SetFavoriteArgs,
     Context
   > = {}
@@ -243,7 +242,11 @@ export function createGraphqlAddFavoriteMutation<Context = void>(
 
 /** Remove a favorite without requiring any mounted favorites query. */
 export function createGraphqlRemoveFavoriteMutation<Context = void>(
-  callbacks: FavoriteMutationCallbacks<void, SetFavoriteArgs, Context> = {}
+  callbacks: FavoriteMutationCallbacks<
+    FavoriteWriteResult,
+    SetFavoriteArgs,
+    Context
+  > = {}
 ) {
   return createFavoriteMutation({
     mutation: SetFavoriteDocument,
@@ -255,9 +258,7 @@ export function createGraphqlRemoveFavoriteMutation<Context = void>(
         0,
         activeFavoritesCacheTargets(input)
       ),
-    select: (result) => {
-      graphqlSetFavoriteResult(result);
-    },
+    select: graphqlSetFavoriteResult,
     callbacks,
   });
 }
@@ -265,7 +266,7 @@ export function createGraphqlRemoveFavoriteMutation<Context = void>(
 /** Creates the durable urql-solid favorites reorder mutation. */
 export function createGraphqlReorderFavoritesMutation<Context = void>(
   callbacks: FavoriteMutationCallbacks<
-    ReorderFavoritesResult,
+    FavoriteWriteResult,
     GraphqlReorderFavoritesArgs,
     Context
   > = {}

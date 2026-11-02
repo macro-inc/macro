@@ -200,6 +200,20 @@ export default defineConfig({
       },
     },
   },
+  syncService: {
+    output: {
+      biome: true,
+      // Keep the existing transport for binary payloads and permission tokens.
+      // Generate shared HTTP models alongside the Bebop websocket schema.
+      schemas: './service-sync/generated/http/schemas',
+      override: {
+        useDates: false,
+      },
+    },
+    input: {
+      target: './service-sync/openapi.json',
+    },
+  },
   unfurlService: {
     output: {
       client: 'fetch',

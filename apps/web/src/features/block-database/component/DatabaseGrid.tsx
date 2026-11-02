@@ -52,6 +52,7 @@ import {
   DatabaseTextEditor,
   DatabaseTextValue,
 } from '../database-mentions';
+import { createDatabaseDocumentNavigation } from '../navigation-adapter';
 import {
   type DatabaseGridHost,
   trackQueryRuns,
@@ -149,6 +150,7 @@ function withRelationLabels(
 
 function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
   const queryClient = useQueryClient();
+  const openDocumentMention = createDatabaseDocumentNavigation();
   // Keep the final schema for this table available to already-queued writes
   // after its tab is closed; a new selected table must never redirect them.
   let ownedTable = props.table;
@@ -345,6 +347,7 @@ function TableAdapter(props: DatabaseGridProps & { tableId: string }) {
                 renderTextValue={renderTextValue}
                 renderMentionPicker={renderMentionPicker}
                 renderMentionValue={renderMentionValue}
+                onOpenDocumentMention={openDocumentMention}
                 renderRelationCell={(cell) => (
                   <DatabaseRelationCell
                     {...cell}

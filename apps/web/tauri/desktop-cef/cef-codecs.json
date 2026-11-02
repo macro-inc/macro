@@ -1,0 +1,8 @@
+{
+  "cefVersion": "151.3.24+g2384915+chromium-151.0.7922.174",
+  "cefCommit": "2384915",
+  "chromiumBranch": "7922",
+  "releaseTag": "cef-codecs-151.3.24-g2384915",
+  "asset": "cef_binary_151.3.24_macosarm64_codecs_minimal.tar.bz2",
+  "sha256": "d5605e50a736b8e107a58ea900d63e6893d4a66d00dda580976378f4de5d52d2"
+}

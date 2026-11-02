@@ -58,6 +58,7 @@ async fn deleting_people_who_sent_removes_their_whatsapp_data(pool: PgPool) {
         .unwrap();
     for (user, text) in [(ALICE, "from alice"), (BOB, "from bob")] {
         linked
+            .chats
             .send_reply(
                 &receipt::<MessageWrite>(user, binding.id),
                 &text_reply(text),
@@ -118,7 +119,7 @@ async fn an_alias_outlives_the_account_that_saw_it(pool: PgPool) {
 async fn receipts_are_stored_once_per_message_and_expire(pool: PgPool) {
     use crate::domain::{
         events::{Receipt, ReceiptState},
-        ports::MediaRepository,
+        ports::AccountRepository,
     };
     let (_, session, repository, binding, alice, _) = adopted(&pool).await;
     let receipt = InboundEvent {
@@ -158,35 +159,37 @@ async fn receipts_are_stored_once_per_message_and_expire(pool: PgPool) {
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn only_the_owners_session_stops_syncing_a_chat(pool: PgPool) {
-    let (linked, _, repository, binding, _, _) = adopted(&pool).await;
+    let (linked, _, _, binding, _, _) = adopted(&pool).await;
     for (user, authority) in [
         (ALICE, SendAuthority::UserApiToken),
         (ALICE, SendAuthority::Automation),
         (BOB, SendAuthority::Human),
     ] {
         let error = linked
+            .chats
             .detach(&receipt::<MessageView>(user, binding.id), authority)
             .await
             .unwrap_err();
-        assert_eq!(error.current_context(), &LinkedError::Forbidden);
+        assert_eq!(error.current_context(), &ExternalChatError::Forbidden);
     }
     linked
+        .chats
         .detach(
             &receipt::<MessageView>(ALICE, binding.id),
             SendAuthority::Human,
         )
         .await
         .unwrap();
-    use crate::domain::ports::BindingRepository;
+    use external_chat::domain::ports::ChatRepository;
     assert_eq!(
-        repository.binding(binding.id).await.unwrap().unwrap().state,
-        BindingState::Detached
+        linked.store.chat(binding.id).await.unwrap().unwrap().state,
+        ChatState::Detached
     );
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn consumed_pairings_are_pruned_after_a_day(pool: PgPool) {
-    use crate::domain::ports::MediaRepository;
+    use crate::domain::ports::AccountRepository;
     let (_, _, repository, _, alice, _) = adopted(&pool).await;
     let pairings = |pool: PgPool| async move {
         sqlx::query_scalar!(

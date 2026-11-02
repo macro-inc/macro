@@ -44,7 +44,7 @@ export const QUICK_CONNECT_SERVERS = [
   {
     server_name: 'Datadog',
     app_slug: 'datadog',
-    url: 'https://mcp.datadoghq.com/mcp',
+    url: 'https://mcp.datadoghq.com/v1/mcp',
     icon: IconDatadog as SvgIcon,
   },
   {

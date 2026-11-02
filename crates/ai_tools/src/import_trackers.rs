@@ -8,11 +8,21 @@ use entity_access::domain::{models::EditAccessLevel, ports::EntityAccessService}
 use import::domain::ports::{
     ImportedDocumentProperties, ImportedTaskProperties, TrackerTaskRelations,
 };
-use initiative::domain::models::{CreateInitiativeRequest, InitiativeId};
+use initiative::domain::models::{
+    CreateInitiativeRequest, InitiativeId, MAX_INITIATIVE_NAME_GRAPHEMES,
+};
 use macro_user_id::user_id::MacroUserIdStr;
+use model::document::MAX_DOCUMENT_NAME_GRAPHEMES;
 use models_properties::{EntityReference, EntityType, api::SetPropertyValue};
 use system_properties::SystemPropertyKey;
+use unicode_segmentation::UnicodeSegmentation;
 use uuid::Uuid;
+
+/// `name` cut to `max` graphemes; source trackers allow longer titles than
+/// Macro, and the body links back to the full source item.
+fn capped_name(name: &str, max: usize) -> String {
+    name.trim().graphemes(true).take(max).collect::<String>()
+}
 
 impl ToolEntityCreator {
     #[tracing::instrument(skip_all, fields(project_id = %id), err)]
@@ -29,7 +39,7 @@ impl ToolEntityCreator {
             .create_imported(
                 user,
                 CreateInitiativeRequest {
-                    name: name.to_string(),
+                    name: capped_name(name, MAX_INITIATIVE_NAME_GRAPHEMES),
                     description: Some(markdown.to_string()),
                     member_ids: None,
                     share_with_team: Some(shared),
@@ -56,9 +66,10 @@ impl ToolEntityCreator {
             .create_imported_task(
                 user,
                 Some(id),
-                name,
+                &capped_name(name, MAX_DOCUMENT_NAME_GRAPHEMES),
                 ImportedContent::Markdown(markdown.to_string()),
                 properties,
+                None,
                 None,
                 shared,
             )

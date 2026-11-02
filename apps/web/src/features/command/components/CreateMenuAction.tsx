@@ -11,8 +11,8 @@ export function CreateMenuAction(props: {
   return (
     <Button
       size="md"
-      variant="cta"
-      class="h-8 rounded-full px-4 font-medium [--color-accent:#fff] [--color-accent-contrast:#000] light-mode:[--color-accent:#000] light-mode:[--color-accent-contrast:#fff]"
+      variant="primary"
+      class="h-8 rounded-full px-4 font-medium"
       aria-label={t(
         props.shiftHeld ? 'create.createItemInNewSplit' : 'create.createItem',
         { label: props.item.label }

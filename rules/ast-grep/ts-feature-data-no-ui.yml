@@ -30,9 +30,11 @@ files:
   - apps/web/src/features/agent-activity/queries/**
   - apps/web/src/features/agent-dms/queries/**
   - apps/web/src/features/agent-conversations/queries/**
+  - apps/web/src/features/local-runtime/queries/**
   - apps/web/src/features/agent-activity/primitives/**
   - apps/web/src/features/agent-dms/primitives/**
   - apps/web/src/features/agent-conversations/primitives/**
+  - apps/web/src/features/local-runtime/primitives/**
   - apps/web/src/features/agent-interactions/queries/**
   - apps/web/src/features/agent-interactions/primitives/**
   - apps/web/src/features/billing-lab/queries/**

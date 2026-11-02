@@ -16,6 +16,7 @@ mod assign_author;
 mod assign_labels;
 mod build_agent_daemon_on_tag;
 mod build_appimage_on_tag;
+mod build_cef_codecs;
 mod build_desktop_on_tag;
 mod build_dmg_on_tag;
 mod build_web_app;
@@ -24,6 +25,7 @@ mod cargo_deny;
 mod cargo_workspace_dependency_check;
 mod check_generated;
 mod check_node_modules_nix;
+mod check_tauri_lockfiles;
 mod cla;
 mod cleanup_preview;
 mod code_check_cloud_storage;
@@ -41,6 +43,7 @@ mod deploy_web_app;
 mod deploy_website;
 mod ensure_daytona_snapshot;
 mod export_ci_telemetry;
+mod ios_app_store_publish;
 mod ios_app_store_release;
 mod ios_preview;
 mod ios_release_drift;
@@ -58,6 +61,7 @@ mod reusable_preview_service;
 mod runners;
 mod sdk_check;
 mod steps;
+mod test_macrod_update;
 mod vars;
 mod web_app_check_main;
 mod web_artifact_paths;
@@ -135,6 +139,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "build_agent_daemon_on_tag",
         file_name: "build_agent_daemon_on_tag.yml",
         render_yaml: || render_gh_workflow(build_agent_daemon_on_tag::build_agent_daemon_on_tag)(),
+    },
+    WorkflowFile {
+        slug: "test_macrod_update",
+        file_name: "test_macrod_update.yml",
+        render_yaml: || render_gh_workflow(test_macrod_update::test_macrod_update)(),
     },
     WorkflowFile {
         slug: "build_appimage_on_tag",
@@ -277,6 +286,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         render_yaml: || render_patched(deploy_website::deploy_website, deploy_website::patch),
     },
     WorkflowFile {
+        slug: "build_cef_codecs",
+        file_name: "build_cef_codecs.yml",
+        render_yaml: || render_gh_workflow(build_cef_codecs::build_cef_codecs)(),
+    },
+    WorkflowFile {
         slug: "ensure_daytona_snapshot",
         file_name: "ensure_daytona_snapshot.yml",
         render_yaml: || render_gh_workflow(ensure_daytona_snapshot::ensure_daytona_snapshot)(),
@@ -310,6 +324,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "ios_app_store_release",
         file_name: "ios-app-store-release.yml",
         render_yaml: || render_gh_workflow(ios_app_store_release::ios_app_store_release)(),
+    },
+    WorkflowFile {
+        slug: "ios_app_store_publish",
+        file_name: "ios-app-store-publish.yml",
+        render_yaml: || render_gh_workflow(ios_app_store_publish::ios_app_store_publish)(),
     },
     WorkflowFile {
         slug: "native_check_label",
@@ -380,6 +399,11 @@ const WORKFLOWS: &[WorkflowFile] = &[
         slug: "check_node_modules_nix",
         file_name: "check_node_modules_nix.yml",
         render_yaml: || render_gh_workflow(check_node_modules_nix::check_node_modules_nix)(),
+    },
+    WorkflowFile {
+        slug: "check_tauri_lockfiles",
+        file_name: "check_tauri_lockfiles.yml",
+        render_yaml: || render_gh_workflow(check_tauri_lockfiles::check_tauri_lockfiles)(),
     },
     WorkflowFile {
         slug: "check_generated",

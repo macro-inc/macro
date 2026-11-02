@@ -9,6 +9,9 @@
         "http://127.0.0.1:9222"
       ]
     },
+    "goalert": {
+      "command": "goalert-mcp-macro"
+    },
     "grafana": {
       "command": "docker",
       "args": [

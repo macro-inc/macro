@@ -36,6 +36,9 @@ test('company links show live previews, allow multiple rows, and unlink only the
     picker.getByRole('button', { name: 'Invoice 43 Linked' })
   ).toBeDisabled();
   await picker.getByRole('button', { name: 'Done' }).click();
+  await expect(
+    page.getByRole('button', { name: 'Link row', exact: true })
+  ).toBeFocused();
   await page.getByRole('button', { name: 'Open source row' }).first().click();
   await expect(page.getByRole('status')).toHaveText('Opened: first');
   await page.getByRole('button', { name: 'Unlink row' }).first().click();

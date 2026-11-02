@@ -18,6 +18,10 @@ export type ChatSummary = {
   unreadCount: number;
   /** False for viewers who can only read. */
   canSend: boolean;
+  /** Why the viewer can't send, when they can't. */
+  sendReason?: ExternalChatReplyBlock;
+  /** Importing earlier messages from the owner's phone. */
+  backfill?: ChatBackfill;
   /** The provider community the group belongs to. */
   community?: { id: string; name: string; announcements: boolean };
 };
@@ -203,6 +207,15 @@ function deliveryFailure(progress: SendProgress, label: string): string {
       'disconnected',
       () => `Your ${label} disconnected before this was sent.`
     )
+    .with(
+      'recipient_not_on_provider',
+      () => `This person isn't on ${label}, so this wasn't sent.`
+    )
+    .with(
+      'rate_limited',
+      () =>
+        `${label} is limiting messages right now. Try again in a few minutes.`
+    )
     .otherwise(() => `${label} didn't accept this message.`);
 }
 
@@ -217,8 +230,8 @@ export function backfillStatus(
     .with(P.union('pending', 'running'), () => 'Importing history…')
     .with('waiting_for_phone', () =>
       viewerOwns
-        ? 'Waiting for your phone to import history'
-        : "Waiting for the owner's phone to import history"
+        ? 'Earlier messages not imported. Open WhatsApp on your phone, then import them.'
+        : "Earlier messages wait for the owner's phone"
     )
     .with(P.union('waiting_for_message', 'done', 'partial'), () => undefined)
     .exhaustive();

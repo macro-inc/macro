@@ -5,7 +5,8 @@
 End-to-end tests for WhatsApp linked devices. Real session-service replicas
 (supervisor, advisory locks, account runners, whatsmeow clients, the encrypted
 Postgres device store) run against `whatsapp_fake_server`. The DSS side runs
-through `whatsapp_linked::LinkedService`, and both share one `#[sqlx::test]`
+through `WhatsAppService` and `ExternalChatService<WhatsAppProvider>`, and
+both share one `#[sqlx::test]`
 database. Nothing talks to WhatsApp or AWS (the KMS is
 `whatsapp_store_pg`'s `FakeWhatsAppKms`).
 

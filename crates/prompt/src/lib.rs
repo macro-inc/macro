@@ -23,6 +23,7 @@ pub mod mcp_item_links;
 pub mod mentions;
 pub mod pull_requests;
 pub mod skills;
+pub mod tasks;
 pub mod tone;
 pub mod tool_usage;
 mod types;
@@ -34,6 +35,14 @@ pub use types::{ComposedPrompt, Section, StaticPrompt};
 /// terms. Contains no tool use instructions.
 pub static BASE_PROMPT: ComposedPrompt = tone::PROMPT
     .compose(&math::PROMPT)
+    .compose(&citations::PROMPT)
+    .compose(&mentions::PROMPT)
+    .compose(&do_not::PROMPT)
+    .compose(&about_macro::PROMPT);
+
+/// [`BASE_PROMPT`] without its tone section, for agent sessions, whose
+/// preamble ([`agent_session`]) sets their own tone.
+static SESSION_BASE_PROMPT: ComposedPrompt = math::PROMPT
     .compose(&citations::PROMPT)
     .compose(&mentions::PROMPT)
     .compose(&do_not::PROMPT)
@@ -67,11 +76,11 @@ pub static TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&document_content_links::PROMPT)
     .compose(&email::PROMPT);
 
-/// The agent-session tool-enabled prompt: [`TOOL_USE_PROMPT`] with the user
-/// tool rules restated for a host that reviews those calls in the turn - a
-/// review card the user answers while the agent waits, not a composer left
-/// pending after it.
-pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
+/// The agent-session tool-enabled prompt: [`TOOL_USE_PROMPT`] on
+/// [`SESSION_BASE_PROMPT`], with the user tool rules restated for a host that
+/// reviews those calls in the turn - a review card the user answers while the
+/// agent waits, not a composer left pending after it.
+pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
     .compose(&tool_usage::PROMPT)
     .compose(&databases::PROMPT)
     .compose(&crm_pipelines::PROMPT)
@@ -82,12 +91,13 @@ pub static SESSION_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
     .compose(&email::PROMPT);
 
 /// Agent-session instructions for nonblocking saved reviews in code mode.
-pub static CODE_MODE_SESSION_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT
+pub static CODE_MODE_SESSION_TOOL_USE_PROMPT: ComposedPrompt = SESSION_BASE_PROMPT
     .compose(&tool_usage::PROMPT)
     .compose(&databases::PROMPT)
     .compose(&crm_pipelines::PROMPT)
     .compose(&user_tools::BOOKING_PROMPT)
     .compose(&user_tools::CODE_MODE_SESSION_PROMPT)
+    .compose(&tasks::PROMPT)
     .compose(&skills::PROMPT)
     .compose(&document_content_links::PROMPT)
     .compose(&email::PROMPT);
@@ -99,7 +109,7 @@ pub static DATABASE_TOOL_USE_PROMPT: ComposedPrompt = BASE_PROMPT.compose(&datab
 pub static DATABASE_READ_ONLY_TOOL_USE_PROMPT: ComposedPrompt =
     BASE_PROMPT.compose(&databases::READ_ONLY_PROMPT);
 
-/// Citation, do-not, Macro-terms, and document-content-linking rules surfaced
+/// Citation, do-not, Macro-terms, pull-request, and document-content-linking rules surfaced
 /// to external MCP clients, composed together. These are static; the
 /// item-linking rules for the model's own replies are not, because they
 /// depend on the runtime app base URL — see [`mcp_instructions`].
@@ -116,6 +126,7 @@ pub static DATABASE_READ_ONLY_TOOL_USE_PROMPT: ComposedPrompt =
 static MCP_STATIC_INSTRUCTIONS: ComposedPrompt = citations::PROMPT
     .compose(&do_not::PROMPT)
     .compose(&about_macro::PROMPT)
+    .compose(&pull_requests::PROMPT)
     .compose(&databases::PROMPT)
     .compose(&crm_pipelines::PROMPT)
     .compose(&document_content_links::PROMPT);
@@ -361,9 +372,7 @@ mod tests {
     }
 
     #[test]
-    fn system_prompt_tells_agents_to_open_ready_pull_requests_with_ci_passing() {
-        let prompt = BASE_PROMPT.to_string();
-        assert!(prompt.contains(pull_requests::READY_PULL_REQUEST));
+    fn mcp_and_coding_agents_open_ready_pull_requests_with_ci_passing() {
         assert!(mcp_instructions("https://macro.com").contains(pull_requests::READY_PULL_REQUEST));
 
         let coding = coding_agents::PROMPT.to_string();

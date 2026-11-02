@@ -5,12 +5,12 @@
 use std::sync::Arc;
 use std::time::Duration;
 
+use external_chat::domain::models::ExternalChatError;
 use futures::future::join_all;
 use tokio::sync::{Notify, Semaphore, watch};
 use tokio_util::sync::CancellationToken;
 use tracing::Instrument;
 use whatsapp_linked::domain::events::{MediaFailure, MediaImport, SessionScope};
-use whatsapp_linked::domain::models::LinkedError;
 use whatsapp_linked::domain::session::SessionService;
 
 use super::ports::{DownloadFailure, WhatsAppSession};
@@ -69,7 +69,7 @@ impl<Session: WhatsAppSession> MediaImports<Session> {
                 .await
             {
                 Ok(claimed) => claimed,
-                Err(report) if matches!(report.current_context(), LinkedError::Fenced) => {
+                Err(report) if matches!(report.current_context(), ExternalChatError::Fenced) => {
                     self.fenced.cancel();
                     return false;
                 }
@@ -120,7 +120,7 @@ impl<Session: WhatsAppSession> MediaImports<Session> {
                 Err(DownloadFailure::Permanent) => self.fail(import, MediaFailure::Permanent).await,
             };
             if let Err(report) = result {
-                if matches!(report.current_context(), LinkedError::Fenced) {
+                if matches!(report.current_context(), ExternalChatError::Fenced) {
                     self.fenced.cancel();
                 } else {
                     tracing::warn!(error = %report, "Recording a WhatsApp attachment failed");
@@ -135,7 +135,7 @@ impl<Session: WhatsAppSession> MediaImports<Session> {
         &self,
         import: &MediaImport,
         failure: MediaFailure,
-    ) -> whatsapp_linked::domain::ports::LinkedResult<()> {
+    ) -> external_chat::domain::ports::ExternalChatResult<()> {
         tracing::Span::current().record(
             "outcome",
             match failure {

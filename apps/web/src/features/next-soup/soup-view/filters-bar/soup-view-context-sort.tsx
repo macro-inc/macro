@@ -16,11 +16,12 @@ import { TOKENS } from '@core/hotkey/tokens';
 import { createMemo, createSignal, Match, Switch } from 'solid-js';
 
 type SortOpenProps = {
+  grouped?: boolean;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 };
 
-export const SoupViewContextSort = () => {
+export const SoupViewContextSort = (props: { grouped?: boolean } = {}) => {
   const panel = useSplitPanelOrThrow();
 
   const [sortOpen, setSortOpen] = createSignal(false);
@@ -49,6 +50,7 @@ export const SoupViewContextSort = () => {
   };
 
   const openProps = (): SortOpenProps => ({
+    grouped: props.grouped,
     open: sortOpen(),
     onOpenChange: setSortOpen,
   });
@@ -105,6 +107,7 @@ const InboxSort = (props: SortOpenProps) => {
 
   return (
     <SortDropdown
+      grouped={props.grouped}
       value={sort.value}
       onChange={sort.onChange}
       options={sort.options}
@@ -119,6 +122,7 @@ const AgentsSort = (props: SortOpenProps) => {
 
   return (
     <SortDropdown
+      grouped={props.grouped}
       value={sort.value}
       onChange={sort.onChange}
       options={sort.options}
@@ -133,6 +137,7 @@ const MailSort = (props: SortOpenProps) => {
 
   return (
     <SortDropdown
+      grouped={props.grouped}
       value={sort.value}
       onChange={sort.onChange}
       options={sort.options}
@@ -147,6 +152,7 @@ const DocumentsSort = (props: SortOpenProps) => {
 
   return (
     <SortDropdown
+      grouped={props.grouped}
       value={sort.value}
       onChange={sort.onChange}
       options={sort.options}
@@ -161,6 +167,7 @@ const TasksSort = (props: SortOpenProps) => {
 
   return (
     <SortDropdown
+      grouped={props.grouped}
       value={sort.value}
       onChange={sort.onChange}
       options={sort.options}
@@ -175,6 +182,7 @@ const ChannelsSort = (props: SortOpenProps) => {
 
   return (
     <SortDropdown
+      grouped={props.grouped}
       value={sort.value}
       onChange={sort.onChange}
       options={sort.options}
@@ -189,6 +197,7 @@ const FilesSort = (props: SortOpenProps) => {
 
   return (
     <SortDropdown
+      grouped={props.grouped}
       value={sort.value}
       onChange={sort.onChange}
       options={sort.options}

@@ -1,10 +1,11 @@
 import { virtualKeyboardVisible } from '@core/mobile/virtualKeyboard';
 import { isEditableInput } from '@core/util/isEditableInput';
-import Drawer from '@corvu/drawer';
+import Drawer, { type Size } from '@corvu/drawer';
 import { Layer } from '@ui/components/Layer';
 import { cn } from '@ui/utils/classname';
 import {
   type ComponentProps,
+  createSignal,
   onCleanup,
   splitProps,
   type ValidComponent,
@@ -120,7 +121,7 @@ function MobileDrawerItem(props: ComponentProps<'button'>) {
     <button
       type="button"
       class={cn(
-        'flex min-h-11 w-full items-center gap-3 rounded-[20px] px-3 py-2.5 text-left text-sm text-ink transition-colors hover:bg-ink/6 active:bg-ink/10 aria-checked:bg-ink/8 aria-pressed:bg-ink/8 aria-[checked=mixed]:bg-ink/8 focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40',
+        'flex min-h-11 w-full items-center gap-3 rounded-[20px] px-3 py-2.5 text-left text-sm text-ink transition-colors hover:bg-ink/6 active:bg-ink/10 aria-checked:bg-ink/8 aria-pressed:bg-ink/8 aria-[checked=mixed]:bg-ink/8 aria-[current=page]:bg-ink/8 aria-[current=page]:font-medium focus-visible:outline-2 focus-visible:outline-accent disabled:opacity-40',
         local.class
       )}
       {...rest}
@@ -240,7 +241,20 @@ function MobileDrawerHandle<T extends ValidComponent = 'div'>(
  * drawer as usual.
  */
 function dismissesDrawer(event: PointerEvent) {
-  return event.target !== document.documentElement;
+  if (event.target === document.documentElement) return false;
+  // A nested picker can remove its selected option during pointerup, before
+  // Corvu checks containment. The original event path still identifies the
+  // drawer that contained the tap; selecting an option must not dismiss it.
+  if (event.target instanceof Node && !event.target.isConnected) {
+    return !event
+      .composedPath()
+      .some(
+        (node) =>
+          node instanceof HTMLElement &&
+          node.hasAttribute('data-corvu-drawer-content')
+      );
+  }
+  return true;
 }
 
 /**
@@ -276,7 +290,12 @@ function swallowRestOfTap() {
  * Wrapper around Corvu's Drawer for mobile. Handles styling and input/virtual keyboard behaviour.
  */
 export const MobileDrawer = Object.assign(
-  (props: ComponentProps<typeof Drawer>) => {
+  (
+    props: Omit<
+      ComponentProps<typeof Drawer>,
+      'activeSnapPoint' | 'onActiveSnapPointChange'
+    >
+  ) => {
     const [local, rest] = splitProps(props, [
       'onOutsidePointer',
       'onOpenChange',
@@ -287,6 +306,12 @@ export const MobileDrawer = Object.assign(
       disposed = true;
     });
     const closed = () => disposed || !(props.open ?? uncontrolledOpen);
+    // A drag past the break point moves Corvu to its closed snap point before
+    // it asks to close. An owner that keeps the drawer open (to confirm a
+    // discard) would leave it parked off-screen behind its scrim, so return
+    // it to the open snap point. It starts closed, as Corvu's own state does,
+    // so opening slides it in.
+    const [activeSnapPoint, setActiveSnapPoint] = createSignal<Size>(0);
     return (
       <Drawer
         breakPoints={[0.8]}
@@ -294,9 +319,12 @@ export const MobileDrawer = Object.assign(
         noOutsidePointerEvents={false}
         restoreFocus={false}
         {...rest}
+        activeSnapPoint={activeSnapPoint()}
+        onActiveSnapPointChange={setActiveSnapPoint}
         onOpenChange={(open) => {
           uncontrolledOpen = open;
           local.onOpenChange?.(open);
+          if (!open && !closed()) setActiveSnapPoint(1);
         }}
         onOutsidePointer={(event) => {
           if (!dismissesDrawer(event)) event.preventDefault();

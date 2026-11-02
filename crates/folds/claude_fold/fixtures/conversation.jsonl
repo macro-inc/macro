@@ -7,3 +7,5 @@
 {"type":"assistant","uuid":"a3","isSidechain":true,"message":{"content":[{"type":"text","text":"Hidden child."}],"stop_reason":"end_turn"}}
 {"type":"assistant","uuid":"a4","message":{"content":[{"type":"text","text":"You are welcome."}],"stop_reason":"max_tokens"}}
 {"type":"future_record","uuid":"f1"}
+{"type":"user","uuid":"n1","origin":{"kind":"task-notification"},"message":{"role":"user","content":"<task-notification>\n<task-id>b1</task-id>\n<tool-use-id>t9</tool-use-id>\n<output-file>/tmp/tasks/b1.output</output-file>\n<status>failed</status>\n<summary>Background command \"Run tests\" failed with exit code 1</summary>\n</task-notification>"}}
+{"type":"assistant","uuid":"a5","message":{"content":[{"type":"text","text":"The tests failed."}],"stop_reason":"end_turn"}}

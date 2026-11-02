@@ -207,6 +207,9 @@ impl SoupService for ReplaySoup {
         Ok(bins
             .into_iter()
             .map(|bin| ItemGroupingInfo {
+                sort_key: None,
+                display_order: None,
+                document_server_facts: None,
                 key: match bin.key {
                     None => String::new(),
                     Some(Cell::Options(ids)) => ids[0].to_string(),
@@ -271,6 +274,15 @@ impl SoupService for ReplaySoup {
     {
         unimplemented!("rows never read frecency")
     }
+    async fn group_labels<'a>(
+        &'a self,
+        _user_id: MacroUserIdStr<'a>,
+        _group_by: &'a soup::domain::models::grouping::GroupByField,
+        _keys: &'a [String],
+    ) -> Result<soup::domain::models::grouping::GroupLabels, SoupErr> {
+        Ok(Default::default())
+    }
+
     async fn caller_tag_sets<'a>(
         &self,
         _: MacroUserIdStr<'a>,

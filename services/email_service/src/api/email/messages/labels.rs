@@ -14,6 +14,9 @@ use models_email::service;
 use sqlx::types::Uuid;
 use utoipa::ToSchema;
 
+#[cfg(test)]
+mod test;
+
 #[derive(serde::Serialize, serde::Deserialize, Debug, ToSchema)]
 pub struct UpdateLabelBatchRequest {
     pub message_ids: Vec<Uuid>,
@@ -146,6 +149,10 @@ pub async fn handler(
     }
 
     let message_db_ids: Vec<Uuid> = db_messages.iter().map(|m| m.db_id).collect();
+    let mut thread_ids: Vec<Uuid> = db_messages.iter().map(|m| m.thread_db_id).collect();
+    thread_ids.sort_unstable();
+    thread_ids.dedup();
+    let pending_write_id = macro_uuid::generate_uuid_v7();
     let provider_label_id = label.provider_label_id.clone();
     let is_adding = body.value;
 
@@ -161,55 +168,97 @@ pub async fn handler(
             .into_response()
     })?;
 
-    let transaction_result = async {
-        if !message_db_ids.is_empty() {
-            if is_adding {
-                email_db_client::labels::insert::insert_message_labels_batch(
-                    &mut *tx,
-                    &message_db_ids,
-                    &provider_label_id,
-                    link.id,
-                )
-                .await
-                .context("Failed to add label to messages in database")?;
-            } else {
-                email_db_client::labels::delete::delete_message_labels_batch(
-                    &mut *tx,
-                    &message_db_ids,
-                    &provider_label_id,
-                    link.id,
-                )
-                .await
-                .context("Failed to remove label from messages in database")?;
-            }
+    // The changed messages Gmail knows about; drafts have no provider_id.
+    let transaction_result: anyhow::Result<Vec<(Uuid, String)>> = async {
+        if message_db_ids.is_empty() {
+            return Ok(Vec::new());
+        }
+        email_db_client::labels::pending_writes::lock_thread_label_writes(&mut tx, &thread_ids)
+            .await
+            .context("Failed to lock the messages' threads")?;
+        let changed_ids = email_db_client::labels::get::messages_changing_label(
+            &mut *tx,
+            link.id,
+            &message_db_ids,
+            &provider_label_id,
+            is_adding,
+        )
+        .await
+        .context("Failed to read which messages change")?;
+        let provider_messages: Vec<(Uuid, String)> = db_messages
+            .iter()
+            .filter(|msg| changed_ids.contains(&msg.db_id))
+            .filter_map(|msg| {
+                msg.provider_id
+                    .as_ref()
+                    .filter(|pid| !pid.is_empty())
+                    .map(|pid| (msg.db_id, pid.clone()))
+            })
+            .collect();
+        let provider_message_ids: Vec<Uuid> = provider_messages.iter().map(|(id, _)| *id).collect();
+        email_db_client::labels::pending_writes::mark_pending_label_writes(
+            &mut *tx,
+            link.id,
+            &provider_message_ids,
+            &provider_label_id,
+            is_adding,
+            pending_write_id,
+        )
+        .await
+        .context("Failed to mark pending label writes")?;
 
-            if provider_label_id.as_str() == service::label::system_labels::UNREAD {
-                email_db_client::messages::update::update_message_read_status_batch(
-                    &mut *tx,
-                    message_db_ids.clone(),
-                    link.id,
-                    !is_adding,
-                )
-                .await
-                .context("Failed to update message read status")?;
-            } else if provider_label_id.as_str() == service::label::system_labels::STARRED {
-                email_db_client::messages::update::update_message_starred_status_batch(
-                    &mut *tx,
-                    message_db_ids.clone(),
-                    link.id,
-                    is_adding,
-                )
-                .await
-                .context("Failed to update message starred status")?;
-            }
+        if is_adding {
+            email_db_client::labels::insert::insert_message_labels_batch(
+                &mut *tx,
+                &message_db_ids,
+                &provider_label_id,
+                link.id,
+            )
+            .await
+            .context("Failed to add label to messages in database")?;
+        } else {
+            email_db_client::labels::delete::delete_message_labels_batch(
+                &mut *tx,
+                &message_db_ids,
+                &provider_label_id,
+                link.id,
+            )
+            .await
+            .context("Failed to remove label from messages in database")?;
         }
 
-        anyhow::Ok(())
+        if provider_label_id.as_str() == service::label::system_labels::UNREAD {
+            email_db_client::messages::update::update_message_read_status_batch(
+                &mut *tx,
+                message_db_ids.clone(),
+                link.id,
+                !is_adding,
+            )
+            .await
+            .context("Failed to update message read status")?;
+        } else if provider_label_id.as_str() == service::label::system_labels::STARRED {
+            email_db_client::messages::update::update_message_starred_status_batch(
+                &mut *tx,
+                message_db_ids.clone(),
+                link.id,
+                is_adding,
+            )
+            .await
+            .context("Failed to update message starred status")?;
+        }
+
+        for thread_id in &thread_ids {
+            email_db_client::threads::update::update_thread_metadata(&mut tx, *thread_id, link.id)
+                .await
+                .context("Failed to update thread state")?;
+        }
+
+        Ok(provider_messages)
     }
     .await;
 
-    match transaction_result {
-        Ok(_) => {
+    let provider_messages = match transaction_result {
+        Ok(provider_messages) => {
             tx.commit().await.map_err(|e| {
                 tracing::error!(error=?e, "unable to commit transaction");
                 (
@@ -220,6 +269,7 @@ pub async fn handler(
                 )
                     .into_response()
             })?;
+            provider_messages
         }
         Err(e) => {
             tracing::error!(error=?e, "Transaction failed, rolling back");
@@ -234,20 +284,17 @@ pub async fn handler(
             )
                 .into_response());
         }
-    }
+    };
 
     // Publish semantic macro.email events, rolled up to one per affected
     // thread (the batch may span several threads in the same inbox).
     let actor = Some(link.macro_id.clone());
-    let mut event_thread_ids: Vec<Uuid> = db_messages.iter().map(|m| m.thread_db_id).collect();
-    event_thread_ids.sort_unstable();
-    event_thread_ids.dedup();
-    for thread_id in event_thread_ids {
+    for thread_id in &thread_ids {
         let event = EmailMacroEvent::thread_label_change(
             link.id,
             link.macro_id.clone(),
             actor.clone(),
-            thread_id,
+            *thread_id,
             LabelRef {
                 label_id: label.id,
                 provider_label_id: provider_label_id.clone(),
@@ -261,43 +308,104 @@ pub async fn handler(
         }
     }
 
-    // One label write for the whole batch (drafts have no provider_id, skip them)
+    // One label write for the whole batch
     let (labels_to_add, labels_to_remove) = if is_adding {
         (vec![provider_label_id.clone()], Vec::new())
     } else {
         (Vec::new(), vec![provider_label_id.clone()])
     };
+    let provider_message_ids: Vec<Uuid> = provider_messages.iter().map(|(id, _)| *id).collect();
 
-    let provider_messages: Vec<(Uuid, String)> = db_messages
-        .iter()
-        .filter_map(|msg| {
-            msg.provider_id
-                .as_ref()
-                .filter(|pid| !pid.is_empty())
-                .map(|pid| (msg.db_id, pid.clone()))
-        })
-        .collect();
-
-    ctx.sqs_client
-        .enqueue_gmail_ops_modify_labels_batch(
+    let mut failed_ids = Vec::new();
+    if !provider_messages.is_empty()
+        && ctx
+            .sqs_client
+            .enqueue_gmail_ops_modify_labels_batch(
+                link.id,
+                provider_messages,
+                labels_to_add,
+                labels_to_remove,
+                pending_write_id,
+            )
+            .await
+            .inspect_err(|e| {
+                tracing::error!(error=?e, "Failed to enqueue gmail ops label write");
+            })
+            .is_err()
+    {
+        // Gmail never learns about this change.
+        failed_ids = undo_unsent_write(
+            &ctx.db,
             link.id,
-            provider_messages,
-            labels_to_add,
-            labels_to_remove,
+            &thread_ids,
+            &provider_message_ids,
+            pending_write_id,
         )
-        .await
-        .inspect_err(|e| {
-            tracing::error!(error=?e, "Failed to enqueue gmail ops label write");
-        })
-        .ok();
+        .await?;
+    }
 
     Ok((
         StatusCode::OK,
         Json(UpdateLabelBatchResponse {
-            successful_ids: message_db_ids,
-            failed_ids: vec![],
+            successful_ids: message_db_ids
+                .into_iter()
+                .filter(|id| !failed_ids.contains(id))
+                .collect(),
+            failed_ids,
             missing_ids,
         }),
     )
         .into_response())
+}
+
+/// Undoes a write that could not be queued and returns the messages put back,
+/// which the response lists as failed. If that fails too, the change stays in
+/// the database without ever reaching Gmail, so the request fails rather than
+/// reporting success.
+async fn undo_unsent_write(
+    db: &sqlx::PgPool,
+    link_id: Uuid,
+    thread_ids: &[Uuid],
+    message_ids: &[Uuid],
+    write_id: Uuid,
+) -> Result<Vec<Uuid>, Response> {
+    revert_unsent_write(db, link_id, thread_ids, message_ids, write_id)
+        .await
+        .map_err(|e| {
+            tracing::error!(error=?e, "Failed to revert label write after enqueue failure");
+            (
+                StatusCode::INTERNAL_SERVER_ERROR,
+                Json(ErrorResponse {
+                    message: "unable to queue the label change".into(),
+                }),
+            )
+                .into_response()
+        })
+}
+
+/// Puts the labels of a write Gmail will never receive back in the state
+/// Gmail will end up with, and derives the threads' state again, holding the
+/// threads' label-write lock. Returns the messages put back.
+async fn revert_unsent_write(
+    db: &sqlx::PgPool,
+    link_id: Uuid,
+    thread_ids: &[Uuid],
+    message_ids: &[Uuid],
+    write_id: Uuid,
+) -> anyhow::Result<Vec<Uuid>> {
+    let mut tx = db.begin().await?;
+    email_db_client::labels::pending_writes::lock_thread_label_writes(&mut tx, thread_ids).await?;
+    let restored = email_db_client::labels::pending_writes::abandon_pending_label_writes(
+        &mut tx,
+        link_id,
+        message_ids,
+        write_id,
+    )
+    .await?;
+    for thread_id in thread_ids {
+        email_db_client::threads::update::update_thread_metadata(&mut tx, *thread_id, link_id)
+            .await?;
+    }
+    tx.commit().await?;
+    Ok(restored)
 }

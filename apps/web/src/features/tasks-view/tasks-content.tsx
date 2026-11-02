@@ -1,6 +1,6 @@
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import { Match, Suspense, Switch } from 'solid-js';
-import { TaskList } from './components/task-list/TaskList';
+import { TaskList, type TaskListProps } from './components/task-list/TaskList';
 import { TasksBoard } from './tasks-board';
 import { TasksGantt } from './tasks-gantt';
 import { useTasksView } from './tasks-view-context';
@@ -18,14 +18,11 @@ export function TasksLoading() {
 }
 
 /** Renders the selected layout from the host's task scope and navigation capabilities. */
-export function TasksContent(props: {
-  ref?: (element: HTMLDivElement) => void;
-  referencePropertyIds?: readonly string[];
-}) {
+export function TasksContent(props: TaskListProps) {
   const { state } = useTasksView();
 
   return (
-    <Suspense fallback={<TasksLoading />}>
+    <Suspense fallback={props.loadingContent ?? <TasksLoading />}>
       <Switch>
         <Match when={state.layout === 'board'}>
           <TasksBoard ref={props.ref} />
@@ -37,6 +34,9 @@ export function TasksContent(props: {
           <TaskList
             ref={props.ref}
             referencePropertyIds={props.referencePropertyIds}
+            emptyContent={props.emptyContent}
+            loadingContent={props.loadingContent}
+            errorContent={props.errorContent}
           />
         </Match>
       </Switch>

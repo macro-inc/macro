@@ -12,6 +12,7 @@ import {
   useViewControlHotkeys,
   ViewLayoutDropdown,
   ViewShell,
+  ViewSidebar,
 } from '@app/components/view-shell';
 import {
   ListHeader,
@@ -24,7 +25,6 @@ import {
   getSoupRowEntities,
 } from '@app/features/soup/collection/rows';
 import { TaskGroupHeader } from '@app/features/tasks-view/components/task-list/TaskGroupHeader';
-import { taskGridColumnCount } from '@app/features/tasks-view/components/task-list/task-grid-template';
 import { HeaderActionGroup } from '@components/app/HeaderActionGroup';
 import { toast } from '@core/component/Toast/Toast';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
@@ -39,7 +39,7 @@ import {
   SYSTEM_PROPERTY_IDS,
 } from '@property/identifiers';
 import type { Property, PropertyApiValues } from '@property/types';
-import { Button, Dropdown, Input } from '@ui';
+import { Button, ButtonGroup, Dropdown, Input } from '@ui';
 import {
   type Accessor,
   batch,
@@ -51,7 +51,11 @@ import {
 } from 'solid-js';
 import type { VirtualizerHandle } from 'virtua/solid';
 import { DeleteProjectsDialog } from '../components/delete-projects-dialog';
-import { ProjectListHeader, ProjectRow } from '../components/project-row';
+import {
+  PROJECT_GRID_COLUMNS,
+  ProjectListHeader,
+  ProjectRow,
+} from '../components/project-row';
 import { ProjectRowMenu } from '../components/project-row-menu';
 import { RenameProjectDialog } from '../components/rename-project-dialog';
 import {
@@ -83,6 +87,8 @@ export function ProjectsCollection(props: {
   scopeId: string;
   isActive: Accessor<boolean>;
   collection: ReturnType<typeof createProjectCollection>;
+  title?: string;
+  mobileNavigation?: JSX.Element;
   ganttEnabled: boolean;
   /** Whether the layout has room to open a project beside the list. */
   canOpenInNewSplit: Accessor<boolean>;
@@ -436,6 +442,7 @@ export function ProjectsCollection(props: {
   const layoutControl = () => (
     <Show when={!isTouchDevice()}>
       <ViewLayoutDropdown
+        grouped
         label="Project layout"
         layouts={props.ganttEnabled ? ['list', 'gantt'] : ['list']}
         value={isGantt() ? 'gantt' : 'list'}
@@ -447,6 +454,7 @@ export function ProjectsCollection(props: {
   );
   const sortControl = () => (
     <ListSortDropdown
+      grouped
       label="Sort projects"
       value={collection.sort()}
       options={[
@@ -460,6 +468,7 @@ export function ProjectsCollection(props: {
   );
   const groupControl = () => (
     <ListGroupDropdown
+      grouped
       label="Group projects"
       value={collection.groupBy()}
       options={[
@@ -474,6 +483,7 @@ export function ProjectsCollection(props: {
   const filterControl = () => (
     <div class="relative shrink-0">
       <ListFilterDropdown
+        grouped
         label="Filter projects"
         groups={filters()}
         open={openMenu() === 'filters'}
@@ -501,8 +511,14 @@ export function ProjectsCollection(props: {
   );
   const dueDateControl = () => (
     <Dropdown>
-      <Dropdown.Trigger variant="ghost" size="icon-md" label="Filter due date">
-        <CalendarIcon />
+      <Dropdown.Trigger
+        as={ButtonGroup.Button}
+        aria-label="Filter due date"
+        tooltip="Filter due date"
+        variant="ghost"
+        size="icon-sm"
+      >
+        <CalendarIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
       </Dropdown.Trigger>
       <Dropdown.Content>
         <div class="flex flex-col gap-3 p-2">
@@ -527,6 +543,7 @@ export function ProjectsCollection(props: {
             />
           </label>
           <Button
+            variant="ghost"
             size="sm"
             onClick={() => {
               collection.setDueAfter('');
@@ -546,9 +563,9 @@ export function ProjectsCollection(props: {
         fallback={
           <ListHeader
             title={
-              <h1 class="truncate text-sm font-semibold tracking-[-0.03em] text-ink">
-                Projects
-              </h1>
+              <ViewSidebar.Title caret={false}>
+                {props.title ?? 'Projects'}
+              </ViewSidebar.Title>
             }
           >
             <HeaderActionGroup label="Project filters">
@@ -580,9 +597,10 @@ export function ProjectsCollection(props: {
       >
         <ViewShell.Header>
           <div class="flex min-w-0 flex-col gap-3">
+            {props.mobileNavigation}
             <div class="hidden h-8 min-w-0 items-center touch:flex @max-[720px]/view-shell:flex">
               <h1 class="min-w-0 truncate text-xl font-semibold tracking-[-0.03em] text-ink">
-                Projects
+                {props.title ?? 'Projects'}
               </h1>
               <div class="ml-auto shrink-0">
                 <SidebarCreateButton
@@ -627,7 +645,7 @@ export function ProjectsCollection(props: {
               aria-multiselectable="true"
               aria-activedescendant={list.focus.key()}
               tabIndex={0}
-              class="@container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
+              class="soup-list @container/u-list relative flex size-full min-h-0 min-w-0 flex-col overflow-hidden outline-none"
             >
               <ProjectListHeader />
               <Show when={backgroundError()}>
@@ -652,6 +670,7 @@ export function ProjectsCollection(props: {
                   >
                     <span>Projects couldn’t be loaded.</span>
                     <Button
+                      variant="ghost"
                       onClick={() =>
                         fireAndForget(collection.refresh(), 'projects')
                       }
@@ -666,7 +685,10 @@ export function ProjectsCollection(props: {
                       {filtered() ? 'No matching projects' : 'No projects yet'}
                     </span>
                     <Show when={!filtered()}>
-                      <Button onClick={() => props.onCreate()}>
+                      <Button
+                        variant="secondary"
+                        onClick={() => props.onCreate()}
+                      >
                         New project
                       </Button>
                     </Show>
@@ -679,6 +701,7 @@ export function ProjectsCollection(props: {
                       handle?.scrollTo(collection.scrollOffset());
                     }}
                     items={collection.items()}
+                    isSticky={(row) => row.kind === 'group-header'}
                     focusedIndex={list.focus.index()}
                     onScroll={checkNearEnd}
                   >
@@ -690,12 +713,12 @@ export function ProjectsCollection(props: {
                           {(group) => (
                             <TaskGroupHeader
                               row={group()}
-                              columnCount={taskGridColumnCount(true)}
+                              columnCount={PROJECT_GRID_COLUMNS.length}
                               groupBy={collection.groupBy()}
                               expanded={collection.disclosure.isExpanded(
                                 group().groupId
                               )}
-                              focused={list.focus.key() === group().id}
+                              focused={list.focus.isFocused(group().id)}
                               onFocus={() =>
                                 list.focus.set(group().id, {
                                   reason: 'hover',
@@ -718,7 +741,7 @@ export function ProjectsCollection(props: {
                               <ProjectRow
                                 rowId={item().id}
                                 row={item().entity}
-                                highlighted={list.focus.key() === item().id}
+                                highlighted={list.focus.isFocused(item().id)}
                                 checked={list.selection.isSelected(item().id)}
                                 onFocus={() =>
                                   list.focus.set(item().id, {
@@ -764,10 +787,11 @@ export function ProjectsCollection(props: {
                             <div role="row" id={more().id}>
                               <div
                                 role="gridcell"
-                                aria-colspan={taskGridColumnCount(true)}
+                                aria-colspan={PROJECT_GRID_COLUMNS.length}
                                 class="flex justify-center py-2"
                               >
                                 <Button
+                                  variant="secondary"
                                   disabled={collection.loadingMore()}
                                   onClick={() =>
                                     list.activate.key(more().id, {

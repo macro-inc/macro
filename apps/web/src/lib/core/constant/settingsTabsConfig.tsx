@@ -133,11 +133,6 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
           'seats',
         ],
       }),
-      tabItem('tabTeamConnections', {
-        tab: 'Team Connections',
-        icon: PlugIcon,
-        keywords: ['team', 'slack', 'github', 'import', 'app'],
-      }),
     ],
   },
   {
@@ -239,6 +234,9 @@ export const SETTINGS_TAB_GROUPS: SettingsTabGroup[] = [
           'agent',
           'tools',
           'mcp',
+          'slack',
+          'github',
+          'import',
         ],
       }),
     ],
@@ -306,7 +304,6 @@ const SETTINGS_TAB_SLUGS: Record<SettingsTab, string> = {
   Bots: 'bots',
   Team: 'team',
   'Team Members': 'team-members',
-  'Team Connections': 'team-connections',
   Calendar: 'calendar',
   Tags: 'tags',
   CRM: 'crm',
@@ -326,6 +323,8 @@ const SETTINGS_SLUG_TO_TAB = new Map<string, SettingsTab>(
 SETTINGS_SLUG_TO_TAB.set('harness', 'Harness');
 SETTINGS_SLUG_TO_TAB.set('connections', 'Connected');
 SETTINGS_SLUG_TO_TAB.set('agent-connections', 'Connected');
+// Team connections (Slack export, GitHub App) moved into Integrations.
+SETTINGS_SLUG_TO_TAB.set('team-connections', 'Connected');
 
 /** The URL slug for a settings tab (e.g. `Connected` → `connections`). */
 export const settingsTabToSlug = (tab: SettingsTab): string =>
@@ -369,7 +368,6 @@ export const useSettingsTabAvailable = () => {
         return !isMobile();
       case 'Team':
       case 'Team Members':
-      case 'Team Connections':
       case 'Tags':
         return true;
       // CRM is still rolling out (Macro-internal only); keep the settings tab
@@ -382,7 +380,7 @@ export const useSettingsTabAvailable = () => {
       case 'Shortcuts':
         return !isTouchDevice();
       case 'Mobile App':
-        return ENABLE_APP_STORE_QR_CODE && !isNativeMobilePlatform();
+        return isNativeMobilePlatform() || ENABLE_APP_STORE_QR_CODE;
       case 'Desktop App':
         return (
           isPlatform('desktop') ||

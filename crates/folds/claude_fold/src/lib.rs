@@ -43,7 +43,7 @@ impl Fold for ClaudeLog {
         };
         match entry.get("type").and_then(Value::as_str) {
             Some("assistant") => assistant(message),
-            Some("user") => user_message(message),
+            Some("user") => user_message(&entry, message),
             _ => Vec::new(),
         }
     }
@@ -105,7 +105,28 @@ fn assistant(message: &Value) -> Vec<LogEvent> {
     events
 }
 
-fn user_message(message: &Value) -> Vec<LogEvent> {
+/// Who the CLI says wrote a user line. Claude Code injects its own events
+/// (`task-notification` when a background task settles) as user turns; the
+/// fold reads this tag, never the text, to tell them from a person's prompt.
+fn origin(entry: &Value) -> Option<&str> {
+    entry.pointer("/origin/kind").and_then(Value::as_str)
+}
+
+/// Marks the CLI writes as a user line when Esc stops a turn. Newer CLIs also
+/// tag the line with `interruptedMessageId`; older ones only write the text.
+const INTERRUPTED: &str = "[Request interrupted by user";
+
+/// Local slash commands (`/model`, `/clear`, `/compact`) echo their name and
+/// output as untagged user lines. No assistant turn answers them.
+const LOCAL_COMMAND_TAGS: &[&str] = &[
+    "<command-name>",
+    "<command-message>",
+    "<local-command-stdout>",
+    "<local-command-stderr>",
+    "<local-command-caveat>",
+];
+
+fn user_message(entry: &Value, message: &Value) -> Vec<LogEvent> {
     let mut events = tool_results(message);
     let text = match message.get("content") {
         Some(Value::String(text)) => text.clone(),
@@ -115,11 +136,28 @@ fn user_message(message: &Value) -> Vec<LogEvent> {
             .collect::<Vec<_>>()
             .join("\n"),
     };
-    if !text.is_empty() {
-        events.push(LogEvent::Update(json!({
+    if entry.get("interruptedMessageId").is_some() || text.starts_with(INTERRUPTED) {
+        events.push(LogEvent::TurnEnded("cancelled"));
+        return events;
+    }
+    // Only a prompt may open a turn: a user chunk outside a Macro prompt
+    // starts one, and CLI bookkeeping is never followed by the `end_turn`
+    // that would close it.
+    let flag = |key| entry.get(key).and_then(Value::as_bool) == Some(true);
+    let bookkeeping = flag("isMeta")
+        || flag("isCompactSummary")
+        || LOCAL_COMMAND_TAGS
+            .iter()
+            .any(|tag| text.trim_start().starts_with(tag));
+    if !text.is_empty() && !bookkeeping {
+        let mut update = json!({
             "sessionUpdate": "user_message_chunk",
             "content": {"type": "text", "text": text},
-        })));
+        });
+        if let Some(origin) = origin(entry) {
+            update["_meta"] = json!({"claudeCode": {"origin": origin}});
+        }
+        events.push(LogEvent::Update(update));
     }
     events
 }

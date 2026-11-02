@@ -212,7 +212,6 @@ function EntityDisplay(props: { isReadOnly: boolean }) {
       valueType: 'ENTITY',
       refs: remaining.length > 0 ? remaining : null,
     });
-    ctx.onRefresh?.();
   };
 
   return (

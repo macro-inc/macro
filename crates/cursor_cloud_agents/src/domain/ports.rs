@@ -14,6 +14,7 @@ use crate::domain::model::{
     ConversationLine, CursorAgentId, CursorModel, CursorRunId, McpServer, ModelChoice, RepoUrl,
     RunListing,
 };
+use crate::domain::prompt_image::CursorPromptImage;
 use agent_client_protocol::schema::v1::{SessionId, SessionUpdate};
 use futures::Stream;
 
@@ -43,6 +44,9 @@ pub trait CursorAgents: Sync {
     /// `open_pull_request` asks Cursor to push its work to a generated branch
     /// and open a pull request against the starting ref. It is a caller's
     /// decision and has no effect without a repository.
+    ///
+    /// `images` are raster pictures for `prompt.images`. Empty leaves the
+    /// prompt as text.
     fn create_agent(
         &self,
         prompt: &str,
@@ -50,6 +54,7 @@ pub trait CursorAgents: Sync {
         open_pull_request: bool,
         mcp_servers: &[McpServer],
         model: Option<&ModelChoice>,
+        images: &[CursorPromptImage],
     ) -> impl Future<Output = Result<(CursorAgentId, CursorRunId), rootcause::Report>> + Send;
 
     /// Send a follow-up prompt to an existing agent, opening a new run.
@@ -57,11 +62,14 @@ pub trait CursorAgents: Sync {
     /// `model` is honoured per run, which is what makes a mid-session model
     /// change possible: the field is undocumented on this endpoint but
     /// validated by it, and absent means the agent's own model stands.
+    ///
+    /// `images` are the same raster pictures as on [`Self::create_agent`].
     fn create_run(
         &self,
         agent: &CursorAgentId,
         prompt: &str,
         model: Option<&ModelChoice>,
+        images: &[CursorPromptImage],
     ) -> impl Future<Output = Result<CursorRunId, rootcause::Report>> + Send;
 
     /// The models this account may choose from, with the variants each accepts.
@@ -163,6 +171,31 @@ pub trait ArtifactStore: Send + Sync {
         mime_type: &str,
         bytes: bytes::Bytes,
     ) -> impl Future<Output = Result<String, rootcause::Report>> + Send;
+}
+
+/// Fetch a link pasted into a prompt when it might be an image.
+///
+/// `None` means the link is not an image we can hand to Cursor — a page, a
+/// private address, a failure — and the prompt continues as text.
+pub trait PromptImageFetcher: Send + Sync + std::fmt::Debug {
+    /// Fetch `url` and return an image when the response is one.
+    fn fetch_image<'a>(
+        &'a self,
+        url: &'a str,
+    ) -> futures::future::BoxFuture<'a, Option<CursorPromptImage>>;
+}
+
+/// A fetcher that never fetches. Prompts stay text.
+#[derive(Debug, Clone, Copy, Default)]
+pub struct NoPromptImageFetcher;
+
+impl PromptImageFetcher for NoPromptImageFetcher {
+    fn fetch_image<'a>(
+        &'a self,
+        _url: &'a str,
+    ) -> futures::future::BoxFuture<'a, Option<CursorPromptImage>> {
+        Box::pin(async { None })
+    }
 }
 
 /// The store for a deployment that has nowhere to put artifacts.

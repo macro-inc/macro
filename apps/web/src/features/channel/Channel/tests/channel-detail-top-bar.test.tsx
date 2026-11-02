@@ -25,9 +25,9 @@ vi.mock('@app/features/soup/entity-notifications', () => ({
 vi.mock('@app/features/soup/SoupEntityActionsDropdown', () => ({
   SoupEntityActionsDropdown: (props: {
     entity: ChannelEntity;
-    triggerProps?: { label?: string };
+    triggerProps?: { 'aria-label'?: string };
   }) => (
-    <button type="button" aria-label={props.triggerProps?.label}>
+    <button type="button" aria-label={props.triggerProps?.['aria-label']}>
       {props.entity.id}
     </button>
   ),
@@ -74,7 +74,7 @@ vi.mock('@components/app/GlobalAppState', () => ({
   useGlobalNotificationSource: () => ({}),
 }));
 vi.mock(
-  '@components/app/split-layout/components/PriorityCollapseOverflowSensor',
+  '@app/components/priority-collapse/PriorityCollapseOverflowSensor',
   () => ({
     createPriorityCollapseController: () => ({
       setRow: () => {},
@@ -83,8 +83,10 @@ vi.mock(
     PriorityCollapseOverflowSensor: mocks.pass,
   })
 );
-vi.mock('@components/app/split-layout/layoutUtils', () => ({
+vi.mock('@app/components/priority-collapse/createPriorityCollapser', () => ({
   useRegisterPriorityCollapseItem: () => () => false,
+}));
+vi.mock('@components/app/split-layout/layoutUtils', () => ({
   useSplitDisplayName: () => {},
   useSplitPanelOrThrow: () => ({ splitHotkeyScope: 'test-scope' }),
 }));

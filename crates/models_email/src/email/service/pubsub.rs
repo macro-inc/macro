@@ -43,6 +43,10 @@ pub enum FailureReason {
     CalendarBackfillBusy,
     GmailApiFailed,
     GmailApiRateLimited,
+    /// Gmail failed with a server or network error.
+    GmailApiUnavailable,
+    /// A newer label write on the same messages has not finished yet.
+    NewerLabelWritePending,
     /// Every fleet-wide backfill write slot stayed taken; the operation is deferred.
     BackfillWritesBusy,
     OutdatedHistoryId,

@@ -1,0 +1,42 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "SELECT id, phone_number, chat_jid,\n            CASE WHEN state = 'pending' AND created_at <= now() - make_interval(secs => $3)\n                THEN 'failed' ELSE state END AS \"state!\"\n        FROM whatsapp_lookup WHERE id = $1 AND account_id = $2",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "phone_number",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 2,
+        "name": "chat_jid",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 3,
+        "name": "state!",
+        "type_info": "Text"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Uuid",
+        "Float8"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      true,
+      null
+    ]
+  },
+  "hash": "2516c719bac2a81c5405c4e8d56fc6b19b64435df55290a6b4b1891b756e03c8"
+}

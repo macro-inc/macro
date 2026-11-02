@@ -3,12 +3,10 @@
 //! dispatched send without an outcome is `unknown` and never sent again.
 
 use super::*;
-use crate::domain::{
-    events::*,
-    ports::{MutationTarget, SendIntent, SendRepository, StagedUpload, StoredSend},
-};
+use crate::domain::{events::*, ports::SendRepository};
 use async_trait::async_trait;
 use chrono::{DateTime, Utc};
+use external_chat::domain::ports::{MutationTarget, SendIntent, StoredSend};
 use macro_user_id::user_id::MacroUserIdStr;
 
 struct SendRow {
@@ -22,7 +20,7 @@ struct SendRow {
     created_at: DateTime<Utc>,
 }
 
-fn progress(row: SendRow) -> LinkedResult<SendProgress> {
+fn progress(row: SendRow) -> ExternalChatResult<SendProgress> {
     Ok(SendProgress {
         id: row.id,
         user_id: row.user_id,
@@ -36,89 +34,25 @@ fn progress(row: SendRow) -> LinkedResult<SendProgress> {
     })
 }
 
-/// A shape value as an integer column.
-fn column(value: Option<u32>) -> Option<i32> {
-    value.map(|value| value.min(i32::MAX as u32) as i32)
-}
-
 /// An integer column as a shape value.
 fn unsigned(value: Option<i32>) -> Option<u32> {
     value.and_then(|value| u32::try_from(value).ok())
 }
 
 #[async_trait]
-impl SendRepository for PgLinkedRepository {
-    async fn stage_upload(&self, upload: StagedUpload<'_>) -> LinkedResult<Uuid> {
-        let id = Uuid::now_v7();
-        sqlx::query!(
-            r#"INSERT INTO external_chat_media_blob (id, chat_id, user_id, mime, filename, sha256, bytes, width, height, duration_seconds)
-            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"#,
-            id,
-            upload.chat_id,
-            upload.user.as_ref(),
-            upload.mime,
-            upload.filename,
-            &upload.sha256[..],
-            upload.bytes,
-            column(upload.shape.width.filter(|width| *width > 0)),
-            column(upload.shape.height.filter(|height| *height > 0)),
-            column(upload.shape.duration_seconds)
-        )
-        .execute(&self.pool)
-        .await
-        .map_err(failure)?;
-        Ok(id)
-    }
-
-    async fn staged_upload_mime(
-        &self,
-        user: &MacroUserIdStr<'_>,
-        chat_id: Uuid,
-        upload: Uuid,
-    ) -> LinkedResult<Option<String>> {
-        let user = user.as_ref();
-        sqlx::query_scalar!(
-            r#"SELECT mime FROM external_chat_media_blob b
-            WHERE id = $1 AND chat_id = $2 AND user_id = $3
-              AND NOT EXISTS (SELECT 1 FROM external_chat_attachment a WHERE a.blob_id = b.id)"#,
-            upload,
-            chat_id,
-            user
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(failure)
-    }
-
-    async fn account_roster(
-        &self,
-        account: &Account,
-        binding: &Binding,
-    ) -> LinkedResult<Option<GroupInfo>> {
-        sqlx::query_scalar!(
-            "SELECT metadata FROM whatsapp_roster WHERE account_id = $1 AND group_jid = $2",
-            account.id,
-            binding.remote_id
-        )
-        .fetch_optional(&self.pool)
-        .await
-        .map_err(failure)?
-        .map(decode::<GroupInfo>)
-        .transpose()
-    }
-
+impl SendRepository for PgWhatsAppRepository {
     async fn mutation_target(
         &self,
-        binding: &Binding,
+        chat: &ChatRef,
         message: Uuid,
-    ) -> LinkedResult<Option<MutationTarget>> {
+    ) -> ExternalChatResult<Option<MutationTarget>> {
         let row = sqlx::query!(
             r#"SELECT m.source_at, m.deleted_at, array_agg(a.jid) AS "sent_by!"
             FROM external_chat_message m
             JOIN whatsapp_identity_alias a ON a.chat_id = m.chat_id AND a.person_id = m.person_id
             WHERE m.chat_id = $1 AND m.message_id = $2
             GROUP BY m.source_at, m.deleted_at"#,
-            binding.id,
+            chat.id,
             message
         )
         .fetch_optional(&self.pool)
@@ -136,7 +70,7 @@ impl SendRepository for PgLinkedRepository {
         chat_id: Uuid,
         user: &MacroUserIdStr<'_>,
         idempotency_key: Uuid,
-    ) -> LinkedResult<Option<StoredSend>> {
+    ) -> ExternalChatResult<Option<StoredSend>> {
         let user = user.as_ref();
         let Some(row) = sqlx::query!(
             r#"SELECT id, user_id, chat_id, payload, state, message_id, error_code, created_at, request_sha256
@@ -170,11 +104,11 @@ impl SendRepository for PgLinkedRepository {
         }))
     }
 
-    async fn enqueue(&self, intent: SendIntent<'_>) -> LinkedResult<SendProgress> {
+    async fn enqueue(&self, intent: SendIntent<'_>) -> ExternalChatResult<SendProgress> {
         let SendIntent {
             user,
             account,
-            binding,
+            chat: binding,
             request,
             digest,
         } = intent;
@@ -183,9 +117,9 @@ impl SendRepository for PgLinkedRepository {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         sqlx::query!(
             "SELECT id FROM whatsapp_linked_account WHERE id = $1 AND user_id = $2 AND state = 'connected' AND generation = $3 FOR SHARE",
-            account.id, user, account.authorization_generation
-        ).fetch_optional(&mut *tx).await.map_err(failure)?.ok_or(LinkedError::Forbidden)?;
-        lock_group_in(&mut tx, binding.id).await?;
+            account.id, user, account.generation
+        ).fetch_optional(&mut *tx).await.map_err(failure)?.ok_or(ExternalChatError::Forbidden)?;
+        lock_chat_in(&mut tx, binding.id).await?;
         let replayed = sqlx::query_scalar!(
             "SELECT id FROM whatsapp_send WHERE chat_id = $1 AND user_id = $2 AND idempotency_key = $3",
             binding.id,
@@ -197,9 +131,9 @@ impl SendRepository for PgLinkedRepository {
         .map_err(failure)?
         .is_some();
         let identity = account
-            .identity_jid
+            .identity
             .as_deref()
-            .ok_or(LinkedError::Forbidden)?;
+            .ok_or(ExternalChatError::Forbidden)?;
         let observed_at = match binding.kind {
             ExternalChatKind::Group => {
                 let metadata = sqlx::query_scalar!(
@@ -212,21 +146,21 @@ impl SendRepository for PgLinkedRepository {
                 .map_err(failure)?
                 .map(decode::<GroupInfo>)
                 .transpose()?
-                .ok_or(LinkedError::Forbidden)?;
+                .ok_or(ExternalChatError::Forbidden)?;
                 if !metadata.can_post(identity) {
-                    return Err(LinkedError::Forbidden.into());
+                    return Err(ExternalChatError::Forbidden.into());
                 }
                 metadata.observed_at
             }
             // Only the owner's own account is in a direct chat.
             ExternalChatKind::Direct if binding.user_id == user => Utc::now(),
-            ExternalChatKind::Direct => return Err(LinkedError::Forbidden.into()),
+            ExternalChatKind::Direct => return Err(ExternalChatError::Forbidden.into()),
         };
         sqlx::query!(r#"INSERT INTO whatsapp_chat_membership (chat_id,account_id,generation,consent_at,remote_member,can_post,reconciled,observed_at)
             VALUES ($1,$2,$3,clock_timestamp(),true,true,true,$4)
             ON CONFLICT (chat_id,account_id) DO UPDATE SET generation = excluded.generation,consent_ended_at = NULL,
             remote_member = true,can_post = true,reconciled = true,observed_at = excluded.observed_at"#,
-            binding.id,account.id,account.authorization_generation,observed_at).execute(&mut *tx).await.map_err(failure)?;
+            binding.id,account.id,account.generation,observed_at).execute(&mut *tx).await.map_err(failure)?;
         // The group lock also serializes idempotency and sequence allocation.
         let sequence = if replayed {
             None
@@ -244,12 +178,12 @@ impl SendRepository for PgLinkedRepository {
             binding.id,
             account.id,
             user,
-            account.authorization_generation
+            account.generation
         )
         .fetch_optional(&mut *tx)
         .await
         .map_err(failure)?
-        .ok_or(LinkedError::Forbidden)?)
+        .ok_or(ExternalChatError::Forbidden)?)
         };
         if let Some(sequence) = sequence {
             sqlx::query!(
@@ -263,9 +197,9 @@ impl SendRepository for PgLinkedRepository {
             request.idempotency_key,
             &digest[..],
             payload,
-            account.authorization_generation,
+            account.generation,
             sequence,
-            crate::signals::trace_context::current()
+            external_chat::signals::trace_context::current()
         )
         .execute(&mut *tx)
         .await
@@ -283,9 +217,9 @@ impl SendRepository for PgLinkedRepository {
         .map_err(failure)?;
         if stored.request_sha256 != digest
             || stored.account_id != account.id
-            || stored.generation != account.authorization_generation
+            || stored.generation != account.generation
         {
-            return Err(LinkedError::Conflict.into());
+            return Err(ExternalChatError::Conflict.into());
         }
         notify(&mut tx, signals::SEND_REQUESTED, account.id).await?;
         tx.commit().await.map_err(failure)?;
@@ -305,7 +239,7 @@ impl SendRepository for PgLinkedRepository {
         &self,
         chat_id: Uuid,
         user: &MacroUserIdStr<'_>,
-    ) -> LinkedResult<Vec<SendProgress>> {
+    ) -> ExternalChatResult<Vec<SendProgress>> {
         let user = user.as_ref();
         sqlx::query_as!(
             SendRow,
@@ -324,12 +258,40 @@ impl SendRepository for PgLinkedRepository {
         .collect()
     }
 
+    async fn delivery_states(
+        &self,
+        chat_id: Uuid,
+        viewer: &str,
+        messages: &[Uuid],
+    ) -> ExternalChatResult<Vec<(Uuid, DeliveryState)>> {
+        sqlx::query!(
+            r#"SELECT DISTINCT ON (message_id) message_id AS "message_id!", state FROM whatsapp_send
+            WHERE chat_id = $1 AND user_id = $2 AND message_id = ANY($3)
+            ORDER BY message_id, created_at DESC"#,
+            chat_id,
+            viewer,
+            messages
+        )
+        .fetch_all(&self.pool)
+        .await
+        .map_err(failure)?
+        .into_iter()
+        .map(|row| {
+            Ok((
+                row.message_id,
+                DeliveryState::parse(&row.state)
+                    .ok_or_else(|| corrupt(format_args!("state {:?}", row.state)))?,
+            ))
+        })
+        .collect()
+    }
+
     async fn sends_for(
         &self,
         chat_id: Uuid,
         user: &MacroUserIdStr<'_>,
         ids: &[Uuid],
-    ) -> LinkedResult<Vec<SendProgress>> {
+    ) -> ExternalChatResult<Vec<SendProgress>> {
         let user = user.as_ref();
         sqlx::query_as!(
             SendRow,
@@ -356,7 +318,7 @@ async fn target_in(
     binding: Uuid,
     message: Uuid,
     identity: Option<&str>,
-) -> LinkedResult<Option<Target>> {
+) -> ExternalChatResult<Option<Target>> {
     Ok(sqlx::query!(
         r#"SELECT m.source_id, a.jid FROM external_chat_message m
         JOIN whatsapp_identity_alias a ON a.chat_id = m.chat_id AND a.person_id = m.person_id
@@ -380,7 +342,7 @@ async fn content_in(
     binding: Uuid,
     request: &SendReply,
     identity: Option<&str>,
-) -> LinkedResult<Option<OutgoingContent>> {
+) -> ExternalChatResult<Option<OutgoingContent>> {
     Ok(match &request.message {
         ReplyContent::Media { upload_id, caption } => {
             let Some(blob) = sqlx::query!(
@@ -443,12 +405,12 @@ async fn content_in(
     })
 }
 
-impl PgLinkedRepository {
+impl PgWhatsAppRepository {
     pub(super) async fn claim_sends(
         &self,
         scope: SessionScope,
         limit: i64,
-    ) -> LinkedResult<Vec<ClaimedSend>> {
+    ) -> ExternalChatResult<Vec<ClaimedSend>> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         let mut failed = sqlx::query_scalar!(
@@ -516,7 +478,7 @@ impl PgLinkedRepository {
         failed.sort();
         failed.dedup();
         for chat_id in failed {
-            notify_change(&mut tx, signals::Change::Chat { chat_id }).await?;
+            notify_change(&mut tx, Change::Chat { chat_id }).await?;
         }
         claimed.sort_by_key(|send| send.chat_sequence);
         tx.commit().await.map_err(failure)?;
@@ -528,7 +490,7 @@ impl PgLinkedRepository {
         scope: SessionScope,
         send: Uuid,
         source_id: &str,
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         let expired = sqlx::query_scalar!(
@@ -544,9 +506,9 @@ impl PgLinkedRepository {
         .await
         .map_err(failure)?;
         if let Some(chat_id) = expired {
-            notify_change(&mut tx, signals::Change::Chat { chat_id }).await?;
+            notify_change(&mut tx, Change::Chat { chat_id }).await?;
             tx.commit().await.map_err(failure)?;
-            return Err(LinkedError::SendExpired.into());
+            return Err(ExternalChatError::SendExpired.into());
         }
         // Every sending fact is re-checked at the moment of the fence.
         let changed = sqlx::query!(
@@ -577,7 +539,7 @@ impl PgLinkedRepository {
             .await
             .map_err(failure)?;
             tx.commit().await.map_err(failure)?;
-            return Err(LinkedError::Forbidden.into());
+            return Err(ExternalChatError::Forbidden.into());
         }
         tx.commit().await.map_err(failure)
     }
@@ -587,7 +549,7 @@ impl PgLinkedRepository {
         scope: SessionScope,
         send: Uuid,
         outcome: &SendOutcome,
-    ) -> LinkedResult<()> {
+    ) -> ExternalChatResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         let binding = sqlx::query_scalar!(
@@ -598,8 +560,8 @@ impl PgLinkedRepository {
         .fetch_optional(&mut *tx)
         .await
         .map_err(failure)?
-        .ok_or(LinkedError::NotFound)?;
-        lock_group_in(&mut tx, binding).await?;
+        .ok_or(ExternalChatError::NotFound)?;
+        lock_chat_in(&mut tx, binding).await?;
         let row = sqlx::query!(
             r#"SELECT s.chat_id, s.payload, s.allocated_source_id, s.state, s.created_at
             FROM whatsapp_send s WHERE s.id = $1 AND s.account_id = $2 AND s.dispatch_started_at IS NOT NULL FOR UPDATE"#,
@@ -609,7 +571,7 @@ impl PgLinkedRepository {
         .fetch_optional(&mut *tx)
         .await
         .map_err(failure)?
-        .ok_or(LinkedError::NotFound)?;
+        .ok_or(ExternalChatError::NotFound)?;
         match outcome {
             SendOutcome::Unknown => {
                 sqlx::query!(
@@ -637,17 +599,17 @@ impl PgLinkedRepository {
                 let identity = account
                     .identity_jid
                     .clone()
-                    .ok_or(LinkedError::Disconnected)?;
+                    .ok_or(ExternalChatError::Disconnected)?;
                 let request: SendReply = decode(row.payload)?;
                 let binding = sqlx::query_as!(
-                    bindings::BindingRow,
+                    ChatRow,
                     "SELECT id, provider, remote_id, kind, user_id, state, adopted_at FROM external_chat WHERE id = $1",
                     row.chat_id
                 )
                 .fetch_one(&mut *tx)
                 .await
                 .map_err(failure)
-                .and_then(bindings::binding)?;
+                .and_then(chat_ref)?;
                 let mut media = vec![];
                 let mut upload = None;
                 let (kind, text, target) = match &request.message {
@@ -788,12 +750,12 @@ impl PgLinkedRepository {
                         .execute(&mut *tx)
                         .await
                         .map_err(failure)?;
-                        notify(&mut tx, signals::MEDIA_READY, upload).await?;
+                        notify(&mut tx, external_chat::signals::MEDIA_READY, upload).await?;
                     }
                 }
             }
         }
-        notify_change(&mut tx, signals::Change::Chat { chat_id: binding }).await?;
+        notify_change(&mut tx, Change::Chat { chat_id: binding }).await?;
         tx.commit().await.map_err(failure)
     }
 
@@ -801,7 +763,7 @@ impl PgLinkedRepository {
         &self,
         scope: SessionScope,
         send: Uuid,
-    ) -> LinkedResult<OutboundMedia> {
+    ) -> ExternalChatResult<OutboundMedia> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         let row = sqlx::query!(
@@ -817,7 +779,7 @@ impl PgLinkedRepository {
         .fetch_optional(&mut *tx)
         .await
         .map_err(failure)?
-        .ok_or(LinkedError::NotFound)?;
+        .ok_or(ExternalChatError::NotFound)?;
         tx.commit().await.map_err(failure)?;
         Ok(OutboundMedia {
             kind: MediaKind::of(&row.mime)
@@ -832,7 +794,7 @@ impl PgLinkedRepository {
         })
     }
 
-    pub(super) async fn release_sends(&self, scope: SessionScope) -> LinkedResult<()> {
+    pub(super) async fn release_sends(&self, scope: SessionScope) -> ExternalChatResult<()> {
         let mut tx = self.pool.begin().await.map_err(failure)?;
         let account = fence_in(&mut tx, scope).await?;
         sqlx::query!(

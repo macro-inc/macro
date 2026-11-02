@@ -45,6 +45,7 @@ import {
   createGraphqlSoupSubscriptionsLifecycle,
   createGraphqlSoupWebSocketUrlResolver,
   GraphqlSoupWebSocketAuthUnavailableError,
+  publishNotificationPatch,
   SOUP_GRAPHQL_WEBSOCKET_RETRY_ATTEMPTS,
   shouldRetryGraphqlSoupWebSocket,
   subscribeToGraphqlNotificationPatches,
@@ -184,6 +185,32 @@ describe('GraphQL Soup websocket retry policy', () => {
 });
 
 describe('GraphQL Soup subscription lifecycle', () => {
+  it('marks listener failures on the receipt span and continues delivery', () => {
+    const failure = new Error('notification listener failed');
+    const stopFailed = subscribeToGraphqlNotificationPatches(() => {
+      throw failure;
+    });
+    const received = vi.fn();
+    const stopReceived = subscribeToGraphqlNotificationPatches(received);
+    const span = { error: vi.fn() };
+    const patch = {
+      __typename: 'GraphqlCacheDeletion' as const,
+      graphqlTypeName: 'GraphqlNotification',
+      entityId: 'synthetic-notification',
+    };
+    try {
+      publishNotificationPatch(patch, span);
+      expect(span.error).toHaveBeenCalledExactlyOnceWith(failure);
+      expect(telemetryError).toHaveBeenCalledWith(failure, {
+        surface: 'graphql-notifications',
+      });
+      expect(received).toHaveBeenCalledExactlyOnceWith(patch);
+    } finally {
+      stopFailed();
+      stopReceived();
+    }
+  });
+
   it('keeps notification and activity updates active with or without a cache host', () => {
     const unsubscribes: Array<ReturnType<typeof vi.fn>> = [];
     const receive = new Map<unknown, (result: { data?: unknown }) => void>();
@@ -223,7 +250,8 @@ describe('GraphQL Soup subscription lifecycle', () => {
       receive.get(NotificationUpdatesDocument)?.({
         data: { notificationUpdates: patch },
       });
-      expect(listener).toHaveBeenLastCalledWith(patch);
+      // Network receipt owns alerts; cache catch-up must never replay them.
+      expect(listener).not.toHaveBeenCalled();
     }
     lifecycle.dispose();
     unregister();

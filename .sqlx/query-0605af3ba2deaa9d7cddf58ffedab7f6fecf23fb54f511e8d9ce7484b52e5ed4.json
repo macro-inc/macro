@@ -1,0 +1,58 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n        SELECT\n            id AS \"thread_id!\",\n            link_id,\n            has_received_mail,\n            latest_inbound_message_ts,\n            latest_outbound_message_ts,\n            latest_non_spam_message_ts,\n            reminder_returned_at\n        FROM email_threads\n        WHERE id = ANY($1)\n        ",
+  "describe": {
+    "columns": [
+      {
+        "ordinal": 0,
+        "name": "thread_id!",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 1,
+        "name": "link_id",
+        "type_info": "Uuid"
+      },
+      {
+        "ordinal": 2,
+        "name": "has_received_mail",
+        "type_info": "Bool"
+      },
+      {
+        "ordinal": 3,
+        "name": "latest_inbound_message_ts",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 4,
+        "name": "latest_outbound_message_ts",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 5,
+        "name": "latest_non_spam_message_ts",
+        "type_info": "Timestamptz"
+      },
+      {
+        "ordinal": 6,
+        "name": "reminder_returned_at",
+        "type_info": "Timestamptz"
+      }
+    ],
+    "parameters": {
+      "Left": [
+        "UuidArray"
+      ]
+    },
+    "nullable": [
+      false,
+      false,
+      false,
+      true,
+      true,
+      true,
+      true
+    ]
+  },
+  "hash": "0605af3ba2deaa9d7cddf58ffedab7f6fecf23fb54f511e8d9ce7484b52e5ed4"
+}

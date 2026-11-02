@@ -52,6 +52,7 @@ export function LinkedRowPreview(
 }
 
 export type RowPickerProps = {
+  returnFocus?: HTMLElement;
   linkedIds: string[];
   onLink(source: RowReference): Promise<void>;
   onClose(): void;
@@ -68,6 +69,7 @@ export function LinkedRowsSection(props: {
   Preview: Component<{ group: LinkedRowGroup; row: DatabaseRow }>;
   openRow(source: RowReference): void;
 }) {
+  let linkButton: HTMLButtonElement | undefined;
   const [picking, setPicking] = createSignal(false);
   const [pending, setPending] = createSignal<string>();
   const [error, setError] = createSignal('');
@@ -92,8 +94,14 @@ export function LinkedRowsSection(props: {
       <div class="flex items-center justify-between gap-2">
         <h3 class="text-sm font-medium">Linked rows</h3>
         <Show when={props.canEdit}>
-          <Button size="sm" variant="outline" onClick={() => setPicking(true)}>
-            <LinkIcon class="size-3.5" /> Link row
+          <Button
+            ref={linkButton}
+            size="sm"
+            variant="secondary"
+            onClick={() => setPicking(true)}
+          >
+            <LinkIcon class="pointer-events-none size-3.5 shrink-0 touch:size-6" />{' '}
+            Link row
           </Button>
         </Show>
       </div>
@@ -109,6 +117,7 @@ export function LinkedRowsSection(props: {
             Could not load linked rows.
             <Button
               size="sm"
+              variant="ghost"
               onClick={() => fireAndForget(props.source.refresh(), 'crm')}
             >
               Retry
@@ -138,7 +147,9 @@ export function LinkedRowsSection(props: {
                         <div class="flex shrink-0 items-center gap-1">
                           <Button
                             size="icon-sm"
-                            label="Open source row"
+                            variant="ghost"
+                            aria-label="Open source row"
+                            tooltip="Open source row"
                             onClick={() =>
                               props.openRow({
                                 databaseId: group().databaseId,
@@ -147,18 +158,20 @@ export function LinkedRowsSection(props: {
                               })
                             }
                           >
-                            <ArrowUpRightIcon />
+                            <ArrowUpRightIcon class="pointer-events-none size-3.5 shrink-0 touch:size-6" />
                           </Button>
                           <Show when={props.canEdit}>
                             <Button
                               size="icon-sm"
-                              label="Unlink row"
+                              variant="ghost"
+                              aria-label="Unlink row"
+                              tooltip="Unlink row"
                               disabled={!!pending()}
                               onClick={() =>
                                 fireAndForget(unlink(row().rowId), 'crm')
                               }
                             >
-                              <XIcon />
+                              <XIcon class="pointer-events-none size-3.5 shrink-0 touch:size-6" />
                             </Button>
                           </Show>
                         </div>
@@ -178,6 +191,7 @@ export function LinkedRowsSection(props: {
       </Show>
       <Show when={picking()}>
         <props.Picker
+          returnFocus={linkButton}
           linkedIds={groups().flatMap((group) =>
             group.rows.map((row) => row.rowId)
           )}
@@ -233,6 +247,12 @@ export function LinkedRowPicker(
     <Dialog
       open
       onOpenChange={(open) => !open && !pending() && props.onClose()}
+      onCloseAutoFocus={(event) => {
+        if (props.returnFocus?.isConnected) {
+          event.preventDefault();
+          props.returnFocus.focus();
+        }
+      }}
       class="flex max-h-[80dvh] w-112 max-w-[calc(100vw-2rem)] flex-col gap-4 p-5"
     >
       <Dialog.Title class="text-base font-medium">
@@ -246,6 +266,7 @@ export function LinkedRowPicker(
           <div class="flex items-center gap-2">
             <Button
               size="sm"
+              variant="ghost"
               disabled={!!pending()}
               onClick={() => {
                 props.onSelectTable(undefined);
@@ -278,6 +299,7 @@ export function LinkedRowPicker(
                 {props.error}
                 <Button
                   size="sm"
+                  variant="ghost"
                   onClick={() => fireAndForget(props.retry(), 'crm')}
                 >
                   Retry
@@ -340,7 +362,11 @@ export function LinkedRowPicker(
           {error()}
         </p>
       </Show>
-      <Button variant="outline" disabled={!!pending()} onClick={props.onClose}>
+      <Button
+        variant="secondary"
+        disabled={!!pending()}
+        onClick={props.onClose}
+      >
         Done
       </Button>
     </Dialog>

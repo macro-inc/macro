@@ -63,14 +63,15 @@ export function ChannelInviteModal(props: {
                 Invite people to {props.channelName}
               </Dialog.Title>
               <Dialog.CloseButton
+                aria-label="Close"
+                tooltip="Close"
                 as={Button}
                 variant="ghost"
                 size="icon-sm"
-                label="Close"
                 tabIndex={-1}
                 disabled={pending()}
               >
-                <XIcon />
+                <XIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
               </Dialog.CloseButton>
             </div>
             <RadioGroup
@@ -151,7 +152,7 @@ export function ChannelInviteModal(props: {
                 Cancel
               </Button>
               <Button
-                variant="strong"
+                variant="primary"
                 onClick={() => fireAndForget(addPeople(), 'channel-invite')}
                 disabled={!canAdd()}
               >

@@ -1,12 +1,13 @@
 use super::*;
-use crate::domain::ports::{AccountRepository, SendIntent, SendRepository};
+use crate::domain::{ports::SendRepository, provider::WhatsAppProvider};
+use external_chat::domain::ports::{ChatProvider, SendIntent};
 use tokio::sync::Barrier;
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
 async fn sends_and_roster_refreshes_share_a_consistent_lock_order(pool: PgPool) {
     let (_, session, repository, binding, alice, _) = adopted(&pool).await;
-    let account = repository
-        .owned_account(&person(ALICE))
+    let account = WhatsAppProvider::new(repository.clone())
+        .account(&person(ALICE))
         .await
         .unwrap()
         .unwrap();
@@ -26,7 +27,7 @@ async fn sends_and_roster_refreshes_share_a_consistent_lock_order(pool: PgPool) 
                 .enqueue(SendIntent {
                     user: &person(ALICE),
                     account: &account,
-                    binding: &binding,
+                    chat: &binding,
                     request: &request,
                     digest: [index; 32],
                 })
@@ -57,7 +58,8 @@ async fn observers_can_refresh_groups_in_opposite_orders(pool: PgPool) {
         .await
         .unwrap();
     linked
-        .adopt(
+        .chats
+        .add(
             &person(ALICE),
             &AddChat {
                 provider: ExternalChatProvider::WhatsApp,

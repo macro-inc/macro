@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n                UPDATE email_messages m SET snippet = v.snippet\n                FROM UNNEST($1::uuid[], $2::text[], $3::text[]) AS v(id, stored, snippet)\n                WHERE m.id = v.id AND m.snippet IS NOT DISTINCT FROM v.stored\n                ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "UuidArray",
+        "TextArray",
+        "TextArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "c0d8950d7b3e655a1e255c5a401a95979ecb4135f2cfc302a67d37ab7a3cf88c"
+}

@@ -377,6 +377,7 @@ impl DraftTransferRepository for EmailPgRepo {
                     link_id: destination.link_id,
                     inbox_visible: false,
                     is_read: true,
+                    has_received_mail: false,
                     latest_inbound_message_ts: None,
                     latest_outbound_message_ts: None,
                     latest_non_spam_message_ts: None,

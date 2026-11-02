@@ -17,4 +17,5 @@ pub mod session;
 /// Whether one of Macro's own tools may run in this turn.
 pub mod tool_gate;
 pub mod tool_mode;
+pub mod tool_stream;
 pub mod user_input;

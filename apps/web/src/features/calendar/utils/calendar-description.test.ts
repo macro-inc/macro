@@ -172,6 +172,18 @@ describe('calendarDescriptionToEditorHtml', () => {
     ).toEqual({ blockName: 'task', documentId: DOCUMENT_ID });
     expect(parseMacroAppLink('not a url')).toBeUndefined();
   });
+
+  it('leaves app pages that are not entities as ordinary links', () => {
+    const href = `https://macro.com/app/booking/${DOCUMENT_ID}#token`;
+    expect(parseMacroAppLink(href)).toBeUndefined();
+    const html = calendarDescriptionToEditorHtml(
+      `<a href="${href}">Manage</a>`
+    );
+    const anchor = new DOMParser()
+      .parseFromString(html, 'text/html')
+      .body.querySelector('a');
+    expect(anchor?.hasAttribute('data-document-mention')).toBe(false);
+  });
 });
 
 describe('exportCalendarDescription', () => {
@@ -189,7 +201,7 @@ describe('exportCalendarDescription', () => {
         ` about <span data-document-mention="true" data-document-id="${DOCUMENT_ID}" data-document-name="August Cycle Planning" data-block-name="md">August Cycle Planning</span></p>`
     );
     expect(exportCalendarDescription(editor)).toBe(
-      `<p>ping Teo Nys about <a href="${window.location.origin}/app/md/${DOCUMENT_ID}">August Cycle Planning</a></p>`
+      `<p>ping @Teo Nys about <a href="${window.location.origin}/app/md/${DOCUMENT_ID}">August Cycle Planning</a></p>`
     );
   });
 

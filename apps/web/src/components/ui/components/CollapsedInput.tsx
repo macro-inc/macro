@@ -27,8 +27,6 @@ export type CollapsedInputProps = {
    */
   disabled?: boolean;
   class?: string;
-  /** Extra composer action placed immediately before Send. */
-  trailingAction?: JSX.Element;
   /** Replaces the attach button at the start of the input. */
   leadingAction?: JSX.Element;
   /**
@@ -67,14 +65,14 @@ export function CollapsedInput(props: CollapsedInputProps) {
           when={props.leadingAction}
           fallback={
             <Button
+              tooltip="Attach files"
               variant="ghost"
-              size="icon-composer"
+              size="icon-md"
               class="not-touch:light-mode:text-composer-ink"
               aria-label="Attach files"
-              label="Attach files"
               onClick={() => props.onAttach?.()}
             >
-              <PaperclipIcon />
+              <PaperclipIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           }
         >
@@ -107,27 +105,23 @@ export function CollapsedInput(props: CollapsedInputProps) {
         </button>
         <Show when={hasAttachments() && !hasText()}>
           <Button
+            tooltip={`${attachmentCount()} attachment${
+              attachmentCount() === 1 ? '' : 's'
+            }`}
             variant="ghost"
             size="sm"
             class="h-8 px-1.5 gap-1"
             aria-label={`${attachmentCount()} attachment${
               attachmentCount() === 1 ? '' : 's'
             }`}
-            label={`${attachmentCount()} attachment${
-              attachmentCount() === 1 ? '' : 's'
-            }`}
             ref={attachFocusInput}
             onClick={() => props.onOpen?.()}
             data-collapsed-input-attachments
           >
-            <PaperclipIcon />
+            <PaperclipIcon class="size-3 touch:size-6 shrink-0 pointer-events-none" />
             <span>{attachmentCount()}</span>
           </Button>
         </Show>
-        {props.trailingAction}
-        {/* Fades out rather than unmounting, the way the expanded composer's
-            send action does: dropping it would slide the trailing action
-            across as soon as the draft emptied. */}
         <SendButton
           appearance="composer"
           pending={props.pending}

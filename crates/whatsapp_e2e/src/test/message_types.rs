@@ -5,17 +5,17 @@
 
 use std::sync::Mutex;
 
-use whatsapp_fake_server::GroupChange;
-use whatsapp_linked::domain::effects::EffectsService;
-use whatsapp_linked::domain::models::MediaPresentation;
-use whatsapp_linked::domain::ports::{GroupEffect, GroupPublisher};
-use whatsapp_linked::domain::rich::{
+use external_chat::domain::effects::EffectsService;
+use external_chat::domain::models::MediaPresentation;
+use external_chat::domain::ports::{ChatEffect, ChatPublisher};
+use external_chat::domain::rich::{
     Call, CallOutcome, ContactCard, Contacts, Event, Location, SystemAction,
 };
-use whatsapp_linked::domain::timeline::{
+use external_chat::domain::timeline::{
     ExternalChatMention, ExternalChatMessage, ExternalChatMessageKind, ExternalChatPersonRef,
     ExternalChatPoll, ExternalChatPollOption, ExternalChatRichContent, ExternalChatSystemLine,
 };
+use whatsapp_fake_server::GroupChange;
 use whatsmeow::download::MediaType;
 use whatsmeow::proto::wa_common::MessageKey;
 use whatsmeow::proto::wa_e2e::{
@@ -27,7 +27,7 @@ use whatsmeow::proto::wa_e2e::{
 use super::*;
 
 /// The timeline entry for WhatsApp message `source`, as Alice reads it.
-async fn shown(world: &World, binding: &Binding, source: &str) -> ExternalChatMessage {
+async fn shown(world: &World, binding: &ChatRef, source: &str) -> ExternalChatMessage {
     let id = sqlx::query_scalar!(
         "SELECT id FROM external_chat_message WHERE chat_id = $1 AND source_id = $2",
         binding.id,
@@ -37,7 +37,7 @@ async fn shown(world: &World, binding: &Binding, source: &str) -> ExternalChatMe
     .await
     .unwrap();
     world
-        .linked
+        .external
         .messages(
             &receipt::<ViewAccessLevel>(ALICE, binding.id),
             None,
@@ -781,7 +781,7 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
     // Alice mentions the customer from Macro.
     let text = format!("@{} on it", world.customer.lid().user);
     let send = world
-        .linked
+        .external
         .send_reply(
             &receipt::<ViewAccessLevel>(ALICE, binding.id),
             &SendReply {
@@ -821,8 +821,8 @@ async fn polls_places_cards_events_mentions_pins_and_calls_arrive_structured(poo
 struct Published(Mutex<Vec<Uuid>>);
 
 #[async_trait]
-impl GroupPublisher for Published {
-    async fn publish(&self, effect: &GroupEffect) -> LinkedResult<()> {
+impl ChatPublisher for Published {
+    async fn publish(&self, effect: &ChatEffect) -> ExternalChatResult<()> {
         self.0
             .lock()
             .unwrap_or_else(std::sync::PoisonError::into_inner)
@@ -907,7 +907,7 @@ async fn group_changes_land_once_as_system_lines_that_never_notify(pool: PgPool)
     );
 
     let page = world
-        .linked
+        .external
         .messages(
             &receipt::<ViewAccessLevel>(ALICE, binding.id),
             None,
@@ -972,8 +972,8 @@ async fn group_changes_land_once_as_system_lines_that_never_notify(pool: PgPool)
 
     // Only the three texts are unread, and only they notify.
     let summary = world
-        .linked
-        .adopted_groups(&person(ALICE))
+        .external
+        .list(&person(ALICE))
         .await
         .unwrap()
         .into_iter()
@@ -982,7 +982,7 @@ async fn group_changes_land_once_as_system_lines_that_never_notify(pool: PgPool)
     assert_eq!(summary.unread_count, 3, "system lines are never unread");
     let published = Arc::new(Published::default());
     let effects = EffectsService::new(
-        Arc::new(PgLinkedRepository::new(world.pool.clone())),
+        Arc::new(PgExternalChatRepository::new(world.pool.clone())),
         published.clone(),
     );
     while effects.publish_pending().await.unwrap() > 0 {}

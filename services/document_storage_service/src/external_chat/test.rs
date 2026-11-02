@@ -58,7 +58,7 @@ async fn a_users_budget_is_shared_across_replicas_and_recovers_after_one_second(
     let (first, second) = tokio::join!(first_replica.check(&alice), second_replica.check(&alice));
     assert_eq!(usize::from(first.is_ok()) + usize::from(second.is_ok()), 1);
     let denied = first.err().or_else(|| second.err()).unwrap();
-    assert_eq!(denied.current_context(), &LinkedError::RateLimited);
+    assert_eq!(denied.current_context(), &ExternalChatError::RateLimited);
     second_replica.check(&person("bob")).await.unwrap();
     assert_eq!(counter.windows.lock().unwrap().len(), 2);
     counter.now.store(1, Ordering::Relaxed);
@@ -93,7 +93,7 @@ async fn unavailable_shared_counter_fails_closed() {
             .await
             .unwrap_err()
             .current_context(),
-        &LinkedError::Unavailable
+        &ExternalChatError::Unavailable
     );
 }
 
@@ -120,7 +120,7 @@ async fn redis_enforces_the_shared_budget_without_affecting_another_user() {
     assert_eq!(usize::from(one.is_ok()) + usize::from(two.is_ok()), 1);
     assert_eq!(
         one.err().or_else(|| two.err()).unwrap().current_context(),
-        &LinkedError::RateLimited
+        &ExternalChatError::RateLimited
     );
     other.unwrap();
 }

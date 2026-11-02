@@ -3,6 +3,7 @@ import { AccessRequestVisitProvider } from '@app/features/access-requests/contex
 import { createSoupState } from '@app/features/next-soup/create-soup-state';
 import { SoupContextProvider } from '@app/features/next-soup/soup-context';
 import { SoupViewContextProvider } from '@app/features/next-soup/soup-view/soup-view-context';
+import { t } from '@app/lib/i18n';
 import { type PaneId, SplitRouter } from '@app/lib/split-router';
 import { globalSplitManager } from '@app/signal/splitLayout';
 import { MobileTopEdgeFade } from '@components/app/mobile/MobileEdgeFade';
@@ -20,6 +21,7 @@ import { Button, cn, Panel } from '@ui';
 import { createEffect, createSignal, Show, Suspense } from 'solid-js';
 import { createMutable } from 'solid-js/store';
 import { Dynamic } from 'solid-js/web';
+import { createPriorityCollapseController } from '../../../priority-collapse/PriorityCollapseOverflowSensor';
 import { splitBackInterceptor } from '../back-interceptor';
 import {
   type SplitBottomPanelRegistration,
@@ -33,7 +35,6 @@ import { shouldShowSplitCloseButton } from '../layoutUtils';
 import { registerSplitHotkeys } from '../registerSplitHotkeys';
 import { createOwnedSlots } from '../utils/createOwnedSlots';
 import { createSplitAutofocus } from '../utils/createSplitAutofocus';
-import { createPriorityCollapseController } from './PriorityCollapseOverflowSensor';
 import { SplitDrawerGroup } from './SplitDrawerContext';
 import { SplitHeader } from './SplitHeader';
 import { SplitToolbar } from './SplitToolbar';
@@ -358,12 +359,13 @@ export function SplitPanel(props: SplitPanelProps) {
                               {panel().title}
                             </h3>
                             <Button
+                              aria-label="Close"
+                              tooltip="Close"
                               variant="ghost"
                               size="icon-sm"
-                              label="Close"
                               onClick={() => panel().onClose?.()}
                             >
-                              <CloseIcon />
+                              <CloseIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
                             </Button>
                           </div>
                           <div class="min-h-0 flex-1 overflow-hidden">
@@ -382,8 +384,11 @@ export function SplitPanel(props: SplitPanelProps) {
                 <Button
                   variant="ghost"
                   size="icon-xs"
-                  label="Close split"
-                  hotkey={TOKENS.split.close}
+                  aria-label={t('splitMenu.closeSplit')}
+                  tooltip={{
+                    content: t('splitMenu.closeSplit'),
+                    hotkey: TOKENS.split.close,
+                  }}
                   class={cn(
                     'absolute top-0 left-0 z-split-panel-chrome origin-top-left scale-[1.15] size-4 p-0 rounded-none border-0 border-r border-b border-edge-frame bg-panel text-ink-muted/70 hover:bg-hover hover:text-ink',
                     props.handle.isSpotLight()

@@ -2,16 +2,21 @@
 import { describe, expect, it } from 'vitest';
 import { resolveSearchHighlightRanges } from './searchHighlightTarget';
 
-function mentionChip(title: string, collapsed = false): HTMLElement {
+function mentionChip(
+  attr: string,
+  title: string,
+  options: { collapsed?: boolean; prefix?: string } = {}
+): HTMLElement {
   const root = document.createElement('span');
-  root.setAttribute('data-document-mention', 'true');
+  root.setAttribute(attr, 'true');
   const icon = document.createElement('span');
   icon.appendChild(document.createElement('svg'));
   root.appendChild(icon);
-  if (!collapsed) {
+  if (!options.collapsed) {
     const name = document.createElement('span');
-    name.setAttribute('data-document-name', title);
-    name.appendChild(document.createTextNode(title));
+    name.appendChild(
+      document.createTextNode(`${options.prefix ?? ''}${title}`)
+    );
     root.appendChild(name);
   }
   document.body.appendChild(root);
@@ -20,7 +25,7 @@ function mentionChip(title: string, collapsed = false): HTMLElement {
 
 describe('resolveSearchHighlightRanges', () => {
   it('highlights the matching substring inside a task chip title', () => {
-    const chip = mentionChip('Fix login bug');
+    const chip = mentionChip('data-document-mention', 'Fix login bug');
     const ranges = resolveSearchHighlightRanges(chip, {
       start: 4,
       end: 9,
@@ -33,8 +38,56 @@ describe('resolveSearchHighlightRanges', () => {
     expect(ranges[0]?.endOffset).toBe(9);
   });
 
+  it('highlights a user mention using searchable offsets that include @', () => {
+    const chip = mentionChip('data-user-mention', 'Wolf UniqueHandle', {
+      prefix: '@',
+    });
+    const ranges = resolveSearchHighlightRanges(chip, {
+      start: 1,
+      end: 5,
+      isReplace: true,
+    });
+
+    expect(ranges).toHaveLength(1);
+    expect(ranges[0]?.startContainer.textContent).toBe('@Wolf UniqueHandle');
+    expect(ranges[0]?.startOffset).toBe(1);
+    expect(ranges[0]?.endOffset).toBe(5);
+  });
+
+  it('shifts a skill slash that is not in searchable text', () => {
+    const chip = mentionChip('data-document-mention', 'draft-skill', {
+      prefix: '/',
+    });
+    const ranges = resolveSearchHighlightRanges(chip, {
+      start: 0,
+      end: 5,
+      isReplace: true,
+    });
+
+    expect(ranges).toHaveLength(1);
+    expect(ranges[0]?.startContainer.textContent).toBe('/draft-skill');
+    expect(ranges[0]?.startOffset).toBe(1);
+    expect(ranges[0]?.endOffset).toBe(6);
+  });
+
+  it('does not shift a group mention whose text already includes @', () => {
+    const chip = mentionChip('data-group-mention', '@refs');
+    const ranges = resolveSearchHighlightRanges(chip, {
+      start: 0,
+      end: 5,
+      isReplace: true,
+    });
+
+    expect(ranges).toHaveLength(1);
+    expect(ranges[0]?.startContainer.textContent).toBe('@refs');
+    expect(ranges[0]?.startOffset).toBe(0);
+    expect(ranges[0]?.endOffset).toBe(5);
+  });
+
   it('falls back to the whole chip when the title is collapsed', () => {
-    const chip = mentionChip('Fix login bug', true);
+    const chip = mentionChip('data-document-mention', 'Fix login bug', {
+      collapsed: true,
+    });
     const ranges = resolveSearchHighlightRanges(chip, {
       start: 0,
       end: 13,

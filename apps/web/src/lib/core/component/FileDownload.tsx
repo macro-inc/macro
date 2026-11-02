@@ -1,17 +1,19 @@
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
 import type { FileDownloadController } from '@core/util/createFileDownload';
 import { fireAndForget } from '@core/util/fireAndForget';
+import ShareIcon from '@icon/share.svg';
 import DownloadIcon from '@icon/system/regular/download-simple.svg';
 import SpinnerIcon from '@icon/system/regular/spinner.svg';
 import XIcon from '@icon/system/regular/x.svg';
-import ShareIcon from '@phosphor/export.svg';
-import { Button, Dropdown } from '@ui';
+import { Button, ButtonGroup, Dropdown } from '@ui';
 import { createSignal, Show } from 'solid-js';
+import { Dynamic } from 'solid-js/web';
 import { useHoldParentHoverCardOpen } from './HoverCard';
 
 export function FileDownloadButton(props: {
   download: FileDownloadController;
   iconOnly?: boolean;
+  grouped?: boolean;
 }) {
   const [menuOpen, setMenuOpen] = createSignal(false);
   useHoldParentHoverCardOpen(() => menuOpen() || props.download.busy());
@@ -33,9 +35,16 @@ export function FileDownloadButton(props: {
     if (props.download.phase() === 'idle') setMenuOpen(false);
   };
   const save = () => fireAndForget(start(), 'file-download');
+  const buttonSize = () => {
+    if (props.iconOnly) return props.grouped ? 'icon-sm' : 'icon-md';
+    return props.grouped ? undefined : 'md';
+  };
   const icon = () => (
-    <Show when={props.download.busy()} fallback={<DownloadIcon />}>
-      <SpinnerIcon class="animate-spin" />
+    <Show
+      when={props.download.busy()}
+      fallback={<DownloadIcon class="size-4 shrink-0 touch:size-6" />}
+    >
+      <SpinnerIcon class="size-4 shrink-0 animate-spin touch:size-6" />
     </Show>
   );
 
@@ -44,36 +53,42 @@ export function FileDownloadButton(props: {
       when={isTouchDevice() && props.download.canOfferShare()}
       fallback={
         <>
-          <Button
+          <Dynamic
+            component={props.grouped ? ButtonGroup.Button : Button}
             variant="ghost"
-            size={props.iconOnly ? 'icon-md' : 'md'}
-            label={label()}
+            size={buttonSize()}
+            aria-label={label()}
+            tooltip={label()}
             disabled={props.download.busy()}
             onClick={save}
           >
             {icon()}
             <Show when={!props.iconOnly}>{label()}</Show>
-          </Button>
+          </Dynamic>
           <Show when={props.download.busy()}>
-            <Button
+            <Dynamic
+              component={props.grouped ? ButtonGroup.Button : Button}
               variant="ghost"
-              size={props.iconOnly ? 'icon-md' : 'md'}
-              label="Cancel download"
+              size={buttonSize()}
+              aria-label="Cancel download"
+              tooltip="Cancel download"
               onClick={props.download.cancel}
             >
               <Show when={props.iconOnly} fallback="Cancel">
-                <XIcon />
+                <XIcon class="size-4 shrink-0 touch:size-6" />
               </Show>
-            </Button>
+            </Dynamic>
           </Show>
         </>
       }
     >
       <Dropdown open={menuOpen()} onOpenChange={setMenuOpen}>
         <Dropdown.Trigger
+          as={props.grouped ? ButtonGroup.Button : Button}
           variant="ghost"
-          size={props.iconOnly ? 'icon-md' : 'md'}
-          label={label()}
+          size={buttonSize()}
+          aria-label={label()}
+          tooltip={label()}
         >
           {icon()}
           <Show when={!props.iconOnly}>{label()}</Show>

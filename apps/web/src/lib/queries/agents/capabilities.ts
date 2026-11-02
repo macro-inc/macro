@@ -1,16 +1,14 @@
 import { throwOnErr } from '@core/util/result';
 import { agentHarnessServiceClient } from '@service-agent-harness/client';
 import type { DiscoverAgentCapabilitiesRequest } from '@service-agent-harness/generated/schemas';
-import { useQuery } from '@tanstack/solid-query';
+import { queryOptions, useQuery } from '@tanstack/solid-query';
 
-/** Capabilities belong to a harness and selected model, never a provider alone. */
-export function useAgentCapabilitiesQuery(
-  target: () => DiscoverAgentCapabilitiesRequest | undefined
+function agentCapabilitiesQueryOptions(
+  request: DiscoverAgentCapabilitiesRequest | undefined
 ) {
-  return useQuery(() => ({
-    queryKey: ['agent-capabilities', target() ?? null] as const,
+  return queryOptions({
+    queryKey: ['agent-capabilities', request ?? null] as const,
     queryFn: async ({ signal }: { signal: AbortSignal }) => {
-      const request = target();
       if (!request) throw new Error('No capability target');
       const response = await throwOnErr(() =>
         agentHarnessServiceClient.discoverAgentCapabilities(request, signal)
@@ -42,9 +40,16 @@ export function useAgentCapabilitiesQuery(
         }),
       };
     },
-    enabled: target() !== undefined,
+    enabled: request !== undefined,
     staleTime: 0,
     gcTime: 0,
     retry: false,
-  }));
+  });
+}
+
+/** Capabilities belong to a harness and selected model, never a provider alone. */
+export function useAgentCapabilitiesQuery(
+  target: () => DiscoverAgentCapabilitiesRequest | undefined
+) {
+  return useQuery(() => agentCapabilitiesQueryOptions(target()));
 }
