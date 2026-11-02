@@ -38,10 +38,9 @@ Unlike Calls, it lists only personal tags; team-shared tags are hidden,
 and its `New tag` action creates a personal tag with no Team sharing option.
 
 Full email client. Desktop groups `Signal` and `Noise` under one `Inbox` sidebar
-item, with pill tabs beside the Inbox title in the content header, matching the
-Chat sidebar tabs; with the Focus flags on, a `Focus` tab leads them. Selecting
-Inbox from another mailbox opens Signal; selecting it while in Focus or Noise
-keeps that tab.
+item, with pill tabs beside the Inbox title in the content header; with the Focus
+flags on, a `Focus` tab leads them. Selecting Inbox from another mailbox opens
+Signal; selecting it while in Focus or Noise keeps that tab.
 The desktop sidebar continues with `Favorites`, `Drafts`, `Sent`, `Scheduled`,
 and `Reminders` (when reminders are enabled), followed by a **Library** section containing `All mail`,
 `Archived`, and `Shared`, then **Tags**. Sidebar number shortcuts follow that

@@ -2,6 +2,7 @@ import type { EntityData } from '@entity/types/entity';
 import type { Notification } from '@entity/types/notification';
 import { onCleanup } from 'solid-js';
 import type { SoupAstItemsData } from '../items';
+import { soupEntityKey } from './entity-input';
 import { withoutPendingGraphqlSoupDeletes } from './optimistic-deletions';
 import {
   hasActivityAfterDone,
@@ -162,7 +163,7 @@ export function createGraphqlSoupDoneProjection() {
     data: SoupAstItemsData | undefined,
     pending: readonly PendingGraphqlSoupDone[],
     excludesDone: boolean,
-    deletedIds: ReadonlySet<string>
+    deletedKeys: ReadonlySet<string>
   ): SoupAstItemsData | undefined => {
     detach();
     if (scope !== queryScope) {
@@ -182,7 +183,7 @@ export function createGraphqlSoupDoneProjection() {
       return undefined;
     }
     if (pending.length === 0) {
-      return withoutPendingGraphqlSoupDeletes(data, deletedIds);
+      return withoutPendingGraphqlSoupDeletes(data, deletedKeys);
     }
 
     const latest = new Map<string, PendingGraphqlSoupDone>();
@@ -228,7 +229,7 @@ export function createGraphqlSoupDoneProjection() {
           excludesDone &&
           !current &&
           snapshot &&
-          !deletedIds.has(id)
+          !deletedKeys.has(soupEntityKey(snapshot.entity) ?? '')
         ) {
           restoring.push(snapshot);
         }
@@ -247,10 +248,14 @@ export function createGraphqlSoupDoneProjection() {
       result = { ...result, entities };
     }
     return withoutPendingGraphqlSoupDeletes(
-      result,
       excludesDone
-        ? withPendingDoneIds(deletedIds, result.entities, pending)
-        : deletedIds
+        ? withoutPendingGraphqlSoupDeletes(
+            result,
+            withPendingDoneIds(new Set(), result.entities, pending),
+            'id'
+          )
+        : result,
+      deletedKeys
     );
   };
 }

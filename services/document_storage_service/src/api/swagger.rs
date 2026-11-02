@@ -58,7 +58,8 @@ use crate::{
     },
 };
 use channel_labels::domain::models::{
-    ChannelLabel, ChannelLabelRule, ChannelLabelsList, SmartTagChannelMatch, SmartTagPreview,
+    ChannelLabel, ChannelLabelRule, ChannelLabelScopeSelection, ChannelLabelsList,
+    SmartTagChannelMatch, SmartTagPreview,
 };
 use channel_labels::inbound::axum_router::{
     CreateChannelLabelRequest, RenameChannelLabelRequest, SetChannelLabelRequest,
@@ -715,6 +716,7 @@ use utoipa::OpenApi;
             ChannelLabel,
             ChannelLabelsList,
             ChannelLabelRule,
+            ChannelLabelScopeSelection,
             SmartTagChannelMatch,
             SmartTagPreview,
             CreateChannelLabelRequest,
