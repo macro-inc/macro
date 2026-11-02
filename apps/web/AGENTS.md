@@ -54,6 +54,12 @@ It uses the real records view with a local source and picker to exercise opening
 replacement, cancellation, keyboard editing, and read-only references. Navigation
 adapter tests separately check file types, access failures, and split selection.
 
+Pinch zoom on opened image files (Drive details and image splits) has a
+backend-free phone and tablet regression:
+`bunx playwright test --config src/features/block-image/browser-test/playwright.config.ts`.
+Keep the zoomed image laid out at its zoomed size, translating only: WebKit
+rasterizes an `<img>` at its layout size, so a `scale()` transform blurs it.
+
 Discussion link scrolling has a backend-free browser regression:
 `bunx playwright test --config src/lib/core/messages/browser-test/playwright.config.ts`.
 
@@ -67,6 +73,12 @@ stacked sheet), which must bring it back on screen. It also keeps a persistent
 prompt under an open sheet and its picker, above a transient notice, and that
 notice on top of the sheet:
 `bunx playwright test --config src/components/app/mobile/browser-test/playwright.config.ts`.
+
+CRM creation has backend-free desktop/phone coverage for name-only companies,
+personal-email contacts and explicit company selection:
+`bunx playwright test --config src/features/crm/browser-test/creation/playwright.config.ts`.
+Nested picker selection must keep its containing drawer open when the option
+unmounts during the tap; drawer dismissal checks the original event path.
 
 Composer typeahead menus choosing the side with room for their full list
 (`floatWithSelection`'s `fullHeight`), above a composer at the bottom of a
@@ -331,6 +343,11 @@ resolved session ID; keep the existing `AgentSessionProvider` subscription to
 `agent_session` rather than enabling legacy block tracking of placeholder IDs.
 
 - Share URL recognition with `packages/lexical-core/utils/auto-link.ts`; preserve explicit unlink markers when saving and rendering messages. See `packages/lexical-core/README.md` at the repository root.
+- CRM creation accepts name-only companies and full contact email addresses.
+  Company selection is explicit; a matching domain only suggests a company.
+  Keep the standalone and pipeline forms consistent (see
+  `docs/agent-guide/crm.md` at the repository root).
+
 - Empty human DMs use the shared centered conversations graphic and explain email delivery to nonusers; keep this state out of agent DMs, loading/error states, and populated timelines.
 - Keep CRM database discovery row-linked and permission-scoped; use horizontally
   centered actionable list states raised toward the toolbar and shared skeletons,
