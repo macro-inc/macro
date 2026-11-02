@@ -57,9 +57,7 @@ describe('startScreenShare', () => {
 
     const options = { audio: false };
 
-    await expect(startScreenShare(room, span, options)).resolves.toBe(
-      'shared'
-    );
+    await expect(startScreenShare(room, span, options)).resolves.toBe('shared');
     expect(localParticipant.setScreenShareEnabled).toHaveBeenCalledWith(
       true,
       options
