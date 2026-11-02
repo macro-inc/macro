@@ -24,7 +24,7 @@ import { errAsync, ResultAsync } from 'neverthrow';
 import type { DatabaseRelatedDestination } from '../database/core/database-relations';
 import type { FormContext, FormWriteFailure } from './context/form-context';
 import { FormConditionEditor } from './form-condition-editor';
-import { FormEditors } from './form-editors';
+import { FormEditors, FormPerson } from './form-editors';
 import { FormEntityPicker, FormRelationPicker } from './form-pickers';
 import { FormResponsesGrid } from './form-responses-grid';
 import {
@@ -174,6 +174,7 @@ export function createAppFormContext(host: FormHostActions): FormContext {
         />
       ),
       renderEditors: (props) => <FormEditors {...props} />,
+      renderPerson: (userId) => <FormPerson userId={userId} />,
     },
   };
 }

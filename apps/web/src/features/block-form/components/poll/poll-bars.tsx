@@ -2,7 +2,7 @@ import CheckCircle from '@icon/system/fill/check-circle-fill.svg';
 import Circle from '@icon/system/regular/circle.svg';
 import { Key } from '@solid-primitives/keyed';
 import { cn } from '@ui';
-import { For, Show } from 'solid-js';
+import { For, type JSX, Show } from 'solid-js';
 import type { PollBar } from '../../core/tally';
 
 /**
@@ -165,38 +165,69 @@ export function PollBars(props: {
   );
 }
 
-/** The tally spelled out, for respondents who cannot open the responses. */
+/**
+ * Who voted for what: each option with the people who chose it, the viewer
+ * marked as "you". Shown only when the tally names voters to this viewer.
+ */
 export function PollResults(props: {
   bars: readonly PollBar[];
   summary: string;
+  /** The viewer, marked among the voters. */
+  viewerId: string | undefined;
+  renderPerson: (userId: string) => JSX.Element;
+  /** Open the full Responses table. */
+  onOpenResponses?: () => void;
 }) {
   return (
     <section
       aria-label="Poll results"
-      class="rounded-lg border border-edge-muted bg-panel px-3 py-2"
+      class="flex flex-col gap-3 rounded-lg border border-edge-muted bg-panel px-3 py-2.5"
     >
-      <table class="w-full text-xs">
-        <caption class="sr-only">Votes per option</caption>
-        <tbody>
-          <For each={props.bars}>
-            {(bar) => (
-              <tr>
-                <th scope="row" class="py-0.5 text-left font-normal text-ink">
-                  {bar.label}
-                  <Show when={bar.mine}>
-                    <span class="ml-1 text-ink-muted">(your vote)</span>
-                  </Show>
-                </th>
-                <td class="py-0.5 text-right text-ink-muted tabular-nums">
-                  {bar.count === 1 ? '1 vote' : `${bar.count} votes`} ·{' '}
-                  {bar.percent}%
-                </td>
-              </tr>
-            )}
-          </For>
-        </tbody>
-      </table>
-      <p class="mt-1 text-[11px] text-ink-muted">{props.summary}</p>
+      <For each={props.bars}>
+        {(bar) => (
+          <div class="flex flex-col gap-1.5">
+            <div class="flex items-baseline justify-between gap-2 text-xs">
+              <span class="min-w-0 font-medium text-ink wrap-anywhere">
+                {bar.label}
+              </span>
+              <span class="shrink-0 text-ink-muted tabular-nums">
+                {bar.count === 1 ? '1 vote' : `${bar.count} votes`}
+              </span>
+            </div>
+            <Show
+              when={(bar.voters ?? []).length > 0}
+              fallback={<p class="text-xs text-ink-muted">No votes yet</p>}
+            >
+              <ul class="flex flex-col gap-1 text-xs text-ink">
+                <For each={bar.voters}>
+                  {(voter) => (
+                    <li class="flex min-w-0 items-center gap-1.5">
+                      {props.renderPerson(voter)}
+                      <Show when={voter === props.viewerId}>
+                        <span class="shrink-0 text-ink-muted">(you)</span>
+                      </Show>
+                    </li>
+                  )}
+                </For>
+              </ul>
+            </Show>
+          </div>
+        )}
+      </For>
+      <div class="flex items-center justify-between gap-2 border-t border-edge-divider pt-2 text-[11px] text-ink-muted">
+        <span>{props.summary}</span>
+        <Show when={props.onOpenResponses}>
+          {(open) => (
+            <button
+              type="button"
+              class="text-accent-ink hover:underline"
+              onClick={() => open()()}
+            >
+              Responses table
+            </button>
+          )}
+        </Show>
+      </div>
     </section>
   );
 }

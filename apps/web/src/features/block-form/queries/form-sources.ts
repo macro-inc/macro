@@ -281,7 +281,12 @@ export function createTallySource(
               match(bucket.value)
                 .returnType<QuestionTally['buckets']>()
                 .with({ kind: 'option' }, ({ option }) => [
-                  { kind: 'option', optionId: option, count: bucket.count },
+                  {
+                    kind: 'option',
+                    optionId: option,
+                    count: bucket.count,
+                    voters: bucket.voters ?? undefined,
+                  },
                 ])
                 .with({ kind: 'checkbox' }, ({ checked }) => [
                   { kind: 'checkbox', checked, count: bucket.count },

@@ -207,6 +207,7 @@ export function createMockFormContext(options: {
       renderEntityLabel: (entity) => entity.entityId,
       renderEditors: (props) =>
         `${props.peers.map((peer) => peer.userId).join(', ')} on ${props.selected}`,
+      renderPerson: (userId) => userId,
     },
     ...options.overrides,
   };

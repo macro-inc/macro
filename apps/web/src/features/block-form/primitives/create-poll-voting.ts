@@ -57,6 +57,16 @@ export function createPollVoting(options: {
       )
     );
   };
+  /** Who chose each option, when the tally names voters to this viewer. */
+  const voters = () => {
+    const tally = questionTally();
+    const named = tally?.buckets.flatMap((bucket) =>
+      bucket.kind === 'option' && bucket.voters
+        ? [[bucket.optionId, bucket.voters] as const]
+        : []
+    );
+    return named && named.length > 0 ? new Map(named) : undefined;
+  };
   const responses = () => questionTally()?.responses ?? 0;
 
   async function vote(optionId: string) {
@@ -103,8 +113,10 @@ export function createPollVoting(options: {
     pending,
     vote,
     bars: (): PollBar[] =>
-      pollBars(options.poll(), counts(), responses(), myVote()),
+      pollBars(options.poll(), counts(), responses(), myVote(), voters()),
     summary: () => pollSummary(responses(), options.poll().multi),
     hasTally: () => !!questionTally(),
+    /** Whether the tally says who voted for what. */
+    hasVoters: () => !!voters(),
   };
 }

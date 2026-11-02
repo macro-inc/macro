@@ -11,9 +11,10 @@ import { createPollVoting } from '../primitives/create-poll-voting';
 import { RespondView } from './respond-view';
 
 /**
- * A poll's card body: vote and see the tally. "Responses" takes editors, and
- * respondents when responses are shared, to the Responses tab; other
- * respondents see the tally spelled out in place.
+ * A poll's card body: vote and see the tally. When the tally names voters
+ * (editors, or respondents of a poll that shares its responses, never an
+ * anonymous one), Results shows who chose each option; otherwise those who
+ * may read the responses get "Responses", the Responses tab.
  */
 function PollCardBody(props: {
   detail: FormDetail;
@@ -65,17 +66,17 @@ function PollCardBody(props: {
           fireAndForget(voting.vote(optionId), 'poll-voting')
         }
         results={
-          canReadResponses()
+          voting.hasVoters()
             ? {
-                label: 'Responses',
-                expanded: undefined,
-                onOpen: props.onOpenResponses,
+                label: showingResults() ? 'Hide results' : 'Results',
+                expanded: showingResults(),
+                onOpen: () => setShowingResults(!showingResults()),
               }
-            : voting.hasTally()
+            : canReadResponses()
               ? {
-                  label: showingResults() ? 'Hide results' : 'Results',
-                  expanded: showingResults(),
-                  onOpen: () => setShowingResults(!showingResults()),
+                  label: 'Responses',
+                  expanded: undefined,
+                  onOpen: props.onOpenResponses,
                 }
               : undefined
         }
@@ -85,8 +86,16 @@ function PollCardBody(props: {
           {availabilityLine(availability(), new Date())}
         </p>
       </Show>
-      <Show when={!isEditor() && showingResults()}>
-        <PollResults bars={voting.bars()} summary={voting.summary()} />
+      <Show when={voting.hasVoters() && showingResults()}>
+        <PollResults
+          bars={voting.bars()}
+          summary={voting.summary()}
+          viewerId={context.viewer.userId()}
+          renderPerson={context.ui.renderPerson}
+          onOpenResponses={
+            canReadResponses() ? props.onOpenResponses : undefined
+          }
+        />
       </Show>
     </div>
   );

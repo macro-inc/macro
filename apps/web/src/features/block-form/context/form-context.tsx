@@ -212,7 +212,13 @@ export type QuestionTally = {
   questionId: string;
   responses: number;
   buckets: (
-    | { kind: 'option'; optionId: string; count: number }
+    | {
+        kind: 'option';
+        optionId: string;
+        count: number;
+        /** Who chose it, as user ids; absent when the viewer may not see voters. */
+        voters?: string[];
+      }
     | { kind: 'checkbox'; checked: boolean; count: number }
   )[];
 };
@@ -379,6 +385,8 @@ export type FormContext = {
     renderEntityLabel: (entity: FormEntityReference) => JSX.Element;
     /** The other editors who selected something, as the app shows people. */
     renderEditors: (props: EditorsProps) => JSX.Element;
+    /** A person's avatar and name, as the app shows people. */
+    renderPerson: (userId: string) => JSX.Element;
   };
 };
 
