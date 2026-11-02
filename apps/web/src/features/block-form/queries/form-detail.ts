@@ -48,7 +48,7 @@ function toSection(section: FormSectionDetail): FormSection {
       kind: 'questions',
       gateRules: null,
       gateMessage: '',
-      showWhen: null,
+      showWhen: questions.showWhen ?? null,
       bookingTarget: null,
       questions: questions.questions.map((question) => ({
         id: question.id,
@@ -158,7 +158,7 @@ export function toFormLayout(layout: WireFormLayout): FormLayout {
           kind: 'questions',
           gateRules: null,
           gateMessage: '',
-          showWhen: null,
+          showWhen: questions.showWhen ?? null,
           bookingTarget: null,
           questions: questions.questions.map((question) => ({
             id: question.id,

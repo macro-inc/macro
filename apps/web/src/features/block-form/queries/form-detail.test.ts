@@ -102,6 +102,68 @@ it('reads the shared layout document as the builder edits it, and writes it back
   expect(toLayoutDocument(layout)).toEqual(document);
 });
 
+it('reads the condition a section is shown on and writes it back, leaving it out of a section always shown', () => {
+  const document = {
+    sections: [
+      {
+        kind: 'questions' as const,
+        id: 'about',
+        title: 'About you',
+        description: '',
+        questions: [
+          {
+            id: 'q-team',
+            column: 'column-team',
+            helpText: '',
+            required: true,
+            widget: 'choice' as const,
+          },
+        ],
+      },
+      {
+        kind: 'questions' as const,
+        id: 'contractors',
+        title: 'Your agency',
+        description: '',
+        showWhen: {
+          conjunction: 'and' as const,
+          conditions: [
+            {
+              kind: 'condition' as const,
+              column: 'column-team',
+              test: {
+                kind: 'options' as const,
+                operator: 'isAnyOf' as const,
+                options: ['option-contractor'],
+              },
+            },
+          ],
+        },
+        questions: [],
+      },
+    ],
+  };
+  const layout = toFormLayout(document);
+  expect(layout.sections.map((section) => section.showWhen)).toEqual([
+    null,
+    {
+      conjunction: 'and',
+      conditions: [
+        {
+          kind: 'condition',
+          column: 'column-team',
+          test: {
+            kind: 'options',
+            operator: 'isAnyOf',
+            options: ['option-contractor'],
+          },
+        },
+      ],
+    },
+  ]);
+  expect(toLayoutDocument(layout)).toEqual(document);
+});
+
 describe('the booking step', () => {
   const form = {
     id: 'form-1',
