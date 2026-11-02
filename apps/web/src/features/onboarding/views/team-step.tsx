@@ -1,4 +1,5 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import { ToggleSwitch } from '@ui';
 import { createMemo, Match, Show, Switch } from 'solid-js';
 import { ContinueButton, SkipButton } from '../components/controls';
 import {
@@ -126,7 +127,24 @@ function TeamForm(props: {
         onEmailChange={form.setSlot}
         onRemoveEmail={form.removeSlot}
         onAddEmail={form.addSlot}
-      />
+      >
+        <Show when={form.domain}>
+          {(domain) => (
+            <ToggleSwitch
+              size="md"
+              class="w-full gap-3 border-t border-edge-muted pt-6"
+              controlClass="shrink-0"
+              checked={form.allowDomainJoin()}
+              onChange={form.setAllowDomainJoin}
+              label={
+                <span class="text-sm text-ink">
+                  Allow @{domain()} emails to join
+                </span>
+              }
+            />
+          )}
+        </Show>
+      </TeamSetupFields>
       <ContinueButton
         label={
           props.finishing
@@ -140,10 +158,13 @@ function TeamForm(props: {
         disabled={!form.canCreate() || props.finishing}
         onClick={() => fireAndForget(form.create(), 'onboarding')}
       />
-      <SkipButton
-        disabled={form.pending() || props.finishing}
-        onClick={props.onSkip}
-      />
+      {/* A work domain always gets a team; only personal addresses may skip. */}
+      <Show when={!form.domain}>
+        <SkipButton
+          disabled={form.pending() || props.finishing}
+          onClick={props.onSkip}
+        />
+      </Show>
     </div>
   );
 }

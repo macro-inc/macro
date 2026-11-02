@@ -1,6 +1,6 @@
 {
   "db_name": "PostgreSQL",
-  "query": "\n            INSERT INTO team (id, name, slug, owner_id, seat_count, subscription_id, paying)\n            VALUES ($1, $2, $3, $4, 1, $5, $6)\n            RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites,\n                default_link_share as \"default_link_share: LinkShare\",\n                language as \"language: Language\"\n            ",
+  "query": "\n            INSERT INTO team (\n                id, name, slug, owner_id, seat_count, subscription_id, paying, auto_join_domain\n            )\n            VALUES ($1, $2, $3, $4, 1, $5, $6, $7)\n            RETURNING id, name, slug, owner_id, enterprise, allow_non_admin_invites,\n                auto_join_domain,\n                default_link_share as \"default_link_share: LinkShare\",\n                language as \"language: Language\"\n            ",
   "describe": {
     "columns": [
       {
@@ -35,11 +35,16 @@
       },
       {
         "ordinal": 6,
-        "name": "default_link_share: LinkShare",
+        "name": "auto_join_domain",
         "type_info": "Text"
       },
       {
         "ordinal": 7,
+        "name": "default_link_share: LinkShare",
+        "type_info": "Text"
+      },
+      {
+        "ordinal": 8,
         "name": "language: Language",
         "type_info": "Text"
       }
@@ -51,7 +56,8 @@
         "Varchar",
         "Text",
         "Text",
-        "Bool"
+        "Bool",
+        "Text"
       ]
     },
     "nullable": [
@@ -62,8 +68,9 @@
       false,
       false,
       true,
+      true,
       true
     ]
   },
-  "hash": "de215a50bb11bfc6aba4c44cc351073edac7e411ff471ddda100fceac1b3142d"
+  "hash": "216722678439bc75d580745e8c5c229c60c8e88934e8725bc1fb61c0321e261e"
 }
