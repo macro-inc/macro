@@ -1175,8 +1175,8 @@ specifications, release, reset and disposal invalidate retention. Older
 installed binaries omit the token and keep receiving full requests. Empty record
 selections fetch only the current revision, with no unused fragment.
 
-`graphql_cache.ipc.request` uses `Telemetry.perfSpan` to record command and
-outcome under the performance sampler. The webview does not re-encode read
+`graphql_cache.ipc.request` is a `perf`-class span (`sampling: 'perf'`) that
+records command and outcome. The webview does not re-encode read
 arguments to count bytes or create spans for notification callbacks.
 `graphql_cache.ipc.notification` in the native emitter measures serialization and
 emission, recording the single serialized payload's byte count. Native read, watch,

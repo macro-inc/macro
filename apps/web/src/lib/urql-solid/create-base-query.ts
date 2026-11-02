@@ -101,7 +101,7 @@ export function createBaseQuery<
           }
         }
         previous = next;
-        const span = Telemetry.perfSpan('urql.reconcile');
+        const span = Telemetry.span('urql.reconcile', { sampling: 'perf' });
         try {
           setState(reconcile(reconciled));
         } finally {

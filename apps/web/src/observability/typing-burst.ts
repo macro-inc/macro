@@ -31,7 +31,7 @@ type Burst = {
 
 /** One sampled owner for edit bursts; no content, per-key spans or idle loop. */
 export function startTypingBurstTelemetry(): () => void {
-  if (!Telemetry.config.perfSampled) return () => {};
+  if (!Telemetry.config.sampled('perf')) return () => {};
   let burst: Burst | undefined;
   let key: { event: KeyboardEvent; cursor: number } | undefined;
   const close = debounce(

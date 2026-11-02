@@ -999,9 +999,9 @@ admission) are in the [startup bundle rule](../../.agents/rules/web/startup-bund
   (the universal-input browser suite checks the exported traces).
 - Cancel the form-submit measurement on teardown but let its in-flight save
   finish; late completion must not scroll or measure another view.
-- Runtime resource samples and typing bursts use the session perf decision and
-  the shared UI-operation observer: no second observer, no per-key frame
-  sampling, no listeners in unsampled sessions. Typing surfaces come from
+- Runtime resource samples and typing bursts use the `perf` class decision
+  (`Telemetry.config.sampled('perf')`) and the shared UI-operation observer: no
+  second observer, no per-key frame sampling, no listeners for unsampled users. Typing surfaces come from
   static `data-input-surface` categories on editor/field owners, never caller
   labels.
 - Keep record names, addresses, answers and query text out of attributes.

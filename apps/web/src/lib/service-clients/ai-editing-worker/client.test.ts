@@ -19,7 +19,7 @@ vi.mock('@service-storage/client', () => ({
   getDocumentPermissionToken: permissionToken,
 }));
 vi.mock('@macro-inc/observability', () => ({
-  Telemetry: { clientSpan: () => span },
+  Telemetry: { span: () => span },
 }));
 
 const state = useAiUsageLimitState();
