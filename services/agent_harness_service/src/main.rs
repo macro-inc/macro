@@ -769,6 +769,7 @@ async fn run() -> anyhow::Result<()> {
             cognition: tool_context.cognition_tool_context.service.clone(),
             reviews: reviews_cell.clone(),
             gate: owner_tool_gate.clone(),
+            app_url: macro_service_urls::AppServiceUrl::new()?.as_str().into(),
         },
     );
     // One connector for the agent and the telemetry catalog. It pools each
