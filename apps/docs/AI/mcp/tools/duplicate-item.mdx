@@ -1,18 +1,18 @@
 ---
 title: DuplicateItem
 description: >-
-  Make a copy of a document (including a task), owned by the user, as the
-  Duplicate action in the app does.
+  Make a copy of a document (including a task) or a database, owned by the user,
+  as the Duplicate action in the app does.
 ---
 
 # DuplicateItem
 
-Make a copy of a document (including a task), owned by the user, as the Duplicate action in the app does. Requires view access to the original. Returns the copy's id.
+Make a copy of a document (including a task) or a database, owned by the user, as the Duplicate action in the app does. A database copy has every table, column, view and row; its sharing, forms and history stay with the original. Requires view access to the original. Returns the copy's id.
 
 ## Parameters
 
 | Parameter | Type | Required | Description |
 | --- | --- | --- | --- |
-| `entityType` | `"document"` | Yes | The kind of item to duplicate. |
+| `entityType` | `"document"` \| `"database"` | Yes | The kind of item to duplicate. |
 | `entityId` | string | Yes | The id of the item to duplicate. |
-| `name` | string | No | Name for the copy of a document. Omit to use "\<original name> copy". |
+| `name` | string | No | Name for the copy. Omit to use "\<original name> copy". |
