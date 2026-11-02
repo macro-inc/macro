@@ -12,8 +12,10 @@ type ActiveGraphqlSoupQuery = {
   refresh: () => Promise<void>;
   /** Only refresh this reader for its matching mutation, never for broad Soup work. */
   target?: () => GraphqlSoupRefreshTarget;
-  /** The REST-shaped filter body, for refreshes scoped to matching lists. */
+  /** REST-shaped filters with optional sort/group inputs for scoped list refreshes. */
   body?: () => unknown;
+  /** The normalized cache keeps this list's rows and membership current. */
+  cacheMaintained?: () => boolean;
 };
 
 const activeQueries = new Set<ActiveGraphqlSoupQuery>();
@@ -66,31 +68,42 @@ async function refreshAfter(
 const revalidationSources = new Set<{
   queries: () => readonly QueryRevalidation[];
   client?: () => Pick<Client, 'query'>;
+  cacheMaintained?: () => boolean;
 }>();
 
 /** Each reader supplies its enabled, loaded pages for durable mutation replay. */
 export function registerGraphqlSoupRevalidations(
   queries: () => readonly QueryRevalidation[],
-  client?: () => Pick<Client, 'query'>
+  client?: () => Pick<Client, 'query'>,
+  /** The normalized cache keeps these pages current (see FE-58). */
+  cacheMaintained?: () => boolean
 ): () => void {
-  const source = { queries, client };
+  const source = { queries, client, cacheMaintained };
   revalidationSources.add(source);
   return () => revalidationSources.delete(source);
 }
 
-/** Snapshot query descriptors without fetching or waiting on the cache. */
+/** Snapshot query descriptors without fetching or waiting on the cache.
+ * `unmaintainedOnly` keeps the pages the cache cannot keep current: the only
+ * ones a write that updates the cache still has to read again. */
 export function getActiveGraphqlSoupRevalidations(
-  client?: Pick<Client, 'query'>
+  client?: Pick<Client, 'query'>,
+  options: { unmaintainedOnly?: boolean } = {}
 ): QueryRevalidation[] {
   const queries = new Map<number, QueryRevalidation>();
   for (const source of revalidationSources) {
     if (client && source.client && source.client() !== client) continue;
+    if (options.unmaintainedOnly && source.cacheMaintained?.()) continue;
     for (const query of source.queries()) {
       queries.set(createRequest(query.document, query.variables).key, query);
     }
   }
   return [...queries.values()];
 }
+
+/** The pages a write that updates the normalized cache still reads again. */
+export const getUnmaintainedGraphqlSoupRevalidations = () =>
+  getActiveGraphqlSoupRevalidations(undefined, { unmaintainedOnly: true });
 
 /** Registers a mounted GraphQL Soup query for mutation-driven revalidation. */
 export function registerActiveGraphqlSoupQuery(
@@ -108,12 +121,15 @@ export async function refreshActiveGraphqlSoupQueries(
   options: {
     throwOnError?: boolean;
     target?: GraphqlSoupRefreshTarget;
-    /** Only refresh list readers whose filter body matches. */
+    /** Only refresh list readers whose filters or sort/group inputs match. */
     where?: (body: unknown) => boolean;
+    /** Skip lists the cache keeps current: the write already updated them. */
+    unmaintainedOnly?: boolean;
   } = {}
 ): Promise<void> {
   const applicable = (query: ActiveGraphqlSoupQuery) => {
     if (!query.isEnabled()) return false;
+    if (options.unmaintainedOnly && query.cacheMaintained?.()) return false;
     if (options.where && !options.where(query.body?.())) return false;
     if (!query.target) return true;
     const target = query.target();

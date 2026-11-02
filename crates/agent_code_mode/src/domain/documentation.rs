@@ -3,28 +3,45 @@ use cognition::domain::{Cognition, DecisionRequest};
 use macro_user_id::user_id::MacroUserIdStr;
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
-use std::{sync::Arc, time::Duration};
+use std::collections::HashMap;
+use std::sync::{Arc, LazyLock};
+use std::time::Duration;
 use tokio_util::sync::CancellationToken;
 
-/// Public Markdown documentation generated from the real SDK by TypeDoc.
+/// One SDK entity, generated from the real SDK by TypeDoc.
 #[derive(Clone, Deserialize, Serialize, JsonSchema)]
 pub struct SdkDocumentation {
     /// SDK namespace.
     pub name: String,
     /// Compact capability summary.
     pub description: String,
-    /// API reference Markdown; omitted in a compact catalog.
-    pub documentation: Option<String>,
-    /// TypeDoc namespace reference used when the full section exceeds the turn budget.
-    #[serde(default, skip_serializing)]
-    #[schemars(skip)]
-    pub overview: Option<String>,
+    /// Every class, method and type the entity declares, one line each and
+    /// named by the symbol `ReadCodeDocs` reads; omitted in a compact catalog.
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub index: Option<String>,
 }
 
-/// Immutable SDK documentation supplied at build time.
-pub fn sdk_documentation() -> Vec<SdkDocumentation> {
+/// The SDK reference as generated: an index per entity, and each symbol's own
+/// reference by name (`Task`, `Task.update`, `storage.Message`).
+#[derive(Deserialize)]
+struct Generated {
+    entities: Vec<SdkDocumentation>,
+    symbols: HashMap<String, String>,
+}
+
+static GENERATED: LazyLock<Generated> = LazyLock::new(|| {
     serde_json::from_str(include_str!("documentation.json"))
         .expect("generated SDK documentation is valid")
+});
+
+/// Every SDK entity with its index, supplied at build time.
+pub fn sdk_documentation() -> &'static [SdkDocumentation] {
+    &GENERATED.entities
+}
+
+/// The reference for one symbol an entity index or another reference names.
+pub fn symbol_reference(symbol: &str) -> Option<&'static str> {
+    GENERATED.symbols.get(symbol).map(String::as_str)
 }
 
 /// How the Jev relevance pass ended.
@@ -105,15 +122,7 @@ async fn rank_entities<'a>(
     )
 }
 
-/// The full reference when it fits `remaining` bytes, else the namespace overview.
-fn fitting_reference(doc: &SdkDocumentation, remaining: usize) -> Option<&String> {
-    [doc.documentation.as_ref(), doc.overview.as_ref()]
-        .into_iter()
-        .flatten()
-        .find(|text| text.len() <= remaining)
-}
-
-/// Expand relevant SDK docs in one Jev call; failures retain the compact index.
+/// Load relevant entity indexes in one Jev call; failures retain the compact catalog.
 /// The byte cap bounds prompt growth; it is not an exact tokenizer count.
 #[tracing::instrument(skip_all, fields(selected = tracing::field::Empty, bytes = tracing::field::Empty, selection_status = tracing::field::Empty, selected_entities = tracing::field::Empty))]
 pub async fn select_documentation(
@@ -124,16 +133,16 @@ pub async fn select_documentation(
 ) -> String {
     let docs = sdk_documentation();
     let mut output = String::from(
-        "\n<macro_sdk>\nUse the real Macro SDK in ExecuteCode. API reference sections below are already loaded documentation: execute directly when they cover the task. Use DescribeCodeTools only for missing methods, options, enum values or workflow guidance; do not request a section again merely to confirm it. The entity index alone does not contain method signatures.\nAvailable entities:\n",
+        "\n<macro_sdk>\nUse the real Macro SDK in ExecuteCode. Entity indexes below list each class, method and type by symbol, with method signatures. Read the symbols a program needs with ReadCodeDocs for their parameters, options and return types, all together in one call, unless their reference is already in context. Use DescribeCodeTools for the index of an entity not loaded here.\nAvailable entities:\n",
     );
-    for doc in &docs {
+    for doc in docs {
         output.push_str(&format!("{}: {}\n", doc.name, doc.description));
     }
     let started = tokio::time::Instant::now();
     let (ranked, status) = rank_entities(
         user,
         prompt,
-        &docs,
+        docs,
         cognition,
         Duration::from_millis(1000),
         cancel,
@@ -141,9 +150,10 @@ pub async fn select_documentation(
     .await;
     let mut selected_entities = Vec::new();
     for doc in ranked.into_iter().take(4) {
-        let remaining = (48 * 1024_usize).saturating_sub(output.len() + doc.name.len() + 32);
-        if let Some(text) = fitting_reference(doc, remaining) {
-            output.push_str(&format!("\n### {}\n{}\n", doc.name, text));
+        let remaining = (48 * 1024_usize).saturating_sub(output.len() + 1);
+        if let Some(index) = doc.index.as_ref().filter(|index| index.len() <= remaining) {
+            output.push('\n');
+            output.push_str(index);
             selected_entities.push(doc.name.as_str());
         }
     }
@@ -162,25 +172,24 @@ pub async fn select_documentation(
     output
 }
 
-/// Budget for one task-documentation tool result. Claude Code moved an 87K
+/// Budget for one documentation tool result. Claude Code moved an 87K
 /// character response out of context into a file; reference Markdown tokenizes
 /// densely, so stay well below that.
-const TASK_DOCUMENTATION_BYTES: usize = 32 * 1024;
+const DOCUMENTATION_BYTES: usize = 32 * 1024;
 
-/// Every SDK reference Jev considers relevant to a described task.
+/// Every SDK entity Jev considers relevant to a described task.
 #[derive(Clone, Serialize, JsonSchema)]
 pub struct TaskDocumentation {
-    /// How selection ended; anything but selected means no entity was expanded.
+    /// How selection ended; anything but selected means no entity was chosen.
     pub status: SelectionStatus,
-    /// Relevant entities, most relevant first, each with its full reference or,
-    /// when that does not fit, its namespace overview.
+    /// Relevant entities, most relevant first, each with its index.
     pub entities: Vec<SdkDocumentation>,
     /// Relevant entities left out for size; request them by name.
     pub omitted: Vec<String>,
 }
 
-/// Select references for a task the agent describes, for clients that never
-/// show the server the user's request.
+/// Select entity indexes for a task the agent describes, for clients that
+/// never show the server the user's request.
 #[tracing::instrument(name = "code_mode.task_documentation", skip_all, fields(selected = tracing::field::Empty, omitted = tracing::field::Empty, bytes = tracing::field::Empty, selection_status = tracing::field::Empty, selected_entities = tracing::field::Empty))]
 pub async fn documentation_for_task(
     user: &MacroUserIdStr<'static>,
@@ -191,21 +200,17 @@ pub async fn documentation_for_task(
     let docs = sdk_documentation();
     // The agent is waiting on this call, unlike the per-turn prompt path.
     let (ranked, status) =
-        rank_entities(user, task, &docs, cognition, Duration::from_secs(5), cancel).await;
+        rank_entities(user, task, docs, cognition, Duration::from_secs(5), cancel).await;
     let mut bytes = 0;
     let mut entities = Vec::new();
     let mut omitted = Vec::new();
     for doc in ranked {
-        match fitting_reference(doc, TASK_DOCUMENTATION_BYTES.saturating_sub(bytes)) {
-            Some(text) => {
-                bytes += text.len();
-                entities.push(SdkDocumentation {
-                    documentation: Some(text.clone()),
-                    overview: None,
-                    ..doc.clone()
-                });
-            }
-            None => omitted.push(doc.name.clone()),
+        let size = doc.index.as_ref().map_or(0, String::len);
+        if bytes + size <= DOCUMENTATION_BYTES {
+            bytes += size;
+            entities.push(doc.clone());
+        } else {
+            omitted.push(doc.name.clone());
         }
     }
     let span = tracing::Span::current();
@@ -226,6 +231,60 @@ pub async fn documentation_for_task(
         entities,
         omitted,
     }
+}
+
+/// One symbol's reference.
+#[derive(Clone, Serialize, JsonSchema)]
+pub struct SymbolReference {
+    /// The symbol as requested.
+    pub symbol: String,
+    /// Its TypeDoc reference; symbols it names in backticks can be read too.
+    pub reference: String,
+}
+
+/// The references for requested symbols, within one result's budget.
+#[derive(Clone, Serialize, JsonSchema)]
+pub struct SymbolReferences {
+    /// References in request order.
+    pub references: Vec<SymbolReference>,
+    /// Requested symbols left out for size; request them again.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub omitted: Vec<String>,
+    /// Requested symbols no index or reference names.
+    #[serde(skip_serializing_if = "Vec::is_empty")]
+    pub unknown: Vec<String>,
+}
+
+/// The references for `symbols`, in order, until they fill the budget.
+#[tracing::instrument(name = "code_mode.read_symbols", skip_all, fields(requested = symbols.len(), read = tracing::field::Empty, unknown = tracing::field::Empty, bytes = tracing::field::Empty))]
+pub fn read_symbols(symbols: &[String]) -> SymbolReferences {
+    let mut bytes = 0;
+    let mut result = SymbolReferences {
+        references: Vec::new(),
+        omitted: Vec::new(),
+        unknown: Vec::new(),
+    };
+    for symbol in symbols {
+        let Some(reference) = symbol_reference(symbol.trim()) else {
+            result.unknown.push(symbol.clone());
+            continue;
+        };
+        // The first reference is always returned; none is larger than the budget.
+        if !result.references.is_empty() && bytes + reference.len() > DOCUMENTATION_BYTES {
+            result.omitted.push(symbol.clone());
+            continue;
+        }
+        bytes += reference.len();
+        result.references.push(SymbolReference {
+            symbol: symbol.clone(),
+            reference: reference.to_owned(),
+        });
+    }
+    let span = tracing::Span::current();
+    span.record("read", result.references.len());
+    span.record("unknown", result.unknown.len());
+    span.record("bytes", bytes);
+    result
 }
 
 #[cfg(test)]

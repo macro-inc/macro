@@ -2,11 +2,14 @@
 use crate::error::AgentError;
 use crate::hook::{BridgeInputs, RegisterFn, ToolLoads, ToolRouter, UserToolFinisher};
 use crate::model::metering::MeteringContext;
+use crate::model::metering_http::MeteredHttpClient;
 use crate::model::router::{ModelRouter, ProviderAgent};
+use crate::model::types::Model;
 use crate::model::{ModelSpeed, PredefinedModel, ReasoningEffort};
 use crate::stream::ChatCompletionStream;
 use crate::telemetry::GenAiContext;
 use crate::tool_adapter::DynToolSetAdapter;
+use crate::tool_result_limit::ToolResultLimit;
 use ai_toolset::{RequestContext, SearchableTool, ToolLoader, ToolSet as AiToolSet};
 use ai_usage::{UsageContext, UsageRecorder};
 use genai_telemetry::ContentPolicy;
@@ -19,18 +22,21 @@ use tokio_util::sync::CancellationToken;
 use tracing::Instrument as _;
 
 const DEFAULT_MAX_TURNS: usize = 200;
-const DEFAULT_MAX_TOKENS: u64 = 16_000;
 
 /// A session's system prompt, optionally split where the part every session
-/// of the agent repeats byte for byte ends.
+/// of the agent repeats byte for byte ends, with an optional tail that
+/// changes every turn.
 ///
 /// Anthropic caches the shared part apart from the per-session rest
 /// (instructions, memory), so a session reads the shared part back even when
-/// its rest is new. Other providers receive the two joined.
+/// its rest is new. The turn's part comes last, after anything the loop adds
+/// (the model id, connected integrations), so a change to it costs only what
+/// follows it. Other providers receive the parts joined.
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct SystemPrompt {
     shared: Option<String>,
     rest: String,
+    turn: String,
 }
 
 impl SystemPrompt {
@@ -40,7 +46,15 @@ impl SystemPrompt {
         Self {
             shared: Some(shared.into()),
             rest: rest.into(),
+            turn: String::new(),
         }
+    }
+
+    /// This prompt with `turn`, the part only this turn sends, at its end.
+    #[must_use]
+    pub fn with_turn(mut self, turn: impl Into<String>) -> Self {
+        self.turn = turn.into();
+        self
     }
 
     /// The shared part, when the prompt is split.
@@ -48,9 +62,9 @@ impl SystemPrompt {
         self.shared.as_deref()
     }
 
-    /// The per-session part, or the whole prompt when it is not split.
-    pub fn rest(&self) -> &str {
-        &self.rest
+    /// Everything after the shared part: the session's own, then the turn's.
+    pub fn rest(&self) -> String {
+        format!("{}{}", self.rest, self.turn)
     }
 
     /// The whole prompt as one string.
@@ -67,16 +81,21 @@ impl std::fmt::Display for SystemPrompt {
     fn fmt(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         write!(
             formatter,
-            "{}{}",
+            "{}{}{}",
             self.shared.as_deref().unwrap_or_default(),
-            self.rest
+            self.rest,
+            self.turn
         )
     }
 }
 
 impl From<String> for SystemPrompt {
     fn from(rest: String) -> Self {
-        Self { shared: None, rest }
+        Self {
+            shared: None,
+            rest,
+            turn: String::new(),
+        }
     }
 }
 
@@ -105,9 +124,11 @@ pub struct AgentLoop {
     reasoning_effort: Option<ReasoningEffort>,
     speed: ModelSpeed,
     max_turns: usize,
-    max_tokens: u64,
+    /// The output cap per model response; `None` asks for the model's maximum.
+    max_tokens: Option<u64>,
     recorder: Arc<dyn UsageRecorder>,
     user_tool_finisher: Option<UserToolFinisher>,
+    result_limit: Option<ToolResultLimit>,
     /// The conversation (session) sessions belong to, for telemetry.
     conversation_id: Option<String>,
     /// The agent name spans carry; defaults to the usage context's feature.
@@ -115,6 +136,11 @@ pub struct AgentLoop {
     /// Whether this loop enriches the runtime's GenAI spans (see
     /// [`Self::with_genai_telemetry`]).
     genai_telemetry: bool,
+    /// See [`Self::with_streamed_tool_calls`].
+    stream_tool_calls: bool,
+    /// The router this loop's model calls use instead of the shared one, when
+    /// a caller-supplied key pays for them (see [`Self::with_provider_api_key`]).
+    router: Option<ModelRouter<MeteredHttpClient>>,
 }
 
 impl AgentLoop {
@@ -132,13 +158,32 @@ impl AgentLoop {
             reasoning_effort: None,
             speed: ModelSpeed::Standard,
             max_turns: DEFAULT_MAX_TURNS,
-            max_tokens: DEFAULT_MAX_TOKENS,
+            max_tokens: None,
             recorder,
             user_tool_finisher: None,
+            result_limit: None,
             conversation_id: None,
             agent_name: None,
             genai_telemetry: true,
+            stream_tool_calls: false,
+            router: None,
         }
+    }
+
+    /// Run the model's calls on `api_key` instead of the deployment's key for
+    /// its provider. Call after [`Self::with_model`]: the key is for the
+    /// selected model's provider, which must be native Anthropic or OpenAI.
+    ///
+    /// Fails rather than falling back when the model does not route, since a
+    /// fallback would run on the deployment's key while the usage is recorded
+    /// as the caller's. Only the loop's own model calls use the key; tools
+    /// that call models themselves still use the deployment's keys.
+    pub fn with_provider_api_key(mut self, api_key: &str) -> Result<Self, AgentError> {
+        let provider = Model::try_from(self.model.as_str())?.provider().to_owned();
+        let router = ModelRouter::shared()?.with_provider_api_key(&provider, api_key)?;
+        router.route(&self.model)?;
+        self.router = Some(router);
+        Ok(self)
     }
 
     /// Select a supported inference speed without changing the model or effort.
@@ -166,6 +211,14 @@ impl AgentLoop {
         self
     }
 
+    /// Cut tool results too long for the model to read whole, keeping them in
+    /// `limit`. The host must offer [`crate::ReadToolResult`] over the same
+    /// `limit`, which the note on a cut result tells the model to call.
+    pub fn with_tool_result_limit(mut self, limit: ToolResultLimit) -> Self {
+        self.result_limit = Some(limit);
+        self
+    }
+
     /// Override the model.
     ///
     /// Accepts any stringifiable id — an [`AgentModel`] (backend) or a raw
@@ -190,9 +243,10 @@ impl AgentLoop {
         self
     }
 
-    /// Override the default max output tokens.
+    /// Cap each model response at `n` output tokens instead of the model's
+    /// maximum.
     pub fn with_max_tokens(mut self, n: u64) -> Self {
-        self.max_tokens = n;
+        self.max_tokens = Some(n);
         self
     }
 
@@ -229,6 +283,24 @@ impl AgentLoop {
         self
     }
 
+    /// Report each tool call as soon as the model names it, then its
+    /// arguments as they stream ([`StreamPart::ToolCallStarted`],
+    /// [`StreamPart::ToolCallArgs`]), before the finished
+    /// [`StreamPart::ToolCall`]. Off by default: a host that only renders
+    /// finished calls has nothing to do with the extra parts.
+    ///
+    /// A streamed call uses the provider id available on its first delta,
+    /// or rig's correlation id when none is available. Its final invocation
+    /// and result keep that id so the host updates the existing row.
+    ///
+    /// [`StreamPart::ToolCallStarted`]: crate::StreamPart::ToolCallStarted
+    /// [`StreamPart::ToolCallArgs`]: crate::StreamPart::ToolCallArgs
+    /// [`StreamPart::ToolCall`]: crate::StreamPart::ToolCall
+    pub fn with_streamed_tool_calls(mut self) -> Self {
+        self.stream_tool_calls = true;
+        self
+    }
+
     /// Start a new streaming session.
     ///
     /// `toolset` is the combined tool set (static + MCP) for this request.
@@ -255,9 +327,11 @@ impl AgentLoop {
             system_prompt,
             usage_ctx,
             |handle, prompt, tool_search, max_turns, max_tokens, telemetry| {
-                let routed = ModelRouter::shared()
-                    .expect("failed to initialize model router")
-                    .route_or_default(&self.model);
+                let router = match &self.router {
+                    Some(router) => router,
+                    None => ModelRouter::shared().expect("failed to initialize model router"),
+                };
+                let routed = router.route_or_default(&self.model);
                 telemetry.set_model(routed.provider(), routed.model_name());
                 routed.into_agent(
                     self.reasoning_effort,
@@ -290,7 +364,7 @@ impl AgentLoop {
             &SystemPrompt,
             &ToolSearch,
             usize,
-            u64,
+            Option<u64>,
             GenAiContext,
         ) -> ProviderAgent,
     ) -> Session
@@ -443,6 +517,8 @@ impl AgentLoop {
                 register_loaded,
                 tool_loads: tool_search.loads.clone(),
                 user_tool_finisher: self.user_tool_finisher.clone(),
+                stream_tool_calls: self.stream_tool_calls,
+                result_limit: self.result_limit.clone(),
             },
             recorder: self.recorder.clone(),
             usage_ctx,

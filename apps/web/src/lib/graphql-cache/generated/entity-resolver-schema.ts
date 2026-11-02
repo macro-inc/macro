@@ -2,6 +2,13 @@
 
 export const entityResolverSchema = {
   CompleteMutationRoot: {
+    createSavedView: {
+      targets: ['GraphqlSavedView'],
+      argumentPaths: [
+        ['input', 'id'],
+        ['input', 'sharedTeamId'],
+      ],
+    },
     markEmailThreadSeen: {
       targets: ['GraphqlSoupEmailThread'],
       argumentPaths: [['input', 'threadId']],
@@ -45,6 +52,13 @@ export const entityResolverSchema = {
       targets: ['GraphqlSoupInitiative'],
       argumentPaths: [['initiativeId']],
     },
+    updateSavedView: {
+      targets: ['GraphqlSavedView'],
+      argumentPaths: [
+        ['input', 'id'],
+        ['input', 'sharing', 'teamId'],
+      ],
+    },
   },
   GraphqlUser: {
     agentSession: {
@@ -58,6 +72,10 @@ export const entityResolverSchema = {
     initiative: {
       targets: ['GraphqlSoupInitiative'],
       argumentPaths: [['initiativeId']],
+    },
+    savedView: {
+      targets: ['GraphqlSavedView'],
+      argumentPaths: [['id']],
     },
     soupEntity: {
       targets: [
@@ -86,6 +104,7 @@ export type GeneratedEntityResolverSchema = typeof entityResolverSchema;
 export type GeneratedEntityResolverTarget =
   | 'GraphqlChannelActivity'
   | 'GraphqlProperty'
+  | 'GraphqlSavedView'
   | 'GraphqlSoupAgentSession'
   | 'GraphqlSoupCalendarEvent'
   | 'GraphqlSoupCall'
@@ -102,12 +121,16 @@ export type GeneratedEntityResolverTarget =
   | 'GraphqlSoupProject'
   | 'GraphqlSoupReminder';
 export type GeneratedEntityResolverArgumentPath =
+  | readonly ['id']
   | readonly ['initiativeId']
   | readonly ['input', 'channelId']
   | readonly ['input', 'entityId']
+  | readonly ['input', 'id']
   | readonly ['input', 'labelId']
   | readonly ['input', 'messageId']
   | readonly ['input', 'propertyDefinitionId']
+  | readonly ['input', 'sharedTeamId']
+  | readonly ['input', 'sharing', 'teamId']
   | readonly ['input', 'threadId']
   | readonly ['input', 'value', 'entityReference', 'specificMessageId']
   | readonly ['input', 'value', 'selectOption']

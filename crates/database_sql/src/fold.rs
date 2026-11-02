@@ -19,7 +19,7 @@ use std::collections::{HashMap, HashSet};
 
 use chrono::{DateTime, Utc};
 use models_databases::position::Position;
-use models_databases::{Formula, OptionId, RowId};
+use models_databases::{DateRange, Formula, OptionId, RowId};
 use serde::{Deserialize, Serialize};
 use specta::Type;
 use uuid::Uuid;
@@ -46,6 +46,8 @@ pub enum Cell {
     Bool(bool),
     /// A date-time.
     Date(DateTime<Utc>),
+    /// A span from one date-time to another.
+    DateRange(DateRange),
     /// The selected option ids; one for single-select columns.
     Options(Vec<OptionId>),
     /// The referenced entity ids; one for single-valued columns.
@@ -70,6 +72,7 @@ pub(crate) enum CellKey {
     Number(u64),
     Bool(bool),
     Date(DateTime<Utc>),
+    DateRange(DateRange),
     Options(Vec<OptionId>),
     Entities(Vec<String>),
     Row(RowId),
@@ -83,6 +86,7 @@ impl From<&Cell> for CellKey {
             Cell::Number(number) => CellKey::Number(number.to_bits()),
             Cell::Bool(checked) => CellKey::Bool(*checked),
             Cell::Date(date) => CellKey::Date(*date),
+            Cell::DateRange(range) => CellKey::DateRange(*range),
             Cell::Options(ids) => CellKey::Options(ids.clone()),
             Cell::Entities(ids) => CellKey::Entities(ids.clone()),
             Cell::Row(id) => CellKey::Row(*id),
@@ -136,11 +140,12 @@ pub fn fold_relations(
 /// Give the rows of relation `index` the cells of its table's derived
 /// columns the plan reads, computed from their other cells.
 fn derive(catalog: &Catalog, plan: &Plan, index: usize, rows: &mut [Row]) {
-    let Some(table) = catalog
-        .tables
-        .iter()
-        .find(|table| table.id == plan.relations[index].relation.table)
-    else {
+    let Some(table) = plan.relations.get(index).and_then(|relation| {
+        catalog
+            .tables
+            .iter()
+            .find(|table| table.id == relation.relation.table)
+    }) else {
         return;
     };
     let key = |definition: Uuid| column_key(index, definition);
@@ -180,7 +185,7 @@ fn fold_joined(catalog: &Catalog, plan: &Plan, rows: Vec<Row>) -> (Table, Vec<Ro
     match &plan.shape {
         Shape::Rows(columns) => {
             let mut rows = rows;
-            sort::rows(catalog, plan, &mut rows);
+            sort::rows(catalog, plan, columns, &mut rows);
             let projected = rows.into_iter().map(|row| {
                 let cells: Vec<Option<Cell>> = columns
                     .iter()

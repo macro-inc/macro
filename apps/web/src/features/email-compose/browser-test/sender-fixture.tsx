@@ -50,6 +50,19 @@ export function SenderFixture() {
           >
             Simulate unavailable aliases
           </button>
+          <button
+            onClick={() =>
+              setFixtureInboxes([
+                {
+                  id: 'owned',
+                  email_address: 'base@example.com',
+                  sendAs: aliases,
+                },
+              ])
+            }
+          >
+            Simulate one inbox with an alias
+          </button>
           <output data-testid="alias-filter">
             {JSON.stringify(fixtureScope)}
           </output>

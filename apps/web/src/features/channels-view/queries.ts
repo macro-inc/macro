@@ -5,7 +5,6 @@ import {
   queryStateFrom,
 } from '@app/features/next-soup/filters/filter-store';
 import { useUserId } from '@core/context/user';
-import { compareDateDesc } from '@core/util/date';
 import { fireAndForget } from '@core/util/fireAndForget';
 import {
   type ChannelEntity,
@@ -19,13 +18,14 @@ import {
   useSoupAstItemsQuery,
 } from '@queries/soup/items';
 import { type Accessor, createEffect, createMemo } from 'solid-js';
+import { sortChannels } from './core/channel-sort';
 import { channelThreadsQueryArgs } from './core/channel-threads-query';
 import type {
   ChannelListSort,
   ChannelsQueryScope,
   ChannelsSortGroup,
 } from './types';
-import { channelHasMessages, isDirectMessage } from './utils';
+import { channelHasMessages, isDirectMessage, isTeamChannel } from './utils';
 
 /** Threads per page the Threads rail reads to find their channels. */
 const THREAD_CHANNELS_PAGE_SIZE = 100;
@@ -66,13 +66,20 @@ export const CHANNELS_QUERY_DEFINITIONS = {
     }),
     matches: channelHasMessages,
   },
+  team_channels: {
+    params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'created_at' },
+    filters: defineQueryFilters({
+      include: { channelType: ['team'], channelIsParticipant: [true] },
+    }),
+    matches: isTeamChannel,
+  },
   channels: {
     params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'created_at' },
     filters: defineQueryFilters({
       include: { channelIsParticipant: [true] },
-      exclude: { channelType: ['direct_message'] },
+      exclude: { channelType: ['direct_message', 'team'] },
     }),
-    matches: (channel) => !isDirectMessage(channel),
+    matches: (channel) => !isDirectMessage(channel) && !isTeamChannel(channel),
   },
   direct_messages: {
     params: { ...CHANNELS_QUERY_PARAMS, sort_method: 'updated_at' },
@@ -217,22 +224,6 @@ export function resolveSelectedChannel(
         isChannelEntity(entity) && entity.id === selectedChannelId
     )
   );
-}
-
-function sortChannels(
-  channels: readonly ChannelEntity[],
-  sort: ChannelListSort
-): ChannelEntity[] {
-  const sortDate = (channel: ChannelEntity) =>
-    sort === 'created_at'
-      ? channel.createdAt
-      : sort === 'viewed_at'
-        ? channel.viewedAt
-        : channel.updatedAt;
-
-  return channels
-    .slice()
-    .sort((left, right) => compareDateDesc(sortDate(left), sortDate(right)));
 }
 
 /**
@@ -381,6 +372,11 @@ export function useChannelsSources(
   sortBy: (group: ChannelsSortGroup) => ChannelListSort
 ): ChannelsSources {
   return {
+    team_channels: useChannelsDataSource(
+      'team_channels',
+      () => enabled('team_channels'),
+      () => sortBy('team_channels')
+    ),
     channels: useChannelsDataSource(
       'channels',
       () => enabled('channels'),

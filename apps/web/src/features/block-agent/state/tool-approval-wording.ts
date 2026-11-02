@@ -24,6 +24,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   CommentOnText: (whose) => `comment on ${whose} documents`,
   ConfigureAgent: (whose) => `change ${whose} agents`,
   ConfigureBot: (whose) => `change ${whose} bots`,
+  ConnectMcpServer: (whose) => `connect an MCP server to ${whose} account`,
   ContentSearch: (whose) => `search ${whose} workspace`,
   CreateBookingLink: (whose) => `create a booking link for ${whose} calendar`,
   CreateBot: (whose) => `create a bot in ${whose} workspace`,
@@ -85,6 +86,9 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   GetTeamAvailability: (whose) => `check availability for ${whose} team`,
   GetThread: (whose) => `read ${whose} email`,
   ImportCompaniesCsv: (whose) => `import companies into ${whose} CRM`,
+  ImportFromLinear: (whose) =>
+    `import a Linear workspace into ${whose} workspace`,
+  ImportFromJira: (whose) => `import a Jira workspace into ${whose} workspace`,
   ImportFromNotion: (whose) =>
     `import a Notion workspace into ${whose} workspace`,
   ImportNotionPage: (whose) => `import a Notion page into ${whose} workspace`,
@@ -137,6 +141,7 @@ const MACRO_TOOLS: Record<MacroToolName, Wording | null> = {
   UpdateAgentSessionSharing: (whose) => `change ${whose} session sharing`,
   ReadAgentSession: (whose) => `read ${whose} agent sessions`,
   ReadChat: (whose) => `read ${whose} chats`,
+  ReadCodeDocs: null,
   ReadCanvas: (whose) => `read ${whose} canvases`,
   RenderCanvas: (whose) => `view ${whose} canvases`,
   ReadContent: (whose) => `read ${whose} documents`,

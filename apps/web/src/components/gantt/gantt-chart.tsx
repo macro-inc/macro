@@ -5,11 +5,13 @@ import {
   onCleanup,
   onMount,
   type ParentProps,
+  Show,
 } from 'solid-js';
 import { createGanttPan } from './create-gantt-pan';
 import { GanttCalendarScene } from './gantt-clip';
 import { HEADER_HEIGHT, useGantt } from './gantt-context';
 import { ganttTicks } from './gantt-date';
+import { GanttHourGrid } from './gantt-hours';
 import { GanttCursorGuide } from './gantt-markers';
 
 export function GanttChart(
@@ -154,7 +156,9 @@ export function GanttChart(
         },
       }}
     >
-      <GridLines />
+      <Show when={gantt.scale() === 'hour'} fallback={<GridLines />}>
+        <GanttHourGrid />
+      </Show>
       <GanttCursorGuide />
       {props.children}
     </Scroll>

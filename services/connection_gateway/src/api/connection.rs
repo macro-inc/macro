@@ -7,6 +7,7 @@ use crate::{
         message::{OutgoingMessage, record_span_error},
         tracking::EntityConnectionExt,
     },
+    service::entity_grants::EntityGrants,
 };
 use anyhow::Result;
 use axum::{
@@ -103,7 +104,14 @@ async fn handle_websocket_connection(
         connection_id: &connection_id,
     };
 
-    let receiver_task = handle_websocket_stream(connection_context, stream, sender.clone()).fuse();
+    crate::service::fanout::connected(&connection_context, &macro_user_id).await;
+
+    let grants = EntityGrants::new(
+        macro_user_id.clone(),
+        user_context.organization_id.map(i64::from),
+    );
+    let receiver_task =
+        handle_websocket_stream(connection_context, stream, sender.clone(), grants).fuse();
 
     tokio::select! {
         res = sender_task => {
@@ -133,6 +141,10 @@ async fn handle_websocket_connection(
             );
         })
         .ok();
+
+    // After remove_connection, so consumers never see "gone" while the
+    // gateway can still route to the socket.
+    crate::service::fanout::disconnected(&connection_context).await;
     drop(last_online_guard);
 }
 
@@ -164,7 +176,7 @@ async fn forwarder(
                 }
                 span
             }
-            OutgoingMessage::Pong => tracing::Span::none(),
+            OutgoingMessage::Pong | OutgoingMessage::Binary(_) => tracing::Span::none(),
         };
         if let OutgoingMessage::Message(message) = &mut message {
             message.trace.clear();

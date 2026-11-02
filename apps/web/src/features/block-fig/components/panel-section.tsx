@@ -1,7 +1,7 @@
 /** A titled section of the design panel, with optional "+" and "−". */
 
-import Minus from '@phosphor/minus.svg';
-import Plus from '@phosphor/plus.svg';
+import Minus from '@icon/system/regular/minus.svg';
+import Plus from '@icon/system/regular/plus.svg';
 import { type JSX, Show } from 'solid-js';
 
 export function Section(props: {

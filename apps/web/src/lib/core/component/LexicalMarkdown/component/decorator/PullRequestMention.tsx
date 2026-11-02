@@ -11,6 +11,10 @@ import {
   useNativeSplitNavigationHandler,
   useSplitNavigationHandler,
 } from '@core/util/useSplitNavigationHandler';
+import OpenIcon from '@icon/system/regular/arrows-out.svg';
+import ChatCircle from '@icon/system/regular/chat-circle.svg';
+import GitMerge from '@icon/system/regular/git-merge.svg';
+import GitPullRequest from '@icon/system/regular/git-pull-request.svg';
 import {
   $isPullRequestMentionNode,
   HISTORIC_TAG,
@@ -19,10 +23,6 @@ import {
   SKIP_DOM_SELECTION_TAG,
   SKIP_SCROLL_INTO_VIEW_TAG,
 } from '@macro-inc/lexical-core';
-import OpenIcon from '@phosphor/arrows-out.svg';
-import ChatCircle from '@phosphor/chat-circle.svg';
-import GitMerge from '@phosphor/git-merge.svg';
-import GitPullRequest from '@phosphor/git-pull-request.svg';
 import { useGithubLinkStatusQuery } from '@queries/auth/github-link';
 import { queryReadyGate } from '@queries/gate';
 import {

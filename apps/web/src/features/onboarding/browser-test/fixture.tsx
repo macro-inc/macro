@@ -132,6 +132,7 @@ function Fixture() {
         <Match when={true}>
           <OnboardingFlowView
             next={params.next}
+            step={params.step}
             checkoutReturn={parseCheckoutReturn(params)}
             onNavigate={(target) => land({ t: 'app', target })}
             onRedirect={(url) => location.assign(url)}

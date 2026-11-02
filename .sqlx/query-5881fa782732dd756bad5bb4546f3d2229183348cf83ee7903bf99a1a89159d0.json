@@ -1,0 +1,16 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            UPDATE import_run\n            SET lease_owner = NULL, lease_expires_at = NOW()\n            WHERE user_id = $1 AND source = $3 AND lease_owner = $2\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Text",
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "5881fa782732dd756bad5bb4546f3d2229183348cf83ee7903bf99a1a89159d0"
+}

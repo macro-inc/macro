@@ -24,19 +24,19 @@ describe('agent import handoff', () => {
     expect(handoff.instructions).not.toContain('CreateImportEntity');
   });
 
-  it('records ledger sources so nothing imports twice', () => {
+  it('uses the reviewed Linear importer', () => {
     const tasks = IMPORT_CATEGORIES.tasks;
     const linear = tasks.providers.find((p) => p.appSlug === 'linear')!;
     const { instructions } = agentImportHandoff(tasks, linear);
-    expect(instructions).toContain('ListImportEntities for source linear');
-    expect(instructions).toContain('CreateImportEntity');
+    expect(instructions).toContain('ImportFromLinear');
+    expect(instructions).not.toContain('CreateImportEntity');
   });
 
-  it('creates tasks as task documents', () => {
+  it('uses the reviewed Jira importer', () => {
     const tasks = IMPORT_CATEGORIES.tasks;
     const jira = tasks.providers.find((p) => p.appSlug === 'jira')!;
     expect(agentImportHandoff(tasks, jira).instructions).toContain(
-      'isTask true'
+      'ImportFromJira'
     );
   });
 });

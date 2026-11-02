@@ -18,7 +18,7 @@ vi.mock('@components/app/split-layout/layout', () => ({
   useSplitLayout: () => ({ openWithSplit: vi.fn() }),
 }));
 vi.mock('@queries/channel/get-or-create-dm', () => ({
-  useGetOrCreateDirectMessageMutation: () => ({ mutate: vi.fn() }),
+  getOrCreateDirectMessage: vi.fn(),
 }));
 vi.mock('@core/user', () => ({
   getDisplayName: () => undefined,

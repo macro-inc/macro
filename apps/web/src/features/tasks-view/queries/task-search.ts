@@ -9,9 +9,11 @@ import type {
   EntityFilters,
   PropertyFilter as SearchPropertyFilter,
 } from '@service-search/generated/models';
+import type { TaskDatePredicate } from '../core/task-due-date';
 import {
   EMPTY_TASK_FACET_CONTEXT,
   getTaskFacetOption,
+  resolveTaskPersonId,
   type TaskFacetContext,
 } from '../filters/task-facets';
 import type { TaskReferenceScope, TaskTab } from '../types';
@@ -33,7 +35,16 @@ const selectedCreators = (
   tab: TaskTab,
   userId: string | undefined
 ): string[] | undefined => {
-  const selected = [...new Set(selection['created-by'] ?? [])];
+  const selected = [
+    ...new Set(
+      (selection['created-by'] ?? []).map((id) =>
+        resolveTaskPersonId(id, {
+          ...EMPTY_TASK_FACET_CONTEXT,
+          viewerId: userId,
+        })
+      )
+    ),
+  ];
   if (tab !== 'created-by-me') {
     return selected.length > 0 ? selected : undefined;
   }
@@ -85,9 +96,23 @@ export function buildTaskSearchRequest(options: {
   facets: FacetSelection;
   facetContext?: TaskFacetContext;
   reference?: TaskReferenceScope;
+  dueDate?: TaskDatePredicate;
 }): SearchSoupQueryArgs {
-  const facetContext = options.facetContext ?? EMPTY_TASK_FACET_CONTEXT;
+  const facetContext = {
+    ...(options.facetContext ?? EMPTY_TASK_FACET_CONTEXT),
+    viewerId: options.userId,
+  };
   const propertyFilters = selectedPropertyFilters(options.facets, facetContext);
+  if (options.dueDate) {
+    const value = options.dueDate;
+    propertyFilters.push({
+      property_definition_id: SYSTEM_PROPERTY_IDS.DUE_DATE,
+      entity_type: 'TASK',
+      ...('dateRange' in value
+        ? { date_range: value.dateRange }
+        : { has_date: value.hasDate }),
+    });
+  }
 
   if (options.tab === 'my-tasks') {
     propertyFilters.push({
@@ -105,7 +130,7 @@ export function buildTaskSearchRequest(options: {
   }
 
   const owners = selectedCreators(options.facets, options.tab, options.userId);
-  // Like the list query, a selected tag that no longer exists stops filtering.
+  // Saved views supply stored bindings even when tag labels are unavailable.
   const tagOptionIds = [...new Set(options.facets.tags ?? [])].filter((id) =>
     facetContext.tagPropertyDefinitionByOptionId.has(id)
   );

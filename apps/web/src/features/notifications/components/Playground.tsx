@@ -242,7 +242,7 @@ function PermissionButton(props: { platformNotif: any }) {
           when={props.platformNotif.permission() === 'granted'}
           fallback={
             <Button
-              variant="accent"
+              variant="primary"
               onClick={() => props.platformNotif.requestPermission()}
             >
               Enable Browser Notifications
@@ -293,7 +293,7 @@ function CustomBuilder(props: {
 
         <div class="pt-4 border-t border-edge-muted">
           <Button
-            variant="accent"
+            variant="primary"
             onClick={() => props.onTest(props.customNotification)}
           >
             🔔 Test Browser Notification
@@ -370,7 +370,7 @@ function NotificationDetail(props: {
             </p>
           </div>
           <Button
-            variant="accent"
+            variant="primary"
             onClick={() => props.onTest(props.notification)}
           >
             🔔 Test Notification

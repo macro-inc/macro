@@ -22,7 +22,6 @@ export type LiveAttentionFeedQuery = {
   /** The cursor each loaded page was read from. */
   readonly data: { readonly cursors: readonly (string | null)[] } | undefined;
   readonly isFetching: boolean;
-  readonly hasNextPage: boolean;
   refetch(options: { requestPolicy: 'network-only' }): Promise<unknown>;
 };
 
@@ -128,8 +127,7 @@ export function createLiveAttentionFeed<
         host,
         options.pages.cachedQuery,
         pages.map((cursor) => options.pages.variables(cursor)),
-        batch,
-        query.hasNextPage
+        batch
       );
       if (!placed) fireAndForget(refetch(), surface);
     } catch (error) {

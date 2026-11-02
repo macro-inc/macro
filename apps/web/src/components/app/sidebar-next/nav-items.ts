@@ -1,33 +1,35 @@
-import { LIST_VIEW_PATHS } from '@app/constants/list-views';
+import { EXTERNAL_VIEW_PATH, LIST_VIEW_PATHS } from '@app/constants/list-views';
 import { calendarPath } from '@app/features/calendar-view/calendar-url';
+import { t } from '@app/lib/i18n';
 import type { SidebarItem } from '@components/app/app-sidebar/sidebar';
 import { TOKENS } from '@core/hotkey/tokens';
-import BellIcon from '@phosphor/bell.svg';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import CalendarBlankIcon from '@phosphor/calendar-blank.svg';
-import CalendarCheckIcon from '@phosphor/calendar-check.svg';
-import ChatsCircleIcon from '@phosphor/chats-circle.svg';
-import EnvelopeIcon from '@phosphor/envelope.svg';
-import FolderSimpleIcon from '@phosphor/folder-simple.svg';
-import GitPullRequestIcon from '@phosphor/git-pull-request.svg';
-import HouseIcon from '@phosphor/house.svg';
-import ListChecksIcon from '@phosphor/list-checks.svg';
-import PhoneCallIcon from '@phosphor/phone-call.svg';
-import PulseIcon from '@phosphor/pulse.svg';
-import AgentIcon from '@phosphor/sparkle.svg';
-import BellFillIcon from '@phosphor-fill/bell-fill.svg';
-import BuildingsFillIcon from '@phosphor-fill/buildings-fill.svg';
-import CalendarBlankFillIcon from '@phosphor-fill/calendar-blank-fill.svg';
-import CalendarCheckFillIcon from '@phosphor-fill/calendar-check-fill.svg';
-import ChatsCircleFillIcon from '@phosphor-fill/chats-circle-fill.svg';
-import EnvelopeFillIcon from '@phosphor-fill/envelope-fill.svg';
-import FolderSimpleFillIcon from '@phosphor-fill/folder-simple-fill.svg';
-import GitPullRequestFillIcon from '@phosphor-fill/git-pull-request-fill.svg';
-import HouseFillIcon from '@phosphor-fill/house-fill.svg';
-import ListChecksFillIcon from '@phosphor-fill/list-checks-fill.svg';
-import PhoneCallFillIcon from '@phosphor-fill/phone-call-fill.svg';
+import BellFillIcon from '@icon/system/fill/bell-fill.svg';
+import BuildingsFillIcon from '@icon/system/fill/buildings-fill.svg';
+import CalendarBlankFillIcon from '@icon/system/fill/calendar-blank-fill.svg';
+import ChatsCircleFillIcon from '@icon/system/fill/chats-circle-fill.svg';
+import EnvelopeFillIcon from '@icon/system/fill/envelope-fill.svg';
+import FolderSimpleFillIcon from '@icon/system/fill/folder-simple-fill.svg';
+import GitPullRequestFillIcon from '@icon/system/fill/git-pull-request-fill.svg';
+import HouseFillIcon from '@icon/system/fill/house-fill.svg';
+import ListChecksFillIcon from '@icon/system/fill/list-checks-fill.svg';
+import PhoneCallFillIcon from '@icon/system/fill/phone-call-fill.svg';
+import PlugFillIcon from '@icon/system/fill/plug-fill.svg';
+import AgentFillIcon from '@icon/system/fill/sparkle-fill.svg';
+import BellIcon from '@icon/system/regular/bell.svg';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import CalendarBlankIcon from '@icon/system/regular/calendar-blank.svg';
+import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
+import ChatsCircleIcon from '@icon/system/regular/chats-circle.svg';
+import EnvelopeIcon from '@icon/system/regular/envelope.svg';
+import FolderSimpleIcon from '@icon/system/regular/folder-simple.svg';
+import GitPullRequestIcon from '@icon/system/regular/git-pull-request.svg';
+import HouseIcon from '@icon/system/regular/house.svg';
+import ListChecksIcon from '@icon/system/regular/list-checks.svg';
+import PhoneCallIcon from '@icon/system/regular/phone-call.svg';
+import PlugIcon from '@icon/system/regular/plug.svg';
+import PulseIcon from '@icon/system/regular/pulse.svg';
+import AgentIcon from '@icon/system/regular/sparkle.svg';
 import PulseFillIcon from '@phosphor-fill/pulse-fill.svg';
-import AgentFillIcon from '@phosphor-fill/sparkle-fill.svg';
 import type { NavIcon } from './nav-glyph';
 import type { SidebarPrefs } from './use-sidebar-prefs';
 
@@ -40,7 +42,7 @@ export type SidebarNextNavItem = Omit<SidebarItem, 'hotkeyToken'> & {
   /** Only destinations with a registered GoTo shortcut expose a key hint. */
   hotkeyToken?: SidebarItem['hotkeyToken'];
   icon: NavIcon;
-  /** Phosphor `fill` weight of `icon`, shown while the view is active. */
+  /** Matching active variant of `icon`, shown while the view is active. */
   iconActive: NavIcon;
 };
 
@@ -53,8 +55,7 @@ export type SidebarNextMenuItem = Omit<
 /**
  * SidebarRail's nav buttons, in default render order.
  *
- * Phosphor icons rather than the animated `wide-*` set: they are plain
- * `fill="currentColor"` SVGs, so the active button's `text-ink-muted` colours
+ * Original Macro icons inherit `currentColor`, so the active button's `text-ink-muted` colours
  * the glyph.
  *
  * Every destination is an existing view id, so the `hotkeyToken`s are the ones
@@ -64,7 +65,9 @@ export type SidebarNextMenuItem = Omit<
 export const SIDEBAR_NEXT_NAV_ITEMS = [
   {
     id: 'home',
-    label: 'Home',
+    get label() {
+      return t('nav.home');
+    },
     href: LIST_VIEW_PATHS.home,
     icon: HouseIcon,
     iconActive: HouseFillIcon,
@@ -73,7 +76,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'notifications',
-    label: 'Notifications',
+    get label() {
+      return t('nav.notifications');
+    },
     href: '/notifications',
     icon: BellIcon,
     iconActive: BellFillIcon,
@@ -82,7 +87,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'documents',
-    label: 'Drive',
+    get label() {
+      return t('nav.drive');
+    },
     href: LIST_VIEW_PATHS.documents,
     icon: FolderSimpleIcon,
     iconActive: FolderSimpleFillIcon,
@@ -91,7 +98,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'mail',
-    label: 'Email',
+    get label() {
+      return t('nav.email');
+    },
     href: LIST_VIEW_PATHS.mail,
     icon: EnvelopeIcon,
     iconActive: EnvelopeFillIcon,
@@ -100,7 +109,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'channels',
-    label: 'Chat',
+    get label() {
+      return t('nav.chat');
+    },
     href: LIST_VIEW_PATHS.channels,
     icon: ChatsCircleIcon,
     iconActive: ChatsCircleFillIcon,
@@ -109,7 +120,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'tasks',
-    label: 'Tasks',
+    get label() {
+      return t('nav.tasks');
+    },
     href: LIST_VIEW_PATHS.tasks,
     icon: ListChecksIcon,
     iconActive: ListChecksFillIcon,
@@ -118,7 +131,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'calendar',
-    label: 'Calendar',
+    get label() {
+      return t('nav.calendar');
+    },
     href: calendarPath('timeGridWeek'),
     icon: CalendarBlankIcon,
     iconActive: CalendarBlankFillIcon,
@@ -127,7 +142,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'agents',
-    label: 'Agents',
+    get label() {
+      return t('nav.agents');
+    },
     href: LIST_VIEW_PATHS.agents,
     icon: AgentIcon,
     iconActive: AgentFillIcon,
@@ -136,7 +153,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'companies',
-    label: 'Customers',
+    get label() {
+      return t('nav.customers');
+    },
     href: LIST_VIEW_PATHS.companies,
     icon: BuildingsIcon,
     iconActive: BuildingsFillIcon,
@@ -145,7 +164,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'calls',
-    label: 'Calls',
+    get label() {
+      return t('nav.calls');
+    },
     href: LIST_VIEW_PATHS.calls,
     icon: PhoneCallIcon,
     iconActive: PhoneCallFillIcon,
@@ -154,7 +175,9 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'reviews',
-    label: 'Reviews',
+    get label() {
+      return t('nav.reviews');
+    },
     href: '/reviews',
     icon: GitPullRequestIcon,
     iconActive: GitPullRequestFillIcon,
@@ -172,10 +195,23 @@ export const SIDEBAR_NEXT_NAV_ITEMS = [
   },
   {
     id: 'booking-links',
-    label: 'Scheduling',
+    get label() {
+      return t('nav.scheduling');
+    },
     href: '/scheduling',
     icon: CalendarCheckIcon,
-    iconActive: CalendarCheckFillIcon,
+    iconActive: CalendarCheckIcon,
+  },
+  {
+    id: 'external',
+    get label() {
+      return t('nav.external');
+    },
+    href: EXTERNAL_VIEW_PATH,
+    icon: PlugIcon,
+    iconActive: PlugFillIcon,
+    hotkey: 'x',
+    hotkeyToken: TOKENS.sidebar.goTo.external,
   },
 ] satisfies SidebarNextNavItem[];
 
@@ -188,6 +224,7 @@ export type NavItemGates = {
   showCalls: boolean;
   showReviews: boolean;
   showActivity: boolean;
+  showExternal: boolean;
   /** User preferences for which items are shown and in what order. */
   prefs: SidebarPrefs;
 };
@@ -204,6 +241,7 @@ export const isNavItemAvailable = (
   if (item.id === 'calls') return gates.showCalls;
   if (item.id === 'reviews') return gates.showReviews;
   if (item.id === 'activity') return gates.showActivity;
+  if (item.id === 'external') return gates.showExternal;
   return true;
 };
 

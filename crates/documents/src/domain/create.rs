@@ -37,6 +37,7 @@ pub struct NewDocumentMetadata {
     document_name: String,
     project_id: Option<uuid::Uuid>,
     created_at: Option<chrono::DateTime<chrono::Utc>>,
+    updated_at: Option<chrono::DateTime<chrono::Utc>>,
     skip_history: bool,
     initial_link_share: InitialLinkShare,
 }
@@ -55,6 +56,7 @@ impl NewDocumentMetadata {
                 document_name: document_name.into(),
                 project_id: None,
                 created_at: None,
+                updated_at: None,
                 skip_history: false,
                 initial_link_share: InitialLinkShare::EntityDefault,
             },
@@ -71,6 +73,7 @@ impl NewDocumentMetadata {
             team_id: kind.team_id,
             share_with_team: kind.share_with_team,
             created_at: self.created_at,
+            updated_at: self.updated_at,
             sub_type: kind.subtype.sub_type(),
             skip_history: self.skip_history,
             initial_link_share: self.initial_link_share,
@@ -100,6 +103,12 @@ impl NewDocumentMetadataBuilder {
     /// Set a custom creation timestamp.
     pub fn created_at(mut self, created_at: chrono::DateTime<chrono::Utc>) -> Self {
         self.metadata.created_at = Some(created_at);
+        self
+    }
+
+    /// Set a custom last-edit timestamp; defaults to the creation timestamp.
+    pub fn updated_at(mut self, updated_at: chrono::DateTime<chrono::Utc>) -> Self {
+        self.metadata.updated_at = Some(updated_at);
         self
     }
 

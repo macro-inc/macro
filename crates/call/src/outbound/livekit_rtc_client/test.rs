@@ -115,21 +115,20 @@ fn verify_access_token_rejects_garbage() {
 #[test]
 fn remove_participant_not_found_is_already_gone() {
     let error = twirp(TwirpErrorCode::NOT_FOUND, "participant does not exist");
-    interpret_remove_participant_result(Err(error))
+    ignore_not_found(Err(error))
         .expect("leave must succeed when LiveKit already dropped the participant");
 }
 
 #[test]
 fn remove_participant_room_not_found_is_already_gone() {
     let error = twirp(TwirpErrorCode::NOT_FOUND, "requested room does not exist");
-    interpret_remove_participant_result(Err(error))
-        .expect("leave must succeed when the LiveKit room is already gone");
+    ignore_not_found(Err(error)).expect("leave must succeed when the LiveKit room is already gone");
 }
 
 #[test]
 fn remove_participant_unavailable_still_fails() {
     let error = twirp(TwirpErrorCode::UNAVAILABLE, "overloaded");
-    let message = interpret_remove_participant_result(Err(error))
+    let message = ignore_not_found(Err(error))
         .expect_err("transient LiveKit failures must still surface")
         .to_string();
     assert_eq!(message, "twirp error: twirp error: unavailable: overloaded");

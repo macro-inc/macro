@@ -2,9 +2,9 @@ import { toast } from '@core/component/Toast/Toast';
 import { useReferralCode } from '@core/context/user';
 import { fireAndForget } from '@core/util/fireAndForget';
 import { getWebOrigin } from '@core/util/webOrigin';
+import ClipboardIcon from '@icon/system/regular/clipboard.svg';
+import CloseIcon from '@icon/system/regular/x.svg';
 import { Telemetry } from '@macro-inc/observability';
-import ClipboardIcon from '@phosphor/clipboard.svg';
-import CloseIcon from '@phosphor/x.svg';
 import { authServiceClient } from '@service-auth/client';
 import { contactsClient } from '@service-contacts/client';
 import { Button, Dialog, Input, Panel } from '@ui';
@@ -87,7 +87,7 @@ export const InviteModal = () => {
       <Panel depth={2} class="max-h-[75vh] text-ink rounded-xl">
         <Panel.Header class="px-2 gap-1">
           <Dialog.CloseButton as={Button} variant="ghost" size="icon-sm">
-            <CloseIcon />
+            <CloseIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
           </Dialog.CloseButton>
           <Dialog.Title as="span" class="text-sm font-medium p-0 m-0">
             Invite
@@ -106,7 +106,7 @@ export const InviteModal = () => {
                   requestAnimationFrame(() => el.focus())
                 );
               }}
-              placeholder={'name@company.com\ncolleague@company.com'}
+              placeholder="name@company.com&#10;colleague@company.com"
               value={value()}
               onInput={(e) => setValue(e.currentTarget.value)}
               rows={4}
@@ -120,7 +120,7 @@ export const InviteModal = () => {
             </Button>
             <Button
               onClick={handleSend}
-              variant="strong"
+              variant="primary"
               disabled={sending() || !parseEmails(value()).length}
               class="font-semibold"
             >
@@ -147,7 +147,7 @@ export const InviteModal = () => {
                     type="button"
                     onClick={handleCopy}
                     size="md"
-                    variant="outline"
+                    variant="secondary"
                     class="font-medium border px-2"
                   >
                     <ClipboardIcon class="size-3" />

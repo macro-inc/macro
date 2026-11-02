@@ -11,6 +11,7 @@ import type {
   ColumnKind,
   Outcome,
 } from '../../../lib/core/database-sql/generated/types';
+import { toCellRange } from './cell-date-range';
 import type { DatabaseCellValue } from './database-view';
 import type { DatabaseRow } from './table';
 
@@ -38,6 +39,7 @@ function gridValue(
     .with({ type: 'number' }, ({ value }) => value)
     .with({ type: 'bool' }, ({ value }) => (value ? 1 : 0))
     .with({ type: 'date' }, ({ value }) => value)
+    .with({ type: 'dateRange' }, ({ value }) => toCellRange(value))
     .with({ type: 'options' }, ({ value }) =>
       listed(
         value.map((id) =>

@@ -277,10 +277,11 @@ pub fn column_of<'catalog>(
 ) -> Option<&'catalog Column> {
     let binding = binding(bindings, key)?;
     let definition = binding.column?;
+    let table_id = relations.get(binding.relation)?.as_ref().table;
     catalog
         .tables
         .iter()
-        .find(|table| table.id == relations[binding.relation].as_ref().table)?
+        .find(|table| table.id == table_id)?
         .columns
         .iter()
         .find(|column| column.id == definition)
@@ -297,7 +298,7 @@ pub fn virtual_column_of(
     if binding.column.is_some() {
         return None;
     }
-    crate::resolve::virtual_column(relations[binding.relation].table, key)
+    crate::resolve::virtual_column(relations.get(binding.relation)?.table, key)
 }
 
 impl AsRef<Relation> for RelationPlan {

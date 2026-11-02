@@ -9,7 +9,9 @@
 
 /// Cross-domain fields composed onto Soup entities.
 mod edges;
+mod mail_cache_profile;
 mod realtime;
+mod saved_view;
 /// Complete schema types and construction helpers.
 mod schema;
 #[cfg(test)]
@@ -34,15 +36,16 @@ pub use graphql_channel::{
 pub use graphql_common::GraphqlRequestParts;
 pub use graphql_email::{
     DeleteEmailDraftInput, DeleteEmailDraftPayload, EmailContentKey, EmailContentLoad,
-    EmailContentLoader, EmailMutationService, EmailServiceEmailContentReader,
-    EmailThreadMailProjectionLoad, EmailThreadMailProjectionLoader, EmailThreadMetadataLoad,
-    EmailThreadMetadataLoader, GraphqlEmailLabel, GraphqlEmailLink, GraphqlEmailLinkSettings,
+    EmailContentLoader, EmailFocusContext, EmailFocusReader, EmailMutationService,
+    EmailServiceEmailContentReader, EmailThreadFocusLoader, EmailThreadMailProjectionLoad,
+    EmailThreadMailProjectionLoader, EmailThreadMetadataLoad, EmailThreadMetadataLoader,
+    EmailThreadUnavailable, GraphqlEmailLabel, GraphqlEmailLink, GraphqlEmailLinkSettings,
     GraphqlEmailMutation, GraphqlEmailProvider, GraphqlEmailQuery, GraphqlEmailSyncStatus,
     MarkEmailThreadSeenInput, NoOpSoupEmailContentEdgeReader, SaveEmailDraftContactInput,
     SaveEmailDraftInput, SaveEmailDraftPayload, SoupEmailContentEdgeReader, SoupEmailEdgeReader,
     SoupEmailThreadMailProjectionEdgeReader, SoupEmailThreadMetadataEdgeReader,
-    UpdateEmailThreadLabelInput, email_content_loader, email_thread_mail_projection_loader,
-    email_thread_metadata_loader,
+    UpdateEmailThreadLabelInput, email_content_loader, email_thread_focus_loader,
+    email_thread_mail_projection_loader, email_thread_metadata_loader,
 };
 pub use graphql_entity_mutation::{
     ChannelSharePolicyInput, DuplicateEntityInput, EntityMutationPayload, EntityMutationRoot,
@@ -76,6 +79,7 @@ pub use graphql_properties::{
     entity_properties_loader,
 };
 pub use graphql_work_feed::{WorkFeedGraphqlContext, WorkFeedGraphqlService};
+pub use mail_cache_profile::{MAIL_CACHE_PROFILE_HEADER, MailCacheProfile};
 pub use realtime::{AgentSessionLogSubscriptions, agent_session_log_subscriptions};
 pub use schema::{
     EmailThreadInput, SchemaOnlySoupSchema, SchemaOnlyState, SharedSoupSchema, SoupQueryRoot,

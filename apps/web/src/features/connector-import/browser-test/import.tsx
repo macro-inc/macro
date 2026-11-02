@@ -1,10 +1,10 @@
 import '@app/index.css';
 import { PromoCard } from '@app/features/sidebar-promotion/components/promo-card';
 import { applyTheme } from '@app/features/theme/utils/themeUtils';
-import FileCsvIcon from '@phosphor/file-csv.svg';
-import FileZipIcon from '@phosphor/file-zip.svg';
-import FolderIcon from '@phosphor/folder.svg';
-import UploadIcon from '@phosphor/upload-simple.svg';
+import FileCsvIcon from '@icon/system/regular/file-csv.svg';
+import FileZipIcon from '@icon/system/regular/file-zip.svg';
+import FolderIcon from '@icon/system/regular/folder.svg';
+import UploadIcon from '@icon/system/regular/upload-simple.svg';
 import { createSignal, For } from 'solid-js';
 import { render } from 'solid-js/web';
 import { ConnectorImportProvider } from '../context/connector-import-context';

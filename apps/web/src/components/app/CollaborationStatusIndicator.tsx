@@ -1,6 +1,6 @@
+import CloudIcon from '@icon/system/regular/cloud.svg';
+import CloudWarningIcon from '@icon/system/regular/cloud-warning.svg';
 import { SyncSourceStatus } from '@macro-inc/collaboration/collab/source';
-import CloudIcon from '@phosphor/cloud.svg';
-import CloudWarningIcon from '@phosphor/cloud-warning.svg';
 import { Tooltip } from '@ui';
 import { Match, Switch } from 'solid-js';
 

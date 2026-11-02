@@ -9,7 +9,7 @@ use entity_access::domain::models::{BotAccessScope, EditAccessLevel};
 use entity_access::domain::ports::EntityAccessService;
 use models_properties::EntityType;
 use models_properties::api::requests::SetPropertyValue;
-use models_properties::shared::EntityReference;
+use models_properties::shared::{DateRange, EndsBeforeStart, EntityReference};
 use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
@@ -24,10 +24,20 @@ pub struct ToolEntityRef {
     pub entity_id: String,
 }
 
+/// A date range as the tool takes it.
+#[derive(Debug, Clone, Deserialize, JsonSchema)]
+pub struct ToolDateRange {
+    /// Where the range starts.
+    pub start: DateTime<Utc>,
+    /// Where the range ends; not before the start.
+    pub end: DateTime<Utc>,
+}
+
 /// How to determine which value field is active, based on the property data type from
 /// GetEntityProperties. The AI must set the matching field:
 ///  - boolean → boolean_value
 ///  - date → date_value
+///  - date_range → date_range_value
 ///  - number → number_value
 ///  - string → string_value
 ///  - select_string/select_number (single) → option_id
@@ -88,6 +98,12 @@ pub struct SetEntityProperty {
     #[serde(default)]
     pub date_value: Option<DateTime<Utc>>,
 
+    #[schemars(
+        description = "For date_range properties: the start and end (ISO 8601 date-times); the end may not come before the start."
+    )]
+    #[serde(default)]
+    pub date_range_value: Option<ToolDateRange>,
+
     #[schemars(description = "For number properties.")]
     #[serde(default)]
     pub number_value: Option<f64>,
@@ -138,38 +154,44 @@ pub struct SetEntityProperty {
 }
 
 impl SetEntityProperty {
-    fn to_set_property_value(&self) -> Option<SetPropertyValue> {
+    /// The value to set, `None` to clear it, or why the value is invalid.
+    fn to_set_property_value(&self) -> Result<Option<SetPropertyValue>, EndsBeforeStart> {
         if let Some(v) = self.boolean_value {
-            return Some(SetPropertyValue::Boolean { value: v });
+            return Ok(Some(SetPropertyValue::Boolean { value: v }));
         }
         if let Some(v) = self.date_value {
-            return Some(SetPropertyValue::Date { value: v });
+            return Ok(Some(SetPropertyValue::Date { value: v }));
+        }
+        if let Some(v) = &self.date_range_value {
+            return Ok(Some(SetPropertyValue::DateRange {
+                value: DateRange::new(v.start, v.end)?,
+            }));
         }
         if let Some(v) = self.number_value {
-            return Some(SetPropertyValue::Number { value: v });
+            return Ok(Some(SetPropertyValue::Number { value: v }));
         }
         if let Some(v) = &self.string_value {
-            return Some(SetPropertyValue::String { value: v.clone() });
+            return Ok(Some(SetPropertyValue::String { value: v.clone() }));
         }
         if let Some(v) = self.option_id {
-            return Some(SetPropertyValue::SelectOption { option_id: v });
+            return Ok(Some(SetPropertyValue::SelectOption { option_id: v }));
         }
         if let Some(v) = &self.option_ids {
-            return Some(SetPropertyValue::MultiSelectOption {
+            return Ok(Some(SetPropertyValue::MultiSelectOption {
                 option_ids: v.clone(),
-            });
+            }));
         }
         if let Some(v) = &self.entity_ref {
-            return Some(SetPropertyValue::EntityReference {
+            return Ok(Some(SetPropertyValue::EntityReference {
                 reference: EntityReference {
                     entity_type: EntityType::from(v.entity_type),
                     entity_id: v.entity_id.clone(),
                     specific_message_id: None,
                 },
-            });
+            }));
         }
         if let Some(v) = &self.entity_refs {
-            return Some(SetPropertyValue::MultiEntityReference {
+            return Ok(Some(SetPropertyValue::MultiEntityReference {
                 references: v
                     .iter()
                     .map(|r| EntityReference {
@@ -178,15 +200,15 @@ impl SetEntityProperty {
                         specific_message_id: None,
                     })
                     .collect(),
-            });
+            }));
         }
         if let Some(v) = &self.link_url {
-            return Some(SetPropertyValue::Link { url: v.clone() });
+            return Ok(Some(SetPropertyValue::Link { url: v.clone() }));
         }
         if let Some(v) = &self.link_urls {
-            return Some(SetPropertyValue::MultiLink { urls: v.clone() });
+            return Ok(Some(SetPropertyValue::MultiLink { urls: v.clone() }));
         }
-        None
+        Ok(None)
     }
 }
 
@@ -227,7 +249,10 @@ where
         tracing::info!("Set entity property");
 
         let entity_type = model_entity::EntityType::from(self.entity_type);
-        let set_value = self.to_set_property_value();
+        let set_value = self.to_set_property_value().map_err(|e| ToolCallError {
+            description: e.to_string(),
+            internal_error: e.into(),
+        })?;
 
         // Prove the requesting user can edit the entity before writing anything.
         let entity_access_receipt = service_context

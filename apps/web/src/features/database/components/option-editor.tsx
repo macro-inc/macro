@@ -1,7 +1,7 @@
 import { fireAndForget } from '@core/util/fireAndForget';
+import DotsIcon from '@icon/system/regular/dots-three.svg';
+import TrashIcon from '@icon/system/regular/trash.svg';
 import { Popover } from '@kobalte/core/popover';
-import DotsIcon from '@phosphor/dots-three.svg';
-import TrashIcon from '@phosphor/trash.svg';
 import { ColorSwatches } from '@property/tags/components/color-swatches';
 import { Button } from '@ui/components/Button';
 import type { ResultAsync } from 'neverthrow';
@@ -75,11 +75,11 @@ export function OptionEditor(props: {
       gutter={6}
     >
       <Popover.Trigger
+        aria-label={`Edit ${props.option.label}`}
+        tooltip={{ content: `Edit ${props.option.label}`, disabled: true }}
         as={Button}
         variant="ghost"
         size="icon-xs"
-        label={`Edit ${props.option.label}`}
-        tooltipDisabled
         class={props.class}
         onPointerDown={(event: PointerEvent) => event.stopPropagation()}
         onClick={(event: MouseEvent) => event.stopPropagation()}
@@ -169,7 +169,11 @@ export function OptionEditor(props: {
                 >
                   Delete
                 </Button>
-                <Button size="xs" onClick={() => setConfirming(false)}>
+                <Button
+                  variant="ghost"
+                  size="xs"
+                  onClick={() => setConfirming(false)}
+                >
                   Cancel
                 </Button>
               </div>

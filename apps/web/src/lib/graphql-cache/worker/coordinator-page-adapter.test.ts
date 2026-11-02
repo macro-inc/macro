@@ -175,6 +175,83 @@ describe('CacheCoordinatorPageAdapter', () => {
     expect(attach?.transfer).toHaveLength(1);
   });
 
+  it('reports visibility changes during registration and fences stale handoff notices', async () => {
+    class Visibility extends EventTarget {
+      visibilityState: DocumentVisibilityState = 'visible';
+    }
+    const visibility = new Visibility();
+    const detached = vi.spyOn(visibility, 'removeEventListener');
+    const port = new FakeCoordinatorPort();
+    const sent = Promise.withResolvers<void>();
+    const post = port.postMessage.bind(port);
+    vi.spyOn(port, 'postMessage').mockImplementation((message, transfer) => {
+      post(message, transfer);
+      sent.resolve();
+    });
+    const onCacheReadAvailabilityChanged = vi.fn();
+    const adapter = createCacheCoordinatorPageAdapter({
+      scope: 'scope',
+      tabId: 'tab-a',
+      visibility,
+      onCacheReadAvailabilityChanged,
+      lockManager: heldLockManager(),
+      createSharedWorker: () => ({ port: port as unknown as MessagePort }),
+      createDedicatedWorker: () => new FakeWorker(),
+    });
+    const started = adapter.start();
+    await sent.promise;
+    expect(port.messages[0]?.message).toMatchObject({
+      kind: 'register-tab',
+      visible: true,
+    });
+    visibility.visibilityState = 'hidden';
+    port.receive({ ...version, kind: 'registered', tabId: 'tab-a' });
+    await started;
+    expect(port.messages.at(-1)?.message).toMatchObject({
+      kind: 'tab-visibility',
+      visible: false,
+    });
+    visibility.visibilityState = 'visible';
+    visibility.dispatchEvent(new Event('visibilitychange'));
+    expect(port.messages.at(-1)?.message).toMatchObject({
+      kind: 'tab-visibility',
+      visible: true,
+    });
+    port.receive({
+      ...version,
+      kind: 'cache-read-availability',
+      ownerEpoch: 1,
+      state: 'blocked',
+    });
+    port.receive({
+      ...version,
+      kind: 'engine-replaced',
+      ownerEpoch: 2,
+      openOutcome: 'opened-existing',
+    });
+    port.receive({
+      ...version,
+      kind: 'cache-read-availability',
+      ownerEpoch: 1,
+      state: 'blocked',
+    });
+    expect(onCacheReadAvailabilityChanged).toHaveBeenCalledExactlyOnceWith(
+      'blocked'
+    );
+    port.receive({
+      ...version,
+      kind: 'cache-read-availability',
+      ownerEpoch: 2,
+      state: 'ready',
+    });
+    expect(onCacheReadAvailabilityChanged).toHaveBeenLastCalledWith('ready');
+    await adapter.dispose({ graceful: false });
+    expect(detached).toHaveBeenCalledWith(
+      'visibilitychange',
+      expect.any(Function)
+    );
+  });
+
   it('forwards startup phases once, ignores stale epochs, and rejects a backwards phase', async () => {
     const port = new FakeCoordinatorPort();
     const progress = vi.fn();

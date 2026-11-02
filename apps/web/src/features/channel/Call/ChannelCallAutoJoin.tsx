@@ -58,7 +58,7 @@ export function ChannelCallAutoJoin(props: {
       }
 
       call
-        .joinCall()
+        .joinCall('deep_link')
         .catch((e) => console.error('Auto-join call failed', e))
         .finally(() => props.onHandled());
     });

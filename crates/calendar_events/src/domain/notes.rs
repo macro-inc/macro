@@ -1,6 +1,13 @@
 //! Meeting-note links and their view-only, live audience.
 
-use entity_access::domain::models::{EntityAccessReceipt, EntityType, OwnerAccessLevel};
+use super::models::{CalendarMentionEvent, CalendarMentionPreview};
+use super::team::{
+    TeamCalendarContent, TeamCalendarItem, TeamCalendarSharing, TeamSourceOccurrence,
+    project_team_source,
+};
+use entity_access::domain::models::{
+    EntityAccessReceipt, EntityType, OwnerAccessLevel, ViewAccessLevel,
+};
 use serde::{Deserialize, Serialize};
 use uuid::Uuid;
 
@@ -61,12 +68,12 @@ pub struct NotePicker {
     pub teams: Vec<NoteTeam>,
 }
 
-/// An owner's durable sharing link, including meetings they can no longer open.
+/// A visible meeting link, or an owner's durable grant they can no longer open.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 #[cfg_attr(feature = "schema", derive(utoipa::ToSchema))]
 #[serde(rename_all = "camelCase")]
 pub struct DocumentNoteLink {
-    /// Current name of the owned markdown document.
+    /// Current name of the markdown document.
     pub document_name: String,
     /// Linked calendar copy.
     pub event_id: Uuid,
@@ -74,8 +81,26 @@ pub struct DocumentNoteLink {
     pub occurrence_key: String,
     /// Current title, or a safe placeholder when meeting details are unavailable.
     pub event_title: String,
+    /// Whether the reader may resolve this exact meeting's details right now.
+    pub can_view_meeting: bool,
+    /// Exact accessible calendar preview, resolved with this link's authorization snapshot.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub event: Option<CalendarMentionEvent>,
     /// Independent optional team audience.
     pub team: Option<NoteTeam>,
+    /// Exact, sanitized team-calendar details when the meeting is shared through a team.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub team_event: Option<TeamCalendarItem>,
+}
+
+/// An exact linked occurrence from a currently authorized full-detail team source.
+pub struct NoteReferenceSource {
+    /// Durable link this source resolves.
+    pub target: NoteTarget,
+    /// Source-scoped event and occurrence; never borrowed from another calendar.
+    pub source: TeamSourceOccurrence,
+    /// Addresses owned by the reader, for requester-relative attendee fields.
+    pub viewer_emails: Vec<String>,
 }
 
 /// Failures with safe, user-facing semantics.
@@ -102,12 +127,24 @@ pub enum NoteError {
 pub trait NoteRepository: Send + Sync + 'static {
     /// Adapter error.
     type Err: std::error::Error + Send + Sync + 'static;
-    /// All links on the caller's document, even after meeting access is lost.
+    /// Visible meeting links; document owners also retain unavailable grants.
     fn document_links(
         &self,
         user: &str,
         document: &str,
     ) -> impl Future<Output = Result<Vec<DocumentNoteLink>, Self::Err>> + Send;
+    /// Exact linked sources with live full-detail team policy and source access.
+    fn team_reference_sources(
+        &self,
+        user: &str,
+        document: &str,
+    ) -> impl Future<Output = Result<Vec<NoteReferenceSource>, rootcause::Report>> + Send;
+    /// Resolve visible link targets through the existing own/channel preview reader.
+    fn reference_previews(
+        &self,
+        user: &str,
+        targets: Vec<NoteTarget>,
+    ) -> impl Future<Output = Result<Vec<CalendarMentionPreview>, rootcause::Report>> + Send;
     /// Current full-detail access; busy-only projections never qualify.
     fn visible(
         &self,
@@ -157,10 +194,10 @@ pub trait NoteRepository: Send + Sync + 'static {
 
 /// Inbound contract; mutation receipts prove ownership before granting access.
 pub trait MeetingNotesService: Send + Sync + 'static {
-    /// List an owned document's durable calendar sharing grants.
+    /// List visible meeting links; owners also receive unavailable durable grants.
     fn document_links(
         &self,
-        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> impl Future<Output = Result<Vec<DocumentNoteLink>, NoteError>> + Send;
     /// Read notes using the current meeting audience.
     fn list(
@@ -224,7 +261,7 @@ impl<R: NoteRepository> MeetingNotesService for MeetingNotes<R> {
     #[tracing::instrument(name = "calendar.notes.document_links", skip_all, fields(document_id = %receipt.entity().entity_id), err)]
     async fn document_links(
         &self,
-        receipt: EntityAccessReceipt<OwnerAccessLevel>,
+        receipt: EntityAccessReceipt<ViewAccessLevel>,
     ) -> Result<Vec<DocumentNoteLink>, NoteError> {
         let user = receipt
             .get_authenticated_user()
@@ -232,10 +269,71 @@ impl<R: NoteRepository> MeetingNotesService for MeetingNotes<R> {
         if receipt.entity().entity_type != EntityType::Document {
             return Err(NoteError::Forbidden);
         }
-        self.repo
+        let mut links = self
+            .repo
             .document_links(user.as_ref(), &receipt.entity().entity_id)
             .await
-            .map_err(internal)
+            .map_err(internal)?;
+        if links.is_empty() {
+            return Ok(links);
+        }
+        let visible_targets = links
+            .iter()
+            .filter(|link| link.can_view_meeting)
+            .map(|link| NoteTarget {
+                event_id: link.event_id,
+                occurrence_key: link.occurrence_key.clone(),
+            })
+            .collect::<Vec<_>>();
+        if !visible_targets.is_empty() {
+            let previews = self
+                .repo
+                .reference_previews(user.as_ref(), visible_targets)
+                .await
+                .map_err(NoteError::Internal)?;
+            for (link, preview) in links
+                .iter_mut()
+                .filter(|link| link.can_view_meeting)
+                .zip(previews)
+            {
+                if let CalendarMentionPreview::Accessible(event) = preview {
+                    let exact = if link.occurrence_key == "single" {
+                        !event.is_recurring
+                    } else {
+                        event.occurrence_key.as_deref() == Some(link.occurrence_key.as_str())
+                    };
+                    if exact {
+                        link.event = Some(*event);
+                    }
+                }
+            }
+        }
+        let sources = self
+            .repo
+            .team_reference_sources(user.as_ref(), &receipt.entity().entity_id)
+            .await
+            .map_err(NoteError::Internal)?;
+        for reference in sources {
+            let Some(projected) = project_team_source(
+                &reference.source,
+                TeamCalendarSharing::All,
+                &reference.viewer_emails,
+            ) else {
+                continue;
+            };
+            if !matches!(projected.content, TeamCalendarContent::Details { .. }) {
+                continue;
+            }
+            if let Some(link) = links.iter_mut().find(|link| {
+                link.event_id == reference.target.event_id
+                    && link.occurrence_key == reference.target.occurrence_key
+                    && link.can_view_meeting
+                    && link.team_event.is_none()
+            }) {
+                link.team_event = Some(projected);
+            }
+        }
+        Ok(links)
     }
     #[tracing::instrument(name = "calendar.notes.list", skip_all, fields(event_id = %target.event_id), err)]
     async fn list(&self, user: &str, target: NoteTarget) -> Result<Vec<MeetingNote>, NoteError> {

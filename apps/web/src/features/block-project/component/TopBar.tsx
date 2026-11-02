@@ -76,6 +76,7 @@ export function TopBar() {
     ...(isOwner() && !isSpecialProject
       ? [
           { op: 'rename' as const },
+          { op: 'copy' as const },
           { op: 'moveToProject' as const },
           { op: 'delete' as const },
         ]
@@ -94,8 +95,11 @@ export function TopBar() {
       icon: ChatWithAgentIcon,
       action: () => openChatWithAgent({ type: 'project', id, name: name() }),
       condition: () => !isSpecialProject,
-      buttonComponent: () => (
-        <ChatWithAgentButton entity={{ type: 'project', id, name: name() }} />
+      buttonComponent: (control) => (
+        <ChatWithAgentButton
+          grouped={control.grouped}
+          entity={{ type: 'project', id, name: name() }}
+        />
       ),
     },
     {
@@ -126,9 +130,9 @@ export function TopBar() {
                 {(tool) => (
                   <Show when={!tool.condition || tool.condition()}>
                     {tool.buttonComponent ? (
-                      <tool.buttonComponent />
+                      <tool.buttonComponent grouped />
                     ) : (
-                      <ToolButton tool={tool} />
+                      <ToolButton tool={tool} grouped />
                     )}
                   </Show>
                 )}

@@ -85,6 +85,45 @@ async fn copy_leaves_the_meetings_macro_call_out() {
 }
 
 #[tokio::test]
+async fn an_event_file_imports_onto_the_picked_calendar_with_its_join_link() {
+    // A forward is a guest deliberately inviting the recipient, so the copy
+    // they add keeps the call the file names, unlike a channel share's.
+    use crate::domain::ports::CalendarSnapshotImporter;
+    let call = "https://macro.com/app/meet/join/0123456789abcdef0123456789abcdef";
+    let description = format!("Agenda\n\nJoin Macro call: {call}");
+    let applied_id = Uuid::now_v7();
+    let repo = FakeRepo {
+        persisted_event_id: Some(applied_id),
+        creation_target: Some(creation_target(false)),
+        ..FakeRepo::default()
+    };
+    let upserts = repo.upserts.clone();
+    let provider = FakeProvider::new(FakeProviderBehavior::Echo);
+    let imported = provider.imported.clone();
+    let snapshot = CalendarEventExport {
+        description: Some(description.clone()),
+        location: Some(call.to_string()),
+        ..export(CalendarEventExportAccess::ChannelShared)
+    }
+    .snapshot();
+
+    let added = service(repo, provider, FakeTokens::ok())
+        .import_snapshot("macro|user", snapshot, Some(Uuid::now_v7()))
+        .await
+        .unwrap();
+
+    assert_eq!(added.id, applied_id);
+    assert_eq!(upserts.lock().unwrap().len(), 1);
+    let imported = imported.lock().unwrap();
+    assert_eq!(imported[0].1.ical_uid, "meeting@example.com");
+    assert_eq!(
+        imported[0].1.description.as_deref(),
+        Some(description.as_str())
+    );
+    assert_eq!(imported[0].1.location.as_deref(), Some(call));
+}
+
+#[tokio::test]
 async fn copy_refuses_before_the_provider_when_the_event_cannot_be_copied() {
     let out_of_office = CalendarEventExport {
         event_type: EventType::OutOfOffice,

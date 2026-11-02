@@ -119,7 +119,7 @@ impl ConnectionRepo for MockConnectionRepo {
         &self,
         _entity: &EntityConnection<'_>,
         _timestamp: u64,
-    ) -> anyhow::Result<StoredConnectionEntity> {
+    ) -> anyhow::Result<Option<StoredConnectionEntity>> {
         unimplemented!()
     }
     async fn update_user_connection_last_ping(
@@ -500,7 +500,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
 
     let tool_service_context = ai_tools::ToolServiceContext {
         cognition_tool_context: Default::default(),
-        connector_tool_context: ai_tools::build_connector_tool_context(pool.clone(), None),
+        connector_tool_context: ai_tools::build_connector_tool_context(pool.clone(), None, None),
         search_service_client: search_service_client.clone(),
         email_service_client: email_service_client_external.clone(),
         soup_service: soup_service.clone(),
@@ -543,6 +543,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         forms_tool_context,
         databases_sql_tool_context,
         import_tool_context: ai_tools::ToolImportToolContext::unwired(),
+        mcp_server_tool_context: ai_tools::ToolMcpServerToolContext::unwired(),
         chat_tool_context,
         channel_tool_context: ai_tools::build_channel_tool_context_without_side_effects(
             pool.clone(),
@@ -610,6 +611,7 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
                     properties_service.clone(),
                 ),
             team_repository: ai_tools::build_team_repository(pool.clone()),
+            initiative_service: tool_service_context.initiative_tool_context.service.clone(),
             project_service: tool_service_context.project_tool_context.service.clone(),
             databases_service: tool_service_context.databases_tool_context.service.clone(),
             document_service: document_tool_context.service.clone(),
@@ -714,8 +716,9 @@ pub async fn test_api_context(pool: sqlx::Pool<sqlx::Postgres>) -> std::sync::Ar
         search_service_client,
         email_service_client_external,
         authorization_state: authorization_state.clone(),
+
         decisions: Arc::new(jev::domain::decisions::DecisionServiceImpl::<
-            jev::domain::JevClassifier<jev::outbound::TypesafeJev>,
+            jev::domain::JevClassifier<jev::outbound::SystemOneJev>,
         >::new(None, admission.clone())),
         tool_free_completions: Arc::new(
             crate::cognition::service::structured_completion::ToolFreeCompletionService::new(

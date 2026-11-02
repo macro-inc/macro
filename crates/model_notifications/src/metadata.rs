@@ -2037,3 +2037,49 @@ mod initiative_discussion;
 pub use initiative_discussion::{InitiativeDiscussionMetadata, InitiativeDiscussionReason};
 mod crm_discussion;
 pub use crm_discussion::{CrmDiscussionMetadata, CrmDiscussionReason};
+
+/// A live message in an independently shared external chat.
+#[derive(Serialize, Deserialize, Debug, Clone, ToSchema)]
+#[serde(rename_all = "camelCase")]
+pub struct ExternalChatMessageMetadata {
+    /// The messaging service the chat lives in.
+    pub provider: model_entity::ExternalChatProvider,
+    /// The chat's name.
+    pub chat_name: String,
+    /// Stable message id; retries use it as their notification id.
+    pub message_id: Uuid,
+}
+impl Notification for ExternalChatMessageMetadata {
+    const TYPE_NAME: &'static str = "external_chat_message";
+}
+impl NotificationTitle for ExternalChatMessageMetadata {
+    fn format_title(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(self.chat_name.clone())
+    }
+    fn format_body(
+        &self,
+        _sender_id: Option<MacroUserIdStr<'_>>,
+    ) -> Result<String, rootcause::Report> {
+        Ok(format!("New {} message", self.provider.label()))
+    }
+}
+
+impl NotificationExtIos for ExternalChatMessageMetadata {
+    type NotifData = PushNotificationData;
+
+    fn collapse_key(&self, entity: &Entity<'_>) -> NotifCollapseKey {
+        NotifCollapseKey::new("external_chat").append(&entity.entity_id)
+    }
+
+    fn as_apns<'a>(
+        &self,
+        sender_id: Option<MacroUserIdStr<'a>>,
+        _entity: &Entity<'_>,
+        notification_id: Uuid,
+    ) -> Option<APNSPushNotification<Self::NotifData>> {
+        alert_apns(self, sender_id, notification_id, None).ok()
+    }
+}

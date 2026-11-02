@@ -1,5 +1,9 @@
 import { cleanup, render, waitFor } from '@solidjs/testing-library';
-import { focusManager, QueryClientProvider } from '@tanstack/solid-query';
+import {
+  focusManager,
+  onlineManager,
+  QueryClientProvider,
+} from '@tanstack/solid-query';
 import { ok } from 'neverthrow';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { queryClient } from '../../client';
@@ -144,4 +148,22 @@ describe('item snooze mutations', () => {
     await expect(unmute.mutateAsync(item)).rejects.toThrow('offline');
     expect(queryClient.getQueryData(key)).toEqual([original]);
   });
+});
+
+describe('offline mute writes', () => {
+  afterEach(() => onlineManager.setOnline(true));
+
+  it.each(['mute', 'unmute'] as const)(
+    'settles an offline %s instead of waiting for the network',
+    async (kind) => {
+      onlineManager.setOnline(false);
+      const networkDown = new TypeError('Failed to fetch');
+      client.unsubscribeItem.mockRejectedValue(networkDown);
+      client.removeUnsubscribeItem.mockRejectedValue(networkDown);
+      const mutations = setup();
+
+      await expect(mutations[kind].mutateAsync(item)).rejects.toBe(networkDown);
+      expect(queryClient.getQueryData(key)).toEqual([original]);
+    }
+  );
 });

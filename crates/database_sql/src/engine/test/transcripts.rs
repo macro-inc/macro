@@ -56,6 +56,7 @@ const ANA: RowId = RowId::from_uuid(Uuid::from_u128(0x01990000_0000_7000_8000_00
 /// the catalog from a database's detail.
 fn crm() -> Catalog {
     Catalog {
+        scope: None,
         tables: vec![
             Table {
                 id: DEALS,

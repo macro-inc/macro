@@ -16,9 +16,9 @@
 //!   pull request checks, reminders for events that have ended, and document
 //!   mentions of documents the viewer does not own.
 //!
-//! A row is listed only while it shows something. Team invites and inbox
-//! reconnection notices have no row at all. Each row also says who it is
-//! from and what the viewer can do from it.
+//! A row is listed only while it shows something. Team invites, inbox
+//! reconnection notices and external chat messages have no row at all. Each
+//! row also says who it is from and what the viewer can do from it.
 
 use std::collections::{HashMap, HashSet};
 
@@ -419,7 +419,9 @@ fn place_event(notification: &FeedNotification, now: DateTime<Utc>) -> Option<(S
         | NotifEvent::GithubPrComment(_)
         | NotifEvent::GithubPrMention(_)
         | NotifEvent::GithubPrReview(_) => (Slot::PullRequest, true),
-        NotifEvent::InboxReauthRequired(_) | NotifEvent::InviteToTeam(_) => return None,
+        NotifEvent::InboxReauthRequired(_)
+        | NotifEvent::InviteToTeam(_)
+        | NotifEvent::ExternalChatMessage(_) => return None,
         // Channel activity and discussions are placed by their own rules; on
         // any other entity they have no row.
         NotifEvent::ChannelMention(_)

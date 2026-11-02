@@ -1,9 +1,10 @@
 import type { CreatableBlock } from '../types';
+import { creatableId } from './creatable';
 
 type UsageHistory = Record<string, { count: number; lastUsedAt: number }>;
 
 export function launcherItemKey(item: CreatableBlock): string {
-  return String(item.hotkeyToken ?? `${item.label}:${item.hotkey}`);
+  return String(item.hotkeyToken ?? `${creatableId(item)}:${item.hotkey}`);
 }
 
 export function sortLauncherBlocks(

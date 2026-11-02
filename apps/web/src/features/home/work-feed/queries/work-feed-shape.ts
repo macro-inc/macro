@@ -31,6 +31,7 @@ export const workFeedShape: AttentionFeedShape<
       // A change this build does not know can only be caught up by a read.
       .exhaustive(() => ({ kind: 'invalidated' })),
   entries: (page) => page.user.workFeed.entries,
+  nextPosition: (page) => page.user.workFeed.nextPosition,
   withEntries: (page, entries) => ({
     ...page,
     user: { ...page.user, workFeed: { ...page.user.workFeed, entries } },

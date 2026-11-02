@@ -124,12 +124,24 @@ impl HarnessAuthorizationRepo for PgHarnessAuthorizationRepo {
         row.map(HarnessTokenAuthorization::try_from).transpose()
     }
 
+    /// Records a token's use, at most about once a minute per token.
+    ///
+    /// Every harness-authenticated request calls this, and one token can carry
+    /// tens of requests a second. Rewriting its row each time queues them all on
+    /// the row lock, each holding a connection, so one slow commit stalls every
+    /// request behind it. A recent timestamp is left alone, and a row another
+    /// request is already updating is skipped rather than waited on.
     async fn mark_harness_token_used(&self, token_id: Uuid) -> Result<(), Self::Err> {
         sqlx::query!(
             r#"
             UPDATE harness_tokens
             SET last_used_at = now()
-            WHERE id = $1
+            WHERE id = (
+                SELECT id FROM harness_tokens
+                WHERE id = $1
+                  AND (last_used_at IS NULL OR last_used_at < now() - interval '1 minute')
+                FOR UPDATE SKIP LOCKED
+            )
             "#,
             token_id,
         )

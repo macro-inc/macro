@@ -1,16 +1,19 @@
 import { CollapsibleSection, ViewSidebar } from '@app/components/view-shell';
 import { useFeatureFlag } from '@app/lib/analytics/posthog';
 import { getIconConfig } from '@core/component/EntityIcon';
-import { enableCrmActivity } from '@core/constant/featureFlags';
+import {
+  enableCrmActivity,
+  enableDatabases,
+} from '@core/constant/featureFlags';
 import { isTouchDevice } from '@core/mobile/isTouchDevice';
-import BuildingsIcon from '@phosphor/buildings.svg';
-import ExportIcon from '@phosphor/download-simple.svg';
-import GearIcon from '@phosphor/gear-six.svg';
-import ListIcon from '@phosphor/list-bullets.svg';
-import PlusIcon from '@phosphor/plus.svg';
-import SidebarIcon from '@phosphor/sidebar-simple.svg';
-import ImportIcon from '@phosphor/upload-simple.svg';
-import UsersIcon from '@phosphor/users.svg';
+import BuildingsIcon from '@icon/system/regular/buildings.svg';
+import ExportIcon from '@icon/system/regular/download-simple.svg';
+import GearIcon from '@icon/system/regular/gear-six.svg';
+import ListIcon from '@icon/system/regular/list-bullets.svg';
+import PlusIcon from '@icon/system/regular/plus.svg';
+import SidebarIcon from '@icon/system/regular/sidebar-simple.svg';
+import ImportIcon from '@icon/system/regular/upload-simple.svg';
+import UsersIcon from '@icon/system/regular/users.svg';
 import { Button, Tooltip } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { createSignal, For, type JSX, Show } from 'solid-js';
@@ -26,6 +29,7 @@ const RECORD_ICONS = {
   email: getIconConfig('email').icon,
   notes: getIconConfig('md').icon,
   calls: getIconConfig('call').icon,
+  databases: getIconConfig('database').icon,
 };
 
 export function CrmSidebar(props: {
@@ -54,6 +58,7 @@ export function CrmSidebar(props: {
   searchLabel?: string;
 }) {
   const activityFlag = useFeatureFlag(enableCrmActivity);
+  const databasesFlag = useFeatureFlag(enableDatabases);
   const [recordsOpen, setRecordsOpen] = createSignal(true);
   const [listsOpen, setListsOpen] = createSignal(true);
   return (
@@ -67,9 +72,10 @@ export function CrmSidebar(props: {
               <Show when={props.onCollapse}>
                 <Tooltip label="Collapse CRM sidebar">
                   <Button
+                    aria-label="Collapse CRM sidebar"
+                    tooltip="Collapse CRM sidebar"
                     variant="ghost"
-                    size="icon-sm"
-                    label="Collapse CRM sidebar"
+                    size="icon-xs"
                     onClick={props.onCollapse}
                   >
                     <SidebarIcon class="size-4" />
@@ -111,7 +117,12 @@ export function CrmSidebar(props: {
               <For
                 each={[
                   ...CRM_RECORDS,
-                  ...(activityFlag().enabled ? CRM_ACTIVITY_TABS : []),
+                  ...(activityFlag().enabled
+                    ? CRM_ACTIVITY_TABS.filter(
+                        (tab) =>
+                          tab.id !== 'databases' || databasesFlag().enabled
+                      )
+                    : []),
                 ]}
               >
                 {(record) => (

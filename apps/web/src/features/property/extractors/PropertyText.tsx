@@ -1,7 +1,8 @@
 import { isBotPrincipalId } from '@core/constant/macroAgent';
 import type { EntityReference } from '@service-properties/generated/schemas/entityReference';
 import { cn } from '@ui';
-import { type JSX, Show } from 'solid-js';
+import { type JSX, Show, useContext } from 'solid-js';
+import { PropertyRootContext } from '../core/context';
 import { usePropertyEntityDisplay } from '../hooks/usePropertyEntityDisplay';
 import { usePropertyUserDisplay } from '../hooks/usePropertyUserDisplay';
 import type { Property } from '../types';
@@ -10,6 +11,7 @@ import {
   formatDate,
   formatNumber,
   formatPropertyValue,
+  formatTimeRange,
 } from '../utils/formatting';
 import {
   getEntityValues,
@@ -18,6 +20,7 @@ import {
   hasValue,
   isBooleanProperty,
   isDateProperty,
+  isDateRangeProperty,
   isEntityProperty,
   isLinkProperty,
   isNumberProperty,
@@ -44,6 +47,7 @@ type Props = {
  * - NUMBER: formatted number
  * - BOOLEAN: "True"/"False"
  * - DATE: formatted date
+ * - DATE_RANGE: formatted range of days
  * - SELECT_*: first option's display label
  * - ENTITY+USER (single): user's first name
  * - ENTITY+USER (multi): "N people"
@@ -73,21 +77,30 @@ export function PropertyText(props: Props) {
   return (
     <Show
       keyed
-      when={singleEntity()}
+      when={singleEntity()?.entity_id}
       fallback={<PropertyTextValue {...props} userId={userId()} />}
     >
-      {(entity) => <EntityPropertyText entity={entity} class={props.class} />}
+      {(entityId) => (
+        <EntityPropertyText
+          entityId={entityId}
+          entityType={singleEntity()?.entity_type}
+          class={props.class}
+        />
+      )}
     </Show>
   );
 }
 
 function EntityPropertyText(props: {
-  entity: EntityReference;
+  entityId: string;
+  entityType: EntityReference['entity_type'] | undefined;
   class?: string;
 }) {
+  const root = useContext(PropertyRootContext);
   const { name, icon } = usePropertyEntityDisplay(
-    () => props.entity.entity_id,
-    () => props.entity.entity_type
+    () => props.entityId,
+    () => props.entityType,
+    { loadingName: () => root?.pickedEntityName(props.entityId) }
   );
   return (
     <span class={cn('inline-flex min-w-0 items-center gap-1.5', props.class)}>
@@ -162,6 +175,8 @@ function extractText(property: Property): string {
     return property.value === null ? '' : formatBoolean(property.value);
   if (isDateProperty(property))
     return property.value === null ? '' : formatDate(property.value);
+  if (isDateRangeProperty(property))
+    return property.value === null ? '' : formatTimeRange(property.value);
 
   if (isSelectProperty(property)) {
     const first = getSelectValues(property)[0];

@@ -215,3 +215,43 @@ async fn an_owner_approval_cannot_execute_after_the_original_turn_is_superseded(
     assert_eq!(body_json(response).await["result"]["isError"], true);
     assert!(!service.forward.was_called());
 }
+
+/// Macro's own tools write as the agent the session row is bound to. A bot
+/// the agent names in its arguments never reaches the credential.
+#[tokio::test]
+async fn macro_tools_are_attributed_to_the_sessions_agent_not_one_the_caller_names() {
+    let StubSessions(Ok(mut grant)) = prompted_by(Some(asker())) else {
+        unreachable!("granting grants");
+    };
+    grant.agent = BotId::TEST_B;
+    let transport = Arc::new(ActorTransport::default());
+    let service =
+        gated(StubSessions(Ok(grant)), SpyCredentials::knowing()).with_actor_mcp(transport.clone());
+    let request = json_request(
+        &json!({"jsonrpc":"2.0","id":9,"method":"tools/call","params":{"name":"Comment","arguments":{
+            "acting_as":"requester",
+            "bot_id": BotId::TEST_A.to_string(),
+            "agent_id": BotId::TEST_A.to_string(),
+        }}})
+        .to_string(),
+    );
+
+    let response = service
+        .proxy(
+            &SessionToken::new("session"),
+            EgressTarget::McpServer(McpDestination::Macro),
+            request,
+        )
+        .await
+        .unwrap();
+
+    assert_eq!(
+        body_json(response).await["result"]["content"][0]["text"],
+        "ok"
+    );
+    assert_eq!(*service.credentials.agents.lock().unwrap(), [BotId::TEST_B]);
+    assert_eq!(
+        service.credentials.asked.lock().unwrap()[0].0,
+        asker().to_string()
+    );
+}

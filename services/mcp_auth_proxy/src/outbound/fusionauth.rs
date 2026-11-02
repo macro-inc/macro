@@ -6,7 +6,7 @@ use tracing::Instrument;
 
 use crate::domain::{
     models::{RefreshToken, UpstreamTokens},
-    ports::{OAuthProvider, UpstreamTokensFuture},
+    ports::{OAuthProvider, UpstreamRevocationFuture, UpstreamTokensFuture},
 };
 
 /// FusionAuth-backed OAuth provider for the MCP auth proxy.
@@ -81,6 +81,22 @@ impl OAuthProvider for FusionAuthOAuthProvider {
                     refresh_token: grant.refresh_token.into(),
                     expires_in: grant.expires_in,
                 })
+            }
+            .instrument(span),
+        )
+    }
+
+    fn revoke_refresh_token<'a>(
+        &'a self,
+        refresh_token: &'a RefreshToken,
+    ) -> UpstreamRevocationFuture<'a> {
+        let span = tracing::debug_span!("FusionAuthOAuthProvider::revoke_refresh_token");
+        Box::pin(
+            async move {
+                self.client
+                    .revoke_refresh_token(refresh_token.as_str())
+                    .await
+                    .map_err(anyhow::Error::from)
             }
             .instrument(span),
         )

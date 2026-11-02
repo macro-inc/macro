@@ -12,6 +12,7 @@
 //! 5. issue a short-lived broker code for the MCP client loopback callback
 //! 6. exchange that code at `/token` after redirect URI and PKCE validation
 //! 7. support refresh-token exchanges against the upstream provider
+//! 8. revoke a client's refresh-token family at `/revoke` (RFC 7009)
 //!
 //! Module layout:
 //! - `domain`: auth proxy state, models, ports, and service logic

@@ -14,6 +14,12 @@ export type OpenCreatedItem = (item: {
 }) => boolean;
 
 export type CreatableBlock = Omit<HotkeyRegistrationOptions, 'scopeId'> & {
+  /**
+   * Stable English name that keys the create-menu catalog and usage history.
+   * Set it whenever `label` is translated; absent, `label` stands in.
+   */
+  id?: string;
+  /** Display text, in the interface language. */
   label: string;
   launcherHint?: string;
   blockName: CreatableName;

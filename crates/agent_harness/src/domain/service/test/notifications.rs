@@ -731,7 +731,7 @@ async fn a_blocked_worker_does_not_block_discovery_or_renewal_or_queue_duplicate
 #[tokio::test]
 async fn a_settled_import_wakes_an_idle_session_with_its_final_report() {
     use agent_runtime_protocol::domain::notification::{
-        ImportOutcome, ImportSettlement, ReviewSettlement,
+        ImportOutcome, ImportSettlement, ImportWorkspace, ReviewSettlement,
     };
     let outbox = Arc::new(Outbox::default());
     let ((service, repo, containers, _, _), mut turns) = harness_with_outbox(outbox.clone());
@@ -746,6 +746,7 @@ async fn a_settled_import_wakes_an_idle_session_with_its_final_report() {
                 subject_id: review.to_string(),
                 event: NotificationEvent::ReviewSettled(ReviewSettlement::Import {
                     import: ImportSettlement {
+                        source: ImportWorkspace::Notion,
                         outcome: ImportOutcome::Completed,
                         error: None,
                         imported: 3,

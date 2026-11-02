@@ -17,6 +17,22 @@ fn only_owner_can_share_session_view_with_channel() {
 }
 
 #[test]
+fn only_the_owner_shares_an_external_chat_with_a_channel() {
+    for (access, expected) in [
+        (None, None),
+        (Some(AccessLevel::View), None),
+        (Some(AccessLevel::Comment), None),
+        (Some(AccessLevel::Edit), None),
+        (Some(AccessLevel::Owner), Some(AccessLevel::View)),
+    ] {
+        assert_eq!(
+            grant_level(ReferencedShareItemType::ExternalChat, None, access),
+            expected
+        );
+    }
+}
+
+#[test]
 fn existing_reference_types_keep_view_sharing() {
     for kind in [
         ReferencedShareItemType::Database,

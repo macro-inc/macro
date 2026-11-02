@@ -63,6 +63,11 @@ function ActionsMenuItem(props: {
         e.preventDefault();
         e.stopPropagation();
       }}
+      on:pointerdown={(e) => {
+        // Keep the editor focused so /gif (and other slash actions) can run.
+        // iOS still emits mousedown after a cancelled pointerdown; cancel both.
+        e.preventDefault();
+      }}
       on:mousedown={(e) => {
         e.preventDefault();
         e.stopPropagation();

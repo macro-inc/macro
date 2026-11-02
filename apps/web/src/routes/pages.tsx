@@ -70,7 +70,7 @@ export function LoginPopupSuccess() {
     <div class="h-full overflow-y-hidden">
       <div class="relative flex flex-row items-center pt-4 h-full">
         <Button
-          variant="outline"
+          variant="secondary"
           onClick={() => {
             publishLoginSuccess();
             window.close();

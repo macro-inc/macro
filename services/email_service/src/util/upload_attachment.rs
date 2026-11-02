@@ -28,7 +28,7 @@ mod test;
 #[derive(Error, Debug)]
 pub enum UploadAttachmentError {
     #[error("Gmail API rate limit exceeded")]
-    RateLimited,
+    RateLimited(EmailApiError),
 
     #[error("Failed to fetch attachment data from Gmail: {0}")]
     GmailFetchFailed(EmailApiError),
@@ -213,7 +213,7 @@ async fn fetch_gmail_attachment_data(
         .get_attachment(link.id, &p.email_provider_id, &p.provider_attachment_id)
         .await
         .map_err(|error| match error {
-            EmailApiError::RateLimited { .. } => UploadAttachmentError::RateLimited,
+            error @ EmailApiError::RateLimited { .. } => UploadAttachmentError::RateLimited(error),
             // Preserve the provider error so API handlers can map it to the
             // right status instead of collapsing everything to 500.
             error => UploadAttachmentError::GmailFetchFailed(error),

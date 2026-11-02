@@ -52,6 +52,19 @@ export function useGetOrCreateDirectMessageMutation(
   }));
 }
 
+/**
+ * Resolves the 1:1 DM with a recipient when a control is pressed. Avatars in
+ * a message list render by the dozen, and a mutation observer per avatar
+ * costs setup for a press that rarely comes.
+ */
+export async function getOrCreateDirectMessage(recipientId: string) {
+  const result = await storageServiceClient.getOrCreateDirectMessage({
+    recipient_id: recipientId,
+  });
+  fireAndForget(invalidateListChannels(), 'channel-list');
+  return result;
+}
+
 type GetOrCreatePrivateChannelParams = {
   recipients: string[];
 };

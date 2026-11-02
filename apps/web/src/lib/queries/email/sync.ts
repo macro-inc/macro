@@ -9,11 +9,7 @@ import {
   RefreshEmailEventOneOfOnethreeEvent,
 } from '@service-email/generated/schemas';
 import { leadingAndTrailing, throttle } from '@solid-primitives/scheduled';
-import {
-  clearBackfillProgress,
-  invalidateBackfillJobs,
-  setBackfillProgress,
-} from './backfill';
+import { clearBackfillProgress, setBackfillProgress } from './backfill';
 import { emailKeys } from './keys';
 import { invalidateEmailLinks } from './link';
 
@@ -72,7 +68,6 @@ export function handleRefreshEmail(payload: unknown): void {
     clearBackfillProgress(event.link_id);
     invalidateAllSoup();
     invalidateEmailLinks();
-    invalidateBackfillJobs();
     return;
   }
 
@@ -89,7 +84,6 @@ export function handleRefreshEmail(payload: unknown): void {
     if (event.status === BackfillStatus.failed) {
       clearBackfillProgress(event.link_id);
       invalidateEmailLinks();
-      invalidateBackfillJobs();
       if (ENABLE_INBOX_SYNC_STATUS) {
         toast.failure('Inbox sync failed');
       }
@@ -107,7 +101,6 @@ export function handleRefreshEmail(payload: unknown): void {
     if (event.status === BackfillStatus.complete) {
       clearBackfillProgress(event.link_id);
       invalidateEmailLinks();
-      invalidateBackfillJobs();
       if (ENABLE_INBOX_SYNC_STATUS) {
         toast.success('Inbox synced');
       }

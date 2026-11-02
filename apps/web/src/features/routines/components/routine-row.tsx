@@ -5,12 +5,15 @@ import {
 import { EntityIcon } from '@core/component/EntityIcon';
 import { Layout as EntityLayout } from '@entity/core/Layout';
 import { Slot as EntitySlot } from '@entity/core/Slot';
-import ClockIcon from '@phosphor/clock-clockwise.svg';
+import ClockIcon from '@icon/system/regular/clock-clockwise.svg';
 import { cn, InlineCheckbox, Layer, Tooltip } from '@ui';
 import { type JSX, type ParentProps, Show } from 'solid-js';
 import type { RoutineRow } from '../core/types';
 
-/** Shared geometry keeps routine properties aligned with their column headers. */
+/**
+ * Shared geometry keeps routine properties aligned with their column headers.
+ * A narrow list (a phone) drops the headers and collapses the row to one line.
+ */
 export function RoutineRowLayout(
   props: ParentProps<Pick<JSX.HTMLAttributes<HTMLDivElement>, 'class' | 'role'>>
 ) {
@@ -18,7 +21,7 @@ export function RoutineRowLayout(
     <EntityLayout
       role={props.role}
       class={cn(
-        'grid min-h-10 min-w-[740px] grid-cols-[minmax(12rem,1fr)_8rem_7rem_minmax(8rem,12rem)_7rem] items-center gap-2 px-3',
+        'grid min-h-10 min-w-[740px] grid-cols-[minmax(12rem,1fr)_8rem_7rem_minmax(8rem,12rem)_7rem] items-center gap-2 px-3 touch:min-h-11 @max-[760px]/routines:min-w-0 @max-[760px]/routines:grid-cols-[minmax(0,1fr)_auto_auto_auto]',
         props.class
       )}
     >
@@ -50,7 +53,7 @@ export function RoutineListRow(props: {
   return (
     <div
       role="row"
-      class="soup-list-entity @container/entity mx-1 min-w-[740px] rounded-xl py-0.5 hover:bg-list-hover focus-within:bg-list-highlighted"
+      class="soup-list-entity @container/entity mx-1 min-w-[740px] rounded-xl py-0.5 hover:bg-list-hover focus-within:bg-list-highlighted @max-[760px]/routines:min-w-0"
       onClick={() => props.onOpen(props.row.id)}
     >
       <RoutineRowLayout class="px-2 text-sm">
@@ -65,7 +68,10 @@ export function RoutineListRow(props: {
             </button>
           </Tooltip>
         </EntitySlot>
-        <EntitySlot role="cell" class="min-w-0 text-xs text-ink-muted">
+        <EntitySlot
+          role="cell"
+          class="min-w-0 text-xs text-ink-muted @max-[760px]/routines:hidden"
+        >
           <Tooltip label={props.row.creator} class="max-w-full">
             <span class="truncate">{props.row.creator}</span>
           </Tooltip>
@@ -105,7 +111,9 @@ export function RoutineListRow(props: {
                   class="size-3.5 shrink-0"
                 />
               </Show>
-              <span class="truncate">{props.row.target}</span>
+              <span class="truncate @max-[760px]/routines:sr-only">
+                {props.row.target}
+              </span>
             </span>
           </Tooltip>
         </EntitySlot>
@@ -126,7 +134,9 @@ export function RoutineListRow(props: {
                 onClick={() => props.onToggle(props.row)}
               >
                 <InlineCheckbox checked={props.row.enabled} />
-                <span>{props.row.enabled ? 'Enabled' : 'Disabled'}</span>
+                <span class="@max-[760px]/routines:hidden">
+                  {props.row.enabled ? 'Enabled' : 'Disabled'}
+                </span>
               </button>
             </Tooltip>
           </Layer>

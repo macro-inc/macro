@@ -588,11 +588,11 @@ function Gutter(props: GutterProps) {
       onLostPointerCapture={onPointerUp}
       onKeyDown={props.resizable ? onKeyDown : undefined}
     >
-      {/* Spaced panels can omit the divider while retaining resize feedback. */}
+      {/* Match the enclosing Surface border; spaced panels can omit the divider. */}
       <Show when={props.showDivider}>
         <div
           class={cn(
-            'absolute border-edge-frame touch:hidden',
+            'absolute border-edge touch:hidden',
             horizontal() ? 'border-l-[1px]' : 'border-t-[1px]'
           )}
           style={barStyle('1px')}

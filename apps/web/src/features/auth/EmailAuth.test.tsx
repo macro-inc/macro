@@ -15,11 +15,16 @@ const mocks = vi.hoisted(() => ({
   refetch: vi.fn(),
   failure: vi.fn(),
   success: vi.fn(),
+  alert: vi.fn(),
   linkId: 'oauth-link',
-  searchParams: {} as Record<string, string>,
+  searchParams: {} as Record<string, string | string[]>,
+  tutorialComplete: true as boolean,
   restore: vi.fn(),
+  track: vi.fn(),
   openAddInbox: vi.fn(),
   fetchProviders: vi.fn(),
+  custom: vi.fn(),
+  dismiss: vi.fn(),
 }));
 vi.mock('@solidjs/router', () => ({
   useNavigate: () => mocks.navigate,
@@ -41,15 +46,22 @@ vi.mock('@core/auth', () => ({ updateUserAuth: vi.fn() }));
 vi.mock('@core/auth/email', () => ({ redirectToEmailAuth: vi.fn() }));
 vi.mock('@core/auth/login-events', () => ({ publishLoginSuccess: vi.fn() }));
 vi.mock('@app/lib/analytics/analytics-context', () => ({
-  useAnalytics: () => ({ pageView: vi.fn() }),
+  useAnalytics: () => ({ pageView: vi.fn(), track: mocks.track }),
 }));
 vi.mock('@core/component/Toast/Toast', () => ({
-  toast: { success: mocks.success, failure: mocks.failure },
+  toast: {
+    success: mocks.success,
+    failure: mocks.failure,
+    alert: mocks.alert,
+    custom: mocks.custom,
+    dismiss: mocks.dismiss,
+  },
 }));
 vi.mock('@core/constant/SettingsState', () => ({
   restoreSettingsReturnTo: vi.fn(),
 }));
 vi.mock('@core/email-link/return-layout', () => ({
+  readInboxLinkReturn: mocks.restore,
   consumeInboxLinkReturn: mocks.restore,
 }));
 vi.mock('@core/mobile/isMobile', () => ({ isMobile: () => false }));
@@ -58,7 +70,9 @@ vi.mock('@core/mobile/isNativeMobilePlatform', () => ({
 }));
 vi.mock('@queries/auth/user-info', () => ({
   invalidateAllAfterLogin: vi.fn(),
-  useUserInfoQuery: () => ({ data: { tutorialComplete: true } }),
+  useUserInfoQuery: () => ({
+    data: { tutorialComplete: mocks.tutorialComplete },
+  }),
 }));
 vi.mock('@ui', () => ({
   Button: (props: JSX.ButtonHTMLAttributes<HTMLButtonElement>) => (
@@ -104,6 +118,7 @@ const { EmailLinkCallback } = makeEmailAuthComponents({
 beforeEach(() => {
   vi.clearAllMocks();
   mocks.linkId = 'oauth-link';
+  mocks.tutorialComplete = true;
   mocks.searchParams = { link_id: mocks.linkId };
   mocks.fetchProviders.mockResolvedValue({
     gmail: true,
@@ -112,8 +127,12 @@ beforeEach(() => {
       'https://login.microsoftonline.com/organizations/v2.0/adminconsent?client_id=app',
   });
   mocks.refetch.mockResolvedValue({});
-  mocks.restore.mockReturnValue({ url: '/calendar/week' });
-  mocks.init.mockReturnValue(okAsync(undefined));
+  mocks.restore.mockReturnValue({
+    url: '/calendar/week',
+    scopes: 'gmail_and_calendar',
+  });
+  mocks.custom.mockReturnValue(7);
+  mocks.init.mockReturnValue(okAsync('new-inbox'));
 });
 afterEach(cleanup);
 
@@ -130,6 +149,57 @@ describe('inbox consent callback', () => {
       forceShare: false,
     });
     expect(mocks.refetch).toHaveBeenCalledOnce();
+    expect(mocks.track).toHaveBeenCalledExactlyOnceWith(
+      'email_link_callback_result',
+      { outcome: 'connected' }
+    );
+  });
+
+  it('names the address when the account chooser returned an inbox that was already connected', async () => {
+    mocks.restore.mockReturnValue({
+      url: '/email',
+      addition: {
+        provider: 'GMAIL',
+        connectedInboxes: [
+          { id: 'gmail-inbox', emailAddress: 'person@example.com' },
+          { id: 'workspace-inbox', emailAddress: 'person@example.org' },
+        ],
+      },
+    });
+    mocks.init.mockReturnValue(okAsync('workspace-inbox'));
+    render(() => <EmailLinkCallback />);
+    await waitFor(() =>
+      expect(mocks.navigate).toHaveBeenCalledWith('/email', { replace: true })
+    );
+    expect(mocks.alert).toHaveBeenCalledExactlyOnceWith(
+      expect.stringContaining('person@example.org'),
+      expect.anything()
+    );
+    expect(mocks.success).not.toHaveBeenCalled();
+    expect(mocks.track).toHaveBeenCalledExactlyOnceWith(
+      'email_link_callback_result',
+      { outcome: 'already_connected' }
+    );
+  });
+
+  it('reports a new inbox from a plain add as connected', async () => {
+    mocks.restore.mockReturnValue({
+      url: '/email',
+      addition: {
+        provider: 'GMAIL',
+        connectedInboxes: [
+          { id: 'gmail-inbox', emailAddress: 'person@example.com' },
+        ],
+      },
+    });
+    render(() => <EmailLinkCallback />);
+    await waitFor(() =>
+      expect(mocks.track).toHaveBeenCalledExactlyOnceWith(
+        'email_link_callback_result',
+        { outcome: 'connected' }
+      )
+    );
+    expect(mocks.alert).not.toHaveBeenCalled();
   });
 
   it('explains pending work and lets the user return without a later redirect', async () => {
@@ -173,6 +243,10 @@ describe('inbox consent callback', () => {
       )
     );
     expect(mocks.navigate).toHaveBeenCalledOnce();
+    expect(mocks.track).toHaveBeenCalledExactlyOnceWith(
+      'email_link_callback_result',
+      { outcome: 'no_gmail_grant' }
+    );
   });
 
   it('still holds the callback for a shared-inbox confirmation', async () => {
@@ -250,7 +324,57 @@ describe('consent that ended without a grant', () => {
     expect(screen.getByRole('status').textContent).toBe('loading');
   });
 
-  it('returns quietly when the user cancelled on the consent screen', async () => {
+  it('explains a consent that left out email with a prompt that retries the same request', async () => {
+    mocks.searchParams = {
+      link_id: 'oauth-link',
+      email_link_error: 'gmail_not_granted',
+      provider: 'gmail',
+    };
+    render(() => <EmailLinkCallback />);
+    await waitFor(() => expect(mocks.custom).toHaveBeenCalledOnce());
+    const [prompt, options] = mocks.custom.mock.calls[0] as [
+      { title: string; actions: Array<{ label: string; onClick: () => void }> },
+      { persistent: boolean; region: string },
+    ];
+    expect(prompt.title).toBe('Email access required');
+    expect(options).toEqual({ persistent: true, region: 'prompt-region' });
+    expect(mocks.init).not.toHaveBeenCalled();
+    expect(mocks.failure).not.toHaveBeenCalled();
+    expect(mocks.navigate).toHaveBeenCalledWith('/calendar/week', {
+      replace: true,
+    });
+    expect(mocks.track).toHaveBeenCalledExactlyOnceWith(
+      'email_link_callback_result',
+      { outcome: 'gmail_not_granted' }
+    );
+
+    expect(prompt.actions.map((action) => action.label)).toEqual(['Try again']);
+    prompt.actions[0].onClick();
+    expect(mocks.dismiss).toHaveBeenCalledWith(7);
+    expect(mocks.openAddInbox).toHaveBeenCalledExactlyOnceWith({
+      scopes: 'gmail_and_calendar',
+    });
+  });
+
+  it('retries with email alone when the refused flow left no stash', async () => {
+    mocks.restore.mockReturnValue(undefined);
+    mocks.searchParams = {
+      link_id: 'oauth-link',
+      email_link_error: 'gmail_not_granted',
+      provider: 'gmail',
+    };
+    render(() => <EmailLinkCallback />);
+    await waitFor(() => expect(mocks.custom).toHaveBeenCalledOnce());
+    const [prompt] = mocks.custom.mock.calls[0] as [
+      { actions: Array<{ onClick: () => void }> },
+    ];
+    prompt.actions[0].onClick();
+    expect(mocks.openAddInbox).toHaveBeenCalledExactlyOnceWith({
+      scopes: undefined,
+    });
+  });
+
+  it('says nothing was connected when the user cancelled on the consent screen', async () => {
     mocks.searchParams = {
       link_id: 'oauth-link',
       email_link_error: 'cancelled',
@@ -262,6 +386,7 @@ describe('consent that ended without a grant', () => {
         replace: true,
       })
     );
+    expect(mocks.alert).toHaveBeenCalledOnce();
     expect(mocks.failure).not.toHaveBeenCalled();
     expect(mocks.init).not.toHaveBeenCalled();
   });
@@ -293,5 +418,27 @@ describe('consent that ended without a grant', () => {
     expect(mocks.openAddInbox).toHaveBeenCalledOnce();
     expect(mocks.restore).not.toHaveBeenCalled();
     expect(mocks.navigate).toHaveBeenCalledOnce();
+  });
+
+  it('returns a first-run user to the deep-linked onboarding step', async () => {
+    mocks.tutorialComplete = false;
+    mocks.searchParams = { link_id: 'oauth-link', step: 'plan' };
+    render(() => <EmailLinkCallback />);
+    await waitFor(() =>
+      expect(mocks.navigate).toHaveBeenCalledWith('/onboarding?step=plan', {
+        replace: true,
+      })
+    );
+  });
+
+  it('drops an unknown step when returning a first-run user to onboarding', async () => {
+    mocks.tutorialComplete = false;
+    mocks.searchParams = { link_id: 'oauth-link', step: 'nope' };
+    render(() => <EmailLinkCallback />);
+    await waitFor(() =>
+      expect(mocks.navigate).toHaveBeenCalledWith('/onboarding', {
+        replace: true,
+      })
+    );
   });
 });

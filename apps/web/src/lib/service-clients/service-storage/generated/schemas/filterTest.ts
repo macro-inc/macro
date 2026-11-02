@@ -7,6 +7,7 @@
 import type { FilterTestOneOf } from './filterTestOneOf';
 import type { FilterTestOneOfFive } from './filterTestOneOfFive';
 import type { FilterTestOneOfNine } from './filterTestOneOfNine';
+import type { FilterTestOneOfOnefive } from './filterTestOneOfOnefive';
 import type { FilterTestOneOfOneone } from './filterTestOneOfOneone';
 import type { FilterTestOneOfOnethree } from './filterTestOneOfOnethree';
 import type { FilterTestOneOfSeven } from './filterTestOneOfSeven';
@@ -22,4 +23,5 @@ export type FilterTest =
   | FilterTestOneOfSeven
   | FilterTestOneOfNine
   | FilterTestOneOfOneone
-  | FilterTestOneOfOnethree;
+  | FilterTestOneOfOnethree
+  | FilterTestOneOfOnefive;

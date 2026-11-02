@@ -17,8 +17,16 @@ import {
   getTaskStatusOptionId,
 } from '@entity/utils/task-properties';
 import { PROPERTY_OPTION_IDS, SYSTEM_PROPERTY_IDS } from '@property/constants';
+import { z } from 'zod';
 
-export type TaskFacetContext = TagFacetContext;
+export const TASK_VIEWER = '@viewer';
+
+export type TaskFacetContext = TagFacetContext & { viewerId?: string };
+
+export const resolveTaskPersonId = (id: string, context: TaskFacetContext) =>
+  id === TASK_VIEWER
+    ? (context.viewerId ?? '00000000-0000-0000-0000-000000000000')
+    : id;
 
 export const EMPTY_TASK_FACET_CONTEXT: TaskFacetContext =
   EMPTY_TAG_FACET_CONTEXT;
@@ -133,10 +141,34 @@ export const TASK_FACETS: Facet<
   TaskFacetContext,
   TaskFacetOption
 >[] = [
-  { id: 'status', mode: 'or', options: TASK_STATUS_OPTIONS },
-  { id: 'priority', mode: 'or', options: TASK_PRIORITY_OPTIONS },
-  { id: 'assignees', mode: 'or', options: assigneeOption },
-  { id: 'created-by', mode: 'or', options: creatorOption },
+  {
+    id: 'status',
+    mode: 'or',
+    options: (id) =>
+      TASK_STATUS_OPTIONS.find((option) => option.id === id) ??
+      (z.string().guid().safeParse(id).success
+        ? statusOption(id, 'Unavailable status', id)
+        : undefined),
+  },
+  {
+    id: 'priority',
+    mode: 'or',
+    options: (id) =>
+      TASK_PRIORITY_OPTIONS.find((option) => option.id === id) ??
+      (z.string().guid().safeParse(id).success
+        ? priorityOption(id, 'Unavailable priority', id)
+        : undefined),
+  },
+  {
+    id: 'assignees',
+    mode: 'or',
+    options: (id, context) => assigneeOption(resolveTaskPersonId(id, context)),
+  },
+  {
+    id: 'created-by',
+    mode: 'or',
+    options: (id, context) => creatorOption(resolveTaskPersonId(id, context)),
+  },
   { id: TAG_FACET_ID, mode: 'or', options: tagOption },
 ];
 

@@ -58,6 +58,7 @@ export function ImageDetail(props: {
   return (
     <FileDetailLoadGate
       documentId={props.documentId}
+      entityType="image"
       label="image"
       load={loadImageDocument}
     >

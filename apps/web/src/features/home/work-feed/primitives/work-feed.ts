@@ -20,6 +20,7 @@ import {
   unmarkWorkFeedDone,
   type WorkFeedDone,
   type WorkFeedEntry,
+  type WorkFeedPageState,
   type WorkFeedScope,
   withoutDoneWorkFeedEntries,
   workFeedEntityKey,
@@ -40,6 +41,8 @@ export type WorkFeedOptions = {
   /** The normalized cache holding the feed's pages, when it is available. */
   cacheHost: Accessor<Pick<CacheHost, 'readQuery' | 'writeQuery'> | undefined>;
   scope: Accessor<WorkFeedScope>;
+  /** Narrows the feed's pages to one item state; live changes keep every state. */
+  state: Accessor<WorkFeedPageState | undefined>;
   enabled: Accessor<boolean>;
   /** Subscribes to transport reconnects, after which changes may be missed. */
   onReconnected?: (listener: () => void) => () => void;
@@ -77,7 +80,8 @@ export function createWorkFeed(options: WorkFeedOptions) {
     query,
     pages: {
       cachedQuery: workFeedCachedQuery,
-      variables: (cursor) => workFeedPageVariables(options.scope(), cursor),
+      variables: (cursor) =>
+        workFeedPageVariables(options.scope(), options.state(), cursor),
     },
     updates: {
       document: WorkFeedUpdatesDocument,

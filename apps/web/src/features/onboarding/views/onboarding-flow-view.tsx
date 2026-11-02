@@ -30,6 +30,8 @@ import { ToolsStep } from './tools-step';
 export function OnboardingFlowView(props: {
   /** A deep link to land on after onboarding. */
   next: string | undefined;
+  /** Raw `?step` from the entry link. Unknown values are ignored. */
+  step?: string;
   checkoutReturn: CheckoutReturn | undefined;
   onNavigate: (target: string) => void;
   /** Leaves the app for hosted checkout. */
@@ -58,6 +60,7 @@ export function OnboardingFlowView(props: {
   });
   const flow = createOnboardingFlow(context, {
     checkoutReturn: () => props.checkoutReturn,
+    requestedStep: () => props.step,
     record,
     signupMethod: () => {
       const accounts = emailAccounts.accounts();

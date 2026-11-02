@@ -7,6 +7,7 @@ import {
   enableCalendarScheduling,
   enableCrm,
   enableTasksReviews,
+  enableWhatsappLinked,
 } from '@core/constant/featureFlags';
 import { type Accessor, createMemo } from 'solid-js';
 import type { NavItemGates } from './nav-items';
@@ -24,6 +25,7 @@ export function useNavItemGates(): Accessor<NavItemGates> {
   const crm = useFeatureFlag(enableCrm);
   const reviews = useFeatureFlag(enableTasksReviews);
   const activity = useActivityFeedFlag();
+  const external = useFeatureFlag(enableWhatsappLinked);
   const { prefs } = useSidebarPrefs();
 
   return createMemo(() => ({
@@ -34,6 +36,7 @@ export function useNavItemGates(): Accessor<NavItemGates> {
     showCalls: ENABLE_CALLS,
     showReviews: reviews().enabled,
     showActivity: activity(),
+    showExternal: external().enabled,
     prefs: prefs(),
   }));
 }

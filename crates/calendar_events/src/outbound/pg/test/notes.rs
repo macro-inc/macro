@@ -44,6 +44,10 @@ async fn a_one_time_meeting_keeps_its_notes_after_a_provider_reschedule(pool: Pg
     .unwrap();
     let notes = PgNoteRepository::new(pool.clone());
     notes.link(owner, &original, &document, None).await.unwrap();
+    // A reader who can see this meeting can discover it from the document.
+    let references = notes.document_links(viewer, &document).await.unwrap();
+    assert_eq!(references.len(), 1);
+    assert_eq!(references[0].event_id, original.event_id);
 
     let starts_at = Utc.with_ymd_and_hms(2026, 7, 26, 16, 0, 0).unwrap();
     event.event.sequence += 1;
@@ -73,6 +77,31 @@ async fn a_one_time_meeting_keeps_its_notes_after_a_provider_reschedule(pool: Pg
     assert_eq!(
         notes.document_links(owner, &document).await.unwrap()[0].occurrence_key,
         "single"
+    );
+    // Losing calendar access hides the reference from a reader, even if a
+    // separate document grant remains. The owner retains the durable link.
+    let document_uuid = Uuid::parse_str(&document).unwrap();
+    sqlx::query!("INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES ($1, 'document', $2, 'user', 'view')", document_uuid, viewer)
+        .execute(&pool).await.unwrap();
+    sqlx::query!("UPDATE comms_channel_participants SET left_at = now() WHERE channel_id = $1 AND user_id = $2", channel, viewer)
+        .execute(&pool).await.unwrap();
+    assert_eq!(
+        PgAccessRepository::new(pool.clone())
+            .get_document_access(&document, Some(&viewer_id))
+            .await
+            .unwrap(),
+        Some(AccessLevel::View)
+    );
+    assert!(
+        notes
+            .document_links(viewer, &document)
+            .await
+            .unwrap()
+            .is_empty()
+    );
+    assert_eq!(
+        notes.document_links(owner, &document).await.unwrap().len(),
+        1
     );
     // A previously returned handle remains able to revoke after the move.
     notes.unlink(&original, &document).await.unwrap();
@@ -362,10 +391,36 @@ async fn channel_note_access_observes_membership_and_private_occurrences(pool: P
     sqlx::query!("INSERT INTO entity_access (entity_id, entity_type, source_id, source_type, access_level) VALUES ($1, 'calendar_event', $2, 'channel', 'view')", target.event_id, channel.to_string()).execute(&pool).await.unwrap();
     let notes = PgNoteRepository::new(pool.clone());
     assert!(notes.visible(viewer, &target).await.unwrap());
+    let document = Uuid::now_v7().to_string();
+    sqlx::query!("INSERT INTO \"Document\" (id, name, owner, \"fileType\") VALUES ($1, 'Channel notes', $2, 'md')", document, viewer).execute(&pool).await.unwrap();
+    notes.link(viewer, &target, &document, None).await.unwrap();
+    use crate::domain::notes::{MeetingNotes, MeetingNotesService};
+    use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
+    let service = MeetingNotes::new(PgNoteRepository::new(pool.clone()));
+    let receipt = EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
+        MacroUserIdStr::parse_from_str(viewer).unwrap(),
+        &document,
+        EntityType::Document,
+    );
+    let references = service.document_links(receipt.clone()).await.unwrap();
+    assert!(references[0].can_view_meeting);
+    assert_eq!(
+        references[0]
+            .event
+            .as_ref()
+            .unwrap()
+            .occurrence_key
+            .as_deref(),
+        Some(target.occurrence_key.as_str())
+    );
     let overrides =
         serde_json::json!([{ "recurrenceId": target.occurrence_key, "visibility": "private" }]);
     sqlx::query!("UPDATE calendar_event_sources SET normalized_payload = jsonb_set(jsonb_set(normalized_payload, '{occurrences,0,recurrenceId}', to_jsonb($2::text)), '{overrides}', $3) WHERE event_id = $1", target.event_id, target.occurrence_key, overrides).execute(&pool).await.unwrap();
     assert!(!notes.visible(viewer, &target).await.unwrap());
+    let references = service.document_links(receipt).await.unwrap();
+    assert!(!references[0].can_view_meeting);
+    assert!(references[0].event.is_none());
+    assert!(references[0].team_event.is_none());
     sqlx::query!("UPDATE calendar_event_sources SET normalized_payload = jsonb_set(normalized_payload, '{overrides}', '[]') WHERE event_id = $1", target.event_id).execute(&pool).await.unwrap();
     assert!(notes.visible(viewer, &target).await.unwrap());
     sqlx::query!("UPDATE comms_channel_participants SET left_at = now() WHERE channel_id = $1 AND user_id = $2", channel, viewer).execute(&pool).await.unwrap();
@@ -571,8 +626,35 @@ async fn team_detail_access_is_live_and_busy_only_never_reveals_notes(pool: PgPo
         notes.document_links(viewer, &document).await.unwrap()[0].event_title,
         "Shared meeting"
     );
+    use crate::domain::notes::{MeetingNotes, MeetingNotesService};
+    use crate::domain::team::TeamCalendarContent;
+    use entity_access::domain::models::{EntityAccessReceipt, EntityType, ViewAccessLevel};
+    let service = MeetingNotes::new(PgNoteRepository::new(pool.clone()));
+    let receipt = EntityAccessReceipt::<ViewAccessLevel>::dangerously_assert_authenticated_user(
+        MacroUserIdStr::parse_from_str(viewer).unwrap(),
+        &document,
+        EntityType::Document,
+    );
+    let references = service.document_links(receipt.clone()).await.unwrap();
+    let projection = references[0].team_event.as_ref().unwrap();
+    assert!(
+        matches!(&projection.content, TeamCalendarContent::Details { details } if details.title == "Planning")
+    );
+    assert_eq!(
+        notes
+            .team_reference_sources(viewer, &document)
+            .await
+            .unwrap()
+            .len(),
+        1
+    );
     sqlx::query!("UPDATE calendar_event_sources SET normalized_payload = jsonb_set(normalized_payload, '{event,visibility}', '\"private\"') WHERE event_id=$1", target.event_id).execute(&pool).await.unwrap();
     assert!(!notes.visible(viewer, &target).await.unwrap());
+    assert!(
+        service.document_links(receipt.clone()).await.unwrap()[0]
+            .team_event
+            .is_none()
+    );
     sqlx::query!("UPDATE calendar_event_sources SET normalized_payload = jsonb_set(normalized_payload, '{event,visibility}', '\"default\"') WHERE event_id=$1", target.event_id).execute(&pool).await.unwrap();
     assert!(notes.visible(viewer, &target).await.unwrap());
     sqlx::query!(
@@ -583,4 +665,9 @@ async fn team_detail_access_is_live_and_busy_only_never_reveals_notes(pool: PgPo
     .await
     .unwrap();
     assert!(!notes.visible(viewer, &target).await.unwrap());
+    assert!(
+        service.document_links(receipt).await.unwrap()[0]
+            .team_event
+            .is_none()
+    );
 }

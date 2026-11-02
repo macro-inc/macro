@@ -91,6 +91,10 @@ impl<R: ContactsRepository, N: ContactsNotifier> ContactsService for ContactsDom
     }
 }
 
+/// How many relationships go in one contacts message. SQS rejects message
+/// bodies over 256 KB, which a mailbox's whole contact list can exceed.
+const CONNECTIONS_PER_MESSAGE: usize = 500;
+
 /// Queue-backed implementation of [`ContactsIngress`].
 ///
 /// Serialises complete-graph or explicit-relationship messages and publishes
@@ -113,9 +117,14 @@ impl<Q: ContactsIngressQueue> ContactsIngress for SqsContactsIngress<Q> {
         &self,
         connections: Vec<ContactConnection>,
     ) -> Result<(), Report> {
-        self.queue
-            .publish_connections(ContactConnections::new(connections))
-            .await
+        // Each message is upserted on its own, so a retry after a partial
+        // publish only repeats upserts.
+        for chunk in connections.chunks(CONNECTIONS_PER_MESSAGE) {
+            self.queue
+                .publish_connections(ContactConnections::new(chunk.to_vec()))
+                .await?;
+        }
+        Ok(())
     }
 }
 

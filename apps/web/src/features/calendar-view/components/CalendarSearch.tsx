@@ -6,7 +6,6 @@ import {
   type CalendarTimeFormat,
   DEFAULT_CALENDAR_SOURCE,
 } from '@app/features/calendar/types';
-import { parseLocalDate } from '@app/features/calendar/utils/calendar-date';
 import { isCalendarRangeSupported } from '@app/features/calendar/utils/calendar-supported-range';
 import {
   conferenceJoinUrl,
@@ -23,16 +22,17 @@ import { registerHotkey } from '@core/hotkey/hotkeys';
 import { TOKENS } from '@core/hotkey/tokens';
 import { debouncedDependent } from '@core/util/debounce';
 import { fireAndForget } from '@core/util/fireAndForget';
+import { parseLocalDate } from '@core/util/local-date';
 import { openExternalUrl } from '@core/util/url';
 import EmptyStateCalendarSearchGraphic from '@design/empty-state-calendar-search.svg';
 import type { EntityData, WithSearch } from '@entity';
+import CaretLeftIcon from '@icon/system/regular/caret-left.svg';
+import SearchIcon from '@icon/system/regular/magnifying-glass.svg';
+import QuotesIcon from '@icon/system/regular/quotes.svg';
+import RepeatIcon from '@icon/system/regular/repeat.svg';
+import VideoCameraIcon from '@icon/system/regular/video-camera.svg';
+import XIcon from '@icon/system/regular/x.svg';
 import { Popover } from '@kobalte/core/popover';
-import CaretLeftIcon from '@phosphor/caret-left.svg';
-import SearchIcon from '@phosphor/magnifying-glass.svg';
-import QuotesIcon from '@phosphor/quotes.svg';
-import RepeatIcon from '@phosphor/repeat.svg';
-import VideoCameraIcon from '@phosphor/video-camera.svg';
-import XIcon from '@phosphor/x.svg';
 import {
   useCalendarMentionPreviewQuery,
   useCalendarSearchPreviewsQuery,
@@ -231,6 +231,7 @@ function CalendarEventPreviewContent(props: {
           </span>
           <Show when={props.event.isRecurring}>
             <RepeatIcon
+              aria-hidden={false}
               class="size-3 shrink-0 text-ink-muted"
               aria-label="Repeats"
             />
@@ -572,12 +573,12 @@ function CalendarSearchControl(props: {
       <div class="flex shrink-0 items-center gap-1">
         <Show when={rawQuery().trim()}>
           <Button
+            aria-label="Exact match"
+            tooltip="Exact match"
             type="button"
             variant="ghost"
             size="icon-sm"
-            square
             aria-pressed={filters().matchType === 'exact'}
-            label="Exact match"
             class={filters().matchType === 'exact' ? 'bg-active text-ink' : ''}
             onPointerDown={(event) => event.preventDefault()}
             onClick={() =>
@@ -678,12 +679,15 @@ function CalendarSearchControl(props: {
           >
             <Show when={props.expanded === false}>
               <Button
+                aria-label="Search events"
+                tooltip={{
+                  content: 'Search events',
+                  hotkey: TOKENS.calendar.search,
+                }}
                 ref={searchButton}
                 type="button"
-                variant="outline"
+                variant="secondary"
                 size="icon-md"
-                label="Search events"
-                hotkey={TOKENS.calendar.search}
                 aria-expanded="false"
                 aria-haspopup="dialog"
                 onClick={props.onExpand}
@@ -799,11 +803,11 @@ function CalendarSearchControl(props: {
                         {filterActions()}
                         <Show when={rawQuery()}>
                           <Button
+                            aria-label="Clear search"
+                            tooltip="Clear search"
                             type="button"
                             variant="ghost"
                             size="icon-sm"
-                            square
-                            label="Clear search"
                             onClick={() => {
                               changeQuery('');
                               inputRef?.focus();
@@ -900,10 +904,11 @@ function CalendarSearchControl(props: {
                                   >
                                     {(link) => (
                                       <Button
+                                        aria-label={`Join ${link().label}`}
+                                        tooltip={`Join ${link().label}`}
                                         type="button"
                                         variant="ghost"
                                         size="sm"
-                                        label={`Join ${link().label}`}
                                         class={cn(
                                           'px-2',
                                           link().kind === 'google'

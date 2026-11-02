@@ -4,7 +4,10 @@ import {
   placeAttentionFeedPatches,
   writeAttentionFeedPatches,
 } from './attention-feed-cache';
-import type { AttentionFeedShape } from './attention-feed-types';
+import type {
+  AttentionFeedPosition,
+  AttentionFeedShape,
+} from './attention-feed-types';
 import { createFakeAttentionFeedClient } from './tests/fake-client';
 
 type Entry = { key: string; sortAt: string };
@@ -12,7 +15,13 @@ type Patch =
   | { t: 'upserted'; entry: Entry }
   | { t: 'removed'; key: string }
   | { t: 'invalidated' };
-type Page = { feed: { entries: Entry[]; nextCursor: string | null } };
+type Page = {
+  feed: {
+    entries: Entry[];
+    nextCursor: string | null;
+    nextPosition: AttentionFeedPosition | null;
+  };
+};
 
 const shape: AttentionFeedShape<Page, Entry, Patch> = {
   key: (entry) => entry.key,
@@ -24,6 +33,7 @@ const shape: AttentionFeedShape<Page, Entry, Patch> = {
         ? { kind: 'removed', key: patch.key }
         : { kind: 'invalidated' },
   entries: (page) => page.feed.entries,
+  nextPosition: (page) => page.feed.nextPosition,
   withEntries: (page, entries) => ({ feed: { ...page.feed, entries } }),
 };
 
@@ -37,8 +47,12 @@ const at = (docId: string, minute: number) =>
 
 const upserted = (entry: Entry): Patch => ({ t: 'upserted', entry });
 const removed = (key: string): Patch => ({ t: 'removed', key });
-const page = (entries: Entry[], nextCursor: string | null = null): Page => ({
-  feed: { entries, nextCursor },
+const page = (
+  entries: Entry[],
+  nextCursor: string | null = null,
+  nextPosition: AttentionFeedPosition | null = null
+): Page => ({
+  feed: { entries, nextCursor, nextPosition },
 });
 
 const cachedQuery = {
@@ -71,6 +85,8 @@ describe('placeAttentionFeedPatches', () => {
     [at('p1-a', 50), at('p1-b', 40)],
     [at('p2-a', 30), at('p2-b', 20)],
   ];
+  // The last page's read stopped at its last row.
+  const more = { sortAt: '2026-02-01T10:20:00Z', entityId: 'p2-b' };
 
   it('removes an entry from whichever page holds it', () => {
     expect(
@@ -79,7 +95,7 @@ describe('placeAttentionFeedPatches', () => {
           shape,
           pages,
           [removed('document:p2-a')],
-          true
+          more
         )
       )
     ).toEqual([['p1-a', 'p1-b'], ['p2-b']]);
@@ -90,7 +106,7 @@ describe('placeAttentionFeedPatches', () => {
       shape,
       pages,
       [upserted(at('new', 45)), upserted(at('p2-b', 55))],
-      true
+      more
     );
     expect(ids(placed)).toEqual([['p2-b', 'p1-a', 'new', 'p1-b'], ['p2-a']]);
   });
@@ -98,7 +114,7 @@ describe('placeAttentionFeedPatches', () => {
   it('leaves an entry older than every loaded row to its page', () => {
     expect(
       ids(
-        placeAttentionFeedPatches(shape, pages, [upserted(at('old', 10))], true)
+        placeAttentionFeedPatches(shape, pages, [upserted(at('old', 10))], more)
       )
     ).toEqual([
       ['p1-a', 'p1-b'],
@@ -110,12 +126,43 @@ describe('placeAttentionFeedPatches', () => {
           shape,
           pages,
           [upserted(at('old', 10))],
-          false
+          null
         )
       )
     ).toEqual([
       ['p1-a', 'p1-b'],
       ['p2-a', 'p2-b', 'old'],
+    ]);
+  });
+
+  it('keeps an entry the last page read past its rows', () => {
+    // A filtered page read on to minute 5 after its last row at minute 20.
+    const readPast = { sortAt: '2026-02-01T10:05:00Z', entityId: 'skipped' };
+    expect(
+      ids(
+        placeAttentionFeedPatches(
+          shape,
+          pages,
+          [upserted(at('gap', 10))],
+          readPast
+        )
+      )
+    ).toEqual([
+      ['p1-a', 'p1-b'],
+      ['p2-a', 'p2-b', 'gap'],
+    ]);
+    expect(
+      ids(
+        placeAttentionFeedPatches(
+          shape,
+          pages,
+          [upserted(at('later', 1))],
+          readPast
+        )
+      )
+    ).toEqual([
+      ['p1-a', 'p1-b'],
+      ['p2-a', 'p2-b'],
     ]);
   });
 
@@ -126,7 +173,7 @@ describe('placeAttentionFeedPatches', () => {
           shape,
           pages,
           [upserted(at('p1-a', 10))],
-          true
+          more
         )
       )
     ).toEqual([['p1-b'], ['p2-a', 'p2-b']]);
@@ -138,7 +185,7 @@ describe('placeAttentionFeedPatches', () => {
         shape,
         pages,
         [upserted(at('new', 45)), { t: 'invalidated' }],
-        true
+        more
       )
     ).toBeUndefined();
   });
@@ -161,8 +208,7 @@ describe('writeAttentionFeedPatches', () => {
       fake.host,
       cachedQuery,
       [firstPage, secondPage],
-      [upserted(at('new', 40))],
-      false
+      [upserted(at('new', 40))]
     );
 
     expect(placed).toBe(true);
@@ -170,6 +216,26 @@ describe('writeAttentionFeedPatches', () => {
     expect(fake.writes).toHaveLength(1);
     expect(fake.writes[0].variables).toEqual(secondPage);
     expect(fake.writes[0].data).toEqual(page([at('new', 40), at('b', 30)]));
+  });
+
+  it('writes an entry the last cached page read past into it', async () => {
+    const fake = createFakeAttentionFeedClient();
+    const readPast = { sortAt: '2026-02-01T10:05:00Z', entityId: 'skipped' };
+    fake.client.executeQuery({ variables: firstPage } as never);
+    fake.queries[0].resolve(page([at('a', 50)], 'cursor-2', readPast));
+
+    expect(
+      await writeAttentionFeedPatches(
+        shape,
+        fake.host,
+        cachedQuery,
+        [firstPage],
+        [upserted(at('gap', 20))]
+      )
+    ).toBe(true);
+    expect(fake.writes[0].data).toEqual(
+      page([at('a', 50), at('gap', 20)], 'cursor-2', readPast)
+    );
   });
 
   it('asks for a read when a page is not cached', async () => {
@@ -180,8 +246,7 @@ describe('writeAttentionFeedPatches', () => {
         fake.host,
         cachedQuery,
         [firstPage],
-        [upserted(at('new', 40))],
-        false
+        [upserted(at('new', 40))]
       )
     ).toBe(false);
     expect(fake.writes).toHaveLength(0);

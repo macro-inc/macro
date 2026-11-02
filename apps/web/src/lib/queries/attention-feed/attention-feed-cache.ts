@@ -1,6 +1,7 @@
 import type { CacheHost } from '@graphql-cache/host/types';
 import type {
   AttentionFeedOrder,
+  AttentionFeedPosition,
   AttentionFeedShape,
 } from './attention-feed-types';
 
@@ -13,29 +14,39 @@ function subMillis(time: string): number {
 /** `<entity type>:<entity id>` keys end in the server's tiebreaker. */
 const entityIdOf = (key: string) => key.slice(key.indexOf(':') + 1);
 
-/** The server's feed order: newest first, then entity id descending. */
+/** The server's feed order: newest `sortAt` first, then entity id descending. */
+function comparePositions(
+  a: AttentionFeedPosition,
+  b: AttentionFeedPosition
+): number {
+  const millis = Date.parse(b.sortAt) - Date.parse(a.sortAt);
+  if (millis !== 0) return millis;
+  const sub = subMillis(b.sortAt) - subMillis(a.sortAt);
+  if (sub !== 0) return sub;
+  return a.entityId < b.entityId ? 1 : a.entityId > b.entityId ? -1 : 0;
+}
+
+const positionOf = <Entry>(
+  order: AttentionFeedOrder<Entry>,
+  entry: Entry
+): AttentionFeedPosition => ({
+  sortAt: order.sortAt(entry),
+  entityId: entityIdOf(order.key(entry)),
+});
+
+/** Entries in the server's feed order. */
 export function compareAttentionFeedEntries<Entry>(
   order: AttentionFeedOrder<Entry>
 ): (a: Entry, b: Entry) => number {
-  return (a, b) => {
-    const left = order.sortAt(a);
-    const right = order.sortAt(b);
-    const millis = Date.parse(right) - Date.parse(left);
-    if (millis !== 0) return millis;
-    const sub = subMillis(right) - subMillis(left);
-    if (sub !== 0) return sub;
-    const leftId = entityIdOf(order.key(a));
-    const rightId = entityIdOf(order.key(b));
-    return leftId < rightId ? 1 : leftId > rightId ? -1 : 0;
-  };
+  return (a, b) => comparePositions(positionOf(order, a), positionOf(order, b));
 }
 
 /**
  * Apply one server batch to a feed's loaded pages, in order. A removed entry
  * leaves whichever page holds it; an upserted entry moves to its place in
- * the server's order, or waits for its page when it is older than every
- * loaded row and more remain. Keyset cursors are positions in that order, so
- * a row inserted into one page leaves no gap before the next. Returns
+ * the server's order. Keyset cursors are positions in that order, so a row
+ * inserted into one page leaves no gap before the next. `next` is where the
+ * last loaded page's read stopped, null once the feed is exhausted. Returns
  * undefined when the batch invalidates the feed.
  */
 export function placeAttentionFeedPatches<Entry, Patch>(
@@ -45,18 +56,18 @@ export function placeAttentionFeedPatches<Entry, Patch>(
   >,
   pages: readonly (readonly Entry[])[],
   patches: readonly Patch[],
-  hasMore: boolean
+  next: AttentionFeedPosition | null
 ): Entry[][] | undefined {
   const compare = compareAttentionFeedEntries(shape);
-  let next = pages.map((page) => [...page]);
+  let placed = pages.map((page) => [...page]);
   for (const patch of patches) {
     const change = shape.change(patch);
     if (change.kind === 'invalidated') return undefined;
     const key =
       change.kind === 'removed' ? change.key : shape.key(change.entry);
-    next = next.map((page) => page.filter((row) => shape.key(row) !== key));
+    placed = placed.map((page) => page.filter((row) => shape.key(row) !== key));
     if (change.kind !== 'upserted') continue;
-    const page = next.find((rows) =>
+    const page = placed.find((rows) =>
       rows.some((row) => compare(change.entry, row) < 0)
     );
     if (page) {
@@ -65,11 +76,17 @@ export function placeAttentionFeedPatches<Entry, Patch>(
         0,
         change.entry
       );
-    } else if (!hasMore) {
-      next.at(-1)?.push(change.entry);
+    } else if (
+      // Older than every loaded row. The last page's read may have gone past
+      // its last row, so the entry is its own while it falls within that
+      // read; past it, the entry arrives with a later page.
+      !next ||
+      comparePositions(positionOf(shape, change.entry), next) <= 0
+    ) {
+      placed.at(-1)?.push(change.entry);
     }
   }
-  return next;
+  return placed;
 }
 
 const sameEntries = <Entry>(a: readonly Entry[], b: readonly Entry[]) =>
@@ -98,8 +115,7 @@ export async function writeAttentionFeedPatches<
   host: Pick<CacheHost, 'readQuery' | 'writeQuery'>,
   cachedQuery: AttentionFeedCachedQuery,
   pageVariables: readonly Variables[],
-  patches: readonly Patch[],
-  hasMore: boolean
+  patches: readonly Patch[]
 ): Promise<boolean> {
   if (pageVariables.length === 0) return false;
   const pages: Page[] = [];
@@ -114,7 +130,13 @@ export async function writeAttentionFeedPatches<
     pages.push(read.data as Page);
   }
   const loaded = pages.map((page) => shape.entries(page));
-  const placed = placeAttentionFeedPatches(shape, loaded, patches, hasMore);
+  const last = pages.at(-1);
+  const placed = placeAttentionFeedPatches(
+    shape,
+    loaded,
+    patches,
+    (last && shape.nextPosition(last)) ?? null
+  );
   if (!placed) return false;
   for (const [index, page] of pages.entries()) {
     const entries = placed[index];

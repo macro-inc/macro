@@ -5,15 +5,12 @@
  * OpenAPI spec version: 0.1.0
  */
 import type { FilterTestOneOfOneoneKind } from './filterTestOneOfOneoneKind';
-import type { SetOperator } from './setOperator';
 
 /**
- * A select or tag column.
+ * A checkbox column. An unchecked box and an empty cell are the same.
  */
 export type FilterTestOneOfOneone = {
+  /** Whether the box is checked. */
+  checked: boolean;
   kind: FilterTestOneOfOneoneKind;
-  /** How the cell's options relate to these. */
-  operator: SetOperator;
-  /** Options of the column; at least one. */
-  options: string[];
 };

@@ -1,7 +1,8 @@
+import { t } from '@app/lib/i18n';
 import { ScopedPortal } from '@core/component/ScopedPortal';
 import { TOKENS } from '@core/hotkey/tokens';
 import type { EntityData } from '@entity';
-import CloseIcon from '@phosphor-icons/core/regular/x.svg?component-solid';
+import CloseIcon from '@icon/system/regular/x.svg?component-solid';
 import { Button, Hotkey, Layer } from '@ui';
 import { type JSX, Show } from 'solid-js';
 
@@ -28,31 +29,31 @@ export const EntitySelectionToolbarModal = (
               variant="ghost"
               onClick={props.onClose}
             >
-              <CloseIcon />
+              <CloseIcon class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
             <span class="text-ink font-normal flex-1 whitespace-nowrap">
-              {props.selectedCount ?? props.multiSelectEntities?.length ?? 0}{' '}
-              selected
+              {t('entityActions.selectedCount', {
+                count:
+                  props.selectedCount ?? props.multiSelectEntities?.length ?? 0,
+              })}
             </span>
             <Show when={props.onAction}>
               <Button
                 onClick={props.onAction}
-                variant="outline"
+                variant="secondary"
                 class="p-1 pl-2 bg-surface"
-                depth={3}
               >
-                <span>Actions</span>
+                <span>{t('entityActions.actions')}</span>
                 <Hotkey token={TOKENS.global.commandMenu} theme="subtle" />
               </Button>
             </Show>
             {props.children}
             <Button
               onClick={props.onClose}
-              variant="outline"
+              variant="secondary"
               class="p-1 pl-2 bg-surface"
-              depth={3}
             >
-              <span>Clear</span>
+              <span>{t('entityActions.clear')}</span>
               <Hotkey shortcut="escape" theme="subtle" />
             </Button>
           </div>

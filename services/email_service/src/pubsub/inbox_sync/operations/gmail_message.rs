@@ -1,12 +1,12 @@
 use crate::pubsub::context::PubSubContext;
-use crate::pubsub::inbox_sync::email_api_error::handle_gmail_message_error;
+use crate::pubsub::inbox_sync::email_api_error::handle_operation_error;
 use crate::util::process_pre_insert::sync_labels::sync_labels;
 use email_api_client::domain::models::{EmailApiError, SyncCursor};
 use models_email::email::service::backfill::BackfillJob;
 use models_email::email::service::backfill::{
     BackfillOperation, BackfillPubsubMessage, InitPayload, JobScopedPayload,
 };
-use models_email::gmail::inbox_sync::GmailMessagePayload;
+use models_email::gmail::inbox_sync::{GmailMessagePayload, InboxSyncOperation};
 use models_email::service::link::{Link, UserProvider};
 use models_email::service::pubsub::{DetailedError, FailureReason, ProcessingError};
 use sqlx::PgPool;
@@ -59,14 +59,14 @@ pub async fn gmail_message(
         return Ok(());
     }
 
-    // Gmail message notifications intentionally refuse labels/history work when quota is
-    // exhausted. A later notification will cover the same cursor range, avoiding fan-out
-    // backpressure while preserving the separate retry queue for child operations.
-    let labels = ctx
-        .email_api
-        .list_labels(link.id)
-        .await
-        .map_err(handle_gmail_message_error)?;
+    // A rate-limited notification is requeued like its child operations rather
+    // than dropped: an idle mailbox may get no later notification to cover
+    // this cursor range.
+    let operation = || InboxSyncOperation::GmailMessage(payload.clone());
+    let labels = match ctx.email_api.list_labels(link.id).await {
+        Ok(labels) => labels,
+        Err(error) => return Err(handle_operation_error(ctx, link.id, operation(), error).await),
+    };
     sync_labels(&ctx.db, link.id, &labels).await.map_err(|e| {
         ProcessingError::Retryable(DetailedError {
             reason: FailureReason::DatabaseQueryFailed,
@@ -82,9 +82,10 @@ pub async fn gmail_message(
         Ok(batch) => batch,
         Err(EmailApiError::OutdatedCursor) => {
             schedule_stale_cursor_backfill(ctx, link, payload.history_id).await?;
-            return Err(handle_gmail_message_error(EmailApiError::OutdatedCursor));
+            let error = EmailApiError::OutdatedCursor;
+            return Err(handle_operation_error(ctx, link.id, operation(), error).await);
         }
-        Err(error) => return Err(handle_gmail_message_error(error)),
+        Err(error) => return Err(handle_operation_error(ctx, link.id, operation(), error).await),
     };
 
     ctx.gmail_history

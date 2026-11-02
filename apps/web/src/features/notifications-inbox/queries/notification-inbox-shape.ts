@@ -31,6 +31,7 @@ export const notificationInboxShape: AttentionFeedShape<
       // A change this build does not know can only be caught up by a read.
       .exhaustive(() => ({ kind: 'invalidated' })),
   entries: (page) => page.user.notificationInbox.entries,
+  nextPosition: (page) => page.user.notificationInbox.nextPosition,
   withEntries: (page, entries) => ({
     ...page,
     user: {

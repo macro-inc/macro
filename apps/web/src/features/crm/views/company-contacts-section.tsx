@@ -6,7 +6,12 @@ import {
   ListLayoutProvider,
 } from '@entity';
 import { Avatar } from '@ui';
-import { createMemo, createSignal, For, type JSX, Show } from 'solid-js';
+import { createMemo, createSignal, For, Show } from 'solid-js';
+import {
+  CrmListEmpty,
+  CrmListSearchEmpty,
+  CrmListSkeleton,
+} from '../components/list-state';
 import { RecordSection } from '../components/record-section';
 import { useCrmContext } from '../context/crm-context';
 import type { CrmContact } from '../core/contact';
@@ -61,9 +66,9 @@ export function CompanyContactsSection(props: {
   company?: CrmCompanyEntity;
   contacts?: CrmContact[];
   onOpenContact?: (contact: CrmContact) => void;
-  actions?: JSX.Element;
 }) {
-  const { openWithSplit } = useCrmContext().createNavigation();
+  const context = useCrmContext();
+  const { openWithSplit } = context.createNavigation();
   const [search, setSearch] = createSignal('');
   const [listRef, setListRef] = createSignal<HTMLElement>();
   const filtered = createMemo(() => {
@@ -75,6 +80,11 @@ export function CompanyContactsSection(props: {
         contact.email.toLowerCase().includes(query)
     );
   });
+  const createContact = () => {
+    const domain = props.company?.domains?.[0]?.domain;
+    if (domain && props.company)
+      context.openCreateContact({ companyId: props.company.id, domain });
+  };
 
   return (
     <RecordSection
@@ -82,20 +92,40 @@ export function CompanyContactsSection(props: {
       search={search()}
       onSearchChange={setSearch}
       searchPlaceholder="Search contacts…"
-      actions={props.actions}
+      onSearchEscape={() => setSearch('')}
+      createAction={{
+        label: 'Add contact',
+        onClick: createContact,
+        disabled: !props.company?.domains?.[0],
+      }}
+      toolbarCreate
     >
       <Show
         when={props.company}
-        fallback={
-          <div class="p-6 text-center text-sm text-ink-muted">Loading…</div>
-        }
+        fallback={<CrmListSkeleton label="Loading contacts" />}
       >
         <Show
           when={filtered().length}
           fallback={
-            <div class="p-6 text-center text-sm text-ink-muted">
-              {search().trim() ? 'No matching contacts.' : 'No contacts yet.'}
-            </div>
+            <Show
+              when={search().trim()}
+              fallback={
+                <CrmListEmpty
+                  title="No contacts yet"
+                  description="Add a contact to this company to see them here."
+                  action={
+                    props.company?.domains?.[0]
+                      ? { label: 'Add contact', onClick: createContact }
+                      : undefined
+                  }
+                />
+              }
+            >
+              <CrmListSearchEmpty
+                title="No matching contacts."
+                onClearSearch={() => setSearch('')}
+              />
+            </Show>
           }
         >
           <ListEntityMetadataQueryProvider>

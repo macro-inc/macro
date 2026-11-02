@@ -250,7 +250,7 @@ export class Sdk extends HeyApiClient {
     }
     
     /**
-     * List an owned document's meeting grants, including unavailable meetings.
+     * List a document's visible meeting links; owners also see unavailable grants.
      */
     public documentNoteLinks<ThrowOnError extends boolean = false>(options: Options<DocumentNoteLinksData, ThrowOnError>): RequestResult<DocumentNoteLinksResponses, unknown, ThrowOnError> {
         return (options.client ?? this.client).get<DocumentNoteLinksResponses, unknown, ThrowOnError>({ url: '/meeting-notes/documents/{document_id}/links', ...options });

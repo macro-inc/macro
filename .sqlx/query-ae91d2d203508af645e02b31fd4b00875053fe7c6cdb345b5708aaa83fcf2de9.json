@@ -1,0 +1,15 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "UPDATE whatsapp_linked_account SET state = $2, generation = generation + 1, updated_at = now() WHERE id = $1",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Text"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "ae91d2d203508af645e02b31fd4b00875053fe7c6cdb345b5708aaa83fcf2de9"
+}

@@ -1,5 +1,6 @@
 //! Plan-based model access for the in-memory runtime only.
 
+use agent_api_keys::domain::ModelProvider;
 use async_trait::async_trait;
 use chat::domain::models::FREE_MODEL;
 use model_owner::Owner;
@@ -30,6 +31,67 @@ impl ModelAccess {
     }
 
     /// The supported models this owner may select.
+    pub fn models<'a>(self, supported: &[&'a str]) -> Vec<&'a str> {
+        supported
+            .iter()
+            .copied()
+            .filter(|model| self.allows(model))
+            .collect()
+    }
+}
+
+/// The models a session may run: its owner's plan access, unless the
+/// session's agent runs on its own key, in which case it is that key's
+/// provider's models. The plan limits only what Macro pays for.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct SessionModels {
+    access: ModelAccess,
+    agent_key: Option<ModelProvider>,
+}
+
+impl SessionModels {
+    /// Models from `access`, or from the `agent_key` provider when the
+    /// session's agent has a usable key.
+    #[must_use]
+    pub fn new(access: ModelAccess, agent_key: Option<ModelProvider>) -> Self {
+        Self { access, agent_key }
+    }
+
+    /// The provider of the agent's key the session's turns run on, if any.
+    #[must_use]
+    pub fn agent_key(self) -> Option<ModelProvider> {
+        self.agent_key
+    }
+
+    /// Whether the session may run `model`; runtime support is checked
+    /// separately.
+    #[must_use]
+    pub fn allows(self, model: &str) -> bool {
+        match self.agent_key {
+            Some(provider) => ModelProvider::of_model(model) == Some(provider),
+            None => self.access.allows(model),
+        }
+    }
+
+    /// Keep a persisted/default model the session may run. Without a key, an
+    /// inaccessible one becomes the free model; with one, a model from
+    /// another provider (saved before the key) becomes the first `supported`
+    /// model the key can run.
+    #[must_use]
+    pub fn default_model<'a>(self, configured: &'a str, supported: &[&'a str]) -> &'a str {
+        match self.agent_key {
+            Some(_) if self.allows(configured) => configured,
+            Some(_) => supported
+                .iter()
+                .copied()
+                .find(|model| self.allows(model))
+                .unwrap_or(configured),
+            None => self.access.default_model(configured),
+        }
+    }
+
+    /// The supported models the session may select.
+    #[must_use]
     pub fn models<'a>(self, supported: &[&'a str]) -> Vec<&'a str> {
         supported
             .iter()

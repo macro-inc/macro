@@ -66,6 +66,9 @@ pub enum ValueKind {
     Number,
     /// Date-times.
     Date,
+    /// Spans of time.
+    #[strum(serialize = "date range")]
+    DateRange,
     /// Checkboxes.
     Checkbox,
     /// Options of a select or tag column.
@@ -142,6 +145,18 @@ pub enum ViewProblem {
     /// A lane is listed twice.
     #[error("a lane is listed twice")]
     RepeatedLane,
+    /// A timeline spans a column that is not a date range.
+    #[error("a timeline spans a date-range column; \"{column}\" is not one")]
+    TimelineCannotSpan {
+        /// The column's name.
+        column: String,
+    },
+    /// A timeline is colored by a column whose values have no colors.
+    #[error("a timeline is colored by a select or tag column; \"{column}\" is neither")]
+    TimelineCannotColorBy {
+        /// The column's name.
+        column: String,
+    },
     /// A board was asked of a view laid out as a table.
     #[error("the view is not a board")]
     NotABoard,
@@ -260,6 +275,33 @@ pub fn check(
             }
             distinct(card_fields.iter().copied(), &column)?;
         }
+        ViewLayout::Timeline {
+            range,
+            title,
+            group_by,
+            bar_fields,
+            color_by,
+        } => {
+            column(*title)?;
+            let range_column = column(*range)?;
+            if range_column.kind != CastKind::DateRange {
+                return Err(ViewProblem::TimelineCannotSpan {
+                    column: range_column.name.clone(),
+                });
+            }
+            if let Some(group_by) = group_by {
+                grouping(column(*group_by)?)?;
+            }
+            distinct(bar_fields.iter().copied(), &column)?;
+            if let Some(color_by) = color_by {
+                let color_column = column(*color_by)?;
+                if !matches!(color_column.kind, CastKind::Select { .. }) {
+                    return Err(ViewProblem::TimelineCannotColorBy {
+                        column: color_column.name.clone(),
+                    });
+                }
+            }
+        }
     }
     Ok(())
 }
@@ -290,6 +332,7 @@ fn check_test(column: &SchemaColumn, test: &FilterTest) -> Result<(), ViewProble
             }
         }
         FilterTest::Date { .. } => fits(ValueKind::Date),
+        FilterTest::DateRange { .. } => fits(ValueKind::DateRange),
         FilterTest::Checkbox { .. } => fits(ValueKind::Checkbox),
         FilterTest::Options { operator, options } => {
             fits(ValueKind::Options)?;

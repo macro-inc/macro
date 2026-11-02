@@ -53,6 +53,10 @@ query NotificationInbox($input: NotificationInboxInput) {
 				...NotificationInboxEntryFields
 			}
 			nextCursor
+			nextPosition {
+				sortAt
+				entityId
+			}
 		}
 	}
 }

@@ -14,27 +14,27 @@ import {
 import { FontPicker } from '@app/features/block-fig/components/font-picker';
 import { Section } from '@app/features/block-fig/components/panel-section';
 import type { Alignment } from '@app/features/block-fig/core/align';
-import AlignBottom from '@phosphor/align-bottom.svg';
-import AlignCenterHorizontal from '@phosphor/align-center-horizontal.svg';
-import AlignCenterVertical from '@phosphor/align-center-vertical.svg';
-import AlignLeft from '@phosphor/align-left.svg';
-import AlignRight from '@phosphor/align-right.svg';
-import AlignTop from '@phosphor/align-top.svg';
-import ArrowFatDown from '@phosphor/arrow-fat-down.svg';
-import ArrowFatLineDown from '@phosphor/arrow-fat-line-down.svg';
-import ArrowFatLineUp from '@phosphor/arrow-fat-line-up.svg';
-import ArrowFatUp from '@phosphor/arrow-fat-up.svg';
-import ArrowsDownUp from '@phosphor/arrows-down-up.svg';
-import ArrowsLeftRight from '@phosphor/arrows-left-right.svg';
-import Exclude from '@phosphor/exclude.svg';
-import FlipHorizontal from '@phosphor/flip-horizontal.svg';
-import FlipVertical from '@phosphor/flip-vertical.svg';
-import Intersect from '@phosphor/intersect.svg';
-import Subtract from '@phosphor/subtract.svg';
-import TextAlignCenter from '@phosphor/text-align-center.svg';
-import TextAlignLeft from '@phosphor/text-align-left.svg';
-import TextAlignRight from '@phosphor/text-align-right.svg';
-import Unite from '@phosphor/unite.svg';
+import AlignBottom from '@icon/system/regular/align-bottom.svg';
+import AlignCenterHorizontal from '@icon/system/regular/align-center-horizontal.svg';
+import AlignCenterVertical from '@icon/system/regular/align-center-vertical.svg';
+import AlignLeft from '@icon/system/regular/align-left.svg';
+import AlignRight from '@icon/system/regular/align-right.svg';
+import AlignTop from '@icon/system/regular/align-top.svg';
+import ArrowFatDown from '@icon/system/regular/arrow-fat-down.svg';
+import ArrowFatLineDown from '@icon/system/regular/arrow-fat-line-down.svg';
+import ArrowFatLineUp from '@icon/system/regular/arrow-fat-line-up.svg';
+import ArrowFatUp from '@icon/system/regular/arrow-fat-up.svg';
+import ArrowsDownUp from '@icon/system/regular/arrows-down-up.svg';
+import ArrowsLeftRight from '@icon/system/regular/arrows-left-right.svg';
+import Exclude from '@icon/system/regular/exclude.svg';
+import FlipHorizontal from '@icon/system/regular/flip-horizontal.svg';
+import FlipVertical from '@icon/system/regular/flip-vertical.svg';
+import Intersect from '@icon/system/regular/intersect.svg';
+import Subtract from '@icon/system/regular/subtract.svg';
+import TextAlignCenter from '@icon/system/regular/text-align-center.svg';
+import TextAlignLeft from '@icon/system/regular/text-align-left.svg';
+import TextAlignRight from '@icon/system/regular/text-align-right.svg';
+import Unite from '@icon/system/regular/unite.svg';
 import { Button } from '@ui/components/Button';
 import { type Component, For, type JSX, Show } from 'solid-js';
 import type { Rect } from '../core/geometry';
@@ -176,15 +176,15 @@ function IconButton(props: {
 }) {
   return (
     <Button
+      aria-label={props.label}
       variant="ghost"
       size="icon-sm"
-      label={props.label}
       tooltip={props.label}
       data-testid={props.testId}
       disabled={props.disabled}
       onClick={() => props.onClick()}
     >
-      <props.icon />
+      <props.icon class="size-3.5" />
     </Button>
   );
 }
@@ -711,7 +711,7 @@ export function PropertiesPanel(props: {
           <div class="flex flex-wrap gap-1">
             <Show when={m().can.group}>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 data-testid="ai-action-group"
                 onClick={() => a.onGroup()}
@@ -721,7 +721,7 @@ export function PropertiesPanel(props: {
             </Show>
             <Show when={m().can.ungroup}>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 data-testid="ai-action-ungroup"
                 onClick={() => a.onUngroup()}
@@ -731,7 +731,7 @@ export function PropertiesPanel(props: {
             </Show>
             <Show when={m().can.clip}>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 data-testid="ai-action-clip"
                 onClick={() => a.onClip()}
@@ -741,7 +741,7 @@ export function PropertiesPanel(props: {
             </Show>
             <Show when={m().can.release}>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 data-testid="ai-action-release"
                 onClick={() => a.onRelease()}
@@ -751,7 +751,7 @@ export function PropertiesPanel(props: {
             </Show>
             <Show when={m().can.outline}>
               <Button
-                variant="outline"
+                variant="secondary"
                 size="sm"
                 data-testid="ai-action-outline"
                 onClick={() => a.onOutline()}

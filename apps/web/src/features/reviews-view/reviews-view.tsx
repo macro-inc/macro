@@ -4,6 +4,7 @@ import {
   useViewShell,
   ViewBreadcrumbs,
   ViewShell,
+  ViewSwitchTrigger,
 } from '@app/components/view-shell';
 import {
   ListHeader,
@@ -462,7 +463,7 @@ function ReviewsRoot() {
               >
                 <span>Reviews couldn’t be loaded.</span>
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   onClick={() =>
                     fireAndForget(listSource.retry(), 'reviews-view')
@@ -509,15 +510,25 @@ function ReviewsRoot() {
         order={0}
         metadata={{ type: 'reviews' }}
       >
-        {(item) => (
-          <ViewBreadcrumbs.ReturnButton
-            isActive={item.isActive()}
-            onClick={item.onSelect}
-            tooltip={scopeTitle()}
-          >
-            {scopeTitle()}
-          </ViewBreadcrumbs.ReturnButton>
-        )}
+        {(item) => {
+          const button = () => (
+            <ViewBreadcrumbs.ReturnButton
+              isActive={item.isActive()}
+              onClick={item.onSelect}
+              tooltip={scopeTitle()}
+            >
+              {scopeTitle()}
+            </ViewBreadcrumbs.ReturnButton>
+          );
+          // At the list itself the name switches views; deeper, it returns here.
+          return (
+            <Show when={item.isActive()} fallback={button()}>
+              <ViewSwitchTrigger fallback={button()}>
+                {scopeTitle()}
+              </ViewSwitchTrigger>
+            </Show>
+          );
+        }}
       </ViewBreadcrumbs.Item>
       <SplitPanel.Root>
         <SplitPanel.Body>

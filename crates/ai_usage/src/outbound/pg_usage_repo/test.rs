@@ -9,6 +9,7 @@ fn completion(feature: AiFeature, model: &str, input: u64, output: u64) -> Compl
         feature,
         user: SYSTEM_USER_ID.clone(),
         entity: None,
+        agent_api_key_id: None,
         cost: Usage {
             amount: UsageAmount::Tokens {
                 input,
@@ -86,6 +87,52 @@ async fn seeded_pricing_is_available(pool: PgPool) {
     .unwrap();
     assert!((cost.total - 0.03873).abs() < 0.000001);
     assert_eq!(repo.get_pricing("nonexistent-model").await.unwrap(), None);
+}
+
+/// Usage on an agent's own key references that key, and forgetting the key
+/// keeps the usage while dropping the reference.
+#[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
+async fn usage_references_the_agent_key_that_paid_for_it(pool: PgPool) {
+    let key_id = sqlx::query_scalar!(
+        r#"
+        WITH owner_identity AS (
+            INSERT INTO macro_user (id, username, email, stripe_customer_id)
+            VALUES (gen_random_uuid(), 'owner@example.com', 'owner@example.com', 'stripe_owner')
+            RETURNING id
+        ), owner_profile AS (
+            INSERT INTO "User" ("id", "email", "macro_user_id")
+            SELECT 'macro|owner@example.com', 'owner@example.com', id FROM owner_identity
+            RETURNING "id"
+        ), agent AS (
+            INSERT INTO bots (id, kind, name, handle, has_agent, owner_user_id)
+            SELECT gen_random_uuid(), 'owned', 'Agent', 'agent', true, "id" FROM owner_profile
+            RETURNING id
+        )
+        INSERT INTO agent_api_keys (
+            bot_id, provider, key_ciphertext, encryption_version, kms_key_id, key_prefix
+        )
+        SELECT id, 'anthropic', '\x01'::bytea, 1, 'kms-key', 'sk-ant-' FROM agent
+        RETURNING bot_id
+        "#
+    )
+    .fetch_one(&pool)
+    .await
+    .unwrap();
+    let repo = PgUsageRepo::new(pool.clone());
+    let mut row = completion(AiFeature::AgentSession, "claude-opus-5", 10, 20);
+    row.agent_api_key_id = Some(key_id);
+    repo.insert_usage(&row, false).await.unwrap();
+
+    let rows = repo.query_usage(&UsageApiParams::default()).await.unwrap();
+    assert_eq!(rows[0].agent_api_key_id, Some(key_id));
+
+    sqlx::query!("DELETE FROM agent_api_keys WHERE bot_id = $1", key_id)
+        .execute(&pool)
+        .await
+        .unwrap();
+    let rows = repo.query_usage(&UsageApiParams::default()).await.unwrap();
+    assert_eq!(rows.len(), 1);
+    assert_eq!(rows[0].agent_api_key_id, None);
 }
 
 #[sqlx::test(migrator = "MACRO_DB_MIGRATIONS")]
@@ -462,6 +509,7 @@ async fn cached_token_usage_roundtrips_with_its_cache_rates(pool: PgPool) {
         feature: AiFeature::AgentSession,
         user: SYSTEM_USER_ID.clone(),
         entity: None,
+        agent_api_key_id: None,
         cost: Usage {
             amount,
             model: "claude-opus-5".to_string(),
@@ -506,6 +554,7 @@ async fn repricing_bills_cache_tokens_and_unprices_them_without_a_cache_rate(poo
             feature: AiFeature::AgentSession,
             user: SYSTEM_USER_ID.clone(),
             entity: None,
+            agent_api_key_id: None,
             cost: Usage {
                 amount: UsageAmount::Tokens {
                     input: 1_000_000,

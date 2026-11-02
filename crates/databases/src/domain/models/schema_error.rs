@@ -146,6 +146,24 @@ pub enum SchemaError {
         /// The board's name.
         board: String,
     },
+    /// A timeline spans the column being removed.
+    #[error(
+        "The timeline \"{timeline}\" draws its bars from this column; delete the timeline or \
+         span it over another date-range column before removing it."
+    )]
+    TimelineSpansRemovedColumn {
+        /// The timeline's name.
+        timeline: String,
+    },
+    /// A timeline spans the column being retyped.
+    #[error(
+        "The timeline \"{timeline}\" draws its bars from this column; delete the timeline or \
+         span it over another date-range column before changing its type."
+    )]
+    TimelineSpansRetypedColumn {
+        /// The timeline's name.
+        timeline: String,
+    },
     /// A relation was asked for with a type other than entity.
     #[error("A relation column's type is entity.")]
     RelationNotEntity,
@@ -234,6 +252,8 @@ pub enum Misfit {
     NotNumber,
     /// The value is not a date.
     NotDate,
+    /// The value is not a date range.
+    NotDateRange,
     /// The value is not true or false.
     NotCheckbox,
     /// The value is not a complete URL.
@@ -265,6 +285,7 @@ impl Misfit {
             Misfit::NotText => ("can't be written as text", "can't be written as text"),
             Misfit::NotNumber => ("isn't a number", "aren't numbers"),
             Misfit::NotDate => ("isn't a date", "aren't dates"),
+            Misfit::NotDateRange => ("isn't a date range", "aren't date ranges"),
             Misfit::NotCheckbox => ("isn't true or false", "aren't true or false"),
             Misfit::NotUrl => ("isn't a complete URL", "aren't complete URLs"),
             Misfit::NotOption => ("can't be an option", "can't be options"),

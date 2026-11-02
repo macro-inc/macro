@@ -52,7 +52,7 @@ export function ParticipantsAddPanel(props: {
         />
       </div>
       <Button
-        variant="outline"
+        variant="secondary"
         disabled={selectedUsers().length === 0}
         onClick={handleAddParticipants}
       >

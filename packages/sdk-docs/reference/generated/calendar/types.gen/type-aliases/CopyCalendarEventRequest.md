@@ -2,7 +2,7 @@
 
 > **CopyCalendarEventRequest** = \{ `calendarId?`: `string` \| `null`; \}
 
-Request body adding a channel-shared event to the requester's calendar.
+Request body adding a shared event to the requester's calendar.
 
 ## Properties
 

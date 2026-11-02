@@ -68,7 +68,7 @@ where
         (status = 500, body = ErrorResponse),
     )
 )]
-#[tracing::instrument(err, skip_all)]
+#[tracing::instrument(err(level = Level::INFO), skip_all)]
 pub async fn get_query_handler<Service, EntityAccess, Authorization>(
     State(state): State<DatabasesRouterState<Service, EntityAccess, Authorization>>,
     user: MacroAuthorizationExtractor<Authorization, UserOrInternal>,

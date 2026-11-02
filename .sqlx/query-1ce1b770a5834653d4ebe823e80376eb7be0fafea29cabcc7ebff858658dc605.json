@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO whatsapp_pre_key (account_id, key_id, uploaded, nonce, value)\n            SELECT $1, entry.key_id, $2, entry.nonce, entry.value\n            FROM UNNEST($3::bigint[], $4::bytea[], $5::bytea[]) AS entry(key_id, nonce, value)\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "Bool",
+        "Int8Array",
+        "ByteaArray",
+        "ByteaArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "1ce1b770a5834653d4ebe823e80376eb7be0fafea29cabcc7ebff858658dc605"
+}

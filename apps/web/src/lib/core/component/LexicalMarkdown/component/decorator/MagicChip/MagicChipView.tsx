@@ -1,8 +1,8 @@
-import ArrowUpRight from '@phosphor/arrow-up-right.svg';
-import ArrowsIn from '@phosphor/arrows-in.svg';
-import CheckCircle from '@phosphor-fill/check-circle-fill.svg';
-import QuestionCircle from '@phosphor-fill/question-fill.svg';
-import WarningCircle from '@phosphor-fill/warning-circle-fill.svg';
+import CheckCircle from '@icon/system/fill/check-circle-fill.svg';
+import QuestionCircle from '@icon/system/fill/question-fill.svg';
+import WarningCircle from '@icon/system/fill/warning-circle-fill.svg';
+import ArrowUpRight from '@icon/system/regular/arrow-up-right.svg';
+import ArrowsIn from '@icon/system/regular/arrows-in.svg';
 import { Badge, Button, Card, cn } from '@ui';
 import { match } from 'ts-pattern';
 import './magic-chip-morph.css';
@@ -200,7 +200,6 @@ export const MagicChipView: Component<{
             <Button
               variant="ghost"
               size="icon-sm"
-              noTouchResize
               aria-label="Collapse to mention"
               on:click={(event) => {
                 event.preventDefault();
@@ -208,13 +207,12 @@ export const MagicChipView: Component<{
                 props.onCollapse?.();
               }}
             >
-              <ArrowsIn />
+              <ArrowsIn class="size-3.5 touch:size-6 shrink-0 pointer-events-none" />
             </Button>
           </Show>
           <Button
-            variant="outline"
+            variant="secondary"
             size="sm"
-            noTouchResize
             class="aspect-square bg-transparent p-0 font-normal @[600px]:aspect-auto @[600px]:px-2"
             aria-label="Open session"
             disabled={props.loading || !props.onOpen}

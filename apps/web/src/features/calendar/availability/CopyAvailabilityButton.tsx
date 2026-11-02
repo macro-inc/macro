@@ -1,5 +1,5 @@
 import { CALENDAR_TOUR } from '@app/features/calendar-view/tour';
-import CalendarCheckIcon from '@phosphor/calendar-check.svg';
+import CalendarCheckIcon from '@icon/system/regular/calendar-check.svg';
 import { Button, type ButtonSize, useImperativeDialog } from '@ui';
 import { tourTarget } from '@ui/components/Tour';
 import { Show } from 'solid-js';
@@ -20,14 +20,15 @@ export function CopyAvailabilityButton(props: {
   return (
     <Show when={connectedInboxes().length > 0}>
       <Button
+        aria-label="Copy availability"
+        tooltip="Copy availability"
         ref={tourTarget(CALENDAR_TOUR.availability)}
         variant="ghost"
         size={props.size ?? 'icon-sm'}
         class={props.class}
-        label="Copy availability"
         onClick={showDialog}
       >
-        <CalendarCheckIcon />
+        <CalendarCheckIcon class="size-4 touch:size-6 shrink-0 pointer-events-none" />
       </Button>
     </Show>
   );

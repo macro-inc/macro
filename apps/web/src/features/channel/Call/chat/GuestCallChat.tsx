@@ -94,6 +94,7 @@ function GuestCallChatContent(props: GuestCallChatProps) {
             />
           </TextField>
           <Button
+            variant="primary"
             type="submit"
             class="mt-2"
             disabled={!chat.ready() || chat.sending() || !content().trim()}
@@ -115,6 +116,7 @@ function GuestCallChatContent(props: GuestCallChatProps) {
             : 'Could not load chat.'}
         </p>
         <Button
+          variant="ghost"
           type="button"
           onClick={() => fireAndForget(chat.refresh(), 'meetings')}
         >

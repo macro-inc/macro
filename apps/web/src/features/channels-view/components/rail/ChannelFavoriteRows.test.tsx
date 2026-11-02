@@ -15,6 +15,7 @@ import { ChannelFavoriteRow } from './ChannelFavoriteRows';
 const rail = vi.hoisted(() => ({
   channelById: (_channelId: string): ChannelEntity | undefined => undefined,
   activateRow: vi.fn(),
+  prefetchRow: vi.fn(),
   list: { focus: { set: vi.fn() } },
 }));
 

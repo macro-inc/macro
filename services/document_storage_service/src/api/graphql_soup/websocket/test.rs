@@ -28,6 +28,14 @@ struct Subscriptions;
 
 #[Subscription]
 impl Subscriptions {
+    async fn current_mail_profile(&self, context: &Context<'_>) -> impl Stream<Item = bool> {
+        assert_eq!(context.data_unchecked::<String>(), "authorized-viewer");
+        futures::stream::iter([context.data_opt::<complete_graph::MailCacheProfile>()
+            == Some(&complete_graph::MailCacheProfile::from_advertised(Some(
+                "soup-mail-v5",
+            )))])
+    }
+
     async fn viewer(&self, context: &Context<'_>) -> impl Stream<Item = String> {
         let viewer = context.data_unchecked::<String>().clone();
         futures::stream::iter([viewer.clone(), viewer])
@@ -508,4 +516,31 @@ fn does_not_mistake_quoted_values_for_extension_offers() {
         HeaderValue::from_static("unknown; value=\"ignored,permessage-deflate\""),
     );
     assert!(negotiate_compression(&headers).is_none());
+}
+
+#[tokio::test]
+async fn mail_profile_negotiation_preserves_authorized_connection_context() {
+    let server = start_server().await;
+    for (payload, expected) in [
+        (json!({}), false),
+        (json!({"mailCacheProfile":"soup-mail-v5"}), true),
+        (json!({"mailCacheProfile":"unknown"}), false),
+    ] {
+        let (mut socket, _) = handshake(server.address, "graphql-transport-ws", None, true).await;
+        send_json(
+            &mut socket,
+            json!({"type":"connection_init", "payload":payload}),
+            false,
+        )
+        .await;
+        assert_eq!(
+            read_json(&mut socket, false).await["type"],
+            "connection_ack"
+        );
+        send_json(&mut socket, json!({"id":"1", "type":"subscribe", "payload":{"query":"subscription { currentMailProfile }"}}), false).await;
+        assert_eq!(
+            read_json(&mut socket, false).await["payload"]["data"]["currentMailProfile"],
+            expected
+        );
+    }
 }

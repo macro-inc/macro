@@ -282,7 +282,7 @@ impl ScheduledMessageSender<ScheduledClaim, SentDelivery> for ScheduledDeliveryA
     ) -> Result<SentDelivery, SubmissionError> {
         let ids = self
             .email_api
-            .send_prepared(&prepared.provider)
+            .send_prepared(prepared.provider)
             .await
             .map_err(classify_submission_error)?;
         apply_sent_ids(&mut prepared.delivery.message, ids);

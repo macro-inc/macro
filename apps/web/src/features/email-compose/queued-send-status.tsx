@@ -129,6 +129,7 @@ export function QueuedSendStatus(props: {
         </Show>
         <Show when={hasMoreServerEmailSends()}>
           <Button
+            variant="secondary"
             onClick={() =>
               fireAndForget(loadMoreServerEmailSends(), 'email-more-sends')
             }
@@ -188,6 +189,7 @@ function ServerSendStatus(props: { row: ServerEmailSend }) {
         </Show>
       </div>
       <Button
+        variant="ghost"
         disabled={working()}
         onClick={() => fireAndForget(action(), 'email-server-send')}
       >
@@ -288,6 +290,7 @@ function SendStatus(props: {
         when={status() !== 'SENDING' && status() !== 'DELIVERY_UNCONFIRMED'}
       >
         <Button
+          variant="ghost"
           disabled={
             working() ||
             (emailSendLocked(props.intent) &&
@@ -304,6 +307,7 @@ function SendStatus(props: {
         }
       >
         <Button
+          variant="ghost"
           disabled={working()}
           onClick={() =>
             fireAndForget(checkStatus(), 'email-compose-check-send')

@@ -1,7 +1,7 @@
 import { inboxIconProps } from '@core/component/inboxIcon';
 import { UserIcon } from '@core/component/UserIcon';
-import ChevronDown from '@phosphor/caret-down.svg';
-import Check from '@phosphor/check.svg';
+import ChevronDown from '@icon/system/regular/caret-down.svg';
+import Check from '@icon/system/regular/check.svg';
 import { cn, Dropdown, Tooltip } from '@ui';
 import { For, Show } from 'solid-js';
 import type { FromInboxOption } from '../core/email-sender';

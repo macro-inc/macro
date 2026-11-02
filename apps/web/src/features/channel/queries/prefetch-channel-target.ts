@@ -1,3 +1,4 @@
+import { fireAndForget } from '@core/util/fireAndForget';
 import { Telemetry } from '@macro-inc/observability';
 import { notificationTargetSpan } from '@notifications/notification-open-trace';
 import { queryClient } from '@queries/client';
@@ -35,4 +36,22 @@ export async function prefetchChannelTarget(
     // TanStack prefetch owns error state; the mounted queries present failures.
     span.setAttr('channel.target.outcome', 'prefetch_settled');
   });
+}
+
+/**
+ * Starts a channel's latest page on the press that will open it. The click
+ * that follows commits the pane before any request it starts can leave, so a
+ * page requested here arrives one press and one commit sooner. A cached page
+ * is reused as is.
+ */
+export function prefetchLatestChannelMessages(channelId: string): void {
+  fireAndForget(
+    Telemetry.span('channel.timeline.prefetch', async (span) => {
+      span.setAttr('channel.id', channelId);
+      await queryClient.prefetchInfiniteQuery(
+        messageTimelineQueryOptions({ type: 'channel', id: channelId }, null)
+      );
+    }),
+    'channel-timeline-prefetch'
+  );
 }

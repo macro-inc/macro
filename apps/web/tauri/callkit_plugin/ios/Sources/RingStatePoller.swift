@@ -55,7 +55,7 @@ final class RingStatePoller {
     func start() {
         guard deadline == nil, !isCancelled else { return }
         deadline = Date().addingTimeInterval(window)
-        print("[CallKit] Ring-status polling started uuid=\(uuid.uuidString)")
+        callKitLog("Ring-status polling started uuid=\(uuid.uuidString)")
         scheduleTick()
     }
 
@@ -66,14 +66,14 @@ final class RingStatePoller {
         pendingTick?.cancel()
         pendingTick = nil
         session.invalidateAndCancel()
-        print("[CallKit] Ring-status polling cancelled uuid=\(uuid.uuidString)")
+        callKitLog("Ring-status polling cancelled uuid=\(uuid.uuidString)")
     }
 
     private func scheduleTick() {
         guard !isCancelled, !isResolved else { return }
         guard let deadline, Date().addingTimeInterval(interval) <= deadline else {
             // Window expired: stop polling and leave the ring as-is.
-            print("[CallKit] Ring-status polling window expired uuid=\(uuid.uuidString)")
+            callKitLog("Ring-status polling window expired uuid=\(uuid.uuidString)")
             return
         }
         let work = DispatchWorkItem { [weak self] in
@@ -99,7 +99,7 @@ final class RingStatePoller {
         guard !isCancelled, !isResolved else { return }
 
         if let error {
-            print("[CallKit] Ring-status poll transient error uuid=\(uuid.uuidString) error=\(error.localizedDescription)")
+            callKitLog("Ring-status poll transient error uuid=\(uuid.uuidString) error=\(error.localizedDescription)")
             scheduleTick()
             return
         }
@@ -115,17 +115,17 @@ final class RingStatePoller {
         case 401, 403, 404:
             // Invalid token or a backend without the endpoint — retrying
             // cannot succeed; stop and leave the ring as-is.
-            print("[CallKit] Ring-status polling stopped uuid=\(uuid.uuidString) httpStatus=\(http.statusCode)")
+            callKitLog("Ring-status polling stopped uuid=\(uuid.uuidString) httpStatus=\(http.statusCode)")
             return
         default:
-            print("[CallKit] Ring-status poll transient HTTP error uuid=\(uuid.uuidString) httpStatus=\(http.statusCode)")
+            callKitLog("Ring-status poll transient HTTP error uuid=\(uuid.uuidString) httpStatus=\(http.statusCode)")
             scheduleTick()
             return
         }
 
         guard let data,
               let decoded = try? JSONDecoder().decode(StatusResponse.self, from: data) else {
-            print("[CallKit] Ring-status poll returned undecodable body uuid=\(uuid.uuidString)")
+            callKitLog("Ring-status poll returned undecodable body uuid=\(uuid.uuidString)")
             scheduleTick()
             return
         }
@@ -140,7 +140,8 @@ final class RingStatePoller {
         case "ringing":
             scheduleTick()
         default:
-            print("[CallKit] Ring-status poll returned unknown status '\(decoded.status)' uuid=\(uuid.uuidString)")
+            // The status is unvalidated server text; never write it to the public log.
+            callKitLog("Ring-status poll returned an unknown status uuid=\(uuid.uuidString)")
             scheduleTick()
         }
     }

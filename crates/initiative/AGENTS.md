@@ -49,3 +49,8 @@ properties, and activity.
 
 - Rules: `.agents/rules/rust/architecture.md`
 - Skill: `cloud-storage-hexagonal-architecture`
+
+`create_imported` is the trusted workspace-import creation path: it accepts a
+ledger-derived id and complete source markdown. It checks attribution and owner
+before reusing an existing project, and repairs property initialization on replay.
+Interactive creation keeps its existing generated ids and description limits.

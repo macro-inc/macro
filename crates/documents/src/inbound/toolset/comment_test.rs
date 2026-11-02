@@ -121,6 +121,7 @@ impl MessageCommands for FakeMessages {
             imported_author: None,
             bot_profile: None,
             mentions: vec![],
+            triggered_via: None,
             triggered_by: Some(USER.to_owned()),
             content: input.content.clone(),
             created_at: at,

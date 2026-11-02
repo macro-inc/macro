@@ -1,0 +1,18 @@
+{
+  "db_name": "PostgreSQL",
+  "query": "\n            INSERT INTO whatsapp_privacy_token (account_id, user_jid, token_timestamp, nonce, value)\n            SELECT $1, entry.user_jid, entry.token_timestamp, entry.nonce, entry.value\n            FROM UNNEST($2::text[], $3::timestamptz[], $4::bytea[], $5::bytea[])\n                AS entry(user_jid, token_timestamp, nonce, value)\n            ON CONFLICT (account_id, user_jid) DO UPDATE SET\n                token_timestamp = EXCLUDED.token_timestamp,\n                nonce = EXCLUDED.nonce,\n                value = EXCLUDED.value\n            ",
+  "describe": {
+    "columns": [],
+    "parameters": {
+      "Left": [
+        "Uuid",
+        "TextArray",
+        "TimestamptzArray",
+        "ByteaArray",
+        "ByteaArray"
+      ]
+    },
+    "nullable": []
+  },
+  "hash": "030bd856f8ae96822a5151b09ad880fd2711bfe6b51d315b82d536188070c4fc"
+}

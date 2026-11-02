@@ -27,6 +27,7 @@ export function commentNotification(
     id,
     eventType: 'commented_on_document',
     entityType: 'DOCUMENT',
+    targetEntityType: 'DOCUMENT',
     entityId: docId,
     sent: true,
     state: 'UNSEEN',
@@ -112,14 +113,28 @@ export function removedPatch(
   return { __typename: 'NotificationInboxEntryRemoved', groupId };
 }
 
+/** A page whose read stops at its last entry unless `nextPosition` says
+ * otherwise; without a cursor the inbox is exhausted. */
 export function inboxPage(
   entries: NotificationInboxEntryFieldsFragment[],
-  nextCursor: string | null = null
+  nextCursor: string | null = null,
+  nextPosition: { sortAt: string; entityId: string } | null = nextCursor
+    ? lastPosition(entries)
+    : null
 ) {
   return {
     user: {
       id: 'macro|viewer@example.com',
-      notificationInbox: { entries, nextCursor },
+      notificationInbox: { entries, nextCursor, nextPosition },
     },
+  };
+}
+
+function lastPosition(entries: NotificationInboxEntryFieldsFragment[]) {
+  const last = entries.at(-1);
+  if (!last) return null;
+  return {
+    sortAt: last.sortAt,
+    entityId: last.groupId.slice(last.groupId.indexOf(':') + 1),
   };
 }

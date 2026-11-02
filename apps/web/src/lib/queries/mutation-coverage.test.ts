@@ -14,9 +14,16 @@ import { soupOptimisticResolvers } from './optimistic-resolvers';
 // New documents must choose a strategy. Exceptions describe a real server-owned
 // outcome; adding an empty optimistic response does not satisfy this gate.
 const policies = {
+  CreateSavedView:
+    'authoritative: server owns sharing; revalidate the loaded cursor chain',
+  UpdateSavedView:
+    'authoritative: revision and sharing need server confirmation',
+  DeleteSavedView:
+    'authoritative: revision-checked deletion and collection revalidation',
   MarkEmailThreadSeen: 'resolver',
   MarkEmailThreadUnread: 'resolver',
   SetEmailThreadArchived: 'resolver',
+  SetEmailThreadsArchived: 'resolver',
   UpdateNotifications: 'resolver',
   RenameEntities: 'resolver',
   UpdateInitiative: 'resolver',

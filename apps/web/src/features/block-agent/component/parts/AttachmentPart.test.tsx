@@ -6,6 +6,7 @@
  * that opens the file.
  */
 
+import { staticFileIdEndpoint } from '@core/constant/servers';
 import type { MessagePart } from '@service-agent-fold/generated/types';
 import { fireEvent, render } from '@solidjs/testing-library';
 import { describe, expect, it, vi } from 'vitest';
@@ -59,7 +60,7 @@ type Attachment = Extract<MessagePart, { kind: 'attachment' }>;
 
 const attachment = (over: Partial<Attachment>): Attachment => ({
   kind: 'attachment',
-  uri: 'https://static.example/file/1',
+  uri: staticFileIdEndpoint('1'),
   name: 'file.bin',
   mimeType: null,
   size: null,
@@ -102,7 +103,7 @@ describe('AttachmentPart', () => {
       />
     ));
     expect(getByTestId('media-image').getAttribute('src')).toBe(
-      'https://static.example/file/1?size=1080'
+      `${staticFileIdEndpoint('1')}?size=1080`
     );
     expect(container.querySelector('a')).toBeNull();
     expect(getByTestId('media-viewer').getAttribute('data-open')).toBe('false');
@@ -110,8 +111,44 @@ describe('AttachmentPart', () => {
     fireEvent.click(getByLabelText('Open image viewer'));
     expect(getByTestId('media-viewer').getAttribute('data-open')).toBe('true');
     expect(getByTestId('media-viewer').textContent).toBe(
-      'image:https://static.example/file/1'
+      `image:${staticFileIdEndpoint('1')}`
     );
+  });
+
+  it('renders a pasted image link without a static-file size query', () => {
+    const uri = 'https://encrypted-tbn0.gstatic.com/images?q=tbn:ANd9GcQ&s=10';
+    const { getByTestId } = render(() => (
+      <AttachmentPart
+        part={attachment({
+          uri,
+          name: 'image.jpg',
+          mimeType: 'image/jpeg',
+        })}
+      />
+    ));
+    expect(getByTestId('media-image').getAttribute('src')).toBe(uri);
+  });
+
+  it('keeps external file paths and embedded image bytes unchanged', () => {
+    const uri = 'https://cdn.example/file/photo.png';
+    const { getByTestId, unmount } = render(() => (
+      <AttachmentPart
+        part={attachment({ uri, name: 'photo.png', mimeType: 'image/png' })}
+      />
+    ));
+    expect(getByTestId('media-image').getAttribute('src')).toBe(uri);
+    unmount();
+    const data = 'data:image/png;base64,aW1n';
+    const embedded = render(() => (
+      <AttachmentPart
+        part={attachment({
+          uri: data,
+          name: 'photo.png',
+          mimeType: 'image/png',
+        })}
+      />
+    ));
+    expect(embedded.getByTestId('media-image').getAttribute('src')).toBe(data);
   });
 
   it('renders a video as a preview that opens the media viewer', () => {
@@ -121,7 +158,7 @@ describe('AttachmentPart', () => {
       />
     ));
     expect(getByTestId('media-video').getAttribute('src')).toBe(
-      'https://static.example/file/1'
+      staticFileIdEndpoint('1')
     );
     expect(container.querySelector('a')).toBeNull();
     expect(getByTestId('media-viewer').getAttribute('data-open')).toBe('false');
@@ -129,7 +166,7 @@ describe('AttachmentPart', () => {
     fireEvent.click(getByLabelText('Open video viewer'));
     expect(getByTestId('media-viewer').getAttribute('data-open')).toBe('true');
     expect(getByTestId('media-viewer').textContent).toBe(
-      'video:https://static.example/file/1'
+      `video:${staticFileIdEndpoint('1')}`
     );
   });
 
@@ -142,7 +179,7 @@ describe('AttachmentPart', () => {
     expect(container.textContent).toContain('notes.pdf');
     expect(getByTestId('entity-icon').getAttribute('data-type')).toBe('pdf');
     const link = container.querySelector('a');
-    expect(link?.getAttribute('href')).toBe('https://static.example/file/1');
+    expect(link?.getAttribute('href')).toBe(staticFileIdEndpoint('1'));
     expect(link?.getAttribute('target')).toBe('_blank');
   });
 });
