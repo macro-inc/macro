@@ -81,6 +81,7 @@ entity_registry = { path = "../../crates/entity_registry/entity_registry", featu
 ] }
 foreign_entity = { path = "../../crates/foreign_entity" }
 favorites = { path = "../../crates/favorites", features = ["postgres"] }
+feature_flags = { path = "../../crates/feature_flags" }
 fusionauth = { path = "../../crates/fusionauth" }
 futures = { workspace = true }
 generic_email_domains = { path = "../../crates/generic_email_domains" }
