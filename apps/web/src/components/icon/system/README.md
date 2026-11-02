@@ -87,7 +87,7 @@ Task statuses use independent `task-status-not-started`, `task-status-in-progres
 `task-status-in-review`, `task-status-completed`, and `task-status-canceled` theme
 tokens for icons and group-header tints. Their defaults are muted gray, blended
 amber, violet, accent, and muted gray respectively. In Progress mixes amber with
-`content-0` in sRGB: 80% amber in dark mode and 50% in light mode, improving contrast
+`content-0` in sRGB: 80% amber in dark mode and 70% in light mode, improving contrast
 without rotating amber toward a tinted foreground's hue. Authored overrides stay
 unchanged.
 Status and Priority option glyphs share a 12 px default, including title property
