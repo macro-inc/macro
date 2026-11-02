@@ -1,11 +1,13 @@
+import { isWithNotification } from '@entity/types/notification';
 import type {
   NotificationInboxActorKind,
+  NotificationInboxEntryFieldsFragment,
   NotificationInboxRowActionKind,
   NotificationInboxRowType,
 } from '@service-storage/graphql/generated/graphql';
 import { describe, expect, it, vi } from 'vitest';
 import { ALL_INBOX_ROW_TYPES } from '../core/inbox-filters';
-import { inboxEntry } from '../tests/wire';
+import { commentNotification, inboxEntry } from '../tests/wire';
 import { encodeInboxScope, toInboxGroup } from './decode';
 
 // Row mapping imports allBlocks, which loads every block module; one of them
@@ -15,7 +17,87 @@ vi.mock('@core/constant/allBlocks', () => ({
   itemToSafeName: (item: { name?: string }) => item.name ?? 'Untitled',
 }));
 
+/** A channel's inbox entry holding one thread row with one reply. */
+const threadRowEntry = () =>
+  ({
+    groupId: 'channel:ch-a',
+    sortAt: '2026-02-01T10:09:00Z',
+    entity: {
+      __typename: 'GraphqlSoupChannel',
+      id: 'ch-a',
+      entityType: 'CHANNEL',
+      channelName: 'General',
+      channelType: 'PUBLIC',
+      ownerId: 'macro|viewer@example.com',
+      createdAt: '2026-01-01T00:00:00Z',
+      updatedAt: '2026-01-01T00:00:00Z',
+      participants: [],
+    },
+    rows: [
+      {
+        id: 'channel:ch-a#thread:root',
+        rowType: 'CHANNEL_THREAD',
+        revision: 'rev',
+        latestAt: '2026-02-01T10:09:00Z',
+        unseen: true,
+        count: 1,
+        actor: null,
+        actions: [],
+        notifications: [
+          {
+            ...commentNotification('ch-a', 'n-1', '2026-02-01T10:09:00Z'),
+            eventType: 'channel_message_reply',
+            entityType: 'CHANNEL',
+            targetEntityType: 'CHANNEL',
+            metadata: {
+              __typename: 'GraphqlChannelReplyMetadata',
+              channelReplyThreadId: 'root',
+              channelReplyMessageId: 'reply',
+              channelReplyUserId: 'macro|colleague@example.com',
+              channelReplySenderDisplayName: null,
+              channelReplyMessageContent: 'on it',
+              channelReplyHasAttachments: false,
+              channelReplyThreadParentSenderId: null,
+              channelReplyChannelType: 'PUBLIC',
+              channelReplyChannelName: 'General',
+              channelReplySenderProfilePictureUrl: null,
+            },
+          },
+        ],
+      },
+    ],
+  }) as unknown as NotificationInboxEntryFieldsFragment;
+
 describe('toInboxGroup', () => {
+  it('gives a row’s entity the accessor that navigation helpers read', () => {
+    const [row] =
+      toInboxGroup(
+        inboxEntry({
+          docId: 'doc-a',
+          sortAt: '2026-02-01T10:09:00Z',
+          rows: [
+            {
+              id: 'document:doc-a#discussion_thread:c1',
+              rowType: 'DISCUSSION_THREAD',
+              latestAt: '2026-02-01T10:09:00Z',
+              notificationIds: ['c1'],
+            },
+          ],
+        })
+      )?.rows ?? [];
+
+    expect(row && isWithNotification(row.content.entity)).toBe(true);
+  });
+
+  it('points a channel row at the message its newest notification names', () => {
+    const [row] = toInboxGroup(threadRowEntry())?.rows ?? [];
+
+    expect(row?.content.entity).toMatchObject({
+      type: 'channel',
+      target: { messageId: 'reply', threadId: 'root' },
+    });
+  });
+
   it('turns each row into an inbox row whose entity carries only its notifications', () => {
     const group = toInboxGroup(
       inboxEntry({
@@ -48,8 +130,8 @@ describe('toInboxGroup', () => {
         count: row.count,
         notifications: row.content.notifications.map((n) => n.id),
         entityNotifications: (
-          row.content.entity.notifications as { id: string }[]
-        ).map((n) => n.id),
+          row.content.entity.notifications as () => { id: string }[]
+        )().map((n) => n.id),
       }))
     ).toEqual([
       {

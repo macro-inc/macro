@@ -1,3 +1,6 @@
+import type { EntityData } from '@entity';
+import { getChannelNotificationParams } from '@notifications/notification-navigation';
+import type { UnifiedNotification } from '@notifications/types';
 import { attentionFeedSoupItem } from '@queries/attention-feed/attention-feed-entity';
 import { mapApiSoupItemToEntity } from '@queries/soup/transform-utils';
 import type {
@@ -8,6 +11,7 @@ import type {
 import { mapGraphqlNotification } from '@service-storage/graphql-soup';
 import { match } from 'ts-pattern';
 import type {
+  InboxRowContent,
   InboxScope,
   NotificationInboxRow,
 } from '../context/notifications-inbox-context';
@@ -109,6 +113,24 @@ export function encodeInboxScope(
 }
 
 /**
+ * The entity one row opens: it carries only the row's notifications, and a
+ * channel row names the message its newest notification is about, since a
+ * thread row's channel entity would otherwise open at the channel's latest.
+ */
+function rowEntity(
+  entity: EntityData,
+  notifications: UnifiedNotification[]
+): InboxRowContent['entity'] {
+  const withNotifications = { ...entity, notifications: () => notifications };
+  const [newest] = notifications;
+  if (!newest || entity.type !== 'channel') return withNotifications;
+  const { messageId, threadId } = getChannelNotificationParams(newest);
+  return messageId
+    ? { ...withNotifications, target: { messageId, threadId } }
+    : withNotifications;
+}
+
+/**
  * Project one inbox entry into rows. Each row's entity carries only that
  * row's notifications, so entity-based helpers (icons, preview targets) see
  * what the row shows. An entity the app does not list, or an entry without a
@@ -138,7 +160,7 @@ export function toInboxGroup(
           actions: toActions(row.actions),
           unseen: row.unseen,
           count: row.count,
-          content: { entity: { ...entity, notifications }, notifications },
+          content: { entity: rowEntity(entity, notifications), notifications },
         },
       ];
     }),
