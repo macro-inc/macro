@@ -81,9 +81,7 @@ export function CreateContactModal(props: {
   const contactEmail = createMemo(() => email().trim().toLowerCase());
   const canSubmit = createMemo(
     () =>
-      contactName().length > 0 &&
-      company() !== undefined &&
-      !createContactMutation.isPending
+      contactName().length > 0 && !createContactMutation.isPending
   );
 
   function reset() {
@@ -105,11 +103,6 @@ export function CreateContactModal(props: {
 
   async function submit() {
     if (createContactMutation.isPending) return;
-    const target = company();
-    if (!target) {
-      setError('Choose a company');
-      return;
-    }
     if (!contactName()) {
       setError('Enter a name');
       return;
@@ -122,7 +115,7 @@ export function CreateContactModal(props: {
     setError(undefined);
     try {
       const { id } = await createContactMutation.mutateAsync({
-        companyId: target.companyId,
+        companyId: company()?.companyId,
         name: contactName(),
         email: contactEmail() || undefined,
       });
